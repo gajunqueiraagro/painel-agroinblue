@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
+import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
+import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
@@ -304,6 +306,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewDataAnoAtual } = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
   const { rawCategorias: viewDataAnoAnterior } = useRebanhoOficial({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
+
+  // Governança do snapshot
+  const { getStatusByMonth: getSnapStatus } = useSnapshotStatus(Number(anoFiltro));
+  const snapStatusMes = getSnapStatus(Number(mesFiltro));
+  const isSnapInvalidado = snapStatusMes === 'invalidado';
+  const isSnapCadeiaQuebrada = snapStatusMes === 'cadeia_quebrada';
 
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
@@ -958,25 +966,42 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           const isSelected = mesFiltro === m.key;
           const mesN = Number(m.key);
           const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
+          const mesSnapStatus = !isGlobal ? getSnapStatus(mesN) : 'sem_snapshot';
+          const isComprometido = mesSnapStatus === 'invalidado' || mesSnapStatus === 'cadeia_quebrada';
           return (
             <button
               key={m.key}
               onClick={() => setMesFiltro(m.key)}
+              title={isComprometido ? (mesSnapStatus === 'invalidado' ? 'Snapshot invalidado' : 'Cadeia quebrada') : undefined}
               className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
                 ${isSelected
-                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  ? isComprometido
+                    ? 'bg-destructive text-destructive-foreground shadow-sm'
+                    : 'bg-primary text-primary-foreground shadow-sm'
                   : isFuturo
                     ? 'bg-muted/40 text-muted-foreground/50 cursor-default'
-                    : isClosed
-                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                    : isComprometido
+                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
+                      : isClosed
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
                 }`}
             >
-              {m.label}
+              {isComprometido ? '⚠' : ''}{m.label}
             </button>
           );
         })}
       </div>
+
+      {/* Snapshot governance banner */}
+      {!isGlobal && (isSnapInvalidado || isSnapCadeiaQuebrada) && (
+        <SnapshotStatusBanner
+          status={snapStatusMes}
+          mesLabel={`${mesLabel}/${anoFiltro}`}
+          onRevalidar={isSnapInvalidado ? () => {} : undefined}
+          onIrMesAnterior={isSnapCadeiaQuebrada ? () => {} : undefined}
+        />
+      )}
 
       {isMesAtual && !isMesFuturo && uFonteMes === 'live' && (
         <div className="flex items-center gap-1.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded px-2 py-1 border border-amber-500/30">

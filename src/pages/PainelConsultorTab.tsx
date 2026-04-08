@@ -12,6 +12,8 @@
  * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
+import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -970,6 +972,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { rawFazenda: zootMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { clienteAtual } = useCliente();
+  const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
   // Leitura oficial do Valor do Rebanho META validado (tabela valor_rebanho_meta_validada)
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(Array(12).fill(0));
@@ -1038,7 +1041,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       }
       const { data, error } = await supabase
         .from('valor_rebanho_realizado_validado' as any)
-        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
+        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total, status')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
       if (error) {
@@ -1064,7 +1067,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       const cabMap = new Map(todasMeses.map(mes => [mes, 0]));
       const pmMap = new Map(todasMeses.map(mes => [mes, 0]));
       const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
-      (data as any[] || []).forEach((row: any) => {
+      // GOVERNANÇA: Apenas snapshots validados alimentam o Painel oficial
+      const validRows = (data as any[] || []).filter((row: any) => row.status === 'validado');
+      validRows.forEach((row: any) => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
         vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
         paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
@@ -1211,12 +1216,20 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 </td>
                 {row.valores.map((v, i) => {
                   const isFuture = !isPrevisto && (i + 1) > monthCutoff;
+                  const mesStatus = !isPrevisto ? getStatusByMonth(i + 1) : 'sem_snapshot';
+                  const isSnapshotBloqueado = !isPrevisto && (mesStatus === 'invalidado' || mesStatus === 'cadeia_quebrada');
                   let cellContent = '';
                   let isSemBase = false;
+                  let cellTitle: string | undefined;
                   if (previstoSemFonte) {
                     cellContent = '';  // sem base meta
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro (only for Realizado)
+                  } else if (isSnapshotBloqueado) {
+                    cellContent = '⚠';
+                    cellTitle = mesStatus === 'invalidado'
+                      ? 'Snapshot invalidado — revalidar Valor do Rebanho'
+                      : 'Cadeia quebrada — reconciliar mês anterior';
                   } else if (isNaN(v)) {
                     cellContent = '–';  // meta não projetou este indicador
                     isSemBase = true;
@@ -1228,8 +1241,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       key={i}
                       className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]${
                         TRIM_BORDER_INDEXES.has(i) ? ' border-l border-border/20' : ''
-                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}`}
-                      title={isSemBase ? 'Meta não projetou este indicador' : undefined}
+                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}${
+                        isSnapshotBloqueado ? ' text-destructive/60 bg-destructive/5' : ''
+                      }`}
+                      title={cellTitle ?? (isSemBase ? 'Meta não projetou este indicador' : undefined)}
                     >
                       {cellContent}
                     </td>
@@ -1336,6 +1351,32 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
             ))}
           </div>
         </div>
+
+        {/* ── Snapshot governance banners ── */}
+        {!isPrevisto && !isGlobal && (() => {
+          const comprometidos = snapshotStatusArray
+            .map((s, i) => ({ mes: i + 1, status: s }))
+            .filter(m => m.status === 'invalidado' || m.status === 'cadeia_quebrada');
+          if (comprometidos.length === 0) return null;
+          const primeiro = comprometidos[0];
+          const mesLabel = MESES_LABELS[primeiro.mes - 1] + '/' + ano;
+          return (
+            <div className="px-2 mt-1">
+              <SnapshotStatusBanner
+                status={primeiro.status}
+                mesLabel={mesLabel}
+                compact
+                onRevalidar={primeiro.status === 'invalidado' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
+                onIrMesAnterior={primeiro.status === 'cadeia_quebrada' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
+              />
+              {comprometidos.length > 1 && (
+                <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                  +{comprometidos.length - 1} mês(es) afetado(s)
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Content: collapsible blocks ── */}
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
