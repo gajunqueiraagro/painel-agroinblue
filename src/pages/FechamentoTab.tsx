@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -27,15 +27,15 @@ import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 /* ── Colunas de categorias ── */
 const CAT_COLS = [
-  { codigo: 'mamotes_m', sigla: 'MM' },
-  { codigo: 'desmama_m', sigla: 'DM' },
-  { codigo: 'garrotes', sigla: 'G' },
-  { codigo: 'bois', sigla: 'B' },
-  { codigo: 'touros', sigla: 'T' },
-  { codigo: 'mamotes_f', sigla: 'MF' },
-  { codigo: 'desmama_f', sigla: 'DF' },
-  { codigo: 'novilhas', sigla: 'N' },
-  { codigo: 'vacas', sigla: 'V' },
+  { codigo: 'mamotes_m', sigla: 'MM', nome: 'Mamotes M' },
+  { codigo: 'desmama_m', sigla: 'DM', nome: 'Desmama M' },
+  { codigo: 'garrotes', sigla: 'G', nome: 'Garrotes' },
+  { codigo: 'bois', sigla: 'B', nome: 'Bois' },
+  { codigo: 'touros', sigla: 'T', nome: 'Touros' },
+  { codigo: 'mamotes_f', sigla: 'MF', nome: 'Mamotes F' },
+  { codigo: 'desmama_f', sigla: 'DF', nome: 'Desmama F' },
+  { codigo: 'novilhas', sigla: 'N', nome: 'Novilhas' },
+  { codigo: 'vacas', sigla: 'V', nome: 'Vacas' },
 ];
 
 /* ── Status de conciliação por pasto ── */
@@ -81,6 +81,7 @@ interface Props {
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToConferenciaGmd?: () => void;
+  onNavigateToMapaPastos?: () => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -98,7 +99,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
@@ -508,13 +509,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <CheckCircle className="h-3 w-3" />
                 {conciliadosCount} conciliados
               </Badge>
-              {divergenciaCount > 0 && (
+             {divergenciaCount > 0 && (
                 <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold gap-1 w-fit">
                   <AlertTriangle className="h-3 w-3" />
                   {divergenciaCount} divergências
                 </Badge>
               )}
             </div>
+            {allClosed && (
+              <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100 text-[11px] font-bold gap-1 w-fit">
+                <CheckCircle className="h-3.5 w-3.5" /> Mês fechado
+              </Badge>
+            )}
+            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-fit justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
+                <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
+              </Button>
+            )}
             {allClosed && onNavigateToValorRebanho && (
               <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={onNavigateToValorRebanho}>
                 Inserir preço do rebanho →
@@ -524,58 +535,67 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 2: Tabela Conciliação (compacta, centralizada) ── */}
           <div className="flex justify-center overflow-x-auto">
+            <TooltipProvider delayDuration={150}>
             <table className="text-[10px] border-collapse w-auto">
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
-                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2 py-1 w-16 border-r border-blue-200 dark:border-blue-800">Cab.</th>
-                  {CAT_COLS.map((c, idx) => (
-                    <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 min-w-[36px]${idx === 4 ? ' border-r border-blue-200 dark:border-blue-800' : ''}`}>{c.sigla}</th>
-                  ))}
-                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2 py-1 min-w-[44px] border-l border-blue-200 dark:border-blue-800">Total</th>
+                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-20 border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Cabeças</th>
+                  {CAT_COLS.map((c, idx) => {
+                    const hasSepRight = idx === 4;
+                    return (
+                      <Tooltip key={c.sigla}>
+                        <TooltipTrigger asChild>
+                          <th className={`text-center font-bold text-blue-900 dark:text-blue-200 px-2 py-1 min-w-[40px] cursor-help${hasSepRight ? ' border-r-2 border-blue-300 dark:border-blue-700' : ''}`}>{c.sigla}</th>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs font-medium">{c.nome}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 min-w-[48px] border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {/* SISTEMA */}
                 <tr className="bg-muted/30">
-                  <td className="font-bold text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[9px]">Sistema</td>
+                  <td className="font-bold text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/50">Sistema</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = saldoMap.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center text-muted-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
                   })}
-                  <td className="text-center font-semibold text-muted-foreground px-2 py-0.5 border-l border-border/30 tabular-nums">{totalSistema ? formatNum(totalSistema, 0) : ''}</td>
+                  <td className="text-center font-semibold text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/50">{totalSistema ? formatNum(totalSistema, 0) : ''}</td>
                 </tr>
                 {/* PASTO */}
                 <tr>
-                  <td className="font-bold text-foreground px-2 py-0.5 border-r border-border/30 text-[9px]">Pasto</td>
+                  <td className="font-bold text-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/20">Pasto</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = pastoDataByCat.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
                   })}
-                  <td className="text-center font-bold text-foreground px-2 py-0.5 border-l border-border/30 tabular-nums">{totalPasto ? formatNum(totalPasto, 0) : ''}</td>
+                  <td className="text-center font-bold text-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/20">{totalPasto ? formatNum(totalPasto, 0) : ''}</td>
                 </tr>
                 {/* DIFERENÇA */}
                 <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
-                  <td className={`font-extrabold px-2 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
+                  <td className={`font-extrabold px-2.5 py-1 border-r-2 border-border/40 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
                   {CAT_COLS.map((c, idx) => {
                     const pv = pastoDataByCat.get(c.codigo) || 0;
                     const sv = saldoMap.get(c.codigo) || 0;
                     const dif = pv - sv;
                     return (
-                      <td key={c.sigla} className={`text-center font-extrabold px-1.5 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                      <td key={c.sigla} className={`text-center font-extrabold px-2 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
                         {fmtDif(dif)}
                       </td>
                     );
                   })}
-                  <td className={`text-center font-extrabold px-2 py-1 border-l border-border/30 tabular-nums ${difCellClass(totalDiferenca)}`}>
+                  <td className={`text-center font-extrabold px-2.5 py-1 border-l-2 border-border/40 tabular-nums ${difCellClass(totalDiferenca)}`}>
                     {fmtDif(totalDiferenca)}
                   </td>
                 </tr>
                 {/* PESO */}
                 <tr className="border-t border-border/20 bg-muted/20">
-                  <td className="text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[8px] italic">Peso kg</td>
+                  <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">Peso kg</td>
                   {CAT_COLS.map((c, idx) => {
                     const peso = pesoMedioByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 1) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{peso ? formatNum(peso, 1) : ''}</td>;
                   })}
                   {(() => {
                     let totalPesoAcc = 0;
@@ -587,7 +607,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     });
                     const pesoMedioTotal = totalCabAcc > 0 ? totalPesoAcc / totalCabAcc : null;
                     return (
-                      <td className="text-center text-[9px] italic text-muted-foreground px-2 py-0.5 border-l border-border/30 tabular-nums font-semibold">
+                      <td className="text-center text-[9px] italic text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums font-semibold bg-muted/30">
                         {pesoMedioTotal ? formatNum(pesoMedioTotal, 1) : ''}
                       </td>
                     );
@@ -595,15 +615,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 </tr>
                 {/* GMD */}
                 <tr className="bg-muted/20">
-                  <td className="text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[8px] italic">GMD</td>
+                  <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">GMD</td>
                   {CAT_COLS.map((c, idx) => {
                     const g = gmdByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic px-1.5 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r border-border/30' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-[9px] italic px-2 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
                   })}
-                  <td className={`text-center text-[9px] italic px-2 py-0.5 border-l border-border/30 tabular-nums ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
+                  <td className={`text-center text-[9px] italic px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/30 ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
                 </tr>
               </tbody>
             </table>
+            </TooltipProvider>
           </div>
 
           {/* ── COL 3: Ações ── */}
@@ -616,11 +637,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <Activity className="h-3.5 w-3.5" /> Conferência do GMD
               </Button>
             )}
-
-            {allClosed && (
-              <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100 text-[11px] font-bold gap-1">
-                <CheckCircle className="h-3.5 w-3.5" /> Mês fechado
-              </Badge>
+            {onNavigateToMapaPastos && (
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={onNavigateToMapaPastos}>
+                <Map className="h-3.5 w-3.5" /> Mapa de Pastos
+              </Button>
             )}
 
             {showCloseButton && (
@@ -656,12 +676,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   </Button>
                 )}
               </div>
-            )}
-
-            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
-              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-full justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
-                <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
-              </Button>
             )}
           </div>
 
