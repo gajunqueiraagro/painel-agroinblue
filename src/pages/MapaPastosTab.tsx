@@ -242,6 +242,11 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
         <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
+              {onBack && (
+                <Button variant="ghost" size="sm" className="h-7 px-1.5" onClick={onBack}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
                 <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
