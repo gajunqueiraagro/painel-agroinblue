@@ -27,15 +27,15 @@ import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 /* ── Colunas de categorias ── */
 const CAT_COLS = [
-  { codigo: 'mamotes_m', sigla: 'MM' },
-  { codigo: 'desmama_m', sigla: 'DM' },
-  { codigo: 'garrotes', sigla: 'G' },
-  { codigo: 'bois', sigla: 'B' },
-  { codigo: 'touros', sigla: 'T' },
-  { codigo: 'mamotes_f', sigla: 'MF' },
-  { codigo: 'desmama_f', sigla: 'DF' },
-  { codigo: 'novilhas', sigla: 'N' },
-  { codigo: 'vacas', sigla: 'V' },
+  { codigo: 'mamotes_m', sigla: 'MM', nome: 'Mamotes M' },
+  { codigo: 'desmama_m', sigla: 'DM', nome: 'Desmama M' },
+  { codigo: 'garrotes', sigla: 'G', nome: 'Garrotes' },
+  { codigo: 'bois', sigla: 'B', nome: 'Bois' },
+  { codigo: 'touros', sigla: 'T', nome: 'Touros' },
+  { codigo: 'mamotes_f', sigla: 'MF', nome: 'Mamotes F' },
+  { codigo: 'desmama_f', sigla: 'DF', nome: 'Desmama F' },
+  { codigo: 'novilhas', sigla: 'N', nome: 'Novilhas' },
+  { codigo: 'vacas', sigla: 'V', nome: 'Vacas' },
 ];
 
 /* ── Status de conciliação por pasto ── */
