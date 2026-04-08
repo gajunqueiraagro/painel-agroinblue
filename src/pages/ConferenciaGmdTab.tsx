@@ -52,9 +52,7 @@ interface CatRow {
   saidas_externas: number;
   evol_cat_saida: number;
   saldo_final: number;
-  /** Saldo calculado aritmeticamente: ini + ent + evol_e - sai - evol_s */
   saldo_calculado: number;
-  /** Divergência = saldo_final (fechamento) - saldo_calculado (aritmético) */
   divergencia: number;
   pesoTotalIni: number;
   pesoTotalFin: number;
@@ -62,8 +60,12 @@ interface CatRow {
   pesoCabFin: number | null;
   pesoEntradasExt: number;
   pesoSaidasExt: number;
+  pesoEvolEntrada: number;
+  pesoEvolSaida: number;
   kgMedioEntExt: number | null;
   kgMedioSaiExt: number | null;
+  kgMedioEvolEnt: number | null;
+  kgMedioEvolSai: number | null;
   ganho: number;
   dias: number;
   cabMedia: number;
@@ -93,12 +95,13 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       const pesoCabFin = div(pesoTotalFin, cat.saldo_final);
       const pesoEntradasExt = cat.peso_entradas_externas;
       const pesoSaidasExt = cat.peso_saidas_externas;
-      const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt;
+      const pesoEvolEntrada = cat.peso_evol_cat_entrada;
+      const pesoEvolSaida = cat.peso_evol_cat_saida;
+      const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt - pesoEvolEntrada + pesoEvolSaida;
       const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
       const dias = cat.dias_mes;
       const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
 
-      // Audit: saldo aritmético vs saldo do fechamento
       const saldo_calculado = cat.saldo_inicial + cat.entradas_externas + cat.evol_cat_entrada - cat.saidas_externas - cat.evol_cat_saida;
       const divergencia = cat.saldo_final - saldo_calculado;
 
@@ -115,8 +118,11 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         divergencia,
         pesoTotalIni, pesoTotalFin, pesoCabIni, pesoCabFin,
         pesoEntradasExt, pesoSaidasExt,
+        pesoEvolEntrada, pesoEvolSaida,
         kgMedioEntExt: div(pesoEntradasExt, cat.entradas_externas),
         kgMedioSaiExt: div(pesoSaidasExt, cat.saidas_externas),
+        kgMedioEvolEnt: div(pesoEvolEntrada, cat.evol_cat_entrada),
+        kgMedioEvolSai: div(pesoEvolSaida, cat.evol_cat_saida),
         ganho, dias, cabMedia, gmd,
       };
     });
@@ -138,9 +144,11 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     const pesoTotalFin = s(r => r.pesoTotalFin);
     const pesoEntradasExt = s(r => r.pesoEntradasExt);
     const pesoSaidasExt = s(r => r.pesoSaidasExt);
+    const pesoEvolEntrada = s(r => r.pesoEvolEntrada);
+    const pesoEvolSaida = s(r => r.pesoEvolSaida);
     const pesoCabIni = div(pesoTotalIni, saldoInicial);
     const pesoCabFin = div(pesoTotalFin, saldoFinal);
-    const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt;
+    const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt - pesoEvolEntrada + pesoEvolSaida;
     const cabMedia = (saldoInicial + saldoFinal) / 2;
     const dias = rows[0]?.dias || 0;
     const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
@@ -149,8 +157,11 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       evolCatEntrada, evolCatSaida, saldoCalculado, divergencia,
       pesoTotalIni, pesoTotalFin,
       pesoCabIni, pesoCabFin, pesoEntradasExt, pesoSaidasExt,
+      pesoEvolEntrada, pesoEvolSaida,
       kgMedioEntExt: div(pesoEntradasExt, entradasExternas),
       kgMedioSaiExt: div(pesoSaidasExt, saidasExternas),
+      kgMedioEvolEnt: div(pesoEvolEntrada, evolCatEntrada),
+      kgMedioEvolSai: div(pesoEvolSaida, evolCatSaida),
       ganho, dias, cabMedia, gmd,
     };
   }, [rows]);
@@ -173,8 +184,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         case 'saldo_final': return { v: r.pesoCabFin, dec: 1 };
         case 'entradas_externas': return { v: r.kgMedioEntExt, dec: 1 };
         case 'saidas_externas': return { v: r.kgMedioSaiExt, dec: 1 };
-        case 'evol_cat_entrada': return { v: null as number | null, dec: 1 };
-        case 'evol_cat_saida': return { v: null as number | null, dec: 1 };
+        case 'evol_cat_entrada': return { v: r.kgMedioEvolEnt, dec: 1 };
+        case 'evol_cat_saida': return { v: r.kgMedioEvolSai, dec: 1 };
       }
     }
     // kg_total
@@ -183,8 +194,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       case 'saldo_final': return { v: r.pesoTotalFin, dec: 0 };
       case 'entradas_externas': return { v: r.pesoEntradasExt, dec: 0 };
       case 'saidas_externas': return { v: r.pesoSaidasExt, dec: 0 };
-      case 'evol_cat_entrada': return { v: 0, dec: 0 };
-      case 'evol_cat_saida': return { v: 0, dec: 0 };
+      case 'evol_cat_entrada': return { v: r.pesoEvolEntrada, dec: 0 };
+      case 'evol_cat_saida': return { v: r.pesoEvolSaida, dec: 0 };
     }
   }
 
@@ -197,8 +208,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         case 'saldoFinal': return { v: totals.pesoCabFin, dec: 1 };
         case 'entradasExternas': return { v: totals.kgMedioEntExt, dec: 1 };
         case 'saidasExternas': return { v: totals.kgMedioSaiExt, dec: 1 };
-        case 'evolCatEntrada': return { v: null as number | null, dec: 1 };
-        case 'evolCatSaida': return { v: null as number | null, dec: 1 };
+        case 'evolCatEntrada': return { v: totals.kgMedioEvolEnt, dec: 1 };
+        case 'evolCatSaida': return { v: totals.kgMedioEvolSai, dec: 1 };
       }
     }
     switch (field) {
@@ -206,8 +217,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       case 'saldoFinal': return { v: totals.pesoTotalFin, dec: 0 };
       case 'entradasExternas': return { v: totals.pesoEntradasExt, dec: 0 };
       case 'saidasExternas': return { v: totals.pesoSaidasExt, dec: 0 };
-      case 'evolCatEntrada': return { v: 0, dec: 0 };
-      case 'evolCatSaida': return { v: 0, dec: 0 };
+      case 'evolCatEntrada': return { v: totals.pesoEvolEntrada, dec: 0 };
+      case 'evolCatSaida': return { v: totals.pesoEvolSaida, dec: 0 };
     }
   }
 
