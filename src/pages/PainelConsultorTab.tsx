@@ -1161,8 +1161,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const viewTotals = useMemo(() => totalizarViewPorMes(viewDataRealizado || []), [viewDataRealizado]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes),
-    [viewTotals, viewDataRealizado, lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes],
+    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes, isGlobal),
+    [viewTotals, viewDataRealizado, lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes, isGlobal],
   );
 
   const isPrevisto = cenario === 'meta';
