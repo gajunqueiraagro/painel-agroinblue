@@ -152,11 +152,8 @@ export function AnaliseEconomica({
     ? arrobasGlobal.somaArrobas
     : zoo.arrobasProduzidasAcumulado;
 
-  // Cabeças médias mensais
-  const cabMediasMensais = useMemo(
-    () => calcCabMediasMensais(saldosIniciais, lancamentosPecuarios, anoNum, mesLimite),
-    [saldosIniciais, lancamentosPecuarios, anoNum, mesLimite],
-  );
+  // Cabeças médias mensais — FONTE OFICIAL: useRebanhoOficial
+  const cabMediasMensais = useCabMediasMensaisOficial(anoNum, mesLimite, isGlobal);
 
   // Lançamentos conciliados por mês no ano
   const lancConciliadosPorMes = useMemo(() => {
