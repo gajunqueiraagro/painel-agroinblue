@@ -74,6 +74,7 @@ export interface EvolucaoSugestao {
   pesoMedioAtual: number;
   pesoEvolucao: number;
   elegivel: boolean;
+  saldoAtual: number;
 }
 
 interface Bloqueio {
