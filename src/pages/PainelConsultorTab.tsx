@@ -86,6 +86,9 @@ interface PesoSnapshot {
   arrobas: number[];
 }
 
+// ─── Tipos de lancamento que compõem o Desfrute ───
+const TIPOS_DESFRUTE = new Set(['abate', 'venda', 'consumo']);
+
 // ─── Monthly raw data struct ───
 interface MonthlyData {
   cabIni: number[];
@@ -111,12 +114,15 @@ interface MonthlyData {
   resOper: number[];
   ebitda: number[];
   varValorReb: number[];
+  desfruteCab: number[];
+  desfrute_arr: number[];
 }
 
 function buildMonthlyDataFromView(
   viewTotals: ReturnType<typeof totalizarViewPorMes>,
   viewRows: import('@/hooks/useZootCategoriaMensal').ZootCategoriaMensal[],
   lancFin: FinanceiroLancamento[],
+  lancPec: Lancamento[],
   ano: number,
   areaProdutiva: number,
   valorRebanhoMes: number[],
@@ -139,7 +145,6 @@ function buildMonthlyDataFromView(
     const mesRows = viewRows.filter(r => r.mes === m);
     const cabMedia = (cabIni[m - 1] + cabFin[m - 1]) / 2;
     if (cabMedia <= 0) return 0;
-    // Use producao_biologica from view
     const prodBio = mesRows.reduce((s, r) => s + r.producao_biologica, 0);
     const dias = diasNoMes(m);
     return dias > 0 ? prodBio / cabMedia / dias : 0;
@@ -147,6 +152,23 @@ function buildMonthlyDataFromView(
 
   const arrobasProd = mk(m => (viewTotals[m]?.producao_biologica ?? 0) / 30);
   const prodKg = mk(m => viewTotals[m]?.producao_biologica ?? 0);
+
+  // ── Desfrute: apenas abate + venda + consumo (REGRA OFICIAL) ──
+  const desfruteLancs = lancPec.filter(l =>
+    TIPOS_DESFRUTE.has(l.tipo) && l.cenario !== 'meta',
+  );
+  const mesPrefix = (m: number) => `${ano}-${String(m).padStart(2, '0')}`;
+  const desfruteCab = mk(m => desfruteLancs
+    .filter(l => l.data.startsWith(mesPrefix(m)))
+    .reduce((s, l) => s + l.quantidade, 0));
+  const desfrute_arr = mk(m => desfruteLancs
+    .filter(l => l.data.startsWith(mesPrefix(m)))
+    .reduce((s, l) => s + (l.quantidade * (l.pesoMedioKg || 0)) / 30, 0));
+
+  // ── Receita pecuária por competência: valorTotal de abate+venda+consumo ──
+  const recPecCompMes = (m: number) => desfruteLancs
+    .filter(l => l.data.startsWith(mesPrefix(m)))
+    .reduce((s, l) => s + Math.abs(l.valorTotal || 0), 0);
 
   // Financial data (kept as-is from useFinanceiro)
   const concFin = lancFin.filter(l => isFinConciliado(l));
@@ -168,9 +190,9 @@ function buildMonthlyDataFromView(
   const recPecArr = mk(recPecMes);
   const custOperArr = mk(desembPecMes);
   const resCaixaArr = mk(m => entFinMes(m) - saiFinMes(m));
-  const recPecCompArr = mk(recPecMes);
-  const resOperArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
-  const ebitdaArr = mk(m => recPecMes(m) - deducMes(m) - desembPecMes(m));
+  const recPecCompArr = mk(recPecCompMes);
+  const resOperArr = mk(m => recPecCompMes(m) - deducMes(m) - desembPecMes(m));
+  const ebitdaArr = mk(m => recPecCompMes(m) - deducMes(m) - desembPecMes(m));
   const varValorRebArr = mk(m => {
     const atual = valorRebFin[m - 1] || 0;
     const anterior = valorRebIni[m - 1] || 0;
@@ -186,6 +208,7 @@ function buildMonthlyDataFromView(
     custOper: custOperArr, resCaixa: resCaixaArr,
     recPecComp: recPecCompArr, resOper: resOperArr,
     ebitda: ebitdaArr, varValorReb: varValorRebArr,
+    desfruteCab, desfrute_arr,
   };
 }
 
@@ -249,11 +272,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   });
   const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
-  const desfruteCab = d.saidas;
-  const desfrute_arr = d.saidas.map((v, i) => {
-    const pm = pesoMedioFin[i];
-    return pm > 0 ? (v * pm) / 30 : 0;
-  });
+  const desfruteCab = d.desfruteCab;
+  const desfrute_arr = d.desfrute_arr;
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : 0))
@@ -301,10 +321,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Desempenho',
           rows: [
-            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
-            r('Peso méd. reb.', 'med2', pesoMedioFin, 'peso_med_reb'),
-            r('UA média', 'med2', uaMedia, 'ua_media'),
-            r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao'),
+            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
+            r('Peso méd. reb.', 'med2', pesoMedioFin, 'peso_med_reb', true),
+            r('UA média', 'med2', uaMedia, 'ua_media', true),
+            r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao', true),
           ],
         },
         {
@@ -313,15 +333,13 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('@ produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
             r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
             r('@/ha', 'med2', arrHa, 'arr_ha'),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
           nome: 'Estrutura',
           rows: [
-            r('Área prod. (ha)', 'med2', Array(12).fill(d.areaProd), 'area_prod'),
-            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
+            r('Área prod. (ha)', 'med2', Array(12).fill(d.areaProd), 'area_prod', true),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
           ],
         },
       ];
@@ -369,28 +387,27 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', d.gmd, 'gmd_medio'),
-            r('Peso médio período', 'med2', d.pesoMedioFin, 'peso_medio_periodo'),
-            r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
-            r('Lotação média', 'med2', lotUaHa, 'lotacao_media'),
+            r('GMD médio período', 'gmd', d.gmd, 'gmd_medio', true),
+            r('Peso médio período', 'med2', d.pesoMedioFin, 'peso_medio_periodo', true),
+            r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
+            r('Lotação média', 'med2', lotUaHa, 'lotacao_media', true),
           ],
         },
         {
           nome: 'Produção Média',
           rows: [
-            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
-            r('Prod. média (@)', 'padrao', d.arrobasProd, 'prod_media_arr'),
-            r('Prod. média (kg)', 'padrao', d.prodKg, 'prod_media_kg'),
-            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
+            r('@/ha média período', 'med2', arrHa, 'arr_ha_media', true),
+            r('Prod. média (@)', 'padrao', d.arrobasProd, 'prod_media_arr', true),
+            r('Prod. média (kg)', 'padrao', d.prodKg, 'prod_media_kg', true),
           ],
         },
         {
           nome: 'Financeiro Médio',
           rows: [
-            r('Receita média', 'money', d.recPec, 'receita_media'),
-            r('Res. oper. médio', 'money', d.resOper, 'res_oper_medio'),
-            r('EBITDA médio', 'money', d.ebitda, 'ebitda_medio'),
-            r('Res. caixa médio', 'money', d.resCaixa, 'res_caixa_medio'),
+            r('Receita média', 'money', d.recPec, 'receita_media', true),
+            r('Res. oper. médio', 'money', d.resOper, 'res_oper_medio', true),
+            r('EBITDA médio', 'money', d.ebitda, 'ebitda_medio', true),
+            r('Res. caixa médio', 'money', d.resCaixa, 'res_caixa_medio', true),
           ],
         },
       ];
@@ -1093,8 +1110,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const viewTotals = useMemo(() => totalizarViewPorMes(viewDataRealizado || []), [viewDataRealizado]);
 
   const monthlyData = useMemo(() =>
-    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, anoNum, areaProdutiva, valorRebanhoMes),
-    [viewTotals, viewDataRealizado, lancFin, anoNum, areaProdutiva, valorRebanhoMes],
+    buildMonthlyDataFromView(viewTotals, viewDataRealizado || [], lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes),
+    [viewTotals, viewDataRealizado, lancFin, lancPec, anoNum, areaProdutiva, valorRebanhoMes],
   );
 
   const isPrevisto = cenario === 'meta';
@@ -1178,9 +1195,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     <div className="overflow-x-auto border rounded border-border/40 -mx-2 sm:mx-0">
       <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '780px' }}>
         <colgroup>
-          <col style={{ width: '100px', minWidth: '100px' }} />
+          <col style={{ width: '240px', minWidth: '240px' }} />
           {MESES_LABELS.map((_, i) => <col key={i} style={{ width: '54px', minWidth: '54px' }} />)}
-          <col style={{ width: '60px', minWidth: '60px' }} />
+          {viewTab === 'mensal' && <col style={{ width: '60px', minWidth: '60px' }} />}
         </colgroup>
         <thead className="sticky top-0 z-10">
           <tr className="bg-muted border-b">
