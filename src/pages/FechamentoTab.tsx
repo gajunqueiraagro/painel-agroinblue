@@ -639,7 +639,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
             {onNavigateToMapaPastos && (
               <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={onNavigateToMapaPastos}>
-                <Map className="h-3.5 w-3.5" /> Mapa de Pastos
+                <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
               </Button>
             )}
 
