@@ -790,6 +790,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [abateParaEditar, abateFornecedores]);
 
+  // Auto-load reclassificação for editing when navigated from another tab
+  useEffect(() => {
+    if (reclassParaEditar) {
+      setAba('reclassificacao');
+      setEditingReclassId(reclassParaEditar.id);
+      reclassState.setCategoriaOrigem(reclassParaEditar.categoria as any);
+      reclassState.setCategoriaDestino((reclassParaEditar.categoriaDestino || 'bois') as any);
+      reclassState.setData(reclassParaEditar.data);
+      reclassState.setQuantidade(String(reclassParaEditar.quantidade));
+      reclassState.setPesoKg(reclassParaEditar.pesoMedioKg ? String(reclassParaEditar.pesoMedioKg) : '');
+      reclassState.setPesoAutoFilled(true);
+      const isMeta = reclassParaEditar.cenario === 'meta' || reclassParaEditar.statusOperacional === 'previsto';
+      reclassState.setStatusOp(isMeta ? 'meta' : 'realizado');
+    }
+  }, [reclassParaEditar]);
+
   // CRITICAL: Apply pending fornecedor match whenever fornecedores list changes
   useEffect(() => {
     if (abateFornecedores.length === 0) return;
