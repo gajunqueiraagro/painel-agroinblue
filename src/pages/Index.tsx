@@ -510,6 +510,7 @@ const Index = () => {
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
           transferenciaParaEditar={transferenciaParaEditar}
+          reclassParaEditar={reclassParaEditar}
           onReturnFromEdit={editOriginTab ? () => {
             // Restore origin tab with saved filter context
             if (editOriginTab === 'financeiro') {
@@ -527,6 +528,7 @@ const Index = () => {
             setVendaParaEditar(null);
             setCompraParaEditar(null);
             setTransferenciaParaEditar(null);
+            setReclassParaEditar(null);
           } : undefined}
         />
       )}
