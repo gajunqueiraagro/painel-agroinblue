@@ -2680,9 +2680,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   categoria: reclassState.categoriaOrigem,
                   categoriaDestino: reclassState.categoriaDestino,
                   quantidade: Number(reclassState.quantidade),
-                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : undefined,
-                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : undefined,
-                  statusOperacional: isMeta ? null : 'realizado',
+                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : null,
+                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : null,
+                  cenario: isMeta ? 'meta' : 'realizado',
+                  statusOperacional: isMeta ? 'previsto' : 'realizado',
                 });
                 toast.success('Reclassificação atualizada com sucesso.');
                 setEditingReclassId(null);

@@ -35,7 +35,7 @@ interface Props {
   onEditarReclass?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
 }
 
-export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
+export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte' | 'historico';
 
 type TopTab = 'todas' | 'entradas' | 'saidas' | 'chuvas' | 'historico';
 
@@ -497,6 +497,7 @@ const FINANCIAL_TYPES: SubAba[] = ['abate', 'compra', 'venda'];
 
 function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   if (!subAba) return 'entradas';
+  if (subAba === 'historico') return 'historico';
   if (ENTRY_TYPES.includes(subAba)) return 'entradas';
   if (EXIT_TYPES.includes(subAba)) return 'saidas';
   return 'entradas';
@@ -791,7 +792,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               onClose={() => setDetalheId(null)}
               onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
               onRemover={(id) => { onRemover(id); setDetalheId(null); }}
-              onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'nascimento', statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'historico' as SubAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             />
           ) : null;
         })()}
