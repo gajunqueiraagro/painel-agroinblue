@@ -166,8 +166,10 @@ function buildMonthlyDataFromView(
   // Zootechnical data from official view
   const cabIni = mk(m => viewTotals[m]?.saldo_inicial ?? 0);
   const cabFin = mk(m => viewTotals[m]?.saldo_final ?? 0);
-  const entradas = mk(m => (viewTotals[m]?.entradas_externas ?? 0) + (viewTotals[m]?.evol_cat_entrada ?? 0));
-  const saidas = mk(m => (viewTotals[m]?.saidas_externas ?? 0) + (viewTotals[m]?.evol_cat_saida ?? 0));
+  // REGRA OFICIAL: entradas/saídas = apenas fluxo externo real da fazenda
+  // Evol. Cat. (reclassificação interna) NÃO entra nos indicadores de fluxo
+  const entradas = mk(m => viewTotals[m]?.entradas_externas ?? 0);
+  const saidas = mk(m => viewTotals[m]?.saidas_externas ?? 0);
   const pesoTotalIni = mk(m => viewTotals[m]?.peso_total_inicial ?? 0);
   const pesoTotalFin = mk(m => viewTotals[m]?.peso_total_final ?? 0);
   const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : 0; });
