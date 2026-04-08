@@ -1273,6 +1273,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
 
+    // ── META: bloqueio via painel inteligente (mesma lógica exata) ──
+    if (isCenarioMeta && metaBloqueio.hasBloqueio) {
+      toast.error(metaBloqueio.primeiroBloqueio || 'Bloqueio detectado pelo painel inteligente META.');
+      return;
+    }
+
     if (isAbate) {
       if (!abateFornecedorId) { toast.error('Selecione o Frigorífico (Fornecedor) para continuar'); return; }
       if (!abateDetalhes) { toast.error('Clique em "Completar Abate" para preencher os detalhes financeiros'); return; }
