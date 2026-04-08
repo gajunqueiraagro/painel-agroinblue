@@ -1269,15 +1269,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                     </td>
                   );
                 })}
-                <td className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/30 bg-muted/5${
-                  previstoSemFonte || row.noTotal ? ' text-muted-foreground/30' : ''
-                }`}>
-                  {(previstoSemFonte || row.noTotal)
-                    ? ''
-                    : row.valores.some(v => isNaN(v))
-                      ? '–'
-                      : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
-                </td>
+                {viewTab === 'mensal' && (
+                  <td className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px] font-bold border-l border-border/30 bg-muted/5${
+                    previstoSemFonte || row.noTotal ? ' text-muted-foreground/30' : ''
+                  }`}>
+                    {(previstoSemFonte || row.noTotal)
+                      ? ''
+                      : row.valores.some(v => isNaN(v))
+                        ? '–'
+                        : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
+                  </td>
+                )}
               </tr>
             );
           })}
