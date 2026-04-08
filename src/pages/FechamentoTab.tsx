@@ -91,17 +91,50 @@ const normalizeTipoUso = (tipoUso?: string) => {
   return tipoUso.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 };
 
-/** Tipos de uso que NÃO são pecuários — não devem entrar na conciliação operacional */
+/**
+ * Classificação de natureza estrutural da área:
+ * - Pecuária: cria, recria, engorda, reforma_pecuaria, vedado
+ * - Agricultura: agricultura
+ * - Estrutural/Ambiental: benfeitorias, app, reserva_legal
+ *
+ * Tipos NÃO pecuários — excluídos de área pecuária e conciliação.
+ */
 const TIPOS_USO_NAO_PECUARIO = new Set([
-  'reforma_pecuaria', 'agricultura', 'app', 'reserva_legal', 'benfeitorias', 'vedado',
+  'agricultura', 'app', 'reserva_legal', 'benfeitorias',
 ]);
 
-/** Retorna true se o tipo de uso efetivo do pasto (mensal ou cadastro) é pecuário */
-function isPastoPecuario(pasto: Pasto, fechamento: FechamentoPasto | null): boolean {
+/**
+ * Tipos pecuários SEM lotação operacional no mês.
+ * Pertencem à área pecuária (estruturalmente), mas não devem gerar
+ * divergência de conciliação de cabeças por não terem rebanho alocado.
+ */
+const TIPOS_PECUARIO_SEM_LOTACAO = new Set([
+  'reforma_pecuaria', 'vedado',
+]);
+
+/** Retorna o tipo de uso efetivo (mensal > cadastro) */
+function getTipoUsoEfetivo(pasto: Pasto, fechamento: FechamentoPasto | null): string {
   const tipoMes = fechamento?.tipo_uso_mes;
-  const tipoEfetivo = normalizeTipoUso(tipoMes || pasto.tipo_uso);
+  return normalizeTipoUso(tipoMes || pasto.tipo_uso);
+}
+
+/** Retorna true se o tipo de uso efetivo é pecuário (inclui reforma e vedado) */
+function isPastoPecuario(pasto: Pasto, fechamento: FechamentoPasto | null): boolean {
+  const tipoEfetivo = getTipoUsoEfetivo(pasto, fechamento);
   if (!tipoEfetivo) return true; // sem tipo = assume pecuário
   return !TIPOS_USO_NAO_PECUARIO.has(tipoEfetivo);
+}
+
+/**
+ * Retorna true se o pasto exige conciliação operacional de cabeças no mês.
+ * Pastos pecuários sem lotação (reforma, vedado) são automaticamente conciliados.
+ */
+function isPastoOperacional(pasto: Pasto, fechamento: FechamentoPasto | null): boolean {
+  const tipoEfetivo = getTipoUsoEfetivo(pasto, fechamento);
+  if (!tipoEfetivo) return true;
+  if (TIPOS_USO_NAO_PECUARIO.has(tipoEfetivo)) return false;
+  if (TIPOS_PECUARIO_SEM_LOTACAO.has(tipoEfetivo)) return false;
+  return true;
 }
 
 /* ── GMD color ── */
