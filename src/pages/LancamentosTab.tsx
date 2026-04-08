@@ -1830,16 +1830,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isEditing = !!editingAbateId;
   const renderSidebar = () => {
     const parentCls = (active: boolean) =>
-      `w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-bold transition-all ${
+      `w-full flex items-center gap-1 px-2 py-0.5 rounded-md text-[12px] font-bold transition-all ${
         isEditing && !active ? 'opacity-20 cursor-not-allowed pointer-events-none grayscale text-muted-foreground/50 shadow-none' :
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
       }`;
     const childCls = (active: boolean) =>
-      `w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] font-semibold transition-all text-left ${
+      `w-full flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-semibold transition-all text-left ${
         isEditing && !active ? 'opacity-20 cursor-not-allowed pointer-events-none grayscale text-muted-foreground/50 shadow-none border-transparent' :
         active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
       }`;
-    const childWrap = "ml-3 mt-0.5 border-l-2 border-primary/30 pl-1.5 space-y-0.5";
+    const childWrap = "ml-2.5 mt-px border-l-2 border-primary/30 pl-1 space-y-px";
 
     const handleNavClick = (cb: () => void) => {
       if (isEditing) return; // Block navigation during edit
@@ -1847,7 +1847,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     };
 
     return (
-      <div className="shrink-0 space-y-2">
+      <div className="shrink-0 space-y-1">
         {/* Entradas */}
         <div>
           <button onClick={() => handleNavClick(() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); })} className={parentCls(aba === 'entrada')} disabled={isEditing && aba !== 'entrada'}>
