@@ -577,6 +577,7 @@ const Index = () => {
           onNavigateToReclass={goToReclassFromFechamento}
           onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')}
           onNavigateToConferenciaGmd={() => handleTabChange('conferencia_gmd')}
+          onNavigateToMapaPastos={() => handleTabChange('mapa_pastos')}
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
