@@ -1016,8 +1016,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <p className="text-[10px] text-muted-foreground/70">Apenas o mês vigente pode ser alimentado.</p>
           </div>
         )}
-      <div className="flex gap-3 items-start">
-        <div className="flex-1 max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
+      <div className="flex flex-col lg:flex-row gap-3 items-start">
+        <div className="w-full lg:flex-1 lg:max-w-[50%] min-w-0 bg-card rounded-lg shadow-sm border overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b bg-primary/15">
@@ -1154,7 +1154,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
 
-        <div className="min-w-[200px] flex-1 space-y-1.5">
+        <div className="w-full lg:min-w-[200px] lg:flex-1 space-y-1.5">
           {uAvisoSnapshotIncompleto ? (
             <Card className="bg-amber-500/10 border-amber-500/30">
               <CardContent className="p-4 flex flex-col items-center justify-center gap-2 text-center">
