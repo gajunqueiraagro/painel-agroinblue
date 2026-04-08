@@ -217,7 +217,7 @@ function buildMonthlyDataFromView(
   const desfruteLancs = lancPec.filter(l =>
     TIPOS_DESFRUTE.has(l.tipo) && l.cenario !== 'meta',
   );
-  const mesPrefix = (m: number) => `${ano}-${String(m).padStart(2, '0')}`;
+  // mesPrefix already defined above
   const desfruteCab = mk(m => desfruteLancs
     .filter(l => l.data.startsWith(mesPrefix(m)))
     .reduce((s, l) => s + l.quantidade, 0));
