@@ -49,6 +49,7 @@ import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type IndicadorMeta } from '@/lib/painelConsultor/indicadorCatalogo';
 import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
+import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
 
 // ─── Constants ───
@@ -1121,21 +1122,15 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
       // GOVERNANÇA: Apenas snapshots validados alimentam o Painel oficial
       const validRows = (data as any[] || []).filter((row: any) => row.status === 'validado');
-      validRows.forEach((row: any) => {
-        totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
-        vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
-        paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
-        cabMap.set(row.ano_mes, Number(row.cabecas) || 0);
-        pmMap.set(row.ano_mes, Number(row.peso_medio_kg) || 0);
-        arrMap.set(row.ano_mes, Number(row.arrobas_total) || 0);
-      });
-      setValorRebanhoMes(todasMeses.map(mes => totais.get(mes) || 0));
-      setRealValorCabMes(todasMeses.map(mes => vcMap.get(mes) || 0));
-      setRealPrecoArrMes(todasMeses.map(mes => paMap.get(mes) || 0));
+      // Consolidação global: usar agregação oficial (2 camadas)
+      const agg = agregaSnapshotsGlobal(validRows, todasMeses);
+      setValorRebanhoMes(todasMeses.map(mes => agg.valorTotal.get(mes) || 0));
+      setRealValorCabMes(todasMeses.map(mes => agg.valorCabeca.get(mes) || 0));
+      setRealPrecoArrMes(todasMeses.map(mes => agg.precoArroba.get(mes) || 0));
       setRealPesoSnap({
-        cabecas: todasMeses.map(mes => cabMap.get(mes) || 0),
-        pesoMedio: todasMeses.map(mes => pmMap.get(mes) || 0),
-        arrobas: todasMeses.map(mes => arrMap.get(mes) || 0),
+        cabecas: todasMeses.map(mes => agg.cabecas.get(mes) || 0),
+        pesoMedio: todasMeses.map(mes => agg.pesoMedio.get(mes) || 0),
+        arrobas: todasMeses.map(mes => agg.arrobas.get(mes) || 0),
       });
     })();
   }, [fazendaId, anoNum, fazendas]);
