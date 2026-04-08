@@ -264,9 +264,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return map;
   }, [viewDataForConcil, mesNum]);
 
-  // Operational fechamentos (pastos ativos only)
+  // Operational fechamentos: only pecuário pastos
   const operationalFechamentos = useMemo(
     () => pastosAtivos
+      .filter(pasto => isPastoPecuario(pasto, getFechamento(pasto.id)))
       .map(pasto => getFechamento(pasto.id))
       .filter((fech): fech is FechamentoPasto => Boolean(fech)),
     [pastosAtivos, getFechamento]
