@@ -585,6 +585,27 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const isFinancial = FINANCIAL_TYPES.includes(subAba);
 
+  const historicoFiltrado = useMemo(() => {
+    return lancamentosNormalizados.filter(l => {
+      try {
+        const d = parseISO(l.data);
+        if (format(d, 'yyyy') !== anoFiltro) return false;
+        if (mesFiltro !== 'todos' && format(d, 'MM') !== mesFiltro) return false;
+        return true;
+      } catch { return false; }
+    });
+  }, [lancamentosNormalizados, anoFiltro, mesFiltro]);
+
+  const MESES_HIST = [
+    { value: 'todos', label: 'Todos' },
+    { value: '01', label: 'Jan' }, { value: '02', label: 'Fev' },
+    { value: '03', label: 'Mar' }, { value: '04', label: 'Abr' },
+    { value: '05', label: 'Mai' }, { value: '06', label: 'Jun' },
+    { value: '07', label: 'Jul' }, { value: '08', label: 'Ago' },
+    { value: '09', label: 'Set' }, { value: '10', label: 'Out' },
+    { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
+  ];
+
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
