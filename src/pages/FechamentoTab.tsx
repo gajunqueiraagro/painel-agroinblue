@@ -692,7 +692,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                       : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
                       : 'text-muted-foreground'
                     }`}>
-                      {p.tipo_uso.toUpperCase()}
+                      {tipoUsoEfetivo!.toUpperCase()}
                     </span>
                   )}
                 </div>
