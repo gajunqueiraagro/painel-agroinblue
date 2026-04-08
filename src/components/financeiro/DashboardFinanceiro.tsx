@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { calcSaldoPorCategoriaLegado } from '@/lib/calculos/zootecnicos';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { calcValorTotal, calcArrobasSafe } from '@/lib/calculos/economicos';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -594,21 +594,19 @@ export function DashboardFinanceiro({
     ano, mesNum, fazendaIdsReais,
   );
 
-  const zooData = useMemo(() => {
-    const saldoInicialAno = saldosIniciais
-      .filter(s => s.ano === ano)
-      .reduce((sum, s) => sum + s.quantidade, 0);
+  // FONTE OFICIAL: useRebanhoOficial para cabeças médias
+  const rebanhoOf = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
 
+  const zooData = useMemo(() => {
     const saldoAnterior = zoo.gmdAberturaMes.estoqueInicialDetalhe.reduce((s, d) => s + d.cabecas, 0);
     const saldoFinalMes = zoo.saldoFinalMes;
     const cabMediaMes = (saldoAnterior > 0 || saldoFinalMes > 0) ? (saldoAnterior + saldoFinalMes) / 2 : null;
 
     const rebanhosMensais: RebanhoMedioMensal[] = [];
     for (let m = 1; m <= mesLimite; m++) {
-      const saldoInicioMes = m === 1
-        ? saldoInicialAno
-        : Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m - 1).values()).reduce((s, v) => s + v, 0);
-      const saldoFimMes = Array.from(calcSaldoPorCategoriaLegado(saldosIniciais, lancamentosPecuarios, ano, m).values()).reduce((s, v) => s + v, 0);
+      const faz = rebanhoOf.getFazendaMes(m);
+      const saldoInicioMes = faz?.cabecasInicio ?? 0;
+      const saldoFimMes = faz?.cabecasFinal ?? 0;
       const media = (saldoInicioMes + saldoFimMes) / 2;
       rebanhosMensais.push({ mes: m, saldoInicio: saldoInicioMes, saldoFim: saldoFimMes, media });
     }
@@ -621,13 +619,15 @@ export function DashboardFinanceiro({
       ? arrobasGlobal.somaArrobas
       : zoo.arrobasProduzidasAcumulado;
 
+    const saldoInicialAno = rebanhoOf.getFazendaMes(1)?.cabecasInicio ?? 0;
+
     return {
       cabMediaMes, cabMediaAcum, rebanhosMensais, arrobasProduzidasAcum,
       saldoAnterior, saldoFinalMes, saldoInicialAno,
       arrobasProduzidasMes: zoo.arrobasProduzidasMes,
       gmdAcumulado: zoo.gmdAcumulado,
     };
-  }, [zoo, saldosIniciais, ano, mesLimite, lancamentosPecuarios, isGlobal, arrobasGlobal.somaArrobas]);
+  }, [zoo, rebanhoOf.loading, rebanhoOf.getFazendaMes, mesLimite, isGlobal, arrobasGlobal.somaArrobas]);
 
   // =========================================================================
   // FINANCEIRO — filtros (mês selecionado)
