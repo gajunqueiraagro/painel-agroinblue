@@ -639,7 +639,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const status = fech?.status;
             const resumo = getResumo(fech, p);
             const adminClose = isAdminClosed(fech);
-            const tipoNorm = normalizeTipoUso(p.tipo_uso);
+            const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
+            const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
             const isEmpty = resumo.totalCabecas === 0;
 
             const cardBg = isEmpty
@@ -684,14 +685,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   {p.area_produtiva_ha ? (
                     <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
                   ) : <span />}
-                  {p.tipo_uso && (
+                  {tipoUsoEfetivo && (
                     <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
                       tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                       : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
                       : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
                       : 'text-muted-foreground'
                     }`}>
-                      {p.tipo_uso.toUpperCase()}
+                      {tipoUsoEfetivo!.toUpperCase()}
                     </span>
                   )}
                 </div>
