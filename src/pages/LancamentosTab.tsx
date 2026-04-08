@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { MetaLancamentoPanel, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
+import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
