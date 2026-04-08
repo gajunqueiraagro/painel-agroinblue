@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
+import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
@@ -247,6 +248,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
    const [vendaDialogOpen, setVendaDialogOpen] = useState(false);
    const [transferenciaDetalhes, setTransferenciaDetalhes] = useState<TransferenciaDetalhes | null>(null);
    const [transferenciaDialogOpen, setTransferenciaDialogOpen] = useState(false);
+  const [evolucaoDialogOpen, setEvolucaoDialogOpen] = useState(false);
+  const [evolucaoSugestao, setEvolucaoSugestao] = useState<EvolucaoSugestao | null>(null);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -1887,7 +1890,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
 
-
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
   const renderFinancialPanel = () => {
 
@@ -2678,10 +2680,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   pesoKg={Number(pesoKg) || 0}
                   clienteId={clienteAtual?.id}
                   onSugestaoEvolucao={(info: EvolucaoSugestao) => {
-                    toast.info(
-                      `Sugestão: ${info.categoriaAtual} → ${info.categoriaDestino}. Peso médio atual: ${info.pesoMedioAtual.toFixed(1)} kg (mín. evolução: ${info.pesoEvolucao} kg). Crie a movimentação de reclassificação manualmente.`,
-                      { duration: 8000 }
-                    );
+                    setEvolucaoSugestao(info);
+                    setEvolucaoDialogOpen(true);
                   }}
                 />
               )}
@@ -3031,6 +3031,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           fazendaId={fazendaAtual.id}
           anoMes={formAnoMes}
           onReaberto={refetchPilares}
+        />
+      )}
+      {evolucaoSugestao && (
+        <EvolucaoAssistidaDialog
+          open={evolucaoDialogOpen}
+          onOpenChange={setEvolucaoDialogOpen}
+          sugestao={evolucaoSugestao}
+          saldoAtual={evolucaoSugestao.saldoAtual}
         />
       )}
     </div>

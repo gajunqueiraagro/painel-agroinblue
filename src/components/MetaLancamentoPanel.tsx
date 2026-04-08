@@ -74,6 +74,7 @@ export interface EvolucaoSugestao {
   pesoMedioAtual: number;
   pesoEvolucao: number;
   elegivel: boolean;
+  saldoAtual: number;
 }
 
 interface Bloqueio {
@@ -342,6 +343,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       pesoMedioAtual: pesoRef,
       pesoEvolucao: catParams.pesoEvolucaoKg,
       elegivel: pesoRef >= catParams.pesoEvolucaoKg,
+      saldoAtual,
     };
   }, [categoria, catParams, simulacao, pesoMedioAtual]);
 
