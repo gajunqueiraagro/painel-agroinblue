@@ -159,17 +159,42 @@ function buildMonthlyDataFromView(
   ano: number,
   areaProdutiva: number,
   valorRebanhoMes: number[],
+  isGlobal = false,
 ): MonthlyData {
   const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
   const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
+  const mesPrefix = (m: number) => `${ano}-${String(m).padStart(2, '0')}`;
 
   // Zootechnical data from official view
   const cabIni = mk(m => viewTotals[m]?.saldo_inicial ?? 0);
   const cabFin = mk(m => viewTotals[m]?.saldo_final ?? 0);
   // REGRA OFICIAL: entradas/saídas = apenas fluxo externo real da fazenda
   // Evol. Cat. (reclassificação interna) NÃO entra nos indicadores de fluxo
-  const entradas = mk(m => viewTotals[m]?.entradas_externas ?? 0);
-  const saidas = mk(m => viewTotals[m]?.saidas_externas ?? 0);
+  let entradas = mk(m => viewTotals[m]?.entradas_externas ?? 0);
+  let saidas = mk(m => viewTotals[m]?.saidas_externas ?? 0);
+
+  // ── GLOBAL: neutralizar transferências inter-fazendas ──
+  // No nível Global, transferências entre fazendas do grupo são movimento interno
+  // e não devem inflar entradas nem saídas do sistema.
+  if (isGlobal) {
+    const transferRealizado = lancPec.filter(l =>
+      l.cenario !== 'meta' &&
+      (l.tipo === 'transferencia_entrada' || l.tipo === 'transferencia_saida') &&
+      l.data.startsWith(String(ano)),
+    );
+    const transfEntMes = mk(m =>
+      transferRealizado
+        .filter(l => l.tipo === 'transferencia_entrada' && l.data.startsWith(mesPrefix(m)))
+        .reduce((s, l) => s + l.quantidade, 0),
+    );
+    const transfSaiMes = mk(m =>
+      transferRealizado
+        .filter(l => l.tipo === 'transferencia_saida' && l.data.startsWith(mesPrefix(m)))
+        .reduce((s, l) => s + l.quantidade, 0),
+    );
+    entradas = entradas.map((v, i) => Math.max(0, v - transfEntMes[i]));
+    saidas = saidas.map((v, i) => Math.max(0, v - transfSaiMes[i]));
+  }
   const pesoTotalIni = mk(m => viewTotals[m]?.peso_total_inicial ?? 0);
   const pesoTotalFin = mk(m => viewTotals[m]?.peso_total_final ?? 0);
   const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : 0; });
