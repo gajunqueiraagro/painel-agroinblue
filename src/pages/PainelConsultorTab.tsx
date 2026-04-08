@@ -12,6 +12,8 @@
  * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
+import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1038,7 +1040,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       }
       const { data, error } = await supabase
         .from('valor_rebanho_realizado_validado' as any)
-        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
+        .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total, status')
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
       if (error) {
