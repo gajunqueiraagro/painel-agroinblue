@@ -1,5 +1,5 @@
 /**
- * MetaLancamentoPanel — Painel Inteligente para Lançamentos META
+ * MetaLancamentoPanel — Painel Inteligente META (Stepper Vertical)
  *
  * FONTES OFICIAIS:
  *   - Saldo/peso: useRebanhoOficial({ cenario: 'meta' })
@@ -13,16 +13,13 @@
  *   - Movimentações NÃO reescrevem parâmetros
  *   - Toda correção estrutural deve ser explícita e auditável
  *
- * categoria_proxima: representa o caminho padrão de evolução.
- * NÃO representa todos os caminhos futuros possíveis.
- *
  * THRESHOLDS TEMPORÁRIOS (parametrizáveis no futuro):
  *   ALERTA_FAIXA_PCT = 10% do limite superior
  *   ALERTA_GMD_DESVIO_PCT = 20% de desvio GMD
  */
 
-import { useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Info, ArrowRight, TrendingUp } from 'lucide-react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
+import { AlertTriangle, CheckCircle2, Info, ArrowRight, TrendingUp, ChevronDown, Lock } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,6 +32,7 @@ import {
   type CategoriaParametros,
 } from '@/hooks/useCategoriaParametros';
 import { CATEGORIAS, type Categoria, type TipoMovimentacao } from '@/types/cattle';
+import { cn } from '@/lib/utils';
 
 // ── Helpers de tipo ──
 
@@ -66,6 +64,8 @@ interface Props {
   clienteId?: string;
   /** Callback informativo — não grava nada */
   onSugestaoEvolucao?: (info: EvolucaoSugestao) => void;
+  /** State callback for parent coordination */
+  onStepStateChange?: (state: MetaStepState) => void;
 }
 
 export interface EvolucaoSugestao {
@@ -75,6 +75,12 @@ export interface EvolucaoSugestao {
   pesoEvolucao: number;
   elegivel: boolean;
   saldoAtual: number;
+}
+
+export interface MetaStepState {
+  hasBloqueio: boolean;
+  etapaEvolucaoValidada: boolean;
+  etapaFinanceiroHabilitado: boolean;
 }
 
 interface Bloqueio {
@@ -124,12 +130,10 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
   const nascimento = isNascimento(tipo);
   const isReclass = isReclassificacaoTipo(tipo);
 
-  // ── Projeção de saldo e peso ──
   let saldoFinalProjetado: number;
   let pesoTotalFinalProjetado: number;
 
   if (isSaida || isReclass) {
-    // Reclassificação = saída da categoria atual para fins de bloqueio
     saldoFinalProjetado = saldoAtual - quantidade;
     pesoTotalFinalProjetado = pesoTotalAtual - (quantidade * pesoKg);
   } else {
@@ -141,11 +145,7 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     ? pesoTotalFinalProjetado / saldoFinalProjetado
     : null;
 
-  // ═══════════════════════════════════════════
   // BLOQUEIOS
-  // ═══════════════════════════════════════════
-
-  // 1. Saldo negativo — apenas saídas e reclassificação
   if ((isSaida || isReclass) && saldoFinalProjetado < 0) {
     result.push({
       tipo: 'bloqueio',
@@ -153,10 +153,7 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     });
   }
 
-  // 2. Peso fora da faixa da categoria
   if (catParams && pesoKg > 0) {
-    // Nascimento: usa faixa da categoria de nascimento (peso_min pode ser baixo)
-    // Demais tipos: usa faixa padrão
     if (pesoKg < catParams.pesoMinKg) {
       result.push({
         tipo: 'bloqueio',
@@ -171,7 +168,6 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     }
   }
 
-  // 3. Peso médio final incoerente (apenas quando saldo > 0)
   if (saldoFinalProjetado > 0 && pesoMedioFinalProjetado != null) {
     if (pesoMedioFinalProjetado <= 0) {
       result.push({ tipo: 'bloqueio', mensagem: 'Peso médio final projetado é negativo ou zero' });
@@ -184,11 +180,7 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     }
   }
 
-  // ═══════════════════════════════════════════
-  // ALERTAS (permitem salvar)
-  // ═══════════════════════════════════════════
-
-  // Peso próximo do limite superior (não aplicar para nascimento)
+  // ALERTAS
   if (catParams && pesoKg > 0 && !nascimento) {
     const limiar = catParams.pesoMaxKg * (1 - ALERTA_FAIXA_PCT);
     if (pesoKg >= limiar && pesoKg <= catParams.pesoMaxKg) {
@@ -196,7 +188,6 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     }
   }
 
-  // Elegível para evolução (apenas quando saldo > 0 após operação)
   if (catParams?.pesoEvolucaoKg && pesoMedioFinalProjetado != null && saldoFinalProjetado > 0) {
     if (pesoMedioFinalProjetado >= catParams.pesoEvolucaoKg) {
       result.push({
@@ -209,14 +200,89 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
   return result;
 }
 
+// ── Stepper Step Component ──
+
+type StepStatus = 'active' | 'done' | 'pending' | 'disabled';
+
+interface StepHeaderProps {
+  step: number;
+  label: string;
+  status: StepStatus;
+  expanded: boolean;
+  onToggle: () => void;
+  tooltip?: string;
+  alwaysOpen?: boolean;
+}
+
+function StepHeader({ step, label, status, expanded, onToggle, tooltip, alwaysOpen }: StepHeaderProps) {
+  const isDisabled = status === 'disabled';
+
+  const statusIcon = {
+    done: <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />,
+    pending: <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />,
+    active: <div className="h-3.5 w-3.5 rounded-full border-2 border-primary bg-primary/20" />,
+    disabled: <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />,
+  };
+
+  const content = (
+    <button
+      type="button"
+      onClick={isDisabled ? undefined : onToggle}
+      disabled={isDisabled}
+      className={cn(
+        'flex items-center gap-2 w-full text-left py-1.5 px-1 rounded transition-colors',
+        isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50 cursor-pointer',
+        expanded && !alwaysOpen && 'bg-muted/30',
+      )}
+    >
+      <span className={cn(
+        'flex items-center justify-center h-5 w-5 rounded-full text-[9px] font-bold shrink-0',
+        status === 'done' ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400' :
+        status === 'pending' ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400' :
+        status === 'disabled' ? 'bg-muted text-muted-foreground/50' :
+        'bg-primary/10 text-primary',
+      )}>
+        {step}
+      </span>
+      <span className={cn(
+        'text-[10px] font-bold uppercase flex-1',
+        isDisabled ? 'text-muted-foreground/50' : 'text-muted-foreground',
+      )}>
+        {label}
+      </span>
+      {statusIcon[status]}
+      {!alwaysOpen && !isDisabled && (
+        <ChevronDown className={cn(
+          'h-3 w-3 text-muted-foreground transition-transform',
+          expanded && 'rotate-180',
+        )} />
+      )}
+    </button>
+  );
+
+  if (tooltip && isDisabled) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent side="left" className="text-[10px] max-w-[200px]">{tooltip}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return content;
+}
+
 // ── Component ──
 
-export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao }: Props) {
+export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao, onStepStateChange }: Props) {
   const { getSaldoMap, getPesoMedioMap, getCategoriasDetalhe, loading: loadingRebanho } = useRebanhoOficial({ ano, cenario: 'meta' });
   const { rows: gmdRows } = useMetaGmd(String(ano));
   const { getParametros, getProximaCategoria, isLoading: loadingParams } = useCategoriaParametros(clienteId);
 
   const loading = loadingRebanho || loadingParams;
+
+  // ── Stepper state ──
+  const [expandedStep, setExpandedStep] = useState<number | null>(null);
 
   // ── Dados da base oficial META ──
   const saldoMap = useMemo(() => getSaldoMap(mes), [getSaldoMap, mes]);
@@ -237,7 +303,6 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
     if (!categoria || quantidade <= 0) return null;
 
     const isSaida = isMovimentacaoSaida(tipo);
-    const isEntradaTipo = isMovimentacaoEntrada(tipo);
     const isReclass = isReclassificacaoTipo(tipo);
 
     let saldoFinalProjetado: number;
@@ -255,36 +320,17 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       ? pesoTotalFinalProjetado / saldoFinalProjetado
       : saldoFinalProjetado === 0
         ? null
-        : undefined; // negativo = incoerente
+        : undefined;
 
-    return {
-      saldoFinalProjetado,
-      pesoTotalFinalProjetado,
-      pesoMedioFinalProjetado,
-    };
+    return { saldoFinalProjetado, pesoTotalFinalProjetado, pesoMedioFinalProjetado };
   }, [categoria, quantidade, pesoKg, tipo, saldoAtual, pesoTotalAtual]);
 
-  // ── BLOCO 3: Validações (lógica centralizada) ──
+  // ── BLOCO 3: Validações ──
   const validacoes = useMemo((): Validacao[] => {
-    return calcularValidacoesMeta({
-      categoria, tipo, quantidade, pesoKg,
-      saldoAtual, pesoTotalAtual, catParams,
-    });
+    return calcularValidacoesMeta({ categoria, tipo, quantidade, pesoKg, saldoAtual, pesoTotalAtual, catParams });
   }, [categoria, tipo, quantidade, pesoKg, saldoAtual, pesoTotalAtual, catParams]);
 
-  // ── BLOCO 5: GMD implícito (fórmula estrutural, NÃO circular) ──
-  /**
-   * GMD implícito = (pesoFinal - pesoInicial - pesoEntradas + pesoSaidas) / cabMedias / dias
-   *
-   * Onde:
-   *   pesoEntradas = peso_entradas_externas + peso_evol_cat_entrada
-   *   pesoSaidas   = peso_saidas_externas + peso_evol_cat_saida
-   *   cabMedias    = (saldo_inicial + saldo_final) / 2
-   *   dias         = dias do mês
-   *
-   * Se cabMedias <= 0 → nulo (sem base confiável)
-   * Se dias <= 0 → nulo
-   */
+  // ── GMD implícito ──
   const gmdInfo = useMemo(() => {
     if (!categoria) return null;
     const mesKey = String(mes).padStart(2, '0');
@@ -310,14 +356,10 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
     return { gmdPlanejado, gmdImplicito, desvio };
   }, [categoria, mes, gmdRows, catDetalhe]);
 
-  // GMD desvio alert
   const gmdAlerta = useMemo((): Alerta | null => {
     if (!gmdInfo?.desvio || Math.abs(gmdInfo.desvio) <= ALERTA_GMD_DESVIO_PCT) return null;
     const pct = (gmdInfo.desvio * 100).toFixed(0);
-    return {
-      tipo: 'alerta',
-      mensagem: `Desvio de ${pct}% entre GMD implícito e GMD planejado`,
-    };
+    return { tipo: 'alerta', mensagem: `Desvio de ${pct}% entre GMD implícito e GMD planejado` };
   }, [gmdInfo]);
 
   const allValidacoes = useMemo(() => {
@@ -331,7 +373,6 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const hasBloqueio = bloqueios.length > 0;
 
   // ── Sugestão de evolução ──
-  // Mostra apenas elegibilidade e destino, sem calcular quantidade exata
   const evolucaoInfo = useMemo((): EvolucaoSugestao | null => {
     if (!categoria || !catParams?.categoriaProxima || !catParams.pesoEvolucaoKg) return null;
     const pesoRef = simulacao?.pesoMedioFinalProjetado ?? pesoMedioAtual;
@@ -345,7 +386,29 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       elegivel: pesoRef >= catParams.pesoEvolucaoKg,
       saldoAtual,
     };
-  }, [categoria, catParams, simulacao, pesoMedioAtual]);
+  }, [categoria, catParams, simulacao, pesoMedioAtual, saldoAtual]);
+
+  // ── Step state derivation ──
+  const hasEvolucao = evolucaoInfo != null;
+  const evolucaoElegivel = evolucaoInfo?.elegivel ?? false;
+  // Non-eligible or no evolution path = auto-validated
+  const etapaEvolucaoValidada = !hasEvolucao || !evolucaoElegivel;
+  const etapaFinanceiroHabilitado = !hasBloqueio && etapaEvolucaoValidada;
+
+  // Notify parent of state changes
+  useEffect(() => {
+    onStepStateChange?.({ hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado });
+  }, [hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, onStepStateChange]);
+
+  // Step statuses
+  const step1Status: StepStatus = 'done';
+  const step2Status: StepStatus = simulacao ? (hasBloqueio ? 'pending' : 'done') : 'active';
+  const step3Status: StepStatus = !hasEvolucao ? 'done' : (evolucaoElegivel ? 'pending' : 'done');
+  const step4Status: StepStatus = etapaFinanceiroHabilitado ? 'active' : 'disabled';
+
+  const handleToggleStep = useCallback((step: number) => {
+    setExpandedStep(prev => prev === step ? null : step);
+  }, []);
 
   if (!categoria) {
     return (
@@ -370,227 +433,247 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   }
 
   return (
-    <div className="bg-card rounded-md border border-orange-200 dark:border-orange-800 shadow-sm p-3 space-y-2.5 self-start max-h-[80vh] overflow-y-auto">
+    <div className="bg-card rounded-md border border-orange-200 dark:border-orange-800 shadow-sm self-start flex flex-col max-h-[80vh]">
       {/* Header */}
-      <h3 className="text-[13px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
-        <TrendingUp className="h-4 w-4" /> Painel Inteligente META
-      </h3>
-
-      {/* Fontes */}
-      <div className="flex flex-wrap gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-[9px] bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded font-medium cursor-help">
-              Saldo: META oficial
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-[10px] max-w-[200px]">
-            Fonte: vw_zoot_categoria_mensal (cenario = meta)
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-[9px] bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded font-medium cursor-help">
-              GMD: Meta planejada
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-[10px] max-w-[200px]">
-            Fonte: meta_gmd_mensal
-          </TooltipContent>
-        </Tooltip>
-        <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">
-          Simulação: local
-        </span>
+      <div className="p-3 pb-1.5">
+        <h3 className="text-[13px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+          <TrendingUp className="h-4 w-4" /> Painel Inteligente META
+        </h3>
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-[9px] bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded font-medium cursor-help">
+                Saldo: META oficial
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-[10px] max-w-[200px]">
+              Fonte: vw_zoot_categoria_mensal (cenario = meta)
+            </TooltipContent>
+          </Tooltip>
+          <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">
+            Simulação: local
+          </span>
+        </div>
       </div>
 
       <Separator />
 
-      {/* BLOCO 1: Situação Atual */}
-      <div>
-        <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Situação Atual do Lote</h4>
-        <div className="space-y-0.5 text-[11px]">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Categoria</span>
-            <span className="font-semibold">{getCategoriaLabel(categoria)}</span>
+      {/* Scrollable stepper area */}
+      <div className="flex-1 overflow-y-auto p-3 pt-1.5 space-y-0.5">
+
+        {/* ═══ ETAPA 1: Situação do Lote (always visible) ═══ */}
+        <div>
+          <StepHeader step={1} label="Situação do Lote" status={step1Status} expanded alwaysOpen onToggle={() => {}} />
+          <div className="pl-7 pb-2">
+            <div className="space-y-0.5 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Categoria</span>
+                <span className="font-semibold">{getCategoriaLabel(categoria)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Saldo atual</span>
+                <span className="font-semibold">{saldoAtual} cab</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Peso médio</span>
+                <span className="font-semibold">{pesoMedioAtual != null ? `${fmt(pesoMedioAtual, 1)} kg` : '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Peso total</span>
+                <span className="font-semibold">{pesoTotalAtual > 0 ? `${fmt(pesoTotalAtual, 0)} kg` : '-'}</span>
+              </div>
+              {catParams && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Faixa válida</span>
+                  <span className="font-medium text-[10px]">{fmt(catParams.pesoMinKg, 0)} – {fmt(catParams.pesoMaxKg, 0)} kg</span>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Saldo atual</span>
-            <span className="font-semibold">{saldoAtual} cab</span>
+        </div>
+
+        <Separator className="my-0.5" />
+
+        {/* ═══ ETAPA 2: Simulação (always visible when active) ═══ */}
+        <div>
+          <StepHeader step={2} label="Simulação" status={step2Status} expanded alwaysOpen onToggle={() => {}} />
+          <div className="pl-7 pb-2">
+            {simulacao && quantidade > 0 ? (
+              <div className="space-y-1.5">
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Saldo final projetado</span>
+                    <span className={cn('font-semibold', simulacao.saldoFinalProjetado < 0 && 'text-destructive')}>
+                      {simulacao.saldoFinalProjetado} cab
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Peso total remanescente</span>
+                    <span className="font-semibold">{fmt(simulacao.pesoTotalFinalProjetado, 0)} kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Peso médio final</span>
+                    <span className={cn('font-semibold', simulacao.pesoMedioFinalProjetado != null && simulacao.pesoMedioFinalProjetado <= 0 && 'text-destructive')}>
+                      {simulacao.pesoMedioFinalProjetado != null ? `${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg` : '-'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Validações inline */}
+                {allValidacoes.length > 0 && (
+                  <div className="space-y-1">
+                    {bloqueios.map((v, i) => (
+                      <div key={`b-${i}`} className="flex items-start gap-1.5 bg-destructive/10 text-destructive rounded p-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
+                      </div>
+                    ))}
+                    {alertas.map((v, i) => (
+                      <div key={`a-${i}`} className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded p-1.5">
+                        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {allValidacoes.length === 0 && pesoKg > 0 && (
+                  <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-medium">Lançamento válido</span>
+                  </div>
+                )}
+
+                {/* GMD inline */}
+                {gmdInfo && (gmdInfo.gmdPlanejado != null || gmdInfo.gmdImplicito != null) && (
+                  <div className="space-y-0.5 text-[11px] pt-1 border-t border-border/50">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">GMD planejado</span>
+                      <span className="font-semibold">{gmdInfo.gmdPlanejado != null ? `${fmt(gmdInfo.gmdPlanejado, 3)} kg` : '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">GMD implícito</span>
+                      <span className="font-semibold">{gmdInfo.gmdImplicito != null ? `${fmt(gmdInfo.gmdImplicito, 3)} kg` : '-'}</span>
+                    </div>
+                    {gmdInfo.desvio != null && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Desvio</span>
+                        <span className={cn('font-semibold', Math.abs(gmdInfo.desvio) > ALERTA_GMD_DESVIO_PCT && 'text-amber-600 dark:text-amber-400')}>
+                          {gmdInfo.desvio > 0 ? '+' : ''}{(gmdInfo.desvio * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[10px] text-muted-foreground italic">Preencha quantidade e peso para simular.</p>
+            )}
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Peso médio</span>
-            <span className="font-semibold">{pesoMedioAtual != null ? `${fmt(pesoMedioAtual, 1)} kg` : '-'}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Peso total</span>
-            <span className="font-semibold">{pesoTotalAtual > 0 ? `${fmt(pesoTotalAtual, 0)} kg` : '-'}</span>
-          </div>
-          {catParams && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Faixa válida</span>
-              <span className="font-medium text-[10px]">{fmt(catParams.pesoMinKg, 0)} – {fmt(catParams.pesoMaxKg, 0)} kg</span>
+        </div>
+
+        <Separator className="my-0.5" />
+
+        {/* ═══ ETAPA 3: Evolução de Categoria (condicional) ═══ */}
+        <div>
+          <StepHeader
+            step={3}
+            label="Evolução de Categoria"
+            status={step3Status}
+            expanded={expandedStep === 3}
+            onToggle={() => handleToggleStep(3)}
+          />
+          {expandedStep === 3 && (
+            <div className="pl-7 pb-2">
+              {!hasEvolucao ? (
+                <p className="text-[10px] text-muted-foreground italic">
+                  Sem caminho de evolução configurado para esta categoria.
+                </p>
+              ) : evolucaoInfo.elegivel ? (
+                <div className="space-y-1.5">
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                    <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">
+                      ✅ Lote elegível para evolução
+                    </p>
+                    <p className="text-[10px] text-green-600 dark:text-green-500">
+                      Peso médio ({fmt(evolucaoInfo.pesoMedioAtual, 1)} kg) ≥ peso de evolução ({fmt(evolucaoInfo.pesoEvolucao, 0)} kg)
+                    </p>
+                    <p className="text-[10px] text-green-600 dark:text-green-500">
+                      Destino: <strong>{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</strong>
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-7 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
+                      onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
+                    >
+                      Abrir evolução da categoria
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[10px] text-muted-foreground space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span>{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</span>
+                    <ArrowRight className="h-3 w-3" />
+                    <span className="font-semibold">{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</span>
+                  </div>
+                  <p>
+                    Peso atual {fmt(evolucaoInfo.pesoMedioAtual, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          {/* Compact info when collapsed and has evolution */}
+          {expandedStep !== 3 && hasEvolucao && (
+            <div className="pl-7 pb-1">
+              <span className={cn(
+                'text-[9px]',
+                evolucaoElegivel ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400',
+              )}>
+                {evolucaoElegivel
+                  ? `⚠ Pendente — elegível (${fmt(evolucaoInfo!.pesoMedioAtual, 1)} kg)`
+                  : `✔ Não elegível — concluída`
+                }
+              </span>
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-0.5" />
+
+        {/* ═══ ETAPA 4: Financeiro ═══ */}
+        <div>
+          <StepHeader
+            step={4}
+            label="Financeiro"
+            status={step4Status}
+            expanded={expandedStep === 4}
+            onToggle={() => handleToggleStep(4)}
+            tooltip={!etapaFinanceiroHabilitado ? 'Finalize a evolução para liberar o financeiro' : undefined}
+          />
+          {expandedStep === 4 && etapaFinanceiroHabilitado && (
+            <div className="pl-7 pb-2">
+              <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-medium">Etapa financeira habilitada</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Configure os detalhes financeiros no painel abaixo para concluir.
+              </p>
+            </div>
+          )}
+          {expandedStep !== 4 && !etapaFinanceiroHabilitado && (
+            <div className="pl-7 pb-1">
+              <span className="text-[9px] text-muted-foreground/60">
+                🔒 Bloqueado — resolva pendências anteriores
+              </span>
             </div>
           )}
         </div>
       </div>
-
-      {/* BLOCO 2: Simulação */}
-      {simulacao && quantidade > 0 && (
-        <>
-          <Separator />
-          <div>
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Simulação do Lançamento</h4>
-            <div className="space-y-0.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Saldo final projetado</span>
-                <span className={`font-semibold ${simulacao.saldoFinalProjetado < 0 ? 'text-destructive' : ''}`}>
-                  {simulacao.saldoFinalProjetado} cab
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Peso total remanescente</span>
-                <span className="font-semibold">{fmt(simulacao.pesoTotalFinalProjetado, 0)} kg</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Peso médio final</span>
-                <span className={`font-semibold ${simulacao.pesoMedioFinalProjetado != null && simulacao.pesoMedioFinalProjetado <= 0 ? 'text-destructive' : ''}`}>
-                  {simulacao.pesoMedioFinalProjetado != null ? `${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg` : '-'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* BLOCO 3: Validações */}
-      {allValidacoes.length > 0 && (
-        <>
-          <Separator />
-          <div>
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Validações</h4>
-            <div className="space-y-1">
-              {bloqueios.map((v, i) => (
-                <div key={`b-${i}`} className="flex items-start gap-1.5 bg-destructive/10 text-destructive rounded p-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
-                </div>
-              ))}
-              {alertas.map((v, i) => (
-                <div key={`a-${i}`} className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded p-1.5">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-
-      {allValidacoes.length === 0 && quantidade > 0 && pesoKg > 0 && (
-        <>
-          <Separator />
-          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            <span className="text-[10px] font-medium">Lançamento válido</span>
-          </div>
-        </>
-      )}
-
-      {/* BLOCO 4: Categoria Adjacente */}
-      {proximaCat && (
-        <>
-          <Separator />
-          <div>
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-1">Categoria Adjacente</h4>
-            <div className="space-y-0.5 text-[11px]">
-              <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">{getCategoriaLabel(categoria)}</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <span className="font-semibold">{getCategoriaLabel(proximaCat.categoriaCodigo)}</span>
-              </div>
-              {catParams?.pesoEvolucaoKg && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Peso mín. evolução</span>
-                  <span className="font-medium">{fmt(catParams.pesoEvolucaoKg, 0)} kg</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* BLOCO 5: GMD */}
-      {gmdInfo && (gmdInfo.gmdPlanejado != null || gmdInfo.gmdImplicito != null) && (
-        <>
-          <Separator />
-          <div>
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-1 flex items-center gap-1">
-              GMD
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-[10px] max-w-[260px]">
-                  <p>GMD implícito = (PesoFinal − PesoInicial − PesoEntradas + PesoSaídas) / CabMédias / Dias</p>
-                  <p className="mt-1">É apenas informativo. NÃO altera o GMD planejado.</p>
-                </TooltipContent>
-              </Tooltip>
-            </h4>
-            <div className="space-y-0.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">GMD planejado</span>
-                <span className="font-semibold">{gmdInfo.gmdPlanejado != null ? `${fmt(gmdInfo.gmdPlanejado, 3)} kg` : '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">GMD implícito</span>
-                <span className="font-semibold">{gmdInfo.gmdImplicito != null ? `${fmt(gmdInfo.gmdImplicito, 3)} kg` : '-'}</span>
-              </div>
-              {gmdInfo.desvio != null && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Desvio</span>
-                  <span className={`font-semibold ${Math.abs(gmdInfo.desvio) > ALERTA_GMD_DESVIO_PCT ? 'text-amber-600 dark:text-amber-400' : ''}`}>
-                    {gmdInfo.desvio > 0 ? '+' : ''}{(gmdInfo.desvio * 100).toFixed(1)}%
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Botão Sugerir Evolução — apenas elegibilidade e destino, sem quantidade */}
-      {evolucaoInfo && (
-        <>
-          <Separator />
-          {evolucaoInfo.elegivel ? (
-            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
-              <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">
-                ✅ Lote elegível para evolução
-              </p>
-              <p className="text-[10px] text-green-600 dark:text-green-500">
-                Peso médio ({fmt(evolucaoInfo.pesoMedioAtual, 1)} kg) ≥ peso de evolução ({fmt(evolucaoInfo.pesoEvolucao, 0)} kg)
-              </p>
-              <p className="text-[10px] text-green-600 dark:text-green-500">
-                Destino: <strong>{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</strong>
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full h-7 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
-                onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
-              >
-                Abrir evolução da categoria
-              </Button>
-            </div>
-          ) : (
-            <div className="text-[10px] text-muted-foreground">
-              <span>Evolução para <strong>{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</strong>: </span>
-              <span>peso atual {fmt(evolucaoInfo.pesoMedioAtual, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg</span>
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
