@@ -685,7 +685,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   {p.area_produtiva_ha ? (
                     <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
                   ) : <span />}
-                  {p.tipo_uso && (
+                  {tipoUsoEfetivo && (
                     <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
                       tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                       : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
