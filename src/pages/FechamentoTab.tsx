@@ -480,170 +480,171 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   return (
     <div className="pb-24">
-      {/* ═══ HEADER FIXO ═══ */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm">
-        {/* Row 1: Filtros + Status */}
-        <div className="flex items-center justify-between px-3 py-2 gap-2">
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-              <SelectTrigger className="w-[68px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-              <SelectTrigger className="w-[72px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MESES_COLS.map((m, i) => (
-                  <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border shadow-sm px-3 py-2">
+        <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-start">
 
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1">
-              <CheckCircle className="h-3 w-3" />
-              {conciliadosCount} conciliados
-            </Badge>
-            {divergenciaCount > 0 && (
-              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {divergenciaCount} divergências
+          {/* ── COL 1: Contexto / Filtros ── */}
+          <div className="flex flex-col gap-1.5 min-w-[120px]">
+            <div className="flex items-center gap-1.5">
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger className="w-[68px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+                <SelectTrigger className="w-[72px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_COLS.map((m, i) => (
+                    <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
+                <CheckCircle className="h-3 w-3" />
+                {conciliadosCount} conciliados
               </Badge>
-            )}
-          </div>
-
-          {/* Secondary actions */}
-          <div className="flex items-center gap-1 shrink-0">
-            <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2" onClick={() => setShowResumoAtividades(true)}>
-              <BarChart3 className="h-3.5 w-3.5" />
-            </Button>
-            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
-              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2 text-destructive hover:text-destructive" onClick={() => setConfirmBulkReopenOpen(true)}>
-                <Unlock className="h-3.5 w-3.5" />
+              {divergenciaCount > 0 && (
+                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold gap-1 w-fit">
+                  <AlertTriangle className="h-3 w-3" />
+                  {divergenciaCount} divergências
+                </Badge>
+              )}
+            </div>
+            {allClosed && onNavigateToValorRebanho && (
+              <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={onNavigateToValorRebanho}>
+                Inserir preço do rebanho →
               </Button>
             )}
           </div>
-        </div>
 
-        {/* ═══ TABELA CONCILIAÇÃO ═══ */}
-        <div className="overflow-x-auto px-2 pb-2">
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="bg-blue-50 dark:bg-blue-950/20">
-                <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 w-16 border-r border-blue-200 dark:border-blue-800">Cab.</th>
-                {CAT_COLS.map((c, idx) => (
-                  <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 min-w-[30px]${idx === 4 ? ' border-r border-blue-200 dark:border-blue-800' : ''}`}>{c.sigla}</th>
-                ))}
-                <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 min-w-[36px] border-l border-blue-200 dark:border-blue-800">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* SISTEMA */}
-              <tr className="bg-muted/30">
-                <td className="font-bold text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Sistema</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = saldoMap.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-semibold text-muted-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalSistema || ''}</td>
-              </tr>
-              {/* PASTO */}
-              <tr>
-                <td className="font-bold text-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Pasto</td>
-                {CAT_COLS.map((c, idx) => {
-                  const v = pastoDataByCat.get(c.codigo) || 0;
-                  return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
-                })}
-                <td className="text-center font-bold text-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalPasto || ''}</td>
-              </tr>
-              {/* DIFERENÇA */}
-              <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
-                <td className={`font-extrabold px-1.5 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
-                {CAT_COLS.map((c, idx) => {
-                  const pv = pastoDataByCat.get(c.codigo) || 0;
-                  const sv = saldoMap.get(c.codigo) || 0;
-                  const dif = pv - sv;
-                  return (
-                    <td key={c.sigla} className={`text-center font-extrabold px-1 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r border-border/30' : ''}`}>
-                      {fmtDif(dif)}
-                    </td>
-                  );
-                })}
-                <td className={`text-center font-extrabold px-1.5 py-1 border-l border-border/30 tabular-nums ${difCellClass(totalDiferenca)}`}>
-                  {fmtDif(totalDiferenca)}
-                </td>
-              </tr>
-              {/* PESO */}
-              <tr className="border-t border-border/20 bg-muted/20">
-                <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">Peso kg</td>
-                {CAT_COLS.map((c, idx) => {
-                  const peso = pesoMedioByCat.get(c.codigo);
-                  return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 0) : ''}</td>;
-                })}
-                <td className="text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 border-l border-border/30" />
-              </tr>
-              {/* GMD */}
-              <tr className="bg-muted/20">
-                <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">GMD</td>
-                {CAT_COLS.map((c, idx) => {
-                  const g = gmdByCat.get(c.codigo);
-                  return <td key={c.sigla} className={`text-center text-[9px] italic px-1 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r border-border/30' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
-                })}
-                <td className={`text-center text-[9px] italic px-1.5 py-0.5 border-l border-border/30 tabular-nums ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          {/* ── COL 2: Tabela Conciliação (compacta, centralizada) ── */}
+          <div className="flex justify-center overflow-x-auto">
+            <table className="text-[10px] border-collapse w-auto">
+              <thead>
+                <tr className="bg-blue-50 dark:bg-blue-950/20">
+                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 w-14 border-r border-blue-200 dark:border-blue-800">Cab.</th>
+                  {CAT_COLS.map((c, idx) => (
+                    <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 min-w-[28px]${idx === 4 ? ' border-r border-blue-200 dark:border-blue-800' : ''}`}>{c.sigla}</th>
+                  ))}
+                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 min-w-[34px] border-l border-blue-200 dark:border-blue-800">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* SISTEMA */}
+                <tr className="bg-muted/30">
+                  <td className="font-bold text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Sistema</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = saldoMap.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-semibold text-muted-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalSistema || ''}</td>
+                </tr>
+                {/* PASTO */}
+                <tr>
+                  <td className="font-bold text-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Pasto</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const v = pastoDataByCat.get(c.codigo) || 0;
+                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                  })}
+                  <td className="text-center font-bold text-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalPasto || ''}</td>
+                </tr>
+                {/* DIFERENÇA */}
+                <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
+                  <td className={`font-extrabold px-1.5 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const pv = pastoDataByCat.get(c.codigo) || 0;
+                    const sv = saldoMap.get(c.codigo) || 0;
+                    const dif = pv - sv;
+                    return (
+                      <td key={c.sigla} className={`text-center font-extrabold px-1 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                        {fmtDif(dif)}
+                      </td>
+                    );
+                  })}
+                  <td className={`text-center font-extrabold px-1.5 py-1 border-l border-border/30 tabular-nums ${difCellClass(totalDiferenca)}`}>
+                    {fmtDif(totalDiferenca)}
+                  </td>
+                </tr>
+                {/* PESO */}
+                <tr className="border-t border-border/20 bg-muted/20">
+                  <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">Peso kg</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const peso = pesoMedioByCat.get(c.codigo);
+                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 0) : ''}</td>;
+                  })}
+                  <td className="text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 border-l border-border/30" />
+                </tr>
+                {/* GMD */}
+                <tr className="bg-muted/20">
+                  <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">GMD</td>
+                  {CAT_COLS.map((c, idx) => {
+                    const g = gmdByCat.get(c.codigo);
+                    return <td key={c.sigla} className={`text-center text-[9px] italic px-1 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r border-border/30' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
+                  })}
+                  <td className={`text-center text-[9px] italic px-1.5 py-0.5 border-l border-border/30 tabular-nums ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-        {/* ═══ AÇÃO PRINCIPAL (NUNCA dois ao mesmo tempo) ═══ */}
-        <div className="px-3 pb-2">
-          {allClosed && (
-            <div className="flex items-center gap-2">
+          {/* ── COL 3: Ações ── */}
+          <div className="flex flex-col gap-1.5 items-end min-w-[120px]">
+            <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
+              <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
+            </Button>
+
+            {allClosed && (
               <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100 text-[11px] font-bold gap-1">
                 <CheckCircle className="h-3.5 w-3.5" /> Mês fechado
               </Badge>
-              {onNavigateToValorRebanho && (
-                <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold" onClick={onNavigateToValorRebanho}>
-                  Inserir preço do rebanho →
-                </Button>
-              )}
-            </div>
-          )}
-          {showCloseButton && (
-            <Button
-              size="sm"
-              className="w-full h-8 text-xs font-bold gap-1"
-              onClick={() => setConfirmBulkOpen(true)}
-            >
-              <Lock className="h-3.5 w-3.5" /> Fechar Mês
-            </Button>
-          )}
-          {showAdjustButton && (
-            <div className="flex gap-2">
-              {sugestoes.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                  onClick={() => setShowSugestoes(true)}
-                >
-                  <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
-                </Button>
-              )}
-              {onNavigateToReclass && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs font-bold gap-1 flex-1"
-                  onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
-                </Button>
-              )}
-            </div>
-          )}
+            )}
+
+            {showCloseButton && (
+              <Button
+                size="sm"
+                className="w-full h-8 text-xs font-bold gap-1"
+                onClick={() => setConfirmBulkOpen(true)}
+              >
+                <Lock className="h-3.5 w-3.5" /> Fechar Mês
+              </Button>
+            )}
+
+            {showAdjustButton && (
+              <div className="flex flex-col gap-1 w-full">
+                {sugestoes.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] font-bold gap-1 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 w-full justify-start"
+                    onClick={() => setShowSugestoes(true)}
+                  >
+                    <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
+                  </Button>
+                )}
+                {onNavigateToReclass && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] font-bold gap-1 w-full justify-start"
+                    onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-full justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
+                <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
+              </Button>
+            )}
+          </div>
+
         </div>
       </div>
 
