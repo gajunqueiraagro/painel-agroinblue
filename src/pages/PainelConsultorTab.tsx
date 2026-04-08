@@ -267,8 +267,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', d.cabIni, 'reb_inicial', true),
-            r('Reb. final (cab)', 'cab', d.cabFin, 'reb_final', true),
+            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
             r('Entradas (cab)', 'cab', d.entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', d.saidas, 'saidas_cab'),
           ],
