@@ -12,6 +12,7 @@
  * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
