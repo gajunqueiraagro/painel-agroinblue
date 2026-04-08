@@ -81,12 +81,16 @@ export interface EvolucaoSugestao {
   elegivel: boolean;
   /** Saldo disponível na categoria anterior */
   saldoAnterior: number;
+  /** Tipo de sugestão: consultiva (não bloqueia) ou obrigatória (bloqueia) */
+  natureza: 'sugestao' | 'obrigatoria';
 }
 
 export interface MetaStepState {
   hasBloqueio: boolean;
   etapaEvolucaoValidada: boolean;
   etapaFinanceiroHabilitado: boolean;
+  /** Evolução é obrigatória para sustentar o lançamento */
+  evolucaoObrigatoria: boolean;
 }
 
 interface Bloqueio {
@@ -392,32 +396,43 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
     const pesoMedioAnt = pesoMedioMap.get(catAnt.categoriaCodigo) ?? null;
     if (pesoMedioAnt == null) return null;
 
+    const elegivel = pesoMedioAnt >= catAnt.pesoEvolucaoKg;
+
+    // Determinar natureza: obrigatória se saldo atual não suporta o lançamento
+    const isSaida = isMovimentacaoSaida(tipo);
+    const isReclass = isReclassificacaoTipo(tipo);
+    const saldoInsuficiente = (isSaida || isReclass) && quantidade > 0 && saldoAtual < quantidade;
+    const natureza: 'sugestao' | 'obrigatoria' = (saldoInsuficiente && elegivel) ? 'obrigatoria' : 'sugestao';
+
     return {
       categoriaAtual: categoria,
       categoriaAnterior: catAnt.categoriaCodigo,
       pesoMedioAnterior: pesoMedioAnt,
       pesoEvolucao: catAnt.pesoEvolucaoKg,
-      elegivel: pesoMedioAnt >= catAnt.pesoEvolucaoKg,
+      elegivel,
       saldoAnterior: saldoAnt,
+      natureza,
     };
-  }, [categoria, categoriasAnteriores, saldoMap, pesoMedioMap]);
+  }, [categoria, categoriasAnteriores, saldoMap, pesoMedioMap, tipo, quantidade, saldoAtual]);
 
   // ── Step state derivation ──
   const hasEvolucao = evolucaoInfo != null;
   const evolucaoElegivel = evolucaoInfo?.elegivel ?? false;
-  // Non-eligible or no evolution path = auto-validated
-  const etapaEvolucaoValidada = !hasEvolucao || !evolucaoElegivel;
+  const evolucaoObrigatoria = evolucaoInfo?.natureza === 'obrigatoria';
+
+  // Evolução validada: se não é obrigatória, está ok; se é obrigatória, bloqueia
+  const etapaEvolucaoValidada = !evolucaoObrigatoria;
   const etapaFinanceiroHabilitado = !hasBloqueio && etapaEvolucaoValidada;
 
   // Notify parent of state changes
   useEffect(() => {
-    onStepStateChange?.({ hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado });
-  }, [hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, onStepStateChange]);
+    onStepStateChange?.({ hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria });
+  }, [hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria, onStepStateChange]);
 
   // Step statuses
   const step1Status: StepStatus = 'done';
   const step2Status: StepStatus = simulacao ? (hasBloqueio ? 'pending' : 'done') : 'active';
-  const step3Status: StepStatus = !hasEvolucao ? 'done' : (evolucaoElegivel ? 'pending' : 'done');
+  const step3Status: StepStatus = evolucaoObrigatoria ? 'pending' : 'done';
   const step4Status: StepStatus = etapaFinanceiroHabilitado ? 'active' : 'disabled';
 
   const handleToggleStep = useCallback((step: number) => {
@@ -588,7 +603,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 
         <Separator className="my-0.5" />
 
-        {/* ═══ ETAPA 3: Evolução de Categoria (condicional) ═══ */}
+        {/* ═══ ETAPA 3: Evolução de Categoria ═══ */}
         <div>
           <StepHeader
             step={3}
@@ -601,19 +616,42 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
             <div className="pl-7 pb-2">
               {!hasEvolucao ? (
                 <p className="text-[10px] text-muted-foreground italic">
-                  Sem categoria anterior configurada para alimentar esta categoria.
+                  Sem categoria anterior configurada para alimentar {getCategoriaLabel(categoria)}.
                 </p>
+              ) : evolucaoObrigatoria ? (
+                /* ── Estado B: Evolução OBRIGATÓRIA (saldo insuficiente + anterior elegível) ── */
+                <div className="space-y-1.5">
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 space-y-1">
+                    <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                      ⚠ Evolução necessária para este lançamento
+                    </p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-500">
+                      Saldo de {getCategoriaLabel(categoria)} ({saldoAtual} cab) não suporta a saída de {quantidade} cab.
+                      Evolua {getCategoriaLabel(evolucaoInfo.categoriaAnterior)} ({evolucaoInfo.saldoAnterior} cab, {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg) para {getCategoriaLabel(categoria)} antes de continuar.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-7 text-[10px] border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                      onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
+                    >
+                      Fazer evolução agora
+                    </Button>
+                  </div>
+                </div>
               ) : evolucaoInfo.elegivel ? (
+                /* ── Estado A: Sugestão consultiva (elegível, mas saldo suporta) ── */
                 <div className="space-y-1.5">
                   <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
                     <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">
-                      ✅ {getCategoriaLabel(evolucaoInfo.categoriaAnterior)} elegível para evoluir
+                      💡 {getCategoriaLabel(evolucaoInfo.categoriaAnterior)} elegível para evoluir para {getCategoriaLabel(evolucaoInfo.categoriaAtual)}
                     </p>
                     <p className="text-[10px] text-green-600 dark:text-green-500">
                       Saldo: {evolucaoInfo.saldoAnterior} cab · Peso médio: {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg ≥ {fmt(evolucaoInfo.pesoEvolucao, 0)} kg
                     </p>
-                    <p className="text-[10px] text-green-600 dark:text-green-500">
-                      Pode evoluir para: <strong>{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</strong>
+                    <p className="text-[9px] text-muted-foreground italic">
+                      Sugestão consultiva — o saldo atual suporta este lançamento.
                     </p>
                     <Button
                       type="button"
@@ -622,11 +660,12 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                       className="w-full h-7 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
                       onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
                     >
-                      Fazer evolução agora
+                      Abrir evolução da categoria
                     </Button>
                   </div>
                 </div>
               ) : (
+                /* ── Categoria anterior não elegível ainda ── */
                 <div className="text-[10px] text-muted-foreground space-y-0.5">
                   <div className="flex items-center gap-1">
                     <span>{getCategoriaLabel(evolucaoInfo.categoriaAnterior)}</span>
@@ -634,22 +673,29 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                     <span className="font-semibold">{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</span>
                   </div>
                   <p>
-                    Peso médio {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg · Saldo: {evolucaoInfo.saldoAnterior} cab
+                    Peso médio: {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg · Saldo: {evolucaoInfo.saldoAnterior} cab
                   </p>
+                  <p className="text-[9px] italic">Categoria anterior ainda não atingiu peso de evolução.</p>
                 </div>
               )}
             </div>
           )}
-          {/* Compact info when collapsed and has evolution */}
+          {/* Compact info when collapsed */}
           {expandedStep !== 3 && hasEvolucao && (
             <div className="pl-7 pb-1">
               <span className={cn(
                 'text-[9px]',
-                evolucaoElegivel ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400',
+                evolucaoObrigatoria
+                  ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                  : evolucaoElegivel
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-muted-foreground',
               )}>
-                {evolucaoElegivel
-                  ? `⚠ ${getCategoriaLabel(evolucaoInfo!.categoriaAnterior)} elegível (${fmt(evolucaoInfo!.pesoMedioAnterior, 1)} kg)`
-                  : `✔ Sem evolução pendente`
+                {evolucaoObrigatoria
+                  ? `⚠ Evolução necessária — ${getCategoriaLabel(evolucaoInfo!.categoriaAnterior)} → ${getCategoriaLabel(categoria)}`
+                  : evolucaoElegivel
+                    ? `💡 ${getCategoriaLabel(evolucaoInfo!.categoriaAnterior)} elegível (sugestão)`
+                    : `✔ Sem evolução pendente`
                 }
               </span>
             </div>
@@ -666,7 +712,12 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
             status={step4Status}
             expanded={expandedStep === 4}
             onToggle={() => handleToggleStep(4)}
-            tooltip={!etapaFinanceiroHabilitado ? 'Finalize a evolução para liberar o financeiro' : undefined}
+            tooltip={!etapaFinanceiroHabilitado
+              ? (evolucaoObrigatoria
+                ? 'Finalize a evolução necessária para liberar o financeiro e concluir o lançamento.'
+                : 'Resolva os bloqueios técnicos para liberar o financeiro.')
+              : undefined
+            }
           />
           {expandedStep === 4 && etapaFinanceiroHabilitado && (
             <div className="pl-7 pb-2">
@@ -682,7 +733,10 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
           {expandedStep !== 4 && !etapaFinanceiroHabilitado && (
             <div className="pl-7 pb-1">
               <span className="text-[9px] text-muted-foreground/60">
-                🔒 Bloqueado — resolva pendências anteriores
+                🔒 {evolucaoObrigatoria
+                  ? 'Finalize a evolução necessária para liberar o financeiro'
+                  : 'Bloqueado — resolva pendências anteriores'
+                }
               </span>
             </div>
           )}
