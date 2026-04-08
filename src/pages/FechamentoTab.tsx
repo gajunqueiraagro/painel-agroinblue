@@ -449,10 +449,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       if (error) {
         console.error('Erro ao reabrir mês via RPC:', error);
         toast.error(`Erro ao reabrir mês: ${error.message}`);
-      } else if (data?.error) {
-        toast.error(`Erro: ${data.error}`);
+      } else if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in data) {
+        toast.error(`Erro: ${(data as any).error}`);
       } else {
-        const cascata = data?.cascata || [];
+        const cascata = (data && typeof data === 'object' && !Array.isArray(data) && 'cascata' in data) ? (data as any).cascata : [];
         toast.success(`Mês ${anoMes} reaberto com sucesso.${cascata.length > 0 ? ` Pilares invalidados: ${cascata.join(', ')}` : ''}`);
       }
 
