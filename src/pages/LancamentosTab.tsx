@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
+import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
