@@ -307,6 +307,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const { rawCategorias: viewDataAnoAtual } = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
   const { rawCategorias: viewDataAnoAnterior } = useRebanhoOficial({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
 
+  // Governança do snapshot
+  const { getStatusByMonth: getSnapStatus } = useSnapshotStatus(Number(anoFiltro));
+  const snapStatusMes = getSnapStatus(Number(mesFiltro));
+  const isSnapInvalidado = snapStatusMes === 'invalidado';
+  const isSnapCadeiaQuebrada = snapStatusMes === 'cadeia_quebrada';
+
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
     Object.entries(MAPA_PRECO_MERCADO).forEach(([codigo, ref]) => {
