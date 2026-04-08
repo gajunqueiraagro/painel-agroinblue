@@ -32,6 +32,12 @@ import {
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 
 // ---------------------------------------------------------------------------
+// Re-exports — consumers DEVEM importar daqui, nunca dos hooks internos
+// ---------------------------------------------------------------------------
+export { type ZootCategoriaMensal, groupByMes, groupByCategoria, totalizarPorMes, categoriasUnicas };
+export { type ZootMensal, indexByMes };
+
+// ---------------------------------------------------------------------------
 // Tipos de saída compatíveis com os consumers legados
 // ---------------------------------------------------------------------------
 

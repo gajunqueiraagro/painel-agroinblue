@@ -10,7 +10,7 @@ import { usePastos } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
-import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, groupByMes } from '@/hooks/useRebanhoOficial';
 import { useAnaliseOperacional } from '@/hooks/useAnaliseOperacional';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +34,8 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
 
   const [ano, mes] = anoMes.split('-').map(Number);
 
-  // ── Fonte oficial: view zootécnica ──
-  const { data: viewData = [] } = useZootCategoriaMensal({ ano, cenario: 'realizado' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData } = useRebanhoOficial({ ano, cenario: 'realizado' });
   const viewCategoriasMes = useMemo(() => {
     const byMes = groupByMes(viewData);
     return byMes[mes] || [];

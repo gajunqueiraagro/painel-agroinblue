@@ -3,7 +3,7 @@
  * Agora consome a view oficial `vw_zoot_categoria_mensal` via hook.
  */
 import { useState, useMemo } from 'react';
-import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { CATEGORIAS } from '@/types/cattle';
 import type { Lancamento } from '@/types/cattle';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
@@ -52,7 +52,8 @@ function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[]
 }
 
 export function MetaConsolidacaoTab({ ano, metaLancamentos, onBack, onNavigateToLancamentos, onNavigateToReclass }: Props) {
-  const { data: viewData = [], isLoading } = useZootCategoriaMensal({ ano, cenario: 'meta' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData, loading: isLoading } = useRebanhoOficial({ ano, cenario: 'meta' });
   const data = useMemo(() => viewToMetaCategoriaMes(viewData), [viewData]);
   const [screen, setScreen] = useState<Screen>('hub');
 

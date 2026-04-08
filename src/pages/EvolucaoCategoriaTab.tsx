@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface Props {
@@ -37,11 +37,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
 
   const ano = Number(anoFiltro);
   const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && Number(mesFiltro) > currentMonth));
-  // Fetch from unified view
-  const { data: viewData = [], isLoading } = useZootCategoriaMensal({
-    ano,
-    cenario: statusFiltro,
-  });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData, loading: isLoading } = useRebanhoOficial({ ano, cenario: statusFiltro });
 
   // Filter to selected month
   const dadosMes = useMemo(() => {

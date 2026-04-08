@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, groupByMes } from '@/hooks/useRebanhoOficial';
 import { calcGMD } from '@/lib/calculos/economicos';
 
 // ---------------------------------------------------------------------------
@@ -44,8 +44,8 @@ export function useArrobasGlobal(
   mes: number,
   _fazendaIds: string[],
 ): ArrobasGlobalResult {
-  // Official source: view data for all fazendas (global mode)
-  const { data: viewData, isLoading: loading } = useZootCategoriaMensal({
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData, loading } = useRebanhoOficial({
     ano,
     cenario: 'realizado',
     global: isGlobal,

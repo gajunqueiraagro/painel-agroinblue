@@ -10,7 +10,7 @@
  */
 
 import { useMemo } from 'react';
-import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 
 // ---------------------------------------------------------------------------
 // Tipos (mantidos para compatibilidade)
@@ -68,7 +68,8 @@ export function useFechamentoCategoria(
   _saldosIniciais: unknown[],
   _categorias: unknown[],
 ): FechamentoCategoriaResumo {
-  const { data: viewData, isLoading } = useZootCategoriaMensal({ ano, cenario: 'realizado' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData, loading: isLoading } = useRebanhoOficial({ ano, cenario: 'realizado' });
 
   return useMemo((): FechamentoCategoriaResumo => {
     const monthData = (viewData || []).filter(r => r.mes === mes);
