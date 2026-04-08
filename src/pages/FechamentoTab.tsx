@@ -239,8 +239,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* ── Status de conciliação por pasto ── */
   const getPastoStatus = useCallback((pasto: Pasto): PastoStatusConcil => {
     const fech = getFechamento(pasto.id);
-    // Pasto com uso mensal não-pecuário: conciliado automaticamente
-    if (!isPastoPecuario(pasto, fech)) return fech?.status === 'fechado' ? 'fechado' : 'conciliado';
+    // Pasto não-pecuário ou pecuário sem lotação (reforma/vedado): conciliado automaticamente
+    if (!isPastoOperacional(pasto, fech)) return fech?.status === 'fechado' ? 'fechado' : 'conciliado';
     if (!fech) return 'nao_iniciado';
     if (fech.status === 'fechado') return 'fechado';
     const items = itensMap.get(fech.id) || [];
@@ -300,7 +300,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   // Operational fechamentos: only pecuário pastos
   const operationalFechamentos = useMemo(
     () => pastosAtivos
-      .filter(pasto => isPastoPecuario(pasto, getFechamento(pasto.id)))
+      .filter(pasto => isPastoOperacional(pasto, getFechamento(pasto.id)))
       .map(pasto => getFechamento(pasto.id))
       .filter((fech): fech is FechamentoPasto => Boolean(fech)),
     [pastosAtivos, getFechamento]
