@@ -1,11 +1,12 @@
 /**
  * Hook: useZootCategoriaMensal
  *
- * Fonte única oficial de indicadores zootécnicos mensais POR CATEGORIA.
- * Consome a view `vw_zoot_categoria_mensal` do banco.
+ * ⚠️ USO INTERNO — Consumir via useRebanhoOficial em componentes.
+ * Este hook é a camada de acesso direto à view `vw_zoot_categoria_mensal`.
+ * Componentes e páginas NÃO devem importar este hook diretamente.
+ * Exceções permitidas: ConciliacaoTab, FechamentoTab (auditoria/comparação).
  *
- * Regra: toda tela que exibe dados por categoria/mês deve usar este hook.
- * O front NÃO recalcula — apenas lê, formata e filtra.
+ * Regra: toda tela que exibe dados por categoria/mês deve usar useRebanhoOficial.
  */
 
 import { useQuery } from '@tanstack/react-query';
