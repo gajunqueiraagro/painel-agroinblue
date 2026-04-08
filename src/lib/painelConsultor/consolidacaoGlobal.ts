@@ -1,5 +1,8 @@
 /**
- * Matriz de Consolidação Global — Painel do Consultor
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║  MATRIZ DE CONSOLIDAÇÃO GLOBAL — PAINEL DO CONSULTOR               ║
+ * ║  Regra oficial e definitiva (PC-100)                               ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
  *
  * Define como cada indicador deve ser agregado no modo Global (Σ fazendas).
  *
@@ -16,7 +19,7 @@
  *   recalculado:     Fórmula customizada sobre base global (GMD, desfrute %)
  *   unitario:        Σ numerador / Σ denominador (custo/@, receita/@)
  *
- * ═══ 3 CAMADAS DE PROTEÇÃO ═══
+ * ═══ 3 CAMADAS DE PROTEÇÃO (REGRA OFICIAL) ═══
  *
  * CAMADA 1 — Exclusão de evolução de categoria (evol_cat)
  *   evol_cat_entrada / evol_cat_saida = movimentação INTERNA entre categorias
@@ -24,17 +27,28 @@
  *   ENTRA apenas em: conciliação por categoria, GMD, peso por categoria
  *   Mesma regra para pesos: peso_evol_cat_entrada/saida ficam apenas no
  *   balanço estrutural da categoria, nunca nos indicadores executivos de fluxo.
+ *   → Aplica-se a TODAS as visões: fazenda individual E global.
  *
  * CAMADA 2 — Neutralização de transferências no Global
- *   No nível FAZENDA: transferência = fluxo externo (entrada ou saída)
+ *   No nível FAZENDA: transferência = fluxo externo (entrada ou saída real)
+ *     - transferencia_entrada CONTA como entrada
+ *     - transferencia_saida CONTA como saída
  *   No nível GLOBAL: transferência = movimento INTERNO do grupo
- *   → Deve ser subtraída dos indicadores de fluxo global
+ *     - NÃO pode entrar como entrada
+ *     - NÃO pode entrar como saída
  *   → Global mostra apenas: nascimento/compra como entrada
  *     e abate/venda/morte/consumo como saída
  *
  * CAMADA 3 — Consolidação por tipo de indicador
  *   Cada indicador tem sua regra oficial (soma, ponderado, recalculado, unitário)
  *   Nunca misturar tipos; nunca fazer média de médias.
+ *
+ * ═══ REGRA OFICIAL PARA PESOS ═══
+ *   peso_evol_cat_entrada / peso_evol_cat_saida existem APENAS para:
+ *     - balanço estrutural interno da categoria
+ *     - fechamento de peso por categoria
+ *     - conferência zootécnica / GMD
+ *   NUNCA entram como indicador executivo de fluxo de peso.
  *
  * Essa separação vale para CABEÇAS e PESOS igualmente.
  */
