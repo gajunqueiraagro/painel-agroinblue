@@ -91,6 +91,19 @@ const normalizeTipoUso = (tipoUso?: string) => {
   return tipoUso.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 };
 
+/** Tipos de uso que NÃO são pecuários — não devem entrar na conciliação operacional */
+const TIPOS_USO_NAO_PECUARIO = new Set([
+  'reforma_pecuaria', 'agricultura', 'app', 'reserva_legal', 'benfeitorias', 'vedado',
+]);
+
+/** Retorna true se o tipo de uso efetivo do pasto (mensal ou cadastro) é pecuário */
+function isPastoPecuario(pasto: Pasto, fechamento: FechamentoPasto | null): boolean {
+  const tipoMes = fechamento?.tipo_uso_mes;
+  const tipoEfetivo = normalizeTipoUso(tipoMes || pasto.tipo_uso);
+  if (!tipoEfetivo) return true; // sem tipo = assume pecuário
+  return !TIPOS_USO_NAO_PECUARIO.has(tipoEfetivo);
+}
+
 /* ── GMD color ── */
 function gmdColor(gmd: number | null): string {
   if (gmd == null) return 'text-muted-foreground';
