@@ -966,21 +966,28 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           const isSelected = mesFiltro === m.key;
           const mesN = Number(m.key);
           const isFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesN > mesAtualSistema);
+          const mesSnapStatus = !isGlobal ? getSnapStatus(mesN) : 'sem_snapshot';
+          const isComprometido = mesSnapStatus === 'invalidado' || mesSnapStatus === 'cadeia_quebrada';
           return (
             <button
               key={m.key}
               onClick={() => setMesFiltro(m.key)}
+              title={isComprometido ? (mesSnapStatus === 'invalidado' ? 'Snapshot invalidado' : 'Cadeia quebrada') : undefined}
               className={`flex-1 text-center text-[11px] font-semibold py-1 rounded transition-colors
                 ${isSelected
-                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  ? isComprometido
+                    ? 'bg-destructive text-destructive-foreground shadow-sm'
+                    : 'bg-primary text-primary-foreground shadow-sm'
                   : isFuturo
                     ? 'bg-muted/40 text-muted-foreground/50 cursor-default'
-                    : isClosed
-                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
+                    : isComprometido
+                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'
+                      : isClosed
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40'
                 }`}
             >
-              {m.label}
+              {isComprometido ? '⚠' : ''}{m.label}
             </button>
           );
         })}
