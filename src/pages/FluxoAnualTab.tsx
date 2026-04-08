@@ -182,17 +182,25 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           <tbody>
             <tr className="bg-primary/15 border-b">
               <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
-              {MESES_COLS.map(m => (
-                <td
-                  key={m.key}
-                  className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
-                  onClick={() => setDrilldownMonth(m.key)}
-                >
-                  {fmtNum(dados.saldoInicioMes[m.key])}
-                </td>
-              ))}
+              {MESES_COLS.map(m => {
+                // Fonte oficial: view zootécnica (cabecas_inicio). Fallback: calcFluxoAnual.
+                const z = zootByMes[m.key];
+                const saldoOficial = z?.cabecas_inicio;
+                const saldoMov = dados.saldoInicioMes[m.key];
+                const valor = saldoOficial ?? saldoMov;
+                return (
+                  <td
+                    key={m.key}
+                    className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
+                    onClick={() => setDrilldownMonth(m.key)}
+                    title={z ? `Fonte: ${z.fonte_oficial_mes}` : 'Fonte: movimentação'}
+                  >
+                    {fmtNum(valor)}
+                  </td>
+                );
+              })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
-                {fmtNum(dados.saldoInicialAno)}
+                {fmtNum(zootByMes['01']?.cabecas_inicio ?? dados.saldoInicialAno)}
               </td>
             </tr>
 
