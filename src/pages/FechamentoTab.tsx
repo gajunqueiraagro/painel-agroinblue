@@ -472,18 +472,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return 'text-red-700 dark:text-red-400 bg-amber-50 dark:bg-amber-950/30';
   };
 
-  // GMD total ponderado
-  const gmdTotal = useMemo(() => {
-    const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
-    let totalProd = 0;
-    let totalCabDias = 0;
-    for (const cat of monthData) {
-      totalProd += cat.producao_biologica;
-      const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
-      totalCabDias += cabMedia * cat.dias_mes;
-    }
-    return totalCabDias > 0 ? totalProd / totalCabDias : null;
-  }, [viewDataForConcil, mesNum]);
 
   // Determine main action
   const allClosed = fechadosCount === pastosAtivos.length && pastosAtivos.length > 0;
