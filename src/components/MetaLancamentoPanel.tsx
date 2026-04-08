@@ -12,6 +12,13 @@
  *   - O sistema NUNCA altera automaticamente o GMD planejado
  *   - Movimentações NÃO reescrevem parâmetros
  *   - Toda correção estrutural deve ser explícita e auditável
+ *
+ * categoria_proxima: representa o caminho padrão de evolução.
+ * NÃO representa todos os caminhos futuros possíveis.
+ *
+ * THRESHOLDS TEMPORÁRIOS (parametrizáveis no futuro):
+ *   ALERTA_FAIXA_PCT = 10% do limite superior
+ *   ALERTA_GMD_DESVIO_PCT = 20% de desvio GMD
  */
 
 import { useMemo } from 'react';
@@ -27,11 +34,27 @@ import {
   ALERTA_GMD_DESVIO_PCT,
   type CategoriaParametros,
 } from '@/hooks/useCategoriaParametros';
-import { CATEGORIAS, type Categoria, type TipoMovimentacao, isEntrada } from '@/types/cattle';
+import { CATEGORIAS, type Categoria, type TipoMovimentacao } from '@/types/cattle';
 
-// ── Thresholds documentados como regra temporária ──
-// ALERTA_FAIXA_PCT = 10% do limite superior
-// ALERTA_GMD_DESVIO_PCT = 20% de desvio GMD
+// ── Helpers de tipo ──
+
+function isMovimentacaoSaida(tipo: TipoMovimentacao): boolean {
+  return ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(tipo);
+}
+
+function isMovimentacaoEntrada(tipo: TipoMovimentacao): boolean {
+  return ['nascimento', 'compra', 'transferencia_entrada'].includes(tipo);
+}
+
+function isNascimento(tipo: TipoMovimentacao): boolean {
+  return tipo === 'nascimento';
+}
+
+function isReclassificacaoTipo(tipo: TipoMovimentacao): boolean {
+  return tipo === 'reclassificacao';
+}
+
+// ── Types ──
 
 interface Props {
   ano: number;
@@ -74,13 +97,118 @@ function getCategoriaLabel(codigo: string): string {
   return CATEGORIAS.find(c => c.value === codigo)?.label || codigo;
 }
 
-function isMovimentacaoSaida(tipo: TipoMovimentacao): boolean {
-  return ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(tipo);
+// ── Core validation logic (shared between panel and submit blocker) ──
+
+export interface MetaValidacaoInput {
+  categoria: Categoria | '';
+  tipo: TipoMovimentacao;
+  quantidade: number;
+  pesoKg: number;
+  saldoAtual: number;
+  pesoTotalAtual: number;
+  catParams?: CategoriaParametros;
 }
 
-function isMovimentacaoEntrada(tipo: TipoMovimentacao): boolean {
-  return isEntrada(tipo);
+/**
+ * Calcula bloqueios e alertas para um lançamento META.
+ * Regras diferenciadas por tipo de movimentação.
+ */
+export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
+  const { categoria, tipo, quantidade, pesoKg, saldoAtual, pesoTotalAtual, catParams } = input;
+  if (!categoria || quantidade <= 0) return [];
+
+  const result: Validacao[] = [];
+  const isSaida = isMovimentacaoSaida(tipo);
+  const isEntrada = isMovimentacaoEntrada(tipo);
+  const nascimento = isNascimento(tipo);
+  const isReclass = isReclassificacaoTipo(tipo);
+
+  // ── Projeção de saldo e peso ──
+  let saldoFinalProjetado: number;
+  let pesoTotalFinalProjetado: number;
+
+  if (isSaida || isReclass) {
+    // Reclassificação = saída da categoria atual para fins de bloqueio
+    saldoFinalProjetado = saldoAtual - quantidade;
+    pesoTotalFinalProjetado = pesoTotalAtual - (quantidade * pesoKg);
+  } else {
+    saldoFinalProjetado = saldoAtual + quantidade;
+    pesoTotalFinalProjetado = pesoTotalAtual + (quantidade * pesoKg);
+  }
+
+  const pesoMedioFinalProjetado = saldoFinalProjetado > 0
+    ? pesoTotalFinalProjetado / saldoFinalProjetado
+    : null;
+
+  // ═══════════════════════════════════════════
+  // BLOQUEIOS
+  // ═══════════════════════════════════════════
+
+  // 1. Saldo negativo — apenas saídas e reclassificação
+  if ((isSaida || isReclass) && saldoFinalProjetado < 0) {
+    result.push({
+      tipo: 'bloqueio',
+      mensagem: `Quantidade (${quantidade}) maior que o saldo disponível (${saldoAtual})`,
+    });
+  }
+
+  // 2. Peso fora da faixa da categoria
+  if (catParams && pesoKg > 0) {
+    // Nascimento: usa faixa da categoria de nascimento (peso_min pode ser baixo)
+    // Demais tipos: usa faixa padrão
+    if (pesoKg < catParams.pesoMinKg) {
+      result.push({
+        tipo: 'bloqueio',
+        mensagem: `Peso ${fmt(pesoKg, 1)} kg abaixo do mínimo da categoria (${fmt(catParams.pesoMinKg, 0)} kg)`,
+      });
+    }
+    if (pesoKg > catParams.pesoMaxKg) {
+      result.push({
+        tipo: 'bloqueio',
+        mensagem: `Peso ${fmt(pesoKg, 1)} kg acima do máximo da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)`,
+      });
+    }
+  }
+
+  // 3. Peso médio final incoerente (apenas quando saldo > 0)
+  if (saldoFinalProjetado > 0 && pesoMedioFinalProjetado != null) {
+    if (pesoMedioFinalProjetado <= 0) {
+      result.push({ tipo: 'bloqueio', mensagem: 'Peso médio final projetado é negativo ou zero' });
+    }
+    if (catParams && pesoMedioFinalProjetado > catParams.pesoMaxKg) {
+      result.push({
+        tipo: 'bloqueio',
+        mensagem: `Peso médio final projetado (${fmt(pesoMedioFinalProjetado, 1)} kg) excede o máximo da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)`,
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // ALERTAS (permitem salvar)
+  // ═══════════════════════════════════════════
+
+  // Peso próximo do limite superior (não aplicar para nascimento)
+  if (catParams && pesoKg > 0 && !nascimento) {
+    const limiar = catParams.pesoMaxKg * (1 - ALERTA_FAIXA_PCT);
+    if (pesoKg >= limiar && pesoKg <= catParams.pesoMaxKg) {
+      result.push({ tipo: 'alerta', mensagem: `Peso próximo ao limite superior da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)` });
+    }
+  }
+
+  // Elegível para evolução (apenas quando saldo > 0 após operação)
+  if (catParams?.pesoEvolucaoKg && pesoMedioFinalProjetado != null && saldoFinalProjetado > 0) {
+    if (pesoMedioFinalProjetado >= catParams.pesoEvolucaoKg) {
+      result.push({
+        tipo: 'alerta',
+        mensagem: `Lote elegível para evolução de categoria (peso médio ${fmt(pesoMedioFinalProjetado, 1)} kg ≥ ${fmt(catParams.pesoEvolucaoKg, 0)} kg)`,
+      });
+    }
+  }
+
+  return result;
 }
+
+// ── Component ──
 
 export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao }: Props) {
   const { getSaldoMap, getPesoMedioMap, getCategoriasDetalhe, loading: loadingRebanho } = useRebanhoOficial({ ano, cenario: 'meta' });
@@ -109,20 +237,17 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 
     const isSaida = isMovimentacaoSaida(tipo);
     const isEntradaTipo = isMovimentacaoEntrada(tipo);
+    const isReclass = isReclassificacaoTipo(tipo);
 
     let saldoFinalProjetado: number;
     let pesoTotalFinalProjetado: number;
 
-    if (isSaida) {
+    if (isSaida || isReclass) {
       saldoFinalProjetado = saldoAtual - quantidade;
       pesoTotalFinalProjetado = pesoTotalAtual - (quantidade * pesoKg);
-    } else if (isEntradaTipo) {
+    } else {
       saldoFinalProjetado = saldoAtual + quantidade;
       pesoTotalFinalProjetado = pesoTotalAtual + (quantidade * pesoKg);
-    } else {
-      // Reclassificação — saída da categoria
-      saldoFinalProjetado = saldoAtual - quantidade;
-      pesoTotalFinalProjetado = pesoTotalAtual - (quantidade * pesoKg);
     }
 
     const pesoMedioFinalProjetado = saldoFinalProjetado > 0
@@ -138,88 +263,46 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
     };
   }, [categoria, quantidade, pesoKg, tipo, saldoAtual, pesoTotalAtual]);
 
-  // ── BLOCO 3: Validações ──
+  // ── BLOCO 3: Validações (lógica centralizada) ──
   const validacoes = useMemo((): Validacao[] => {
-    if (!categoria || quantidade <= 0) return [];
-    const result: Validacao[] = [];
-    const isSaida = isMovimentacaoSaida(tipo);
-    const isEntradaTipo = isMovimentacaoEntrada(tipo);
+    return calcularValidacoesMeta({
+      categoria, tipo, quantidade, pesoKg,
+      saldoAtual, pesoTotalAtual, catParams,
+    });
+  }, [categoria, tipo, quantidade, pesoKg, saldoAtual, pesoTotalAtual, catParams]);
 
-    // ── BLOQUEIOS ──
-    // Saldo negativo (apenas para saídas)
-    if (isSaida && simulacao && simulacao.saldoFinalProjetado < 0) {
-      result.push({
-        tipo: 'bloqueio',
-        mensagem: `Quantidade (${quantidade}) maior que o saldo disponível (${saldoAtual})`,
-      });
-    }
-
-    // Peso fora da faixa da categoria
-    if (catParams && pesoKg > 0) {
-      if (pesoKg < catParams.pesoMinKg) {
-        result.push({
-          tipo: 'bloqueio',
-          mensagem: `Peso ${fmt(pesoKg, 1)} kg abaixo do mínimo da categoria (${fmt(catParams.pesoMinKg, 0)} kg)`,
-        });
-      }
-      if (pesoKg > catParams.pesoMaxKg) {
-        result.push({
-          tipo: 'bloqueio',
-          mensagem: `Peso ${fmt(pesoKg, 1)} kg acima do máximo da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)`,
-        });
-      }
-    }
-
-    // Peso médio final incoerente (apenas se saldo > 0 após operação)
-    if (simulacao && simulacao.saldoFinalProjetado > 0 && simulacao.pesoMedioFinalProjetado != null) {
-      if (simulacao.pesoMedioFinalProjetado <= 0) {
-        result.push({ tipo: 'bloqueio', mensagem: 'Peso médio final projetado é negativo ou zero' });
-      }
-      if (catParams && simulacao.pesoMedioFinalProjetado > catParams.pesoMaxKg) {
-        result.push({ tipo: 'bloqueio', mensagem: `Peso médio final projetado (${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg) excede o máximo da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)` });
-      }
-    }
-
-    // ── ALERTAS ──
-    // Peso próximo do limite superior
-    if (catParams && pesoKg > 0) {
-      const limiar = catParams.pesoMaxKg * (1 - ALERTA_FAIXA_PCT);
-      if (pesoKg >= limiar && pesoKg <= catParams.pesoMaxKg) {
-        result.push({ tipo: 'alerta', mensagem: `Peso próximo ao limite superior da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)` });
-      }
-    }
-
-    // Elegível para evolução (apenas entradas e quando saldo > 0)
-    if (catParams?.pesoEvolucaoKg && simulacao?.pesoMedioFinalProjetado != null && simulacao.saldoFinalProjetado > 0) {
-      if (simulacao.pesoMedioFinalProjetado >= catParams.pesoEvolucaoKg) {
-        result.push({
-          tipo: 'alerta',
-          mensagem: `Lote elegível para evolução de categoria (peso médio ${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg ≥ ${fmt(catParams.pesoEvolucaoKg, 0)} kg)`,
-        });
-      }
-    }
-
-    return result;
-  }, [categoria, quantidade, pesoKg, tipo, saldoAtual, catParams, simulacao]);
-
-  // ── BLOCO 5: GMD ──
+  // ── BLOCO 5: GMD implícito (fórmula estrutural, NÃO circular) ──
+  /**
+   * GMD implícito = (pesoFinal - pesoInicial - pesoEntradas + pesoSaidas) / cabMedias / dias
+   *
+   * Onde:
+   *   pesoEntradas = peso_entradas_externas + peso_evol_cat_entrada
+   *   pesoSaidas   = peso_saidas_externas + peso_evol_cat_saida
+   *   cabMedias    = (saldo_inicial + saldo_final) / 2
+   *   dias         = dias do mês
+   *
+   * Se cabMedias <= 0 → nulo (sem base confiável)
+   * Se dias <= 0 → nulo
+   */
   const gmdInfo = useMemo(() => {
     if (!categoria) return null;
     const mesKey = String(mes).padStart(2, '0');
     const gmdRow = gmdRows.find(r => r.categoria === categoria);
     const gmdPlanejado = gmdRow?.meses[mesKey] ?? null;
 
-    // GMD implícito: produção biológica / cabecas médias / dias
-    const detalhe = catDetalhe;
     let gmdImplicito: number | null = null;
-    if (detalhe && detalhe.diasMes > 0) {
-      const cabMedias = (detalhe.saldoInicial + detalhe.saldoFinal) / 2;
-      if (cabMedias > 0 && detalhe.producaoBiologica !== 0) {
-        gmdImplicito = detalhe.producaoBiologica / cabMedias / detalhe.diasMes;
+
+    if (catDetalhe && catDetalhe.diasMes > 0) {
+      const cabMedias = (catDetalhe.saldoInicial + catDetalhe.saldoFinal) / 2;
+      if (cabMedias > 0) {
+        const pesoEntradas = catDetalhe.pesoEntradasExternas + catDetalhe.pesoEvolCatEntrada;
+        const pesoSaidas = catDetalhe.pesoSaidasExternas + catDetalhe.pesoEvolCatSaida;
+        const ganhoLiquido = catDetalhe.pesoTotalFinal - catDetalhe.pesoTotalInicial - pesoEntradas + pesoSaidas;
+        gmdImplicito = ganhoLiquido / cabMedias / catDetalhe.diasMes;
       }
     }
 
-    const desvio = gmdPlanejado && gmdImplicito && gmdPlanejado !== 0
+    const desvio = gmdPlanejado && gmdImplicito != null && gmdPlanejado !== 0
       ? (gmdImplicito - gmdPlanejado) / gmdPlanejado
       : null;
 
@@ -247,6 +330,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const hasBloqueio = bloqueios.length > 0;
 
   // ── Sugestão de evolução ──
+  // Mostra apenas elegibilidade e destino, sem calcular quantidade exata
   const evolucaoInfo = useMemo((): EvolucaoSugestao | null => {
     if (!categoria || !catParams?.categoriaProxima || !catParams.pesoEvolucaoKg) return null;
     const pesoRef = simulacao?.pesoMedioFinalProjetado ?? pesoMedioAtual;
@@ -444,8 +528,9 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                 <TooltipTrigger asChild>
                   <Info className="h-3 w-3 text-muted-foreground cursor-help" />
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-[10px] max-w-[220px]">
-                  O GMD implícito é apenas informativo. Ele NÃO altera o GMD planejado da META automaticamente.
+                <TooltipContent side="bottom" className="text-[10px] max-w-[260px]">
+                  <p>GMD implícito = (PesoFinal − PesoInicial − PesoEntradas + PesoSaídas) / CabMédias / Dias</p>
+                  <p className="mt-1">É apenas informativo. NÃO altera o GMD planejado.</p>
                 </TooltipContent>
               </Tooltip>
             </h4>
@@ -471,7 +556,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
         </>
       )}
 
-      {/* Botão Sugerir Evolução */}
+      {/* Botão Sugerir Evolução — apenas elegibilidade e destino, sem quantidade */}
       {evolucaoInfo && (
         <>
           <Separator />
@@ -508,41 +593,34 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   );
 }
 
-/** Retorna true se há bloqueios no painel */
+/**
+ * Hook que retorna true se há bloqueios para um lançamento META.
+ * Usa exatamente a mesma lógica do painel (calcularValidacoesMeta).
+ */
 export function useMetaValidacaoBloqueios(
   ano: number, mes: number, categoria: Categoria | '',
   tipo: TipoMovimentacao, quantidade: number, pesoKg: number, clienteId?: string,
-): boolean {
+): { hasBloqueio: boolean; primeiroBloqueio: string | null } {
   const { getSaldoMap, getPesoMedioMap } = useRebanhoOficial({ ano, cenario: 'meta' });
   const { getParametros } = useCategoriaParametros(clienteId);
 
   return useMemo(() => {
-    if (!categoria || quantidade <= 0) return false;
+    if (!categoria || quantidade <= 0) return { hasBloqueio: false, primeiroBloqueio: null };
 
     const saldoAtual = getSaldoMap(mes).get(categoria) ?? 0;
     const pesoMedioAtual = getPesoMedioMap(mes).get(categoria) ?? null;
     const pesoTotalAtual = pesoMedioAtual != null ? saldoAtual * pesoMedioAtual : 0;
     const catParams = getParametros(categoria);
-    const isSaida = isMovimentacaoSaida(tipo);
 
-    // Saldo negativo
-    if (isSaida && (saldoAtual - quantidade) < 0) return true;
+    const validacoes = calcularValidacoesMeta({
+      categoria, tipo, quantidade, pesoKg,
+      saldoAtual, pesoTotalAtual, catParams,
+    });
 
-    // Peso fora da faixa
-    if (catParams && pesoKg > 0) {
-      if (pesoKg < catParams.pesoMinKg || pesoKg > catParams.pesoMaxKg) return true;
-    }
-
-    // Peso médio final incoerente
-    if (isSaida) {
-      const saldoFinal = saldoAtual - quantidade;
-      if (saldoFinal > 0) {
-        const pesoFinal = (pesoTotalAtual - quantidade * pesoKg) / saldoFinal;
-        if (pesoFinal <= 0) return true;
-        if (catParams && pesoFinal > catParams.pesoMaxKg) return true;
-      }
-    }
-
-    return false;
+    const bloqueios = validacoes.filter(v => v.tipo === 'bloqueio');
+    return {
+      hasBloqueio: bloqueios.length > 0,
+      primeiroBloqueio: bloqueios.length > 0 ? bloqueios[0].mensagem : null,
+    };
   }, [ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, getSaldoMap, getPesoMedioMap, getParametros]);
 }
