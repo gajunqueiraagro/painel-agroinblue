@@ -1,12 +1,14 @@
 /**
  * Hook: useZootCategoriaMensal
  *
- * ⚠️ USO INTERNO — Consumir via useRebanhoOficial em componentes.
- * Este hook é a camada de acesso direto à view `vw_zoot_categoria_mensal`.
- * Componentes e páginas NÃO devem importar este hook diretamente.
- * Exceções permitidas: ConciliacaoTab, FechamentoTab (auditoria/comparação).
+ * ⚠️ USO INTERNO — NÃO IMPORTAR DIRETAMENTE EM TELAS/COMPONENTES.
+ * Consumir EXCLUSIVAMENTE via useRebanhoOficial.
  *
- * Regra: toda tela que exibe dados por categoria/mês deve usar useRebanhoOficial.
+ * Exceções permitidas (somente auditoria/conciliação):
+ *   - FechamentoTab.tsx
+ *   - ConciliacaoTab.tsx
+ *
+ * Qualquer import fora das exceções acima é uma VIOLAÇÃO arquitetural.
  */
 
 import { useQuery } from '@tanstack/react-query';
