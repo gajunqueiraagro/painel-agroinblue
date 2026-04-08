@@ -51,6 +51,7 @@ const SUB_ABA_LABELS: Record<SubAba, { label: string; icon: string }> = {
   transferencia_saida: { label: 'T.Saí.', icon: '📤' },
   consumo: { label: 'Cons.', icon: '🍖' },
   morte: { label: 'Mortes', icon: '💀' },
+  historico: { label: 'Evol. Cat.', icon: '🔄' },
 };
 
 const TABLE_HEAD_CELL = 'px-[3px] py-1 text-[8px] font-bold uppercase tracking-[0.02em] whitespace-nowrap select-none';
