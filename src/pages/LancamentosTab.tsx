@@ -58,7 +58,7 @@ import { toast } from 'sonner';
 interface Props {
   lancamentos: Lancamento[];
   onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
-  onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
+  onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => Promise<void> | void;
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
   abaInicial?: Aba;
@@ -76,7 +76,7 @@ interface Props {
   /** Reclassificação para abrir em modo edição automaticamente */
   reclassParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
-  onReturnFromEdit?: () => void;
+  onReturnFromEdit?: () => Promise<void> | void;
   /** Initial year filter for historico view */
   initialAnoFiltro?: string;
   /** Initial month filter for historico view */
@@ -2690,9 +2690,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
-                // Small delay to let state propagate before navigating back
-                await new Promise(r => setTimeout(r, 100));
-                if (onReturnFromEdit) onReturnFromEdit();
+                if (onReturnFromEdit) await onReturnFromEdit();
               } : reclassState.handleSubmit}
               submitting={false}
               canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}

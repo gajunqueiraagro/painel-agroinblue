@@ -381,13 +381,13 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
     if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
+    if (dados.cenario !== undefined) update.cenario = dados.cenario;
     if (dados.statusOperacional !== undefined) {
       update.status_operacional = dados.statusOperacional;
-      // Derive cenario from statusOperacional
-      if (dados.statusOperacional === null) {
-        update.cenario = 'meta';
-      } else {
-        update.cenario = 'realizado';
+      if (dados.cenario === undefined) {
+        update.cenario = dados.statusOperacional === null || dados.statusOperacional === 'previsto'
+          ? 'meta'
+          : 'realizado';
       }
     }
     if (dados.dataVenda !== undefined) update.data_venda = dados.dataVenda;
@@ -398,7 +398,13 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
-      setLancamentos(prev => prev.map(l => l.id === id ? { ...l, ...dados } : l));
+      setLancamentos(prev => prev.map(l => l.id === id ? {
+        ...l,
+        ...dados,
+        cenario: dados.cenario ?? (dados.statusOperacional !== undefined
+          ? (dados.statusOperacional === null || dados.statusOperacional === 'previsto' ? 'meta' : 'realizado')
+          : l.cenario),
+      } : l));
     }
   };
 
