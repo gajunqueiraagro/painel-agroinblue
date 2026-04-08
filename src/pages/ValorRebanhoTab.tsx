@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
+import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
+import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
