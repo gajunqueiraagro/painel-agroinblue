@@ -81,7 +81,7 @@ interface Props {
   initialMesFiltro?: string;
 }
 
-type Aba = 'entrada' | 'saida' | 'reclassificacao' | 'historico';
+type Aba = 'entrada' | 'saida' | 'reclassificacao';
 import { STATUS_LABEL, STATUS_OPTIONS_ZOOTECNICO, META_VISUAL, getStatusBadge, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -97,7 +97,6 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'entrada', label: 'Entradas', icon: <LogIn className="h-4 w-4" /> },
   { id: 'saida', label: 'Saídas', icon: <LogOut className="h-4 w-4" /> },
   { id: 'reclassificacao', label: 'Reclass.', icon: <RefreshCw className="h-4 w-4" /> },
-  { id: 'historico', label: 'Histórico', icon: <Clock className="h-4 w-4" /> },
 ];
 
 const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
@@ -205,7 +204,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
   }, [fazendas, fazendaAtual]);
 
-  const [aba, setAba] = useState<Aba>(abaInicial || (initialAnoFiltro ? 'historico' : 'entrada'));
+  const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
@@ -1886,11 +1885,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <button onClick={() => handleNavClick(() => setAba('reclassificacao'))} className={parentCls(aba === 'reclassificacao')} disabled={isEditing && aba !== 'reclassificacao'}>
           <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
         </button>
-
-        {/* Histórico */}
-        <button onClick={() => handleNavClick(() => setAba('historico'))} className={parentCls(aba === 'historico')} disabled={isEditing && aba !== 'historico'}>
-          <Clock className="h-3.5 w-3.5" /> Histórico
-        </button>
       </div>
     );
   };
@@ -2577,7 +2571,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       )}
 
       {/* ── P1 governance banner ── */}
-      {p1Oficial && aba !== 'historico' && (
+      {p1Oficial && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
@@ -2599,7 +2593,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             { aba: 'entrada' as Aba, label: 'Entradas', icon: <LogIn className="h-3 w-3" /> },
             { aba: 'saida' as Aba, label: 'Saídas', icon: <LogOut className="h-3 w-3" /> },
             { aba: 'reclassificacao' as Aba, label: 'Evoluir', icon: <RefreshCw className="h-3 w-3" /> },
-            { aba: 'historico' as Aba, label: 'Histórico', icon: <Clock className="h-3 w-3" /> },
           ].map(nav => (
             <button
               key={nav.aba}
@@ -2669,8 +2662,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               backLabel={backLabel}
             />
           </>
-        ) : aba === 'historico' ? (
-          <div className={isMobile ? '' : 'col-span-2 self-start'}>{renderHistorico()}</div>
         ) : (
           <>
              {renderForm()}
