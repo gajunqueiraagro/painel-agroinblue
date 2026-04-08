@@ -52,7 +52,7 @@ import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
+import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
 interface Props {
@@ -1572,9 +1572,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           restoreEditOrigin();
         }
       } else {
-        console.log('[Save Flow] Payload final:', { tipo, tipoPeso, isVenda, isAbate, isCompra, snapshot: lancamentoDados.detalhesSnapshot ? JSON.stringify(lancamentoDados.detalhesSnapshot).slice(0, 200) : 'none' });
         const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
-        console.log('[Save Flow] Lançamento salvo, returnedId:', returnedId);
 
         if (isCompra && returnedId) {
           if (compraDetalhes && fazendaAtual && clienteAtual) {
@@ -1614,10 +1612,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
-          console.log('[Save Flow] Venda detectada', { isBoitel, valorLiquido: calc.valorLiquido, temRef: !!vendaFinanceiroRef.current });
           if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
-            const finResult = await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
-            console.log('[Save Flow] generateFinanceiro resultado:', finResult);
+            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
           }
           vendaFinanceiroRef.current?.resetForm();
           setLastSavedLancamentoId(null);
@@ -2668,25 +2664,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             />
             <ReclassificacaoResumoPanel
               quantidade={Number(reclassState.quantidade) || 0}
-              pesoKg={Number(reclassState.pesoKg) || 0}
+              pesoKg={parseDecimalInput(reclassState.pesoKg) || 0}
               origemLabel={reclassState.origemLabel}
               destinoLabel={reclassState.destinoLabel}
               pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
               onRequestRegister={editingReclassId ? async () => {
                 const isMeta = reclassState.statusOp === 'meta';
+                const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
                 const payload = {
                   data: reclassState.data,
                   categoria: reclassState.categoriaOrigem,
                   categoriaDestino: reclassState.categoriaDestino,
                   quantidade: Number(reclassState.quantidade),
-                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : null,
-                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : null,
+                  pesoMedioKg: pesoMedioKg ?? null,
+                  pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
                   cenario: isMeta ? 'meta' as const : 'realizado' as const,
                   statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
                 };
-                console.log('[RECLASS-EDIT] reclassState.pesoKg raw:', JSON.stringify(reclassState.pesoKg));
-                console.log('[RECLASS-EDIT] payload enviado:', JSON.stringify(payload));
                 await onEditar(editingReclassId, payload);
                 toast.success('Reclassificação atualizada com sucesso.');
                 setEditingReclassId(null);

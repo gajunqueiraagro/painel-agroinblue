@@ -396,9 +396,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.tipoVenda !== undefined) update.tipo_venda = dados.tipoVenda;
     if (dados.detalhesSnapshot !== undefined) update.detalhes_snapshot = dados.detalhesSnapshot;
 
-    console.log('[EDIT-LANCAMENTO] id:', id, 'update object:', JSON.stringify(update));
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
-    console.log('[EDIT-LANCAMENTO] result:', error ? `ERROR: ${error.message}` : 'SUCCESS');
     if (!error) {
       setLancamentos(prev => prev.map(l => l.id === id ? {
         ...l,

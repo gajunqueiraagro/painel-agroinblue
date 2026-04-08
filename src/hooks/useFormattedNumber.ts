@@ -9,13 +9,30 @@ function formatIntBR(value: string): string {
 
 /** Format decimal with Brazilian format and fixed decimals (275,50 / 1.250,75) */
 function formatDecBR(value: string, decimals: number): string {
-  const clean = value.replace(/[^\d.,\-]/g, '').replace(',', '.');
-  const num = parseFloat(clean);
-  if (isNaN(num)) return '';
+  const num = parseDecimalInput(value);
+  if (num === undefined) return '';
   return num.toLocaleString('pt-BR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
+}
+
+export function parseDecimalInput(value: string | number | null | undefined): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (!value) return undefined;
+
+  const sanitized = value.trim().replace(/\s+/g, '');
+  if (!sanitized) return undefined;
+
+  const normalized = sanitized.includes(',')
+    ? sanitized.replace(/\./g, '').replace(',', '.')
+    : sanitized;
+
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : undefined;
 }
 
 /**
@@ -69,8 +86,8 @@ export function useDecimalInput(rawValue: string, setRawValue: (v: string) => vo
 
   const onBlur = useCallback(() => {
     if (rawValue) {
-      const num = parseFloat(rawValue);
-      if (!isNaN(num)) {
+      const num = parseDecimalInput(rawValue);
+      if (num !== undefined) {
         setDisplayValue(formatDecBR(rawValue, decimals));
       } else {
         setDisplayValue('');
