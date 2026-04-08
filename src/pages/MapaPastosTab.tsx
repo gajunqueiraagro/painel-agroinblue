@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download, FileText, Upload, FileDown } from 'lucide-react';
+import { Download, FileText, Upload, FileDown, ArrowLeft } from 'lucide-react';
 import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
 import { ImportMapaPastos } from '@/components/ImportMapaPastos';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -52,7 +52,13 @@ const CAT_SIGLAS: Record<string, string> = {
   mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
 };
 
-export function MapaPastosTab() {
+interface MapaPastosTabProps {
+  onBack?: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
+}
+
+export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
@@ -64,8 +70,9 @@ export function MapaPastosTab() {
     return Array.from(set).sort().reverse();
   }, [curYear]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(curYear));
-  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));
+  const mesDefault = filtroMesInicial || (Number(anoFiltro) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
+  const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
@@ -235,6 +242,11 @@ export function MapaPastosTab() {
         <div className="flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
+              {onBack && (
+                <Button variant="ghost" size="sm" className="h-7 px-1.5" onClick={onBack}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
                 <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
