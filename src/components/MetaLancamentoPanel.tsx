@@ -578,7 +578,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                 className="w-full h-7 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
                 onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
               >
-                Sugerir Evolução
+                Abrir evolução da categoria
               </Button>
             </div>
           ) : (
