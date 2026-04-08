@@ -17,7 +17,6 @@ import { useMemo, useState, useEffect, useCallback } from 'react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto } from '@/hooks/usePastos';
 import {
-  calcPesoMedioPonderado,
   calcUA,
   calcUAHa,
   calcAreaProdutivaPecuaria,
@@ -515,8 +514,9 @@ export function useIndicadoresZootecnicos(
 
     // --- MoM ---
     const compSaldoMoM = saldoAnterior > 0 ? buildComparacao(saldoFinalMes, saldoAnterior, 'mensal') : null;
+    // FONTE OFICIAL: peso médio anterior vem da view (mes-1 ou Dez ano anterior)
     const pesoMedioAnterior = mes > 1 ? viewPesoMedio(viewByMesAno, mes - 1)
-      : calcPesoMedioPonderado(saldosIniciais.filter(s => s.ano === ano).map(s => ({ quantidade: s.quantidade, pesoKg: s.pesoMedioKg ?? null })));
+      : viewPesoMedio(viewByMesAnoAnt, 12);
     const compPesoMedioMoM = pesoMedioRebanhoKg !== null && pesoMedioAnterior !== null ? buildComparacao(pesoMedioRebanhoKg, pesoMedioAnterior, 'mensal') : null;
 
     const pesoTotalAnt = mes > 1 ? viewPesoTotalFinal(viewByMesAno, mes - 1) : 0;

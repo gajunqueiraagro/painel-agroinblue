@@ -53,18 +53,19 @@ export function VariacaoEstoqueExplicacao({
     const cabFim = Array.from(saldoFimMap.values()).reduce((s, v) => s + v, 0);
     const deltaCab = cabFim - cabInicio;
 
+    // FONTE OFICIAL: peso vem exclusivamente de pesosReaisInicial (view zootécnica Dez/ano-1)
     const arrobasInicio = saldosIniciais
       .filter(s => s.ano === anoNum)
       .reduce((sum, s) => {
-        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? 0;
         return sum + s.quantidade * (pesoKg / 30);
       }, 0);
 
     let arrobasFim = 0;
-    // Use official weight from rebanho or fallback to pesosReais prop
+    // FONTE OFICIAL: peso vem exclusivamente da view zootécnica
     const pesoMapOficial = rebanho.getPesoMedioMap(mesLimite);
     for (const [cat, qtd] of saldoFimMap.entries()) {
-      const pesoKg = pesoMapOficial.get(cat) ?? pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
+      const pesoKg = pesoMapOficial.get(cat) ?? pesosReaisFinal?.[cat] ?? 0;
       arrobasFim += qtd * (pesoKg / 30);
     }
     const deltaArrobas = arrobasFim - arrobasInicio;
@@ -79,19 +80,21 @@ export function VariacaoEstoqueExplicacao({
     const hasPrecoFinal = precosFinal.length > 0;
     const hasPrecos = hasPrecoInicial && hasPrecoFinal;
 
+    // FONTE OFICIAL: peso exclusivamente da view zootécnica
     let valorInicial = 0;
     saldosIniciais
       .filter(s => s.ano === anoNum)
       .forEach(s => {
         const preco = precoMapInicial.get(s.categoria) || 0;
-        const pesoKg = pesosReaisInicial?.[s.categoria] ?? s.pesoMedioKg ?? 0;
+        const pesoKg = pesosReaisInicial?.[s.categoria] ?? 0;
         valorInicial += s.quantidade * pesoKg * preco;
       });
 
     let valorFinal = 0;
     for (const [cat, qtd] of saldoFimMap.entries()) {
       const preco = precoMapFinal.get(cat) || 0;
-      const pesoKg = pesosReaisFinal?.[cat] ?? saldosIniciais.find(s => s.ano === anoNum && s.categoria === cat)?.pesoMedioKg ?? 0;
+      // FONTE OFICIAL: peso exclusivamente da view zootécnica (sem fallback saldosIniciais)
+      const pesoKg = pesosReaisFinal?.[cat] ?? 0;
       valorFinal += qtd * pesoKg * preco;
     }
 

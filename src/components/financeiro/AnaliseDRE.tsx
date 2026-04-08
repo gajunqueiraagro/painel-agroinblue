@@ -120,19 +120,19 @@ function calcValorEstoque(
   precos: { categoria: string; preco_kg: number }[],
   ano: number,
   mes: number,
-  pesosReais?: Record<string, number>,
+  pesosReais: Record<string, number>,
   saldoMap?: Map<string, number>,
 ): number {
   if (!precos || precos.length === 0) return 0;
   const precoMap = new Map(precos.map((p) => [p.categoria, p.preco_kg]));
 
   if (mes === 0) {
-    // Initial value (Dec prev year) — use pesosReais if available
+    // Initial value (Dec prev year) — peso vem exclusivamente de pesosReais (fonte oficial)
     return saldosIniciais
       .filter((s) => s.ano === ano)
       .reduce((sum, s) => {
         const preco = precoMap.get(s.categoria) || 0;
-        const pesoKg = pesosReais?.[s.categoria] ?? s.pesoMedioKg ?? 0;
+        const pesoKg = pesosReais[s.categoria] ?? 0;
         return sum + s.quantidade * pesoKg * preco;
       }, 0);
   }
@@ -141,7 +141,8 @@ function calcValorEstoque(
   let total = 0;
   for (const [cat, qtd] of saldoMap.entries()) {
     const preco = precoMap.get(cat) || 0;
-    const pesoKg = pesosReais?.[cat] ?? saldosIniciais.find((s) => s.ano === ano && s.categoria === cat)?.pesoMedioKg ?? 0;
+    // FONTE OFICIAL: peso vem exclusivamente de pesosReais (view zootécnica)
+    const pesoKg = pesosReais[cat] ?? 0;
     total += qtd * pesoKg * preco;
   }
   return total;
@@ -201,23 +202,18 @@ export function DREAtividade({
     return map;
   }, [rebanho.getPesoMedioMap, mesNum]);
 
-  // Initial weights from Dec prev year (official source)
+  // Initial weights from Dec prev year (FONTE OFICIAL exclusiva — sem fallback para saldosIniciais)
   const pesosReaisInicial = useMemo(() => {
     const map: Record<string, number> = {};
     const pesoMap = rebanhoAnoAnt.getPesoMedioMap(12);
     for (const [cat, peso] of pesoMap.entries()) {
       if (peso > 0) map[cat] = peso;
     }
-    // Fill from saldos iniciais where official data is missing
-    saldosIniciais.filter(s => s.ano === anoNum).forEach(s => {
-      if (!map[s.categoria] && s.pesoMedioKg && s.pesoMedioKg > 0) {
-        map[s.categoria] = s.pesoMedioKg;
-      }
-    });
     return map;
-  }, [rebanhoAnoAnt.getPesoMedioMap, saldosIniciais, anoNum]);
+  }, [rebanhoAnoAnt.getPesoMedioMap]);
 
   // Helper to get pesos for a given month (0 = initial)
+  // FONTE OFICIAL exclusiva — sem fallback para saldosIniciais
   const getPesosCompletos = (m: number): Record<string, number> => {
     if (m === 0) return pesosReaisInicial;
     const map: Record<string, number> = {};
@@ -225,12 +221,6 @@ export function DREAtividade({
     for (const [cat, peso] of pesoMap.entries()) {
       if (peso > 0) map[cat] = peso;
     }
-    // Fill from saldos iniciais where official data is missing
-    saldosIniciais.filter(s => s.ano === anoNum).forEach(s => {
-      if (!map[s.categoria] && s.pesoMedioKg && s.pesoMedioKg > 0) {
-        map[s.categoria] = s.pesoMedioKg;
-      }
-    });
     return map;
   };
 
