@@ -3038,7 +3038,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           open={evolucaoDialogOpen}
           onOpenChange={setEvolucaoDialogOpen}
           sugestao={evolucaoSugestao}
-          saldoAtual={evolucaoSugestao.saldoAtual}
         />
       )}
     </div>

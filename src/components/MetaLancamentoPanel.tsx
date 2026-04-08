@@ -69,12 +69,18 @@ interface Props {
 }
 
 export interface EvolucaoSugestao {
+  /** Categoria do lançamento atual (destino da evolução) */
   categoriaAtual: string;
-  categoriaDestino: string;
-  pesoMedioAtual: number;
+  /** Categoria anterior que pode alimentar a atual */
+  categoriaAnterior: string;
+  /** Peso médio atual da categoria anterior */
+  pesoMedioAnterior: number;
+  /** Peso mínimo para evolução da categoria anterior */
   pesoEvolucao: number;
+  /** Se a categoria anterior atingiu peso de evolução */
   elegivel: boolean;
-  saldoAtual: number;
+  /** Saldo disponível na categoria anterior */
+  saldoAnterior: number;
 }
 
 export interface MetaStepState {
@@ -277,7 +283,7 @@ function StepHeader({ step, label, status, expanded, onToggle, tooltip, alwaysOp
 export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao, onStepStateChange }: Props) {
   const { getSaldoMap, getPesoMedioMap, getCategoriasDetalhe, loading: loadingRebanho } = useRebanhoOficial({ ano, cenario: 'meta' });
   const { rows: gmdRows } = useMetaGmd(String(ano));
-  const { getParametros, getProximaCategoria, isLoading: loadingParams } = useCategoriaParametros(clienteId);
+  const { getParametros, getProximaCategoria, getCategoriasAnteriores, isLoading: loadingParams } = useCategoriaParametros(clienteId);
 
   const loading = loadingRebanho || loadingParams;
 
@@ -290,7 +296,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const categoriasDetalhe = useMemo(() => getCategoriasDetalhe(mes), [getCategoriasDetalhe, mes]);
 
   const catParams = categoria ? getParametros(categoria) : undefined;
-  const proximaCat = categoria ? getProximaCategoria(categoria) : undefined;
+  const categoriasAnteriores = useMemo(() => categoria ? getCategoriasAnteriores(categoria) : [], [categoria, getCategoriasAnteriores]);
 
   // ── BLOCO 1: Situação atual do lote ──
   const saldoAtual = categoria ? (saldoMap.get(categoria) ?? 0) : 0;
@@ -372,21 +378,29 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const alertas = allValidacoes.filter(v => v.tipo === 'alerta');
   const hasBloqueio = bloqueios.length > 0;
 
-  // ── Sugestão de evolução ──
+  // ── Sugestão de evolução (categoria ANTERIOR que alimenta a atual) ──
   const evolucaoInfo = useMemo((): EvolucaoSugestao | null => {
-    if (!categoria || !catParams?.categoriaProxima || !catParams.pesoEvolucaoKg) return null;
-    const pesoRef = simulacao?.pesoMedioFinalProjetado ?? pesoMedioAtual;
-    if (pesoRef == null) return null;
+    if (!categoria || categoriasAnteriores.length === 0) return null;
+
+    // Pegar a primeira categoria anterior (prioridade por ordem hierárquica)
+    const catAnt = categoriasAnteriores[0];
+    if (!catAnt.pesoEvolucaoKg) return null;
+
+    const saldoAnt = saldoMap.get(catAnt.categoriaCodigo) ?? 0;
+    if (saldoAnt <= 0) return null;
+
+    const pesoMedioAnt = pesoMedioMap.get(catAnt.categoriaCodigo) ?? null;
+    if (pesoMedioAnt == null) return null;
 
     return {
       categoriaAtual: categoria,
-      categoriaDestino: catParams.categoriaProxima,
-      pesoMedioAtual: pesoRef,
-      pesoEvolucao: catParams.pesoEvolucaoKg,
-      elegivel: pesoRef >= catParams.pesoEvolucaoKg,
-      saldoAtual,
+      categoriaAnterior: catAnt.categoriaCodigo,
+      pesoMedioAnterior: pesoMedioAnt,
+      pesoEvolucao: catAnt.pesoEvolucaoKg,
+      elegivel: pesoMedioAnt >= catAnt.pesoEvolucaoKg,
+      saldoAnterior: saldoAnt,
     };
-  }, [categoria, catParams, simulacao, pesoMedioAtual, saldoAtual]);
+  }, [categoria, categoriasAnteriores, saldoMap, pesoMedioMap]);
 
   // ── Step state derivation ──
   const hasEvolucao = evolucaoInfo != null;
@@ -587,19 +601,19 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
             <div className="pl-7 pb-2">
               {!hasEvolucao ? (
                 <p className="text-[10px] text-muted-foreground italic">
-                  Sem caminho de evolução configurado para esta categoria.
+                  Sem categoria anterior configurada para alimentar esta categoria.
                 </p>
               ) : evolucaoInfo.elegivel ? (
                 <div className="space-y-1.5">
                   <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
                     <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">
-                      ✅ Lote elegível para evolução
+                      ✅ {getCategoriaLabel(evolucaoInfo.categoriaAnterior)} elegível para evoluir
                     </p>
                     <p className="text-[10px] text-green-600 dark:text-green-500">
-                      Peso médio ({fmt(evolucaoInfo.pesoMedioAtual, 1)} kg) ≥ peso de evolução ({fmt(evolucaoInfo.pesoEvolucao, 0)} kg)
+                      Saldo: {evolucaoInfo.saldoAnterior} cab · Peso médio: {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg ≥ {fmt(evolucaoInfo.pesoEvolucao, 0)} kg
                     </p>
                     <p className="text-[10px] text-green-600 dark:text-green-500">
-                      Destino: <strong>{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</strong>
+                      Pode evoluir para: <strong>{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</strong>
                     </p>
                     <Button
                       type="button"
@@ -608,19 +622,19 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                       className="w-full h-7 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
                       onClick={() => onSugestaoEvolucao?.(evolucaoInfo)}
                     >
-                      Abrir evolução da categoria
+                      Fazer evolução agora
                     </Button>
                   </div>
                 </div>
               ) : (
                 <div className="text-[10px] text-muted-foreground space-y-0.5">
                   <div className="flex items-center gap-1">
-                    <span>{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</span>
+                    <span>{getCategoriaLabel(evolucaoInfo.categoriaAnterior)}</span>
                     <ArrowRight className="h-3 w-3" />
-                    <span className="font-semibold">{getCategoriaLabel(evolucaoInfo.categoriaDestino)}</span>
+                    <span className="font-semibold">{getCategoriaLabel(evolucaoInfo.categoriaAtual)}</span>
                   </div>
                   <p>
-                    Peso atual {fmt(evolucaoInfo.pesoMedioAtual, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg
+                    Peso médio {fmt(evolucaoInfo.pesoMedioAnterior, 1)} kg / mín. {fmt(evolucaoInfo.pesoEvolucao, 0)} kg · Saldo: {evolucaoInfo.saldoAnterior} cab
                   </p>
                 </div>
               )}
@@ -634,8 +648,8 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                 evolucaoElegivel ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400',
               )}>
                 {evolucaoElegivel
-                  ? `⚠ Pendente — elegível (${fmt(evolucaoInfo!.pesoMedioAtual, 1)} kg)`
-                  : `✔ Não elegível — concluída`
+                  ? `⚠ ${getCategoriaLabel(evolucaoInfo!.categoriaAnterior)} elegível (${fmt(evolucaoInfo!.pesoMedioAnterior, 1)} kg)`
+                  : `✔ Sem evolução pendente`
                 }
               </span>
             </div>
