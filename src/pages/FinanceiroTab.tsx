@@ -711,7 +711,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         <div className="flex gap-3 px-2 pt-1.5 pb-4">
           {/* Table */}
           <div className="flex-[7] min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
-            <table className="w-full text-[11px]">
+            <table className="w-full text-[9px]">
               <thead>
                 <tr className="bg-primary text-primary-foreground">
                   <th className={`${TABLE_HEAD_CELL} text-left`}>DATA</th>
@@ -731,12 +731,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
                   const catDestino = l.categoriaDestino ? (CATEGORIAS.find(c => c.value === l.categoriaDestino)?.label || l.categoriaDestino) : '-';
                   const cfg = getStatusBadge(l);
                   return (
-                    <tr key={l.id} onClick={() => setDetalheId(l.id)} className="border-b border-border/40 hover:bg-muted/40 cursor-pointer transition-colors">
-                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
-                      <td className={`${TABLE_BODY_CELL} text-right font-bold text-[11px]`}>{l.quantidade}</td>
-                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{catOrigem}</td>
-                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{catDestino}</td>
-                      <td className={`${TABLE_BODY_CELL} text-right text-[10px]`}>{l.pesoMedioKg ? `${Number(l.pesoMedioKg).toFixed(2)}` : '-'}</td>
+                    <tr key={l.id} onClick={() => setDetalheId(l.id)} className="border-b border-border/70 leading-none hover:bg-muted/30 cursor-pointer transition-colors">
+                      <td className={`${TABLE_BODY_CELL} text-[9px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                      <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
+                      <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{catOrigem}</td>
+                      <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{catDestino}</td>
+                      <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg ? `${Number(l.pesoMedioKg).toFixed(2)}` : '-'}</td>
                       <td className={`${TABLE_BODY_CELL} text-center`}>
                         <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>
                       </td>
