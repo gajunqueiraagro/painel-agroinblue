@@ -27,7 +27,8 @@ import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
-import { useRebanhoOficial, indexByMes, type ZootMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
+import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
+import { CATEGORIAS } from '@/types/cattle';
 import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcAreaProdutivaPecuaria,
@@ -86,7 +87,37 @@ interface PesoSnapshot {
   arrobas: number[];
 }
 
-// ─── Tipos de lancamento que compõem o Desfrute ───
+/**
+ * Converte dados da view oficial (vw_zoot_categoria_mensal) para MetaCategoriaMes[].
+ * Fonte única: elimina dependência do cálculo local useMetaConsolidacao.
+ */
+function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[] {
+  return rows.map(r => {
+    const catDef = CATEGORIAS.find(c => c.value === r.categoria_codigo);
+    return {
+      categoria: r.categoria_codigo as any,
+      categoriaLabel: catDef?.label || r.categoria_nome,
+      mes: String(r.mes).padStart(2, '0'),
+      si: r.saldo_inicial,
+      ee: r.entradas_externas,
+      se: r.saidas_externas,
+      ei: r.evol_cat_entrada,
+      siInternas: r.evol_cat_saida,
+      sf: r.saldo_final,
+      cabMedias: (r.saldo_inicial + r.saldo_final) / 2,
+      pesoInicial: r.peso_total_inicial,
+      pesoEntradas: r.peso_entradas_externas + r.peso_evol_cat_entrada,
+      pesoSaidas: r.peso_saidas_externas + r.peso_evol_cat_saida,
+      gmd: r.gmd || 0,
+      dias: r.dias_mes,
+      producaoBio: r.producao_biologica,
+      pesoTotalFinal: r.peso_total_final,
+      pesoMedioFinal: r.peso_medio_final,
+    };
+  });
+}
+
+
 const TIPOS_DESFRUTE = new Set(['abate', 'venda', 'consumo']);
 
 // ─── Monthly raw data struct ───
@@ -987,7 +1018,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     return `${ano}-${String(m).padStart(2, '0')}`;
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
-  const { rawFazenda: zootMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
+  const { rawFazenda: zootMeta, rawCategorias: viewCategoriasMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { clienteAtual } = useCliente();
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
@@ -1119,7 +1150,16 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
 
-  // Blocos: Realizado usa buildMonthlyData, Meta usa snapshot validado (valor_rebanho_meta_validada)
+  // Consolidação META baseada na VIEW OFICIAL (vw_zoot_categoria_mensal cenario='meta')
+  // NUNCA usar cálculo local (useMetaConsolidacao) — a view é a fonte única de verdade
+  const metaConsolidacaoView = useMemo(() =>
+    viewCategoriasMeta && viewCategoriasMeta.length > 0
+      ? viewToMetaCategoriaMes(viewCategoriasMeta)
+      : [],
+    [viewCategoriasMeta],
+  );
+
+  // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
@@ -1131,11 +1171,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         ? { cabecas: realPesoSnap.cabecas[0], pesoMedioKg: realPesoSnap.pesoMedio[0], arrobas: realPesoSnap.arrobas[0] }
         : undefined;
 
-      // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
-      if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
+      // Fonte oficial: view convertida para MetaCategoriaMes[]
+      if (metaConsolidacaoView.length > 0) {
+        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
       }
 
+      // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
       return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
     }
     // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -1146,7 +1187,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
     return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacaoView, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
 
   useEffect(() => {
     if (blocos.length > 0) {
