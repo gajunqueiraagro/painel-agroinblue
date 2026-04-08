@@ -2680,10 +2680,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   pesoKg={Number(pesoKg) || 0}
                   clienteId={clienteAtual?.id}
                   onSugestaoEvolucao={(info: EvolucaoSugestao) => {
-                    toast.info(
-                      `Sugestão: ${info.categoriaAtual} → ${info.categoriaDestino}. Peso médio atual: ${info.pesoMedioAtual.toFixed(1)} kg (mín. evolução: ${info.pesoEvolucao} kg). Crie a movimentação de reclassificação manualmente.`,
-                      { duration: 8000 }
-                    );
+                    setEvolucaoSugestao(info);
+                    setEvolucaoDialogOpen(true);
                   }}
                 />
               )}
