@@ -1150,7 +1150,16 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
   const previstoGlobalBloqueado = isPrevisto && isGlobal;
 
-  // Blocos: Realizado usa buildMonthlyData, Meta usa snapshot validado (valor_rebanho_meta_validada)
+  // Consolidação META baseada na VIEW OFICIAL (vw_zoot_categoria_mensal cenario='meta')
+  // NUNCA usar cálculo local (useMetaConsolidacao) — a view é a fonte única de verdade
+  const metaConsolidacaoView = useMemo(() =>
+    viewCategoriasMeta && viewCategoriasMeta.length > 0
+      ? viewToMetaCategoriaMes(viewCategoriasMeta)
+      : [],
+    [viewCategoriasMeta],
+  );
+
+  // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
     if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
@@ -1162,11 +1171,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         ? { cabecas: realPesoSnap.cabecas[0], pesoMedioKg: realPesoSnap.pesoMedio[0], arrobas: realPesoSnap.arrobas[0] }
         : undefined;
 
-      // Consolidação Meta valida os blocos zootécnicos; valor do rebanho vem do snapshot validado
-      if (metaConsolidacao && metaConsolidacao.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacao, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
+      // Fonte oficial: view convertida para MetaCategoriaMes[]
+      if (metaConsolidacaoView.length > 0) {
+        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
       }
 
+      // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
       return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
     }
     // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -1177,7 +1187,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
     return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacao, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacaoView, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
 
   useEffect(() => {
     if (blocos.length > 0) {
