@@ -2675,7 +2675,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               statusOp={reclassState.statusOp}
               onRequestRegister={editingReclassId ? async () => {
                 const isMeta = reclassState.statusOp === 'meta';
-                onEditar(editingReclassId, {
+                await onEditar(editingReclassId, {
                   data: reclassState.data,
                   categoria: reclassState.categoriaOrigem,
                   categoriaDestino: reclassState.categoriaDestino,
@@ -2690,6 +2690,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
+                // Small delay to let state propagate before navigating back
+                await new Promise(r => setTimeout(r, 100));
                 if (onReturnFromEdit) onReturnFromEdit();
               } : reclassState.handleSubmit}
               submitting={false}
