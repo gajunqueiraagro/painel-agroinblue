@@ -348,7 +348,7 @@ export function FechamentoPastoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[95vh] min-h-[70vh] flex flex-col max-w-3xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-h-[90vh] sm:max-h-[95vh] min-h-0 sm:min-h-[70vh] flex flex-col max-w-3xl p-0 gap-0 overflow-hidden">
         {/* ── HEADER ESCURO ── */}
         <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-5 pt-4 pb-3 space-y-2">
           {/* Row 1: Name + status + copy */}
