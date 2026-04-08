@@ -968,7 +968,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     return `${ano}-${String(m).padStart(2, '0')}`;
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
-  const { data: zootMeta } = useZootMensal({ ano: anoNum, cenario: 'meta' });
+  const { rawFazenda: zootMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { clienteAtual } = useCliente();
 
   // Leitura oficial do Valor do Rebanho META validado (tabela valor_rebanho_meta_validada)
@@ -1010,8 +1010,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setMetaPesoSnap({ cabecas: cab, pesoMedio: pm, arrobas: arr });
       });
   }, [fazendaId, anoNum]);
-  // Official source: view data for Realizado (replaces buildMonthlyData local calcs)
-  const { data: viewDataRealizado } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado', global: isGlobal });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewDataRealizado } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
   // Month cutoff: months > cutoff are blank
   const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
