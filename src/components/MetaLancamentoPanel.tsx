@@ -343,6 +343,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       pesoMedioAtual: pesoRef,
       pesoEvolucao: catParams.pesoEvolucaoKg,
       elegivel: pesoRef >= catParams.pesoEvolucaoKg,
+      saldoAtual,
     };
   }, [categoria, catParams, simulacao, pesoMedioAtual]);
 
