@@ -165,6 +165,14 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     });
   }
 
+  // Bloqueio de peso: saída não pode retirar mais peso do que o total disponível
+  if ((isSaida || isReclass) && pesoTotalAtual > 0 && pesoTotalFinalProjetado < 0) {
+    result.push({
+      tipo: 'bloqueio',
+      mensagem: `Peso de saída (${fmt(quantidade * pesoKg, 0)} kg) maior que o peso total disponível (${fmt(pesoTotalAtual, 0)} kg)`,
+    });
+  }
+
   if (catParams && pesoKg > 0) {
     if (pesoKg < catParams.pesoMinKg) {
       result.push({
