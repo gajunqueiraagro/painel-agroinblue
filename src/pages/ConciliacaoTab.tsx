@@ -1,25 +1,42 @@
+/**
+ * ConciliacaoTab — Conciliação de Categorias (Sistema × Pastos)
+ *
+ * Fonte oficial do "Sistema": vw_zoot_categoria_mensal (via useZootCategoriaMensal)
+ * Fonte oficial do "Pastos": fechamento_pastos + fechamento_pasto_itens
+ *
+ * Regra: o front NÃO recalcula saldo final por movimentações.
+ */
+
 import { useState, useEffect, useMemo } from 'react';
-import { usePastos, type CategoriaRebanho } from '@/hooks/usePastos';
+import { usePastos } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useLancamentos } from '@/hooks/useLancamentos';
+import { useZootCategoriaMensal, groupByMes, categoriasUnicas } from '@/hooks/useZootCategoriaMensal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
-import { calcSaldoPorCategoria, calcConciliacao } from '@/lib/calculos/zootecnicos';
+import { classificarNivelConciliacao, type NivelConciliacao } from '@/lib/calculos/zootecnicos';
 
 interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
 
+interface ConciliacaoRow {
+  categoriaId: string;
+  categoriaNome: string;
+  qtdSistema: number;
+  qtdPastos: number;
+  diferenca: number;
+  nivel: NivelConciliacao;
+}
+
 export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
   const { isGlobal } = useFazenda();
-  const { categorias, pastos } = usePastos();
+  const { pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-  const { lancamentos, saldosIniciais } = useLancamentos();
   const defaultAnoMes = filtroAnoInicial && filtroMesInicial
     ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
     : format(new Date(), 'yyyy-MM');
@@ -32,6 +49,14 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
   }, [filtroAnoInicial, filtroMesInicial]);
   const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
   const [loadingItens, setLoadingItens] = useState(false);
+
+  const [ano, mes] = anoMes.split('-').map(Number);
+
+  // ── Fonte oficial: view zootécnica ──
+  const { data: viewData = [], isLoading: loadingView } = useZootCategoriaMensal({
+    ano,
+    cenario: 'realizado',
+  });
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -50,19 +75,43 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
     load();
   }, [fechamentos, loadItens]);
 
-  const [ano, mes] = anoMes.split('-').map(Number);
+  // Saldo do sistema: vem da view oficial (saldo_final por categoria no mês)
+  const saldoSistema = useMemo(() => {
+    const byMes = groupByMes(viewData);
+    const catsMes = byMes[mes] || [];
+    const map = new Map<string, number>();
+    catsMes.forEach(c => map.set(c.categoria_id, c.saldo_final));
+    return map;
+  }, [viewData, mes]);
 
-  // Saldo do sistema via lib central
-  const saldoSistema = useMemo(
-    () => calcSaldoPorCategoria(saldosIniciais, lancamentos, ano, mes, categorias),
-    [saldosIniciais, lancamentos, ano, mes, categorias],
-  );
+  // Categorias da view
+  const cats = useMemo(() => categoriasUnicas(viewData), [viewData]);
 
-  // Conciliação via lib central
-  const rows = useMemo(
-    () => calcConciliacao(categorias, saldoSistema, itensPastos),
-    [categorias, saldoSistema, itensPastos],
-  );
+  // Conciliação: sistema × pastos
+  const rows = useMemo((): ConciliacaoRow[] => {
+    // Unir categorias da view + categorias dos pastos
+    const allCatIds = new Set([...saldoSistema.keys(), ...itensPastos.keys()]);
+    const catMap = new Map(cats.map(c => [c.id, c]));
+
+    return Array.from(allCatIds)
+      .map(catId => {
+        const cat = catMap.get(catId);
+        const qtdSistema = saldoSistema.get(catId) || 0;
+        const qtdPastos = itensPastos.get(catId) || 0;
+        const diferenca = qtdPastos - qtdSistema;
+        return {
+          categoriaId: catId,
+          categoriaNome: cat?.nome || catId,
+          qtdSistema,
+          qtdPastos,
+          diferenca,
+          nivel: classificarNivelConciliacao(diferenca),
+          ordem: cat?.ordem ?? 999,
+        };
+      })
+      .filter(r => r.qtdSistema !== 0 || r.qtdPastos !== 0)
+      .sort((a, b) => a.ordem - b.ordem);
+  }, [saldoSistema, itensPastos, cats]);
 
   const alertas = useMemo(() => {
     const msgs: string[] = [];
@@ -84,10 +133,10 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
     for (let i = 0; i < rows.length; i++) {
       for (let j = i + 1; j < rows.length; j++) {
         if (rows[i].diferenca < -2 && rows[j].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
-          msgs.push(`Possível evolução de categoria: ${rows[i].categoria.nome} → ${rows[j].categoria.nome} não lançada no sistema.`);
+          msgs.push(`Possível evolução de categoria: ${rows[i].categoriaNome} → ${rows[j].categoriaNome} não lançada no sistema.`);
         }
         if (rows[j].diferenca < -2 && rows[i].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
-          msgs.push(`Possível evolução de categoria: ${rows[j].categoria.nome} → ${rows[i].categoria.nome} não lançada no sistema.`);
+          msgs.push(`Possível evolução de categoria: ${rows[j].categoriaNome} → ${rows[i].categoriaNome} não lançada no sistema.`);
         }
       }
     }
@@ -99,6 +148,7 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
 
   const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
+  const isLoading = loadingItens || loadingView;
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -125,13 +175,13 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
         </div>
       )}
 
-      {loadingItens ? (
+      {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Calculando...</div>
       ) : (
         <div className="space-y-2">
           {rows.map(row => (
             <div
-              key={row.categoria.id}
+              key={row.categoriaId}
               className={`rounded-lg border p-3 ${
                 row.nivel === 'ok' ? 'border-green-500/30 bg-green-500/5' :
                 row.nivel === 'atencao' ? 'border-yellow-500/30 bg-yellow-500/5' :
@@ -139,7 +189,7 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="font-medium">{row.categoria.nome}</div>
+                <div className="font-medium">{row.categoriaNome}</div>
                 <div className="flex items-center gap-1">
                   {row.nivel === 'ok' ? <CheckCircle className="h-4 w-4 text-green-500" /> :
                    row.nivel === 'atencao' ? <Info className="h-4 w-4 text-yellow-500" /> :

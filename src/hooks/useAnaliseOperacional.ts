@@ -1,18 +1,29 @@
 /**
- * Hook de análise operacional — usa funções centrais de cálculo.
+ * Hook de análise operacional — fonte oficial: vw_zoot_categoria_mensal.
+ *
+ * Resumo de movimentações: vem de lancamentos (detalhe do fluxo).
+ * Saldo do sistema: vem da view oficial (saldo_final por categoria).
+ * Conciliação: sistema (view) × pastos (fechamento_pasto_itens).
  */
 import { useMemo } from 'react';
-import type { Lancamento, SaldoInicial } from '@/types/cattle';
-import type { CategoriaRebanho } from '@/hooks/usePastos';
+import type { Lancamento } from '@/types/cattle';
+import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 import {
   calcResumoMovimentacoes,
-  calcSaldoPorCategoria,
-  calcConciliacao,
+  classificarNivelConciliacao,
   type ResumoMovimentacoes,
-  type ConciliacaoCategoria,
+  type NivelConciliacao,
 } from '@/lib/calculos/zootecnicos';
 
 export type { ResumoMovimentacoes };
+
+export interface ConciliacaoCategoria {
+  categoria: { id: string; nome: string; codigo: string };
+  qtdSistema: number;
+  qtdPastos: number;
+  diferenca: number;
+  nivel: NivelConciliacao;
+}
 
 export interface AlertaInteligente {
   tipo: 'info' | 'atencao' | 'critico';
@@ -29,30 +40,51 @@ export interface SugestaoAjuste {
 
 export function useAnaliseOperacional(
   lancamentos: Lancamento[],
-  saldosIniciais: SaldoInicial[],
-  categorias: CategoriaRebanho[],
+  /** Dados da view oficial para o mês selecionado */
+  viewCategoriasMes: ZootCategoriaMensal[],
   itensPastos: Map<string, number>,
-  anoMes: string
+  anoMes: string,
 ) {
-  const [ano, mes] = anoMes.split('-').map(Number);
-
-  // Movimentações do mês — lib central
+  // Movimentações do mês — de lancamentos (detalhe de fluxo)
   const resumoMov = useMemo(
     () => calcResumoMovimentacoes(lancamentos, anoMes),
     [lancamentos, anoMes],
   );
 
-  // Saldo do sistema — lib central
-  const saldoSistema = useMemo(
-    () => calcSaldoPorCategoria(saldosIniciais, lancamentos, ano, mes, categorias),
-    [ano, mes, lancamentos, saldosIniciais, categorias],
-  );
+  // Saldo do sistema — da view oficial
+  const saldoSistema = useMemo(() => {
+    const map = new Map<string, number>();
+    viewCategoriasMes.forEach(c => map.set(c.categoria_id, c.saldo_final));
+    return map;
+  }, [viewCategoriasMes]);
 
-  // Conciliação — lib central
-  const conciliacao = useMemo(
-    () => calcConciliacao(categorias, saldoSistema, itensPastos),
-    [categorias, saldoSistema, itensPastos],
-  );
+  // Conciliação: sistema (view) × pastos
+  const conciliacao = useMemo((): ConciliacaoCategoria[] => {
+    const allCatIds = new Set([...saldoSistema.keys(), ...itensPastos.keys()]);
+    const catMap = new Map(viewCategoriasMes.map(c => [c.categoria_id, c]));
+
+    return Array.from(allCatIds)
+      .map(catId => {
+        const cat = catMap.get(catId);
+        const qtdSistema = saldoSistema.get(catId) || 0;
+        const qtdPastos = itensPastos.get(catId) || 0;
+        const diferenca = qtdPastos - qtdSistema;
+        return {
+          categoria: {
+            id: catId,
+            nome: cat?.categoria_nome || catId,
+            codigo: cat?.categoria_codigo || '',
+          },
+          qtdSistema,
+          qtdPastos,
+          diferenca,
+          nivel: classificarNivelConciliacao(diferenca),
+          ordem: cat?.ordem_exibicao ?? 999,
+        };
+      })
+      .filter(r => r.qtdSistema !== 0 || r.qtdPastos !== 0)
+      .sort((a, b) => (a as any).ordem - (b as any).ordem);
+  }, [saldoSistema, itensPastos, viewCategoriasMes]);
 
   // Alertas inteligentes
   const alertas: AlertaInteligente[] = useMemo(() => {

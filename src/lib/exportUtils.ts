@@ -1,9 +1,21 @@
+/**
+ * Utilitários de exportação (Excel e PDF) — Relatórios de Rebanho
+ *
+ * Arquitetura: as funções de export aceitam dados pré-computados da view oficial
+ * (vw_zoot_fazenda_mensal / vw_zoot_categoria_mensal) quando disponíveis.
+ * Fallback: cálculo local por movimentações (mantido para compatibilidade offline).
+ *
+ * Regra: "Movimentação explica. Fechamento define. View distribui."
+ * O export de movimentações detalha o fluxo; o saldo oficial vem da view.
+ */
+
 import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao, TODOS_TIPOS } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
+import type { ZootMensal } from '@/hooks/useZootMensal';
 
 const MESES_COLS = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
@@ -39,7 +51,15 @@ const COLUNAS_EVOL = [
 ];
 
 // ── helpers ──
-function calcFluxoAnual(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string) {
+
+/** Indexa array de ZootMensal por mes_key */
+function indexZootByMes(rows: ZootMensal[]): Record<string, ZootMensal> {
+  const map: Record<string, ZootMensal> = {};
+  for (const r of rows) map[r.mes_key] = r;
+  return map;
+}
+
+function calcFluxoAnual(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[]) {
   const saldoInicialAno = saldosIniciais.filter(s => s.ano === Number(ano)).reduce((sum, s) => sum + s.quantidade, 0);
   const lancAno = lancamentos.filter(l => { try { return format(parseISO(l.data), 'yyyy') === ano; } catch { return false; } });
 
@@ -56,16 +76,22 @@ function calcFluxoAnual(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[
     }
   });
 
+  // Saldo: priorizar view oficial quando disponível
+  const zByMes = zootMensal ? indexZootByMes(zootMensal) : null;
+
   const saldoInicioMes: Record<string, number> = {};
   let acum = saldoInicialAno;
-  MESES_COLS.forEach(m => {
-    saldoInicioMes[m.key] = acum;
+  MESES_COLS.forEach((m, i) => {
+    const z = zByMes?.[m.key];
+    saldoInicioMes[m.key] = z?.cabecas_inicio ?? acum;
     const ent = LINHAS_FLUXO.filter(li => li.sinal === '+').reduce((s, li) => s + porMesTipo[m.key][li.tipo], 0);
     const sai = LINHAS_FLUXO.filter(li => li.sinal === '-').reduce((s, li) => s + porMesTipo[m.key][li.tipo], 0);
     acum += ent - sai;
   });
 
-  return { porMesTipo, saldoInicioMes, saldoFinalAno: acum, saldoInicialAno };
+  const saldoFinalAno = zByMes?.['12']?.cabecas_final ?? acum;
+
+  return { porMesTipo, saldoInicioMes, saldoFinalAno, saldoInicialAno };
 }
 
 function calcEvolucaoCategoria(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, mes: string) {
@@ -120,7 +146,7 @@ function calcCategoriasMes(lancamentos: Lancamento[], saldosIniciais: SaldoInici
 }
 
 // ── Resumo calc ──
-function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, mes: string) {
+function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, mes: string, zootMensal?: ZootMensal[]) {
   const saldoInicialAno = saldosIniciais.filter(s => s.ano === Number(ano)).reduce((sum, s) => sum + s.quantidade, 0);
 
   const filtrados = lancamentos.filter(l => {
@@ -137,25 +163,41 @@ function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
   let saldoInicialPeriodo = saldoInicialAno;
   if (mes !== 'todos') {
     const mesNum = Number(mes);
-    const acum = lancamentos.filter(l => {
-      try { const d = parseISO(l.data); return format(d, 'yyyy') === ano && Number(format(d, 'MM')) < mesNum; } catch { return false; }
-    }).reduce((sum, l) => {
-      if (isEntrada(l.tipo)) return sum + l.quantidade;
-      if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
-      return sum;
-    }, 0);
-    saldoInicialPeriodo += acum;
+    // Tentar usar view oficial
+    if (zootMensal) {
+      const z = zootMensal.find(r => r.mes === mesNum);
+      if (z) saldoInicialPeriodo = z.cabecas_inicio;
+    } else {
+      const acum = lancamentos.filter(l => {
+        try { const d = parseISO(l.data); return format(d, 'yyyy') === ano && Number(format(d, 'MM')) < mesNum; } catch { return false; }
+      }).reduce((sum, l) => {
+        if (isEntrada(l.tipo)) return sum + l.quantidade;
+        if (!isReclassificacao(l.tipo)) return sum - l.quantidade;
+        return sum;
+      }, 0);
+      saldoInicialPeriodo += acum;
+    }
   }
 
   const totalEntradas = filtrados.filter(l => isEntrada(l.tipo)).reduce((sum, l) => sum + l.quantidade, 0);
   const totalSaidas = filtrados.filter(l => !isEntrada(l.tipo) && !isReclassificacao(l.tipo)).reduce((sum, l) => sum + l.quantidade, 0);
 
-  return { saldoInicialPeriodo, totalEntradas, totalSaidas, saldoFinal: saldoInicialPeriodo + totalEntradas - totalSaidas };
+  // Saldo final: priorizar view oficial
+  let saldoFinal = saldoInicialPeriodo + totalEntradas - totalSaidas;
+  if (zootMensal && mes !== 'todos') {
+    const z = zootMensal.find(r => r.mes === Number(mes));
+    if (z) saldoFinal = z.cabecas_final;
+  } else if (zootMensal && mes === 'todos') {
+    const z12 = zootMensal.find(r => r.mes === 12);
+    if (z12) saldoFinal = z12.cabecas_final;
+  }
+
+  return { saldoInicialPeriodo, totalEntradas, totalSaidas, saldoFinal };
 }
 
 // ── EXCEL EXPORT ──
-export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string) {
-  const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos');
+export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[]) {
+  const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos', zootMensal);
   const resumoData = [
     ['Resumo - ' + ano],
     [],
@@ -165,7 +207,7 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
     ['Saldo Final', resumo.saldoFinal],
   ];
 
-  const fluxo = calcFluxoAnual(lancamentos, saldosIniciais, ano);
+  const fluxo = calcFluxoAnual(lancamentos, saldosIniciais, ano, zootMensal);
   const fluxoHeader = ['Movimentação', ...MESES_COLS.map(m => m.label), 'Total'];
   const fluxoRows: (string | number)[][] = [fluxoHeader];
   fluxoRows.push(['Saldo Início', ...MESES_COLS.map(m => fluxo.saldoInicioMes[m.key]), fluxo.saldoInicialAno]);
@@ -173,7 +215,10 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
     const total = MESES_COLS.reduce((s, m) => s + fluxo.porMesTipo[m.key][li.tipo], 0);
     fluxoRows.push([li.label, ...MESES_COLS.map(m => fluxo.porMesTipo[m.key][li.tipo]), total]);
   });
+  const zByMes = zootMensal ? indexZootByMes(zootMensal) : null;
   const saldosFinal = MESES_COLS.map((m, i) => {
+    const z = zByMes?.[m.key];
+    if (z) return z.cabecas_final;
     if (i < 11) return fluxo.saldoInicioMes[MESES_COLS[i + 1].key];
     return fluxo.saldoFinalAno;
   });
@@ -228,7 +273,7 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
 }
 
 // ── PDF EXPORT ──
-export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string) {
+export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[]) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
 
@@ -236,7 +281,7 @@ export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInic
   doc.text(`Relatório de Rebanho - ${ano}`, pageW / 2, 15, { align: 'center' });
 
   // 1. Resumo
-  const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos');
+  const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos', zootMensal);
   doc.setFontSize(12);
   doc.text('Resumo Anual', 14, 25);
   autoTable(doc, {
@@ -258,7 +303,7 @@ export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInic
   doc.addPage();
   doc.setFontSize(14);
   doc.text('Fluxo Anual', 14, 15);
-  const fluxo = calcFluxoAnual(lancamentos, saldosIniciais, ano);
+  const fluxo = calcFluxoAnual(lancamentos, saldosIniciais, ano, zootMensal);
   const fHead = ['Movimentação', ...MESES_COLS.map(m => m.label), 'Total'];
   const fBody: string[][] = [];
   fBody.push(['Saldo Início', ...MESES_COLS.map(m => String(fluxo.saldoInicioMes[m.key])), String(fluxo.saldoInicialAno)]);
@@ -266,7 +311,12 @@ export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInic
     const total = MESES_COLS.reduce((s, m) => s + fluxo.porMesTipo[m.key][li.tipo], 0);
     fBody.push([li.label, ...MESES_COLS.map(m => String(fluxo.porMesTipo[m.key][li.tipo])), String(total)]);
   });
-  const sfArr = MESES_COLS.map((m, i) => String(i < 11 ? fluxo.saldoInicioMes[MESES_COLS[i + 1].key] : fluxo.saldoFinalAno));
+  const zByMes = zootMensal ? indexZootByMes(zootMensal) : null;
+  const sfArr = MESES_COLS.map((m, i) => {
+    const z = zByMes?.[m.key];
+    if (z) return String(z.cabecas_final);
+    return String(i < 11 ? fluxo.saldoInicioMes[MESES_COLS[i + 1].key] : fluxo.saldoFinalAno);
+  });
   fBody.push(['Saldo Final', ...sfArr, String(fluxo.saldoFinalAno)]);
   autoTable(doc, {
     startY: 20,
@@ -303,4 +353,3 @@ export function exportToPDF(lancamentos: Lancamento[], saldosIniciais: SaldoInic
 
   doc.save(`rebanho_${ano}.pdf`);
 }
-
