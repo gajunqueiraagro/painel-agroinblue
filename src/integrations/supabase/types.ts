@@ -4339,22 +4339,7 @@ export type Database = {
           saidas: number | null
           ua_media: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "saldos_iniciais_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "saldos_iniciais_fazenda_id_fkey"
-            columns: ["fazenda_id"]
-            isOneToOne: false
-            referencedRelation: "fazendas"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
