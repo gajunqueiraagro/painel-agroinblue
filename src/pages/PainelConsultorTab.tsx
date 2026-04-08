@@ -214,12 +214,23 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
-  // Se há snapshot validado de peso, usar EXCLUSIVAMENTE arrobas_total da tabela validada
+  // REGRA SOBERANA: snapshot validado SEMPRE vence sobre views para cabeças, peso e arrobas
   const hasSnap = pesoSnap && pesoSnap.arrobas.some(v => v > 0);
+
+  // Cabeças: snapshot validado sobrescreve view quando disponível
+  const hasCabSnap = hasSnap && pesoSnap!.cabecas.some(v => v > 0);
+  const cabFin = hasCabSnap
+    ? pesoSnap!.cabecas.map((c, i) => c > 0 ? c : d.cabFin[i])
+    : d.cabFin;
+  // Cab inicial: Dez do ano anterior vem do snapshot[0] do array de 13; Fev+ = cabFin do mês anterior
+  const cabIni = hasCabSnap
+    ? [d.cabIni[0], ...cabFin.slice(0, 11)]
+    : d.cabIni;
+
+  // Peso: snapshot validado sobrescreve view
   const pesoTotalFin = hasSnap
     ? pesoSnap!.arrobas.map(a => a * 30)
     : d.pesoTotalFin;
-  // Peso inicial: Dez do ano anterior vem de dezPesoSnap; Fev+ = final do mês anterior
   const pesoTotalIni = hasSnap
     ? [(dezPesoSnap ?? d.pesoTotalIni[0]), ...pesoTotalFin.slice(0, 11)]
     : d.pesoTotalIni;
@@ -227,10 +238,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     ? pesoSnap!.pesoMedio
     : d.pesoMedioFin;
   const pesoMedioIni = hasSnap
-    ? [(dezPesoSnap != null && d.cabIni[0] > 0 ? dezPesoSnap / d.cabIni[0] : d.pesoMedioIni[0]), ...pesoMedioFin.slice(0, 11)]
+    ? [(dezPesoSnap != null && cabIni[0] > 0 ? dezPesoSnap / cabIni[0] : d.pesoMedioIni[0]), ...pesoMedioFin.slice(0, 11)]
     : d.pesoMedioIni;
 
-  const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
+  const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const uaMedia = cabMedia.map((v, i) => {
     const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 450 : 0;
@@ -244,8 +255,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   });
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
-    : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
+    ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : 0))
+    : d.valorRebFin.map((v, i) => { const c = cabFin[i]; return c > 0 ? v / c : 0; });
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : 0))
     : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
