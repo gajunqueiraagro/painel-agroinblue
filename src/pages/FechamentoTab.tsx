@@ -509,13 +509,23 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <CheckCircle className="h-3 w-3" />
                 {conciliadosCount} conciliados
               </Badge>
-              {divergenciaCount > 0 && (
+             {divergenciaCount > 0 && (
                 <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold gap-1 w-fit">
                   <AlertTriangle className="h-3 w-3" />
                   {divergenciaCount} divergências
                 </Badge>
               )}
             </div>
+            {allClosed && (
+              <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100 text-[11px] font-bold gap-1 w-fit">
+                <CheckCircle className="h-3.5 w-3.5" /> Mês fechado
+              </Badge>
+            )}
+            {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
+              <Button size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 font-bold gap-1 text-destructive hover:text-destructive w-fit justify-start" onClick={() => setConfirmBulkReopenOpen(true)}>
+                <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
+              </Button>
+            )}
             {allClosed && onNavigateToValorRebanho && (
               <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={onNavigateToValorRebanho}>
                 Inserir preço do rebanho →
