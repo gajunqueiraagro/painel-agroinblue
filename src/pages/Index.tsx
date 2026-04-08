@@ -576,6 +576,7 @@ const Index = () => {
           onBackToConciliacao={fechamentoFromConciliacao ? goToVisaoZooHub : undefined}
           onNavigateToReclass={goToReclassFromFechamento}
           onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')}
+          onNavigateToConferenciaGmd={() => handleTabChange('conferencia_gmd')}
         />
       )}
       {activeTab === 'mapa_pastos' && <MapaPastosTab />}
