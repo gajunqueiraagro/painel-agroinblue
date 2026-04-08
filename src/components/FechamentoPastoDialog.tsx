@@ -318,12 +318,12 @@ export function FechamentoPastoDialog({
   const renderGrupo = (label: string, cats: CategoriaRebanho[], colorAccent: string, tabBase: number) => (
     <div>
       <div className={`text-xs font-bold uppercase tracking-widest mb-2 ${colorAccent}`}>{label}</div>
-      <div className="flex items-start gap-4 pl-8">
-        <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[40px]">
-          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
-          <span className="text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
+      <div className="flex items-start gap-2 sm:gap-4 pl-2 sm:pl-8">
+        <div className="flex flex-col pt-[22px] gap-1 shrink-0 w-[34px] sm:w-[40px]">
+          <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground h-8 flex items-center">Qtde</span>
+          <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground h-8 flex items-center">Peso</span>
         </div>
-        <div className="flex gap-4 flex-wrap">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-2 sm:flex sm:gap-4 sm:flex-wrap flex-1 min-w-0">
           {cats.map((c, idx) => {
             const item = getItem(c.id);
             return (
