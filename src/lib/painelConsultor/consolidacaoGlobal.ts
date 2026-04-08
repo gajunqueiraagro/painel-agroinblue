@@ -28,6 +28,13 @@
  *    → Usado APENAS em: conciliação por categoria, GMD, peso por categoria
  *    → NUNCA entra em indicadores de fluxo da fazenda
  *
+ * C. Transferências inter-fazendas no modo GLOBAL:
+ *    - No nível FAZENDA: transferência = fluxo externo (entrada ou saída)
+ *    - No nível GLOBAL: transferência = movimento INTERNO do grupo
+ *    → DEVE ser neutralizada (subtraída) dos indicadores de fluxo global
+ *    → Regra: Global mostra apenas nascimento/compra como entrada
+ *      e apenas abate/venda/morte/consumo como saída
+ *
  * Essa separação vale para CABEÇAS e PESOS igualmente.
  */
 
