@@ -561,6 +561,7 @@ const Index = () => {
           onEditarVenda={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarCompra={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarTransferencia={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setTransferenciaParaEditar(l); setActiveTab('lancamentos'); }}
+          onEditarReclass={(l, ctx) => { setEditOriginTab('financeiro'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setReclassParaEditar(l); setActiveTab('lancamentos'); }}
         />
       )}
       {activeTab === 'acessos' && <AcessosTab />}
