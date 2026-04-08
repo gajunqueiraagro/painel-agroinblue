@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
-import { useZootCategoriaMensal, groupByMes, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, groupByMes, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { usePastos } from '@/hooks/usePastos';
