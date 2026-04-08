@@ -673,7 +673,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -689,7 +689,22 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const saidas = agg('se');
   const pesoIniRaw = agg('pesoInicial');
   const pesoFinRaw = agg('pesoTotalFinal');
-  const prodBio = agg('producaoBio');
+
+  // Produção biológica: a view não incorpora meta_gmd_mensal,
+  // então recalculamos a partir do GMD meta por categoria
+  const prodBio = Array.from({ length: 12 }, (_, i) => {
+    const mesKey = String(i + 1).padStart(2, '0');
+    const mesRows = consolidacao.filter(c => c.mes === mesKey);
+    let totalProd = 0;
+    for (const row of mesRows) {
+      const gmdRow = gmdMetaRows.find(g => g.categoria === row.categoria);
+      const gmdVal = gmdRow?.meses[mesKey] || 0;
+      const cabMedia = (row.si + row.sf) / 2;
+      const dias = row.dias || new Date(new Date().getFullYear(), i + 1, 0).getDate();
+      totalProd += cabMedia * gmdVal * dias;
+    }
+    return totalProd;
+  });
 
   // Override cabIni[0] (Jan) with Dec realizado validado
   const cabIni = [...cabIniRaw];
