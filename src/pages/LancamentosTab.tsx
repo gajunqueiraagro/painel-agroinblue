@@ -2684,6 +2684,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setEvolucaoSugestao(info);
                     setEvolucaoDialogOpen(true);
                   }}
+                  onStepStateChange={setMetaStepState}
                 />
               )}
               {/* Existing right panel */}
