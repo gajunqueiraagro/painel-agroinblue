@@ -15,7 +15,7 @@ import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
-import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';

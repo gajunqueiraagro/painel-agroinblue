@@ -124,11 +124,11 @@ export function MetaPrecoTab({ onBack }: Props) {
   const { user } = useAuth();
   const fazendaId = fazendaAtual?.id;
 
-  // Meta consolidation data for qty/peso
-  const { data: viewDataMeta } = useZootCategoriaMensal({ ano: Number(ano), cenario: 'meta' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewDataMeta } = useRebanhoOficial({ ano: Number(ano), cenario: 'meta' });
 
   // Realized data for prior year (both Dec for vs Inic. ano, and same month for vs 1 ano)
-  const { data: viewDataRealizadoAnoAnt } = useZootCategoriaMensal({ ano: Number(ano) - 1, cenario: 'realizado' });
+  const { rawCategorias: viewDataRealizadoAnoAnt } = useRebanhoOficial({ ano: Number(ano) - 1, cenario: 'realizado' });
 
   // Valor rebanho fechamento for realized comparisons
   const [valorRebDezAnt, setValorRebDezAnt] = useState<number>(0);
