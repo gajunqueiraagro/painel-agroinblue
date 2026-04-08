@@ -1,12 +1,13 @@
 /**
  * Hook: useZootMensal
- * 
- * ⚠️ USO INTERNO — Consumir via useRebanhoOficial em componentes.
+ *
+ * ⚠️ USO INTERNO — NÃO IMPORTAR DIRETAMENTE EM TELAS/COMPONENTES.
+ * Consumir EXCLUSIVAMENTE via useRebanhoOficial.
+ *
  * Este hook é a camada de acesso direto à view `vw_zoot_fazenda_mensal`.
- * Componentes e páginas NÃO devem importar este hook diretamente.
+ * Qualquer import direto em componente é uma VIOLAÇÃO arquitetural.
  *
  * Regra de produto: todo indicador mensal do rebanho deve vir de useRebanhoOficial.
- * O front NÃO recalcula — apenas lê, formata e filtra.
  */
 
 import { useQuery } from '@tanstack/react-query';
