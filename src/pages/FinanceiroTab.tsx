@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { getStatusBadge } from '@/lib/statusOperacional';
-import { Lancamento, CATEGORIAS } from '@/types/cattle';
+import { Lancamento, CATEGORIAS, TODOS_TIPOS, isEntrada, isReclassificacao } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { parseISO, format } from 'date-fns';
-import { DollarSign, Info, ArrowLeft, Filter, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ptBR } from 'date-fns/locale';
+import { DollarSign, Info, ArrowLeft, Filter, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { FinanceiroExportMenu } from '@/components/FinanceiroExportMenu';
 import { ChuvasTab } from './ChuvasTab';
@@ -35,7 +36,7 @@ interface Props {
 
 export type SubAba = 'nascimento' | 'compra' | 'transferencia_entrada' | 'abate' | 'venda' | 'transferencia_saida' | 'consumo' | 'morte';
 
-type TopTab = 'todas' | 'entradas' | 'saidas' | 'chuvas';
+type TopTab = 'todas' | 'entradas' | 'saidas' | 'chuvas' | 'historico';
 
 const ENTRY_TYPES: SubAba[] = ['nascimento', 'compra', 'transferencia_entrada'];
 const EXIT_TYPES: SubAba[] = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
@@ -587,6 +588,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
+    { id: 'historico', label: 'Histórico', icon: '🕑' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
   const topTabs = modoMovimentacao
