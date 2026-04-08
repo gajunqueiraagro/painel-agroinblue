@@ -52,7 +52,7 @@ import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
+import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
 
 interface Props {
@@ -2668,25 +2668,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             />
             <ReclassificacaoResumoPanel
               quantidade={Number(reclassState.quantidade) || 0}
-              pesoKg={Number(reclassState.pesoKg) || 0}
+              pesoKg={parseDecimalInput(reclassState.pesoKg) || 0}
               origemLabel={reclassState.origemLabel}
               destinoLabel={reclassState.destinoLabel}
               pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
               onRequestRegister={editingReclassId ? async () => {
                 const isMeta = reclassState.statusOp === 'meta';
+                const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
                 const payload = {
                   data: reclassState.data,
                   categoria: reclassState.categoriaOrigem,
                   categoriaDestino: reclassState.categoriaDestino,
                   quantidade: Number(reclassState.quantidade),
-                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : null,
-                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : null,
+                  pesoMedioKg: pesoMedioKg ?? null,
+                  pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
                   cenario: isMeta ? 'meta' as const : 'realizado' as const,
                   statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
                 };
-                console.log('[RECLASS-EDIT] reclassState.pesoKg raw:', JSON.stringify(reclassState.pesoKg));
-                console.log('[RECLASS-EDIT] payload enviado:', JSON.stringify(payload));
                 await onEditar(editingReclassId, payload);
                 toast.success('Reclassificação atualizada com sucesso.');
                 setEditingReclassId(null);

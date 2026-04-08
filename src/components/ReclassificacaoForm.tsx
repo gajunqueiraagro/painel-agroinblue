@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { useIntegerInput, useDecimalInput } from '@/hooks/useFormattedNumber';
+import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { RefreshCw, ArrowRight, Scale } from 'lucide-react';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -189,6 +189,7 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, lancamentos,
     if (!Number(quantidade) || categoriaOrigem === categoriaDestino) return;
 
     const isMeta = statusOp === 'meta';
+    const pesoMedioKg = parseDecimalInput(pesoKg);
 
     const result = await onAdicionar({
       data,
@@ -196,8 +197,8 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, lancamentos,
       quantidade: Number(quantidade),
       categoria: categoriaOrigem,
       categoriaDestino,
-      pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
-      pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
+      pesoMedioKg,
+      pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : undefined,
       statusOperacional: isMeta ? null : 'realizado',
     });
 
