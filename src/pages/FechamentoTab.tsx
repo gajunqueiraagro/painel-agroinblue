@@ -206,6 +206,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* ── Status de conciliação por pasto ── */
   const getPastoStatus = useCallback((pasto: Pasto): PastoStatusConcil => {
     const fech = getFechamento(pasto.id);
+    // Pasto com uso mensal não-pecuário: conciliado automaticamente
+    if (!isPastoPecuario(pasto, fech)) return fech?.status === 'fechado' ? 'fechado' : 'conciliado';
     if (!fech) return 'nao_iniciado';
     if (fech.status === 'fechado') return 'fechado';
     const items = itensMap.get(fech.id) || [];
