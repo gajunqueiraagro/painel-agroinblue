@@ -512,6 +512,9 @@ const Index = () => {
           transferenciaParaEditar={transferenciaParaEditar}
           reclassParaEditar={reclassParaEditar}
           onReturnFromEdit={editOriginTab ? () => {
+            // Reload data to ensure fresh state after edit
+            loadData();
+            metaLoadData();
             // Restore origin tab with saved filter context
             if (editOriginTab === 'financeiro') {
               setSubAbaFinanceiro(editOriginSubAba);
