@@ -435,35 +435,31 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   };
 
   const handleBulkReopen = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
     setBulkReopening(true);
     try {
-      const pastosParaReabrir = pastosAtivos.filter(p => {
-        const fech = getFechamento(p.id);
-        return fech?.status === 'fechado';
+      // Usar RPC oficial que invalida snapshot + cascata P2
+      const { data, error } = await supabase.rpc('reabrir_pilar_fechamento', {
+        _fazenda_id: fazendaAtual.id,
+        _ano_mes: anoMes,
+        _pilar: 'p1_mapa_pastos',
+        _motivo: 'Reabertura via tela de Fechamento de Pastos',
       });
 
-      let erros = 0;
-      for (const pasto of pastosParaReabrir) {
-        const fech = getFechamento(pasto.id)!;
-        const { error } = await supabase
-          .from('fechamento_pastos')
-          .update({ status: 'rascunho', responsavel_nome: null })
-          .eq('id', fech.id);
-        if (error) {
-          console.error('Erro ao reabrir pasto:', error);
-          erros++;
-        }
+      if (error) {
+        console.error('Erro ao reabrir mês via RPC:', error);
+        toast.error(`Erro ao reabrir mês: ${error.message}`);
+      } else if (data?.error) {
+        toast.error(`Erro: ${data.error}`);
+      } else {
+        const cascata = data?.cascata || [];
+        toast.success(`Mês ${anoMes} reaberto com sucesso.${cascata.length > 0 ? ` Pilares invalidados: ${cascata.join(', ')}` : ''}`);
       }
 
-      if (erros > 0) {
-        toast.error(`${erros} pasto(s) não puderam ser reabertos. Verifique e tente novamente.`);
-      } else {
-        toast.success(`${pastosParaReabrir.length} pasto(s) reaberto(s) com sucesso.`);
-      }
       await loadFechamentos(anoMes);
     } catch (e) {
-      console.error('Erro ao reabrir pastos:', e);
-      toast.error('Erro inesperado ao reabrir pastos. Tente novamente.');
+      console.error('Erro ao reabrir mês:', e);
+      toast.error('Erro inesperado ao reabrir mês. Tente novamente.');
     } finally {
       setBulkReopening(false);
       setConfirmBulkReopenOpen(false);
@@ -805,9 +801,24 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           onSave={async (items) => salvarItens(activeFechamento.id, items)}
           onFechar={async () => fecharPasto(activeFechamento.id)}
           onReabrir={async () => {
-            const ok = await reabrirPasto(activeFechamento.id);
-            if (ok) loadFechamentos(anoMes);
-            return ok;
+            if (!fazendaAtual || fazendaAtual.id === '__global__') return false;
+            const { data, error } = await supabase.rpc('reabrir_pilar_fechamento', {
+              _fazenda_id: fazendaAtual.id,
+              _ano_mes: anoMes,
+              _pilar: 'p1_mapa_pastos',
+              _motivo: 'Reabertura individual via modal de pasto',
+            });
+            if (error) {
+              toast.error(`Erro ao reabrir: ${error.message}`);
+              return false;
+            }
+            if (data?.error) {
+              toast.error(`Erro: ${data.error}`);
+              return false;
+            }
+            toast.success('Mês reaberto com sucesso.');
+            await loadFechamentos(anoMes);
+            return true;
           }}
           onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
         />
