@@ -218,7 +218,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
-  // compraFinanceiroRef removed — compra now uses modal + direct generation
+  const [editingReclassId, setEditingReclassId] = useState<string | null>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
@@ -228,7 +228,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ─── P1 governance: derive anoMes from form date ───
   const formAnoMes = useMemo(() => {
     if (!data) return undefined;
-    return data.slice(0, 7); // 'yyyy-MM'
+    return data.slice(0, 7);
   }, [data]);
   const { status: statusPilaresForm, refetch: refetchPilares } = useStatusPilares(fazendaAtual?.id, formAnoMes);
   const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
