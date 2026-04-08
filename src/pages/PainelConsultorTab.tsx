@@ -1066,7 +1066,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       const cabMap = new Map(todasMeses.map(mes => [mes, 0]));
       const pmMap = new Map(todasMeses.map(mes => [mes, 0]));
       const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
-      (data as any[] || []).forEach((row: any) => {
+      // GOVERNANÇA: Apenas snapshots validados alimentam o Painel oficial
+      const validRows = (data as any[] || []).filter((row: any) => row.status === 'validado');
+      validRows.forEach((row: any) => {
         totais.set(row.ano_mes, (totais.get(row.ano_mes) || 0) + (Number(row.valor_total) || 0));
         vcMap.set(row.ano_mes, Number(row.valor_cabeca_medio) || 0);
         paMap.set(row.ano_mes, Number(row.preco_arroba_medio) || 0);
