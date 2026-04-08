@@ -1,14 +1,13 @@
 /**
  * EvolucaoAssistidaDialog — Fluxo assistido de evolução de categoria
  *
+ * Conceito: mostra a categoria ANTERIOR que pode alimentar a categoria
+ * do lançamento atual. Ex: lançando Bois → mostra Garrotes elegíveis.
+ *
  * Nesta fase:
  *   - Apenas exibe elegibilidade, origem, destino, peso e saldo
  *   - NÃO grava movimentações automáticas
  *   - NÃO estima quantidade parcial
- *   - Preparado para futuramente gerar evol_cat_saida e evol_cat_entrada
- *
- * O campo 'categoria_proxima' representa o caminho DEFAULT de evolução.
- * NÃO representa todos os caminhos futuros possíveis.
  */
 
 import { ArrowRight, CheckCircle2, Info, Scale, Users } from 'lucide-react';
@@ -29,7 +28,6 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sugestao: EvolucaoSugestao | null;
-  saldoAtual: number;
 }
 
 function fmt(v: number | null | undefined, decimals = 2): string {
@@ -41,11 +39,11 @@ function getCategoriaLabel(codigo: string): string {
   return CATEGORIAS.find(c => c.value === codigo)?.label || codigo;
 }
 
-export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtual }: Props) {
+export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao }: Props) {
   if (!sugestao) return null;
 
-  const { categoriaAtual, categoriaDestino, pesoMedioAtual, pesoEvolucao, elegivel } = sugestao;
-  const progressPct = pesoEvolucao > 0 ? Math.min((pesoMedioAtual / pesoEvolucao) * 100, 100) : 0;
+  const { categoriaAtual, categoriaAnterior, pesoMedioAnterior, pesoEvolucao, elegivel, saldoAnterior } = sugestao;
+  const progressPct = pesoEvolucao > 0 ? Math.min((pesoMedioAnterior / pesoEvolucao) * 100, 100) : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,18 +54,18 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
             Evolução Assistida de Categoria
           </DialogTitle>
           <DialogDescription className="text-[11px]">
-            Análise de elegibilidade para reclassificação. Nenhuma movimentação será gravada automaticamente.
+            Categoria anterior elegível para alimentar o lançamento atual. Nenhuma movimentação será gravada automaticamente.
           </DialogDescription>
         </DialogHeader>
 
         <Separator />
 
-        {/* Fluxo visual: Origem → Destino */}
+        {/* Fluxo visual: Anterior → Atual */}
         <div className="flex items-center justify-center gap-3 py-2">
           <div className="text-center">
             <span className="text-[10px] text-muted-foreground uppercase font-medium">Origem</span>
             <div className="mt-1 bg-muted rounded-md px-3 py-2">
-              <span className="text-[13px] font-semibold">{getCategoriaLabel(categoriaAtual)}</span>
+              <span className="text-[13px] font-semibold">{getCategoriaLabel(categoriaAnterior)}</span>
             </div>
           </div>
           <ArrowRight className="h-5 w-5 text-orange-500 shrink-0 mt-3" />
@@ -75,7 +73,7 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
             <span className="text-[10px] text-muted-foreground uppercase font-medium">Destino</span>
             <div className="mt-1 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md px-3 py-2">
               <span className="text-[13px] font-semibold text-orange-700 dark:text-orange-400">
-                {getCategoriaLabel(categoriaDestino)}
+                {getCategoriaLabel(categoriaAtual)}
               </span>
             </div>
           </div>
@@ -83,23 +81,23 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
 
         <Separator />
 
-        {/* Dados do lote */}
+        {/* Dados da categoria anterior */}
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Dados do Lote</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Dados da Categoria Anterior</h4>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-muted/50 rounded p-2 space-y-0.5">
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <Users className="h-3 w-3" /> Saldo atual
+                <Users className="h-3 w-3" /> Saldo disponível
               </div>
-              <span className="text-[13px] font-semibold">{saldoAtual} cab</span>
+              <span className="text-[13px] font-semibold">{saldoAnterior} cab</span>
             </div>
 
             <div className="bg-muted/50 rounded p-2 space-y-0.5">
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                 <Scale className="h-3 w-3" /> Peso médio
               </div>
-              <span className="text-[13px] font-semibold">{fmt(pesoMedioAtual, 1)} kg</span>
+              <span className="text-[13px] font-semibold">{fmt(pesoMedioAnterior, 1)} kg</span>
             </div>
           </div>
 
@@ -120,7 +118,7 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
               />
             </div>
             <div className="flex justify-between text-[9px] text-muted-foreground">
-              <span>Atual: {fmt(pesoMedioAtual, 1)} kg</span>
+              <span>Atual: {fmt(pesoMedioAnterior, 1)} kg</span>
               <span>{progressPct.toFixed(0)}%</span>
             </div>
           </div>
@@ -134,12 +132,12 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
               <span className="text-[12px] font-semibold text-green-700 dark:text-green-400">
-                Lote elegível para evolução
+                Categoria anterior elegível
               </span>
             </div>
             <p className="text-[10px] text-green-600 dark:text-green-500">
-              O peso médio atual ({fmt(pesoMedioAtual, 1)} kg) atingiu o peso mínimo de evolução ({fmt(pesoEvolucao, 0)} kg).
-              Para concluir a evolução, crie manualmente uma movimentação de reclassificação.
+              {getCategoriaLabel(categoriaAnterior)} ({saldoAnterior} cab, {fmt(pesoMedioAnterior, 1)} kg) pode evoluir para {getCategoriaLabel(categoriaAtual)}.
+              Para concluir, crie manualmente uma movimentação de reclassificação.
             </p>
           </div>
         ) : (
@@ -147,11 +145,11 @@ export function EvolucaoAssistidaDialog({ open, onOpenChange, sugestao, saldoAtu
             <div className="flex items-center gap-1.5">
               <Info className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400">
-                Lote ainda não elegível
+                Categoria anterior ainda não elegível
               </span>
             </div>
             <p className="text-[10px] text-amber-600 dark:text-amber-500">
-              Faltam {fmt(pesoEvolucao - pesoMedioAtual, 1)} kg no peso médio para atingir o mínimo de evolução.
+              Faltam {fmt(pesoEvolucao - pesoMedioAnterior, 1)} kg no peso médio de {getCategoriaLabel(categoriaAnterior)} para atingir o mínimo de evolução.
             </p>
           </div>
         )}
