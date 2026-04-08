@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
