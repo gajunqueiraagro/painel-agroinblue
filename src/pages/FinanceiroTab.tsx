@@ -609,7 +609,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
-    { id: 'historico', label: 'Histórico', icon: '🕑' },
+    { id: 'historico', label: 'Evol. Cat.', icon: '🔄' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
   const topTabs = modoMovimentacao
