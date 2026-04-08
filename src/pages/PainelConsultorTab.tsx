@@ -690,21 +690,9 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const pesoIniRaw = agg('pesoInicial');
   const pesoFinRaw = agg('pesoTotalFinal');
 
-  // Produção biológica: a view não incorpora meta_gmd_mensal,
-  // então recalculamos a partir do GMD meta por categoria
-  const prodBio = Array.from({ length: 12 }, (_, i) => {
-    const mesKey = String(i + 1).padStart(2, '0');
-    const mesRows = consolidacao.filter(c => c.mes === mesKey);
-    let totalProd = 0;
-    for (const row of mesRows) {
-      const gmdRow = gmdMetaRows.find(g => g.categoria === row.categoria);
-      const gmdVal = gmdRow?.meses[mesKey] || 0;
-      const cabMedia = (row.si + row.sf) / 2;
-      const dias = row.dias || new Date(new Date().getFullYear(), i + 1, 0).getDate();
-      totalProd += cabMedia * gmdVal * dias;
-    }
-    return totalProd;
-  });
+  // Produção biológica: a view oficial (vw_zoot_categoria_mensal) já integra
+  // meta_gmd_mensal no peso_total_final e producao_biologica. Leitura direta.
+  const prodBio = agg('producaoBio');
 
   // Override cabIni[0] (Jan) with Dec realizado validado
   const cabIni = [...cabIniRaw];
@@ -712,13 +700,10 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     cabIni[0] = dezRealizadoSnap.cabecas;
   }
 
-  // A view não incorpora produção biológica META no peso final.
-  // Corrigimos: pesoFinCorrigido = pesoFinRaw (balanço contábil) + prodBio (GMD meta)
-  const pesoFinCorrigido = pesoFinRaw.map((v, i) => v + prodBio[i]);
-
+  // A view já incorpora produção biológica META no peso_total_final.
   // Snapshot validado de peso sobrescreve consolidação quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
-  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinCorrigido;
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
   // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
   const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
   const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
@@ -727,7 +712,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Peso médio final = peso total final / SF (weighted across categories)
   const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFinCorrigido[i] / sf : 0;
+    return sf > 0 ? pesoFinRaw[i] / sf : 0;
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
@@ -738,14 +723,12 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
 
-  // GMD: produção biológica / (cab média × dias)
+  // GMD: lido diretamente da view (producaoBio já é correto)
   const gmd = Array.from({ length: 12 }, (_, i) => {
     const cm = cabMedia[i];
     const mesNum = i + 1;
-    const ano = consolidacao.length > 0 ? new Date().getFullYear() : new Date().getFullYear();
-    // Get dias from first matching row
     const row = consolidacao.find(c => c.mes === String(mesNum).padStart(2, '0'));
-    const dias = row?.dias || new Date(ano, mesNum, 0).getDate();
+    const dias = row?.dias || new Date(new Date().getFullYear(), mesNum, 0).getDate();
     if (cm <= 0 || dias <= 0) return 0;
     return prodBio[i] / (cm * dias);
   });
