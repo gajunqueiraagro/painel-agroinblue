@@ -91,6 +91,8 @@ export interface MetaStepState {
   etapaFinanceiroHabilitado: boolean;
   /** Evolução é obrigatória para sustentar o lançamento */
   evolucaoObrigatoria: boolean;
+  /** Saldo atual da categoria do lançamento (destino da evolução) */
+  saldoDestinoAtual: number;
 }
 
 interface Bloqueio {
@@ -426,8 +428,8 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 
   // Notify parent of state changes
   useEffect(() => {
-    onStepStateChange?.({ hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria });
-  }, [hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria, onStepStateChange]);
+    onStepStateChange?.({ hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria, saldoDestinoAtual: saldoAtual });
+  }, [hasBloqueio, etapaEvolucaoValidada, etapaFinanceiroHabilitado, evolucaoObrigatoria, saldoAtual, onStepStateChange]);
 
   // Step statuses
   const step1Status: StepStatus = 'done';

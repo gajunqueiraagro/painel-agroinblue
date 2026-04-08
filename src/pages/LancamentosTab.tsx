@@ -250,6 +250,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
    const [transferenciaDialogOpen, setTransferenciaDialogOpen] = useState(false);
   const [evolucaoDialogOpen, setEvolucaoDialogOpen] = useState(false);
   const [evolucaoSugestao, setEvolucaoSugestao] = useState<EvolucaoSugestao | null>(null);
+  const [metaStepState, setMetaStepState] = useState<MetaStepState | null>(null);
 
   const [motivoMorte, setMotivoMorte] = useState('');
   const [motivoMorteCustom, setMotivoMorteCustom] = useState('');
@@ -2683,6 +2684,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setEvolucaoSugestao(info);
                     setEvolucaoDialogOpen(true);
                   }}
+                  onStepStateChange={setMetaStepState}
                 />
               )}
               {/* Existing right panel */}
@@ -3038,6 +3040,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           open={evolucaoDialogOpen}
           onOpenChange={setEvolucaoDialogOpen}
           sugestao={evolucaoSugestao}
+          dataLancamento={data}
+          quantidadeLancamento={Number(quantidade) || 0}
+          saldoDestinoAtual={metaStepState?.saldoDestinoAtual ?? 0}
+          onRegistrar={onAdicionar}
+          onSucesso={() => {
+            setEvolucaoSugestao(null);
+          }}
         />
       )}
     </div>
