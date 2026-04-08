@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Download, FileText, Upload, FileDown } from 'lucide-react';
+import { Download, FileText, Upload, FileDown, ArrowLeft } from 'lucide-react';
 import { gerarModeloMapaPastos } from '@/lib/importMapaPastos';
 import { ImportMapaPastos } from '@/components/ImportMapaPastos';
 import { MESES_COLS } from '@/lib/calculos/labels';
