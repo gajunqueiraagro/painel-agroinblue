@@ -80,8 +80,8 @@ interface Props {
   onBackToConciliacao?: () => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
   onNavigateToValorRebanho?: () => void;
-  onNavigateToConferenciaGmd?: () => void;
-  onNavigateToMapaPastos?: () => void;
+  onNavigateToConferenciaGmd?: (filtro: { ano: string; mes: number }) => void;
+  onNavigateToMapaPastos?: (filtro: { ano: string; mes: number }) => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -633,12 +633,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
             </Button>
             {onNavigateToConferenciaGmd && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={onNavigateToConferenciaGmd}>
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToConferenciaGmd({ ano: anoFiltro, mes: mesFiltro })}>
                 <Activity className="h-3.5 w-3.5" /> Conferência do GMD
               </Button>
             )}
             {onNavigateToMapaPastos && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={onNavigateToMapaPastos}>
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
                 <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
               </Button>
             )}
