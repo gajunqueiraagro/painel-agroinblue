@@ -15,6 +15,20 @@
  *   ponderado_area:  Σ numerador / Σ área produtiva (lotação, @/ha, kg/ha)
  *   recalculado:     Fórmula customizada sobre base global (GMD, desfrute %)
  *   unitario:        Σ numerador / Σ denominador (custo/@, receita/@)
+ *
+ * ─── SEPARAÇÃO OBRIGATÓRIA DE CONCEITOS ───
+ *
+ * A. Fluxo externo real da fazenda (para indicadores executivos):
+ *    - Entradas: nascimento, compra, transferência de entrada
+ *    - Saídas: abate, venda em pé, transferência de saída, consumo, morte
+ *    → Usado em: Entradas/Saídas (cab), Acumulados, Saldo, Desfrute
+ *
+ * B. Movimentação interna entre categorias (evol_cat):
+ *    - evol_cat_entrada / evol_cat_saida
+ *    → Usado APENAS em: conciliação por categoria, GMD, peso por categoria
+ *    → NUNCA entra em indicadores de fluxo da fazenda
+ *
+ * Essa separação vale para CABEÇAS e PESOS igualmente.
  */
 
 export type TipoConsolidacao =
