@@ -517,6 +517,7 @@ const Index = () => {
               setSubAbaFinanceiro(editOriginSubAba);
               setMovFiltroAno(editOriginAnoFiltro);
               setMovFiltroMes(editOriginMesFiltro);
+              setMovFiltroStatus(editOriginStatusFiltro);
             }
             setActiveTab(editOriginTab);
             setEditOriginTab(null);
