@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock, Lightbulb, Pencil } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Lock, AlertTriangle, Sprout, BarChart3, Unlock, Lightbulb, Pencil, Info } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -25,6 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
@@ -48,12 +54,39 @@ const CAT_COLS = [
   { codigo: 'vacas', sigla: 'V' },
 ];
 
+/* ── Status de conciliação por pasto ── */
+type PastoStatusConcil = 'nao_iniciado' | 'em_edicao' | 'inconsistente' | 'conciliado' | 'fechado';
+
+const STATUS_LABEL: Record<PastoStatusConcil, string> = {
+  nao_iniciado: 'Não iniciado',
+  em_edicao: 'Em edição',
+  inconsistente: 'Inconsistente',
+  conciliado: 'Conciliado',
+  fechado: 'Fechado',
+};
+
+const STATUS_CARD_BG: Record<PastoStatusConcil, string> = {
+  nao_iniciado: 'bg-gray-100 dark:bg-gray-800/40 border-gray-300 dark:border-gray-600',
+  em_edicao: 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700',
+  inconsistente: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700',
+  conciliado: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700',
+  fechado: 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-600',
+};
+
+const STATUS_BADGE_STYLE: Record<PastoStatusConcil, string> = {
+  nao_iniciado: 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  em_edicao: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+  inconsistente: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+  conciliado: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+  fechado: 'bg-emerald-200 text-emerald-800 dark:bg-emerald-800/50 dark:text-emerald-200',
+};
+
 interface PastoResumo {
   totalCabecas: number;
   pesoMedio: number | null;
   uaHa: number | null;
   uaTotal: number;
-  catBreakdown: { sigla: string; qty: number }[];
+  catBreakdown: { sigla: string; qty: number; pesoMedio: number | null }[];
   lotacaoKgHa: number | null;
 }
 
@@ -67,37 +100,9 @@ interface Props {
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
 
-// Color map for tipo_uso
-const TIPO_USO_STYLES: Record<string, { border: string; text: string; bg: string; icon?: 'plant' }> = {
-  'cria':             { border: 'border-l-orange-500', text: 'text-orange-700 dark:text-orange-400', bg: 'bg-orange-500/10' },
-  'recria':           { border: 'border-l-emerald-500', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
-  'engorda':          { border: 'border-l-blue-500', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500/10' },
-  'vedado':           { border: 'border-l-green-800', text: 'text-green-800 dark:text-green-400', bg: 'bg-green-800/10' },
-  'reforma pecuaria': { border: 'border-l-gray-600', text: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-600/10' },
-  'agricultura':      { border: 'border-l-lime-600', text: 'text-lime-700 dark:text-lime-400', bg: 'bg-lime-600/10', icon: 'plant' },
-  'app':              { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
-  'reserva legal':    { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
-  'benfeitorias':     { border: 'border-l-gray-900 dark:border-l-gray-100', text: 'text-gray-900 dark:text-gray-100', bg: 'bg-gray-900/10 dark:bg-gray-100/10' },
-};
-
-const DEFAULT_TIPO_USO_STYLE: { border: string; text: string; bg: string; icon?: 'plant' } = {
-  border: 'border-l-border',
-  text: 'text-foreground',
-  bg: 'bg-muted/20',
-};
-
 const normalizeTipoUso = (tipoUso?: string) => {
   if (!tipoUso) return '';
-  return tipoUso
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLowerCase();
-};
-
-const getTipoUsoStyle = (tipoUso: string | undefined) => {
-  if (!tipoUso) return DEFAULT_TIPO_USO_STYLE;
-  return TIPO_USO_STYLES[normalizeTipoUso(tipoUso)] || DEFAULT_TIPO_USO_STYLE;
+  return tipoUso.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 };
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho }: Props = {}) {
@@ -174,12 +179,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     items.forEach(i => { uaTotal += calcUA(i.quantidade, i.peso_medio_kg); });
     const uaHa = pasto.area_produtiva_ha && uaTotal > 0 ? uaTotal / pasto.area_produtiva_ha : null;
 
-    // Category breakdown
+    // Category breakdown with peso
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
-    const catBreakdown: { sigla: string; qty: number }[] = [];
+    const catBreakdown: { sigla: string; qty: number; pesoMedio: number | null }[] = [];
     for (const col of CAT_COLS) {
-      const qty = items.filter(i => catIdToCodigo.get(i.categoria_id) === col.codigo).reduce((s, i) => s + i.quantidade, 0);
-      if (qty > 0) catBreakdown.push({ sigla: col.sigla, qty });
+      const catItems = items.filter(i => catIdToCodigo.get(i.categoria_id) === col.codigo);
+      const qty = catItems.reduce((s, i) => s + i.quantidade, 0);
+      const pesoItem = catItems.find(i => i.quantidade > 0 && i.peso_medio_kg);
+      if (qty > 0) catBreakdown.push({ sigla: col.sigla, qty, pesoMedio: pesoItem?.peso_medio_kg ?? null });
     }
 
     // Lotação kg/ha
@@ -189,8 +196,35 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return { totalCabecas: totalCab, pesoMedio, uaHa, uaTotal, catBreakdown, lotacaoKgHa };
   }, [itensMap, categorias]);
 
-  const preenchidos = pastosAtivos.filter(p => getFechamento(p.id)).length;
-  const fechadosCount = pastosAtivos.filter(p => getFechamento(p.id)?.status === 'fechado').length;
+  /* ── Status de conciliação por pasto ── */
+  const getPastoStatus = useCallback((pasto: Pasto): PastoStatusConcil => {
+    const fech = getFechamento(pasto.id);
+    if (!fech) return 'nao_iniciado';
+    if (fech.status === 'fechado') return 'fechado';
+
+    const items = itensMap.get(fech.id) || [];
+    const totalCab = items.reduce((s, i) => s + i.quantidade, 0);
+    if (totalCab === 0) return 'nao_iniciado';
+
+    // Check inconsistencies: items with qty but no peso
+    const semPeso = items.some(i => i.quantidade > 0 && !i.peso_medio_kg);
+    if (semPeso) return 'inconsistente';
+
+    return 'conciliado';
+  }, [getFechamento, itensMap]);
+
+  // Counters
+  const statusCounts = useMemo(() => {
+    const counts: Record<PastoStatusConcil, number> = {
+      nao_iniciado: 0, em_edicao: 0, inconsistente: 0, conciliado: 0, fechado: 0,
+    };
+    pastosAtivos.forEach(p => { counts[getPastoStatus(p)]++; });
+    return counts;
+  }, [pastosAtivos, getPastoStatus]);
+
+  const conciliadosCount = statusCounts.conciliado + statusCounts.fechado;
+  const divergenciaCount = statusCounts.inconsistente;
+  const fechadosCount = statusCounts.fechado;
   const pendentesCount = pastosAtivos.length - fechadosCount;
 
   // Determine if bulk close button should show
@@ -206,7 +240,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const mesNum = Number(anoMes.split('-')[1]);
 
   // FONTE OFICIAL: saldo previsto por movimentações (vw_zoot_categoria_mensal)
-  // Compara contra pastoDataByCat para detectar divergências de conciliação
   const saldoMap = useMemo(() => {
     const map = new Map<string, number>();
     const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
@@ -218,16 +251,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return map;
   }, [viewDataForConcil, mesNum]);
 
-  // Fonte oficial da conciliação visual:
-  // fechamento_pastos deduplicado por pasto (updated_at mais recente),
-  // sem depender de pasto ativo atual para não distorcer meses históricos.
+  // Dedup fechamentos
   const dedupFechamentos = useMemo(() => {
     const byPasto = new Map<string, FechamentoPasto>();
     fechamentos.forEach(f => {
       const atual = byPasto.get(f.pasto_id);
       const tsAtual = atual?.updated_at || '';
       const tsNovo = f.updated_at || '';
-
       if (!atual || tsNovo > tsAtual || (tsNovo === tsAtual && f.status === 'fechado' && atual.status !== 'fechado')) {
         byPasto.set(f.pasto_id, f);
       }
@@ -235,12 +265,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return Array.from(byPasto.values());
   }, [fechamentos]);
 
-  const dedupFechIds = useMemo(
-    () => new Set(dedupFechamentos.map(f => f.id)),
-    [dedupFechamentos]
-  );
-
-  // ── Fonte OPERACIONAL: mesma base visual dos pastos/cards/resumo (sem conciliação) ──
+  // ── Fonte OPERACIONAL ──
   const operationalFechamentos = useMemo(
     () => pastosAtivos
       .map(pasto => getFechamento(pasto.id))
@@ -253,7 +278,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [operationalFechamentos]
   );
 
-  // ── Fonte OPERACIONAL: realidade dos pastos exibida nas telas operacionais ──
+  // Pasto data by category
   const pastoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
@@ -269,14 +294,34 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return map;
   }, [itensMap, categorias, operationalFechIds]);
 
-
-
+  // Peso médio ponderado por categoria (média de todos os pastos)
+  const pesoMedioByCat = useMemo(() => {
+    const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
+    const acc = new Map<string, { totalPeso: number; totalCab: number }>();
+    itensMap.forEach((items, fechId) => {
+      if (!operationalFechIds.has(fechId)) return;
+      items.forEach(i => {
+        if (i.quantidade > 0 && i.peso_medio_kg) {
+          const codigo = catIdToCodigo.get(i.categoria_id);
+          if (codigo) {
+            const cur = acc.get(codigo) || { totalPeso: 0, totalCab: 0 };
+            cur.totalPeso += i.peso_medio_kg * i.quantidade;
+            cur.totalCab += i.quantidade;
+            acc.set(codigo, cur);
+          }
+        }
+      });
+    });
+    const result = new Map<string, number>();
+    acc.forEach((v, k) => { if (v.totalCab > 0) result.set(k, v.totalPeso / v.totalCab); });
+    return result;
+  }, [itensMap, categorias, operationalFechIds]);
 
   const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
   const totalDiferenca = totalPasto - totalSistema;
 
-  // Sugestões de conciliação (mesma lógica da tela Conciliação de Categoria)
+  // Sugestões de conciliação
   const catMap = useMemo(
     () => new Map((categorias || []).map(c => [c.codigo, c.nome])),
     [categorias]
@@ -294,7 +339,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
-  // hasDivergencia usa a mesma fonte OPERACIONAL (pastoDataByCat) da linha Dif.
   const hasDivergencia = useMemo(() => {
     if (totalDiferenca !== 0) return true;
     return CAT_COLS.some(c => {
@@ -322,7 +366,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const handleBulkClose = async () => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
 
-    // Block if any category has divergence
     if (hasDivergencia) {
       toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
       setConfirmBulkOpen(false);
@@ -334,7 +377,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     try {
       const fazendaId = fazendaAtual.id;
       const clienteId = fazendaAtual.cliente_id;
-
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || null;
 
@@ -353,43 +395,39 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         return;
       }
 
+      let erros = 0;
       for (const pastoId of pastosParaFechar) {
         let fech = getFechamento(pastoId);
-
         if (!fech) {
           fech = await criarFechamento(pastoId, anoMes);
-          if (!fech) continue;
+          if (!fech) { erros++; continue; }
         }
-
         const { error } = await supabase
           .from('fechamento_pastos')
-          .update({
-            status: 'fechado',
-            responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
-          })
+          .update({ status: 'fechado', responsavel_nome: FECHAMENTO_GLOBAL_MARKER })
           .eq('id', fech.id);
-
         if (error) {
           console.error('Erro ao fechar pasto administrativamente:', error);
+          erros++;
         }
       }
 
-      const auditPayload = {
-        usuario_id: userId,
-        fazenda_id: fazendaId,
-        cliente_id: clienteId,
-        competencia: anoMes,
-        tipo_acao: FECHAMENTO_GLOBAL_MARKER,
-        pastos_fechados: pastosParaFechar.length,
-        data_hora: new Date().toISOString(),
-      };
-      console.info('[AUDIT] Fechamento Global Administrativo:', auditPayload);
+      if (erros > 0) {
+        toast.error(`${erros} pasto(s) não puderam ser fechados. Verifique e tente novamente.`);
+      } else {
+        toast.success(`${pastosParaFechar.length} pasto(s) fechado(s) com sucesso.`);
+      }
 
-      toast.success(`${pastosParaFechar.length} pasto(s) fechado(s) administrativamente.`);
+      console.info('[AUDIT] Fechamento Global Administrativo:', {
+        usuario_id: userId, fazenda_id: fazendaId, cliente_id: clienteId,
+        competencia: anoMes, tipo_acao: FECHAMENTO_GLOBAL_MARKER,
+        pastos_fechados: pastosParaFechar.length - erros, erros,
+      });
+
       await loadFechamentos(anoMes);
     } catch (e) {
       console.error('Erro no fechamento global:', e);
-      toast.error('Erro ao realizar fechamento global.');
+      toast.error('Erro inesperado ao realizar fechamento. Tente novamente.');
     } finally {
       setBulkClosing(false);
       setConfirmBulkOpen(false);
@@ -404,20 +442,28 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         return fech?.status === 'fechado';
       });
 
+      let erros = 0;
       for (const pasto of pastosParaReabrir) {
         const fech = getFechamento(pasto.id)!;
         const { error } = await supabase
           .from('fechamento_pastos')
           .update({ status: 'rascunho', responsavel_nome: null })
           .eq('id', fech.id);
-        if (error) console.error('Erro ao reabrir pasto:', error);
+        if (error) {
+          console.error('Erro ao reabrir pasto:', error);
+          erros++;
+        }
       }
 
-      toast.success(`${pastosParaReabrir.length} pasto(s) reaberto(s).`);
+      if (erros > 0) {
+        toast.error(`${erros} pasto(s) não puderam ser reabertos. Verifique e tente novamente.`);
+      } else {
+        toast.success(`${pastosParaReabrir.length} pasto(s) reaberto(s) com sucesso.`);
+      }
       await loadFechamentos(anoMes);
     } catch (e) {
       console.error('Erro ao reabrir pastos:', e);
-      toast.error('Erro ao reabrir pastos.');
+      toast.error('Erro inesperado ao reabrir pastos. Tente novamente.');
     } finally {
       setBulkReopening(false);
       setConfirmBulkReopenOpen(false);
@@ -439,19 +485,25 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     );
   }
 
+  /* ── Helper: formatação de diferença ── */
+  const fmtDif = (dif: number) => {
+    if (dif === 0) return '';
+    return dif > 0 ? `+${Math.abs(dif).toLocaleString('pt-BR')}` : `-${Math.abs(dif).toLocaleString('pt-BR')}`;
+  };
+
   return (
     <div className="pb-24">
       {/* Tabela conciliação + Filtros - sticky */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm pt-2 px-2 pb-2 space-y-1.5">
         {/* Container superior: tabela esquerda + botões direita */}
         <div className="flex items-start justify-between gap-4">
-          {/* Tabela resumo conciliação - 50% no desktop */}
-          <div className="flex items-start gap-1 w-full md:w-[50%] shrink-0">
+          {/* Tabela resumo conciliação */}
+          <div className="flex items-start gap-1 w-full md:w-[55%] shrink-0">
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-[10px] border-collapse">
                 <thead>
                   <tr className="border-b border-border/40 bg-muted">
-                    <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-12 border-r border-border/30 bg-muted">Cab.</th>
+                    <th className="text-left font-bold text-muted-foreground px-1 py-0.5 w-14 border-r border-border/30 bg-muted">Cab.</th>
                     {CAT_COLS.map((c, idx) => (
                       <th key={c.sigla} className={`text-right font-bold text-muted-foreground px-1 py-0.5 min-w-[28px]${idx === 4 ? ' border-r border-border/30' : ''}`}>{c.sigla}</th>
                     ))}
@@ -459,37 +511,48 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   </tr>
                 </thead>
                 <tbody>
+                  {/* SISTEMA primeiro */}
                   <tr>
-                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Pasto</td>
-                    {CAT_COLS.map((c, idx) => {
-                      const v = pastoDataByCat.get(c.codigo) || 0;
-                      return <td key={c.sigla} className={`text-right italic text-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
-                    })}
-                    <td className="text-right italic font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalPasto.toLocaleString('pt-BR')}</td>
-                  </tr>
-                  <tr>
-                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Sistema</td>
+                    <td className="font-bold text-muted-foreground px-1 py-0.5 border-r border-border/30 bg-muted text-[9px]">Sistema</td>
                     {CAT_COLS.map((c, idx) => {
                       const v = saldoMap.get(c.codigo) || 0;
-                      return <td key={c.sigla} className={`text-right italic text-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
+                      return <td key={c.sigla} className={`text-right text-muted-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
                     })}
-                    <td className="text-right italic font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalSistema.toLocaleString('pt-BR')}</td>
+                    <td className="text-right font-semibold text-muted-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalSistema.toLocaleString('pt-BR')}</td>
                   </tr>
-                  <tr className="border-t border-border/40 bg-muted">
-                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted">Dif.</td>
+                  {/* PASTO depois */}
+                  <tr>
+                    <td className="font-bold text-foreground px-1 py-0.5 border-r border-border/30 bg-muted text-[9px]">Pasto</td>
                     {CAT_COLS.map((c, idx) => {
-                      const pasto = pastoDataByCat.get(c.codigo) || 0;
-                      const sistema = saldoMap.get(c.codigo) || 0;
-                      const dif = pasto - sistema;
-                      const formatted = dif !== 0 ? (dif > 0 ? `+${Math.abs(dif).toLocaleString('pt-BR')}` : `-${Math.abs(dif).toLocaleString('pt-BR')}`) : '';
+                      const v = pastoDataByCat.get(c.codigo) || 0;
+                      return <td key={c.sigla} className={`text-right font-semibold text-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? v.toLocaleString('pt-BR') : ''}</td>;
+                    })}
+                    <td className="text-right font-bold text-foreground px-1 py-0.5 border-l border-border/30 bg-muted">{totalPasto.toLocaleString('pt-BR')}</td>
+                  </tr>
+                  {/* Peso médio */}
+                  <tr className="border-t border-border/20">
+                    <td className="text-muted-foreground px-1 py-0.5 border-r border-border/30 bg-muted text-[8px] italic">Peso kg</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const peso = pesoMedioByCat.get(c.codigo);
+                      return <td key={c.sigla} className={`text-right text-[9px] italic text-muted-foreground px-1 py-0.5${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 0) : ''}</td>;
+                    })}
+                    <td className="text-right text-[9px] italic text-muted-foreground px-1 py-0.5 border-l border-border/30 bg-muted"></td>
+                  </tr>
+                  {/* DIFERENÇA - destaque forte */}
+                  <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400 bg-red-50 dark:bg-red-950/30' : 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>
+                    <td className={`font-extrabold px-1 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>Dif.</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const pv = pastoDataByCat.get(c.codigo) || 0;
+                      const sv = saldoMap.get(c.codigo) || 0;
+                      const dif = pv - sv;
                       return (
-                        <td key={c.sigla} className={`text-right italic font-bold px-1 py-0.5 ${dif > 0 ? 'text-emerald-600' : dif < 0 ? 'text-red-600' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
-                          {formatted}
+                        <td key={c.sigla} className={`text-right font-extrabold px-1 py-1 ${dif > 0 ? 'text-emerald-700 dark:text-emerald-400' : dif < 0 ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground'}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                          {fmtDif(dif)}
                         </td>
                       );
                     })}
-                    <td className={`text-right italic font-bold px-1 py-0.5 border-l border-border/30 bg-muted ${totalDiferenca > 0 ? 'text-emerald-600' : totalDiferenca < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                      {totalDiferenca !== 0 ? (totalDiferenca > 0 ? `+${Math.abs(totalDiferenca).toLocaleString('pt-BR')}` : `-${Math.abs(totalDiferenca).toLocaleString('pt-BR')}`) : '0'}
+                    <td className={`text-right font-extrabold px-1 py-1 border-l border-border/30 ${totalDiferenca > 0 ? 'text-emerald-700 dark:text-emerald-400' : totalDiferenca < 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                      {totalDiferenca !== 0 ? fmtDif(totalDiferenca) : '0 ✓'}
                     </td>
                   </tr>
                 </tbody>
@@ -506,7 +569,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
           </div>
 
-          {/* Botões em coluna - centralizados no espaço restante */}
+          {/* Botões em coluna */}
           <div className="hidden md:flex flex-col gap-1 flex-1 items-center justify-center pt-0.5">
             {onNavigateToReclass && hasDivergencia && (
               <Button
@@ -535,14 +598,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 className="text-[10px] font-bold border-warning text-warning hover:bg-warning/10 h-5 px-2 w-[170px] justify-center"
                 onClick={() => {
                   if (hasDivergencia) {
-                    toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema. Realize a conciliação antes de fechar.');
+                    toast.error('Não é possível fechar os pastos. Existem categorias desconciliadas entre Pasto e Sistema.');
                     return;
                   }
                   setConfirmBulkOpen(true);
                 }}
               >
                 <Lock className="h-3 w-3 mr-1" />
-                Fechamento Todos
+                Fechar Pastos
               </Button>
             )}
             {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
@@ -553,7 +616,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 onClick={() => setConfirmBulkReopenOpen(true)}
               >
                 <Unlock className="h-3 w-3 mr-1" />
-                Reabrir Pastos
+                Reabrir Mês
               </Button>
             )}
           </div>
@@ -577,8 +640,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </SelectContent>
             </Select>
           </div>
-          <div className="flex-1 flex justify-center">
-            <Badge variant="secondary" className="text-[10px] font-bold">{preenchidos}/{pastosAtivos.length} iniciados</Badge>
+          <div className="flex-1 flex justify-center gap-2">
+            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1">
+              <CheckCircle className="h-3 w-3" />
+              {conciliadosCount} conciliados
+            </Badge>
+            {divergenciaCount > 0 && (
+              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-bold gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {divergenciaCount} com divergência
+              </Badge>
+            )}
           </div>
           <div className="shrink-0">
             <span className="text-[10px] text-muted-foreground font-medium">{fechadosCount} fechados</span>
@@ -597,12 +669,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           </Button>
           {canBulkClose && (
             <Button size="sm" variant="outline" className="text-xs font-bold border-warning text-warning hover:bg-warning/10 h-7 flex-1 min-w-[120px] justify-center" onClick={() => { if (hasDivergencia) { toast.error('Não é possível fechar. Categorias desconciliadas.'); return; } setConfirmBulkOpen(true); }}>
-              <Lock className="h-3.5 w-3.5 mr-1" /> Fechamento Todos
+              <Lock className="h-3.5 w-3.5 mr-1" /> Fechar Pastos
             </Button>
           )}
           {fechadosCount > 0 && (canEdit('zootecnico') || canEdit('pastos')) && (
             <Button size="sm" variant="outline" className="text-xs font-bold border-destructive text-destructive hover:bg-destructive/10 h-7 flex-1 min-w-[120px] justify-center" onClick={() => setConfirmBulkReopenOpen(true)}>
-              <Unlock className="h-3.5 w-3.5 mr-1" /> Reabrir Pastos
+              <Unlock className="h-3.5 w-3.5 mr-1" /> Reabrir Mês
             </Button>
           )}
         </div>
@@ -633,73 +705,94 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <p className="text-xs mt-1">Cadastre pastos na aba "Pastos" e marque "Entra na conciliação".</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1">
-          {pastosAtivos.map(p => {
-            const fech = getFechamento(p.id);
-            const status = fech?.status;
-            const resumo = getResumo(fech, p);
-            const adminClose = isAdminClosed(fech);
-            const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
-            const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
-            const isEmpty = resumo.totalCabecas === 0;
+        <TooltipProvider delayDuration={200}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1">
+            {pastosAtivos.map(p => {
+              const fech = getFechamento(p.id);
+              const pastoStatus = getPastoStatus(p);
+              const resumo = getResumo(fech, p);
+              const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
+              const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
 
-            const cardBg = isEmpty
-              ? 'bg-gray-100 dark:bg-gray-800/40 border-gray-200 dark:border-gray-700'
-              : tipoNorm === 'recria'
-              ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700'
-              : tipoNorm === 'engorda'
-              ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-700'
-              : tipoNorm === 'cria'
-              ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-700'
-              : 'bg-card border-border';
+              const cardBg = STATUS_CARD_BG[pastoStatus];
 
-            return (
-              <button
-                key={p.id}
-                onClick={() => handleOpenPasto(p)}
-                className={`w-full rounded border px-1.5 py-1 text-left hover:ring-1 hover:ring-primary/40 transition-all ${cardBg}`}
-              >
-                {/* Line 1: Name + Status */}
-                <div className="flex items-center justify-between gap-0.5">
-                  <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
-                  {status === 'fechado' ? (
-                    adminClose ? (
-                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none">
-                        <Lock className="h-2 w-2" />G
-                      </Badge>
-                    ) : (
-                      <Badge variant="default" className="text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none"><CheckCircle className="h-2 w-2" /></Badge>
-                    )
-                  ) : status === 'rascunho' ? (
-                    <Badge variant="secondary" className="text-[7px] px-0.5 py-0 h-[12px] shrink-0 leading-none">R</Badge>
-                  ) : null}
-                </div>
+              return (
+                <Tooltip key={p.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleOpenPasto(p)}
+                      className={`w-full rounded border px-1.5 py-1 text-left hover:ring-1 hover:ring-primary/40 transition-all ${cardBg}`}
+                    >
+                      {/* Line 1: Name + Status badge */}
+                      <div className="flex items-center justify-between gap-0.5">
+                        <span className="font-bold text-xs text-foreground truncate leading-tight">{p.nome}</span>
+                        <Badge className={`text-[6px] px-1 py-0 h-[13px] shrink-0 leading-none border-0 ${STATUS_BADGE_STYLE[pastoStatus]}`}>
+                          {pastoStatus === 'fechado' ? '✓' : pastoStatus === 'conciliado' ? '●' : pastoStatus === 'inconsistente' ? '!' : pastoStatus === 'em_edicao' ? '…' : '○'}
+                        </Badge>
+                      </div>
 
-                {/* Line 2: Cabeças (principal) */}
-                <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
-                  {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
-                </div>
+                      {/* Line 2: Cabeças */}
+                      <div className="font-extrabold text-[13px] tabular-nums text-foreground leading-tight mt-0.5">
+                        {resumo.totalCabecas > 0 ? `${resumo.totalCabecas} cab` : '—'}
+                      </div>
 
-                {/* Line 3: Área + Tipo uso */}
-                <div className="flex items-center justify-between mt-0.5">
-                  {p.area_produtiva_ha ? (
-                    <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
-                  ) : <span />}
-                  {tipoUsoEfetivo && (
-                    <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
-                      tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
-                      : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
-                      : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
-                      : 'text-muted-foreground'
-                    }`}>
-                      {tipoUsoEfetivo!.toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                      {/* Line 3: Peso médio */}
+                      {resumo.pesoMedio && (
+                        <div className="text-[8px] text-muted-foreground leading-none mt-0.5 tabular-nums">
+                          {formatNum(resumo.pesoMedio, 1)} kg
+                        </div>
+                      )}
+
+                      {/* Line 4: Área + Tipo uso */}
+                      <div className="flex items-center justify-between mt-0.5">
+                        {p.area_produtiva_ha ? (
+                          <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
+                        ) : <span />}
+                        {tipoUsoEfetivo && (
+                          <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
+                            tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
+                            : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
+                            : tipoNorm === 'cria' ? 'text-orange-700 dark:text-orange-400'
+                            : 'text-muted-foreground'
+                          }`}>
+                            {tipoUsoEfetivo!.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[220px] p-2 text-[10px] space-y-1">
+                    <div className="font-bold text-xs">{p.nome} — {STATUS_LABEL[pastoStatus]}</div>
+                    {resumo.totalCabecas > 0 && (
+                      <>
+                        <div className="text-muted-foreground">
+                          <span className="font-semibold text-foreground">{resumo.totalCabecas}</span> cab
+                          {resumo.pesoMedio && <> · <span className="font-semibold text-foreground">{formatNum(resumo.pesoMedio, 1)}</span> kg</>}
+                        </div>
+                        {resumo.catBreakdown.length > 0 && (
+                          <div className="space-y-0.5 pt-1 border-t border-border/30">
+                            {resumo.catBreakdown.map(cb => (
+                              <div key={cb.sigla} className="flex justify-between">
+                                <span className="text-muted-foreground">{cb.sigla}</span>
+                                <span className="tabular-nums">{cb.qty} cab{cb.pesoMedio ? ` · ${formatNum(cb.pesoMedio, 0)} kg` : ''}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {resumo.lotacaoKgHa != null && (
+                          <div className="pt-1 border-t border-border/30 text-muted-foreground">
+                            Lotação: <span className="font-semibold text-foreground">{formatNum(resumo.lotacaoKgHa, 0)}</span> kg/ha
+                            {resumo.uaHa != null && <> · <span className="font-semibold text-foreground">{formatNum(resumo.uaHa, 2)}</span> UA/ha</>}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </TooltipProvider>
       )}
 
       {selectedPasto && activeFechamento && (
@@ -736,14 +829,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
-              Fechamento Global da Fazenda
+              Fechar Pastos
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm leading-relaxed">
-              Você está realizando um <strong>fechamento global</strong> da fazenda
+              Você está realizando o <strong>fechamento</strong> da fazenda
               {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para o mês <strong>{formatAnoMes(anoMes)}</strong>.
               <br /><br />
-              Os <strong>{pendentesCount} pasto(s)</strong> ainda não fechados serão marcados como{' '}
-              <strong>"Fechamento Global"</strong> (fechamento administrativo).
+              Os <strong>{pendentesCount} pasto(s)</strong> ainda não fechados serão marcados como fechados.
               <br /><br />
               Pastos já fechados individualmente <strong>não serão alterados</strong>.
               <br /><br />
@@ -771,13 +863,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Unlock className="h-5 w-5 text-destructive" />
-              Reabrir Pastos
+              Reabrir Mês
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm leading-relaxed">
               Você está reabrindo <strong>{fechadosCount} pasto(s) fechado(s)</strong> da fazenda
               {fazendaAtual ? ` "${fazendaAtual.nome}"` : ''} para o mês <strong>{formatAnoMes(anoMes)}</strong>.
               <br /><br />
-              O status será alterado de <strong>"Fechado"</strong> para <strong>"Rascunho"</strong>.
+              O status será alterado de <strong>"Fechado"</strong> para <strong>"Em edição"</strong>.
               <br /><br />
               <strong>Nenhum dado será alterado</strong>, apenas o status dos pastos.
             </AlertDialogDescription>
