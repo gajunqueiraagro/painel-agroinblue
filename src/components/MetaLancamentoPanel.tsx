@@ -153,6 +153,11 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
     pesoTotalFinalProjetado = pesoTotalAtual + (quantidade * pesoKg);
   }
 
+  // Zerou cabeças = zera peso
+  if ((isSaida || isReclass) && saldoFinalProjetado === 0) {
+    pesoTotalFinalProjetado = 0;
+  }
+
   const pesoMedioFinalProjetado = saldoFinalProjetado > 0
     ? pesoTotalFinalProjetado / saldoFinalProjetado
     : null;
@@ -196,6 +201,12 @@ export function calcularValidacoesMeta(input: MetaValidacaoInput): Validacao[] {
       result.push({
         tipo: 'bloqueio',
         mensagem: `Peso médio final projetado (${fmt(pesoMedioFinalProjetado, 1)} kg) excede o máximo da categoria (${fmt(catParams.pesoMaxKg, 0)} kg)`,
+      });
+    }
+    if (catParams && pesoMedioFinalProjetado < catParams.pesoMinKg) {
+      result.push({
+        tipo: 'bloqueio',
+        mensagem: `Peso médio final projetado (${fmt(pesoMedioFinalProjetado, 1)} kg) abaixo do mínimo da categoria (${fmt(catParams.pesoMinKg, 0)} kg)`,
       });
     }
   }
@@ -336,11 +347,14 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       pesoTotalFinalProjetado = pesoTotalAtual + (quantidade * pesoKg);
     }
 
+    // Zerou cabeças = zera peso (sem resíduo de "peso ganho no mês")
+    if (saldoFinalProjetado === 0) {
+      pesoTotalFinalProjetado = 0;
+    }
+
     const pesoMedioFinalProjetado = saldoFinalProjetado > 0
       ? pesoTotalFinalProjetado / saldoFinalProjetado
-      : saldoFinalProjetado === 0
-        ? null
-        : undefined;
+      : null;
 
     return { saldoFinalProjetado, pesoTotalFinalProjetado, pesoMedioFinalProjetado };
   }, [categoria, quantidade, pesoKg, tipo, saldoAtual, pesoTotalAtual]);
