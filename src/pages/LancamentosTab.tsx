@@ -73,6 +73,8 @@ interface Props {
   compraParaEditar?: Lancamento | null;
   /** Transferência para abrir em modo edição automaticamente */
   transferenciaParaEditar?: Lancamento | null;
+  /** Reclassificação para abrir em modo edição automaticamente */
+  reclassParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => void;
   /** Initial year filter for historico view */
