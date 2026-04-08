@@ -2,8 +2,8 @@
  * EvolucaoAssistidaDialog — Fluxo assistido de evolução de categoria
  *
  * Dois modos:
- *   A) Consultivo (natureza = 'sugestao'): apenas informa elegibilidade
- *   B) Executivo (natureza = 'obrigatoria'): permite registrar a evolução
+ *   A) Consultivo (natureza = 'sugestao'): informa elegibilidade + permite registrar opcionalmente
+ *   B) Executivo (natureza = 'obrigatoria'): exige registrar a evolução
  *
  * Ao registrar, grava um par oficial de reclassificação:
  *   - evol_cat_saida na categoria origem
@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowRight, CheckCircle2, Info, Scale, Users, AlertTriangle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Info, Scale, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,7 @@ export function EvolucaoAssistidaDialog({
   const [pesoStr, setPesoStr] = useState('');
   const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   const qtdInput = useIntegerInput(qtdStr, setQtdStr);
   const pesoInput = useDecimalInput(pesoStr, setPesoStr, 2);
@@ -73,12 +74,12 @@ export function EvolucaoAssistidaDialog({
   // Pre-fill when dialog opens
   const handleOpenChange = useCallback((v: boolean) => {
     if (v && sugestao) {
-      // Quantidade sugerida: mínimo entre saldo disponível e déficit
       const deficit = Math.max(0, quantidadeLancamento - saldoDestinoAtual);
       const sugerida = isObrigatoria ? Math.min(sugestao.saldoAnterior, deficit || 1) : '';
       setQtdStr(String(sugerida));
       setPesoStr(sugestao.pesoMedioAnterior > 0 ? String(sugestao.pesoMedioAnterior) : '');
       setObservacao('');
+      setShowForm(isObrigatoria); // auto-open form for mandatory
     }
     onOpenChange(v);
   }, [sugestao, quantidadeLancamento, saldoDestinoAtual, isObrigatoria, onOpenChange]);
@@ -92,18 +93,18 @@ export function EvolucaoAssistidaDialog({
     return Math.max(0, quantidadeLancamento - saldoDestinoAtual);
   }, [isObrigatoria, quantidadeLancamento, saldoDestinoAtual]);
 
-  // Validations
+  // Validations (applied when form is shown)
   const validacoes = useMemo(() => {
-    if (!sugestao || !isObrigatoria) return [];
+    if (!sugestao || !showForm) return [];
     const errs: string[] = [];
     if (qtd <= 0) errs.push('Informe a quantidade a evoluir.');
     if (qtd > sugestao.saldoAnterior) errs.push(`Quantidade (${qtd}) maior que o saldo disponível (${sugestao.saldoAnterior}).`);
     if (peso <= 0) errs.push('Informe o peso da evolução.');
-    if (qtd > 0 && qtd < deficit) errs.push(`Quantidade (${qtd}) insuficiente para sustentar o lançamento (mín. ${deficit} cab).`);
+    if (isObrigatoria && qtd > 0 && qtd < deficit) errs.push(`Quantidade (${qtd}) insuficiente para sustentar o lançamento (mín. ${deficit} cab).`);
     return errs;
-  }, [sugestao, isObrigatoria, qtd, peso, deficit]);
+  }, [sugestao, showForm, qtd, peso, deficit, isObrigatoria]);
 
-  const canSave = isObrigatoria && qtd > 0 && peso > 0 && validacoes.length === 0;
+  const canSave = showForm && qtd > 0 && peso > 0 && validacoes.length === 0;
 
   const handleRegistrar = useCallback(async () => {
     if (!sugestao || !canSave) return;
@@ -117,6 +118,7 @@ export function EvolucaoAssistidaDialog({
         categoriaDestino: sugestao.categoriaAtual as any,
         pesoMedioKg: peso,
         pesoMedioArrobas: kgToArrobas(peso),
+        cenario: 'meta',
         statusOperacional: null,
         observacao: observacao || undefined,
       });
@@ -138,6 +140,14 @@ export function EvolucaoAssistidaDialog({
     }
   }, [sugestao, canSave, qtd, peso, observacao, dataLancamento, onRegistrar, onOpenChange, onSucesso]);
 
+  const handleShowForm = useCallback(() => {
+    if (!sugestao) return;
+    setQtdStr('');
+    setPesoStr(sugestao.pesoMedioAnterior > 0 ? String(sugestao.pesoMedioAnterior) : '');
+    setObservacao('');
+    setShowForm(true);
+  }, [sugestao]);
+
   if (!sugestao) return null;
 
   const { categoriaAtual, categoriaAnterior, pesoMedioAnterior, pesoEvolucao, elegivel, saldoAnterior } = sugestao;
@@ -156,7 +166,7 @@ export function EvolucaoAssistidaDialog({
             <DialogDescription className="text-[11px]">
               {isObrigatoria
                 ? 'Registre a evolução necessária para sustentar o lançamento atual.'
-                : 'Categoria anterior elegível para evolução. Sugestão consultiva.'}
+                : 'Categoria anterior elegível para evolução. Você pode registrar opcionalmente.'}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -194,8 +204,8 @@ export function EvolucaoAssistidaDialog({
               </div>
               {isObrigatoria && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Lançamento a sustentar</span>
-                  <span className="font-semibold">{quantidadeLancamento} cab / {fmt(Number(pesoStr) || 0, 0)} kg</span>
+                  <span className="text-muted-foreground">Déficit do lançamento</span>
+                  <span className="font-semibold text-amber-600 dark:text-amber-400">{deficit} cab</span>
                 </div>
               )}
             </div>
@@ -238,8 +248,21 @@ export function EvolucaoAssistidaDialog({
             </div>
           )}
 
-          {/* ── Bloco de execução (somente obrigatória) ── */}
-          {isObrigatoria && (
+          {/* ── Botão para abrir formulário no modo consultivo ── */}
+          {!isObrigatoria && elegivel && !showForm && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full h-8 text-[10px] border-green-300 text-green-700 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/50"
+              onClick={handleShowForm}
+            >
+              Registrar evolução agora (opcional)
+            </Button>
+          )}
+
+          {/* ── Bloco de execução (obrigatória ou quando showForm ativo) ── */}
+          {showForm && (
             <>
               <Separator />
               <div className="space-y-2">
@@ -247,7 +270,7 @@ export function EvolucaoAssistidaDialog({
                   Evolução a registrar
                 </h4>
 
-                {deficit > 0 && (
+                {isObrigatoria && deficit > 0 && (
                   <div className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2">
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <span className="text-[10px] text-amber-700 dark:text-amber-400">
@@ -278,7 +301,7 @@ export function EvolucaoAssistidaDialog({
                       className="h-7 text-[11px] text-right font-bold tabular-nums border-orange-300 dark:border-orange-700"
                     />
                     <span className="text-[9px] text-muted-foreground">
-                      Disponível: {saldoAnterior} cab {deficit > 0 && `· Mín: ${deficit} cab`}
+                      Disponível: {saldoAnterior} cab {isObrigatoria && deficit > 0 && `· Mín: ${deficit} cab`}
                     </span>
                   </div>
                   <div className="space-y-1">
@@ -336,9 +359,9 @@ export function EvolucaoAssistidaDialog({
               </TooltipContent>
             </Tooltip>
             <span>
-              {isObrigatoria
+              {showForm
                 ? 'A evolução será gravada como reclassificação oficial em cenário Meta, com rastreabilidade completa.'
-                : 'Nesta fase, a evolução deve ser registrada manualmente via reclassificação.'}
+                : 'Você pode registrar a evolução manualmente ou usar o formulário acima.'}
             </span>
           </div>
         </div>
@@ -353,9 +376,9 @@ export function EvolucaoAssistidaDialog({
             onClick={() => onOpenChange(false)}
             disabled={saving}
           >
-            {isObrigatoria ? 'Cancelar' : 'Fechar'}
+            {showForm ? 'Cancelar' : 'Fechar'}
           </Button>
-          {isObrigatoria && (
+          {showForm && (
             <Button
               size="sm"
               onClick={handleRegistrar}
