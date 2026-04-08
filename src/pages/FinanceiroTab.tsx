@@ -791,6 +791,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               onClose={() => setDetalheId(null)}
               onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
               onRemover={(id) => { onRemover(id); setDetalheId(null); }}
+              onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'nascimento', statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             />
           ) : null;
         })()}
@@ -991,6 +992,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
             onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+            onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
           />
         ) : null;
       })()}
