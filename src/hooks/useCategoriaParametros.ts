@@ -100,11 +100,23 @@ export function useCategoriaParametros(clienteId?: string) {
     return resolvedMap.get(atual.categoriaProxima);
   };
 
+  /** Retorna categorias anteriores cujo categoriaProxima aponta para a categoria dada */
+  const getCategoriasAnteriores = (categoriaCodigo: string): CategoriaParametros[] => {
+    const result: CategoriaParametros[] = [];
+    resolvedMap.forEach((params) => {
+      if (params.categoriaProxima === categoriaCodigo) {
+        result.push(params);
+      }
+    });
+    return result;
+  };
+
   return {
     parametros: data ?? [],
     resolvedMap,
     getParametros,
     getProximaCategoria,
+    getCategoriasAnteriores,
     isLoading,
   };
 }

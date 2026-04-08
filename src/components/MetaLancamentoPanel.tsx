@@ -69,12 +69,18 @@ interface Props {
 }
 
 export interface EvolucaoSugestao {
+  /** Categoria do lançamento atual (destino da evolução) */
   categoriaAtual: string;
-  categoriaDestino: string;
-  pesoMedioAtual: number;
+  /** Categoria anterior que pode alimentar a atual */
+  categoriaAnterior: string;
+  /** Peso médio atual da categoria anterior */
+  pesoMedioAnterior: number;
+  /** Peso mínimo para evolução da categoria anterior */
   pesoEvolucao: number;
+  /** Se a categoria anterior atingiu peso de evolução */
   elegivel: boolean;
-  saldoAtual: number;
+  /** Saldo disponível na categoria anterior */
+  saldoAnterior: number;
 }
 
 export interface MetaStepState {
