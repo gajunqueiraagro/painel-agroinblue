@@ -1352,6 +1352,32 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           </div>
         </div>
 
+        {/* ── Snapshot governance banners ── */}
+        {!isPrevisto && !isGlobal && (() => {
+          const comprometidos = snapshotStatusArray
+            .map((s, i) => ({ mes: i + 1, status: s }))
+            .filter(m => m.status === 'invalidado' || m.status === 'cadeia_quebrada');
+          if (comprometidos.length === 0) return null;
+          const primeiro = comprometidos[0];
+          const mesLabel = MESES_LABELS[primeiro.mes - 1] + '/' + ano;
+          return (
+            <div className="px-2 mt-1">
+              <SnapshotStatusBanner
+                status={primeiro.status}
+                mesLabel={mesLabel}
+                compact
+                onRevalidar={primeiro.status === 'invalidado' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
+                onIrMesAnterior={primeiro.status === 'cadeia_quebrada' && onTabChange ? () => onTabChange('valor_rebanho') : undefined}
+              />
+              {comprometidos.length > 1 && (
+                <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                  +{comprometidos.length - 1} mês(es) afetado(s)
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── Content: collapsible blocks ── */}
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
           {previstoGlobalBloqueado ? (
