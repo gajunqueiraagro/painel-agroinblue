@@ -575,6 +575,62 @@ export type Database = {
         }
         Relationships: []
       }
+      cfg_categoria_parametros: {
+        Row: {
+          ativo: boolean
+          categoria_codigo: string
+          categoria_proxima: string | null
+          cliente_id: string | null
+          created_at: string
+          grupo: string
+          id: string
+          is_default: boolean
+          ordem_hierarquia: number
+          peso_evolucao_kg: number | null
+          peso_max_kg: number
+          peso_min_kg: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_codigo: string
+          categoria_proxima?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          grupo: string
+          id?: string
+          is_default?: boolean
+          ordem_hierarquia: number
+          peso_evolucao_kg?: number | null
+          peso_max_kg: number
+          peso_min_kg: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria_codigo?: string
+          categoria_proxima?: string | null
+          cliente_id?: string | null
+          created_at?: string
+          grupo?: string
+          id?: string
+          is_default?: boolean
+          ordem_hierarquia?: number
+          peso_evolucao_kg?: number | null
+          peso_max_kg?: number
+          peso_min_kg?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cfg_categoria_parametros_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chuvas: {
         Row: {
           cliente_id: string
