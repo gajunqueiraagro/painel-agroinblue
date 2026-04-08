@@ -278,7 +278,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           rows: [
             r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => d.cabFin[i] > 0 ? p / d.cabFin[i] : NaN), 'peso_fin_cab_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
@@ -301,7 +301,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Desempenho',
           rows: [
             r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
-            r('Peso méd. reb.', 'med2', d.pesoMedioFin, 'peso_med_reb'),
+            r('Peso méd. reb.', 'med2', pesoMedioFin, 'peso_med_reb'),
             r('UA média', 'med2', uaMedia, 'ua_media'),
             r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao'),
           ],
