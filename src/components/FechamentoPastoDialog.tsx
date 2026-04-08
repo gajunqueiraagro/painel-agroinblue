@@ -134,7 +134,7 @@ const CategoriaCard = React.memo(function CategoriaCard({
           }
         }}
         disabled={disabled}
-        className="h-8 text-xs px-1.5 text-center tabular-nums w-[58px]"
+        className="h-8 text-xs px-1.5 text-center tabular-nums w-full sm:w-[58px]"
         placeholder="kg"
       />
     </div>
