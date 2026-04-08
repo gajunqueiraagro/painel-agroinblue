@@ -1216,12 +1216,20 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 </td>
                 {row.valores.map((v, i) => {
                   const isFuture = !isPrevisto && (i + 1) > monthCutoff;
+                  const mesStatus = !isPrevisto ? getStatusByMonth(i + 1) : 'sem_snapshot';
+                  const isSnapshotBloqueado = !isPrevisto && (mesStatus === 'invalidado' || mesStatus === 'cadeia_quebrada');
                   let cellContent = '';
                   let isSemBase = false;
+                  let cellTitle: string | undefined;
                   if (previstoSemFonte) {
                     cellContent = '';  // sem base meta
                   } else if (isFuture) {
                     cellContent = '';  // mês futuro (only for Realizado)
+                  } else if (isSnapshotBloqueado) {
+                    cellContent = '⚠';
+                    cellTitle = mesStatus === 'invalidado'
+                      ? 'Snapshot invalidado — revalidar Valor do Rebanho'
+                      : 'Cadeia quebrada — reconciliar mês anterior';
                   } else if (isNaN(v)) {
                     cellContent = '–';  // meta não projetou este indicador
                     isSemBase = true;
@@ -1233,8 +1241,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       key={i}
                       className={`text-right py-0.5 px-0.5 tabular-nums whitespace-nowrap text-[10px]${
                         TRIM_BORDER_INDEXES.has(i) ? ' border-l border-border/20' : ''
-                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}`}
-                      title={isSemBase ? 'Meta não projetou este indicador' : undefined}
+                      }${previstoSemFonte ? ' text-muted-foreground/30' : ''}${isSemBase ? ' text-muted-foreground/50 italic' : ''}${
+                        isSnapshotBloqueado ? ' text-destructive/60 bg-destructive/5' : ''
+                      }`}
+                      title={cellTitle ?? (isSemBase ? 'Meta não projetou este indicador' : undefined)}
                     >
                       {cellContent}
                     </td>
