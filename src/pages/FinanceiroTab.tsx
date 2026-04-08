@@ -618,6 +618,94 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
   const subTypes = topTab === 'entradas' ? ENTRY_TYPES : topTab === 'saidas' ? EXIT_TYPES : [];
 
+  if (topTab === 'historico') {
+    return (
+      <div className="animate-fade-in pb-20">
+        <div className="p-4 pb-0">
+          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md grid-cols-${topTabs.length}`}>
+            {topTabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
+                className={`py-1 px-1 rounded font-bold transition-colors text-[11px] ${
+                  topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="px-4 pt-3">
+          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 rounded-t-md">
+            <div className="flex gap-1.5">
+              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-[12px]">{a}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={mesFiltro} onValueChange={setMesFiltro}>
+                <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
+                <SelectContent>{MESES_HIST.map(m => <SelectItem key={m.value} value={m.value} className="text-[12px]">{m.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5 pt-1.5">
+            {historicoFiltrado.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8 text-[12px]">Nenhum lançamento no período</p>
+            ) : (
+              historicoFiltrado.slice(0, 50).map(l => {
+                const entrada = isEntrada(l.tipo);
+                const reclass = isReclassificacao(l.tipo);
+                const catLabel = CATEGORIAS.find(c => c.value === l.categoria)?.label;
+                const catDestinoLabel = l.categoriaDestino ? CATEGORIAS.find(c => c.value === l.categoriaDestino)?.label : null;
+                const tipoLabel = TODOS_TIPOS.find(t => t.value === l.tipo);
+                return (
+                  <button key={l.id} onClick={() => setDetalheId(l.id)}
+                    className="w-full bg-card rounded-md p-2 border shadow-sm flex items-center gap-2 text-left hover:bg-muted/50 transition-colors">
+                    <div className="text-lg">{tipoLabel?.icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
+                          {entrada ? '+' : reclass ? '↔' : '-'}{l.quantidade}
+                        </span>
+                        <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
+                        {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
+                        {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      {(() => {
+                        const cfg = getStatusBadge(l);
+                        return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
+                      })()}
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+        {/* Detail modal */}
+        {(() => {
+          const lancamentoDetalhe = detalheId ? lancamentosNormalizados.find(l => l.id === detalheId) : null;
+          return lancamentoDetalhe ? (
+            <LancamentoDetalhe
+              lancamento={lancamentoDetalhe}
+              open={!!detalheId}
+              onClose={() => setDetalheId(null)}
+              onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
+              onRemover={(id) => { onRemover(id); setDetalheId(null); }}
+            />
+          ) : null;
+        })()}
+      </div>
+    );
+  }
+
   if (topTab === 'chuvas') {
     return (
       <div className="animate-fade-in pb-20">
