@@ -580,7 +580,13 @@ const Index = () => {
           onNavigateToMapaPastos={() => handleTabChange('mapa_pastos')}
         />
       )}
-      {activeTab === 'mapa_pastos' && <MapaPastosTab />}
+      {activeTab === 'mapa_pastos' && (
+        <MapaPastosTab
+          onBack={gmdOriginRef.current !== 'mapa_pastos' ? () => setActiveTab(gmdOriginRef.current) : undefined}
+          filtroAnoInicial={filtroGlobal.ano}
+          filtroMesInicial={filtroGlobal.mes}
+        />
+      )}
       {activeTab === 'mapa_geo_pastos' && <MapaGeoPastosTab />}
       {activeTab === 'resumo_pastos' && <ResumoPastosTab onTabChange={handleTabChange} />}
       {activeTab === 'analise_operacional' && <AnaliseOperacionalTab onNavigateToMovimentacao={navigateToMovimentacao} />}
