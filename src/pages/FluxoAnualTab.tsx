@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useZootMensal, indexByMes } from '@/hooks/useZootMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,10 +57,10 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>('realizado');
 
-  // Fonte única oficial de indicadores mensais (view consolidada)
+  // FONTE OFICIAL: useRebanhoOficial
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
-  const { data: zootMensal = [] } = useZootMensal({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
-  const zootByMes = useMemo(() => indexByMes(zootMensal), [zootMensal]);
+  const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
+  const zootByMes = rebanhoOf.fazendaByMes;
 
   const lancFiltrados = useMemo(() => {
     const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';

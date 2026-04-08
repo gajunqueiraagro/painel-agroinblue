@@ -3,6 +3,7 @@ import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao, Cat
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -28,6 +29,9 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
 
+  // FONTE OFICIAL: useRebanhoOficial para saldos por categoria
+  const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
+
   const { meses, dados } = useMemo(() => {
     const lancFiltrados = lancamentos.filter(l => {
       try { return format(parseISO(l.data), 'yyyy') === anoFiltro; } catch { return false; }
@@ -41,6 +45,14 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
       try { mesesSet.add(format(parseISO(l.data), 'yyyy-MM')); } catch {}
     });
 
+    // Also add months from official view data
+    for (let m = 1; m <= 12; m++) {
+      const faz = rebanhoOf.getFazendaMes(m);
+      if (faz && (faz.cabecasInicio > 0 || faz.cabecasFinal > 0)) {
+        mesesSet.add(`${anoFiltro}-${String(m).padStart(2, '0')}`);
+      }
+    }
+
     const mesesArr = Array.from(mesesSet).sort();
     if (mesesArr.length === 0) return { meses: [], dados: {} };
 
@@ -48,46 +60,44 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
     const dados: Record<Categoria, { saldoInicial: number; meses: Record<string, number> }> = {} as any;
     CATEGORIAS.forEach(c => {
-      const saldoIni = saldosIniciais
-        .filter(s => s.ano === primeiroAno && s.categoria === c.value)
-        .reduce((sum, s) => sum + s.quantidade, 0);
+      // FONTE OFICIAL: saldo inicial do ano = saldo inicial de janeiro da view
+      const saldoIniView = rebanhoOf.getSaldoInicialMap(1);
+      const saldoIni = saldoIniView.get(c.value) ??
+        saldosIniciais.filter(s => s.ano === primeiroAno && s.categoria === c.value).reduce((sum, s) => sum + s.quantidade, 0);
 
       dados[c.value] = { saldoInicial: saldoIni, meses: {} };
-      let acum = saldoIni;
 
       mesesArr.forEach(mes => {
-        const entradasMes = lancFiltrados
-          .filter(l => {
-            try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && isEntrada(l.tipo); }
-            catch { return false; }
-          })
-          .reduce((s, l) => s + l.quantidade, 0);
-        const saidasMes = lancFiltrados
-          .filter(l => {
-            try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo); }
-            catch { return false; }
-          })
-          .reduce((s, l) => s + l.quantidade, 0);
-        const reclassEntMes = lancFiltrados
-          .filter(l => {
-            try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoriaDestino === c.value; }
-            catch { return false; }
-          })
-          .reduce((s, l) => s + l.quantidade, 0);
-        const reclassSaiMes = lancFiltrados
-          .filter(l => {
-            try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoria === c.value; }
-            catch { return false; }
-          })
-          .reduce((s, l) => s + l.quantidade, 0);
+        const mesNum = Number(mes.split('-')[1]);
+        // FONTE OFICIAL: saldo final da view (se disponível)
+        const saldoView = rebanhoOf.getSaldoMap(mesNum);
+        const saldoOficial = saldoView.get(c.value);
+        if (saldoOficial !== undefined) {
+          dados[c.value].meses[mes] = saldoOficial;
+          return;
+        }
 
-        acum += entradasMes - saidasMes + reclassEntMes - reclassSaiMes;
-        dados[c.value].meses[mes] = acum;
+        // Fallback: cálculo por movimentação (mês sem fechamento)
+        const prevMesIdx = mesesArr.indexOf(mes) - 1;
+        const prevSaldo = prevMesIdx >= 0 ? (dados[c.value].meses[mesesArr[prevMesIdx]] ?? saldoIni) : saldoIni;
+        const entradasMes = lancFiltrados.filter(l => {
+          try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && isEntrada(l.tipo); } catch { return false; }
+        }).reduce((s, l) => s + l.quantidade, 0);
+        const saidasMes = lancFiltrados.filter(l => {
+          try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.categoria === c.value && !isEntrada(l.tipo) && !isReclassificacao(l.tipo); } catch { return false; }
+        }).reduce((s, l) => s + l.quantidade, 0);
+        const reclassEntMes = lancFiltrados.filter(l => {
+          try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoriaDestino === c.value; } catch { return false; }
+        }).reduce((s, l) => s + l.quantidade, 0);
+        const reclassSaiMes = lancFiltrados.filter(l => {
+          try { return format(parseISO(l.data), 'yyyy-MM') === mes && l.tipo === 'reclassificacao' && l.categoria === c.value; } catch { return false; }
+        }).reduce((s, l) => s + l.quantidade, 0);
+        dados[c.value].meses[mes] = prevSaldo + entradasMes - saidasMes + reclassEntMes - reclassSaiMes;
       });
     });
 
     return { meses: mesesArr, dados };
-  }, [lancamentos, saldosIniciais, anoFiltro]);
+  }, [lancamentos, saldosIniciais, anoFiltro, rebanhoOf.loading, rebanhoOf.getSaldoMap, rebanhoOf.getSaldoInicialMap, rebanhoOf.getFazendaMes]);
 
   if (meses.length === 0) {
     return (

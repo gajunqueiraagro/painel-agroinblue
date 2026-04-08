@@ -1,10 +1,11 @@
 /**
  * Hook: useZootMensal
  * 
- * Fonte única oficial de indicadores zootécnicos mensais.
- * Consome a view `vw_zoot_fazenda_mensal` do banco.
- * 
- * Regra de produto: todo indicador mensal do rebanho deve vir deste hook.
+ * ⚠️ USO INTERNO — Consumir via useRebanhoOficial em componentes.
+ * Este hook é a camada de acesso direto à view `vw_zoot_fazenda_mensal`.
+ * Componentes e páginas NÃO devem importar este hook diretamente.
+ *
+ * Regra de produto: todo indicador mensal do rebanho deve vir de useRebanhoOficial.
  * O front NÃO recalcula — apenas lê, formata e filtra.
  */
 
