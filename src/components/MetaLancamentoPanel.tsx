@@ -91,6 +91,8 @@ export interface MetaStepState {
   etapaFinanceiroHabilitado: boolean;
   /** Evolução é obrigatória para sustentar o lançamento */
   evolucaoObrigatoria: boolean;
+  /** Saldo atual da categoria do lançamento (destino da evolução) */
+  saldoDestinoAtual: number;
 }
 
 interface Bloqueio {
