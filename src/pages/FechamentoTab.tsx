@@ -639,7 +639,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             const status = fech?.status;
             const resumo = getResumo(fech, p);
             const adminClose = isAdminClosed(fech);
-            const tipoNorm = normalizeTipoUso(p.tipo_uso);
+            const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
+            const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
             const isEmpty = resumo.totalCabecas === 0;
 
             const cardBg = isEmpty
