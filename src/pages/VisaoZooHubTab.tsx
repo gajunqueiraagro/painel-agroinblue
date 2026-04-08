@@ -19,7 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
-import { calcCabMediasMensais } from '@/components/financeiro/AnaliseEconomica';
+import { useCabMediasMensaisOficial } from '@/components/financeiro/AnaliseEconomica';
 import {
   isConciliado as isConciliadoClass,
   isEntrada as isEntradaClass,
