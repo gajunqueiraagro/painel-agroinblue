@@ -98,7 +98,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt - pesoEvolEntrada + pesoEvolSaida;
       const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
       const dias = cat.dias_mes;
-      const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
+      const gmd = cabMedia !== 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
 
       const saldo_calculado = cat.saldo_inicial + cat.entradas_externas + cat.evol_cat_entrada - cat.saidas_externas - cat.evol_cat_saida;
       const divergencia = cat.saldo_final - saldo_calculado;
@@ -149,7 +149,7 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     const ganho = pesoTotalFin - pesoTotalIni - pesoEntradasExt + pesoSaidasExt - pesoEvolEntrada + pesoEvolSaida;
     const cabMedia = (saldoInicial + saldoFinal) / 2;
     const dias = rows[0]?.dias || 0;
-    const gmd = cabMedia > 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
+    const gmd = cabMedia !== 0 && dias > 0 ? ganho / (cabMedia * dias) : null;
     return {
       saldoInicial, saldoFinal, entradasExternas, saidasExternas,
       evolCatEntrada, evolCatSaida, saldoCalculado, divergencia,
