@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { MetaLancamentoPanel, type EvolucaoSugestao } from '@/components/MetaLancamentoPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
@@ -2648,7 +2649,27 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ) : (
           <>
              {renderForm()}
-            {isCompra ? (
+            <div className="space-y-3">
+              {/* META Intelligent Panel */}
+              {isCenarioMeta && (
+                <MetaLancamentoPanel
+                  ano={data ? Number(data.slice(0, 4)) : new Date().getFullYear()}
+                  mes={data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1}
+                  categoria={categoria as any}
+                  tipo={tipo}
+                  quantidade={Number(quantidade) || 0}
+                  pesoKg={Number(pesoKg) || 0}
+                  clienteId={clienteAtual?.id}
+                  onSugestaoEvolucao={(info: EvolucaoSugestao) => {
+                    toast.info(
+                      `Sugestão: ${info.categoriaAtual} → ${info.categoriaDestino}. Peso médio atual: ${info.pesoMedioAtual.toFixed(1)} kg (mín. evolução: ${info.pesoEvolucao} kg). Crie a movimentação de reclassificação manualmente.`,
+                      { duration: 8000 }
+                    );
+                  }}
+                />
+              )}
+              {/* Existing right panel */}
+              {isCompra ? (
               <>
                 <CompraResumoPanel
                   quantidade={Number(quantidade) || 0}
@@ -2881,6 +2902,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ) : (
               renderFinancialPanel()
             )}
+            </div>
           </>
         )}
       </div>
