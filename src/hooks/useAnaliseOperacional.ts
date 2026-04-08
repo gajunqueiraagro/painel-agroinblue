@@ -7,7 +7,7 @@
  */
 import { useMemo } from 'react';
 import type { Lancamento } from '@/types/cattle';
-import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import type { ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import {
   calcResumoMovimentacoes,
   classificarNivelConciliacao,
