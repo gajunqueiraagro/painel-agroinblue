@@ -52,7 +52,13 @@ const CAT_SIGLAS: Record<string, string> = {
   mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
 };
 
-export function MapaPastosTab() {
+interface MapaPastosTabProps {
+  onBack?: () => void;
+  filtroAnoInicial?: string;
+  filtroMesInicial?: number;
+}
+
+export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
@@ -64,8 +70,9 @@ export function MapaPastosTab() {
     return Array.from(set).sort().reverse();
   }, [curYear]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(curYear));
-  const [mesFiltro, setMesFiltro] = useState(new Date().getMonth() + 1);
+  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));
+  const mesDefault = filtroMesInicial || (Number(anoFiltro) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
+  const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
