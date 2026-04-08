@@ -208,8 +208,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
         case 'saldoFinal': return { v: totals.pesoCabFin, dec: 1 };
         case 'entradasExternas': return { v: totals.kgMedioEntExt, dec: 1 };
         case 'saidasExternas': return { v: totals.kgMedioSaiExt, dec: 1 };
-        case 'evolCatEntrada': return { v: null as number | null, dec: 1 };
-        case 'evolCatSaida': return { v: null as number | null, dec: 1 };
+        case 'evolCatEntrada': return { v: totals.kgMedioEvolEnt, dec: 1 };
+        case 'evolCatSaida': return { v: totals.kgMedioEvolSai, dec: 1 };
       }
     }
     switch (field) {
@@ -217,8 +217,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       case 'saldoFinal': return { v: totals.pesoTotalFin, dec: 0 };
       case 'entradasExternas': return { v: totals.pesoEntradasExt, dec: 0 };
       case 'saidasExternas': return { v: totals.pesoSaidasExt, dec: 0 };
-      case 'evolCatEntrada': return { v: 0, dec: 0 };
-      case 'evolCatSaida': return { v: 0, dec: 0 };
+      case 'evolCatEntrada': return { v: totals.pesoEvolEntrada, dec: 0 };
+      case 'evolCatSaida': return { v: totals.pesoEvolSaida, dec: 0 };
     }
   }
 
