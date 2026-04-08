@@ -30,11 +30,10 @@ import {
 } from '@/lib/calculos/economicos';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  useZootCategoriaMensal,
+  useRebanhoOficial,
   groupByMes,
   type ZootCategoriaMensal,
-} from '@/hooks/useZootCategoriaMensal';
-import { useZootMensal, indexByMes } from '@/hooks/useZootMensal';
+} from '@/hooks/useRebanhoOficial';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -327,10 +326,10 @@ export function useIndicadoresZootecnicos(
   const isGlobal = fazendaId === '__global__';
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
-  // ── FONTE OFICIAL: views zootécnicas ──
-  const { data: viewDataAno, isLoading: loadingViewAno } = useZootCategoriaMensal({ ano, cenario: 'realizado', global: isGlobal });
-  const { data: viewDataAnoAnt, isLoading: loadingViewAnoAnt } = useZootCategoriaMensal({ ano: ano - 1, cenario: 'realizado', global: isGlobal });
-  const { data: viewDataAno2, isLoading: loadingViewAno2 } = useZootCategoriaMensal({ ano: ano - 2, cenario: 'realizado', global: isGlobal });
+  // ── FONTE OFICIAL: useRebanhoOficial (camada única obrigatória) ──
+  const { rawCategorias: viewDataAno, loading: loadingViewAno } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
+  const { rawCategorias: viewDataAnoAnt, loading: loadingViewAnoAnt } = useRebanhoOficial({ ano: ano - 1, cenario: 'realizado', global: isGlobal });
+  const { rawCategorias: viewDataAno2, loading: loadingViewAno2 } = useRebanhoOficial({ ano: ano - 2, cenario: 'realizado', global: isGlobal });
 
   const viewByMesAno = useMemo(() => groupByMes(viewDataAno || []), [viewDataAno]);
   const viewByMesAnoAnt = useMemo(() => groupByMes(viewDataAnoAnt || []), [viewDataAnoAnt]);

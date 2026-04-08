@@ -15,7 +15,7 @@ import { usePrecoMercado } from '@/hooks/usePrecoMercado';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
-import { useZootCategoriaMensal, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
@@ -301,9 +301,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const { itens: precosMercado } = usePrecoMercado(anoMes);
 
-  // Official source: view data (replaces useFechamentoCategoria)
-  const { data: viewDataAnoAtual } = useZootCategoriaMensal({ ano: Number(anoFiltro), cenario: 'realizado' });
-  const { data: viewDataAnoAnterior } = useZootCategoriaMensal({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewDataAnoAtual } = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
+  const { rawCategorias: viewDataAnoAnterior } = useRebanhoOficial({ ano: Number(anoFiltro) - 1, cenario: 'realizado' });
 
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};

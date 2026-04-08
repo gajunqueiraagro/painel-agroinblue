@@ -9,7 +9,7 @@ import { useState, useMemo } from 'react';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, groupByMes } from '@/hooks/useRebanhoOficial';
 import { formatNum } from '@/lib/calculos/formatters';
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -79,10 +79,8 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
   const [viewMode, setViewMode] = useState<ViewMode>('cabecas');
   const [cenario, setCenario] = useState<Cenario>(cenarioInicial);
 
-  const { data: categoriaMensal = [], isLoading } = useZootCategoriaMensal({
-    ano: Number(ano),
-    cenario,
-  });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: categoriaMensal, loading: isLoading } = useRebanhoOficial({ ano: Number(ano), cenario });
 
   const byMes = useMemo(() => groupByMes(categoriaMensal), [categoriaMensal]);
   const catsMes = useMemo(() => (byMes[mesSel] || []).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao), [byMes, mesSel]);

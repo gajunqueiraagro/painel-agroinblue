@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MESES_NOMES, MESES_COLS } from '@/lib/calculos/labels';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { calcAreaProdutivaPecuaria } from '@/lib/calculos/zootecnicos';
-import { useZootCategoriaMensal, groupByMes, type ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial, groupByMes, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
 import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { usePastos } from '@/hooks/usePastos';
@@ -90,9 +90,9 @@ export function IndicadoresZooTab({ lancamentos, saldosIniciais, onBack, onTabCh
 
   const zoo = useIndicadoresZootecnicos(fazendaId, anoNum, mesFiltro, lancsFiltrados, saldosIniciais, pastos, categorias, globalFazendaIds);
 
-  // FONTE OFICIAL: views zootécnicas para comparações e gráficos
-  const { data: viewDataAno } = useZootCategoriaMensal({ ano: anoNum, cenario });
-  const { data: viewDataAnoAnt } = useZootCategoriaMensal({ ano: anoNum - 1, cenario });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewDataAno } = useRebanhoOficial({ ano: anoNum, cenario });
+  const { rawCategorias: viewDataAnoAnt } = useRebanhoOficial({ ano: anoNum - 1, cenario });
 
 
   const mesLabel = MESES_COLS.find(m => m.key === String(mesFiltro).padStart(2, '0'))?.label || '';
@@ -452,9 +452,9 @@ function GraficosView({ subView, onBack, zoo, lancamentos, anoNum, mesFiltro, pa
   const isEstoque = subView === 'graficos-estoque';
   const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
-  // FONTE OFICIAL: views zootécnicas para gráficos
-  const { data: gViewAno } = useZootCategoriaMensal({ ano: anoNum, cenario: 'realizado' });
-  const { data: gViewAnoAnt } = useZootCategoriaMensal({ ano: anoNum - 1, cenario: 'realizado' });
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: gViewAno } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
+  const { rawCategorias: gViewAnoAnt } = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado' });
 
   const chartData = useMemo(() => {
     const buildYear = (viewData: ZootCategoriaMensal[], ano: number) => {

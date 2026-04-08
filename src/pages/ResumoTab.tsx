@@ -14,7 +14,7 @@ import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 
 import { supabase } from '@/integrations/supabase/client';
-import { useZootMensal } from '@/hooks/useZootMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
@@ -74,11 +74,11 @@ function StatusBadge({ nivel, label }: { nivel: StatusNivel; label: string }) {
 // ---------------------------------------------------------------------------
 // Zoo KPIs hook — uses official weight hierarchy (fechamento > lancamento > saldo)
 // ---------------------------------------------------------------------------
-// Zoo KPIs — official source: vw_zoot_fazenda_mensal
+// Zoo KPIs — FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
 // ---------------------------------------------------------------------------
 
 function useZooKpis(ano: number, mes: number) {
-  const { data: rows } = useZootMensal({ ano, cenario: 'realizado' });
+  const { rawFazenda: rows } = useRebanhoOficial({ ano, cenario: 'realizado' });
 
   return useMemo(() => {
     const mesDado = (rows || []).find(r => r.mes === mes);
