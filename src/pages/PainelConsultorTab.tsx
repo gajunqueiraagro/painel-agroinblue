@@ -12,6 +12,7 @@
  * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
@@ -672,7 +673,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -688,7 +689,22 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const saidas = agg('se');
   const pesoIniRaw = agg('pesoInicial');
   const pesoFinRaw = agg('pesoTotalFinal');
-  const prodBio = agg('producaoBio');
+
+  // Produção biológica: a view não incorpora meta_gmd_mensal,
+  // então recalculamos a partir do GMD meta por categoria
+  const prodBio = Array.from({ length: 12 }, (_, i) => {
+    const mesKey = String(i + 1).padStart(2, '0');
+    const mesRows = consolidacao.filter(c => c.mes === mesKey);
+    let totalProd = 0;
+    for (const row of mesRows) {
+      const gmdRow = gmdMetaRows.find(g => g.categoria === row.categoria);
+      const gmdVal = gmdRow?.meses[mesKey] || 0;
+      const cabMedia = (row.si + row.sf) / 2;
+      const dias = row.dias || new Date(new Date().getFullYear(), i + 1, 0).getDate();
+      totalProd += cabMedia * gmdVal * dias;
+    }
+    return totalProd;
+  });
 
   // Override cabIni[0] (Jan) with Dec realizado validado
   const cabIni = [...cabIniRaw];
@@ -696,9 +712,13 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
     cabIni[0] = dezRealizadoSnap.cabecas;
   }
 
+  // A view não incorpora produção biológica META no peso final.
+  // Corrigimos: pesoFinCorrigido = pesoFinRaw (balanço contábil) + prodBio (GMD meta)
+  const pesoFinCorrigido = pesoFinRaw.map((v, i) => v + prodBio[i]);
+
   // Snapshot validado de peso sobrescreve consolidação quando disponível
   const hasSnap = pesoSnap && pesoSnap.cabecas.some(v => v > 0);
-  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinRaw;
+  const pesoFin = hasSnap ? pesoSnap!.cabecas.map((c, i) => c * (pesoSnap!.pesoMedio[i] || 0)) : pesoFinCorrigido;
   // Peso ini: Jan = Dez realizado validado; Fev+ = Meta final mês anterior
   const dezPesoKg = dezRealizadoSnap ? dezRealizadoSnap.arrobas * 30 : 0;
   const pesoIniJan = dezPesoKg > 0 ? dezPesoKg : pesoIniRaw[0];
@@ -707,7 +727,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Peso médio final = peso total final / SF (weighted across categories)
   const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFinRaw[i] / sf : 0;
+    return sf > 0 ? pesoFinCorrigido[i] / sf : 0;
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
@@ -1019,6 +1039,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { rawFazenda: zootMeta, rawCategorias: viewCategoriasMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
+  const { rows: gmdMetaRows } = useMetaGmd(ano);
   const { clienteAtual } = useCliente();
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
@@ -1173,7 +1194,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
       }
 
       // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
@@ -1187,7 +1208,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
     return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacaoView, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
+  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
 
   useEffect(() => {
     if (blocos.length > 0) {
