@@ -609,7 +609,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const allTopTabs: { id: TopTab; label: string; icon: string }[] = [
     { id: 'entradas', label: 'Entradas', icon: '📥' },
     { id: 'saidas', label: 'Saídas', icon: '📤' },
-    { id: 'historico', label: 'Histórico', icon: '🕑' },
+    { id: 'historico', label: 'Evol. Cat.', icon: '🔄' },
     { id: 'chuvas', label: 'Chuvas', icon: '☁️' },
   ];
   const topTabs = modoMovimentacao
@@ -619,76 +619,167 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const subTypes = topTab === 'entradas' ? ENTRY_TYPES : topTab === 'saidas' ? EXIT_TYPES : [];
 
   if (topTab === 'historico') {
+    const reclassFiltrados = historicoFiltrado
+      .filter(l => isReclassificacao(l.tipo))
+      .filter(l => {
+        const st = l.statusOperacional || 'realizado';
+        if (statusFiltro === 'realizado' && (l.cenario !== 'realizado' || st !== 'realizado')) return false;
+        if (statusFiltro === 'programado' && (l.cenario !== 'realizado' || st !== 'programado')) return false;
+        if (statusFiltro === 'meta' && l.cenario !== 'meta') return false;
+        if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
+        return true;
+      })
+      .sort((a, b) => a.data.localeCompare(b.data));
+
+    const reclassStats = (() => {
+      let qtd = 0;
+      let pesoTotal = 0;
+      reclassFiltrados.forEach(l => {
+        qtd += l.quantidade;
+        pesoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
+      });
+      const pesoMedio = qtd > 0 ? pesoTotal / qtd : 0;
+      return { qtd, pesoMedio };
+    })();
+
+    const reclassCatsDisponiveis = (() => {
+      const cats = new Set<string>();
+      historicoFiltrado.filter(l => isReclassificacao(l.tipo)).forEach(l => cats.add(l.categoria));
+      return CATEGORIAS.filter(c => cats.has(c.value));
+    })();
+
+    const mesLabelHist = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
+    const catLabelHist = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
+    const statusLabelHist = getStatusFiltroLabel(statusFiltro);
+
     return (
-      <div className="animate-fade-in pb-20">
-        <div className="p-4 pb-0">
-          <div className={`grid gap-0.5 bg-muted rounded-md p-0.5 max-w-md grid-cols-${topTabs.length}`}>
+      <div className="w-full max-w-full animate-fade-in pb-20">
+        <div className="bg-primary text-primary-foreground px-3 py-2 space-y-1.5">
+          {/* Top tabs */}
+          <div className={`grid gap-0.5 rounded-md bg-card p-0.5 max-w-md grid-cols-${topTabs.length}`}>
             {topTabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => { setTopTab(t.id); if (t.id === 'entradas') setSubAba('nascimento'); if (t.id === 'saidas') setSubAba('abate'); }}
-                className={`py-1 px-1 rounded font-bold transition-colors text-[11px] ${
-                  topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'
+                className={`py-1 px-1 text-[11px] rounded font-bold transition-colors ${
+                  topTab === t.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {t.icon} {t.label}
               </button>
             ))}
           </div>
-        </div>
-        <div className="px-4 pt-3">
-          <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 rounded-t-md">
-            <div className="flex gap-1.5">
-              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-                <SelectTrigger className="h-8 text-[12px] font-bold w-24"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent>{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-[12px]">{a}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={mesFiltro} onValueChange={setMesFiltro}>
-                <SelectTrigger className="h-8 text-[12px] font-bold flex-1"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent>{MESES_HIST.map(m => <SelectItem key={m.value} value={m.value} className="text-[12px]">{m.label}</SelectItem>)}</SelectContent>
-              </Select>
+
+          {/* Filters row */}
+          <div className="flex flex-wrap items-center gap-1">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border"><SelectValue placeholder="Ano" /></SelectTrigger>
+              <SelectContent side="bottom">{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={mesFiltro} onValueChange={setMesFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border"><SelectValue placeholder="Mês" /></SelectTrigger>
+              <SelectContent side="bottom">{MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+              <SelectTrigger className="h-6 text-[10px] font-bold w-[100px] bg-card text-foreground border-border"><SelectValue placeholder="Categoria" /></SelectTrigger>
+              <SelectContent side="bottom">
+                <SelectItem value="todas" className="text-sm">Todas</SelectItem>
+                {reclassCatsDisponiveis.map(c => <SelectItem key={c.value} value={c.value} className="text-sm">{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-px rounded border border-primary-foreground/20 bg-primary-foreground/5 p-px">
+              {([
+                { value: 'realizado' as StatusFiltro, label: 'Realizado', activeClass: 'bg-success text-success-foreground' },
+                { value: 'programado' as StatusFiltro, label: 'Programado', activeClass: 'bg-secondary text-secondary-foreground' },
+                { value: 'meta' as StatusFiltro, label: 'Meta', activeClass: 'bg-warning text-warning-foreground' },
+              ]).map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setStatusFiltro(s.value === statusFiltro ? 'todos' : s.value)}
+                  className={`px-2 py-px rounded text-[9px] font-bold transition-colors ${
+                    statusFiltro === s.value ? s.activeClass : 'text-primary-foreground/70 hover:bg-primary-foreground/10'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="space-y-1.5 pt-1.5">
-            {historicoFiltrado.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8 text-[12px]">Nenhum lançamento no período</p>
-            ) : (
-              historicoFiltrado.slice(0, 50).map(l => {
-                const entrada = isEntrada(l.tipo);
-                const reclass = isReclassificacao(l.tipo);
-                const catLabel = CATEGORIAS.find(c => c.value === l.categoria)?.label;
-                const catDestinoLabel = l.categoriaDestino ? CATEGORIAS.find(c => c.value === l.categoriaDestino)?.label : null;
-                const tipoLabel = TODOS_TIPOS.find(t => t.value === l.tipo);
-                return (
-                  <button key={l.id} onClick={() => setDetalheId(l.id)}
-                    className="w-full bg-card rounded-md p-2 border shadow-sm flex items-center gap-2 text-left hover:bg-muted/50 transition-colors">
-                    <div className="text-lg">{tipoLabel?.icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${entrada ? 'bg-success/20 text-success' : reclass ? 'bg-accent/20 text-accent-foreground' : 'bg-destructive/20 text-destructive'}`}>
-                          {entrada ? '+' : reclass ? '↔' : '-'}{l.quantidade}
-                        </span>
-                        <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
-                        {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
-                        {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      {(() => {
-                        const cfg = getStatusBadge(l);
-                        return <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>;
-                      })()}
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                  </button>
-                );
-              })
-            )}
+        </div>
+
+        {/* Content area */}
+        <div className="flex gap-3 px-2 pt-1.5 pb-4">
+          {/* Table */}
+          <div className="flex-[7] min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="bg-primary text-primary-foreground">
+                  <th className={`${TABLE_HEAD_CELL} text-left`}>DATA</th>
+                  <th className={`${TABLE_HEAD_CELL} text-right`}>QTD</th>
+                  <th className={`${TABLE_HEAD_CELL} text-left`}>CAT. ORIGEM</th>
+                  <th className={`${TABLE_HEAD_CELL} text-left`}>CAT. DESTINO</th>
+                  <th className={`${TABLE_HEAD_CELL} text-right`}>P.VIVO</th>
+                  <th className={`${TABLE_HEAD_CELL} text-center`}>STATUS</th>
+                  <th className={`${TABLE_HEAD_CELL} text-center w-6`}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {reclassFiltrados.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center text-muted-foreground py-8 text-[12px]">Nenhuma evolução no período</td></tr>
+                ) : reclassFiltrados.map(l => {
+                  const catOrigem = CATEGORIAS.find(c => c.value === l.categoria)?.label || l.categoria;
+                  const catDestino = l.categoriaDestino ? (CATEGORIAS.find(c => c.value === l.categoriaDestino)?.label || l.categoriaDestino) : '-';
+                  const cfg = getStatusBadge(l);
+                  return (
+                    <tr key={l.id} onClick={() => setDetalheId(l.id)} className="border-b border-border/40 hover:bg-muted/40 cursor-pointer transition-colors">
+                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{format(parseISO(l.data), 'dd/MM/yy')}</td>
+                      <td className={`${TABLE_BODY_CELL} text-right font-bold text-[11px]`}>{l.quantidade}</td>
+                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{catOrigem}</td>
+                      <td className={`${TABLE_BODY_CELL} text-[10px]`}>{catDestino}</td>
+                      <td className={`${TABLE_BODY_CELL} text-right text-[10px]`}>{l.pesoMedioKg ? `${Number(l.pesoMedioKg).toFixed(2)}` : '-'}</td>
+                      <td className={`${TABLE_BODY_CELL} text-center`}>
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${cfg.cls}`}>{cfg.label}</span>
+                      </td>
+                      <td className={`${TABLE_BODY_CELL} text-center`}><Info className="h-3 w-3 text-muted-foreground inline" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary panel */}
+          <div className="flex-[3] min-w-[180px] max-w-[260px] flex-shrink-0 hidden md:block">
+            <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden sticky top-2">
+              <div className="bg-primary px-3 py-2.5">
+                <h3 className="text-[11px] font-bold text-primary-foreground tracking-wide uppercase">EVOLUÇÕES</h3>
+              </div>
+              <div className="px-3 py-2 bg-muted/40 border-b border-border">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px]">
+                  <div className="text-muted-foreground">Ano</div>
+                  <div className="font-bold text-foreground">{anoFiltro}</div>
+                  <div className="text-muted-foreground">Mês</div>
+                  <div className="font-bold text-foreground">{mesLabelHist}</div>
+                  <div className="text-muted-foreground">Categoria</div>
+                  <div className="font-bold text-foreground">{catLabelHist}</div>
+                  <div className="text-muted-foreground">Status</div>
+                  <div className="font-bold text-foreground">{statusLabelHist}</div>
+                </div>
+              </div>
+              <div className="px-3 py-2 space-y-1.5">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-wide">Qtde</span>
+                  <span className="font-bold tabular-nums text-[11px] text-foreground">{formatCabecas(reclassStats.qtd)}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-wide">Peso médio</span>
+                  <span className="font-bold tabular-nums text-[11px] text-foreground">{formatKg(reclassStats.pesoMedio)}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
+
         {/* Detail modal */}
         {(() => {
           const lancamentoDetalhe = detalheId ? lancamentosNormalizados.find(l => l.id === detalheId) : null;
