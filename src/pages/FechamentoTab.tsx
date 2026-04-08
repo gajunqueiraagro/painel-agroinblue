@@ -812,8 +812,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               toast.error(`Erro ao reabrir: ${error.message}`);
               return false;
             }
-            if (data?.error) {
-              toast.error(`Erro: ${data.error}`);
+            if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in data) {
+              toast.error(`Erro: ${(data as any).error}`);
               return false;
             }
             toast.success('Mês reaberto com sucesso.');
