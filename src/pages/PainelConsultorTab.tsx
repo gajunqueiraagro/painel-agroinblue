@@ -1035,6 +1035,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, [ano, filtroGlobal?.mes]);
   const { status: statusPilares, refetch: refetchPilares } = useStatusPilares(fazendaId, mesAtualRef);
   const { rawFazenda: zootMeta, rawCategorias: viewCategoriasMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
+  const { rows: gmdMetaRows } = useMetaGmd(ano);
   const { clienteAtual } = useCliente();
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
