@@ -22,16 +22,16 @@ export default tseslint.config(
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
       "no-restricted-imports": ["error", {
-        patterns: [
+        paths: [
           {
-            group: ["@/hooks/useZootCategoriaMensal"],
+            name: "@/hooks/useZootCategoriaMensal",
             importNames: ["useZootCategoriaMensal"],
-            message: "PROIBIDO: usar useRebanhoOficial em vez de useZootCategoriaMensal diretamente. Exceções: useRebanhoOficial.ts, FechamentoTab.tsx, ConciliacaoTab.tsx"
+            message: "PROIBIDO: usar useRebanhoOficial. Exceções: useRebanhoOficial.ts, FechamentoTab.tsx, ConciliacaoTab.tsx"
           },
           {
-            group: ["@/hooks/useZootMensal"],
+            name: "@/hooks/useZootMensal",
             importNames: ["useZootMensal"],
-            message: "PROIBIDO: usar useRebanhoOficial em vez de useZootMensal diretamente. Exceção: useRebanhoOficial.ts"
+            message: "PROIBIDO: usar useRebanhoOficial. Exceção: useRebanhoOficial.ts"
           }
         ]
       }],
