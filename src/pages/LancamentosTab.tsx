@@ -3033,6 +3033,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onReaberto={refetchPilares}
         />
       )}
+      {evolucaoSugestao && (
+        <EvolucaoAssistidaDialog
+          open={evolucaoDialogOpen}
+          onOpenChange={setEvolucaoDialogOpen}
+          sugestao={evolucaoSugestao}
+          saldoAtual={evolucaoSugestao.saldoAtual}
+        />
+      )}
     </div>
   );
 }
