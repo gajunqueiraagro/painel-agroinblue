@@ -1114,12 +1114,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
-      const totais = new Map(todasMeses.map(mes => [mes, 0]));
-      const vcMap = new Map(todasMeses.map(mes => [mes, 0]));
-      const paMap = new Map(todasMeses.map(mes => [mes, 0]));
-      const cabMap = new Map(todasMeses.map(mes => [mes, 0]));
-      const pmMap = new Map(todasMeses.map(mes => [mes, 0]));
-      const arrMap = new Map(todasMeses.map(mes => [mes, 0]));
       // GOVERNANÇA: Apenas snapshots validados alimentam o Painel oficial
       const validRows = (data as any[] || []).filter((row: any) => row.status === 'validado');
       // Consolidação global: usar agregação oficial (2 camadas)
