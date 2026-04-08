@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
@@ -188,6 +189,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
 
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
@@ -2564,9 +2566,62 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      <div className="grid grid-cols-[11rem_minmax(0,1fr)_20rem] gap-3 items-start overflow-visible">
-        {/* Left: Navigation sidebar */}
-        {renderSidebar()}
+      {/* ── Mobile nav strip ── */}
+      {isMobile && (
+        <div className="flex gap-1 overflow-x-auto pb-2 mb-1 -mx-1 px-1">
+          {[
+            { aba: 'entrada' as Aba, label: 'Entradas', icon: <LogIn className="h-3 w-3" /> },
+            { aba: 'saida' as Aba, label: 'Saídas', icon: <LogOut className="h-3 w-3" /> },
+            { aba: 'reclassificacao' as Aba, label: 'Evoluir', icon: <RefreshCw className="h-3 w-3" /> },
+            { aba: 'historico' as Aba, label: 'Histórico', icon: <Clock className="h-3 w-3" /> },
+          ].map(nav => (
+            <button
+              key={nav.aba}
+              onClick={() => {
+                if (isEditing && aba !== nav.aba) return;
+                setAba(nav.aba);
+                if (nav.aba === 'entrada') setTipo('nascimento');
+                if (nav.aba === 'saida') setTipo('abate');
+              }}
+              disabled={isEditing && aba !== nav.aba}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
+                aba === nav.aba
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground bg-muted/30 hover:bg-muted/60'
+              } ${isEditing && aba !== nav.aba ? 'opacity-20 pointer-events-none' : ''}`}
+            >
+              {nav.icon} {nav.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Mobile sub-nav for entrada/saida types ── */}
+      {isMobile && (aba === 'entrada' || aba === 'saida') && (
+        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1">
+          {(aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA).map(t => (
+            <button
+              key={t.value}
+              onClick={() => { setTipo(t.value); resetAllFields(); }}
+              disabled={isEditing && tipo !== t.value}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold whitespace-nowrap transition-all shrink-0 border ${
+                tipo === t.value
+                  ? 'bg-primary/15 text-foreground border-primary/40'
+                  : 'text-muted-foreground border-transparent hover:bg-muted/40'
+              } ${isEditing && tipo !== t.value ? 'opacity-20 pointer-events-none' : ''}`}
+            >
+              <span className="text-[11px]">{t.icon}</span> {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={isMobile
+        ? 'flex flex-col gap-3'
+        : 'grid grid-cols-[11rem_minmax(0,1fr)_20rem] gap-3 items-start overflow-visible'
+      }>
+        {/* Left: Navigation sidebar (desktop only) */}
+        {!isMobile && renderSidebar()}
 
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
@@ -2589,7 +2644,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             />
           </>
         ) : aba === 'historico' ? (
-          <div className="col-span-2 self-start">{renderHistorico()}</div>
+          <div className={isMobile ? '' : 'col-span-2 self-start'}>{renderHistorico()}</div>
         ) : (
           <>
              {renderForm()}
