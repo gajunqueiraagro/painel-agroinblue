@@ -1,8 +1,16 @@
+/**
+ * AnaliseOperacionalTab — Análise Operacional Mensal
+ *
+ * Fonte oficial do "Sistema": vw_zoot_categoria_mensal (via useZootCategoriaMensal)
+ * Movimentações: lancamentos (detalhe de fluxo)
+ * Conciliação: sistema (view) × pastos (fechamento_pasto_itens)
+ */
 import { useState, useEffect, useMemo } from 'react';
-import { usePastos, type CategoriaRebanho } from '@/hooks/usePastos';
+import { usePastos } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useZootCategoriaMensal, groupByMes } from '@/hooks/useZootCategoriaMensal';
 import { useAnaliseOperacional } from '@/hooks/useAnaliseOperacional';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -18,11 +26,20 @@ interface Props {
 
 export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const { isGlobal } = useFazenda();
-  const { categorias, pastos } = usePastos();
+  const { pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
-  const { lancamentos, saldosIniciais } = useLancamentos();
+  const { lancamentos } = useLancamentos();
   const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
   const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
+
+  const [ano, mes] = anoMes.split('-').map(Number);
+
+  // ── Fonte oficial: view zootécnica ──
+  const { data: viewData = [] } = useZootCategoriaMensal({ ano, cenario: 'realizado' });
+  const viewCategoriasMes = useMemo(() => {
+    const byMes = groupByMes(viewData);
+    return byMes[mes] || [];
+  }, [viewData, mes]);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -40,7 +57,7 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   }, [fechamentos, loadItens]);
 
   const { resumoMov, conciliacao, alertas, sugestoes } = useAnaliseOperacional(
-    lancamentos, saldosIniciais, categorias, itensPastos, anoMes
+    lancamentos, viewCategoriasMes, itensPastos, anoMes
   );
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para análise.</div>;
@@ -119,10 +136,10 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
               const subAba = LABEL_TO_SUBABA[m.label];
               const handleClick = () => {
                 if (onNavigateToMovimentacao && subAba) {
-                  const [ano, mes] = anoMes.split('-');
+                  const [anoStr, mesStr] = anoMes.split('-');
                   onNavigateToMovimentacao(subAba, {
-                    ano,
-                    mes,
+                    ano: anoStr,
+                    mes: mesStr,
                     label: `${m.label} | ${formatAnoMes(anoMes)}`,
                     backTab: 'analise_operacional',
                   });
