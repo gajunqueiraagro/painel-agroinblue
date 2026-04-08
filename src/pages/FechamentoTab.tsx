@@ -527,66 +527,80 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <table className="text-[10px] border-collapse w-auto">
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
-                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 w-14 border-r border-blue-200 dark:border-blue-800">Cab.</th>
+                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2 py-1 w-16 border-r border-blue-200 dark:border-blue-800">Cab.</th>
                   {CAT_COLS.map((c, idx) => (
-                    <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 min-w-[28px]${idx === 4 ? ' border-r border-blue-200 dark:border-blue-800' : ''}`}>{c.sigla}</th>
+                    <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 min-w-[36px]${idx === 4 ? ' border-r border-blue-200 dark:border-blue-800' : ''}`}>{c.sigla}</th>
                   ))}
-                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-1.5 py-1 min-w-[34px] border-l border-blue-200 dark:border-blue-800">Total</th>
+                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2 py-1 min-w-[44px] border-l border-blue-200 dark:border-blue-800">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {/* SISTEMA */}
                 <tr className="bg-muted/30">
-                  <td className="font-bold text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Sistema</td>
+                  <td className="font-bold text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[9px]">Sistema</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = saldoMap.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-muted-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
                   })}
-                  <td className="text-center font-semibold text-muted-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalSistema || ''}</td>
+                  <td className="text-center font-semibold text-muted-foreground px-2 py-0.5 border-l border-border/30 tabular-nums">{totalSistema ? formatNum(totalSistema, 0) : ''}</td>
                 </tr>
                 {/* PASTO */}
                 <tr>
-                  <td className="font-bold text-foreground px-1.5 py-0.5 border-r border-border/30 text-[9px]">Pasto</td>
+                  <td className="font-bold text-foreground px-2 py-0.5 border-r border-border/30 text-[9px]">Pasto</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = pastoDataByCat.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v || ''}</td>;
+                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
                   })}
-                  <td className="text-center font-bold text-foreground px-1.5 py-0.5 border-l border-border/30 tabular-nums">{totalPasto || ''}</td>
+                  <td className="text-center font-bold text-foreground px-2 py-0.5 border-l border-border/30 tabular-nums">{totalPasto ? formatNum(totalPasto, 0) : ''}</td>
                 </tr>
                 {/* DIFERENÇA */}
                 <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
-                  <td className={`font-extrabold px-1.5 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
+                  <td className={`font-extrabold px-2 py-1 border-r border-border/30 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
                   {CAT_COLS.map((c, idx) => {
                     const pv = pastoDataByCat.get(c.codigo) || 0;
                     const sv = saldoMap.get(c.codigo) || 0;
                     const dif = pv - sv;
                     return (
-                      <td key={c.sigla} className={`text-center font-extrabold px-1 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r border-border/30' : ''}`}>
+                      <td key={c.sigla} className={`text-center font-extrabold px-1.5 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r border-border/30' : ''}`}>
                         {fmtDif(dif)}
                       </td>
                     );
                   })}
-                  <td className={`text-center font-extrabold px-1.5 py-1 border-l border-border/30 tabular-nums ${difCellClass(totalDiferenca)}`}>
+                  <td className={`text-center font-extrabold px-2 py-1 border-l border-border/30 tabular-nums ${difCellClass(totalDiferenca)}`}>
                     {fmtDif(totalDiferenca)}
                   </td>
                 </tr>
                 {/* PESO */}
                 <tr className="border-t border-border/20 bg-muted/20">
-                  <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">Peso kg</td>
+                  <td className="text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[8px] italic">Peso kg</td>
                   {CAT_COLS.map((c, idx) => {
                     const peso = pesoMedioByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 0) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 tabular-nums${idx === 4 ? ' border-r border-border/30' : ''}`}>{peso ? formatNum(peso, 1) : ''}</td>;
                   })}
-                  <td className="text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 border-l border-border/30" />
+                  {(() => {
+                    let totalPesoAcc = 0;
+                    let totalCabAcc = 0;
+                    pesoMedioByCat.forEach((peso, codigo) => {
+                      const cab = pastoDataByCat.get(codigo) || 0;
+                      totalPesoAcc += peso * cab;
+                      totalCabAcc += cab;
+                    });
+                    const pesoMedioTotal = totalCabAcc > 0 ? totalPesoAcc / totalCabAcc : null;
+                    return (
+                      <td className="text-center text-[9px] italic text-muted-foreground px-2 py-0.5 border-l border-border/30 tabular-nums font-semibold">
+                        {pesoMedioTotal ? formatNum(pesoMedioTotal, 1) : ''}
+                      </td>
+                    );
+                  })()}
                 </tr>
                 {/* GMD */}
                 <tr className="bg-muted/20">
-                  <td className="text-muted-foreground px-1.5 py-0.5 border-r border-border/30 text-[8px] italic">GMD</td>
+                  <td className="text-muted-foreground px-2 py-0.5 border-r border-border/30 text-[8px] italic">GMD</td>
                   {CAT_COLS.map((c, idx) => {
                     const g = gmdByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic px-1 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r border-border/30' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-[9px] italic px-1.5 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r border-border/30' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
                   })}
-                  <td className={`text-center text-[9px] italic px-1.5 py-0.5 border-l border-border/30 tabular-nums ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
+                  <td className={`text-center text-[9px] italic px-2 py-0.5 border-l border-border/30 tabular-nums ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
                 </tr>
               </tbody>
             </table>
@@ -597,6 +611,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
               <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
             </Button>
+            {onNavigateToConferenciaGmd && (
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={onNavigateToConferenciaGmd}>
+                <Activity className="h-3.5 w-3.5" /> Conferência do GMD
+              </Button>
+            )}
 
             {allClosed && (
               <Badge className="bg-emerald-200 text-emerald-900 dark:bg-emerald-800/50 dark:text-emerald-100 text-[11px] font-bold gap-1">
