@@ -321,6 +321,19 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
+  // GMD total ponderado
+  const gmdTotal = useMemo(() => {
+    const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
+    let totalProd = 0;
+    let totalCabDias = 0;
+    for (const cat of monthData) {
+      totalProd += cat.producao_biologica;
+      const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
+      totalCabDias += cabMedia * cat.dias_mes;
+    }
+    return totalCabDias > 0 ? totalProd / totalCabDias : null;
+  }, [viewDataForConcil, mesNum]);
+
   const hasDivergencia = useMemo(() => {
     if (totalDiferenca !== 0) return true;
     return CAT_COLS.some(c => {
