@@ -190,7 +190,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
