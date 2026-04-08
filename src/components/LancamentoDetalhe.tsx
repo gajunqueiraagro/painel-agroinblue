@@ -40,10 +40,11 @@ interface Props {
   onEditarVenda?: (lancamento: Lancamento) => void;
   onEditarCompra?: (lancamento: Lancamento) => void;
   onEditarTransferencia?: (lancamento: Lancamento) => void;
+  onEditarReclass?: (lancamento: Lancamento) => void;
   fazendaId?: string;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, fazendaId }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, fazendaId }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const { canEditMeta } = usePermissions();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -132,6 +133,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (lancamento.tipo === 'transferencia_saida' && onEditarTransferencia) {
       onClose();
       onEditarTransferencia(lancamento);
+    } else if (isReclassificacao(lancamento.tipo) && onEditarReclass) {
+      onClose();
+      onEditarReclass(lancamento);
     } else if (isCompra) {
       // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });

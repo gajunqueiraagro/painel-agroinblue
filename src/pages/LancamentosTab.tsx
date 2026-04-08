@@ -73,6 +73,8 @@ interface Props {
   compraParaEditar?: Lancamento | null;
   /** Transferência para abrir em modo edição automaticamente */
   transferenciaParaEditar?: Lancamento | null;
+  /** Reclassificação para abrir em modo edição automaticamente */
+  reclassParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => void;
   /** Initial year filter for historico view */
@@ -188,7 +190,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
@@ -216,7 +218,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
-  // compraFinanceiroRef removed — compra now uses modal + direct generation
+  const [editingReclassId, setEditingReclassId] = useState<string | null>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
@@ -226,7 +228,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ─── P1 governance: derive anoMes from form date ───
   const formAnoMes = useMemo(() => {
     if (!data) return undefined;
-    return data.slice(0, 7); // 'yyyy-MM'
+    return data.slice(0, 7);
   }, [data]);
   const { status: statusPilaresForm, refetch: refetchPilares } = useStatusPilares(fazendaAtual?.id, formAnoMes);
   const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
@@ -787,6 +789,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       loadAbateForEdit(abateParaEditar);
     }
   }, [abateParaEditar, abateFornecedores]);
+
+  // Auto-load reclassificação for editing when navigated from another tab
+  useEffect(() => {
+    if (reclassParaEditar) {
+      setAba('reclassificacao');
+      setEditingReclassId(reclassParaEditar.id);
+      reclassState.setCategoriaOrigem(reclassParaEditar.categoria as any);
+      reclassState.setCategoriaDestino((reclassParaEditar.categoriaDestino || 'bois') as any);
+      reclassState.setData(reclassParaEditar.data);
+      reclassState.setQuantidade(String(reclassParaEditar.quantidade));
+      reclassState.setPesoKg(reclassParaEditar.pesoMedioKg ? String(reclassParaEditar.pesoMedioKg) : '');
+      reclassState.setPesoAutoFilled(true);
+      const isMeta = reclassParaEditar.cenario === 'meta' || reclassParaEditar.statusOperacional === 'previsto';
+      reclassState.setStatusOp(isMeta ? 'meta' : 'realizado');
+    }
+  }, [reclassParaEditar]);
 
   // CRITICAL: Apply pending fornecedor match whenever fornecedores list changes
   useEffect(() => {
@@ -2655,11 +2673,45 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               destinoLabel={reclassState.destinoLabel}
               pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
-              onRequestRegister={reclassState.handleSubmit}
+              onRequestRegister={editingReclassId ? async () => {
+                const isMeta = reclassState.statusOp === 'meta';
+                onEditar(editingReclassId, {
+                  data: reclassState.data,
+                  categoria: reclassState.categoriaOrigem,
+                  categoriaDestino: reclassState.categoriaDestino,
+                  quantidade: Number(reclassState.quantidade),
+                  pesoMedioKg: reclassState.pesoKg ? Number(reclassState.pesoKg) : undefined,
+                  pesoMedioArrobas: reclassState.pesoKg ? Number(reclassState.pesoKg) / 30 : undefined,
+                  statusOperacional: isMeta ? null : 'realizado',
+                });
+                toast.success('Reclassificação atualizada com sucesso.');
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                if (onReturnFromEdit) onReturnFromEdit();
+              } : reclassState.handleSubmit}
               submitting={false}
               canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}
-              onBack={onBackToConciliacao}
+              onBack={editingReclassId ? undefined : onBackToConciliacao}
               backLabel={backLabel}
+              isEditing={!!editingReclassId}
+              onCancelEdit={() => {
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                if (onReturnFromEdit) onReturnFromEdit();
+              }}
+              onDelete={editingReclassId ? () => {
+                onRemover(editingReclassId);
+                setEditingReclassId(null);
+                reclassState.setQuantidade('');
+                reclassState.setPesoKg('');
+                reclassState.setPesoAutoFilled(false);
+                toast.success('Reclassificação removida.');
+                if (onReturnFromEdit) onReturnFromEdit();
+              } : undefined}
             />
           </>
         ) : (

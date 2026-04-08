@@ -17,6 +17,9 @@ interface Props {
   canRegister: boolean;
   onBack?: () => void;
   backLabel?: string;
+  isEditing?: boolean;
+  onCancelEdit?: () => void;
+  onDelete?: () => void;
 }
 
 function fmt(v: number | null, dec = 1) {
@@ -36,7 +39,7 @@ export function ReclassificacaoResumoPanel({
   quantidade, pesoKg, origemLabel, destinoLabel,
   pesoMedioOrigem, statusOp,
   onRequestRegister, submitting, canRegister,
-  onBack, backLabel,
+  onBack, backLabel, isEditing, onCancelEdit, onDelete,
 }: Props) {
   const totalKg = quantidade * pesoKg;
   const arrobasCab = pesoKg ? pesoKg / 30 : 0;
@@ -81,15 +84,46 @@ export function ReclassificacaoResumoPanel({
 
       <Separator />
 
-      <Button
-        type="button"
-        className={`w-full h-7 text-[10px] font-bold ${statusOp === 'meta' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
-        onClick={onRequestRegister}
-        disabled={!canRegister || submitting}
-      >
-        <RefreshCw className="h-3 w-3 mr-1" />
-        {submitting ? 'Registrando...' : 'Registrar Reclassificação'}
-      </Button>
+      {isEditing ? (
+        <div className="flex gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 h-7 text-[10px] font-bold"
+            onClick={onCancelEdit}
+          >
+            Cancelar
+          </Button>
+          {onDelete && (
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-7 w-7 p-0"
+              onClick={onDelete}
+            >
+              🗑
+            </Button>
+          )}
+          <Button
+            type="button"
+            className={`flex-1 h-7 text-[10px] font-bold ${statusOp === 'meta' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
+            onClick={onRequestRegister}
+            disabled={!canRegister || submitting}
+          >
+            {submitting ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          className={`w-full h-7 text-[10px] font-bold ${statusOp === 'meta' ? 'bg-orange-500 hover:bg-orange-600' : ''}`}
+          onClick={onRequestRegister}
+          disabled={!canRegister || submitting}
+        >
+          <RefreshCw className="h-3 w-3 mr-1" />
+          {submitting ? 'Registrando...' : 'Registrar Reclassificação'}
+        </Button>
+      )}
 
       {onBack && (
         <button
