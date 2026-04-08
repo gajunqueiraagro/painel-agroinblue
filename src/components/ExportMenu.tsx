@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { exportToExcel, exportToPDF } from '@/lib/exportUtils';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { toast } from 'sonner';
 
 interface Props {
@@ -19,13 +20,25 @@ export function ExportMenu({ lancamentos, saldosIniciais }: Props) {
 
   const anosOpcoes = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i));
 
+  // Dados oficiais da view para alimentar o export
+  const { rawFazenda, rawCategorias } = useRebanhoOficial({
+    ano: Number(ano),
+    cenario: 'realizado',
+  });
+
   const handleExport = (tipo: 'excel' | 'pdf') => {
     try {
       if (tipo === 'excel') {
-        exportToExcel(lancamentos, saldosIniciais, ano);
+        exportToExcel(
+          lancamentos,
+          saldosIniciais,
+          ano,
+          rawFazenda.length > 0 ? rawFazenda : undefined,
+          rawCategorias.length > 0 ? rawCategorias : undefined,
+        );
         toast.success('Excel exportado com sucesso!');
       } else {
-        exportToPDF(lancamentos, saldosIniciais, ano);
+        exportToPDF(lancamentos, saldosIniciais, ano, rawFazenda.length > 0 ? rawFazenda : undefined);
         toast.success('PDF exportado com sucesso!');
       }
       setOpen(false);

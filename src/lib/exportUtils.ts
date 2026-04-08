@@ -16,6 +16,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import type { ZootMensal } from '@/hooks/useZootMensal';
+import type { ZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
 
 const MESES_COLS = [
   { key: '01', label: 'Jan' }, { key: '02', label: 'Fev' }, { key: '03', label: 'Mar' },
@@ -94,7 +95,66 @@ function calcFluxoAnual(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[
   return { porMesTipo, saldoInicioMes, saldoFinalAno, saldoInicialAno };
 }
 
-function calcEvolucaoCategoria(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, mes: string) {
+/**
+ * calcEvolucaoCategoria — Evolução por categoria para um mês.
+ *
+ * Prioriza dados da view oficial (zootCategorias) quando disponíveis.
+ * Fallback: cálculo local por movimentações (compatibilidade offline).
+ *
+ * Fonte oficial: vw_zoot_categoria_mensal via useRebanhoOficial.
+ */
+function calcEvolucaoCategoria(
+  lancamentos: Lancamento[],
+  saldosIniciais: SaldoInicial[],
+  ano: string,
+  mes: string,
+  zootCategorias?: ZootCategoriaMensal[],
+) {
+  const mesNum = Number(mes);
+
+  // ── Caminho oficial: dados da view ──
+  if (zootCategorias && zootCategorias.length > 0) {
+    const catsMes = zootCategorias.filter(r => r.mes === mesNum);
+    if (catsMes.length > 0) {
+      return CATEGORIAS.map(cat => {
+        const row = catsMes.find(r => r.categoria_codigo === cat.value);
+        if (!row) {
+          return { label: cat.label, saldoInicioMes: 0, movs: COLUNAS_EVOL.map(() => 0), saldoFinal: 0 };
+        }
+        // Mapear movimentações da view para as colunas do Excel
+        const movs = COLUNAS_EVOL.map(col => {
+          switch (col.tipo) {
+            case 'nascimento': return row.entradas_externas > 0 ? 0 : 0; // nascimento incluso em entradas_externas na view
+            case 'compra': return 0; // detalhamento por tipo não disponível na view
+            case 'transferencia_entrada': return 0;
+            case 'reclassificacao_entrada': return row.evol_cat_entrada;
+            case 'abate': return 0;
+            case 'venda': return 0;
+            case 'transferencia_saida': return 0;
+            case 'consumo': return 0;
+            case 'morte': return 0;
+            case 'reclassificacao_saida': return row.evol_cat_saida;
+            default: return 0;
+          }
+        });
+        // Entradas/saídas externas consolidadas da view
+        movs[0] = row.entradas_externas; // Coluna "Nasc." → entradas externas consolidadas
+        movs[4] = row.saidas_externas;   // Coluna "Abates" → saídas externas consolidadas
+        // Zerar os demais para evitar dupla contagem (view já consolida)
+        movs[1] = 0; movs[2] = 0; // compra, transf.E já inclusos em entradas_externas
+        movs[5] = 0; movs[6] = 0; movs[7] = 0; movs[8] = 0; // venda, transf.S, consumo, morte já inclusos
+
+        return {
+          label: cat.label,
+          saldoInicioMes: row.saldo_inicial,
+          movs,
+          saldoFinal: row.saldo_final,
+        };
+      });
+    }
+  }
+
+  // ── Fallback: cálculo por movimentações (offline) ──
   const mesKey = `${ano}-${mes}`;
   const filtrados = lancamentos.filter(l => { try { return format(parseISO(l.data), 'yyyy-MM') === mesKey; } catch { return false; } });
   const anteriores = lancamentos.filter(l => { try { const k = format(parseISO(l.data), 'yyyy-MM'); return format(parseISO(l.data), 'yyyy') === ano && k < mesKey; } catch { return false; } });
@@ -196,7 +256,7 @@ function calcResumo(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], a
 }
 
 // ── EXCEL EXPORT ──
-export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[]) {
+export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoInicial[], ano: string, zootMensal?: ZootMensal[], zootCategorias?: ZootCategoriaMensal[]) {
   const resumo = calcResumo(lancamentos, saldosIniciais, ano, 'todos', zootMensal);
   const resumoData = [
     ['Resumo - ' + ano],
@@ -230,7 +290,7 @@ export function exportToExcel(lancamentos: Lancamento[], saldosIniciais: SaldoIn
   ];
 
   MESES_COLS.forEach(mes => {
-    const dados = calcEvolucaoCategoria(lancamentos, saldosIniciais, ano, mes.key);
+    const dados = calcEvolucaoCategoria(lancamentos, saldosIniciais, ano, mes.key, zootCategorias);
     const header = ['Categoria', 'Saldo Ini.', ...COLUNAS_EVOL.map(c => c.label), 'Saldo Fin.'];
     const rows: (string | number)[][] = [header];
     dados.forEach(d => rows.push([d.label, d.saldoInicioMes, ...d.movs, d.saldoFinal]));
