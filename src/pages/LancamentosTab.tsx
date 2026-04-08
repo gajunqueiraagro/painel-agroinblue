@@ -3038,6 +3038,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           open={evolucaoDialogOpen}
           onOpenChange={setEvolucaoDialogOpen}
           sugestao={evolucaoSugestao}
+          dataLancamento={data}
+          quantidadeLancamento={Number(quantidade) || 0}
+          saldoDestinoAtual={metaStepState?.saldoDestinoAtual ?? 0}
+          onRegistrar={onAdicionar}
+          onSucesso={() => {
+            setEvolucaoSugestao(null);
+          }}
         />
       )}
     </div>
