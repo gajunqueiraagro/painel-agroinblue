@@ -81,6 +81,7 @@ interface Props {
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToConferenciaGmd?: () => void;
+  onNavigateToMapaPastos?: () => void;
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
