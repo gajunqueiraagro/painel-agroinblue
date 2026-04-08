@@ -214,12 +214,23 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     return { indicador, format, valores, indicadorId, noTotal };
   };
 
-  // Se há snapshot validado de peso, usar EXCLUSIVAMENTE arrobas_total da tabela validada
+  // REGRA SOBERANA: snapshot validado SEMPRE vence sobre views para cabeças, peso e arrobas
   const hasSnap = pesoSnap && pesoSnap.arrobas.some(v => v > 0);
+
+  // Cabeças: snapshot validado sobrescreve view quando disponível
+  const hasCabSnap = hasSnap && pesoSnap!.cabecas.some(v => v > 0);
+  const cabFin = hasCabSnap
+    ? pesoSnap!.cabecas.map((c, i) => c > 0 ? c : d.cabFin[i])
+    : d.cabFin;
+  // Cab inicial: Dez do ano anterior vem do snapshot[0] do array de 13; Fev+ = cabFin do mês anterior
+  const cabIni = hasCabSnap
+    ? [d.cabIni[0], ...cabFin.slice(0, 11)]
+    : d.cabIni;
+
+  // Peso: snapshot validado sobrescreve view
   const pesoTotalFin = hasSnap
     ? pesoSnap!.arrobas.map(a => a * 30)
     : d.pesoTotalFin;
-  // Peso inicial: Dez do ano anterior vem de dezPesoSnap; Fev+ = final do mês anterior
   const pesoTotalIni = hasSnap
     ? [(dezPesoSnap ?? d.pesoTotalIni[0]), ...pesoTotalFin.slice(0, 11)]
     : d.pesoTotalIni;
@@ -227,10 +238,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     ? pesoSnap!.pesoMedio
     : d.pesoMedioFin;
   const pesoMedioIni = hasSnap
-    ? [(dezPesoSnap != null && d.cabIni[0] > 0 ? dezPesoSnap / d.cabIni[0] : d.pesoMedioIni[0]), ...pesoMedioFin.slice(0, 11)]
+    ? [(dezPesoSnap != null && cabIni[0] > 0 ? dezPesoSnap / cabIni[0] : d.pesoMedioIni[0]), ...pesoMedioFin.slice(0, 11)]
     : d.pesoMedioIni;
 
-  const cabMedia = d.cabIni.map((v, i) => (v + d.cabFin[i]) / 2);
+  const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const uaMedia = cabMedia.map((v, i) => {
     const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 450 : 0;
@@ -244,8 +255,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   });
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realValorCab[i] || (d.cabFin[i] > 0 ? v / d.cabFin[i] : 0))
-    : d.valorRebFin.map((v, i) => { const c = d.cabFin[i]; return c > 0 ? v / c : 0; });
+    ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : 0))
+    : d.valorRebFin.map((v, i) => { const c = cabFin[i]; return c > 0 ? v / c : 0; });
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : 0))
     : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
@@ -256,8 +267,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', d.cabIni, 'reb_inicial', true),
-            r('Reb. final (cab)', 'cab', d.cabFin, 'reb_final', true),
+            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
             r('Entradas (cab)', 'cab', d.entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', d.saidas, 'saidas_cab'),
           ],
@@ -267,7 +278,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           rows: [
             r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
             r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => d.cabFin[i] > 0 ? p / d.cabFin[i] : NaN), 'peso_fin_cab_kg', true),
+            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
             r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
             r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
             r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
@@ -290,7 +301,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Desempenho',
           rows: [
             r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
-            r('Peso méd. reb.', 'med2', d.pesoMedioFin, 'peso_med_reb'),
+            r('Peso méd. reb.', 'med2', pesoMedioFin, 'peso_med_reb'),
             r('UA média', 'med2', uaMedia, 'ua_media'),
             r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao'),
           ],
