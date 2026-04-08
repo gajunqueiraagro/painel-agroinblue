@@ -1887,8 +1887,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     );
   };
 
-  const [evolucaoDialogOpen, setEvolucaoDialogOpen] = useState(false);
-  const [evolucaoSugestao, setEvolucaoSugestao] = useState<EvolucaoSugestao | null>(null);
 
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
   const renderFinancialPanel = () => {
