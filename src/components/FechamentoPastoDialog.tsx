@@ -81,7 +81,7 @@ const CategoriaCard = React.memo(function CategoriaCard({
   }, [pesoMedioKg, pesoFocused]);
 
   return (
-    <div className="flex flex-col items-center gap-1" style={{ minWidth: '62px' }}>
+    <div className="flex flex-col items-center gap-1 min-w-0 w-full sm:w-auto" style={{ minWidth: 0 }}>
       <span className="text-[11px] font-semibold text-foreground whitespace-nowrap mb-0.5">{c.nome}</span>
       <div className="relative">
         <Input
