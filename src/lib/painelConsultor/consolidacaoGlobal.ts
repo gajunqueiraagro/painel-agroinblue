@@ -3,37 +3,38 @@
  *
  * Define como cada indicador deve ser agregado no modo Global (Σ fazendas).
  *
- * Regra absoluta:
+ * ═══ REGRA ABSOLUTA ═══
  *   - NUNCA usar média simples entre fazendas
  *   - NUNCA somar médias ou percentuais
  *   - NUNCA fazer média de GMD individual por fazenda
  *   - Se denominador for zero → exibir vazio (NaN)
  *
- * Tipos de consolidação:
+ * ═══ TIPOS DE CONSOLIDAÇÃO ═══
  *   soma:            Σ valores de todas as fazendas
  *   ponderado_cab:   Σ numerador / Σ cabeças (peso médio, valor/cab)
  *   ponderado_area:  Σ numerador / Σ área produtiva (lotação, @/ha, kg/ha)
  *   recalculado:     Fórmula customizada sobre base global (GMD, desfrute %)
  *   unitario:        Σ numerador / Σ denominador (custo/@, receita/@)
  *
- * ─── SEPARAÇÃO OBRIGATÓRIA DE CONCEITOS ───
+ * ═══ 3 CAMADAS DE PROTEÇÃO ═══
  *
- * A. Fluxo externo real da fazenda (para indicadores executivos):
- *    - Entradas: nascimento, compra, transferência de entrada
- *    - Saídas: abate, venda em pé, transferência de saída, consumo, morte
- *    → Usado em: Entradas/Saídas (cab), Acumulados, Saldo, Desfrute
+ * CAMADA 1 — Exclusão de evolução de categoria (evol_cat)
+ *   evol_cat_entrada / evol_cat_saida = movimentação INTERNA entre categorias
+ *   NÃO entra em: Entradas (cab), Saídas (cab), Acumulados, Saldo, Desfrute
+ *   ENTRA apenas em: conciliação por categoria, GMD, peso por categoria
+ *   Mesma regra para pesos: peso_evol_cat_entrada/saida ficam apenas no
+ *   balanço estrutural da categoria, nunca nos indicadores executivos de fluxo.
  *
- * B. Movimentação interna entre categorias (evol_cat):
- *    - evol_cat_entrada / evol_cat_saida
- *    → Usado APENAS em: conciliação por categoria, GMD, peso por categoria
- *    → NUNCA entra em indicadores de fluxo da fazenda
+ * CAMADA 2 — Neutralização de transferências no Global
+ *   No nível FAZENDA: transferência = fluxo externo (entrada ou saída)
+ *   No nível GLOBAL: transferência = movimento INTERNO do grupo
+ *   → Deve ser subtraída dos indicadores de fluxo global
+ *   → Global mostra apenas: nascimento/compra como entrada
+ *     e abate/venda/morte/consumo como saída
  *
- * C. Transferências inter-fazendas no modo GLOBAL:
- *    - No nível FAZENDA: transferência = fluxo externo (entrada ou saída)
- *    - No nível GLOBAL: transferência = movimento INTERNO do grupo
- *    → DEVE ser neutralizada (subtraída) dos indicadores de fluxo global
- *    → Regra: Global mostra apenas nascimento/compra como entrada
- *      e apenas abate/venda/morte/consumo como saída
+ * CAMADA 3 — Consolidação por tipo de indicador
+ *   Cada indicador tem sua regra oficial (soma, ponderado, recalculado, unitário)
+ *   Nunca misturar tipos; nunca fazer média de médias.
  *
  * Essa separação vale para CABEÇAS e PESOS igualmente.
  */
