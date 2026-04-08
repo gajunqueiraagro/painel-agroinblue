@@ -1,68 +1,67 @@
-## Reestruturação: Cenário + Status Operacional
+## Correção Estrutural: Fonte Única de Verdade Zootécnica
 
-### Situação atual no banco
-- 255 registros: `status_operacional='conciliado'`, `cenario='realizado'`
-- 116 registros: `status_operacional='previsto'`, `cenario='meta'`
-- Nenhum registro com `status_operacional='confirmado'`
+### A. Diagnóstico — Violações encontradas
 
-### Mapeamento de migração
-| Atual | Novo |
-|-------|------|
-| `conciliado` + `realizado` | `realizado` + `realizado` |
-| `previsto` + `meta` | **NULL** + `meta` |
-| `confirmado` (se houver) | `programado` + `realizado` |
+#### 🔴 CRÍTICO — Ainda usam `calcSaldoPorCategoriaLegado` (recálculo por movimentação)
+1. **`DashboardFinanceiro.tsx`** — calcula rebanho médio mensal via saldosIniciais + lançamentos
+2. **`AnaliseEconomica.tsx`** — calcula rebanho médio mensal via saldosIniciais + lançamentos
 
----
+#### 🟠 MÉDIO — Acessam views diretamente (sem passar por useRebanhoOficial)
+3. **`useIndicadoresZootecnicos.ts`** — usa `useZootCategoriaMensal` + `useZootMensal` diretamente
+4. **`VisaoAnualZootecnicaTab.tsx`** — query direta em `vw_zoot_categoria_mensal`
+5. **`useStatusZootecnico.ts`** — query direta em `vw_zoot_categoria_mensal`
+6. **`useValorRebanhoGlobal.ts`** — query direta em `vw_zoot_categoria_mensal`
+7. **`LancarFinHubTab.tsx`** — usa `useZootCategoriaMensal` diretamente
+8. **`ZootecnicoTab.tsx`** — usa view data diretamente via useIndicadoresZootecnicos
+9. **`FechamentoTab.tsx`** — usa `useZootCategoriaMensal` diretamente (conciliação)
+10. **`ConciliacaoTab.tsx`** — usa `useZootCategoriaMensal` diretamente
 
-### Fase 1 — Banco de dados (migration)
-1. **Migrar dados**: `conciliado` → `realizado`, `confirmado` → `programado`, META → `status_operacional = NULL`
-2. **Atualizar triggers**:
-   - `auto_create_transferencia_entrada`: adaptar para novos valores
-   - `sync_transferencia_update`: adaptar para novos valores
-   - `guard_lancamento_mes_fechado_p1`: META = `cenario='meta'` (já funciona)
-   - `validar_conciliacao_rebanho`: filtrar `status_operacional IS NOT NULL` ao invés de `!= 'previsto'`
-   - `audit_trigger_lancamentos`: funciona sem mudança
-3. **Criar CHECK constraint** (ou trigger de validação):
-   - `cenario='meta'` → `status_operacional IS NULL`
-   - `cenario='realizado'` → `status_operacional IN ('previsto','programado','agendado','realizado')`
-4. **RLS para META**: Criar função `can_edit_meta()` que retorna `true` apenas para `admin_agroinblue`
+#### 🟡 BAIXO — Usam saldosIniciais para reconstruir saldo
+11. **`exportUtils.ts`** — calcFluxoAnual recalcula saldo por movimentação
+12. **`EvolucaoTab.tsx`** — usa saldosIniciais.filter
+13. **`DesfrunteTab.tsx`** — usa saldosIniciais.filter
+14. **`FluxoAnualTab.tsx`** — usa exportUtils internamente
+
+#### ✅ JÁ MIGRADOS (7 arquivos)
+- VisaoZooHubTab, MapaGeoPastosTab, VariacaoEstoqueExplicacao, GraficosAnaliseTab, AnaliseDRE, AnaliseTab, PainelConsultorTab
 
 ---
 
-### Fase 2 — Hooks e lógica (código)
-1. **`statusOperacional.ts`**: Reestruturar completamente
-   - Remover mapeamento `previsto/confirmado/conciliado`
-   - Novos valores: `programado | realizado` (zoot) + `previsto | programado | agendado | realizado` (fin)
-   - META não é status, é cenário
-2. **`useLancamentos.ts`**: Atualizar insert/update para usar novos valores
-3. **`useMetaConsolidacao.ts`**: Filtrar `cenario='meta'` (sem checar status)
-4. **`useFechamento.ts`** e hooks de saldo: Filtrar `cenario='realizado' AND status_operacional='realizado'`
-5. **Cálculos**: `isConciliado()` → `isRealizado()`, `isPrevisto()` → `isMeta()` (cenário)
+### B. Plano de Migração (em 3 fases)
+
+#### Fase 1 — Eliminar `calcSaldoPorCategoriaLegado` (2 arquivos críticos)
+- **DashboardFinanceiro.tsx**: Trocar por `useRebanhoOficial.getSaldoMap()` e `getSaldoInicialMap()`
+- **AnaliseEconomica.tsx**: Trocar por `useRebanhoOficial.getSaldoMap()` e `getSaldoInicialMap()`
+
+#### Fase 2 — Migrar acesso direto às views (8 arquivos)
+- **useIndicadoresZootecnicos.ts**: Refatorar para consumir `useRebanhoOficial` ao invés de chamar `useZootCategoriaMensal` + `useZootMensal` diretamente
+- **VisaoAnualZootecnicaTab.tsx**: Substituir query direta por `useRebanhoOficial`
+- **useStatusZootecnico.ts**: Substituir query direta por `useRebanhoOficial`
+- **useValorRebanhoGlobal.ts**: Substituir query direta por `useRebanhoOficial`
+- **LancarFinHubTab.tsx**: Substituir `useZootCategoriaMensal` por `useRebanhoOficial`
+- **FechamentoTab.tsx**: Para conciliação, manter view como fonte explicativa (não define saldo final)
+- **ConciliacaoTab.tsx**: Manter view como fonte explicativa (conciliação compara sistema vs pastos)
+
+#### Fase 3 — Migrar exports e telas com saldosIniciais (3 arquivos)
+- **exportUtils.ts**: Refatorar `calcFluxoAnual` para receber dados do `useRebanhoOficial`
+- **EvolucaoTab.tsx**: Migrar para `useRebanhoOficial`
+- **DesfrunteTab.tsx**: Migrar para `useRebanhoOficial`
 
 ---
 
-### Fase 3 — UI e permissões (componentes)
-1. **`LancamentosTab.tsx`**: Novo seletor de status com valores corretos por módulo
-2. **Filtros de tela**: Zoot operacional = `cenario='realizado'`, META = `cenario='meta'`
-3. **Permissão META no frontend**: Bloquear criação/edição/exclusão para perfis != `admin_agroinblue`
-4. **Badges e labels**: Atualizar cores e textos
-5. **Consolidação e painéis**: Validar que leitura está correta
+### C. Proteção Arquitetural
+
+1. Adicionar comentário de header em `useZootCategoriaMensal.ts` e `useZootMensal.ts` marcando como "USO INTERNO — consumir via useRebanhoOficial"
+2. Remover export de `calcSaldoPorCategoriaLegado` de `zootecnicos.ts` após migração
+3. Documentar regra no `useRebanhoOficial.ts`
 
 ---
 
-### Valores finais por módulo
+### D. Exceções permitidas
+- **FechamentoTab** e **ConciliacaoTab**: usam view para *comparação/conciliação* (sistema vs pastos), não para definir saldo final — isso é aceitável
+- **SaldoInicialForm**: é tela de *input* de dados, não de leitura — aceitável
 
-**Zootécnico operacional:**
-- Programado: `cenario='realizado'`, `status_operacional='programado'`
-- Realizado: `cenario='realizado'`, `status_operacional='realizado'`
+---
 
-**Financeiro operacional:**
-- Previsto: `cenario='realizado'`, `status_operacional='previsto'`
-- Programado: `cenario='realizado'`, `status_operacional='programado'`
-- Agendado: `cenario='realizado'`, `status_operacional='agendado'`
-- Realizado: `cenario='realizado'`, `status_operacional='realizado'`
-
-**META (ambos módulos):**
-- `cenario='meta'`, `status_operacional=NULL`
-
-### Começo pela Fase 1 (migration) após aprovação.
+### Escopo total: ~13 arquivos a migrar
+### Prioridade: Fase 1 (2 arquivos críticos) → Fase 2 (6 arquivos) → Fase 3 (3 arquivos)
