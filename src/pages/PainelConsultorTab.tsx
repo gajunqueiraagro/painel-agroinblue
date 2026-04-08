@@ -87,7 +87,37 @@ interface PesoSnapshot {
   arrobas: number[];
 }
 
-// ─── Tipos de lancamento que compõem o Desfrute ───
+/**
+ * Converte dados da view oficial (vw_zoot_categoria_mensal) para MetaCategoriaMes[].
+ * Fonte única: elimina dependência do cálculo local useMetaConsolidacao.
+ */
+function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[] {
+  return rows.map(r => {
+    const catDef = CATEGORIAS.find(c => c.value === r.categoria_codigo);
+    return {
+      categoria: r.categoria_codigo as any,
+      categoriaLabel: catDef?.label || r.categoria_nome,
+      mes: String(r.mes).padStart(2, '0'),
+      si: r.saldo_inicial,
+      ee: r.entradas_externas,
+      se: r.saidas_externas,
+      ei: r.evol_cat_entrada,
+      siInternas: r.evol_cat_saida,
+      sf: r.saldo_final,
+      cabMedias: (r.saldo_inicial + r.saldo_final) / 2,
+      pesoInicial: r.peso_total_inicial,
+      pesoEntradas: r.peso_entradas_externas + r.peso_evol_cat_entrada,
+      pesoSaidas: r.peso_saidas_externas + r.peso_evol_cat_saida,
+      gmd: r.gmd || 0,
+      dias: r.dias_mes,
+      producaoBio: r.producao_biologica,
+      pesoTotalFinal: r.peso_total_final,
+      pesoMedioFinal: r.peso_medio_final,
+    };
+  });
+}
+
+
 const TIPOS_DESFRUTE = new Set(['abate', 'venda', 'consumo']);
 
 // ─── Monthly raw data struct ───
