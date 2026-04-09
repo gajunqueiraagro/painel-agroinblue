@@ -916,16 +916,19 @@ export function useFinanceiro() {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
           cliente_id: fazendas.find(f => f.id === (r.fazendaId || primaryFazendaId))?.cliente_id || cid,
-          importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,
           saidas: r.saidas,
           saldo_final_total: r.saldoFinalTotal,
         }));
+        console.log('[Importação] resumoCaixa payload:', JSON.stringify(resumoBatch, null, 2));
         const { error } = await supabase.from('financeiro_resumo_caixa').upsert(resumoBatch, {
           onConflict: 'fazenda_id,ano_mes',
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[Importação] Erro ao salvar resumo caixa:', error);
+          throw error;
+        }
       }
 
       const msgs: string[] = [`${inseridos} lançamentos inseridos`];
