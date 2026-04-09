@@ -338,26 +338,34 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  // Compute dedup flags per row
-  const dupFlags = useMemo(() => {
-    if (!existingHashes || !clienteId) return new Map<number, boolean>();
-    const flags = new Map<number, boolean>();
-    const seenInBatch = new Set<string>();
-    for (const l of linhas) {
-      const contaKey = normalizeImportText(l.contaOrigem);
-      const contaR = contaKey ? contaLookup.get(contaKey) : null;
-      const hash = buildHashImportacao(
-        clienteId, l.fazendaId || '',
-        l.dataPagamento || l.anoMes + '-01', l.valor,
-        l.tipoOperacao, contaR?.id || null,
-        l.produto, l.obs,
+  // Real-time dedup check for a single row against DB hashes + batch siblings
+  const checkDuplicate = useCallback((row: LinhaImportada, allRows: LinhaImportada[], existingH: Set<string>): boolean => {
+    if (!clienteId || !existingH) return false;
+    const contaKey = normalizeImportText(row.contaOrigem);
+    const contaR = contaKey ? contaLookup.get(contaKey) : null;
+    const hash = buildHashImportacao(
+      clienteId, row.fazendaId || '',
+      row.dataPagamento || (row.anoMes ? row.anoMes + '-01' : ''), row.valor,
+      row.tipoOperacao, contaR?.id || null,
+      row.produto, row.obs,
+    );
+    // Check against existing DB records
+    if (existingH.has(hash)) return true;
+    // Check against earlier rows in the same batch (by linha order)
+    for (const sibling of allRows) {
+      if (sibling.linha >= row.linha) break;
+      const sContaKey = normalizeImportText(sibling.contaOrigem);
+      const sContaR = sContaKey ? contaLookup.get(sContaKey) : null;
+      const sHash = buildHashImportacao(
+        clienteId, sibling.fazendaId || '',
+        sibling.dataPagamento || (sibling.anoMes ? sibling.anoMes + '-01' : ''), sibling.valor,
+        sibling.tipoOperacao, sContaR?.id || null,
+        sibling.produto, sibling.obs,
       );
-      const isDup = existingHashes.has(hash) || seenInBatch.has(hash);
-      flags.set(l.linha, isDup);
-      seenInBatch.add(hash);
+      if (sHash === hash) return true;
     }
-    return flags;
-  }, [existingHashes, clienteId, linhas, contaLookup]);
+    return false;
+  }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [importing, setImporting] = useState(false);
@@ -365,10 +373,11 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [statusFilter, setStatusFilter] = useState<ReasonFilter>('all');
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  // Initialize/revalidate rows when dupFlags or lookups change
+  // Initialize/revalidate rows when hashes or lookups change
   useEffect(() => {
+    if (!existingHashes) return;
     setRows(linhas.map(l => {
-      const isDup = dupFlags.get(l.linha) || false;
+      const isDup = checkDuplicate(l, linhas, existingHashes);
       return {
         ...l,
         _validation: validateRow(l, contaLookup, fazendaLookup, isDup),
@@ -377,7 +386,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         _isDuplicate: isDup,
       };
     }));
-  }, [linhas, dupFlags, contaLookup, fazendaLookup]);
+  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate]);
 
   const contaOptions = useMemo(
     () => contas
@@ -393,8 +402,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   );
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
+    if (!existingHashes) return currentRows;
     return currentRows.map(r => {
-      const isDup = dupFlags.get(r.linha) || false;
+      const isDup = checkDuplicate(r, currentRows, existingHashes);
       return {
         ...r,
         _validation: validateRow(r, contaLookup, fazendaLookup, isDup),
@@ -402,7 +412,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         _isDuplicate: isDup,
       };
     });
-  }, [contaLookup, fazendaLookup, dupFlags]);
+  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate]);
 
   // Stats
   const stats = useMemo(() => {
@@ -450,17 +460,26 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   // Edit a single cell
   const updateRow = (linha: number, field: keyof LinhaImportada, value: string | null) => {
     setRows(prev => {
-      return prev.map(r => {
+      // First pass: apply the field change
+      const nextRows = prev.map(r => {
         if (r.linha !== linha) return r;
         const updated = { ...r, [field]: value };
         if (field === 'fazenda') {
           const faz = fazendas.find(f => f.codigo.toLowerCase().trim() === (value || '').toLowerCase().trim());
           updated.fazendaId = faz?.id || null;
         }
-        const isDup = dupFlags.get(r.linha) || false;
-        updated._validation = validateRow(updated, contaLookup, fazendaLookup, isDup);
-        updated._resolved = resolveInfo(updated, contaLookup, fazendaLookup);
         return updated;
+      });
+      // Second pass: recalculate dedup for ALL rows (editing one row can affect siblings)
+      if (!existingHashes) return nextRows;
+      return nextRows.map(r => {
+        const isDup = checkDuplicate(r, nextRows, existingHashes);
+        return {
+          ...r,
+          _validation: validateRow(r, contaLookup, fazendaLookup, isDup),
+          _resolved: resolveInfo(r, contaLookup, fazendaLookup),
+          _isDuplicate: isDup,
+        };
       });
     });
   };
