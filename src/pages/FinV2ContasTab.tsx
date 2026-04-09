@@ -326,9 +326,14 @@ export function FinV2ContasTab() {
                 <Label>Banco</Label>
                 <Select value={banco} onValueChange={(v) => { setBanco(v); if (v !== 'Outros') setBancoOutro(''); }}>
                   <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[220px]">
                     {bancos.map(b => (
-                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>{b.nome_curto}</SelectItem>
+                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground font-mono w-7">{b.codigo_banco}</span>
+                          <span>{b.nome_banco}</span>
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -337,7 +342,7 @@ export function FinV2ContasTab() {
                     className="mt-1.5"
                     value={bancoOutro}
                     onChange={e => setBancoOutro(e.target.value)}
-                    placeholder="Nome do banco"
+                    placeholder="Digite o nome do banco"
                   />
                 )}
               </div>
