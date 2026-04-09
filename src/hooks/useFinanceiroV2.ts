@@ -256,7 +256,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
-    if (filtros.grupo_custo) query = query.eq('grupo_custo', filtros.grupo_custo);
+    // grupo_custo is filtered client-side (not a column in lancamentos_v2)
     if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
     if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
 
