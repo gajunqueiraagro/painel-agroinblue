@@ -307,6 +307,14 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         docOriginal = parsed.documentoOriginal || rawDocumento;
       }
 
+      // Build raw Excel record for preview
+      const rawExcel: Record<string, string> = {};
+      for (let hi = 0; hi < headers.length; hi++) {
+        const hdr = headers[hi];
+        const val = r[hi];
+        rawExcel[hdr] = val != null && val !== '' ? String(val) : '';
+      }
+
       lancamentos.push({
         linha: linhaNum,
         anoMes: anoMes!,
@@ -329,6 +337,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         tipoDocumento: tipoDocFinal,
         numeroDocumento: notaFiscalFinal,
         documentoOriginal: docOriginal,
+        rawExcel,
       });
 
     } else if (tipoRegistro === 'SALDO') {
@@ -378,7 +387,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     }
   }
 
-  return { lancamentos, saldosBancarios, contas: [], resumoCaixa, erros, totalLinhas: dataRows.length };
+  return { lancamentos, saldosBancarios, contas: [], resumoCaixa, erros, totalLinhas: dataRows.length, excelHeaders: headers };
 }
 
 // ── Fazenda resolution ──
