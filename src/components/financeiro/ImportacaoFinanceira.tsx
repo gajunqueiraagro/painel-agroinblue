@@ -56,7 +56,7 @@ interface PreviewState {
   erroEstrutura?: ValidacaoEstrutura;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir, onBuscarDetalhesLote }: Props) {
   const { perfil } = usePermissions();
   const { clienteAtual } = useCliente();
   const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
@@ -65,6 +65,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [importando, setImportando] = useState(false);
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
+  const [confirmTexto, setConfirmTexto] = useState('');
+  const [detalhesLote, setDetalhesLote] = useState<{ total: number; periodos: string[]; fazendaIds: string[] } | null>(null);
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
   const [conferenciaOpen, setConferenciaOpen] = useState(false);
 
