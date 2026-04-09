@@ -24,7 +24,7 @@ import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 
 type Bloco = 'indicadores' | 'receita' | 'dre' | 'fluxo';
-type Cenario = 'realizado' | 'previsto';
+type Cenario = 'realizado' | 'meta';
 
 interface Props {
   lancamentos: FinanceiroLancamento[];
@@ -225,10 +225,10 @@ export function AnaliseEconomica({
             Realizado
           </button>
           <button
-            onClick={() => setCenario('previsto')}
-            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'previsto' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+            onClick={() => setCenario('meta')}
+            className={`flex-1 text-[11px] font-bold py-1 rounded transition-colors ${cenario === 'meta' ? 'bg-orange-500 text-white shadow-sm' : 'text-muted-foreground'}`}
           >
-            Previsto
+            Meta
           </button>
         </div>
 

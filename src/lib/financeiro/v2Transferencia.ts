@@ -1,9 +1,9 @@
 export const TIPO_OPERACAO_TRANSFERENCIA = '3-Transferência';
 
-type StatusTransacaoNormalizada = 'previsto' | 'agendado' | 'programado' | 'realizado';
+type StatusTransacaoNormalizada = 'meta' | 'agendado' | 'programado' | 'realizado';
 
 const STATUS_TRANSACAO_VALIDOS = new Set<StatusTransacaoNormalizada>([
-  'previsto',
+  'meta',
   'agendado',
   'programado',
   'realizado',
@@ -15,7 +15,8 @@ export function isTransferenciaTipo(tipoOperacao?: string | null): boolean {
 
 export function normalizeStatusTransacao(status?: string | null): StatusTransacaoNormalizada {
   const normalized = (status || '').trim().toLowerCase() as StatusTransacaoNormalizada;
-  return STATUS_TRANSACAO_VALIDOS.has(normalized) ? normalized : 'previsto';
+  if (normalized === 'previsto') return 'meta'; // backward compat
+  return STATUS_TRANSACAO_VALIDOS.has(normalized) ? normalized : 'meta';
 }
 
 export function validateTransferenciaAccounts(contaOrigemId?: string | null, contaDestinoId?: string | null) {

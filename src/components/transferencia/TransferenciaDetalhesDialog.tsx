@@ -79,7 +79,7 @@ export function TransferenciaDetalhesDialog({
       fazendaOrigem,
       fazendaDestino,
       data,
-      statusOperacional: statusOp,
+      statusOperacional: statusOp === 'meta' ? 'programado' : statusOp,
       observacao,
       precoReferenciaArroba: precoReferenciaArroba || undefined,
       precoReferenciaCabeca: precoReferenciaCabeca || undefined,

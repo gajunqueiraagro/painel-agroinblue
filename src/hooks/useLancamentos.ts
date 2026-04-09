@@ -385,7 +385,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.statusOperacional !== undefined) {
       update.status_operacional = dados.statusOperacional;
       if (dados.cenario === undefined) {
-        update.cenario = dados.statusOperacional === null || dados.statusOperacional === 'previsto'
+        update.cenario = dados.statusOperacional === null
           ? 'meta'
           : 'realizado';
       }
@@ -402,7 +402,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         ...l,
         ...dados,
         cenario: dados.cenario ?? (dados.statusOperacional !== undefined
-          ? (dados.statusOperacional === null || dados.statusOperacional === 'previsto' ? 'meta' : 'realizado')
+          ? (dados.statusOperacional === null ? 'meta' : 'realizado')
           : l.cenario),
       } : l));
     }
