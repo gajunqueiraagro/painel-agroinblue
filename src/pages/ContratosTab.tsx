@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Pause, Play, XCircle } from 'lucide-react';
+import { Plus, Pencil, Pause, Play, XCircle, ShieldAlert } from 'lucide-react';
 import { useContratos, Contrato, ContratoForm } from '@/hooks/useContratos';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -36,7 +36,12 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 export function ContratosTab() {
   const { contratos, loading, criarContrato, editarContrato, alterarStatus } = useContratos();
   const { contasBancarias: contas, classificacoes, fornecedores, loadContas, loadFornecedores, loadClassificacoes } = useFinanceiroV2();
-  const { fazendas, fazendaAtual } = useFazenda();
+  const { fazendas, fazendaAtual, isGlobal } = useFazenda();
+
+  const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
+  const fazOperacionais = useMemo(() => fazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false), [fazendas]);
+  const clienteTemUmaFazenda = fazOperacionais.length <= 1;
+  const acessoPermitido = isGlobal || isAdministrativo || clienteTemUmaFazenda;
 
   // Load auxiliary data on mount
   useEffect(() => {
@@ -66,6 +71,26 @@ export function ContratosTab() {
   };
 
   const defaultFazendaId = fazendaAtual?.id !== '__global__' ? fazendaAtual?.id : undefined;
+
+  if (!acessoPermitido) {
+    return (
+      <div className="w-full px-4 animate-fade-in pb-24">
+        <div className="p-4">
+          <Card className="border-2 border-amber-300 dark:border-amber-700">
+            <CardContent className="p-8 text-center space-y-3">
+              <ShieldAlert className="h-10 w-10 mx-auto text-amber-500" />
+              <h3 className="text-sm font-bold text-foreground">Acesso restrito ao contexto consolidado</h3>
+              <div className="text-xs text-muted-foreground space-y-2 max-w-md mx-auto">
+                <p>Contratos e recorrências só podem ser gerenciados em <strong className="text-foreground">Global</strong> ou <strong className="text-foreground">Administrativo</strong>.</p>
+                <p>Esse módulo afeta o financeiro consolidado e não deve ser editado dentro de uma fazenda operacional específica.</p>
+                <p className="font-semibold text-foreground">Selecione Global ou Administrativo no topo para continuar.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full px-4 animate-fade-in pb-24">
