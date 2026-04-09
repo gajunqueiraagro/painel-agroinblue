@@ -215,41 +215,87 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const isSaida = tipoOperacao === '2-Saídas';
   const isTransf = tipoOperacao === '3-Transferência';
 
-  // Classification helpers
+  // === Cascading classification filters: Tipo → Macro → Grupo → Centro → Subcentro ===
+  const filteredByTipo = useMemo(() => {
+    if (tipoOperacao === '__all__') return hook.classificacoes;
+    return hook.classificacoes.filter(c => c.tipo_operacao === tipoOperacao);
+  }, [hook.classificacoes, tipoOperacao]);
+
   const macrosUnicos = useMemo(() => {
-    const set = new Set(hook.classificacoes.map(c => c.macro_custo).filter(Boolean));
+    const set = new Set(filteredByTipo.map(c => c.macro_custo).filter(Boolean));
     return sortMacros(Array.from(set));
-  }, [hook.classificacoes]);
+  }, [filteredByTipo]);
+
+  const filteredByMacro = useMemo(() => {
+    if (macroFiltro === '__all__') return filteredByTipo;
+    return filteredByTipo.filter(c => c.macro_custo === macroFiltro);
+  }, [filteredByTipo, macroFiltro]);
+
+  const gruposUnicos = useMemo(() => {
+    const set = new Set(filteredByMacro.map(c => c.grupo_custo).filter(Boolean));
+    return Array.from(set).sort();
+  }, [filteredByMacro]);
+
+  const filteredByGrupo = useMemo(() => {
+    if (grupoFiltro === '__all__') return filteredByMacro;
+    return filteredByMacro.filter(c => c.grupo_custo === grupoFiltro);
+  }, [filteredByMacro, grupoFiltro]);
 
   const centrosUnicos = useMemo(() => {
-    let items = hook.classificacoes;
-    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
-    const set = new Set(items.map(c => c.centro_custo).filter(Boolean));
+    const set = new Set(filteredByGrupo.map(c => c.centro_custo).filter(Boolean));
     return Array.from(set).sort();
-  }, [hook.classificacoes, macroFiltro]);
+  }, [filteredByGrupo]);
+
+  const filteredByCentro = useMemo(() => {
+    if (centroFiltro === '__all__') return filteredByGrupo;
+    return filteredByGrupo.filter(c => c.centro_custo === centroFiltro);
+  }, [filteredByGrupo, centroFiltro]);
 
   const subcentrosUnicos = useMemo(() => {
-    let items = hook.classificacoes;
-    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
-    if (centroFiltro !== '__all__') items = items.filter(c => c.centro_custo === centroFiltro);
-    const set = new Set(items.map(c => c.subcentro).filter(Boolean));
+    const set = new Set(filteredByCentro.map(c => c.subcentro).filter(Boolean));
     return Array.from(set).sort();
-  }, [hook.classificacoes, macroFiltro, centroFiltro]);
+  }, [filteredByCentro]);
 
-  // Subcentro selection: auto-fill macro + centro
+  // Auto-clear invalid downstream filters when upstream changes
+  useEffect(() => {
+    if (macroFiltro !== '__all__' && !macrosUnicos.includes(macroFiltro)) {
+      setMacroFiltro('__all__'); setMacroLocked(false);
+    }
+  }, [macrosUnicos, macroFiltro]);
+
+  useEffect(() => {
+    if (grupoFiltro !== '__all__' && !gruposUnicos.includes(grupoFiltro)) {
+      setGrupoFiltro('__all__');
+    }
+  }, [gruposUnicos, grupoFiltro]);
+
+  useEffect(() => {
+    if (centroFiltro !== '__all__' && !centrosUnicos.includes(centroFiltro)) {
+      setCentroFiltro('__all__');
+    }
+  }, [centrosUnicos, centroFiltro]);
+
+  useEffect(() => {
+    if (subcentroFiltro !== '__all__' && !subcentrosUnicos.includes(subcentroFiltro)) {
+      setSubcentroFiltro('__all__');
+    }
+  }, [subcentrosUnicos, subcentroFiltro]);
+
+  // Subcentro selection: auto-fill macro + grupo + centro
   const handleSubcentroChange = (val: string) => {
     setSubcentroFiltro(val);
     if (val !== '__all__') {
       const match = hook.classificacoes.find(c => c.subcentro === val);
       if (match) {
         setMacroFiltro(match.macro_custo || '__all__');
+        setGrupoFiltro(match.grupo_custo || '__all__');
         setCentroFiltro(match.centro_custo || '__all__');
         setMacroLocked(true);
       }
     } else {
-      // Clear: unlock macro/centro
       if (macroLocked) {
         setMacroFiltro('__all__');
+        setGrupoFiltro('__all__');
         setCentroFiltro('__all__');
         setMacroLocked(false);
       }
