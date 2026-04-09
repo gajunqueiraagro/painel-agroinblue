@@ -274,6 +274,11 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       if (hasError) continue;
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
+
+      // Parse documento from Documento or Nota_Fiscal columns
+      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal'));
+      const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
+
       lancamentos.push({
         linha: linhaNum,
         anoMes: anoMes!,
@@ -293,6 +298,8 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
+        tipoDocumento: docParsed?.tipo || null,
+        notaFiscal: docParsed?.numero || null,
       });
 
     } else if (tipoRegistro === 'SALDO') {
