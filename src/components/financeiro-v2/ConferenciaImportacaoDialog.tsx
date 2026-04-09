@@ -183,6 +183,15 @@ function validateRow(
   if (row.valor === null || row.valor === undefined || isNaN(row.valor)) {
     errors.push('Valor obrigatório');
     diagnostics.push({ campo: 'Valor', valorRecebido: String(row.valor ?? '(vazio)'), motivo: 'Campo obrigatório: valor numérico esperado', tipo: 'error', categoria: 'outros' });
+  } else if (row.valor < 0) {
+    warnings.push('Valor negativo detectado');
+    diagnostics.push({
+      campo: 'Valor',
+      valorRecebido: String(row.valor),
+      motivo: 'Valor negativo será convertido para positivo. O sistema aplica o sinal conforme o tipo de operação (Entrada/Saída). Use "Ações em massa" para corrigir todos.',
+      tipo: 'warning',
+      categoria: 'outros',
+    });
   }
 
   // Tipo
