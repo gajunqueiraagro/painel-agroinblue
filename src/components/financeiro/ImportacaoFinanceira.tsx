@@ -473,6 +473,37 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Conferência de Importação */}
+      {preview && conferenciaOpen && (
+        <ConferenciaImportacaoDialog
+          open={conferenciaOpen}
+          onClose={() => setConferenciaOpen(false)}
+          nomeArquivo={preview.nomeArquivo}
+          linhas={preview.lancamentos}
+          contas={contasBancarias}
+          fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
+          onConfirmar={async (linhasCorrigidas) => {
+            setImportando(true);
+            const ok = await onConfirmar(
+              preview.nomeArquivo,
+              linhasCorrigidas,
+              preview.totalLinhas,
+              0,
+              preview.saldosBancarios,
+              [],
+              preview.resumoCaixa.filter(r => r.fazendaId),
+              tipoImportacao,
+            );
+            if (ok) {
+              setPreview(null);
+              setConferenciaOpen(false);
+            }
+            setImportando(false);
+            return ok;
+          }}
+        />
+      )}
     </div>
   );
 }
