@@ -515,6 +515,13 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     setBulkOpen(false);
   };
 
+  const bulkFixNegativeValues = () => {
+    setRows(prev => revalidateRows(prev.map(r => r.valor < 0 ? { ...r, valor: Math.abs(r.valor) } : r)));
+    setBulkOpen(false);
+  };
+
+  const negativeCount = useMemo(() => rows.filter(r => r.valor < 0).length, [rows]);
+
   // Export errors as CSV
   const exportErrors = () => {
     const errorRows = rows.filter(r => r._validation.diagnostics.length > 0);
