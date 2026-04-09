@@ -318,6 +318,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   useEffect(() => {
     setCurrentPage(0);
+    setSelectedIds(new Set());
   }, [filtros, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   const handlePageChange = (p: number) => setCurrentPage(p);
