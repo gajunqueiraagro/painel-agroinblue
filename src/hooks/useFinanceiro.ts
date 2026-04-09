@@ -946,23 +946,52 @@ export function useFinanceiro() {
     }
   }, [user, loadData, fazendas]);
 
-  // --- Cancelar importação (soft delete V2) ---
+  // --- Buscar detalhes do lote para confirmação ---
+  const buscarDetalhesLote = useCallback(async (importacaoId: string) => {
+    const { data, error } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id, ano_mes, fazenda_id, cancelado')
+      .eq('lote_importacao_id', importacaoId);
+    if (error || !data) return null;
+
+    const ativos = data.filter(r => !r.cancelado);
+    const periodos = [...new Set(ativos.map(r => r.ano_mes))].sort();
+    const fazendaIds = [...new Set(ativos.map(r => r.fazenda_id))];
+    return { total: ativos.length, periodos, fazendaIds };
+  }, []);
+
+  // --- Cancelar importação completa (force, por lote) ---
   const excluirImportacao = useCallback(async (importacaoId: string) => {
     try {
-      const { data, error } = await supabase.rpc('cancel_financeiro_importacao_v2', {
-        _importacao_id: importacaoId,
-      });
-      if (error) throw error;
+      // 1. Cancel all lancamentos of this lote
+      const { error: lancErr } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .update({
+          cancelado: true,
+          cancelado_em: new Date().toISOString(),
+        } as any)
+        .eq('lote_importacao_id', importacaoId)
+        .eq('cancelado', false);
+      if (lancErr) throw lancErr;
 
-      const cancelados = Number((data as { cancelled_rows?: number } | null)?.cancelled_rows || 0);
-      toast.success(`Importação cancelada com ${cancelados} lançamento(s) inativado(s).`);
+      // 2. Mark importacao as cancelled
+      const { error: impErr } = await supabase
+        .from('financeiro_importacoes_v2')
+        .update({
+          status: 'cancelada',
+          cancelada_em: new Date().toISOString(),
+        } as any)
+        .eq('id', importacaoId);
+      if (impErr) throw impErr;
+
+      toast.success('Importação removida com sucesso');
       await loadData();
       return true;
     } catch (err: any) {
-      toast.error('Erro ao cancelar: ' + (err.message || err));
+      toast.error('Erro ao excluir importação: ' + (err.message || err));
       return false;
     }
-  }, [loadData, user]);
+  }, [loadData]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {
@@ -1020,7 +1049,7 @@ export function useFinanceiro() {
   return {
     importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho,
-    fazendaMapForImport, loading, confirmarImportacao, excluirImportacao,
+    fazendaMapForImport, loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote,
     reloadData: loadData, isGlobal, fazendaADM,
     totalLancamentosADM: lancamentosADM.length,
   };
