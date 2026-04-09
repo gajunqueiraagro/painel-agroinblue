@@ -196,7 +196,7 @@ export function FinV2ContasTab() {
       fazenda_id: fazendaId,
       nome_conta: displayName, // keep nome_conta synced for backward compat
       nome_exibicao: displayName,
-      banco: banco.trim() || null,
+      banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
       tipo_conta: tipoConta,
       codigo_conta: codigoConta.trim() || null,
       agencia: agencia.trim() || null,
