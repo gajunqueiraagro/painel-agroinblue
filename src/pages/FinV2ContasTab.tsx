@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Pencil, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+
 
 interface BancoRef {
   codigo_banco: string;
