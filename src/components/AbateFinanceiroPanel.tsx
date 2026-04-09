@@ -200,7 +200,10 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       // Determinar subcentro correto baseado na categoria (fêmeas vs machos)
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
-      const subcentroAbate = isFemea ? 'PEC/RECEITA/ABATES/FEMEAS' : 'PEC/RECEITA/ABATES/MACHOS';
+      // Candidatos em ordem de prioridade: novo plano → legado
+      const subcentroCandidatos = isFemea
+        ? ['Abates de Fêmeas', 'PEC/RECEITA/ABATES/FEMEAS']
+        : ['Abates de Machos', 'PEC/RECEITA/ABATES/MACHOS'];
 
       // Validar classificação no plano de contas real
       const { data: planoReceita } = await supabase
@@ -209,16 +212,19 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         .eq('cliente_id', clienteAtual.id)
         .eq('ativo', true)
         .eq('tipo_operacao', '1-Entradas')
-        .eq('subcentro', subcentroAbate)
-        .limit(1);
+        .in('subcentro', subcentroCandidatos)
+        .limit(2);
 
       if (!planoReceita || planoReceita.length === 0) {
-        toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroAbate}" no plano de classificação.`);
+        toast.error(`Não foi encontrado mapeamento financeiro válido para abates (${isFemea ? 'fêmeas' : 'machos'}) no plano de classificação.`);
         setGerando(false);
         return false;
       }
 
-      const clasReceita = planoReceita[0];
+      // Priorizar pelo ordem dos candidatos
+      const clasReceita = subcentroCandidatos.reduce<(typeof planoReceita)[0] | null>(
+        (found, sub) => found || planoReceita.find(p => p.subcentro === sub) || null, null
+      ) || planoReceita[0];
 
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
@@ -265,23 +271,28 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
 
       // Generate deduction records when there are discounts
       if (totalDescontos > 0) {
-        const subcentroDeducao = 'PEC/NOTAS COM ABATES E VENDAS EM PÉ';
+        const subcentroDeducaoCandidatos = [
+          'Impostos e Despesas de Abates e Vendas',
+          'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
+        ];
         const { data: planoDeducao } = await supabase
           .from('financeiro_plano_contas')
           .select('id, macro_custo, centro_custo, subcentro')
           .eq('cliente_id', clienteAtual.id)
           .eq('ativo', true)
           .eq('tipo_operacao', '2-Saídas')
-          .eq('subcentro', subcentroDeducao)
-          .limit(1);
+          .in('subcentro', subcentroDeducaoCandidatos)
+          .limit(2);
 
         if (!planoDeducao || planoDeducao.length === 0) {
-          toast.error(`Não foi encontrado mapeamento financeiro válido para "${subcentroDeducao}" no plano de classificação.`);
+          toast.error('Não foi encontrado mapeamento financeiro válido para deduções de abates no plano de classificação.');
           setGerando(false);
           return false;
         }
 
-        const clasDed = planoDeducao[0];
+        const clasDed = subcentroDeducaoCandidatos.reduce<(typeof planoDeducao)[0] | null>(
+          (found, sub) => found || planoDeducao.find(p => p.subcentro === sub) || null, null
+        ) || planoDeducao[0];
         const frigorificoLabel = frigorifico ? ` | ${frigorifico}` : '';
         inserts.push({
           cliente_id: clienteAtual.id,
