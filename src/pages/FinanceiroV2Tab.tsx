@@ -837,14 +837,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.{sortIcon('data')}</th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[62px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto{sortIcon('pgto')}</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto{sortIcon('produto')}</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor{sortIcon('fornecedor')}</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Centro</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor{sortIcon('valor')}</th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[62px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto<SortIndicator field="pgto" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">NF</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Status</th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground"></th>
                 </tr>
               </thead>
