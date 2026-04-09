@@ -338,26 +338,34 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  // Compute dedup flags per row
-  const dupFlags = useMemo(() => {
-    if (!existingHashes || !clienteId) return new Map<number, boolean>();
-    const flags = new Map<number, boolean>();
-    const seenInBatch = new Set<string>();
-    for (const l of linhas) {
-      const contaKey = normalizeImportText(l.contaOrigem);
-      const contaR = contaKey ? contaLookup.get(contaKey) : null;
-      const hash = buildHashImportacao(
-        clienteId, l.fazendaId || '',
-        l.dataPagamento || l.anoMes + '-01', l.valor,
-        l.tipoOperacao, contaR?.id || null,
-        l.produto, l.obs,
+  // Real-time dedup check for a single row against DB hashes + batch siblings
+  const checkDuplicate = useCallback((row: LinhaImportada, allRows: LinhaImportada[], existingH: Set<string>): boolean => {
+    if (!clienteId || !existingH) return false;
+    const contaKey = normalizeImportText(row.contaOrigem);
+    const contaR = contaKey ? contaLookup.get(contaKey) : null;
+    const hash = buildHashImportacao(
+      clienteId, row.fazendaId || '',
+      row.dataPagamento || (row.anoMes ? row.anoMes + '-01' : ''), row.valor,
+      row.tipoOperacao, contaR?.id || null,
+      row.produto, row.obs,
+    );
+    // Check against existing DB records
+    if (existingH.has(hash)) return true;
+    // Check against earlier rows in the same batch (by linha order)
+    for (const sibling of allRows) {
+      if (sibling.linha >= row.linha) break;
+      const sContaKey = normalizeImportText(sibling.contaOrigem);
+      const sContaR = sContaKey ? contaLookup.get(sContaKey) : null;
+      const sHash = buildHashImportacao(
+        clienteId, sibling.fazendaId || '',
+        sibling.dataPagamento || (sibling.anoMes ? sibling.anoMes + '-01' : ''), sibling.valor,
+        sibling.tipoOperacao, sContaR?.id || null,
+        sibling.produto, sibling.obs,
       );
-      const isDup = existingHashes.has(hash) || seenInBatch.has(hash);
-      flags.set(l.linha, isDup);
-      seenInBatch.add(hash);
+      if (sHash === hash) return true;
     }
-    return flags;
-  }, [existingHashes, clienteId, linhas, contaLookup]);
+    return false;
+  }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [importing, setImporting] = useState(false);
