@@ -408,12 +408,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
         </Select>
       </TableCell>
       <TableCell className="py-0.5">
-        <Select value={row.contaDestino || ''} onValueChange={v => onUpdate(row.linha, 'contaDestino', v || null)}>
+        <Select value={row.contaDestino || '__none__'} onValueChange={v => onUpdate(row.linha, 'contaDestino', v === '__none__' ? null : v)}>
           <SelectTrigger className="h-6 text-[10px] px-1 border-0 bg-transparent shadow-none">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">— Nenhuma —</SelectItem>
+            <SelectItem value="__none__" className="text-xs">— Nenhuma —</SelectItem>
             {contaOptions.map(c => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
           </SelectContent>
         </Select>
