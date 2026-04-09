@@ -29,6 +29,8 @@ export interface LinhaImportada {
   tipoDocumento: string | null;
   numeroDocumento: string | null;
   documentoOriginal: string | null;
+  /** Raw Excel cell values keyed by header name — for full preview */
+  rawExcel?: Record<string, string>;
 }
 
 export interface SaldoBancarioImportado {
