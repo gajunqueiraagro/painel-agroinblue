@@ -931,9 +931,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const canEditRow = !isHistoricoReadOnly && !rowMesFechado;
 
                     return (
-                      <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
-                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
-                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[62px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                      <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
+                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
+                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} className="h-3 w-3" />
+                        </td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[90px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
