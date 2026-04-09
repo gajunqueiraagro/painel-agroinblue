@@ -219,6 +219,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const [editingReclassId, setEditingReclassId] = useState<string | null>(null);
+  /** Lancamento original antes da edição — para detectar alterações estruturais */
+  const editOriginalRef = useRef<Lancamento | null>(null);
+  const [p1BloqueioMsg, setP1BloqueioMsg] = useState<string | null>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
