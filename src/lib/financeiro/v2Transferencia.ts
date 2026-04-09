@@ -17,6 +17,7 @@ export function normalizeStatusTransacao(status?: string | null): StatusTransaca
   const raw = (status || '').trim().toLowerCase();
   if (raw === 'previsto') return 'meta'; // backward compat
   if (raw === 'conciliado') return 'realizado'; // backward compat
+  if (raw === 'confirmado') return 'programado'; // backward compat
   const normalized = raw as StatusTransacaoNormalizada;
   return STATUS_TRANSACAO_VALIDOS.has(normalized) ? normalized : 'meta';
 }
