@@ -467,22 +467,49 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
         </Card>
       )}
 
-      {/* Confirm cancel dialog */}
-      <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => !open && setConfirmExcluir(null)}>
+      {/* Confirm cancel dialog — strong confirmation */}
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => { if (!open) { setConfirmExcluir(null); setConfirmTexto(''); setDetalhesLote(null); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar importação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a inativar todos os <span className="font-bold">{confirmExcluir?.total_validas} lançamentos</span> do arquivo <span className="font-bold">{confirmExcluir?.nome_arquivo}</span>.
-              <br /><br />Os dados não serão apagados, mas deixarão de aparecer nas análises.
-              <br /><br />Lançamentos conciliados ou editados manualmente bloqueiam o cancelamento.
+            <AlertDialogTitle className="text-destructive">🔴 Excluir importação (lote)</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  Você está prestes a cancelar <strong>todos</strong> os lançamentos do arquivo <strong>{confirmExcluir?.nome_arquivo}</strong>.
+                </p>
+                {detalhesLote && (
+                  <div className="rounded-md border p-3 space-y-1 bg-muted/30">
+                    <p><strong>{detalhesLote.total}</strong> lançamentos ativos serão cancelados</p>
+                    <p>Período: <strong>{detalhesLote.periodos.join(', ')}</strong></p>
+                    <p>Fazendas afetadas: <strong>{detalhesLote.fazendaIds.length}</strong></p>
+                  </div>
+                )}
+                <p className="text-destructive font-medium">
+                  Esta ação não pode ser desfeita. Os lançamentos deixarão de aparecer nas análises.
+                </p>
+                <div>
+                  <p className="mb-1">Digite <strong>CONFIRMAR</strong> para prosseguir:</p>
+                  <input
+                    type="text"
+                    className="w-full border rounded-md px-3 py-2 text-sm"
+                    placeholder="CONFIRMAR"
+                    value={confirmTexto}
+                    onChange={(e) => setConfirmTexto(e.target.value)}
+                  />
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Cancelar Importação
-            </AlertDialogAction>
+            <Button
+              variant="destructive"
+              disabled={confirmTexto !== 'CONFIRMAR' || excluindo === confirmExcluir?.id}
+              onClick={handleExcluir}
+            >
+              {excluindo === confirmExcluir?.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir esta importação
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
