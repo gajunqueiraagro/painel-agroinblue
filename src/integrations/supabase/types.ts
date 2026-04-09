@@ -161,6 +161,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bancos_referencia: {
+        Row: {
+          ativo: boolean
+          codigo_banco: string
+          created_at: string
+          id: string
+          nome_banco: string
+          nome_curto: string
+          ordem_exibicao: number
+        }
+        Insert: {
+          ativo?: boolean
+          codigo_banco: string
+          created_at?: string
+          id?: string
+          nome_banco: string
+          nome_curto: string
+          ordem_exibicao?: number
+        }
+        Update: {
+          ativo?: boolean
+          codigo_banco?: string
+          created_at?: string
+          id?: string
+          nome_banco?: string
+          nome_curto?: string
+          ordem_exibicao?: number
+        }
+        Relationships: []
+      }
       boitel_adiantamentos: {
         Row: {
           boitel_lote_id: string

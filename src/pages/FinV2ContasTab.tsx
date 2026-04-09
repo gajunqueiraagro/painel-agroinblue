@@ -14,6 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Pencil, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+
+interface BancoRef {
+  codigo_banco: string;
+  nome_banco: string;
+  nome_curto: string;
+}
 
 interface ContaBancaria {
   id: string;
@@ -61,6 +68,7 @@ export function FinV2ContasTab() {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const [contas, setContas] = useState<ContaBancaria[]>([]);
+  const [bancos, setBancos] = useState<BancoRef[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContaBancaria | null>(null);
@@ -70,6 +78,7 @@ export function FinV2ContasTab() {
   const [nomeExibicao, setNomeExibicao] = useState('');
   const [tipoConta, setTipoConta] = useState('cc');
   const [banco, setBanco] = useState('');
+  const [bancoOutro, setBancoOutro] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
 
@@ -78,6 +87,15 @@ export function FinV2ContasTab() {
   const [agencia, setAgencia] = useState('');
   const [numeroConta, setNumeroConta] = useState('');
   const [contaDigito, setContaDigito] = useState('');
+
+  const loadBancos = useCallback(async () => {
+    const { data } = await supabase
+      .from('bancos_referencia')
+      .select('codigo_banco, nome_banco, nome_curto')
+      .eq('ativo', true)
+      .order('ordem_exibicao');
+    setBancos((data as BancoRef[]) || []);
+  }, []);
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -91,7 +109,18 @@ export function FinV2ContasTab() {
     setLoading(false);
   }, [clienteAtual?.id]);
 
+  useEffect(() => { loadBancos(); }, [loadBancos]);
   useEffect(() => { load(); }, [load]);
+
+  const bancoOptions = useMemo(() =>
+    bancos.map(b => ({ value: b.nome_curto, label: b.nome_curto })),
+  [bancos]);
+
+  /** Resolve display name for banco field (handles legacy free-text values) */
+  const resolveBancoDisplay = (val: string | null) => {
+    if (!val) return '-';
+    return val;
+  };
 
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
@@ -119,6 +148,7 @@ export function FinV2ContasTab() {
     setNomeExibicao('');
     setTipoConta('cc');
     setBanco('');
+    setBancoOutro('');
     setFazendaId(fazendas[0]?.id || '');
     setAtiva(true);
     setCodigoConta('');
@@ -133,7 +163,18 @@ export function FinV2ContasTab() {
     setEditing(c);
     setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
     setTipoConta(c.tipo_conta || 'cc');
-    setBanco(c.banco || '');
+    // Resolve banco: if it matches a known banco, use it; otherwise treat as "Outros"
+    const knownBanco = bancos.find(b => b.nome_curto === c.banco);
+    if (knownBanco) {
+      setBanco(c.banco || '');
+      setBancoOutro('');
+    } else if (c.banco) {
+      setBanco('Outros');
+      setBancoOutro(c.banco);
+    } else {
+      setBanco('');
+      setBancoOutro('');
+    }
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
     setCodigoConta(c.codigo_conta || '');
@@ -155,7 +196,7 @@ export function FinV2ContasTab() {
       fazenda_id: fazendaId,
       nome_conta: displayName, // keep nome_conta synced for backward compat
       nome_exibicao: displayName,
-      banco: banco.trim() || null,
+      banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
       tipo_conta: tipoConta,
       codigo_conta: codigoConta.trim() || null,
       agencia: agencia.trim() || null,
@@ -285,7 +326,22 @@ export function FinV2ContasTab() {
               </div>
               <div>
                 <Label>Banco</Label>
-                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Itaú" />
+                <Select value={banco} onValueChange={(v) => { setBanco(v); if (v !== 'Outros') setBancoOutro(''); }}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                  <SelectContent>
+                    {bancos.map(b => (
+                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>{b.nome_curto}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {banco === 'Outros' && (
+                  <Input
+                    className="mt-1.5"
+                    value={bancoOutro}
+                    onChange={e => setBancoOutro(e.target.value)}
+                    placeholder="Nome do banco"
+                  />
+                )}
               </div>
             </div>
             <div>
