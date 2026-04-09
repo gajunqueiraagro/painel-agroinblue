@@ -219,12 +219,12 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
   const sheetName = 'EXPORT_APP_UNICO';
   const ws = wb.Sheets[sheetName];
   if (!ws) {
-    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [{ linha: 0, campo: 'Aba', mensagem: 'EXPORT_APP_UNICO não encontrada' }], totalLinhas: 0 };
+    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [{ linha: 0, campo: 'Aba', mensagem: 'EXPORT_APP_UNICO não encontrada' }], totalLinhas: 0, excelHeaders: [] };
   }
 
   const allRows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
   if (allRows.length < 2) {
-    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [], totalLinhas: 0 };
+    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [], totalLinhas: 0, excelHeaders: [] };
   }
 
   const headers = (allRows[0] || []).map(c => String(c ?? '').trim());
