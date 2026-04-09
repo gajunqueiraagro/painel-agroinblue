@@ -56,6 +56,7 @@ export interface LancamentoV2Form {
   escopo_negocio?: string;
   observacao?: string;
   nota_fiscal?: string | null;
+  tipo_documento?: string | null;
   favorecido_id?: string | null;
   forma_pagamento?: string | null;
   dados_pagamento?: string | null;
@@ -356,6 +357,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
       nota_fiscal: form.nota_fiscal || null,
+      tipo_documento: form.tipo_documento || null,
       favorecido_id: form.favorecido_id || null,
       forma_pagamento: form.forma_pagamento || null,
       dados_pagamento: form.dados_pagamento || null,
@@ -405,6 +407,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
       nota_fiscal: form.nota_fiscal || null,
+      tipo_documento: form.tipo_documento || null,
       favorecido_id: form.favorecido_id || null,
       forma_pagamento: form.forma_pagamento || null,
       dados_pagamento: form.dados_pagamento || null,
@@ -486,6 +489,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       escopo_negocio: lanc.escopo_negocio,
       observacao: lanc.observacao,
       nota_fiscal: lanc.nota_fiscal,
+      tipo_documento: (lanc as any).tipo_documento,
       favorecido_id: lanc.favorecido_id,
       forma_pagamento: lanc.forma_pagamento,
       dados_pagamento: lanc.dados_pagamento,
