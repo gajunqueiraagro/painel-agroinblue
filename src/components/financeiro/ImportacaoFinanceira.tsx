@@ -9,7 +9,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
-  parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
+  parseExcel, parseCsv, resolverFazendas, resolverFazendasExtras, validarCentrosCusto,
+  validarEstruturaExcel, validarEstruturaCsv,
   type LinhaImportada, type SaldoBancarioImportado,
   type ResumoCaixaImportado, type ErroImportacao, type CentroCustoOficial, type FazendaMap,
   type ValidacaoEstrutura,
