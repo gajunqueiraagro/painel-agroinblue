@@ -60,7 +60,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // Campos zootécnicos estruturais (afetam conciliação, saldo, GMD, fluxo)
   const CAMPOS_ESTRUTURAIS: (keyof Lancamento)[] = [
     'data', 'tipo', 'quantidade', 'categoria', 'categoriaDestino',
-    'fazendaOrigem', 'fazendaDestino', 'lote',
+    'fazendaOrigem', 'fazendaDestino',
   ];
 
   /** Verifica se houve alteração em campos zootécnicos estruturais */
