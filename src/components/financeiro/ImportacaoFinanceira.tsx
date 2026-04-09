@@ -5,6 +5,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
+import { ConferenciaImportacaoDialog } from '@/components/financeiro-v2/ConferenciaImportacaoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
