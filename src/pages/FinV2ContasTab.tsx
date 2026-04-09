@@ -11,10 +11,11 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, ChevronDown, MoreHorizontal, Power, PowerOff, Trash2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-
 
 interface BancoRef {
   codigo_banco: string;
@@ -69,10 +70,17 @@ export function FinV2ContasTab() {
   const { fazendas } = useFazenda();
   const [contas, setContas] = useState<ContaBancaria[]>([]);
   const [bancos, setBancos] = useState<BancoRef[]>([]);
+  const [contasComLancamento, setContasComLancamento] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContaBancaria | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [mostrarInativas, setMostrarInativas] = useState(false);
+
+  // Confirm dialogs
+  const [confirmDesativar, setConfirmDesativar] = useState<ContaBancaria | null>(null);
+  const [confirmAtivar, setConfirmAtivar] = useState<ContaBancaria | null>(null);
+  const [confirmExcluir, setConfirmExcluir] = useState<ContaBancaria | null>(null);
 
   // Form fields — principal
   const [nomeExibicao, setNomeExibicao] = useState('');
@@ -100,12 +108,29 @@ export function FinV2ContasTab() {
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('financeiro_contas_bancarias')
-      .select('*')
-      .eq('cliente_id', clienteAtual.id)
-      .order('ordem_exibicao');
-    setContas((data as ContaBancaria[]) || []);
+
+    const [contasRes, lancamentosRes] = await Promise.all([
+      supabase
+        .from('financeiro_contas_bancarias')
+        .select('*')
+        .eq('cliente_id', clienteAtual.id)
+        .order('ordem_exibicao'),
+      supabase
+        .from('financeiro_lancamentos_v2')
+        .select('conta_bancaria_id')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('cancelado', false)
+        .not('conta_bancaria_id', 'is', null),
+    ]);
+
+    setContas((contasRes.data as ContaBancaria[]) || []);
+
+    // Build set of conta IDs that have lancamentos
+    const ids = new Set<string>();
+    (lancamentosRes.data || []).forEach((r: any) => {
+      if (r.conta_bancaria_id) ids.add(r.conta_bancaria_id);
+    });
+    setContasComLancamento(ids);
     setLoading(false);
   }, [clienteAtual?.id]);
 
@@ -120,13 +145,18 @@ export function FinV2ContasTab() {
     })),
   [bancos]);
 
+  const contasFiltradas = useMemo(() => {
+    if (mostrarInativas) return contas;
+    return contas.filter(c => c.ativa);
+  }, [contas, mostrarInativas]);
+
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
       { tipo: 'cc', label: TIPO_LABEL.cc, items: [] },
       { tipo: 'inv', label: TIPO_LABEL.inv, items: [] },
       { tipo: 'cartao', label: TIPO_LABEL.cartao, items: [] },
     ];
-    const sorted = [...contas].sort((a, b) => {
+    const sorted = [...contasFiltradas].sort((a, b) => {
       const ga = TIPO_ORDER[a.tipo_conta || 'cc'] ?? 99;
       const gb = TIPO_ORDER[b.tipo_conta || 'cc'] ?? 99;
       if (ga !== gb) return ga - gb;
@@ -139,7 +169,9 @@ export function FinV2ContasTab() {
       else groups[0].items.push(c);
     });
     return groups.filter(g => g.items.length > 0);
-  }, [contas]);
+  }, [contasFiltradas]);
+
+  const totalInativas = useMemo(() => contas.filter(c => !c.ativa).length, [contas]);
 
   const openNew = () => {
     setEditing(null);
@@ -161,7 +193,6 @@ export function FinV2ContasTab() {
     setEditing(c);
     setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
     setTipoConta(c.tipo_conta || 'cc');
-    // Resolve banco: if it matches a known banco, use it; otherwise treat as "Outros"
     const knownBanco = bancos.find(b => b.nome_curto === c.banco);
     if (knownBanco) {
       setBanco(c.banco || '');
@@ -192,7 +223,7 @@ export function FinV2ContasTab() {
     const payload = {
       cliente_id: clienteAtual.id,
       fazenda_id: fazendaId,
-      nome_conta: displayName, // keep nome_conta synced for backward compat
+      nome_conta: displayName,
       nome_exibicao: displayName,
       banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
       tipo_conta: tipoConta,
@@ -216,8 +247,54 @@ export function FinV2ContasTab() {
     load();
   };
 
-  const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
+  const handleDesativar = async () => {
+    if (!confirmDesativar) return;
+    const { error } = await supabase
+      .from('financeiro_contas_bancarias')
+      .update({ ativa: false })
+      .eq('id', confirmDesativar.id);
+    if (error) { toast.error('Erro ao desativar conta'); }
+    else { toast.success('Conta desativada'); }
+    setConfirmDesativar(null);
+    load();
+  };
 
+  const handleAtivar = async () => {
+    if (!confirmAtivar) return;
+    const { error } = await supabase
+      .from('financeiro_contas_bancarias')
+      .update({ ativa: true })
+      .eq('id', confirmAtivar.id);
+    if (error) { toast.error('Erro ao reativar conta'); }
+    else { toast.success('Conta reativada'); }
+    setConfirmAtivar(null);
+    load();
+  };
+
+  const handleExcluir = async () => {
+    if (!confirmExcluir) return;
+    // Double-check no lancamentos
+    const { count } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('conta_bancaria_id', confirmExcluir.id)
+      .eq('cancelado', false);
+    if (count && count > 0) {
+      toast.error('Não é possível excluir: existem lançamentos vinculados a esta conta.');
+      setConfirmExcluir(null);
+      return;
+    }
+    const { error } = await supabase
+      .from('financeiro_contas_bancarias')
+      .delete()
+      .eq('id', confirmExcluir.id);
+    if (error) { toast.error('Erro ao excluir conta'); }
+    else { toast.success('Conta excluída permanentemente'); }
+    setConfirmExcluir(null);
+    load();
+  };
+
+  const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
   const cellClass = "text-[12px] font-medium leading-tight py-1 px-2";
 
   const formatContaBancaria = (c: ContaBancaria) => {
@@ -233,7 +310,20 @@ export function FinV2ContasTab() {
     <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-foreground">Contas Bancárias</h2>
-        <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Conta</Button>
+        <div className="flex items-center gap-2">
+          {totalInativas > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground gap-1"
+              onClick={() => setMostrarInativas(v => !v)}
+            >
+              {mostrarInativas ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {mostrarInativas ? 'Ocultar inativas' : `Mostrar inativas (${totalInativas})`}
+            </Button>
+          )}
+          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Conta</Button>
+        </div>
       </div>
 
       <Card>
@@ -247,14 +337,14 @@ export function FinV2ContasTab() {
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Ag / Conta</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Fazenda</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Status</TableHead>
-                <TableHead className="w-8 py-1.5 px-2" />
+                <TableHead className="w-10 py-1.5 px-2" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
               )}
-              {!loading && contas.length === 0 && (
+              {!loading && contasFiltradas.length === 0 && (
                 <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>
               )}
               {!loading && grouped.map((group) => (
@@ -264,34 +354,60 @@ export function FinV2ContasTab() {
                       {group.label}
                     </TableCell>
                   </TableRow>
-                  {group.items.map(c => (
-                    <TableRow key={c.id} className="h-auto">
-                      <TableCell className={cellClass}>
-                        <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 leading-tight border ${BADGE_CLASS[c.tipo_conta || 'cc']}`}>
-                          {BADGE_LABEL[c.tipo_conta || 'cc']}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={cellClass}>
-                        <span className="font-semibold">{c.nome_exibicao || c.nome_conta}</span>
-                        {c.codigo_conta && (
-                          <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({c.codigo_conta})</span>
-                        )}
-                      </TableCell>
-                      <TableCell className={cellClass}>{c.banco || '-'}</TableCell>
-                      <TableCell className={`${cellClass} font-mono text-[11px]`}>{formatContaBancaria(c)}</TableCell>
-                      <TableCell className={cellClass}>{fazendaNome(c.fazenda_id)}</TableCell>
-                      <TableCell className={cellClass}>
-                        <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0 leading-tight">
-                          {c.ativa ? 'Ativa' : 'Inativa'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-1 px-1">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(c)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {group.items.map(c => {
+                    const temLancamentos = contasComLancamento.has(c.id);
+                    return (
+                      <TableRow key={c.id} className={`h-auto ${!c.ativa ? 'opacity-50' : ''}`}>
+                        <TableCell className={cellClass}>
+                          <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 leading-tight border ${BADGE_CLASS[c.tipo_conta || 'cc']}`}>
+                            {BADGE_LABEL[c.tipo_conta || 'cc']}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={cellClass}>
+                          <span className="font-semibold">{c.nome_exibicao || c.nome_conta}</span>
+                          {c.codigo_conta && (
+                            <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({c.codigo_conta})</span>
+                          )}
+                        </TableCell>
+                        <TableCell className={cellClass}>{c.banco || '-'}</TableCell>
+                        <TableCell className={`${cellClass} font-mono text-[11px]`}>{formatContaBancaria(c)}</TableCell>
+                        <TableCell className={cellClass}>{fazendaNome(c.fazenda_id)}</TableCell>
+                        <TableCell className={cellClass}>
+                          <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0 leading-tight">
+                            {c.ativa ? 'Ativa' : 'Inativa'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-1 px-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem onClick={() => openEdit(c)} className="gap-2 text-xs">
+                                <Pencil className="h-3 w-3" /> Editar
+                              </DropdownMenuItem>
+                              {c.ativa ? (
+                                <DropdownMenuItem onClick={() => setConfirmDesativar(c)} className="gap-2 text-xs text-amber-600">
+                                  <PowerOff className="h-3 w-3" /> Desativar
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => setConfirmAtivar(c)} className="gap-2 text-xs text-emerald-600">
+                                  <Power className="h-3 w-3" /> Reativar
+                                </DropdownMenuItem>
+                              )}
+                              {!temLancamentos && (
+                                <DropdownMenuItem onClick={() => setConfirmExcluir(c)} className="gap-2 text-xs text-destructive">
+                                  <Trash2 className="h-3 w-3" /> Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </>
               ))}
             </TableBody>
@@ -299,13 +415,13 @@ export function FinV2ContasTab() {
         </CardContent>
       </Card>
 
+      {/* ─── Dialog Criar/Editar ─── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar Conta' : 'Nova Conta Bancária'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {/* ─── Bloco Principal ─── */}
             <div>
               <Label>Nome da Conta *</Label>
               <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: Itaú Personalité ADM" />
@@ -363,7 +479,6 @@ export function FinV2ContasTab() {
               <Label>Conta ativa</Label>
             </div>
 
-            {/* ─── Bloco Avançado ─── */}
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground text-xs">
@@ -399,6 +514,56 @@ export function FinV2ContasTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Confirmar Desativação ─── */}
+      <AlertDialog open={!!confirmDesativar} onOpenChange={(open) => !open && setConfirmDesativar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar conta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa conta será desativada e não poderá mais ser usada em novos lançamentos. Lançamentos existentes não serão afetados. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDesativar}>Desativar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Confirmar Reativação ─── */}
+      <AlertDialog open={!!confirmAtivar} onOpenChange={(open) => !open && setConfirmAtivar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar conta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa conta voltará a ficar disponível para novos lançamentos. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAtivar}>Reativar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Confirmar Exclusão ─── */}
+      <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => !open && setConfirmExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conta permanentemente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa conta será excluída permanentemente. Essa ação não pode ser desfeita. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
