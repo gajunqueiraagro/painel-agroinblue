@@ -6,7 +6,7 @@ import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 const COLS: XlsxCellValue[] = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
-  'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
+  'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Documento', 'Obs',
 ];
 
 const EXAMPLES: XlsxCellValue[][] = [
