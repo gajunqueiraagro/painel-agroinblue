@@ -57,6 +57,23 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const { status: statusPilaresLanc } = useStatusPilares(fazendaId, lancAnoMes);
   const p1Oficial = statusPilaresLanc.p1_mapa_pastos.status === 'oficial';
 
+  // Campos zootécnicos estruturais (afetam conciliação, saldo, GMD, fluxo)
+  const CAMPOS_ESTRUTURAIS: (keyof Lancamento)[] = [
+    'data', 'tipo', 'quantidade', 'categoria', 'categoriaDestino',
+    'fazendaOrigem', 'fazendaDestino',
+  ];
+
+  /** Verifica se houve alteração em campos zootécnicos estruturais */
+  function temAlteracaoEstrutural(original: Lancamento, editado: Partial<Lancamento>): boolean {
+    return CAMPOS_ESTRUTURAIS.some(campo => {
+      if (!(campo in editado)) return false;
+      const valOrig = (original as any)[campo] ?? '';
+      const valEdit = (editado as any)[campo] ?? '';
+      return String(valOrig) !== String(valEdit);
+    });
+  }
+
+  const [p1BloqueioMsg, setP1BloqueioMsg] = useState<string | null>(null);
   const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ ...lancamento });
   /** UI-only: tracks whether 'meta' is selected in the status toggle (for edit forms) */
@@ -155,7 +172,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     const isSaidaAuto = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'].includes(form.tipo);
     const isEntradaAuto = ['nascimento', 'compra', 'transferencia_entrada'].includes(form.tipo);
 
-    onEditar(lancamento.id, {
+    const dados: Partial<Omit<Lancamento, 'id'>> = {
       data: form.data,
       tipo: form.tipo,
       quantidade: Number(form.quantidade),
@@ -168,27 +185,44 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
       cenario: formStatusMode === 'meta' ? 'meta' : 'realizado',
       statusOperacional: formStatusMode === 'meta' ? null : (form.statusOperacional || null),
-    });
+    };
+
+    // P1 selective block: only block if structural fields changed
+    if (p1Oficial && temAlteracaoEstrutural(lancamento, dados as Partial<Lancamento>)) {
+      setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais (peso, preço, observação) podem ser editados.');
+      return;
+    }
+    setP1BloqueioMsg(null);
+
+    onEditar(lancamento.id, dados);
     setEditando(false);
     onClose();
   };
 
   // ---- Purchase zootécnico save ----
   const handleSalvarCompraZoo = async () => {
+    const dados: Partial<Lancamento> = {
+      data: compraForm.data,
+      tipo: compraForm.tipo,
+      quantidade: Number(compraForm.quantidade),
+      categoria: compraForm.categoria,
+      fazendaOrigem: compraForm.fazendaOrigem || undefined,
+      fazendaDestino: nomeFazenda,
+      pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
+      pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
+      cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
+      statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
+    };
+
+    if (p1Oficial && temAlteracaoEstrutural(lancamento, dados)) {
+      setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais podem ser editados.');
+      return;
+    }
+    setP1BloqueioMsg(null);
+
     setCompraSaving(true);
     try {
-      await onEditar(lancamento.id, {
-        data: compraForm.data,
-        tipo: compraForm.tipo,
-        quantidade: Number(compraForm.quantidade),
-        categoria: compraForm.categoria,
-        fazendaOrigem: compraForm.fazendaOrigem || undefined,
-        fazendaDestino: nomeFazenda,
-        pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
-        pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
-        cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
-        statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
-      });
+      await onEditar(lancamento.id, dados);
       setCompraZooSaved(true);
     } finally {
       setCompraSaving(false);
@@ -905,6 +939,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 })}
               </div>
             </div>
+
+            {/* Bloqueio seletivo P1 - mensagem inline */}
+            {p1BloqueioMsg && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded px-3 py-2">
+                <p className="text-[10px] text-destructive font-semibold mb-0.5">⚠️ Alteração não salva</p>
+                <p className="text-[9px] text-destructive/90">{p1BloqueioMsg}</p>
+              </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>

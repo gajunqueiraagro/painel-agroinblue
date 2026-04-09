@@ -219,6 +219,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
   const [editingReclassId, setEditingReclassId] = useState<string | null>(null);
+  /** Lancamento original antes da edição — para detectar alterações estruturais */
+  const editOriginalRef = useRef<Lancamento | null>(null);
+  const [p1BloqueioMsg, setP1BloqueioMsg] = useState<string | null>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
@@ -598,6 +601,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
   const handleCancelEdit = useCallback(() => {
+    editOriginalRef.current = null;
+    setP1BloqueioMsg(null);
     setEditingAbateId(null);
     setQuantidade(''); setCategoria(''); setPesoKg('');
     setFazendaOrigem(''); setFazendaDestino('');
@@ -778,6 +783,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // 8. Set editing mode
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1057,6 +1064,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // 10. Set editing mode
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1195,6 +1204,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1229,6 +1240,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setTransferenciaDetalhes(null);
     }
 
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1285,10 +1298,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Validate form and open confirmation dialog
   const handleRequestRegister = () => {
-    // ── P1 governance block ──
+    // ── P1 governance: selective block ──
     if (p1Oficial) {
-      toast.error('Este mês está fechado no Mapa de Pastos (P1 oficial). Reabra o período para registrar lançamentos.');
-      return;
+      const isEditing = !!editingAbateId;
+      if (!isEditing) {
+        // New entries are always blocked when P1 is closed
+        setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos (P1 oficial). Novos lançamentos não podem ser registrados. Reabra o período para continuar.');
+        return;
+      }
+      // Editing: check if structural fields changed
+      const orig = editOriginalRef.current;
+      if (orig) {
+        const estruturalChanged =
+          String(orig.data) !== String(data) ||
+          String(orig.tipo) !== String(tipo) ||
+          Number(orig.quantidade) !== Number(quantidade) ||
+          String(orig.categoria) !== String(categoria) ||
+          (String(orig.fazendaOrigem || '') !== String(fazendaOrigem || '')) ||
+          (String(orig.fazendaDestino || '') !== String(fazendaDestino || ''));
+        if (estruturalChanged) {
+          setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais (valor, preço, bônus, descontos, notas, observações) podem ser editados.');
+          return;
+        }
+      }
+      setP1BloqueioMsg(null);
     }
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
@@ -1505,6 +1538,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setSubmitting(true);
     try {
       if (editingAbateId) {
+        editOriginalRef.current = null;
+        setP1BloqueioMsg(null);
         onEditar(editingAbateId, lancamentoDados);
         if (isAbate && (isConciliado || isConfirmado || isMeta)) {
           // Auto-generate/update financeiro for abate
@@ -2591,12 +2626,24 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
             <div className="text-[11px]">
               <span className="font-bold text-destructive">Mês fechado (P1 oficial).</span>{' '}
-              <span className="text-muted-foreground">Reabra o período para alterar campos estruturais ou registrar novos lançamentos.</span>
+              <span className="text-muted-foreground">
+                {editingAbateId
+                  ? 'Campos zootécnicos estruturais estão bloqueados. Campos financeiros/comerciais podem ser editados.'
+                  : 'Reabra o período para alterar campos estruturais ou registrar novos lançamentos.'}
+              </span>
             </div>
           </div>
           <Button variant="outline" size="sm" className="text-[10px] h-6 shrink-0 ml-2" onClick={() => setShowReabrirP1(true)}>
             Reabrir
           </Button>
+        </div>
+      )}
+
+      {/* ── P1 selective block inline message ── */}
+      {p1BloqueioMsg && (
+        <div className="bg-destructive/10 border-2 border-destructive/40 rounded-md px-3 py-2.5 mb-2">
+          <p className="text-[11px] text-destructive font-bold mb-0.5">⚠️ Alteração não salva</p>
+          <p className="text-[10px] text-destructive/90">{p1BloqueioMsg}</p>
         </div>
       )}
 
