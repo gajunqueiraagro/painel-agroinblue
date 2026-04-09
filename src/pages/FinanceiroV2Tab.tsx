@@ -165,6 +165,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     contaOrigem: '__all__',
     contaDestino: '__all__',
     macroFiltro: '__all__',
+    grupoFiltro: '__all__',
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
@@ -181,6 +182,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [contaOrigem, setContaOrigem] = useState(defaults.contaOrigem);
   const [contaDestino, setContaDestino] = useState(defaults.contaDestino);
   const [macroFiltro, setMacroFiltro] = useState(defaults.macroFiltro);
+  const [grupoFiltro, setGrupoFiltro] = useState(defaults.grupoFiltro);
   const [centroFiltro, setCentroFiltro] = useState(defaults.centroFiltro);
   const [subcentroFiltro, setSubcentroFiltro] = useState(defaults.subcentroFiltro);
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
