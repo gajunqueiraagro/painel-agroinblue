@@ -464,7 +464,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                 ))}
                 {pagedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={16} className="text-center py-8 text-muted-foreground text-xs">
+                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground text-xs">
                       Nenhuma linha com este filtro
                     </TableCell>
                   </TableRow>
