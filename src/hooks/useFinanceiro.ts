@@ -792,6 +792,7 @@ export function useFinanceiro() {
         .single();
 
       if (impErr) throw impErr;
+      console.log('[Importação] importacao_id gerado:', imp.id);
 
       // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
@@ -892,20 +893,23 @@ export function useFinanceiro() {
         .eq('id', imp.id);
       if (updateImportacaoError) throw updateImportacaoError;
 
-      // ── Saldos bancários (upsert, não apaga) ──
+      // ── Saldos bancários legado (upsert, não apaga) ──
       if (saldosResolvidos.length > 0) {
         const saldoBatch = saldosResolvidos.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
           cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || cid,
-          importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
           saldo_final: s.saldoFinal,
         }));
+        console.log('[Importação] saldoBatch payload:', JSON.stringify(saldoBatch, null, 2));
         const { error } = await supabase.from('financeiro_saldos_bancarios').upsert(saldoBatch, {
           onConflict: 'fazenda_id,conta_banco,ano_mes',
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[Importação] Erro ao salvar saldos bancários:', error);
+          throw error;
+        }
       }
 
       // ── Resumo caixa (upsert, não apaga) ──
@@ -913,16 +917,19 @@ export function useFinanceiro() {
         const resumoBatch = resumoCaixa.map(r => ({
           fazenda_id: r.fazendaId || primaryFazendaId,
           cliente_id: fazendas.find(f => f.id === (r.fazendaId || primaryFazendaId))?.cliente_id || cid,
-          importacao_id: imp.id,
           ano_mes: r.anoMes,
           entradas: r.entradas,
           saidas: r.saidas,
           saldo_final_total: r.saldoFinalTotal,
         }));
+        console.log('[Importação] resumoCaixa payload:', JSON.stringify(resumoBatch, null, 2));
         const { error } = await supabase.from('financeiro_resumo_caixa').upsert(resumoBatch, {
           onConflict: 'fazenda_id,ano_mes',
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[Importação] Erro ao salvar resumo caixa:', error);
+          throw error;
+        }
       }
 
       const msgs: string[] = [`${inseridos} lançamentos inseridos`];
