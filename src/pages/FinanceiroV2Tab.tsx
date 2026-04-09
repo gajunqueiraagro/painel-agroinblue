@@ -649,6 +649,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     }
   };
 
+  const handleCancelarMigracao2025 = async () => {
+    setMigracaoDeleting(true);
+    try {
+      const result = await hook.cancelarMigracao('2025');
+      if (result.cancelados > 0) {
+        toast.success(`${result.cancelados} registros de migração 2025 cancelados`);
+        if (result.restantes.length > 0) {
+          const resumo = result.restantes.map(r => `${r.origem}: ${r.qtd}`).join(', ');
+          toast.info(`Restam ativos em 2025: ${resumo}`);
+        } else {
+          toast.info('Nenhum registro ativo restante em 2025');
+        }
+        await hook.loadLancamentos(filtros, hook.page);
+      } else {
+        toast.info('Nenhum registro de migração encontrado em 2025');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao cancelar migração');
+    } finally {
+      setMigracaoDeleting(false);
+      setConfirmMigracaoOpen(false);
+      setMigracaoConfirmText('');
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
 
