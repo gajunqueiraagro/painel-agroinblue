@@ -4468,7 +4468,7 @@ export type Database = {
           _documento: string
           _favorecido_id: string
           _fazenda_id: string
-          _nota_fiscal: string
+          _numero_documento: string
           _tipo_operacao: string
           _valor: number
         }
