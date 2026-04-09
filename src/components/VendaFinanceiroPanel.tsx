@@ -102,7 +102,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
 

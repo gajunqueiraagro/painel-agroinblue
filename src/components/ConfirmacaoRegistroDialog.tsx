@@ -63,8 +63,7 @@ interface Props {
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   realizado: { label: STATUS_LABEL.realizado, cls: 'bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400' },
   programado: { label: STATUS_LABEL.programado, cls: 'bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400' },
-  previsto: { label: STATUS_LABEL.previsto, cls: 'bg-cyan-100 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400' },
-  meta: { label: 'Meta', cls: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' },
+  meta: { label: STATUS_LABEL.meta, cls: 'bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400' },
 };
 
 function fmtDate(d?: string) {

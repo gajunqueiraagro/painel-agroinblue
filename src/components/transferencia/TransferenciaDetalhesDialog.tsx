@@ -51,7 +51,7 @@ export function TransferenciaDetalhesDialog({
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
   const isProgramado = statusOp === 'programado';
   const usePrev = isPrevisto || isProgramado;
 

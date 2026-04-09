@@ -51,6 +51,20 @@ export const STATUS_DESCRIPTION: Record<StatusOperacional | 'meta', string> = {
   realizado: 'Operação concluída (impacta rebanho e financeiro)',
 };
 
+// ── META visual config ──
+
+export const META_VISUAL = {
+  label: 'Meta',
+  labelCurto: 'Meta',
+  color: 'text-orange-700 dark:text-orange-400',
+  bg: 'bg-orange-500',
+  dot: 'bg-orange-500',
+  activeBorder: 'border-orange-400',
+  activeBg: 'bg-orange-50 dark:bg-orange-950/30',
+  badgeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
+  description: 'Planejamento oficial do consultor. Não impacta saldo nem caixa.',
+};
+
 // ── Options para selects ──
 
 /** Opções operacionais para módulo zootécnico (sem Meta): Realizado, Programado */
@@ -69,20 +83,6 @@ export const STATUS_OPTIONS_FINANCEIRO: { value: StatusFinanceiro | 'meta'; labe
 
 /** Backwards-compatible: all status options (union) */
 export const STATUS_OPTIONS = STATUS_OPTIONS_FINANCEIRO;
-
-// ── META visual config ──
-
-export const META_VISUAL = {
-  label: 'Meta',
-  labelCurto: 'Meta',
-  color: 'text-orange-700 dark:text-orange-400',
-  bg: 'bg-orange-500',
-  dot: 'bg-orange-500',
-  activeBorder: 'border-orange-400',
-  activeBg: 'bg-orange-50 dark:bg-orange-950/30',
-  badgeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
-  description: 'Planejamento oficial do consultor. Não impacta saldo nem caixa.',
-};
 
 /** Opções completas para módulo zootécnico: Realizado, Programado, Meta */
 export const STATUS_OPTIONS_ZOOTECNICO_COM_META: { value: StatusZootecnico | 'meta'; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [

@@ -39,14 +39,14 @@ const TIPOS_OPERACAO = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'previsto', label: STATUS_LABEL.previsto },
+  { value: 'meta', label: STATUS_LABEL.meta },
   { value: 'agendado', label: 'Agendado' },
   { value: 'programado', label: STATUS_LABEL.programado },
   { value: 'realizado', label: STATUS_LABEL.realizado },
 ];
 
 function deriveStatus(dataPagamento: string): string {
-  if (!dataPagamento) return 'previsto';
+  if (!dataPagamento) return 'meta';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const d = new Date(dataPagamento + 'T00:00:00');
@@ -187,7 +187,7 @@ export function LancamentoV2Dialog({
   const [macroCusto, setMacroCusto] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
-  const [statusTransacao, setStatusTransacao] = useState('previsto');
+  const [statusTransacao, setStatusTransacao] = useState('meta');
   const [valorDisplay, setValorDisplay] = useState('0,00');
   const [contaOrigemId, setContaOrigemId] = useState('');
   const [contaDestinoId, setContaDestinoId] = useState('');
@@ -286,7 +286,7 @@ export function LancamentoV2Dialog({
       setMacroCusto('');
       setCentroCusto('');
       setTipoOperacao('2-Saídas');
-      setStatusTransacao('previsto');
+      setStatusTransacao('meta');
       setValorDisplay('0,00');
       setContaOrigemId('');
       setContaDestinoId('');

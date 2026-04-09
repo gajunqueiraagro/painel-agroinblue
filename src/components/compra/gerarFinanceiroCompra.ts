@@ -45,7 +45,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     return false;
   }
 
-  const statusFin = statusOp === 'previsto' ? 'previsto' : 'programado';
+  const statusFin = statusOp === 'meta' ? 'meta' : 'programado';
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
   const compraLabel = `Compra ${quantidade} ${catLabel}`;
   const anoMes = data.slice(0, 7);

@@ -53,7 +53,7 @@ export const ConsumoFinanceiroPanel = forwardRef<ConsumoFinanceiroPanelRef, Prop
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
 
   const [formaPag, setFormaPag] = useState<'avista' | 'prazo'>('avista');
   const [qtdParcelas, setQtdParcelas] = useState('1');
