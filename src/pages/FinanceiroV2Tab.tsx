@@ -553,7 +553,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setConfirmDeleteOpen(false);
     }
   };
-
+  const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
 
   useEffect(() => {
