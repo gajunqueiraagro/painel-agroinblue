@@ -892,20 +892,23 @@ export function useFinanceiro() {
         .eq('id', imp.id);
       if (updateImportacaoError) throw updateImportacaoError;
 
-      // ── Saldos bancários (upsert, não apaga) ──
+      // ── Saldos bancários legado (upsert, não apaga) ──
       if (saldosResolvidos.length > 0) {
         const saldoBatch = saldosResolvidos.map(s => ({
           fazenda_id: s.fazendaId || primaryFazendaId,
           cliente_id: fazendas.find(f => f.id === (s.fazendaId || primaryFazendaId))?.cliente_id || cid,
-          importacao_id: imp.id,
           conta_banco: s.contaBanco,
           ano_mes: s.anoMes,
           saldo_final: s.saldoFinal,
         }));
+        console.log('[Importação] saldoBatch payload:', JSON.stringify(saldoBatch, null, 2));
         const { error } = await supabase.from('financeiro_saldos_bancarios').upsert(saldoBatch, {
           onConflict: 'fazenda_id,conta_banco,ano_mes',
         });
-        if (error) throw error;
+        if (error) {
+          console.error('[Importação] Erro ao salvar saldos bancários:', error);
+          throw error;
+        }
       }
 
       // ── Resumo caixa (upsert, não apaga) ──
