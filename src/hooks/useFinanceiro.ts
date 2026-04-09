@@ -81,6 +81,7 @@ interface ContaBancariaImportacao {
   codigo_conta: string | null;
   banco?: string | null;
   numero_conta?: string | null;
+  conta_digito?: string | null;
 }
 
 interface LinhaImportadaResolvida extends LinhaImportada {

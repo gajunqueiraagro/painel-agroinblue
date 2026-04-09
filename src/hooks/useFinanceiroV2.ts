@@ -70,6 +70,9 @@ export interface ContaBancariaV2 {
   tipo_conta: string | null;
   codigo_conta: string | null;
   nome_exibicao: string | null;
+  agencia: string | null;
+  numero_conta: string | null;
+  conta_digito: string | null;
 }
 
 export interface FornecedorV2 {
@@ -131,7 +134,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao')
+      .select('id, nome_conta, banco, fazenda_id, tipo_conta, codigo_conta, nome_exibicao, agencia, numero_conta, conta_digito')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao');
