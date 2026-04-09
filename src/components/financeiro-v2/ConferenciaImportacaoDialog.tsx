@@ -191,9 +191,26 @@ function resolveInfo(
 export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas, contas, fazendas, onConfirmar }: Props) {
   const contaLookup = useMemo(() => {
     const m = new Map<string, string>();
+    // Track codigo_conta uniqueness
+    const codigoCount = new Map<string, number>();
     for (const c of contas) {
-      const key = (c.codigo_conta || c.nome_conta || '').toLowerCase().trim();
-      if (key) m.set(key, c.nome_exibicao || c.nome_conta);
+      if (c.codigo_conta) {
+        const ck = c.codigo_conta.toLowerCase().trim();
+        codigoCount.set(ck, (codigoCount.get(ck) || 0) + 1);
+      }
+    }
+    for (const c of contas) {
+      const label = c.nome_exibicao || c.nome_conta;
+      // Primary key: nome_exibicao (what the user sees)
+      const exibKey = (c.nome_exibicao || '').toLowerCase().trim();
+      if (exibKey) m.set(exibKey, label);
+      // Secondary key: codigo_conta ONLY if unique
+      if (c.codigo_conta) {
+        const ck = c.codigo_conta.toLowerCase().trim();
+        if ((codigoCount.get(ck) || 0) <= 1 && ck) {
+          m.set(ck, label);
+        }
+      }
     }
     return m;
   }, [contas]);
@@ -216,7 +233,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   const contaOptions = useMemo(
     () => contas
-      .map(c => ({ value: c.codigo_conta || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta }))
+      .map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta }))
       .filter(c => !!c.value),
     [contas],
   );
