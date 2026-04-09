@@ -69,7 +69,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const fazendaId = fazendaAtual?.id;
   const isGlobal = fazendaId === '__global__';
   const {
-    importacoes, lancamentos, centrosCusto, indicadores,
+    importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, fazendaADM,
     totalLancamentosADM,
@@ -343,6 +343,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 importacoes={importacoes}
                 centrosCusto={centrosCusto}
                 fazendas={fazendaMapForImport}
+                contasBancarias={contasBancarias}
                 onConfirmar={confirmarImportacao}
                 onExcluir={excluirImportacao}
               />
