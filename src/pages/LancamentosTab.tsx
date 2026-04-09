@@ -1062,6 +1062,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // 10. Set editing mode
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1200,6 +1202,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
@@ -1234,6 +1238,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setTransferenciaDetalhes(null);
     }
 
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
