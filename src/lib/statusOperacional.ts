@@ -21,13 +21,13 @@ import type { Lancamento } from '@/types/cattle';
 export type Cenario = 'meta' | 'realizado';
 
 /** Status operacional válidos no cenário 'realizado' */
-export type StatusOperacional = 'previsto' | 'programado' | 'agendado' | 'realizado';
+export type StatusOperacional = 'programado' | 'agendado' | 'realizado';
 
 /** Status zootécnico (subconjunto) */
 export type StatusZootecnico = 'programado' | 'realizado';
 
 /** Status financeiro (completo) */
-export type StatusFinanceiro = 'previsto' | 'programado' | 'agendado' | 'realizado';
+export type StatusFinanceiro = 'programado' | 'agendado' | 'realizado';
 
 /**
  * Tipo unificado para filtro visual.
@@ -37,15 +37,15 @@ export type FiltroVisual = StatusOperacional | 'meta';
 
 // ── Labels ──
 
-export const STATUS_LABEL: Record<StatusOperacional, string> = {
-  previsto: 'Previsto',
+export const STATUS_LABEL: Record<StatusOperacional | 'meta', string> = {
+  meta: 'Meta',
   programado: 'Programado',
   agendado: 'Agendado',
   realizado: 'Realizado',
 };
 
-export const STATUS_DESCRIPTION: Record<StatusOperacional, string> = {
-  previsto: 'Planejamento financeiro do cliente (não impacta caixa)',
+export const STATUS_DESCRIPTION: Record<StatusOperacional | 'meta', string> = {
+  meta: 'Planejamento anual oficial (editável apenas por ADM)',
   programado: 'Operação definida, ainda não executada',
   agendado: 'Operação agendada com data definida',
   realizado: 'Operação concluída (impacta rebanho e financeiro)',
@@ -59,12 +59,12 @@ export const STATUS_OPTIONS_ZOOTECNICO: { value: StatusZootecnico; label: string
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
 ];
 
-/** Opções para módulo financeiro: Realizado, Agendado, Programado, Previsto */
-export const STATUS_OPTIONS_FINANCEIRO: { value: StatusFinanceiro; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
+/** Opções para módulo financeiro: Realizado, Agendado, Programado, Meta */
+export const STATUS_OPTIONS_FINANCEIRO: { value: StatusFinanceiro | 'meta'; label: string; labelCurto: string; color: string; bg: string; description: string }[] = [
   { value: 'realizado', label: 'Realizado', labelCurto: 'Realizado', color: 'text-green-800 dark:text-green-400', bg: 'bg-green-700', description: STATUS_DESCRIPTION.realizado },
   { value: 'agendado', label: 'Agendado', labelCurto: 'Agendado', color: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-500', description: STATUS_DESCRIPTION.agendado },
   { value: 'programado', label: 'Programado', labelCurto: 'Programado', color: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500', description: STATUS_DESCRIPTION.programado },
-  { value: 'previsto', label: 'Previsto', labelCurto: 'Previsto', color: 'text-cyan-700 dark:text-cyan-400', bg: 'bg-cyan-600', description: STATUS_DESCRIPTION.previsto },
+  { value: 'meta', label: 'Meta', labelCurto: 'Meta', color: META_VISUAL.color, bg: META_VISUAL.bg, description: STATUS_DESCRIPTION.meta },
 ];
 
 /** Backwards-compatible: all status options (union) */
@@ -131,9 +131,9 @@ export function isProgramado(l: Lancamento): boolean {
   return getCenario(l) === 'realizado' && l.statusOperacional === 'programado';
 }
 
-/** Lançamento é Previsto (financeiro operacional)? */
+/** @deprecated Status 'previsto' foi migrado para 'meta'. Use isMeta instead. */
 export function isPrevisto(l: Lancamento): boolean {
-  return getCenario(l) === 'realizado' && l.statusOperacional === 'previsto';
+  return isMeta(l);
 }
 
 /** Lançamento é Agendado (financeiro operacional)? */
@@ -173,9 +173,9 @@ export function filtrarPorCenario(
 ): Lancamento[] {
   switch (cenario) {
     case 'realizado': return filtrarRealizados(lancamentos);
-    case 'meta': return filtrarMeta(lancamentos);
+    case 'meta':
+    case 'previsto': return filtrarMeta(lancamentos); // previsto migrado → meta
     case 'programado': return lancamentos.filter(isProgramado);
-    case 'previsto': return lancamentos.filter(isPrevisto);
     case 'agendado': return lancamentos.filter(isAgendado);
     case 'confirmado': return lancamentos.filter(isProgramado); // backward compat
     case 'todos': return lancamentos;
@@ -191,8 +191,6 @@ export function getStatusBadge(l: Lancamento) {
   }
   const st = l.statusOperacional;
   switch (st) {
-    case 'previsto':
-      return { label: 'Previsto', cls: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-400' };
     case 'programado':
       return { label: 'Programado', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400' };
     case 'agendado':
