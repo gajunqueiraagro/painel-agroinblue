@@ -144,13 +144,13 @@ function validateRow(
     }
   }
 
-  // Número documento
-  if (row.numeroDocumento && /[^\d]/.test(row.numeroDocumento)) {
-    warnings.push('Número documento contém caracteres não numéricos');
+  // Documento ambíguo — only warn if documentoOriginal has digits that couldn't be extracted
+  if (row.documentoOriginal && row.tipoDocumento && !row.numeroDocumento && /\d/.test(row.documentoOriginal)) {
+    warnings.push('Número do documento não pôde ser extraído com segurança');
     diagnostics.push({
       campo: 'Documento',
-      valorRecebido: row.numeroDocumento,
-      motivo: 'Campo espera valor numérico, valor recebido contém texto ou caracteres especiais',
+      valorRecebido: row.documentoOriginal,
+      motivo: 'Tipo detectado mas número contém texto misturado — verifique manualmente',
       tipo: 'warning',
     });
   }
@@ -436,7 +436,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Conta (orig)</TableHead>
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Conta Dest. (orig)</TableHead>
                   <TableHead className="w-24 bg-blue-50/50 dark:bg-blue-950/20">Subcentro (orig)</TableHead>
-                  <TableHead className="w-16 bg-blue-50/50 dark:bg-blue-950/20">Doc. (orig)</TableHead>
+                  <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Doc. Original</TableHead>
                   <TableHead className="w-16 bg-blue-50/50 dark:bg-blue-950/20 text-right">Valor (orig)</TableHead>
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Produto (orig)</TableHead>
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Fornecedor (orig)</TableHead>
@@ -444,6 +444,8 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Fazenda</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Conta (sist.)</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Conta Dest. (sist.)</TableHead>
+                  <TableHead className="w-16 bg-green-50/50 dark:bg-green-950/20">Tipo Doc.</TableHead>
+                  <TableHead className="w-16 bg-green-50/50 dark:bg-green-950/20">Nº Doc.</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Tipo</TableHead>
                   <TableHead className="w-16 bg-green-50/50 dark:bg-green-950/20 text-right">Valor (sist.)</TableHead>
                   {/* Diagnostics */}
@@ -462,7 +464,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                 ))}
                 {pagedRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={16} className="text-center py-8 text-muted-foreground text-xs">
+                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground text-xs">
                       Nenhuma linha com este filtro
                     </TableCell>
                   </TableRow>
@@ -565,7 +567,7 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
       <TableCell className={origCellClass}>{row.contaOrigem || '—'}</TableCell>
       <TableCell className={origCellClass}>{row.contaDestino || '—'}</TableCell>
       <TableCell className={origCellClass} title={row.subcentro || undefined}>{row.subcentro ? (row.subcentro.length > 20 ? row.subcentro.slice(0, 20) + '…' : row.subcentro) : '—'}</TableCell>
-      <TableCell className={origCellClass}>{row.numeroDocumento || '—'}</TableCell>
+      <TableCell className={origCellClass} title={row.documentoOriginal || undefined}>{row.documentoOriginal || '—'}</TableCell>
       <TableCell className={`${origCellClass} text-right tabular-nums`}>{row.valor != null ? formatMoeda(row.valor) : '—'}</TableCell>
       <TableCell className={origCellClass}>{row.produto || '—'}</TableCell>
       <TableCell className={origCellClass}>{row.fornecedor || '—'}</TableCell>
@@ -604,6 +606,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
           </SelectContent>
         </Select>
         {r.contaDestinoResolvidaNome && <span className="text-[8px] text-green-600 block pl-1">✓ {r.contaDestinoResolvidaNome}</span>}
+      </TableCell>
+      <TableCell className={resCellClass}>
+        <span className="text-[9px]">{row.tipoDocumento || '—'}</span>
+      </TableCell>
+      <TableCell className={resCellClass}>
+        <span className="text-[9px] tabular-nums">{row.numeroDocumento || '—'}</span>
       </TableCell>
       <TableCell className={resCellClass}>
         <Select value={row.tipoOperacao || ''} onValueChange={val => onUpdate(row.linha, 'tipoOperacao', val || null)}>
