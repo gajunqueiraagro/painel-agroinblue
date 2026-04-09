@@ -1,5 +1,5 @@
 /**
- * Parser para importação financeira — aba única EXPORT_APP_UNICO.
+ * Parser para importação financeira — Excel (aba EXPORT_APP_UNICO) ou CSV UTF-8.
  */
 import * as XLSX from 'xlsx';
 
@@ -128,13 +128,26 @@ function isTransferencia(tipo: string | null): boolean {
   return t.startsWith('3') || t.includes('transfer') || t.includes('resgate') || t.includes('aplicaç');
 }
 
+/**
+ * Normaliza status legado para nomenclatura oficial.
+ * previsto → meta | conciliado → realizado | confirmado → programado
+ */
+function normalizeStatus(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase().trim();
+  if (s === 'previsto') return 'meta';
+  if (s === 'conciliado') return 'realizado';
+  if (s === 'confirmado') return 'programado';
+  return s; // meta, realizado, programado, agendado passam direto
+}
+
 // ── Column index mapping ──
 
 const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
-  'Documento', 'Nota_Fiscal',
+  'Documento', 'Nota_Fiscal', 'NF',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
@@ -155,8 +168,8 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 
 function normalizeCol(s: string): string {
   const n = s.toLowerCase().replace(/[_\s]/g, '');
-  // Aliases
-  if (n === 'notafiscal') return 'documento';
+  // Aliases — NF e Nota_Fiscal mapeiam para a mesma coluna lógica
+  if (n === 'notafiscal' || n === 'nf') return 'nf';
   return n;
 }
 
