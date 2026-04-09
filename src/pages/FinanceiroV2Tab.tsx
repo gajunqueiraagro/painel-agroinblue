@@ -965,6 +965,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </table>
           </div>
 
+          {/* Bulk action bar */}
+          {someSelected && (
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <span className="text-[11px] font-semibold">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => setConfirmDeleteOpen(true)}>
+                <Trash2 className="h-3 w-3" /> Excluir selecionados
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={() => setSelectedIds(new Set())}>
+                <X className="h-3 w-3" /> Cancelar seleção
+              </Button>
+            </div>
+          )}
+
           {/* Total count */}
           <div className="flex items-center px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
