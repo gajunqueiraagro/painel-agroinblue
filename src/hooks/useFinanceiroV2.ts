@@ -512,6 +512,40 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return { excluidos: totalExcluidos, bloqueados };
   }, []);
 
+  /** Cancel (soft-delete) imported "realizado" lancamentos matching filters */
+  const cancelarRealizadosImportados = useCallback(async (filtros: FiltrosV2): Promise<{ cancelados: number }> => {
+    if (!clienteId) return { cancelados: 0 };
+
+    // Fetch all matching the filters
+    const all = await fetchAllLancamentos(filtros);
+
+    // Filter: only realizado + imported (has lote_importacao_id)
+    const alvo = all.filter(l =>
+      l.status_transacao === 'realizado' &&
+      !!l.lote_importacao_id &&
+      !l.cancelado
+    );
+
+    if (alvo.length === 0) return { cancelados: 0 };
+
+    let totalCancelados = 0;
+    for (let i = 0; i < alvo.length; i += 100) {
+      const batch = alvo.slice(i, i + 100).map(l => l.id);
+      const { error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
+        .in('id', batch);
+      if (error) {
+        console.error('[FinV2] cancel batch error', error);
+        toast.error(`Erro ao cancelar lote: ${error.message}`);
+        break;
+      }
+      totalCancelados += batch.length;
+    }
+
+    return { cancelados: totalCancelados };
+  }, [clienteId, fetchAllLancamentos]);
+
   const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
     if (!clienteId || !user) return false;
 
