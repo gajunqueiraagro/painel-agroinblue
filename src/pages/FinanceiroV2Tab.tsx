@@ -47,8 +47,15 @@ function sortContas<T extends { nome_conta: string; tipo_conta?: string | null; 
 }
 
 /** Display name for a conta: prefer nome_exibicao, fallback to nome_conta */
-function contaLabel(c: { nome_conta: string; nome_exibicao?: string | null }): string {
-  return c.nome_exibicao || c.nome_conta;
+function contaLabel(c: { nome_conta: string; nome_exibicao?: string | null; agencia?: string | null; numero_conta?: string | null; conta_digito?: string | null }): string {
+  const nome = c.nome_exibicao || c.nome_conta;
+  const parts: string[] = [];
+  if (c.agencia) parts.push(c.agencia);
+  if (c.numero_conta) {
+    parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
+  }
+  if (parts.length > 0) return `${nome} (${parts.join(' ')})`;
+  return nome;
 }
 
 const MACRO_ORDER = [
