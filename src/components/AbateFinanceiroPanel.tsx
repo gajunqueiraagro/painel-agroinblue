@@ -231,7 +231,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         macro_custo: clasReceita.macro_custo,
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
-        nota_fiscal: notaFiscal || undefined,
+        numero_documento: notaFiscal || undefined,
         ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
       };
 
@@ -294,7 +294,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           macro_custo: clasDed.macro_custo,
           centro_custo: clasDed.centro_custo,
           subcentro: clasDed.subcentro,
-          nota_fiscal: notaFiscal || undefined,
+          numero_documento: notaFiscal || undefined,
           ano_mes: anoMes,
           valor: totalDescontos,
           data_competencia: data,

@@ -104,7 +104,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
         descricao: `${compraLabel} - Parcela ${i + 1}/${compraDetalhes.parcelas.length}`,
         historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
         origem_tipo: 'compra_rebanho:parcela',
-        nota_fiscal: compraDetalhes.notaFiscal || undefined,
+        numero_documento: compraDetalhes.notaFiscal || undefined,
       });
     });
   } else {
@@ -118,7 +118,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
       descricao: compraLabel,
       historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
       origem_tipo: 'compra_rebanho:parcela',
-      nota_fiscal: compraDetalhes.notaFiscal || undefined,
+      numero_documento: compraDetalhes.notaFiscal || undefined,
     });
   }
 

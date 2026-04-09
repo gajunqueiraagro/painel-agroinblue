@@ -260,7 +260,7 @@ export function useContratos() {
         centro_custo: contrato.centro_custo || null,
         subcentro: contrato.subcentro || null,
         observacao: contrato.observacao || null,
-        nota_fiscal: null,
+        numero_documento: null,
         favorecido_id: contrato.fornecedor_id || null,
         forma_pagamento: contrato.forma_pagamento || null,
         dados_pagamento: contrato.dados_pagamento || null,

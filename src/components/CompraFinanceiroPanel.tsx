@@ -102,7 +102,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, valor, data_competencia, data_pagamento, descricao, origem_tipo, favorecido_id, nota_fiscal')
+      .select('id, valor, data_competencia, data_pagamento, descricao, origem_tipo, favorecido_id, numero_documento')
       .eq('movimentacao_rebanho_id', lancamentoId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true })
@@ -147,7 +147,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           })));
         }
 
-        const nf = parcelaRecs[0]?.nota_fiscal;
+        const nf = parcelaRecs[0]?.numero_documento;
         if (nf && !notaFiscal) {
           onNotaFiscalChange(nf as string);
           setPagamentoOpen(true);
