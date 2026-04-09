@@ -378,6 +378,15 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setPreview(null)}>Cancelar</Button>
+              {preview.lancamentos.length > 0 && (
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setConferenciaOpen(true)}
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" /> Revisar e Corrigir
+                </Button>
+              )}
               <Button
                 className="flex-1"
                 onClick={handleConfirmar}
