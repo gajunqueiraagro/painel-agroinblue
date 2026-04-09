@@ -71,7 +71,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const {
     importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
-    loading, confirmarImportacao, excluirImportacao, fazendaADM,
+    loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote, fazendaADM,
     totalLancamentosADM,
   } = useFinanceiro();
 
@@ -346,6 +346,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 contasBancarias={contasBancarias}
                 onConfirmar={confirmarImportacao}
                 onExcluir={excluirImportacao}
+                onBuscarDetalhesLote={buscarDetalhesLote}
               />
             </div>
           )}
