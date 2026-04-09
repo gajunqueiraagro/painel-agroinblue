@@ -242,9 +242,9 @@ export function useFluxoCaixa(
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
-    // Filter: conciliado + data_pagamento in the given year
-    const conciliados = lancamentosGlobais.filter(l => {
-      if (!isConciliado(l)) return false;
+    // Filter: realizado + data_pagamento in the given year
+    const realizados = lancamentosGlobais.filter(l => {
+      if (!isRealizado(l)) return false;
       const a = datePagtoAnoClass(l);
       return a === ano;
     });

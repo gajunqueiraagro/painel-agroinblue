@@ -50,7 +50,7 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 // ---------------------------------------------------------------------------
 
 // Use centralized classification — FONTE ÚNICA DE VERDADE (src/lib/financeiro/classificacao.ts)
-const isConciliado = (l: FinanceiroLancamento) => isConciliadoCentral(l);
+const isRealizado = (l: FinanceiroLancamento) => isRealizadoCentral(l);
 const isEntrada = (l: FinanceiroLancamento) => isEntradaCentral(l);
 const isSaida = (l: FinanceiroLancamento) => isSaidaCentral(l);
 const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesCentral(l);

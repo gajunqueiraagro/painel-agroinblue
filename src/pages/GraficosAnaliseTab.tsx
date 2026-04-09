@@ -293,7 +293,7 @@ function FinanceiroCharts({ lancFin, anoFiltro, anoNum, mesFiltro, lancamentos, 
     for (let m = 1; m <= 12; m++) {
       const mesKey = `${ano}-${String(m).padStart(2, '0')}`;
       const lancMes = lancFin.filter(l => {
-        if (!isConciliado(l)) return false;
+        if (!isRealizado(l)) return false;
         const am = datePagtoAnoMes(l);
         return am === mesKey;
       });

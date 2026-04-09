@@ -79,7 +79,7 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
 function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMes: number): number {
   let total = 0;
   for (const l of lancFin) {
-    if (!isConciliado(l)) continue;
+    if (!isRealizado(l)) continue;
     const a = datePagtoAno(l);
     const m = datePagtoMes(l);
     if (a !== ano || m === null || m > ateMes) continue;
@@ -96,7 +96,7 @@ function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMe
 function calcDesembolsoProdPec(lancFin: FinanceiroLancamento[], rateioADM: RateioADM[], ano: number, ateMes: number, isGlobal: boolean): number {
   let total = 0;
   for (const l of lancFin) {
-    if (!isConciliado(l)) continue;
+    if (!isRealizado(l)) continue;
     const a = datePagtoAno(l);
     const m = datePagtoMes(l);
     if (a !== ano || m === null || m > ateMes) continue;
@@ -265,7 +265,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   const lancConciliadosPorMes = useMemo(() => {
     const map = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancFin) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const mesKey = am.substring(5, 7);
