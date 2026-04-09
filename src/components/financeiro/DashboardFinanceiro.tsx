@@ -2,14 +2,14 @@
  * Dashboard financeiro — redesign completo.
  *
  * ARQUITETURA:
- * - Dados FINANCEIROS: filtrados localmente (conciliado + data pagamento)
+ * - Dados FINANCEIROS: filtrados localmente (realizado + data pagamento)
  * - Dados ZOOTÉCNICOS: exclusivamente de useIndicadoresZootecnicos (fonte única)
  * - PROIBIDO: cálculo local de saldos, pesos, arrobas ou cabeças médias
  *
  * Data base financeira: data_pagamento (YYYY-MM)
  * Entradas = tipo_operacao starts with "1"
  * Saídas = tipo_operacao starts with "2"
- * Status = Conciliado
+ * Status = Realizado
  *
  * FILTRO ÚNICO: recebe ano e mesAte via props do container (FinanceiroCaixaTab).
  */
@@ -29,7 +29,7 @@ import {
   type RateioADM,
 } from '@/hooks/useFinanceiro';
 import {
-  isConciliado as isConciliadoCentral,
+  isRealizado as isRealizadoCentral,
   isEntrada as isEntradaCentral,
   isSaida as isSaidaCentral,
   datePagtoAnoMes as datePagtoAnoMesCentral,
@@ -50,7 +50,7 @@ import type { Pasto, CategoriaRebanho } from '@/hooks/usePastos';
 // ---------------------------------------------------------------------------
 
 // Use centralized classification — FONTE ÚNICA DE VERDADE (src/lib/financeiro/classificacao.ts)
-const isConciliado = (l: FinanceiroLancamento) => isConciliadoCentral(l);
+const isRealizado = (l: FinanceiroLancamento) => isRealizadoCentral(l);
 const isEntrada = (l: FinanceiroLancamento) => isEntradaCentral(l);
 const isSaida = (l: FinanceiroLancamento) => isSaidaCentral(l);
 const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesCentral(l);
@@ -635,7 +635,7 @@ export function DashboardFinanceiro({
 
   const filtradosMes = useMemo(() =>
     lancamentos.filter(l => {
-      if (!isConciliado(l)) return false;
+      if (!isRealizado(l)) return false;
       const am = datePagtoAnoMes(l);
       return am === periodoMes;
     }), [lancamentos, periodoMes]);
@@ -684,7 +684,7 @@ export function DashboardFinanceiro({
     // --- Desembolso produtivo acumulado ---
     const desembolsoProdAcumProprio = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isDesembolsoProdutivo(l)) return false;
+        if (!isRealizado(l) || !isDesembolsoProdutivo(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -711,7 +711,7 @@ export function DashboardFinanceiro({
     // --- Entradas acumuladas ---
     const entradasAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isEntrada(l)) return false;
+        if (!isRealizado(l) || !isEntrada(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -721,7 +721,7 @@ export function DashboardFinanceiro({
     // --- Saídas acumuladas ---
     const saidasAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isSaida(l)) return false;
+        if (!isRealizado(l) || !isSaida(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -739,7 +739,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isEntrada(l)) return false;
+      if (!isRealizado(l) || !isEntrada(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -759,7 +759,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isSaida(l)) return false;
+      if (!isRealizado(l) || !isSaida(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -804,7 +804,7 @@ export function DashboardFinanceiro({
 
     const recPecCaixaAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isEntrada(l)) return false;
+        if (!isRealizado(l) || !isEntrada(l)) return false;
         if (!isReceitaPec(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
@@ -823,7 +823,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isSaida(l) || !isDesembolsoProdutivo(l)) return false;
+      if (!isRealizado(l) || !isSaida(l) || !isDesembolsoProdutivo(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -866,7 +866,7 @@ export function DashboardFinanceiro({
       monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
     }
     for (const l of lancamentos) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const m = am.substring(5);

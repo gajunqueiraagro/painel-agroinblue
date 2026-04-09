@@ -50,9 +50,12 @@ export const isReposicaoBovinos = (l: FinanceiroLancamento) => {
   return macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao');
 };
 
-/** É Conciliado */
-export const isConciliado = (l: FinanceiroLancamento) =>
+/** Lançamento realizado (status_transacao = 'realizado')? */
+export const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase().trim() === 'realizado';
+
+/** @deprecated Use isRealizado. Alias mantido para compatibilidade. */
+export const isConciliado = isRealizado;
 
 /** É Outras Entradas Financeiras */
 export const isOutrasEntradas = (l: FinanceiroLancamento) =>

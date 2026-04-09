@@ -9,7 +9,7 @@
  * REGRA CRÍTICA: NÃO usar escopo_negocio — derivar tudo de centro_custo.
  *
  * REGRAS:
- * - status_transacao = "Conciliado"
+ * - status_transacao = "realizado" (único que entra no financeiro real)
  * - data_base = data_pagamento
  * - Entradas = tipo_operacao 1*
  * - Saídas = tipo_operacao 2*
@@ -45,9 +45,12 @@ const normTipo = (v: string | null | undefined): string =>
 // Status & Tipo Operação
 // ---------------------------------------------------------------------------
 
-/** Lançamento conciliado? */
-export const isConciliado = (l: LancamentoClassificavel): boolean =>
+/** Lançamento realizado (status_transacao = 'realizado')? */
+export const isRealizado = (l: LancamentoClassificavel): boolean =>
   norm(l.status_transacao) === 'realizado';
+
+/** @deprecated Use isRealizado. Alias mantido para compatibilidade. */
+export const isConciliado = isRealizado;
 
 /** É entrada (tipo_operacao 1*) */
 export const isEntrada = (l: LancamentoClassificavel): boolean => {

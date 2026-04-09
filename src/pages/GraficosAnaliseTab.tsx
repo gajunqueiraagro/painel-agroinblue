@@ -41,7 +41,7 @@ const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpacity: 0.5 };
 const AXIS_TICK = { fontSize: 10, fill: 'hsl(var(--muted-foreground))' };
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
@@ -293,7 +293,7 @@ function FinanceiroCharts({ lancFin, anoFiltro, anoNum, mesFiltro, lancamentos, 
     for (let m = 1; m <= 12; m++) {
       const mesKey = `${ano}-${String(m).padStart(2, '0')}`;
       const lancMes = lancFin.filter(l => {
-        if (!isConciliado(l)) return false;
+        if (!isRealizado(l)) return false;
         const am = datePagtoAnoMes(l);
         return am === mesKey;
       });

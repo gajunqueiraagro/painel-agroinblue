@@ -14,10 +14,10 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
-import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
+import { isRealizado as isLancRealizado } from '@/lib/statusOperacional';
 import {
   calcFinanceiroFromLancamentos,
-  isConciliado as isConciliadoFin,
+  isRealizado as isRealizadoFin,
   datePagtoAnoMes,
   type FinanceiroLancamentoBase,
 } from '@/lib/financeiro/filters';
@@ -247,7 +247,7 @@ export function useResumoStatus(
 
     // Filter to period
     const filtrados = lancamentos.filter(l => {
-      if (!isLancConciliado(l)) return false;
+      if (!isLancRealizado(l)) return false;
       try {
         const d = l.data;
         if (!d.startsWith(anoStr)) return false;
@@ -320,7 +320,7 @@ export function useResumoStatus(
       if (ano === anoAtual && m === mesAtual) continue;
 
       const relevantes = lancsMes.filter(l => !isExclusoOperacional(l.status_transacao));
-      const todosConciliados = relevantes.every(l => isConciliadoFin(l));
+      const todosConciliados = relevantes.every(l => isRealizadoFin(l));
       if (todosConciliados) mesesFechados++;
     }
 

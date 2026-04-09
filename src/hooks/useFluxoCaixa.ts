@@ -1,6 +1,6 @@
 /**
  * Hook para o Fluxo de Caixa — 12 linhas, jan-dez.
- * Base: data_pagamento + status_transacao = 'Conciliado'.
+ * Base: data_pagamento + status_transacao = 'Realizado'.
  * Saldo Inicial Jan = soma dos registros de saldo_final Dez do ano anterior (financeiro_saldos_bancarios_v2).
  *
  * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
-  isConciliado,
+  isRealizado,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
   getEscopo,
@@ -242,9 +242,9 @@ export function useFluxoCaixa(
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
-    // Filter: conciliado + data_pagamento in the given year
-    const conciliados = lancamentosGlobais.filter(l => {
-      if (!isConciliado(l)) return false;
+    // Filter: realizado + data_pagamento in the given year
+    const realizados = lancamentosGlobais.filter(l => {
+      if (!isRealizado(l)) return false;
       const a = datePagtoAnoClass(l);
       return a === ano;
     });
@@ -252,7 +252,7 @@ export function useFluxoCaixa(
     // Group by month
     const byMes: Record<number, FluxoLancamentoBase[]> = {};
     for (let m = 1; m <= 12; m++) byMes[m] = [];
-    for (const l of conciliados) {
+    for (const l of realizados) {
       const m = datePagtoMesClass(l);
       if (m && m >= 1 && m <= 12) byMes[m].push(l);
     }

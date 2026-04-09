@@ -20,7 +20,7 @@ import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import {
-  isConciliado as isConciliadoClass,
+  isRealizado as isRealizadoClass,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
   getEscopo,
@@ -63,7 +63,7 @@ function formatMoedaCompacto(val: number): string {
 
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
@@ -79,7 +79,7 @@ const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
 function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMes: number): number {
   let total = 0;
   for (const l of lancFin) {
-    if (!isConciliado(l)) continue;
+    if (!isRealizado(l)) continue;
     const a = datePagtoAno(l);
     const m = datePagtoMes(l);
     if (a !== ano || m === null || m > ateMes) continue;
@@ -96,7 +96,7 @@ function calcReceitaPecuaria(lancFin: FinanceiroLancamento[], ano: number, ateMe
 function calcDesembolsoProdPec(lancFin: FinanceiroLancamento[], rateioADM: RateioADM[], ano: number, ateMes: number, isGlobal: boolean): number {
   let total = 0;
   for (const l of lancFin) {
-    if (!isConciliado(l)) continue;
+    if (!isRealizado(l)) continue;
     const a = datePagtoAno(l);
     const m = datePagtoMes(l);
     if (a !== ano || m === null || m > ateMes) continue;
@@ -265,7 +265,7 @@ export function VisaoZooHubTab({ lancamentos, saldosIniciais, onTabChange, filtr
   const lancConciliadosPorMes = useMemo(() => {
     const map = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancFin) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const mesKey = am.substring(5, 7);

@@ -2,7 +2,7 @@
  * Bloco 4: Fluxo de Caixa mensal.
  *
  * Usa classificação centralizada de src/lib/financeiro/classificacao.ts.
- * Base: data_pagamento + Conciliado.
+ * Base: data_pagamento + Realizado.
  */
 import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import {
-  isConciliado,
+  isRealizado,
   isEntrada,
   isSaida,
   getEscopo,

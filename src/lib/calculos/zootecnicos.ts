@@ -5,7 +5,7 @@
 
 import type { Lancamento, SaldoInicial, Categoria, TipoMovimentacao } from '@/types/cattle';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
-import { isConciliado as isLancConciliado } from '@/lib/statusOperacional';
+import { isRealizado as isLancRealizado } from '@/lib/statusOperacional';
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares
@@ -86,7 +86,7 @@ function lancamentosNoRange(lancs: Lancamento[], startDate: string, endDate: str
  * Esta é a função padrão para cálculos de saldo real.
  */
 function lancamentosConciliadosNoRange(lancs: Lancamento[], startDate: string, endDate: string): Lancamento[] {
-  return lancs.filter(l => l.data >= startDate && l.data <= endDate && isLancConciliado(l));
+  return lancs.filter(l => l.data >= startDate && l.data <= endDate && isLancRealizado(l));
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +160,7 @@ export function calcSaldoMensalAcumulado(
 
   const lancAno = lancamentos.filter(l => {
     const lAno = l.data.substring(0, 4);
-    return lAno === String(ano) && isLancConciliado(l);
+    return lAno === String(ano) && isLancRealizado(l);
   });
 
   const saldoInicioMes: Record<string, number> = {};
@@ -321,7 +321,7 @@ export function calcFluxoAnual(
     .reduce((sum, s) => sum + s.quantidade * (s.pesoMedioKg || 0), 0);
 
   const lancAno = lancamentos.filter(l =>
-    l.data.substring(0, 4) === String(ano) && (preFiltered || isLancConciliado(l))
+    l.data.substring(0, 4) === String(ano) && (preFiltered || isLancRealizado(l))
   );
 
   const porMesTipo: Record<string, Record<FluxoTipo, number>> = {};

@@ -5,10 +5,12 @@
  * Qualquer alteração aqui impacta ambos os módulos.
  *
  * Regras:
- * - Conciliado: status_transacao (lowercase, trimmed) === 'realizado'
+ * - Realizado: status_transacao (lowercase, trimmed) === 'realizado'
  * - Entrada: tipo_operacao começa com '1'
  * - Saída: tipo_operacao começa com '2'
  * - Data base: data_pagamento (YYYY-MM-DD ou YYYY-MM)
+ *
+ * Nomenclatura oficial: realizado | agendado | programado | meta
  */
 
 export interface FinanceiroLancamentoBase {
@@ -25,9 +27,12 @@ const norm = (v: string | null | undefined) => (v || '').toLowerCase().trim();
 const normTipo = (v: string | null | undefined): string =>
   norm(v).replace(/[\s\-–—]/g, '');
 
-/** Lançamento conciliado? */
-export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
+/** Lançamento realizado (status_transacao = 'realizado')? */
+export const isRealizado = (l: FinanceiroLancamentoBase): boolean =>
   norm(l.status_transacao) === 'realizado';
+
+/** @deprecated Use isRealizado. Alias mantido para compatibilidade. */
+export const isConciliado = isRealizado;
 
 /**
  * Lançamento de entrada — somente tipo_operacao 1*
@@ -74,7 +79,7 @@ export function calcFinanceiroFromLancamentos(
 
   // Filtrar: conciliado + data_pagamento dentro do período
   const conciliados = lancamentos.filter(l => {
-    if (!isConciliado(l)) return false;
+    if (!isRealizado(l)) return false;
     const am = datePagtoAnoMes(l);
     if (!am) return false;
     return mesesRange.includes(am);
