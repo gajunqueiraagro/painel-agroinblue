@@ -35,7 +35,7 @@ interface Props {
   onCreateFornecedor: (nome: string, cpfCnpj?: string) => Promise<void>;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;

@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import type { CompraDetalhes } from '@/components/compra/CompraDetalhesDialog';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 
 interface GerarFinanceiroCompraParams {
   compraDetalhes: CompraDetalhes;
@@ -13,7 +13,7 @@ interface GerarFinanceiroCompraParams {
   pesoKg: number;
   data: string;
   categoria: string;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   fazendaOrigem: string;
   fornecedorId: string;
 }

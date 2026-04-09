@@ -12,7 +12,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 
 interface Parcela {
   data: string;
@@ -26,7 +26,7 @@ interface Props {
   data: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
