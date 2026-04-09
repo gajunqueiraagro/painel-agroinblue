@@ -28,6 +28,7 @@ export interface LinhaImportada {
   escopoNegocio: string;
   tipoDocumento: string | null;
   numeroDocumento: string | null;
+  documentoOriginal: string | null;
 }
 
 export interface SaldoBancarioImportado {
@@ -286,20 +287,20 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
 
       let tipoDocFinal: string | null = null;
       let notaFiscalFinal: string | null = null;
+      let docOriginal: string | null = rawDocumento;
 
       if (rawTipoDocumento) {
         // Tipo_Documento column provided explicitly — use it directly
         tipoDocFinal = rawTipoDocumento;
-        // Extract number from the documento/NF column (raw number only)
         if (rawDocumento) {
-          const docParsed = parseDocumentoImport(rawDocumento);
-          notaFiscalFinal = docParsed?.numero || rawDocumento;
+          const parsed = parseDocumentoImportV2(rawDocumento);
+          notaFiscalFinal = parsed.numeroDocumento;
         }
       } else if (rawDocumento) {
-        // Auto-detect type from combined text
-        const docParsed = parseDocumentoImport(rawDocumento);
-        tipoDocFinal = docParsed?.tipo || null;
-        notaFiscalFinal = docParsed?.numero || null;
+        const parsed = parseDocumentoImportV2(rawDocumento);
+        tipoDocFinal = parsed.tipoDocumento;
+        notaFiscalFinal = parsed.numeroDocumento;
+        docOriginal = parsed.documentoOriginal || rawDocumento;
       }
 
       lancamentos.push({
@@ -323,6 +324,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         escopoNegocio: inferirEscopo(tipo, macro),
         tipoDocumento: tipoDocFinal,
         numeroDocumento: notaFiscalFinal,
+        documentoOriginal: docOriginal,
       });
 
     } else if (tipoRegistro === 'SALDO') {
