@@ -546,6 +546,65 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return { cancelados: totalCancelados };
   }, [clienteId, fetchAllLancamentos]);
 
+  /** Cancel migration records for a specific year */
+  const cancelarMigracao = useCallback(async (ano: string): Promise<{ cancelados: number; restantes: { origem: string; qtd: number }[] }> => {
+    if (!clienteId) return { cancelados: 0, restantes: [] };
+
+    // Fetch IDs of migration+realizado records for the year
+    let allIds: string[] = [];
+    let from = 0;
+    const PAGE = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id')
+        .eq('cliente_id', clienteId)
+        .like('ano_mes', `${ano}-%`)
+        .eq('cancelado', false)
+        .eq('origem_lancamento', 'migracao')
+        .eq('status_transacao', 'realizado')
+        .range(from, from + PAGE - 1);
+      if (error) { console.error(error); break; }
+      if (!data || data.length === 0) break;
+      allIds = allIds.concat(data.map(d => d.id));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+
+    if (allIds.length === 0) return { cancelados: 0, restantes: [] };
+
+    let totalCancelados = 0;
+    for (let i = 0; i < allIds.length; i += 200) {
+      const batch = allIds.slice(i, i + 200);
+      const { error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .update({ cancelado: true, cancelado_em: new Date().toISOString() } as any)
+        .in('id', batch);
+      if (error) {
+        console.error('[FinV2] cancel migracao batch error', error);
+        toast.error(`Erro ao cancelar lote: ${error.message}`);
+        break;
+      }
+      totalCancelados += batch.length;
+    }
+
+    // Fetch remaining records summary
+    const { data: remaining } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('origem_lancamento')
+      .eq('cliente_id', clienteId)
+      .like('ano_mes', `${ano}-%`)
+      .eq('cancelado', false);
+
+    const countByOrigem: Record<string, number> = {};
+    (remaining || []).forEach((r: any) => {
+      countByOrigem[r.origem_lancamento] = (countByOrigem[r.origem_lancamento] || 0) + 1;
+    });
+    const restantes = Object.entries(countByOrigem).map(([origem, qtd]) => ({ origem, qtd }));
+
+    return { cancelados: totalCancelados, restantes };
+  }, [clienteId]);
+
   const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
     if (!clienteId || !user) return false;
 
