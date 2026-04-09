@@ -181,7 +181,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     for (let m = 1; m <= localMes; m++) {
       const mesKey = `${localAno}-${String(m).padStart(2, '0')}`;
       const desM = lancFin
-        .filter(l => isConciliado(l) && isDesembolsoProdutivo(l) && datePagtoAnoMes(l) === mesKey)
+        .filter(l => isRealizado(l) && isDesembolsoProdutivo(l) && datePagtoAnoMes(l) === mesKey)
         .reduce((s, l) => s + Math.abs(l.valor), 0);
       const ratM = rateioADM.filter(r => r.anoMes === mesKey).reduce((s, r) => s + r.valorRateado, 0);
       const cusM = desM + ratM;

@@ -79,7 +79,7 @@ export function calcFinanceiroFromLancamentos(
 
   // Filtrar: conciliado + data_pagamento dentro do período
   const conciliados = lancamentos.filter(l => {
-    if (!isConciliado(l)) return false;
+    if (!isRealizado(l)) return false;
     const am = datePagtoAnoMes(l);
     if (!am) return false;
     return mesesRange.includes(am);
