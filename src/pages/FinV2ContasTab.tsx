@@ -326,7 +326,22 @@ export function FinV2ContasTab() {
               </div>
               <div>
                 <Label>Banco</Label>
-                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Itaú" />
+                <Select value={banco} onValueChange={(v) => { setBanco(v); if (v !== 'Outros') setBancoOutro(''); }}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
+                  <SelectContent>
+                    {bancos.map(b => (
+                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>{b.nome_curto}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {banco === 'Outros' && (
+                  <Input
+                    className="mt-1.5"
+                    value={bancoOutro}
+                    onChange={e => setBancoOutro(e.target.value)}
+                    placeholder="Nome do banco"
+                  />
+                )}
               </div>
             </div>
             <div>
