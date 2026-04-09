@@ -249,7 +249,7 @@ export function LancamentoV2Dialog({
       setCentroCusto(lancamento.centro_custo || '');
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
-      setValorDisplay(toBRL(lancamento.valor));
+      setValorDisplay(toBRL(Math.abs(lancamento.valor)));
       // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
       // For entries: destination = conta_bancaria_id
       // For exits: origin = conta_bancaria_id
@@ -623,7 +623,7 @@ export function LancamentoV2Dialog({
 
   const parceladaValid = formaPagamentoParc === 'avista' || (numParcelas >= 2 && numParcelas <= 24 && parcelaRows.length === numParcelas);
   const recorrenteValid = frequencia === 'pontual' || recorrenciaRows.length > 0;
-  const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao && !!favorecidoId && favorecidoId !== '__none_forn__'
+  const canSave = !!fazendaId && !!dataCompetencia && !!dataPagamento && !!descricao
     && !!subcentro && !!tipoOperacao && !!statusTransacao && valorNum > 0
     && contaSimpleValid && parceladaValid && recorrenteValid;
 
@@ -750,7 +750,7 @@ export function LancamentoV2Dialog({
       observacao,
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
-      favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+      favorecido_id: (favorecidoId && favorecidoId !== '__none_forn__') ? favorecidoId : null,
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
     };

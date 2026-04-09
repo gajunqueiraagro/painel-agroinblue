@@ -183,6 +183,15 @@ function validateRow(
   if (row.valor === null || row.valor === undefined || isNaN(row.valor)) {
     errors.push('Valor obrigatório');
     diagnostics.push({ campo: 'Valor', valorRecebido: String(row.valor ?? '(vazio)'), motivo: 'Campo obrigatório: valor numérico esperado', tipo: 'error', categoria: 'outros' });
+  } else if (row.valor < 0) {
+    warnings.push('Valor negativo detectado');
+    diagnostics.push({
+      campo: 'Valor',
+      valorRecebido: String(row.valor),
+      motivo: 'Valor negativo será convertido para positivo. O sistema aplica o sinal conforme o tipo de operação (Entrada/Saída). Use "Ações em massa" para corrigir todos.',
+      tipo: 'warning',
+      categoria: 'outros',
+    });
   }
 
   // Tipo
@@ -506,6 +515,13 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     setBulkOpen(false);
   };
 
+  const bulkFixNegativeValues = () => {
+    setRows(prev => revalidateRows(prev.map(r => r.valor < 0 ? { ...r, valor: Math.abs(r.valor) } : r)));
+    setBulkOpen(false);
+  };
+
+  const negativeCount = useMemo(() => rows.filter(r => r.valor < 0).length, [rows]);
+
   // Export errors as CSV
   const exportErrors = () => {
     const errorRows = rows.filter(r => r._validation.diagnostics.length > 0);
@@ -570,6 +586,24 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
           <div className="px-4 pb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Verificando duplicidades na base...
+          </div>
+        )}
+
+        {/* Negative values banner */}
+        {!isLoading && negativeCount > 0 && (
+          <div className="px-4 pb-2 shrink-0">
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">
+                  {negativeCount} lançamento(s) com valor negativo detectado(s)
+                </p>
+                <p className="text-amber-700 dark:text-amber-400">
+                  O sistema trabalha com valores positivos — o sinal é aplicado internamente conforme o tipo (Entrada = positivo, Saída = negativo).
+                  Use <strong>"Ações em massa"</strong> para converter todos de uma vez, ou corrija individualmente na coluna Valor.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -656,6 +690,11 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                 <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] h-7" onClick={bulkClearNumeroDocumento}>
                   Limpar Número Documento (todos)
                 </Button>
+                {negativeCount > 0 && (
+                  <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] h-7 text-amber-600" onClick={bulkFixNegativeValues}>
+                    ⚠ Converter {negativeCount} valor(es) negativo(s) para positivo
+                  </Button>
+                )}
               </PopoverContent>
             </Popover>
 
