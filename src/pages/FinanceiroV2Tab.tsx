@@ -466,20 +466,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return 'outros';
   };
 
+  // Build grupo_custo lookup from classificacoes (centro_custo → grupo_custo)
+  const centroToGrupo = useMemo(() => {
+    const map = new Map<string, string>();
+    hook.classificacoes.forEach(c => {
+      if (c.centro_custo && c.grupo_custo) map.set(c.centro_custo, c.grupo_custo);
+    });
+    return map;
+  }, [hook.classificacoes]);
+
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
 
     // Directional conta filtering:
-    // "Conta Origem" alone → only outflows (saídas + transfers sent from this account)
-    // "Conta Destino" alone → only inflows (entradas + transfers received by this account)
     const hasContaOrigem = contaOrigem && contaOrigem !== '__all__';
     const hasContaDestino = contaDestino && contaDestino !== '__all__';
 
     if (hasContaOrigem && !hasContaDestino) {
-      // Show only money leaving this account: saídas or transfers sent
       items = items.filter(l => l.sinal < 0 || isTransferenciaTipo(l.tipo_operacao));
     } else if (hasContaDestino && !hasContaOrigem) {
-      // Show only money arriving at this account: entradas or transfers received
       items = items.filter(l => l.sinal > 0 || isTransferenciaTipo(l.tipo_operacao));
     }
 
@@ -493,8 +498,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
+    // Client-side grupo_custo filter (not a DB column on lancamentos)
+    if (grupoFiltro !== '__all__') {
+      items = items.filter(l => {
+        const grupo = centroToGrupo.get(l.centro_custo || '');
+        return grupo === grupoFiltro;
+      });
+    }
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     const pagamentoA = a.data_pagamento || '9999-12-31';
