@@ -288,12 +288,42 @@ export function useContratos() {
     return lancamentos.length;
   }, []);
 
+  const excluirContrato = useCallback(async (id: string): Promise<boolean> => {
+    // Delete linked lancamentos first
+    const { error: delLanc } = await (supabase
+      .from('financeiro_lancamentos_v2') as any)
+      .delete()
+      .eq('contrato_id', id);
+
+    if (delLanc) {
+      toast.error('Erro ao excluir lançamentos do contrato');
+      console.error(delLanc);
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('financeiro_contratos' as any)
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Erro ao excluir contrato');
+      console.error(error);
+      return false;
+    }
+
+    toast.success('Contrato excluído');
+    await fetchContratos();
+    return true;
+  }, [fetchContratos]);
+
   return {
     contratos,
     loading,
     criarContrato,
     editarContrato,
     alterarStatus,
+    excluirContrato,
     fetchContratos,
   };
 }
