@@ -648,46 +648,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
-      {/* Cleanup imported realizado confirmation */}
-      <AlertDialog open={confirmCleanupOpen} onOpenChange={(open) => { setConfirmCleanupOpen(open); if (!open) setCleanupConfirmText(''); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">⚠ Excluir realizados importados</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                <p>Você está prestes a <strong className="text-destructive">cancelar permanentemente</strong> todos os lançamentos que atendem aos critérios:</p>
-                <ul className="list-disc pl-4 space-y-1 text-[12px]">
-                  <li>Status: <strong>Realizado</strong></li>
-                  <li>Origem: <strong>Importação</strong> (possuem lote de importação)</li>
-                  <li>Dentro dos filtros atualmente aplicados</li>
-                </ul>
-                <p className="text-[12px] text-muted-foreground">Metas, programados e contratos <strong>não serão afetados</strong>.</p>
-                <p className="font-bold text-destructive">{realizadosImportadosCount} lançamento{realizadosImportadosCount !== 1 ? 's serão' : ' será'} removido{realizadosImportadosCount !== 1 ? 's' : ''}.</p>
-                <div className="pt-2 border-t">
-                  <label className="text-[11px] font-semibold block mb-1">Digite <span className="font-mono text-destructive">CONFIRMAR</span> para prosseguir:</label>
-                  <Input
-                    value={cleanupConfirmText}
-                    onChange={(e) => setCleanupConfirmText(e.target.value)}
-                    placeholder="CONFIRMAR"
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={cleanupDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCleanupRealizados}
-              disabled={cleanupDeleting || cleanupConfirmText !== 'CONFIRMAR'}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {cleanupDeleting ? 'Excluindo...' : `Excluir ${realizadosImportadosCount} realizado${realizadosImportadosCount !== 1 ? 's' : ''}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
   useEffect(() => {
     if (currentPage > totalPages - 1) {
