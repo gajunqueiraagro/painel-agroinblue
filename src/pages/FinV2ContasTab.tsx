@@ -113,14 +113,12 @@ export function FinV2ContasTab() {
   useEffect(() => { load(); }, [load]);
 
   const bancoOptions = useMemo(() =>
-    bancos.map(b => ({ value: b.nome_curto, label: b.nome_curto })),
+    bancos.map(b => ({
+      value: b.nome_curto,
+      label: `${b.nome_banco}`,
+      searchText: `${b.nome_banco} ${b.nome_curto} ${b.codigo_banco}`.toLowerCase(),
+    })),
   [bancos]);
-
-  /** Resolve display name for banco field (handles legacy free-text values) */
-  const resolveBancoDisplay = (val: string | null) => {
-    if (!val) return '-';
-    return val;
-  };
 
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
