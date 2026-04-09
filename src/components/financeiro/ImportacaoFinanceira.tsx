@@ -443,10 +443,18 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
                     {imp.status !== 'cancelada' && podeCancelar && (
                       <Button
                         variant="ghost" size="icon"
-                        className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        onClick={() => setConfirmExcluir(imp)}
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={async () => {
+                          setConfirmExcluir(imp);
+                          setConfirmTexto('');
+                          setDetalhesLote(null);
+                          if (onBuscarDetalhesLote) {
+                            const det = await onBuscarDetalhesLote(imp.id);
+                            setDetalhesLote(det);
+                          }
+                        }}
                         disabled={excluindo === imp.id}
-                        title="Cancelar importação"
+                        title="Excluir importação (lote)"
                       >
                         {excluindo === imp.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
                       </Button>
