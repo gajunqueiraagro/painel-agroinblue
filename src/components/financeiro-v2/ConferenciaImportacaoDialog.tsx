@@ -422,12 +422,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
         {row.valor != null ? formatMoeda(row.valor) : '—'}
       </TableCell>
       <TableCell className="py-0.5">
-        <Select value={row.tipoDocumento || ''} onValueChange={v => onUpdate(row.linha, 'tipoDocumento', v || null)}>
+        <Select value={row.tipoDocumento || '__none__'} onValueChange={v => onUpdate(row.linha, 'tipoDocumento', v === '__none__' ? null : v)}>
           <SelectTrigger className="h-6 text-[10px] px-1 border-0 bg-transparent shadow-none">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">— Nenhum —</SelectItem>
+            <SelectItem value="__none__" className="text-xs">— Nenhum —</SelectItem>
             {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
           </SelectContent>
         </Select>
