@@ -471,6 +471,43 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, []);
 
+  const excluirLancamentosEmLote = useCallback(async (ids: string[]): Promise<{ excluidos: number; bloqueados: string[] }> => {
+    if (ids.length === 0) return { excluidos: 0, bloqueados: [] };
+
+    // Fetch all to check which can be deleted
+    const { data: rows, error: loadError } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id, lote_importacao_id, origem_lancamento, descricao')
+      .in('id', ids);
+
+    if (loadError || !rows) {
+      toast.error('Erro ao validar lançamentos para exclusão');
+      return { excluidos: 0, bloqueados: [] };
+    }
+
+    const bloqueados = rows.filter(r => !!r.lote_importacao_id).map(r => r.id);
+    const deletaveis = rows.filter(r => !r.lote_importacao_id).map(r => r.id);
+
+    if (deletaveis.length === 0) {
+      return { excluidos: 0, bloqueados };
+    }
+
+    // Delete in batches of 100
+    let totalExcluidos = 0;
+    for (let i = 0; i < deletaveis.length; i += 100) {
+      const batch = deletaveis.slice(i, i + 100);
+      const { error } = await supabase.from('financeiro_lancamentos_v2').delete().in('id', batch);
+      if (error) {
+        console.error('[FinV2] batch delete error', error);
+        toast.error(`Erro ao excluir lote (${i}): ${error.message}`);
+        break;
+      }
+      totalExcluidos += batch.length;
+    }
+
+    return { excluidos: totalExcluidos, bloqueados };
+  }, []);
+
   const duplicarLancamento = useCallback(async (lanc: LancamentoV2) => {
     if (!clienteId || !user) return false;
 
@@ -547,6 +584,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     criarLancamentosEmLote,
     editarLancamento,
     excluirLancamento,
+    excluirLancamentosEmLote,
     duplicarLancamento,
     setPage,
   };

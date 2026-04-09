@@ -3,6 +3,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
+import { toast } from 'sonner';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X } from 'lucide-react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
@@ -191,7 +193,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
-  
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Sorting state
    type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
@@ -313,6 +319,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   useEffect(() => {
     setCurrentPage(0);
+    setSelectedIds(new Set());
   }, [filtros, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
 
   const handlePageChange = (p: number) => setCurrentPage(p);
@@ -370,6 +377,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
       });
     }
+  };
+
+  // ── Bulk selection helpers (defined after sortedLancamentos via lazy refs) ──
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
@@ -498,7 +514,47 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap]);
 
   const totalLancamentosFiltrados = sortedLancamentos.length;
+
+  // ── Bulk selection (depends on sortedLancamentos) ──
+  const allSelected = useMemo(() => selectedIds.size > 0 && sortedLancamentos.length > 0 && sortedLancamentos.every(l => selectedIds.has(l.id)), [selectedIds, sortedLancamentos]);
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedLancamentos.map(l => l.id)));
+    }
+  };
+
+  const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
+  const bloqueadosInfo = useMemo(() => {
+    const importados = selectedLancamentos.filter(l => !!l.lote_importacao_id);
+    const deletaveis = selectedLancamentos.filter(l => !l.lote_importacao_id);
+    const origens = new Set(selectedLancamentos.map(l => l.origem_lancamento));
+    return { importados, deletaveis, origens: Array.from(origens) };
+  }, [selectedLancamentos]);
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      const ids = bloqueadosInfo.deletaveis.map(l => l.id);
+      const result = await hook.excluirLancamentosEmLote(ids);
+      if (result.excluidos > 0) {
+        toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);
+      }
+      if (result.bloqueados.length > 0) {
+        toast.error(`${result.bloqueados.length} importado(s) não puderam ser excluídos`);
+      }
+      setSelectedIds(new Set());
+      await hook.loadLancamentos(filtros, hook.page);
+    } finally {
+      setBulkDeleting(false);
+      setConfirmDeleteOpen(false);
+    }
+  };
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
+
 
   useEffect(() => {
     if (currentPage > totalPages - 1) {
@@ -829,6 +885,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
            <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
+                <col style={{ width: 28 }} />
                 <col style={{ width: 62 }} />
                 <col style={{ width: 62 }} />
                 <col />
@@ -841,8 +898,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-0 z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[62px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto<SortIndicator field="pgto" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle bg-primary sticky left-0 z-30">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} className="h-3 w-3 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary" />
+                  </th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[28px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[90px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
@@ -855,7 +915,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={9} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={10} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -871,9 +931,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     const canEditRow = !isHistoricoReadOnly && !rowMesFechado;
 
                     return (
-                      <tr key={l.id} className="border-b italic !h-auto hover:bg-muted/50 transition-colors">
-                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-0 z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
-                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[62px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
+                      <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
+                        <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
+                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} className="h-3 w-3" />
+                        </td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
+                        <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[90px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
@@ -902,6 +965,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </table>
           </div>
 
+          {/* Bulk action bar */}
+          {someSelected && (
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <span className="text-[11px] font-semibold">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => setConfirmDeleteOpen(true)}>
+                <Trash2 className="h-3 w-3" /> Excluir selecionados
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={() => setSelectedIds(new Set())}>
+                <X className="h-3 w-3" /> Cancelar seleção
+              </Button>
+            </div>
+          )}
+
           {/* Total count */}
           <div className="flex items-center px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
@@ -924,6 +1000,38 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
       />
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamentos em massa</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p><strong>{selectedIds.size}</strong> lançamento{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}.</p>
+                {bloqueadosInfo.importados.length > 0 && (
+                  <p className="text-destructive font-semibold">
+                    ⚠ {bloqueadosInfo.importados.length} lançamento{bloqueadosInfo.importados.length !== 1 ? 's' : ''} importado{bloqueadosInfo.importados.length !== 1 ? 's' : ''} não {bloqueadosInfo.importados.length !== 1 ? 'podem' : 'pode'} ser excluído{bloqueadosInfo.importados.length !== 1 ? 's' : ''}.
+                  </p>
+                )}
+                <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} excluído{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} permanentemente.</p>
+                <p className="text-[11px] text-muted-foreground">Origens: {bloqueadosInfo.origens.join(', ')}</p>
+                <p className="text-destructive font-bold text-xs mt-2">Essa ação não pode ser desfeita.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting || bloqueadosInfo.deletaveis.length === 0}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleting ? 'Excluindo...' : `Excluir ${bloqueadosInfo.deletaveis.length} lançamento${bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
