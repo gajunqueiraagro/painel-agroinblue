@@ -373,10 +373,11 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [statusFilter, setStatusFilter] = useState<ReasonFilter>('all');
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  // Initialize/revalidate rows when dupFlags or lookups change
+  // Initialize/revalidate rows when hashes or lookups change
   useEffect(() => {
+    if (!existingHashes) return;
     setRows(linhas.map(l => {
-      const isDup = dupFlags.get(l.linha) || false;
+      const isDup = checkDuplicate(l, linhas, existingHashes);
       return {
         ...l,
         _validation: validateRow(l, contaLookup, fazendaLookup, isDup),
@@ -385,7 +386,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         _isDuplicate: isDup,
       };
     }));
-  }, [linhas, dupFlags, contaLookup, fazendaLookup]);
+  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate]);
 
   const contaOptions = useMemo(
     () => contas
@@ -401,8 +402,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   );
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
+    if (!existingHashes) return currentRows;
     return currentRows.map(r => {
-      const isDup = dupFlags.get(r.linha) || false;
+      const isDup = checkDuplicate(r, currentRows, existingHashes);
       return {
         ...r,
         _validation: validateRow(r, contaLookup, fazendaLookup, isDup),
@@ -410,7 +412,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         _isDuplicate: isDup,
       };
     });
-  }, [contaLookup, fazendaLookup, dupFlags]);
+  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate]);
 
   // Stats
   const stats = useMemo(() => {
@@ -458,17 +460,26 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   // Edit a single cell
   const updateRow = (linha: number, field: keyof LinhaImportada, value: string | null) => {
     setRows(prev => {
-      return prev.map(r => {
+      // First pass: apply the field change
+      const nextRows = prev.map(r => {
         if (r.linha !== linha) return r;
         const updated = { ...r, [field]: value };
         if (field === 'fazenda') {
           const faz = fazendas.find(f => f.codigo.toLowerCase().trim() === (value || '').toLowerCase().trim());
           updated.fazendaId = faz?.id || null;
         }
-        const isDup = dupFlags.get(r.linha) || false;
-        updated._validation = validateRow(updated, contaLookup, fazendaLookup, isDup);
-        updated._resolved = resolveInfo(updated, contaLookup, fazendaLookup);
         return updated;
+      });
+      // Second pass: recalculate dedup for ALL rows (editing one row can affect siblings)
+      if (!existingHashes) return nextRows;
+      return nextRows.map(r => {
+        const isDup = checkDuplicate(r, nextRows, existingHashes);
+        return {
+          ...r,
+          _validation: validateRow(r, contaLookup, fazendaLookup, isDup),
+          _resolved: resolveInfo(r, contaLookup, fazendaLookup),
+          _isDuplicate: isDup,
+        };
       });
     });
   };
