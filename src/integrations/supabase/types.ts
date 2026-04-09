@@ -2979,7 +2979,7 @@ export type Database = {
           fazenda_id: string
           fazenda_origem: string | null
           id: string
-          nota_fiscal: string | null
+          numero_documento: string | null
           observacao: string | null
           outros_descontos: number | null
           peso_carcaca_kg: number | null
@@ -3026,7 +3026,7 @@ export type Database = {
           fazenda_id: string
           fazenda_origem?: string | null
           id?: string
-          nota_fiscal?: string | null
+          numero_documento?: string | null
           observacao?: string | null
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
@@ -3073,7 +3073,7 @@ export type Database = {
           fazenda_id?: string
           fazenda_origem?: string | null
           id?: string
-          nota_fiscal?: string | null
+          numero_documento?: string | null
           observacao?: string | null
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
