@@ -134,7 +134,7 @@ const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
-  'Documento', 'Nota_Fiscal',
+  'Documento', 'Nota_Fiscal', 'NF', 'Tipo_Documento',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
@@ -155,8 +155,10 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 
 function normalizeCol(s: string): string {
   const n = s.toLowerCase().replace(/[_\s]/g, '');
-  // Aliases
-  if (n === 'notafiscal') return 'documento';
+  // Aliases — keep Nota_Fiscal and NF as separate mapped columns
+  if (n === 'notafiscal') return 'notafiscal';
+  if (n === 'nf') return 'nf';
+  if (n === 'tipodocumento') return 'tipodocumento';
   return n;
 }
 
@@ -278,9 +280,27 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
 
-      // Parse documento from Documento or Nota_Fiscal columns
-      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal'));
-      const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
+      // Parse documento: try Documento, Nota_Fiscal, or NF columns
+      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal')) || str(col(r, colMap, 'NF'));
+      const rawTipoDocumento = str(col(r, colMap, 'Tipo_Documento'));
+
+      let tipoDocFinal: string | null = null;
+      let notaFiscalFinal: string | null = null;
+
+      if (rawTipoDocumento) {
+        // Tipo_Documento column provided explicitly — use it directly
+        tipoDocFinal = rawTipoDocumento;
+        // Extract number from the documento/NF column (raw number only)
+        if (rawDocumento) {
+          const docParsed = parseDocumentoImport(rawDocumento);
+          notaFiscalFinal = docParsed?.numero || rawDocumento;
+        }
+      } else if (rawDocumento) {
+        // Auto-detect type from combined text
+        const docParsed = parseDocumentoImport(rawDocumento);
+        tipoDocFinal = docParsed?.tipo || null;
+        notaFiscalFinal = docParsed?.numero || null;
+      }
 
       lancamentos.push({
         linha: linhaNum,
@@ -301,8 +321,8 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
-        tipoDocumento: docParsed?.tipo || null,
-        notaFiscal: docParsed?.numero || null,
+        tipoDocumento: tipoDocFinal,
+        notaFiscal: notaFiscalFinal,
       });
 
     } else if (tipoRegistro === 'SALDO') {
