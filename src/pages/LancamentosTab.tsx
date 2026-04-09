@@ -781,6 +781,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
 
     // 8. Set editing mode
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
