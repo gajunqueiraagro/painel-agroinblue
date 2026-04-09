@@ -321,8 +321,8 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
-        tipoDocumento: docParsed?.tipo || null,
-        notaFiscal: docParsed?.numero || null,
+        tipoDocumento: tipoDocFinal,
+        notaFiscal: notaFiscalFinal,
       });
 
     } else if (tipoRegistro === 'SALDO') {
