@@ -589,6 +589,24 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
           </div>
         )}
 
+        {/* Negative values banner */}
+        {!isLoading && negativeCount > 0 && (
+          <div className="px-4 pb-2 shrink-0">
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <p className="font-semibold text-amber-800 dark:text-amber-300">
+                  {negativeCount} lançamento(s) com valor negativo detectado(s)
+                </p>
+                <p className="text-amber-700 dark:text-amber-400">
+                  O sistema trabalha com valores positivos — o sinal é aplicado internamente conforme o tipo (Entrada = positivo, Saída = negativo).
+                  Use <strong>"Ações em massa"</strong> para converter todos de uma vez, ou corrija individualmente na coluna Valor.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary cards */}
         <div className="px-4 pb-2 shrink-0">
           <div className="grid grid-cols-5 gap-2">
