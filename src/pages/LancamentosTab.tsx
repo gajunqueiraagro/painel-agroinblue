@@ -601,6 +601,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
   const handleCancelEdit = useCallback(() => {
+    editOriginalRef.current = null;
+    setP1BloqueioMsg(null);
     setEditingAbateId(null);
     setQuantidade(''); setCategoria(''); setPesoKg('');
     setFazendaOrigem(''); setFazendaDestino('');
