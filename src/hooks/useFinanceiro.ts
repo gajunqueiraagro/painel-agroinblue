@@ -363,7 +363,7 @@ export function useFinanceiro() {
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
-          supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta').eq('cliente_id', clienteId!).eq('ativa', true),
+          supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId!).eq('ativa', true),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
         ]);
@@ -399,7 +399,7 @@ export function useFinanceiro() {
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
-          clienteId ? supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta').eq('cliente_id', clienteId).eq('ativa', true) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId).eq('ativa', true) : Promise.resolve({ data: [] }),
           admPromise,
           needsRateio && opIds.length > 0
             ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
