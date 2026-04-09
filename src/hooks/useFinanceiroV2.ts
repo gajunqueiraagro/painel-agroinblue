@@ -110,6 +110,7 @@ export interface FiltrosV2 {
 export interface ClassificacaoItem {
   subcentro: string;
   centro_custo: string;
+  grupo_custo: string;
   macro_custo: string;
   tipo_operacao: string;
 }
@@ -184,7 +185,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_plano_contas')
-      .select('subcentro, centro_custo, macro_custo, tipo_operacao')
+      .select('subcentro, centro_custo, grupo_custo, macro_custo, tipo_operacao')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .not('subcentro', 'is', null)
@@ -196,6 +197,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       items.push({
         subcentro: row.subcentro,
         centro_custo: row.centro_custo || '',
+        grupo_custo: row.grupo_custo || '',
         macro_custo: row.macro_custo || '',
         tipo_operacao: row.tipo_operacao || '',
       });
