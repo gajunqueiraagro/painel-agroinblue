@@ -155,8 +155,10 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 
 function normalizeCol(s: string): string {
   const n = s.toLowerCase().replace(/[_\s]/g, '');
-  // Aliases
-  if (n === 'notafiscal') return 'documento';
+  // Aliases — keep Nota_Fiscal and NF as separate mapped columns
+  if (n === 'notafiscal') return 'notafiscal';
+  if (n === 'nf') return 'nf';
+  if (n === 'tipodocumento') return 'tipodocumento';
   return n;
 }
 
