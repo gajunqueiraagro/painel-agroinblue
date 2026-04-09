@@ -351,7 +351,7 @@ export function useFinanceiro() {
       if (isGlobal) {
         if (allFazendaIds.length === 0) {
           setLancamentos([]); setImportacoes([]); setCentrosCusto([]);
-          setLancamentosADM([]); setRawSaldos([]); setRawLancsPec([]);
+          setContasBancarias([]); setLancamentosADM([]); setRawSaldos([]); setRawLancsPec([]);
           setLoading(false);
           return;
         }
