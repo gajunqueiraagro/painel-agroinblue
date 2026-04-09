@@ -3,7 +3,7 @@
  */
 import * as XLSX from 'xlsx';
 
-import { parseDocumentoImport, type TipoDocumento } from './documentoHelper';
+import { parseDocumentoImportV2, type TipoDocumento } from './documentoHelper';
 
 // ── Types ──
 
