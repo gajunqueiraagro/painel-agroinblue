@@ -154,7 +154,10 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 }
 
 function normalizeCol(s: string): string {
-  return s.toLowerCase().replace(/[_\s]/g, '');
+  const n = s.toLowerCase().replace(/[_\s]/g, '');
+  // Aliases
+  if (n === 'notafiscal') return 'documento';
+  return n;
 }
 
 export function validarEstruturaExcel(file: ArrayBuffer): ValidacaoEstrutura {

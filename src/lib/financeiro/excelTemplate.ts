@@ -44,6 +44,7 @@ const INSTRUCOES: XlsxCellValue[][] = [
   ['Grupo_Custo', 'NÃO', 'Texto', 'Nível 2 hierarquia'],
   ['Centro_Custo', 'NÃO', 'Texto', 'Nível 3 hierarquia'],
   ['Subcentro', 'NÃO', 'Texto', 'Nível 4 — detalhe opcional'],
+  ['Documento', 'NÃO', 'Texto', 'Tipo + número do documento (ex: NF 123456, Recibo 4567, Contrato 2024-01)'],
   ['Obs', 'NÃO', 'Texto', 'Observações livres'],
   [],
   ['TIPOS DE REGISTRO:'],
