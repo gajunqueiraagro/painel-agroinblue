@@ -1,6 +1,6 @@
 /**
  * Hook para o Fluxo de Caixa — 12 linhas, jan-dez.
- * Base: data_pagamento + status_transacao = 'Conciliado'.
+ * Base: data_pagamento + status_transacao = 'Realizado'.
  * Saldo Inicial Jan = soma dos registros de saldo_final Dez do ano anterior (financeiro_saldos_bancarios_v2).
  *
  * REGRA: O fluxo de caixa é SEMPRE GLOBAL (todas as fazendas),
@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
-  isConciliado,
+  isRealizado,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
   getEscopo,

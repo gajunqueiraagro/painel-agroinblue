@@ -20,7 +20,7 @@ import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
 import { DREAtividade } from '@/components/financeiro/AnaliseDRE';
 import {
-  isConciliado as isConciliadoClass,
+  isRealizado as isRealizadoClass,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
   getEscopo,
@@ -63,7 +63,7 @@ function formatMoedaCompacto(val: number): string {
 
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {

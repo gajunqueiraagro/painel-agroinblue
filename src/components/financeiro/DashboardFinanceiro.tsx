@@ -2,14 +2,14 @@
  * Dashboard financeiro — redesign completo.
  *
  * ARQUITETURA:
- * - Dados FINANCEIROS: filtrados localmente (conciliado + data pagamento)
+ * - Dados FINANCEIROS: filtrados localmente (realizado + data pagamento)
  * - Dados ZOOTÉCNICOS: exclusivamente de useIndicadoresZootecnicos (fonte única)
  * - PROIBIDO: cálculo local de saldos, pesos, arrobas ou cabeças médias
  *
  * Data base financeira: data_pagamento (YYYY-MM)
  * Entradas = tipo_operacao starts with "1"
  * Saídas = tipo_operacao starts with "2"
- * Status = Conciliado
+ * Status = Realizado
  *
  * FILTRO ÚNICO: recebe ano e mesAte via props do container (FinanceiroCaixaTab).
  */
@@ -29,7 +29,7 @@ import {
   type RateioADM,
 } from '@/hooks/useFinanceiro';
 import {
-  isConciliado as isConciliadoCentral,
+  isRealizado as isRealizadoCentral,
   isEntrada as isEntradaCentral,
   isSaida as isSaidaCentral,
   datePagtoAnoMes as datePagtoAnoMesCentral,

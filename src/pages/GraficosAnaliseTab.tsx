@@ -41,7 +41,7 @@ const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpacity: 0.5 };
 const AXIS_TICK = { fontSize: 10, fill: 'hsl(var(--muted-foreground))' };
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
