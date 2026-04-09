@@ -68,6 +68,7 @@ export function FinV2ContasTab() {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const [contas, setContas] = useState<ContaBancaria[]>([]);
+  const [bancos, setBancos] = useState<BancoRef[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContaBancaria | null>(null);
