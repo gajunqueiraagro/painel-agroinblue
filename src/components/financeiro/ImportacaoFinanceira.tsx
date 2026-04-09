@@ -54,6 +54,7 @@ interface PreviewState {
   totalLinhas: number;
   resumoFazendas: { codigo: string; nome: string; qtd: number }[];
   erroEstrutura?: ValidacaoEstrutura;
+  excelHeaders?: string[];
 }
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir, onBuscarDetalhesLote }: Props) {
@@ -121,6 +122,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
       erros: [...result.erros, ...errosFazenda, ...errosFazendaExtras, ...errosCentro],
       totalLinhas: result.totalLinhas,
       resumoFazendas,
+      excelHeaders: result.excelHeaders,
     });
 
     if (fileRef.current) fileRef.current.value = '';
@@ -521,6 +523,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           onClose={() => setConferenciaOpen(false)}
           nomeArquivo={preview.nomeArquivo}
           linhas={preview.lancamentos}
+          excelHeaders={preview.excelHeaders || []}
           contas={contasBancarias}
           fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
           clienteId={clienteAtual?.id}
