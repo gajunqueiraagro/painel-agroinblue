@@ -1,0 +1,1 @@
+ALTER TABLE public.financeiro_contas_bancarias ADD COLUMN conta_digito text;

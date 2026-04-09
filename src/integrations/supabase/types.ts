@@ -1630,6 +1630,7 @@ export type Database = {
           banco: string | null
           cliente_id: string
           codigo_conta: string | null
+          conta_digito: string | null
           created_at: string
           fazenda_id: string
           id: string
@@ -1646,6 +1647,7 @@ export type Database = {
           banco?: string | null
           cliente_id: string
           codigo_conta?: string | null
+          conta_digito?: string | null
           created_at?: string
           fazenda_id: string
           id?: string
@@ -1662,6 +1664,7 @@ export type Database = {
           banco?: string | null
           cliente_id?: string
           codigo_conta?: string | null
+          conta_digito?: string | null
           created_at?: string
           fazenda_id?: string
           id?: string
