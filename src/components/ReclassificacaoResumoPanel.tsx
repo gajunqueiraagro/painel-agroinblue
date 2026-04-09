@@ -31,8 +31,7 @@ const STATUS_COLORS: Record<StatusOpcao, { text: string; bg: string; label: stri
   realizado: { text: 'text-green-600', bg: 'bg-green-500', label: STATUS_LABEL.realizado },
   programado: { text: 'text-blue-600', bg: 'bg-blue-500', label: STATUS_LABEL.programado },
   agendado: { text: 'text-purple-600', bg: 'bg-purple-500', label: STATUS_LABEL.agendado },
-  previsto: { text: 'text-cyan-600', bg: 'bg-cyan-500', label: STATUS_LABEL.previsto },
-  meta: { text: 'text-orange-600', bg: 'bg-orange-500', label: META_VISUAL.label },
+  meta: { text: 'text-orange-600', bg: 'bg-orange-500', label: STATUS_LABEL.meta },
 };
 
 export function ReclassificacaoResumoPanel({

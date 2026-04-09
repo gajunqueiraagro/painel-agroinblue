@@ -35,8 +35,8 @@ interface Props {
 }
 
 const TIPOS = ['1-Entradas', '2-Saídas', '3-Transferências'];
-const STATUS_LIST = ['previsto', 'agendado', 'programado', 'realizado'];
-const STATUS_UI_LABEL: Record<string, string> = { previsto: STATUS_LABEL_MAP.previsto, agendado: 'Agendado', programado: STATUS_LABEL_MAP.programado, realizado: STATUS_LABEL_MAP.realizado };
+const STATUS_LIST = ['meta', 'agendado', 'programado', 'realizado'];
+const STATUS_UI_LABEL: Record<string, string> = { meta: STATUS_LABEL_MAP.meta, agendado: 'Agendado', programado: STATUS_LABEL_MAP.programado, realizado: STATUS_LABEL_MAP.realizado };
 
 const COLS = ['data_competencia', 'data_pagamento', 'tipo_operacao', 'conta_bancaria_id', 'descricao', 'valor', 'subcentro', 'status_transacao'] as const;
 type ColKey = typeof COLS[number];
@@ -45,7 +45,7 @@ let rowCounter = 0;
 function newRowId() { return `row_${++rowCounter}_${Date.now()}`; }
 
 function deriveStatus(dataPagamento: string): string {
-  if (!dataPagamento) return 'previsto';
+  if (!dataPagamento) return 'meta';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const d = new Date(dataPagamento + 'T00:00:00');
@@ -63,7 +63,7 @@ function createEmptyRow(inherit?: Partial<RowData>): RowData {
     descricao: '',
     valor: '',
     subcentro: inherit?.subcentro || '',
-    status_transacao: inherit?.status_transacao || 'previsto',
+    status_transacao: inherit?.status_transacao || 'meta',
     macro_custo: inherit?.macro_custo || '',
     centro_custo: inherit?.centro_custo || '',
   };
@@ -193,7 +193,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
         data_pagamento: r.data_pagamento || null,
         valor: Math.abs(parseFloat(r.valor)),
         tipo_operacao: r.tipo_operacao || '2-Saídas',
-        status_transacao: r.status_transacao || 'previsto',
+        status_transacao: r.status_transacao || 'meta',
         descricao: r.descricao,
         macro_custo: r.macro_custo,
         centro_custo: r.centro_custo,

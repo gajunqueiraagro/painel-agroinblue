@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
@@ -28,7 +28,7 @@ interface Props {
   pesoKg: number;
   data: string;
   categoria: string;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   fazendaOrigem: string;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
@@ -290,7 +290,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         }
       }
 
-      const statusFin = statusOp === 'previsto' ? 'previsto' : 'programado';
+      const statusFin = statusOp === 'meta' ? 'meta' : 'programado';
       const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
       const compraLabel = `Compra ${quantidade} ${catLabel}`;
       const anoMes = data.slice(0, 7);
@@ -437,7 +437,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     resetForm,
   }), [handleGerarFinanceiro, validationErrors, fornecedorId, calc.valorBase, tipoPreco, resetForm]);
 
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
   const previstoInputClass = isPrevisto ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
 
   return (

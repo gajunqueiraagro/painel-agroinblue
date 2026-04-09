@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { ArrowRightLeft, DollarSign } from 'lucide-react';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
 import { buildTransferenciaCalculation, type TransferenciaCalculation } from '@/lib/calculos/transferencia';
 
@@ -37,7 +37,7 @@ interface Props {
   fazendaOrigem: string;
   fazendaDestino: string;
   data: string;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   observacao?: string;
 }
 
@@ -51,7 +51,7 @@ export function TransferenciaDetalhesDialog({
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
   const isProgramado = statusOp === 'programado';
   const usePrev = isPrevisto || isProgramado;
 
@@ -79,7 +79,7 @@ export function TransferenciaDetalhesDialog({
       fazendaOrigem,
       fazendaDestino,
       data,
-      statusOperacional: statusOp,
+      statusOperacional: statusOp === 'meta' ? 'programado' : statusOp,
       observacao,
       precoReferenciaArroba: precoReferenciaArroba || undefined,
       precoReferenciaCabeca: precoReferenciaCabeca || undefined,

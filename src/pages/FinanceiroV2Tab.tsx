@@ -92,7 +92,7 @@ const MESES_LIST = [
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  previsto: CENTRAL_STATUS_LABEL.previsto,
+  meta: CENTRAL_STATUS_LABEL.meta,
   agendado: 'Agendado',
   programado: CENTRAL_STATUS_LABEL.programado,
   realizado: CENTRAL_STATUS_LABEL.realizado,
@@ -629,7 +629,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
                   <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
                   <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                  <SelectItem value="previsto" className={itemCls}>{CENTRAL_STATUS_LABEL.previsto}</SelectItem>
+                  <SelectItem value="meta" className={itemCls}>{CENTRAL_STATUS_LABEL.meta}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

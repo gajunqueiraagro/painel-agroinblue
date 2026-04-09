@@ -122,7 +122,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
       fazendaOrigem: '',
       compradorNome,
       data: dataVenda,
-      statusOperacional,
+      statusOperacional: statusOperacional === 'previsto' ? 'programado' : statusOperacional as 'programado' | 'agendado' | 'realizado',
       tipoPreco: toEngineTipoPreco(tipoPreco),
       precoInput,
       tipoVenda,

@@ -116,7 +116,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = (statusOp as string) === 'meta';
   const isProgramado = statusOp === 'programado';
   const usePrev = isPrevisto || isProgramado;
 

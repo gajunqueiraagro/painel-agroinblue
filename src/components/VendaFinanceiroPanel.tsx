@@ -16,7 +16,7 @@ import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelLote, salvarBoitelPlanejamento, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 
 interface Parcela {
   data: string;
@@ -35,7 +35,7 @@ interface Props {
   onCreateFornecedor: (nome: string, cpfCnpj?: string) => Promise<void>;
   notaFiscal: string;
   onNotaFiscalChange: (v: string) => void;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
@@ -102,7 +102,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
-  const isPrevisto = statusOp === 'previsto';
+  const isPrevisto = statusOp === 'meta';
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
 
