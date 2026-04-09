@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Pencil } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Plus, Pencil, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ContaBancaria {
@@ -23,6 +24,7 @@ interface ContaBancaria {
   tipo_conta: string | null;
   codigo_conta: string | null;
   nome_exibicao: string | null;
+  conta_digito: string | null;
   fazenda_id: string;
   ativa: boolean;
   ordem_exibicao: number;
@@ -43,6 +45,18 @@ function parseNum(code: string | null) {
   return parseInt(parts[parts.length - 1] || '0', 10);
 }
 
+/** Build display label: "Nome (Ag-Conta)" when bank details exist */
+export function contaDisplayLabel(c: { nome_exibicao?: string | null; nome_conta: string; agencia?: string | null; numero_conta?: string | null; conta_digito?: string | null }): string {
+  const nome = c.nome_exibicao || c.nome_conta;
+  const parts: string[] = [];
+  if (c.agencia) parts.push(c.agencia);
+  if (c.numero_conta) {
+    parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
+  }
+  if (parts.length > 0) return `${nome} (${parts.join(' ')})`;
+  return nome;
+}
+
 export function FinV2ContasTab() {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -50,15 +64,20 @@ export function FinV2ContasTab() {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContaBancaria | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const [nome, setNome] = useState('');
+  // Form fields — principal
+  const [nomeExibicao, setNomeExibicao] = useState('');
+  const [tipoConta, setTipoConta] = useState('cc');
   const [banco, setBanco] = useState('');
-  const [numero, setNumero] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
-  const [tipoConta, setTipoConta] = useState('cc');
+
+  // Form fields — avançado
   const [codigoConta, setCodigoConta] = useState('');
-  const [nomeExibicao, setNomeExibicao] = useState('');
+  const [agencia, setAgencia] = useState('');
+  const [numeroConta, setNumeroConta] = useState('');
+  const [contaDigito, setContaDigito] = useState('');
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -97,40 +116,51 @@ export function FinV2ContasTab() {
 
   const openNew = () => {
     setEditing(null);
-    setNome(''); setBanco(''); setNumero('');
+    setNomeExibicao('');
+    setTipoConta('cc');
+    setBanco('');
     setFazendaId(fazendas[0]?.id || '');
     setAtiva(true);
-    setTipoConta('cc'); setCodigoConta(''); setNomeExibicao('');
+    setCodigoConta('');
+    setAgencia('');
+    setNumeroConta('');
+    setContaDigito('');
+    setAdvancedOpen(false);
     setDialogOpen(true);
   };
 
   const openEdit = (c: ContaBancaria) => {
     setEditing(c);
-    setNome(c.nome_conta);
+    setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
+    setTipoConta(c.tipo_conta || 'cc');
     setBanco(c.banco || '');
-    setNumero(c.numero_conta || '');
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
-    setTipoConta(c.tipo_conta || 'cc');
     setCodigoConta(c.codigo_conta || '');
-    setNomeExibicao(c.nome_exibicao || '');
+    setAgencia(c.agencia || '');
+    setNumeroConta(c.numero_conta || '');
+    setContaDigito(c.conta_digito || '');
+    setAdvancedOpen(!!(c.codigo_conta || c.agencia || c.numero_conta || c.conta_digito));
     setDialogOpen(true);
   };
 
   const save = async () => {
-    if (!clienteAtual?.id || !nome.trim() || !fazendaId) {
-      toast.error('Preencha nome e fazenda');
+    if (!clienteAtual?.id || !nomeExibicao.trim() || !fazendaId) {
+      toast.error('Preencha o nome da conta e a fazenda');
       return;
     }
+    const displayName = nomeExibicao.trim();
     const payload = {
       cliente_id: clienteAtual.id,
       fazenda_id: fazendaId,
-      nome_conta: nome.trim(),
+      nome_conta: displayName, // keep nome_conta synced for backward compat
+      nome_exibicao: displayName,
       banco: banco.trim() || null,
-      numero_conta: numero.trim() || null,
       tipo_conta: tipoConta,
       codigo_conta: codigoConta.trim() || null,
-      nome_exibicao: nomeExibicao.trim() || null,
+      agencia: agencia.trim() || null,
+      numero_conta: numeroConta.trim() || null,
+      conta_digito: contaDigito.trim() || null,
       ativa,
     };
 
@@ -151,6 +181,15 @@ export function FinV2ContasTab() {
 
   const cellClass = "text-[12px] font-medium leading-tight py-1 px-2";
 
+  const formatContaBancaria = (c: ContaBancaria) => {
+    const parts: string[] = [];
+    if (c.agencia) parts.push(c.agencia);
+    if (c.numero_conta) {
+      parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
+    }
+    return parts.length > 0 ? parts.join(' ') : '-';
+  };
+
   return (
     <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -164,9 +203,9 @@ export function FinV2ContasTab() {
             <TableHeader>
               <TableRow className="border-b">
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Tipo</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Código</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Nome Exibição</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Nome da Conta</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Banco</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Ag / Conta</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Fazenda</TableHead>
                 <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Status</TableHead>
                 <TableHead className="w-8 py-1.5 px-2" />
@@ -193,9 +232,14 @@ export function FinV2ContasTab() {
                           {BADGE_LABEL[c.tipo_conta || 'cc']}
                         </Badge>
                       </TableCell>
-                      <TableCell className={`${cellClass} font-mono`}>{c.codigo_conta || '-'}</TableCell>
-                      <TableCell className={cellClass}>{c.nome_exibicao || c.nome_conta}</TableCell>
+                      <TableCell className={cellClass}>
+                        <span className="font-semibold">{c.nome_exibicao || c.nome_conta}</span>
+                        {c.codigo_conta && (
+                          <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({c.codigo_conta})</span>
+                        )}
+                      </TableCell>
                       <TableCell className={cellClass}>{c.banco || '-'}</TableCell>
+                      <TableCell className={`${cellClass} font-mono text-[11px]`}>{formatContaBancaria(c)}</TableCell>
                       <TableCell className={cellClass}>{fazendaNome(c.fazenda_id)}</TableCell>
                       <TableCell className={cellClass}>
                         <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0 leading-tight">
@@ -222,6 +266,11 @@ export function FinV2ContasTab() {
             <DialogTitle>{editing ? 'Editar Conta' : 'Nova Conta Bancária'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {/* ─── Bloco Principal ─── */}
+            <div>
+              <Label>Nome da Conta *</Label>
+              <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: Itaú Personalité ADM" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Tipo de Conta *</Label>
@@ -235,26 +284,8 @@ export function FinV2ContasTab() {
                 </Select>
               </div>
               <div>
-                <Label>Código</Label>
-                <Input value={codigoConta} onChange={e => setCodigoConta(e.target.value)} placeholder="Ex: cc-001" />
-              </div>
-            </div>
-            <div>
-              <Label>Nome de Exibição</Label>
-              <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: BB Operação" />
-            </div>
-            <div>
-              <Label>Nome interno (legado)</Label>
-              <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bradesco Operação" className="text-muted-foreground" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
                 <Label>Banco</Label>
-                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Bradesco" />
-              </div>
-              <div>
-                <Label>Nº Conta</Label>
-                <Input value={numero} onChange={e => setNumero(e.target.value)} placeholder="Ex: 12345-6" />
+                <Input value={banco} onChange={e => setBanco(e.target.value)} placeholder="Ex: Itaú" />
               </div>
             </div>
             <div>
@@ -272,6 +303,36 @@ export function FinV2ContasTab() {
               <Switch checked={ativa} onCheckedChange={setAtiva} />
               <Label>Conta ativa</Label>
             </div>
+
+            {/* ─── Bloco Avançado ─── */}
+            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground text-xs">
+                  Dados bancários avançados
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                <div>
+                  <Label>Código curto</Label>
+                  <Input value={codigoConta} onChange={e => setCodigoConta(e.target.value)} placeholder="Ex: cc-001 (uso técnico/importação)" className="font-mono text-sm" />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>Agência</Label>
+                    <Input value={agencia} onChange={e => setAgencia(e.target.value)} placeholder="1234" />
+                  </div>
+                  <div>
+                    <Label>Nº Conta</Label>
+                    <Input value={numeroConta} onChange={e => setNumeroConta(e.target.value)} placeholder="56789" />
+                  </div>
+                  <div>
+                    <Label>Dígito</Label>
+                    <Input value={contaDigito} onChange={e => setContaDigito(e.target.value)} placeholder="0" maxLength={2} />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
