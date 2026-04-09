@@ -144,13 +144,13 @@ function validateRow(
     }
   }
 
-  // Número documento
-  if (row.numeroDocumento && /[^\d]/.test(row.numeroDocumento)) {
-    warnings.push('Número documento contém caracteres não numéricos');
+  // Documento ambíguo — only warn if documentoOriginal has digits that couldn't be extracted
+  if (row.documentoOriginal && row.tipoDocumento && !row.numeroDocumento && /\d/.test(row.documentoOriginal)) {
+    warnings.push('Número do documento não pôde ser extraído com segurança');
     diagnostics.push({
       campo: 'Documento',
-      valorRecebido: row.numeroDocumento,
-      motivo: 'Campo espera valor numérico, valor recebido contém texto ou caracteres especiais',
+      valorRecebido: row.documentoOriginal,
+      motivo: 'Tipo detectado mas número contém texto misturado — verifique manualmente',
       tipo: 'warning',
     });
   }
