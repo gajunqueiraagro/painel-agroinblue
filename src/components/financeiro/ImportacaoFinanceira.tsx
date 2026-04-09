@@ -42,6 +42,7 @@ interface Props {
     tipoImportacao?: string,
   ) => Promise<boolean>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
+  onBuscarDetalhesLote?: (importacaoId: string) => Promise<{ total: number; periodos: string[]; fazendaIds: string[] } | null>;
 }
 
 interface PreviewState {
