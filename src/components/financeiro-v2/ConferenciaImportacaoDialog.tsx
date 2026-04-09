@@ -672,6 +672,11 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                 <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] h-7" onClick={bulkClearNumeroDocumento}>
                   Limpar Número Documento (todos)
                 </Button>
+                {negativeCount > 0 && (
+                  <Button variant="ghost" size="sm" className="w-full justify-start text-[11px] h-7 text-amber-600" onClick={bulkFixNegativeValues}>
+                    ⚠ Converter {negativeCount} valor(es) negativo(s) para positivo
+                  </Button>
+                )}
               </PopoverContent>
             </Popover>
 
