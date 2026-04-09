@@ -1538,6 +1538,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setSubmitting(true);
     try {
       if (editingAbateId) {
+        editOriginalRef.current = null;
+        setP1BloqueioMsg(null);
         onEditar(editingAbateId, lancamentoDados);
         if (isAbate && (isConciliado || isConfirmado || isMeta)) {
           // Auto-generate/update financeiro for abate
