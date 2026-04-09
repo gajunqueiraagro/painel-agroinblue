@@ -590,13 +590,15 @@ export function useFinanceiro() {
     if (!normalized) return null;
 
     const contasDaFazenda = contas.filter(conta => conta.fazenda_id === fazendaId);
+
+    // Priority order: nome_exibicao → codigo_conta → nome_conta (legacy) → banco+nome → numero_conta
     const conta = contasDaFazenda.find((item) => {
       const candidates = [
         item.nome_exibicao,
-        item.nome_conta,
         item.codigo_conta,
+        item.nome_conta,
         item.numero_conta,
-        [item.banco, item.nome_conta].filter(Boolean).join(' '),
+        [item.banco, item.nome_exibicao || item.nome_conta].filter(Boolean).join(' '),
       ];
 
       return candidates.some(candidate => normalizeImportText(candidate) === normalized);
