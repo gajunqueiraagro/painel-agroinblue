@@ -27,7 +27,7 @@ export interface LinhaImportada {
   obs: string | null;
   escopoNegocio: string;
   tipoDocumento: string | null;
-  notaFiscal: string | null;
+  numeroDocumento: string | null;
 }
 
 export interface SaldoBancarioImportado {
