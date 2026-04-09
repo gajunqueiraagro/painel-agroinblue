@@ -436,12 +436,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Conta (orig)</TableHead>
                   <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Conta Dest. (orig)</TableHead>
                   <TableHead className="w-24 bg-blue-50/50 dark:bg-blue-950/20">Subcentro (orig)</TableHead>
-                  <TableHead className="w-16 bg-blue-50/50 dark:bg-blue-950/20">Doc. (orig)</TableHead>
-                  <TableHead className="w-16 bg-blue-50/50 dark:bg-blue-950/20 text-right">Valor (orig)</TableHead>
-                  <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Produto (orig)</TableHead>
-                  <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Fornecedor (orig)</TableHead>
-                  {/* Resolved columns */}
-                  <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Fazenda</TableHead>
+                  <TableHead className="w-20 bg-blue-50/50 dark:bg-blue-950/20">Doc. Original</TableHead>
+                  <TableHead className="w-16 bg-green-50/50 dark:bg-green-950/20">Tipo Doc.</TableHead>
+                  <TableHead className="w-16 bg-green-50/50 dark:bg-green-950/20">Nº Doc.</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Conta (sist.)</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Conta Dest. (sist.)</TableHead>
                   <TableHead className="w-20 bg-green-50/50 dark:bg-green-950/20">Tipo</TableHead>
