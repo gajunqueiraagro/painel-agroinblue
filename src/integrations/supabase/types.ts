@@ -2310,7 +2310,7 @@ export type Database = {
           lote_importacao_id: string | null
           macro_custo: string | null
           movimentacao_rebanho_id: string | null
-          nota_fiscal: string | null
+          numero_documento: string | null
           observacao: string | null
           origem_lancamento: string
           origem_tipo: string | null
@@ -2357,7 +2357,7 @@ export type Database = {
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
-          nota_fiscal?: string | null
+          numero_documento?: string | null
           observacao?: string | null
           origem_lancamento?: string
           origem_tipo?: string | null
@@ -2404,7 +2404,7 @@ export type Database = {
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
-          nota_fiscal?: string | null
+          numero_documento?: string | null
           observacao?: string | null
           origem_lancamento?: string
           origem_tipo?: string | null
