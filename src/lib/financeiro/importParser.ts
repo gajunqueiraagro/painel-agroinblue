@@ -78,6 +78,8 @@ export interface ResultadoParsing {
   resumoCaixa: ResumoCaixaImportado[];
   erros: ErroImportacao[];
   totalLinhas: number;
+  /** Original Excel headers for full preview */
+  excelHeaders?: string[];
 }
 
 // ── Helpers ──
