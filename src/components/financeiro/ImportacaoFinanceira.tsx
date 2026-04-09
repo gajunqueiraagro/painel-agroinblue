@@ -29,6 +29,7 @@ interface Props {
   centrosCusto: CentroCustoOficial[];
   fazendas: FazendaMap[];
   mesFechado?: boolean;
+  contasBancarias?: { id: string; nome_conta: string; nome_exibicao?: string | null; codigo_conta?: string | null }[];
   onConfirmar: (
     nomeArquivo: string,
     linhas: LinhaImportada[],
@@ -53,7 +54,7 @@ interface PreviewState {
   erroEstrutura?: ValidacaoEstrutura;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, onConfirmar, onExcluir }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir }: Props) {
   const { perfil } = usePermissions();
   const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -62,6 +63,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
+  const [conferenciaOpen, setConferenciaOpen] = useState(false);
+
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
