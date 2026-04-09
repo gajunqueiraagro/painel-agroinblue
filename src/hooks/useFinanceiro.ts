@@ -656,7 +656,7 @@ export function useFinanceiro() {
 
       const { data: contasData, error: contasError } = await supabase
         .from('financeiro_contas_bancarias')
-        .select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta')
+        .select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito')
         .eq('cliente_id', cid)
         .eq('ativa', true);
 
