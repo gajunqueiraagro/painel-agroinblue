@@ -343,6 +343,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                 importacoes={importacoes}
                 centrosCusto={centrosCusto}
                 fazendas={fazendaMapForImport}
+                contasBancarias={contasBancarias}
                 onConfirmar={confirmarImportacao}
                 onExcluir={excluirImportacao}
               />
