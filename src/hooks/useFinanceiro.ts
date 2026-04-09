@@ -306,6 +306,7 @@ export function useFinanceiro() {
   const [importacoes, setImportacoes] = useState<ImportacaoRecord[]>([]);
   const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([]);
   const [centrosCusto, setCentrosCusto] = useState<CentroCustoOficial[]>([]);
+  const [contasBancarias, setContasBancarias] = useState<ContaBancariaImportacao[]>([]);
   const [lancamentosADM, setLancamentosADM] = useState<FinanceiroLancamento[]>([]);
   const [rawSaldos, setRawSaldos] = useState<RawSaldo[]>([]);
   const [rawLancsPec, setRawLancsPec] = useState<RawLancPec[]>([]);
