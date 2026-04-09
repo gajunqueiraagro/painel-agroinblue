@@ -202,6 +202,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmCleanupOpen, setConfirmCleanupOpen] = useState(false);
+  const [cleanupDeleting, setCleanupDeleting] = useState(false);
+  const [cleanupConfirmText, setCleanupConfirmText] = useState('');
 
   // Sorting state
    type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
@@ -616,6 +619,33 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setConfirmDeleteOpen(false);
     }
   };
+
+  // Cleanup: count imported realizado in current filtered set
+  const realizadosImportadosCount = useMemo(() =>
+    sortedLancamentos.filter(l => l.status_transacao === 'realizado' && !!l.lote_importacao_id && !l.cancelado).length,
+    [sortedLancamentos]
+  );
+
+  const handleCleanupRealizados = async () => {
+    setCleanupDeleting(true);
+    try {
+      const result = await hook.cancelarRealizadosImportados(filtros);
+      if (result.cancelados > 0) {
+        toast.success(`${result.cancelados} lançamento${result.cancelados !== 1 ? 's' : ''} realizado${result.cancelados !== 1 ? 's' : ''} importado${result.cancelados !== 1 ? 's' : ''} removido${result.cancelados !== 1 ? 's' : ''}`);
+        await hook.loadLancamentos(filtros, hook.page);
+      } else {
+        toast.info('Nenhum lançamento encontrado para remoção');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao executar limpeza');
+    } finally {
+      setCleanupDeleting(false);
+      setConfirmCleanupOpen(false);
+      setCleanupConfirmText('');
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
 
@@ -1300,11 +1330,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           )}
 
-          {/* Total count */}
-          <div className="flex items-center px-1 py-1">
+          {/* Total count + cleanup button */}
+          <div className="flex items-center justify-between px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
+            {realizadosImportadosCount > 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-6 text-[10px] gap-1 px-2"
+                onClick={() => setConfirmCleanupOpen(true)}
+              >
+                <Trash2 className="h-3 w-3" /> Excluir realizados importados ({realizadosImportadosCount})
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -1350,6 +1390,47 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {bulkDeleting ? 'Excluindo...' : `Excluir ${bloqueadosInfo.deletaveis.length} lançamento${bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cleanup imported realizado confirmation */}
+      <AlertDialog open={confirmCleanupOpen} onOpenChange={(open) => { setConfirmCleanupOpen(open); if (!open) setCleanupConfirmText(''); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">⚠ Excluir realizados importados</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>Você está prestes a <strong className="text-destructive">cancelar permanentemente</strong> todos os lançamentos que atendem aos critérios:</p>
+                <ul className="list-disc pl-4 space-y-1 text-[12px]">
+                  <li>Status: <strong>Realizado</strong></li>
+                  <li>Origem: <strong>Importação</strong> (possuem lote de importação)</li>
+                  <li>Dentro dos filtros atualmente aplicados</li>
+                </ul>
+                <p className="text-[12px] text-muted-foreground">Metas, programados e contratos <strong>não serão afetados</strong>.</p>
+                <p className="font-bold text-destructive">{realizadosImportadosCount} lançamento{realizadosImportadosCount !== 1 ? 's serão' : ' será'} removido{realizadosImportadosCount !== 1 ? 's' : ''}.</p>
+                <div className="pt-2 border-t">
+                  <label className="text-[11px] font-semibold block mb-1">Digite <span className="font-mono text-destructive">CONFIRMAR</span> para prosseguir:</label>
+                  <Input
+                    value={cleanupConfirmText}
+                    onChange={(e) => setCleanupConfirmText(e.target.value)}
+                    placeholder="CONFIRMAR"
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleanupDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCleanupRealizados}
+              disabled={cleanupDeleting || cleanupConfirmText !== 'CONFIRMAR'}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cleanupDeleting ? 'Excluindo...' : `Excluir ${realizadosImportadosCount} realizado${realizadosImportadosCount !== 1 ? 's' : ''}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
