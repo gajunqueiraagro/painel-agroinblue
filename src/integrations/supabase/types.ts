@@ -2595,6 +2595,7 @@ export type Database = {
           cliente_id: string
           created_at: string
           escopo_negocio: string | null
+          grupo_custo: string | null
           grupo_fluxo: string | null
           id: string
           macro_custo: string
@@ -2609,6 +2610,7 @@ export type Database = {
           cliente_id: string
           created_at?: string
           escopo_negocio?: string | null
+          grupo_custo?: string | null
           grupo_fluxo?: string | null
           id?: string
           macro_custo: string
@@ -2623,6 +2625,7 @@ export type Database = {
           cliente_id?: string
           created_at?: string
           escopo_negocio?: string | null
+          grupo_custo?: string | null
           grupo_fluxo?: string | null
           id?: string
           macro_custo?: string
