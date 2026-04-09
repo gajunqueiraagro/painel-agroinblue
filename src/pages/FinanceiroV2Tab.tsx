@@ -378,6 +378,53 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     }
   };
 
+  // ── Bulk selection helpers ──
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const allSelected = useMemo(() => selectedIds.size > 0 && sortedLancamentos.length > 0 && sortedLancamentos.every(l => selectedIds.has(l.id)), [selectedIds, sortedLancamentos]);
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedLancamentos.map(l => l.id)));
+    }
+  };
+
+  // Bulk delete analysis
+  const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
+  const bloqueadosInfo = useMemo(() => {
+    const importados = selectedLancamentos.filter(l => !!l.lote_importacao_id);
+    const deletaveis = selectedLancamentos.filter(l => !l.lote_importacao_id);
+    const origens = new Set(selectedLancamentos.map(l => l.origem_lancamento));
+    return { importados, deletaveis, origens: Array.from(origens) };
+  }, [selectedLancamentos]);
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      const ids = bloqueadosInfo.deletaveis.map(l => l.id);
+      const result = await hook.excluirLancamentosEmLote(ids);
+      if (result.excluidos > 0) {
+        toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);
+      }
+      if (result.bloqueados.length > 0) {
+        toast.error(`${result.bloqueados.length} importado(s) não puderam ser excluídos`);
+      }
+      setSelectedIds(new Set());
+      await hook.loadLancamentos(filtros, hook.page);
+    } finally {
+      setBulkDeleting(false);
+      setConfirmDeleteOpen(false);
+    }
+  };
+
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => {
     console.log('[FinV2] reopen edit object', {
