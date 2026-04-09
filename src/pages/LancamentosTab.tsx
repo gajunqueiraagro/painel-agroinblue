@@ -1296,10 +1296,30 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Validate form and open confirmation dialog
   const handleRequestRegister = () => {
-    // ── P1 governance block ──
+    // ── P1 governance: selective block ──
     if (p1Oficial) {
-      toast.error('Este mês está fechado no Mapa de Pastos (P1 oficial). Reabra o período para registrar lançamentos.');
-      return;
+      const isEditing = !!editingAbateId;
+      if (!isEditing) {
+        // New entries are always blocked when P1 is closed
+        setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos (P1 oficial). Novos lançamentos não podem ser registrados. Reabra o período para continuar.');
+        return;
+      }
+      // Editing: check if structural fields changed
+      const orig = editOriginalRef.current;
+      if (orig) {
+        const estruturalChanged =
+          String(orig.data) !== String(data) ||
+          String(orig.tipo) !== String(tipo) ||
+          Number(orig.quantidade) !== Number(quantidade) ||
+          String(orig.categoria) !== String(categoria) ||
+          (String(orig.fazendaOrigem || '') !== String(fazendaOrigem || '')) ||
+          (String(orig.fazendaDestino || '') !== String(fazendaDestino || ''));
+        if (estruturalChanged) {
+          setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais (valor, preço, bônus, descontos, notas, observações) podem ser editados.');
+          return;
+        }
+      }
+      setP1BloqueioMsg(null);
     }
     if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
