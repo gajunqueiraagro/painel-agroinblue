@@ -74,7 +74,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
           acrescimos: l.acrescimos ?? undefined,
           deducoes: l.deducoes ?? undefined,
           valorTotal: l.valor_total ?? undefined,
-          notaFiscal: l.nota_fiscal ?? undefined,
+          notaFiscal: l.numero_documento ?? undefined,
           tipoPeso: l.tipo_peso ?? 'vivo',
           cenario: l.cenario ?? 'realizado',
           statusOperacional: l.status_operacional ?? (l.cenario === 'meta' ? null : 'realizado'),
@@ -155,7 +155,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         acrescimos: l.acrescimos ?? undefined,
         deducoes: l.deducoes ?? undefined,
         valorTotal: l.valor_total ?? undefined,
-        notaFiscal: l.nota_fiscal ?? undefined,
+        notaFiscal: l.numero_documento ?? undefined,
         tipoPeso: l.tipo_peso ?? 'vivo',
         cenario: l.cenario ?? 'realizado',
         statusOperacional: l.status_operacional ?? (l.cenario === 'meta' ? null : 'realizado'),
@@ -268,7 +268,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       acrescimos: lancamento.acrescimos || null,
       deducoes: lancamento.deducoes || null,
       valor_total: lancamento.valorTotal || null,
-      nota_fiscal: lancamento.notaFiscal || null,
+      numero_documento: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
       status_operacional: lancamento.statusOperacional === null ? null : (lancamento.statusOperacional || 'realizado'),
       data_venda: lancamento.dataVenda || null,
@@ -335,7 +335,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         acrescimos: data.acrescimos ?? undefined,
         deducoes: data.deducoes ?? undefined,
         valorTotal: data.valor_total ?? undefined,
-        notaFiscal: data.nota_fiscal ?? undefined,
+        notaFiscal: data.numero_documento ?? undefined,
         tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
         cenario: (data as any).cenario ?? 'realizado',
         statusOperacional: (data.status_operacional as StatusOperacional) ?? ((data as any).cenario === 'meta' ? null : 'realizado'),
@@ -379,7 +379,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.acrescimos !== undefined) update.acrescimos = dados.acrescimos;
     if (dados.deducoes !== undefined) update.deducoes = dados.deducoes;
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
-    if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
+    if (dados.notaFiscal !== undefined) update.numero_documento = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.cenario !== undefined) update.cenario = dados.cenario;
     if (dados.statusOperacional !== undefined) {

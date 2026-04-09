@@ -27,7 +27,7 @@ export interface LancamentoV2 {
   ano_mes: string;
   documento: string | null;
   historico: string | null;
-  nota_fiscal: string | null;
+  numero_documento: string | null;
   favorecido_id: string | null;
   conta_destino_id: string | null;
   origem_lancamento: string;
@@ -55,7 +55,7 @@ export interface LancamentoV2Form {
   subcentro?: string;
   escopo_negocio?: string;
   observacao?: string;
-  nota_fiscal?: string | null;
+  numero_documento?: string | null;
   tipo_documento?: string | null;
   favorecido_id?: string | null;
   forma_pagamento?: string | null;
@@ -356,7 +356,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       subcentro: form.subcentro || null,
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
-      nota_fiscal: form.nota_fiscal || null,
+      numero_documento: form.numero_documento || null,
       tipo_documento: form.tipo_documento || null,
       favorecido_id: form.favorecido_id || null,
       forma_pagamento: form.forma_pagamento || null,
@@ -406,7 +406,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       subcentro: form.subcentro || null,
       escopo_negocio: form.escopo_negocio || null,
       observacao: form.observacao || null,
-      nota_fiscal: form.nota_fiscal || null,
+      numero_documento: form.numero_documento || null,
       tipo_documento: form.tipo_documento || null,
       favorecido_id: form.favorecido_id || null,
       forma_pagamento: form.forma_pagamento || null,
@@ -488,7 +488,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       subcentro: lanc.subcentro,
       escopo_negocio: lanc.escopo_negocio,
       observacao: lanc.observacao,
-      nota_fiscal: lanc.nota_fiscal,
+      numero_documento: lanc.numero_documento,
       tipo_documento: (lanc as any).tipo_documento,
       favorecido_id: lanc.favorecido_id,
       forma_pagamento: lanc.forma_pagamento,

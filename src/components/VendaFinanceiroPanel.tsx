@@ -561,7 +561,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         macro_custo: clasReceita.macro_custo,
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
-        nota_fiscal: notaFiscal || undefined,
+        numero_documento: notaFiscal || undefined,
       };
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
@@ -630,7 +630,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             macro_custo: clasDed.macro_custo,
             centro_custo: clasDed.centro_custo,
             subcentro: clasDed.subcentro,
-            nota_fiscal: notaFiscal || undefined,
+            numero_documento: notaFiscal || undefined,
             ano_mes: anoMes,
             valor: item.valor,
             data_competencia: data,

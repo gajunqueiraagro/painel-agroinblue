@@ -27,7 +27,7 @@ export interface LinhaImportada {
   obs: string | null;
   escopoNegocio: string;
   tipoDocumento: string | null;
-  notaFiscal: string | null;
+  numeroDocumento: string | null;
 }
 
 export interface SaldoBancarioImportado {
@@ -322,7 +322,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
         tipoDocumento: tipoDocFinal,
-        notaFiscal: notaFiscalFinal,
+        numeroDocumento: notaFiscalFinal,
       });
 
     } else if (tipoRegistro === 'SALDO') {

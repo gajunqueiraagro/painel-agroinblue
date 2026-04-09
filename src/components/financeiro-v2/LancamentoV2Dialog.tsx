@@ -266,7 +266,7 @@ export function LancamentoV2Dialog({
         setContaDestinoId('');
       }
       setTipoDocumento((lancamento as any).tipo_documento || '');
-      setNotaFiscal(lancamento.nota_fiscal || '');
+      setNotaFiscal(lancamento.numero_documento || '');
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');
@@ -681,7 +681,7 @@ export function LancamentoV2Dialog({
           centro_custo: centroCusto,
           subcentro,
           observacao,
-          nota_fiscal: notaFiscal || null,
+          numero_documento: notaFiscal || null,
           tipo_documento: tipoDocumento || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
           forma_pagamento: formaPgto || null,
@@ -717,7 +717,7 @@ export function LancamentoV2Dialog({
           centro_custo: centroCusto,
           subcentro,
           observacao,
-           nota_fiscal: notaFiscal || null,
+           numero_documento: notaFiscal || null,
            tipo_documento: tipoDocumento || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
           forma_pagamento: formaPgto || null,
@@ -748,7 +748,7 @@ export function LancamentoV2Dialog({
       centro_custo: centroCusto,
       subcentro,
       observacao,
-      nota_fiscal: notaFiscal || null,
+      numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
       favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
       forma_pagamento: formaPgto || null,

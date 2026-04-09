@@ -46,7 +46,7 @@ interface LancamentoResumo {
   descricao: string | null;
   status_transacao: string | null;
   favorecido_id: string | null;
-  nota_fiscal: string | null;
+  numero_documento: string | null;
   conta_bancaria_id: string | null;
   conta_destino_id: string | null;
 }
@@ -191,7 +191,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       let lQuery = supabase
         .from('financeiro_lancamentos_v2')
-        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, nota_fiscal, conta_bancaria_id, conta_destino_id')
+        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .in('status_transacao', [...STATUS_REALIZADOS])

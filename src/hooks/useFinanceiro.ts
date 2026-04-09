@@ -55,7 +55,7 @@ export interface FinanceiroLancamento {
   grupo_custo: string | null;
   centro_custo: string | null;
   subcentro: string | null;
-  nota_fiscal: string | null;
+  numero_documento: string | null;
   cpf_cnpj: string | null;
   recorrencia: string | null;
   forma_pagamento: string | null;
@@ -185,7 +185,7 @@ function mapV2ToLancamento(r: any): FinanceiroLancamento {
     grupo_custo: null, // Not in V2
     centro_custo: r.centro_custo,
     subcentro: r.subcentro,
-    nota_fiscal: r.nota_fiscal,
+    numero_documento: r.numero_documento,
     cpf_cnpj: null,
     recorrencia: null,
     forma_pagamento: r.forma_pagamento,
@@ -808,7 +808,7 @@ export function useFinanceiro() {
           subcentro: l.subcentro,
           observacao: l.obs,
           escopo_negocio: l.escopoNegocio,
-          nota_fiscal: l.notaFiscal || null,
+          numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
           created_by: user.id,
         };

@@ -113,7 +113,7 @@ function fmtDate(d: string | null) {
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
 }
 function formatNF(l: LancamentoV2): string {
-  return formatDocumento((l as any).tipo_documento, l.nota_fiscal);
+  return formatDocumento((l as any).tipo_documento, l.numero_documento);
 }
 
 interface Props {
