@@ -3,6 +3,8 @@
  */
 import * as XLSX from 'xlsx';
 
+import { parseDocumentoImport, type TipoDocumento } from './documentoHelper';
+
 // ── Types ──
 
 export interface LinhaImportada {
@@ -24,6 +26,8 @@ export interface LinhaImportada {
   produto: string | null;
   obs: string | null;
   escopoNegocio: string;
+  tipoDocumento: string | null;
+  notaFiscal: string | null;
 }
 
 export interface SaldoBancarioImportado {
@@ -130,6 +134,7 @@ const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
+  'Documento', 'Nota_Fiscal',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
