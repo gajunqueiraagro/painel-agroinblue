@@ -792,6 +792,7 @@ export function useFinanceiro() {
         .single();
 
       if (impErr) throw impErr;
+      console.log('[Importação] importacao_id gerado:', imp.id);
 
       // ── Inserir lançamentos novos no V2 ──
       const insertBatchSize = 50;
