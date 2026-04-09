@@ -67,6 +67,51 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isCsv = file.name.toLowerCase().endsWith('.csv');
+
+    if (isCsv) {
+      // ── CSV flow ──
+      const text = await file.text();
+      const validacao = validarEstruturaCsv(text);
+      if (!validacao.valido) {
+        setPreview({
+          nomeArquivo: file.name,
+          lancamentos: [], saldosBancarios: [], resumoCaixa: [],
+          erros: [], totalLinhas: 0, resumoFazendas: [],
+          erroEstrutura: validacao,
+        });
+        if (fileRef.current) fileRef.current.value = '';
+        return;
+      }
+
+      const result = parseCsv(text);
+      const errosFazenda = resolverFazendas(result.lancamentos, fazendas);
+      const errosCentro = validarCentrosCusto(result.lancamentos, centrosCusto);
+
+      const fazendaCount = new Map<string, number>();
+      for (const l of result.lancamentos) {
+        if (l.fazenda) fazendaCount.set(l.fazenda, (fazendaCount.get(l.fazenda) || 0) + 1);
+      }
+      const fazendaMapByCode = new Map(fazendas.map(f => [f.codigo.toLowerCase().trim(), f]));
+      const resumoFazendas = Array.from(fazendaCount.entries()).map(([codigo, qtd]) => {
+        const faz = fazendaMapByCode.get(codigo.toLowerCase().trim());
+        return { codigo, nome: faz?.nome || '❌ Não encontrada', qtd };
+      }).sort((a, b) => b.qtd - a.qtd);
+
+      setPreview({
+        nomeArquivo: file.name,
+        lancamentos: result.lancamentos,
+        saldosBancarios: [],
+        resumoCaixa: [],
+        erros: [...result.erros, ...errosFazenda, ...errosCentro],
+        totalLinhas: result.totalLinhas,
+        resumoFazendas,
+      });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+
+    // ── Excel flow ──
     const buffer = await file.arrayBuffer();
 
     const validacao = validarEstruturaExcel(buffer);
