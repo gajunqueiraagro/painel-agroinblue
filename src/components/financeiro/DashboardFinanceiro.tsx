@@ -635,7 +635,7 @@ export function DashboardFinanceiro({
 
   const filtradosMes = useMemo(() =>
     lancamentos.filter(l => {
-      if (!isConciliado(l)) return false;
+      if (!isRealizado(l)) return false;
       const am = datePagtoAnoMes(l);
       return am === periodoMes;
     }), [lancamentos, periodoMes]);
@@ -684,7 +684,7 @@ export function DashboardFinanceiro({
     // --- Desembolso produtivo acumulado ---
     const desembolsoProdAcumProprio = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isDesembolsoProdutivo(l)) return false;
+        if (!isRealizado(l) || !isDesembolsoProdutivo(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -711,7 +711,7 @@ export function DashboardFinanceiro({
     // --- Entradas acumuladas ---
     const entradasAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isEntrada(l)) return false;
+        if (!isRealizado(l) || !isEntrada(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -721,7 +721,7 @@ export function DashboardFinanceiro({
     // --- Saídas acumuladas ---
     const saidasAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isSaida(l)) return false;
+        if (!isRealizado(l) || !isSaida(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
         return Number(am.substring(5, 7)) <= mesLimite;
@@ -739,7 +739,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isEntrada(l)) return false;
+      if (!isRealizado(l) || !isEntrada(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -759,7 +759,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isSaida(l)) return false;
+      if (!isRealizado(l) || !isSaida(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -804,7 +804,7 @@ export function DashboardFinanceiro({
 
     const recPecCaixaAcum = lancamentos
       .filter(l => {
-        if (!isConciliado(l) || !isEntrada(l)) return false;
+        if (!isRealizado(l) || !isEntrada(l)) return false;
         if (!isReceitaPec(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(anoFiltro)) return false;
@@ -823,7 +823,7 @@ export function DashboardFinanceiro({
     }
 
     lancamentos.filter(l => {
-      if (!isConciliado(l) || !isSaida(l) || !isDesembolsoProdutivo(l)) return false;
+      if (!isRealizado(l) || !isSaida(l) || !isDesembolsoProdutivo(l)) return false;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) return false;
       return Number(am.substring(5, 7)) <= mesLimite;
@@ -866,7 +866,7 @@ export function DashboardFinanceiro({
       monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
     }
     for (const l of lancamentos) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const m = am.substring(5);
