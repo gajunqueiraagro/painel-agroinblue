@@ -165,6 +165,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     contaOrigem: '__all__',
     contaDestino: '__all__',
     macroFiltro: '__all__',
+    grupoFiltro: '__all__',
     centroFiltro: '__all__',
     subcentroFiltro: '__all__',
     produtoFiltro: '',
@@ -181,6 +182,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [contaOrigem, setContaOrigem] = useState(defaults.contaOrigem);
   const [contaDestino, setContaDestino] = useState(defaults.contaDestino);
   const [macroFiltro, setMacroFiltro] = useState(defaults.macroFiltro);
+  const [grupoFiltro, setGrupoFiltro] = useState(defaults.grupoFiltro);
   const [centroFiltro, setCentroFiltro] = useState(defaults.centroFiltro);
   const [subcentroFiltro, setSubcentroFiltro] = useState(defaults.subcentroFiltro);
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
@@ -213,41 +215,87 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const isSaida = tipoOperacao === '2-Saídas';
   const isTransf = tipoOperacao === '3-Transferência';
 
-  // Classification helpers
+  // === Cascading classification filters: Tipo → Macro → Grupo → Centro → Subcentro ===
+  const filteredByTipo = useMemo(() => {
+    if (tipoOperacao === '__all__') return hook.classificacoes;
+    return hook.classificacoes.filter(c => c.tipo_operacao === tipoOperacao);
+  }, [hook.classificacoes, tipoOperacao]);
+
   const macrosUnicos = useMemo(() => {
-    const set = new Set(hook.classificacoes.map(c => c.macro_custo).filter(Boolean));
+    const set = new Set(filteredByTipo.map(c => c.macro_custo).filter(Boolean));
     return sortMacros(Array.from(set));
-  }, [hook.classificacoes]);
+  }, [filteredByTipo]);
+
+  const filteredByMacro = useMemo(() => {
+    if (macroFiltro === '__all__') return filteredByTipo;
+    return filteredByTipo.filter(c => c.macro_custo === macroFiltro);
+  }, [filteredByTipo, macroFiltro]);
+
+  const gruposUnicos = useMemo(() => {
+    const set = new Set(filteredByMacro.map(c => c.grupo_custo).filter(Boolean));
+    return Array.from(set).sort();
+  }, [filteredByMacro]);
+
+  const filteredByGrupo = useMemo(() => {
+    if (grupoFiltro === '__all__') return filteredByMacro;
+    return filteredByMacro.filter(c => c.grupo_custo === grupoFiltro);
+  }, [filteredByMacro, grupoFiltro]);
 
   const centrosUnicos = useMemo(() => {
-    let items = hook.classificacoes;
-    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
-    const set = new Set(items.map(c => c.centro_custo).filter(Boolean));
+    const set = new Set(filteredByGrupo.map(c => c.centro_custo).filter(Boolean));
     return Array.from(set).sort();
-  }, [hook.classificacoes, macroFiltro]);
+  }, [filteredByGrupo]);
+
+  const filteredByCentro = useMemo(() => {
+    if (centroFiltro === '__all__') return filteredByGrupo;
+    return filteredByGrupo.filter(c => c.centro_custo === centroFiltro);
+  }, [filteredByGrupo, centroFiltro]);
 
   const subcentrosUnicos = useMemo(() => {
-    let items = hook.classificacoes;
-    if (macroFiltro !== '__all__') items = items.filter(c => c.macro_custo === macroFiltro);
-    if (centroFiltro !== '__all__') items = items.filter(c => c.centro_custo === centroFiltro);
-    const set = new Set(items.map(c => c.subcentro).filter(Boolean));
+    const set = new Set(filteredByCentro.map(c => c.subcentro).filter(Boolean));
     return Array.from(set).sort();
-  }, [hook.classificacoes, macroFiltro, centroFiltro]);
+  }, [filteredByCentro]);
 
-  // Subcentro selection: auto-fill macro + centro
+  // Auto-clear invalid downstream filters when upstream changes
+  useEffect(() => {
+    if (macroFiltro !== '__all__' && !macrosUnicos.includes(macroFiltro)) {
+      setMacroFiltro('__all__'); setMacroLocked(false);
+    }
+  }, [macrosUnicos, macroFiltro]);
+
+  useEffect(() => {
+    if (grupoFiltro !== '__all__' && !gruposUnicos.includes(grupoFiltro)) {
+      setGrupoFiltro('__all__');
+    }
+  }, [gruposUnicos, grupoFiltro]);
+
+  useEffect(() => {
+    if (centroFiltro !== '__all__' && !centrosUnicos.includes(centroFiltro)) {
+      setCentroFiltro('__all__');
+    }
+  }, [centrosUnicos, centroFiltro]);
+
+  useEffect(() => {
+    if (subcentroFiltro !== '__all__' && !subcentrosUnicos.includes(subcentroFiltro)) {
+      setSubcentroFiltro('__all__');
+    }
+  }, [subcentrosUnicos, subcentroFiltro]);
+
+  // Subcentro selection: auto-fill macro + grupo + centro
   const handleSubcentroChange = (val: string) => {
     setSubcentroFiltro(val);
     if (val !== '__all__') {
       const match = hook.classificacoes.find(c => c.subcentro === val);
       if (match) {
         setMacroFiltro(match.macro_custo || '__all__');
+        setGrupoFiltro(match.grupo_custo || '__all__');
         setCentroFiltro(match.centro_custo || '__all__');
         setMacroLocked(true);
       }
     } else {
-      // Clear: unlock macro/centro
       if (macroLocked) {
         setMacroFiltro('__all__');
+        setGrupoFiltro('__all__');
         setCentroFiltro('__all__');
         setMacroLocked(false);
       }
@@ -309,9 +357,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
     status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
     macro_custo: macroFiltro !== '__all__' ? macroFiltro : undefined,
+    grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, centroFiltro, subcentroFiltro]);
+  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -417,20 +466,25 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     return 'outros';
   };
 
+  // Build grupo_custo lookup from classificacoes (centro_custo → grupo_custo)
+  const centroToGrupo = useMemo(() => {
+    const map = new Map<string, string>();
+    hook.classificacoes.forEach(c => {
+      if (c.centro_custo && c.grupo_custo) map.set(c.centro_custo, c.grupo_custo);
+    });
+    return map;
+  }, [hook.classificacoes]);
+
   const filteredLancamentos = useMemo(() => {
     let items = hook.lancamentos;
 
     // Directional conta filtering:
-    // "Conta Origem" alone → only outflows (saídas + transfers sent from this account)
-    // "Conta Destino" alone → only inflows (entradas + transfers received by this account)
     const hasContaOrigem = contaOrigem && contaOrigem !== '__all__';
     const hasContaDestino = contaDestino && contaDestino !== '__all__';
 
     if (hasContaOrigem && !hasContaDestino) {
-      // Show only money leaving this account: saídas or transfers sent
       items = items.filter(l => l.sinal < 0 || isTransferenciaTipo(l.tipo_operacao));
     } else if (hasContaDestino && !hasContaOrigem) {
-      // Show only money arriving at this account: entradas or transfers received
       items = items.filter(l => l.sinal > 0 || isTransferenciaTipo(l.tipo_operacao));
     }
 
@@ -444,8 +498,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
     }
+    // Client-side grupo_custo filter (not a DB column on lancamentos)
+    if (grupoFiltro !== '__all__') {
+      items = items.filter(l => {
+        const grupo = centroToGrupo.get(l.centro_custo || '');
+        return grupo === grupoFiltro;
+      });
+    }
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     const pagamentoA = a.data_pagamento || '9999-12-31';
@@ -615,6 +676,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setContaOrigem('__all__');
     setContaDestino('__all__');
     setMacroFiltro('__all__');
+    setGrupoFiltro('__all__');
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
@@ -678,7 +740,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
             <div>
               <label className={lblCls}>Tipo</label>
-              <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); }}>
+              <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigem('__all__'); setContaDestino('__all__'); setMacroLocked(false); }}>
                 <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
@@ -724,9 +786,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro + Buttons */}
+          {/* LINE 2: Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Buttons */}
           <div className="flex items-end gap-1.5">
-            <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end flex-1">
+            <div className="grid grid-cols-[130px_130px_120px_120px_120px_120px] gap-1.5 items-end flex-1">
               <div>
                 <label className={lblCls}>Conta Origem</label>
                 <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -751,10 +813,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <label className={lblCls}>Macro</label>
                 <SearchableSelect
                   value={macroFiltro}
-                  onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                   options={macrosUnicos.map(m => ({ value: m, label: m }))}
                   disabled={macroLocked}
                   placeholder="Buscar macro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Grupo</label>
+                <SearchableSelect
+                  value={grupoFiltro}
+                  onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={gruposUnicos.map(g => ({ value: g, label: g }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar grupo..."
                 />
               </div>
               <div>
