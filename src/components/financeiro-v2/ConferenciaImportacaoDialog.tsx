@@ -108,11 +108,15 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   const contaIds = useMemo(() => new Set(contas.map(c => c.id)), [contas]);
   const contaOptions = useMemo(
-    () => contas.map(c => ({ value: c.codigo_conta || c.nome_conta, label: c.nome_exibicao || c.nome_conta })),
+    () => contas
+      .map(c => ({ value: c.codigo_conta || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta }))
+      .filter(c => !!c.value),
     [contas],
   );
   const fazendaOptions = useMemo(
-    () => fazendas.map(f => ({ value: f.codigo, label: `${f.codigo} — ${f.nome}` })),
+    () => fazendas
+      .map(f => ({ value: f.codigo || f.id, label: `${f.codigo || f.id} — ${f.nome}` }))
+      .filter(f => !!f.value),
     [fazendas],
   );
 
@@ -404,12 +408,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
         </Select>
       </TableCell>
       <TableCell className="py-0.5">
-        <Select value={row.contaDestino || ''} onValueChange={v => onUpdate(row.linha, 'contaDestino', v || null)}>
+        <Select value={row.contaDestino || '__none__'} onValueChange={v => onUpdate(row.linha, 'contaDestino', v === '__none__' ? null : v)}>
           <SelectTrigger className="h-6 text-[10px] px-1 border-0 bg-transparent shadow-none">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">— Nenhuma —</SelectItem>
+            <SelectItem value="__none__" className="text-xs">— Nenhuma —</SelectItem>
             {contaOptions.map(c => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -418,12 +422,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
         {row.valor != null ? formatMoeda(row.valor) : '—'}
       </TableCell>
       <TableCell className="py-0.5">
-        <Select value={row.tipoDocumento || ''} onValueChange={v => onUpdate(row.linha, 'tipoDocumento', v || null)}>
+        <Select value={row.tipoDocumento || '__none__'} onValueChange={v => onUpdate(row.linha, 'tipoDocumento', v === '__none__' ? null : v)}>
           <SelectTrigger className="h-6 text-[10px] px-1 border-0 bg-transparent shadow-none">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="text-xs">— Nenhum —</SelectItem>
+            <SelectItem value="__none__" className="text-xs">— Nenhum —</SelectItem>
             {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
           </SelectContent>
         </Select>
