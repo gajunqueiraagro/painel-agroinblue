@@ -5,10 +5,12 @@
  * Qualquer alteração aqui impacta ambos os módulos.
  *
  * Regras:
- * - Conciliado: status_transacao (lowercase, trimmed) === 'realizado'
+ * - Realizado: status_transacao (lowercase, trimmed) === 'realizado'
  * - Entrada: tipo_operacao começa com '1'
  * - Saída: tipo_operacao começa com '2'
  * - Data base: data_pagamento (YYYY-MM-DD ou YYYY-MM)
+ *
+ * Nomenclatura oficial: realizado | agendado | programado | meta
  */
 
 export interface FinanceiroLancamentoBase {

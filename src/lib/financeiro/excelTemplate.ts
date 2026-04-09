@@ -11,8 +11,8 @@ const COLS: XlsxCellValue[] = [
 
 const EXAMPLES: XlsxCellValue[][] = [
   ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', null, '3M', '2-Saídas', 'Nutrição', 4500.00, 'Pago', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'Entrega mensal'],
-  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Conciliado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Campanha mai/2026'],
-  ['LANCAMENTO', '2026-03', '2026-03-05', 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferência', 'Resgate', 50000.00, 'Conciliado', 'Resgate CDI', null, null, null, null, null, 'Transferência entre contas'],
+  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Realizado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Campanha mai/2026'],
+  ['LANCAMENTO', '2026-03', '2026-03-05', 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferência', 'Resgate', 50000.00, 'Realizado', 'Resgate CDI', null, null, null, null, null, 'Transferência entre contas'],
   ['SALDO', '2026-01', null, 'Banco do Brasil', null, null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null],
   ['SALDO', '2026-01', null, 'Sicredi', null, null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null],
   ['RESUMO', '2026-01', null, null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null],
@@ -37,7 +37,7 @@ const INSTRUCOES: XlsxCellValue[][] = [
   ['Tipo', 'NÃO', 'Texto', 'Tipo operação (ex: 2-Saídas, 1-Entradas)'],
   ['Grupo', 'NÃO', 'Texto', 'Grupo do lançamento'],
   ['Valor', 'SIM', 'Numérico', 'Valor da operação'],
-  ['Status', 'NÃO', 'Texto', 'Ex: Pago, Pendente, Conciliado'],
+  ['Status', 'NÃO', 'Texto', 'Ex: Pago, Pendente, Realizado'],
   ['Produto', 'NÃO', 'Texto', 'Descrição do produto ou serviço'],
   ['Fornecedor', 'NÃO', 'Texto', 'Nome do fornecedor ou cliente'],
   ['Macro_Custo', 'NÃO', 'Texto', 'Nível 1 hierarquia (ex: Custeio Produtivo)'],
