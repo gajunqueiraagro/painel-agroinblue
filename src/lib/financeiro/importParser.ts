@@ -3,6 +3,8 @@
  */
 import * as XLSX from 'xlsx';
 
+import { parseDocumentoImport, type TipoDocumento } from './documentoHelper';
+
 // ── Types ──
 
 export interface LinhaImportada {
@@ -24,6 +26,8 @@ export interface LinhaImportada {
   produto: string | null;
   obs: string | null;
   escopoNegocio: string;
+  tipoDocumento: string | null;
+  notaFiscal: string | null;
 }
 
 export interface SaldoBancarioImportado {
@@ -130,6 +134,7 @@ const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
+  'Documento', 'Nota_Fiscal',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
@@ -149,7 +154,10 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 }
 
 function normalizeCol(s: string): string {
-  return s.toLowerCase().replace(/[_\s]/g, '');
+  const n = s.toLowerCase().replace(/[_\s]/g, '');
+  // Aliases
+  if (n === 'notafiscal') return 'documento';
+  return n;
 }
 
 export function validarEstruturaExcel(file: ArrayBuffer): ValidacaoEstrutura {
@@ -269,6 +277,11 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       if (hasError) continue;
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
+
+      // Parse documento from Documento or Nota_Fiscal columns
+      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal'));
+      const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
+
       lancamentos.push({
         linha: linhaNum,
         anoMes: anoMes!,
@@ -288,6 +301,8 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         produto: str(col(r, colMap, 'Produto')),
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
+        tipoDocumento: docParsed?.tipo || null,
+        notaFiscal: docParsed?.numero || null,
       });
 
     } else if (tipoRegistro === 'SALDO') {

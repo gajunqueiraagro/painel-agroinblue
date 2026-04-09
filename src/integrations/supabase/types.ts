@@ -2318,6 +2318,7 @@ export type Database = {
           sinal: number
           status_transacao: string | null
           subcentro: string | null
+          tipo_documento: string | null
           tipo_operacao: string
           transferencia_grupo_id: string | null
           updated_at: string
@@ -2364,6 +2365,7 @@ export type Database = {
           sinal?: number
           status_transacao?: string | null
           subcentro?: string | null
+          tipo_documento?: string | null
           tipo_operacao: string
           transferencia_grupo_id?: string | null
           updated_at?: string
@@ -2410,6 +2412,7 @@ export type Database = {
           sinal?: number
           status_transacao?: string | null
           subcentro?: string | null
+          tipo_documento?: string | null
           tipo_operacao?: string
           transferencia_grupo_id?: string | null
           updated_at?: string

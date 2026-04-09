@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
+import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -191,6 +192,7 @@ export function LancamentoV2Dialog({
   const [valorDisplay, setValorDisplay] = useState('0,00');
   const [contaOrigemId, setContaOrigemId] = useState('');
   const [contaDestinoId, setContaDestinoId] = useState('');
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento | ''>('');
   const [notaFiscal, setNotaFiscal] = useState('');
   const [observacao, setObservacao] = useState('');
 
@@ -263,6 +265,7 @@ export function LancamentoV2Dialog({
         setContaOrigemId(lancamento.conta_bancaria_id || '');
         setContaDestinoId('');
       }
+      setTipoDocumento((lancamento as any).tipo_documento || '');
       setNotaFiscal(lancamento.nota_fiscal || '');
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
@@ -290,6 +293,7 @@ export function LancamentoV2Dialog({
       setValorDisplay('0,00');
       setContaOrigemId('');
       setContaDestinoId('');
+      setTipoDocumento('');
       setNotaFiscal('');
       setObservacao('');
       setFormaPagamentoParc('avista');
@@ -534,9 +538,12 @@ export function LancamentoV2Dialog({
   };
 
   const handleNotaFiscalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    const trimmed = digits.replace(/^0+/, '').slice(0, 9);
-    setNotaFiscal(trimmed);
+    if (tipoDocumento === 'Nota Fiscal') {
+      const raw = extractNFDigits(e.target.value);
+      setNotaFiscal(raw);
+    } else {
+      setNotaFiscal(e.target.value);
+    }
   };
 
   const handleParcelaValorChange = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -554,7 +561,9 @@ export function LancamentoV2Dialog({
     setParcelaRows(prev => prev.map((r, i) => i === idx ? { ...r, dataPagamento: val } : r));
   };
 
-  const notaFiscalDisplay = notaFiscal ? formatNotaFiscal(notaFiscal) : '';
+  const notaFiscalDisplay = notaFiscal
+    ? (tipoDocumento === 'Nota Fiscal' ? formatNFNumber(notaFiscal) : notaFiscal)
+    : '';
 
   const contasDisponiveis = contas;
 
@@ -673,6 +682,7 @@ export function LancamentoV2Dialog({
           subcentro,
           observacao,
           nota_fiscal: notaFiscal || null,
+          tipo_documento: tipoDocumento || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
@@ -707,7 +717,8 @@ export function LancamentoV2Dialog({
           centro_custo: centroCusto,
           subcentro,
           observacao,
-          nota_fiscal: notaFiscal || null,
+           nota_fiscal: notaFiscal || null,
+           tipo_documento: tipoDocumento || null,
           favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
@@ -738,6 +749,7 @@ export function LancamentoV2Dialog({
       subcentro,
       observacao,
       nota_fiscal: notaFiscal || null,
+      tipo_documento: tipoDocumento || null,
       favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
@@ -1169,10 +1181,27 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Complementares</p>
-              <div className="grid grid-cols-[120px_1fr_1fr] gap-2">
+              <div className="grid grid-cols-[130px_120px_1fr_1fr] gap-2">
                 <div>
-                  <Label className="text-[10px]">Nota Fiscal</Label>
-                  <Input tabIndex={12} value={notaFiscalDisplay} onChange={handleNotaFiscalChange} inputMode="numeric" className={cn("h-8 font-mono text-xs", fieldBg)} placeholder="000.000.000" />
+                  <Label className="text-[10px]">Tipo Documento</Label>
+                  <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
+                    <SelectTrigger tabIndex={12} className={cn("h-8 text-xs", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none_td__">Nenhum</SelectItem>
+                      {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px]">Nº Documento</Label>
+                  <Input
+                    tabIndex={13}
+                    value={notaFiscalDisplay}
+                    onChange={handleNotaFiscalChange}
+                    inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
+                    className={cn("h-8 font-mono text-xs", fieldBg)}
+                    placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
+                  />
                 </div>
                 <div>
                   <Label className="text-[10px]">Forma de Pagamento</Label>

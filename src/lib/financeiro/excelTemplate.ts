@@ -6,18 +6,18 @@ import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 const COLS: XlsxCellValue[] = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
-  'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
+  'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Documento', 'Obs',
 ];
 
 const EXAMPLES: XlsxCellValue[][] = [
-  ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', null, '3M', '2-Saídas', 'Nutrição', 4500.00, 'Pago', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'Entrega mensal'],
-  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Realizado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Campanha mai/2026'],
-  ['LANCAMENTO', '2026-03', '2026-03-05', 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferência', 'Resgate', 50000.00, 'Realizado', 'Resgate CDI', null, null, null, null, null, 'Transferência entre contas'],
-  ['SALDO', '2026-01', null, 'Banco do Brasil', null, null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null],
-  ['SALDO', '2026-01', null, 'Sicredi', null, null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Saidas', null, 62000.00, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Saldo_Final_Total', null, 168200.50, null, null, null, null, null, null, null, null],
+  ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', null, '3M', '2-Saídas', 'Nutrição', 4500.00, 'Realizado', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'NF 123456', 'Entrega mensal'],
+  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Realizado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Recibo 4567', 'Campanha mai/2026'],
+  ['LANCAMENTO', '2026-03', '2026-03-05', 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferência', 'Resgate', 50000.00, 'Realizado', 'Resgate CDI', null, null, null, null, null, null, 'Transferência entre contas'],
+  ['SALDO', '2026-01', null, 'Banco do Brasil', null, null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null, null],
+  ['SALDO', '2026-01', null, 'Sicredi', null, null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, 'Saidas', null, 62000.00, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, 'Saldo_Final_Total', null, 168200.50, null, null, null, null, null, null, null, null, null],
 ];
 
 const INSTRUCOES: XlsxCellValue[][] = [
@@ -44,6 +44,7 @@ const INSTRUCOES: XlsxCellValue[][] = [
   ['Grupo_Custo', 'NÃO', 'Texto', 'Nível 2 hierarquia'],
   ['Centro_Custo', 'NÃO', 'Texto', 'Nível 3 hierarquia'],
   ['Subcentro', 'NÃO', 'Texto', 'Nível 4 — detalhe opcional'],
+  ['Documento', 'NÃO', 'Texto', 'Tipo + número do documento (ex: NF 123456, Recibo 4567, Contrato 2024-01)'],
   ['Obs', 'NÃO', 'Texto', 'Observações livres'],
   [],
   ['TIPOS DE REGISTRO:'],
