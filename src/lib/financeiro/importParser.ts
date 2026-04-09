@@ -291,16 +291,19 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
 
-      // Parse documento from Documento or Nota_Fiscal columns
-      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal'));
+      // Parse documento from Documento, Nota_Fiscal or NF columns
+      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'NF')) || str(col(r, colMap, 'Nota_Fiscal'));
       const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
+
+      // Normalizar status legado
+      const statusNorm = normalizeStatus(status);
 
       lancamentos.push({
         linha: linhaNum,
         anoMes: anoMes!,
         dataPagamento: dataRef,
         valor: valor!,
-        statusTransacao: status,
+        statusTransacao: statusNorm,
         fazenda,
         fazendaId: null,
         tipoOperacao: tipo,
