@@ -567,7 +567,7 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
       <TableCell className={origCellClass}>{row.contaOrigem || '—'}</TableCell>
       <TableCell className={origCellClass}>{row.contaDestino || '—'}</TableCell>
       <TableCell className={origCellClass} title={row.subcentro || undefined}>{row.subcentro ? (row.subcentro.length > 20 ? row.subcentro.slice(0, 20) + '…' : row.subcentro) : '—'}</TableCell>
-      <TableCell className={origCellClass}>{row.numeroDocumento || '—'}</TableCell>
+      <TableCell className={origCellClass} title={row.documentoOriginal || undefined}>{row.documentoOriginal || '—'}</TableCell>
       <TableCell className={`${origCellClass} text-right tabular-nums`}>{row.valor != null ? formatMoeda(row.valor) : '—'}</TableCell>
       <TableCell className={origCellClass}>{row.produto || '—'}</TableCell>
       <TableCell className={origCellClass}>{row.fornecedor || '—'}</TableCell>
@@ -606,6 +606,12 @@ function ConferenciaRow({ row, contaOptions, fazendaOptions, onUpdate }: {
           </SelectContent>
         </Select>
         {r.contaDestinoResolvidaNome && <span className="text-[8px] text-green-600 block pl-1">✓ {r.contaDestinoResolvidaNome}</span>}
+      </TableCell>
+      <TableCell className={resCellClass}>
+        <span className="text-[9px]">{row.tipoDocumento || '—'}</span>
+      </TableCell>
+      <TableCell className={resCellClass}>
+        <span className="text-[9px] tabular-nums">{row.numeroDocumento || '—'}</span>
       </TableCell>
       <TableCell className={resCellClass}>
         <Select value={row.tipoOperacao || ''} onValueChange={val => onUpdate(row.linha, 'tipoOperacao', val || null)}>
