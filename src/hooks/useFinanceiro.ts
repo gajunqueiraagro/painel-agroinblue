@@ -394,10 +394,11 @@ export function useFinanceiro() {
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
-        const [lancData, ccResult, impResult, admData, saldoResult, lancPecResult] = await Promise.all([
+        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta').eq('cliente_id', clienteId).eq('ativa', true) : Promise.resolve({ data: [] }),
           admPromise,
           needsRateio && opIds.length > 0
             ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds)
@@ -410,6 +411,7 @@ export function useFinanceiro() {
         setLancamentos(lancData);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
         setImportacoes((impResult.data as ImportacaoRecord[]) || []);
+        setContasBancarias((contasResult.data as ContaBancariaImportacao[]) || []);
 
         if (needsRateio) {
           setLancamentosADM(admData);
