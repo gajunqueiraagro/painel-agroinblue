@@ -589,22 +589,34 @@ export function useFinanceiro() {
     const normalized = normalizeImportText(contaLabel);
     if (!normalized) return null;
 
-    const contasDaFazenda = contas.filter(conta => conta.fazenda_id === fazendaId);
+    // Build codigo_conta uniqueness map
+    const codigoCount = new Map<string, number>();
+    for (const c of contas) {
+      if (c.codigo_conta) {
+        const ck = normalizeImportText(c.codigo_conta);
+        codigoCount.set(ck, (codigoCount.get(ck) || 0) + 1);
+      }
+    }
 
-    // Priority order: nome_exibicao → codigo_conta → nome_conta (legacy) → banco+nome → numero_conta
-    const conta = contasDaFazenda.find((item) => {
-      const candidates = [
-        item.nome_exibicao,
-        item.codigo_conta,
-        item.nome_conta,
-        item.numero_conta,
-        [item.banco, item.nome_exibicao || item.nome_conta].filter(Boolean).join(' '),
-      ];
+    const matchConta = (item: ContaBancariaImportacao): boolean => {
+      // 1st: nome_exibicao (primary key)
+      if (normalizeImportText(item.nome_exibicao) === normalized) return true;
+      // 2nd: codigo_conta ONLY if unique
+      if (item.codigo_conta) {
+        const ck = normalizeImportText(item.codigo_conta);
+        if (ck === normalized && (codigoCount.get(ck) || 0) <= 1) return true;
+      }
+      return false;
+    };
 
-      return candidates.some(candidate => normalizeImportText(candidate) === normalized);
-    });
+    // Try fazenda-specific first
+    const contasDaFazenda = contas.filter(c => c.fazenda_id === fazendaId);
+    const contaFazenda = contasDaFazenda.find(matchConta);
+    if (contaFazenda) return contaFazenda.id;
 
-    return conta?.id || null;
+    // Fallback: all contas from any fazenda of same client
+    const contaGlobal = contas.find(matchConta);
+    return contaGlobal?.id || null;
   };
 
   const buildHashImportacao = (
