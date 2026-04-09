@@ -88,6 +88,15 @@ export function FinV2ContasTab() {
   const [numeroConta, setNumeroConta] = useState('');
   const [contaDigito, setContaDigito] = useState('');
 
+  const loadBancos = useCallback(async () => {
+    const { data } = await supabase
+      .from('bancos_referencia')
+      .select('codigo_banco, nome_banco, nome_curto')
+      .eq('ativo', true)
+      .order('ordem_exibicao');
+    setBancos((data as BancoRef[]) || []);
+  }, []);
+
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
@@ -100,7 +109,18 @@ export function FinV2ContasTab() {
     setLoading(false);
   }, [clienteAtual?.id]);
 
+  useEffect(() => { loadBancos(); }, [loadBancos]);
   useEffect(() => { load(); }, [load]);
+
+  const bancoOptions = useMemo(() =>
+    bancos.map(b => ({ value: b.nome_curto, label: b.nome_curto })),
+  [bancos]);
+
+  /** Resolve display name for banco field (handles legacy free-text values) */
+  const resolveBancoDisplay = (val: string | null) => {
+    if (!val) return '-';
+    return val;
+  };
 
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
