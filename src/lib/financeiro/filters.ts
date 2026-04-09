@@ -25,9 +25,12 @@ const norm = (v: string | null | undefined) => (v || '').toLowerCase().trim();
 const normTipo = (v: string | null | undefined): string =>
   norm(v).replace(/[\s\-–—]/g, '');
 
-/** Lançamento conciliado? */
-export const isConciliado = (l: FinanceiroLancamentoBase): boolean =>
+/** Lançamento realizado (status_transacao = 'realizado')? */
+export const isRealizado = (l: FinanceiroLancamentoBase): boolean =>
   norm(l.status_transacao) === 'realizado';
+
+/** @deprecated Use isRealizado. Alias mantido para compatibilidade. */
+export const isConciliado = isRealizado;
 
 /**
  * Lançamento de entrada — somente tipo_operacao 1*
