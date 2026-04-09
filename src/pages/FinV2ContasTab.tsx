@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, Pencil, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+
 
 interface BancoRef {
   codigo_banco: string;
@@ -113,14 +113,12 @@ export function FinV2ContasTab() {
   useEffect(() => { load(); }, [load]);
 
   const bancoOptions = useMemo(() =>
-    bancos.map(b => ({ value: b.nome_curto, label: b.nome_curto })),
+    bancos.map(b => ({
+      value: b.nome_curto,
+      label: `${b.nome_banco}`,
+      searchText: `${b.nome_banco} ${b.nome_curto} ${b.codigo_banco}`.toLowerCase(),
+    })),
   [bancos]);
-
-  /** Resolve display name for banco field (handles legacy free-text values) */
-  const resolveBancoDisplay = (val: string | null) => {
-    if (!val) return '-';
-    return val;
-  };
 
   const grouped = useMemo(() => {
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
@@ -328,9 +326,14 @@ export function FinV2ContasTab() {
                 <Label>Banco</Label>
                 <Select value={banco} onValueChange={(v) => { setBanco(v); if (v !== 'Outros') setBancoOutro(''); }}>
                   <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[220px]">
                     {bancos.map(b => (
-                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>{b.nome_curto}</SelectItem>
+                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-muted-foreground font-mono w-7">{b.codigo_banco}</span>
+                          <span>{b.nome_banco}</span>
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -339,7 +342,7 @@ export function FinV2ContasTab() {
                     className="mt-1.5"
                     value={bancoOutro}
                     onChange={e => setBancoOutro(e.target.value)}
-                    placeholder="Nome do banco"
+                    placeholder="Digite o nome do banco"
                   />
                 )}
               </div>
