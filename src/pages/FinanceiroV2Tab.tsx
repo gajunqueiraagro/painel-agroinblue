@@ -555,6 +555,38 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   };
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamentos em massa</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p><strong>{selectedIds.size}</strong> lançamento{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}.</p>
+                {bloqueadosInfo.importados.length > 0 && (
+                  <p className="text-destructive font-semibold">
+                    ⚠ {bloqueadosInfo.importados.length} lançamento{bloqueadosInfo.importados.length !== 1 ? 's' : ''} importado{bloqueadosInfo.importados.length !== 1 ? 's' : ''} não {bloqueadosInfo.importados.length !== 1 ? 'podem' : 'pode'} ser excluído{bloqueadosInfo.importados.length !== 1 ? 's' : ''}.
+                  </p>
+                )}
+                <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} excluído{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} permanentemente.</p>
+                <p className="text-[11px] text-muted-foreground">Origens: {bloqueadosInfo.origens.join(', ')}</p>
+                <p className="text-destructive font-bold text-xs mt-2">Essa ação não pode ser desfeita.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting || bloqueadosInfo.deletaveis.length === 0}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleting ? 'Excluindo...' : `Excluir ${bloqueadosInfo.deletaveis.length} lançamento${bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
   useEffect(() => {
     if (currentPage > totalPages - 1) {
