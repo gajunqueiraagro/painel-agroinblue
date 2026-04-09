@@ -1473,6 +1473,54 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Cancel migration 2025 confirmation */}
+      <AlertDialog open={confirmMigracaoOpen} onOpenChange={(open) => { setConfirmMigracaoOpen(open); if (!open) setMigracaoConfirmText(''); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">🔴 Cancelar registros de migração 2025</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>Você está prestes a <strong className="text-destructive">cancelar permanentemente</strong> todos os registros de migração do ano 2025.</p>
+                <ul className="list-disc pl-4 space-y-1 text-[12px]">
+                  <li>Origem: <strong>migracao</strong></li>
+                  <li>Status: <strong>realizado</strong></li>
+                  <li>Período: <strong>Jan/2025 a Dez/2025</strong></li>
+                  <li>Total estimado: <strong>6.088 registros</strong></li>
+                </ul>
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 text-[12px]">
+                  <p className="font-semibold text-green-700 dark:text-green-400">✅ Serão preservados:</p>
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                    <li>46 registros de origem <strong>manual</strong></li>
+                    <li>4 registros de origem <strong>movimentação de rebanho</strong></li>
+                    <li>1 registro <strong>meta</strong> de migração</li>
+                  </ul>
+                </div>
+                <div className="pt-2 border-t">
+                  <label className="text-[11px] font-semibold block mb-1">Digite <span className="font-mono text-destructive">CONFIRMAR</span> para prosseguir:</label>
+                  <Input
+                    value={migracaoConfirmText}
+                    onChange={(e) => setMigracaoConfirmText(e.target.value)}
+                    placeholder="CONFIRMAR"
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={migracaoDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelarMigracao2025}
+              disabled={migracaoDeleting || migracaoConfirmText !== 'CONFIRMAR'}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {migracaoDeleting ? 'Cancelando...' : 'Cancelar migração 2025'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
