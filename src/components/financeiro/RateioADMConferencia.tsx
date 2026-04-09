@@ -3,7 +3,7 @@
  * Critério: rebanho médio do período
  *
  * Mostra por mês:
- * - Total ADM conciliado (Saídas conciliadas por Data_Ref)
+ * - Total ADM realizado (Saídas realizadas por Data_Ref)
  * - Tabela de auditoria com todos os lançamentos usados
  * - Critério de rateio
  * - Percentual e valor por fazenda
@@ -58,7 +58,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                 <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
                   <li>Fazenda = ADM (código de importação)</li>
                   <li>Tipo começando com <code className="bg-muted px-1 rounded">2</code> (saída)</li>
-                  <li>Status = <code className="bg-muted px-1 rounded">Conciliado</code></li>
+                  <li>Status = <code className="bg-muted px-1 rounded">Realizado</code></li>
                   <li>Data_Ref preenchida</li>
                 </ul>
                 <p className="text-muted-foreground mt-1">
@@ -93,7 +93,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
           <div className="text-[10px] text-muted-foreground space-y-0.5 pl-5">
             <p>Critério de rateio: <strong>Rebanho médio</strong> do período</p>
             <p>Coluna de data: <strong>Data_Ref</strong> (data_realizacao)</p>
-            <p>Filtro: Fazenda=ADM · Tipo=2-Saídas · Status=Conciliado · Data_Ref preenchida</p>
+            <p>Filtro: Fazenda=ADM · Tipo=2-Saídas · Status=Realizado · Data_Ref preenchida</p>
             <p>Base: apenas <strong>LANCAMENTO</strong> (SALDO e RESUMO excluídos)</p>
           </div>
         </CardContent>
