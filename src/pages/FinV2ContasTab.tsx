@@ -163,7 +163,18 @@ export function FinV2ContasTab() {
     setEditing(c);
     setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
     setTipoConta(c.tipo_conta || 'cc');
-    setBanco(c.banco || '');
+    // Resolve banco: if it matches a known banco, use it; otherwise treat as "Outros"
+    const knownBanco = bancos.find(b => b.nome_curto === c.banco);
+    if (knownBanco) {
+      setBanco(c.banco || '');
+      setBancoOutro('');
+    } else if (c.banco) {
+      setBanco('Outros');
+      setBancoOutro(c.banco);
+    } else {
+      setBanco('');
+      setBancoOutro('');
+    }
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
     setCodigoConta(c.codigo_conta || '');
