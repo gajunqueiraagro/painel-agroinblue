@@ -337,6 +337,7 @@ export function useFinanceiro() {
       setImportacoes([]);
       setLancamentos([]);
       setCentrosCusto([]);
+      setContasBancarias([]);
       setLancamentosADM([]);
       setRawSaldos([]);
       setRawLancsPec([]);
