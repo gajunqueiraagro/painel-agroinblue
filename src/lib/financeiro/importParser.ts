@@ -134,7 +134,7 @@ const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
-  'Documento', 'Nota_Fiscal',
+  'Documento', 'Nota_Fiscal', 'NF', 'Tipo_Documento',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
