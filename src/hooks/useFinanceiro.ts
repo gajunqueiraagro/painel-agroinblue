@@ -732,7 +732,7 @@ export function useFinanceiro() {
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao, observacao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
             .eq('cancelado', false)
@@ -743,7 +743,7 @@ export function useFinanceiro() {
               cid, fid,
               e.data_pagamento, e.valor,
               e.tipo_operacao, e.conta_bancaria_id,
-              e.descricao, e.observacao,
+              e.numero_documento, e.descricao, e.observacao,
             );
             existingHashes.add(hash);
           }
@@ -758,9 +758,9 @@ export function useFinanceiro() {
       for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
           cid, l.fazendaId || '',
-          l.dataPagamento || l.anoMes + '-01', l.valor,
+          l.dataPagamento || '', l.valor,
           l.tipoOperacao, l.contaBancariaId,
-          l.produto, l.obs,
+          l.numeroDocumento, l.produto, l.obs,
         );
         if (existingHashes.has(hash)) {
           duplicados++;
