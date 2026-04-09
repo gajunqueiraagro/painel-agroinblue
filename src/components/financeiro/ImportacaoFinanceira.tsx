@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
 import { ConferenciaImportacaoDialog } from '@/components/financeiro-v2/ConferenciaImportacaoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCliente } from '@/contexts/ClienteContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
@@ -56,6 +57,7 @@ interface PreviewState {
 
 export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir }: Props) {
   const { perfil } = usePermissions();
+  const { clienteAtual } = useCliente();
   const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -483,6 +485,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           linhas={preview.lancamentos}
           contas={contasBancarias}
           fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
+          clienteId={clienteAtual?.id}
           onConfirmar={async (linhasCorrigidas) => {
             setImportando(true);
             const ok = await onConfirmar(
