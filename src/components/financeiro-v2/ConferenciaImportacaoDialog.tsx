@@ -124,6 +124,7 @@ function buildHashImportacao(
   clienteId: string, fazendaId: string,
   dataPagamento: string | null, valor: number,
   tipoOperacao: string | null, contaBancariaId: string | null,
+  numeroDocumento?: string | null,
   descricao?: string | null, observacao?: string | null,
 ): string {
   return [
@@ -133,6 +134,7 @@ function buildHashImportacao(
     valor.toFixed(2),
     (tipoOperacao || '').trim().toLowerCase(),
     contaBancariaId || '',
+    normalizeImportText(numeroDocumento),
     normalizeImportText(descricao),
     normalizeImportText(observacao),
   ].join('|');
@@ -310,7 +312,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, descricao, observacao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
             .eq('fazenda_id', fid)
             .eq('cliente_id', clienteId)
             .eq('cancelado', false)
@@ -321,7 +323,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
               clienteId, fid,
               e.data_pagamento, e.valor,
               e.tipo_operacao, e.conta_bancaria_id,
-              e.descricao, e.observacao,
+              e.numero_documento, e.descricao, e.observacao,
             ));
           }
           if (data.length < batchSize) break;
@@ -345,9 +347,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
     const hash = buildHashImportacao(
       clienteId, row.fazendaId || '',
-      row.dataPagamento || (row.anoMes ? row.anoMes + '-01' : ''), row.valor,
+      row.dataPagamento || '', row.valor,
       row.tipoOperacao, contaR?.id || null,
-      row.produto, row.obs,
+      row.numeroDocumento, row.produto, row.obs,
     );
     // Check against existing DB records
     if (existingH.has(hash)) return true;
@@ -358,9 +360,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       const sContaR = sContaKey ? contaLookup.get(sContaKey) : null;
       const sHash = buildHashImportacao(
         clienteId, sibling.fazendaId || '',
-        sibling.dataPagamento || (sibling.anoMes ? sibling.anoMes + '-01' : ''), sibling.valor,
+        sibling.dataPagamento || '', sibling.valor,
         sibling.tipoOperacao, sContaR?.id || null,
-        sibling.produto, sibling.obs,
+        sibling.numeroDocumento, sibling.produto, sibling.obs,
       );
       if (sHash === hash) return true;
     }
