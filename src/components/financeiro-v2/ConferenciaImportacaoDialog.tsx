@@ -333,7 +333,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         if (d.tipo === 'error') map.set(d.campo, (map.get(d.campo) || 0) + 1);
       }
     }
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [rows]);
 
   return (
