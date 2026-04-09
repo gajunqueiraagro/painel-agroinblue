@@ -5,6 +5,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
+import { ConferenciaImportacaoDialog } from '@/components/financeiro-v2/ConferenciaImportacaoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
@@ -28,6 +29,7 @@ interface Props {
   centrosCusto: CentroCustoOficial[];
   fazendas: FazendaMap[];
   mesFechado?: boolean;
+  contasBancarias?: { id: string; nome_conta: string; nome_exibicao?: string | null; codigo_conta?: string | null }[];
   onConfirmar: (
     nomeArquivo: string,
     linhas: LinhaImportada[],
@@ -52,7 +54,7 @@ interface PreviewState {
   erroEstrutura?: ValidacaoEstrutura;
 }
 
-export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, onConfirmar, onExcluir }: Props) {
+export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesFechado, contasBancarias = [], onConfirmar, onExcluir }: Props) {
   const { perfil } = usePermissions();
   const podeCancelar = ['admin_agroinblue', 'gestor_cliente', 'financeiro'].includes(perfil || '');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -61,6 +63,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [excluindo, setExcluindo] = useState<string | null>(null);
   const [confirmExcluir, setConfirmExcluir] = useState<ImportacaoRecord | null>(null);
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
+  const [conferenciaOpen, setConferenciaOpen] = useState(false);
+
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -374,6 +378,15 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setPreview(null)}>Cancelar</Button>
+              {preview.lancamentos.length > 0 && (
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setConferenciaOpen(true)}
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" /> Revisar e Corrigir
+                </Button>
+              )}
               <Button
                 className="flex-1"
                 onClick={handleConfirmar}
@@ -460,6 +473,37 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Conferência de Importação */}
+      {preview && conferenciaOpen && (
+        <ConferenciaImportacaoDialog
+          open={conferenciaOpen}
+          onClose={() => setConferenciaOpen(false)}
+          nomeArquivo={preview.nomeArquivo}
+          linhas={preview.lancamentos}
+          contas={contasBancarias}
+          fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
+          onConfirmar={async (linhasCorrigidas) => {
+            setImportando(true);
+            const ok = await onConfirmar(
+              preview.nomeArquivo,
+              linhasCorrigidas,
+              preview.totalLinhas,
+              0,
+              preview.saldosBancarios,
+              [],
+              preview.resumoCaixa.filter(r => r.fazendaId),
+              tipoImportacao,
+            );
+            if (ok) {
+              setPreview(null);
+              setConferenciaOpen(false);
+            }
+            setImportando(false);
+            return ok;
+          }}
+        />
+      )}
     </div>
   );
 }
