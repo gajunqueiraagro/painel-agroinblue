@@ -266,7 +266,7 @@ export function LancamentoV2Dialog({
         setContaDestinoId('');
       }
       setTipoDocumento((lancamento as any).tipo_documento || '');
-      setNotaFiscal(lancamento.nota_fiscal || '');
+      setNotaFiscal(lancamento.numero_documento || '');
       setObservacao(lancamento.observacao || '');
       setFormaPgto(lancamento.forma_pagamento || '');
       setDadosPagamento(lancamento.dados_pagamento || '');

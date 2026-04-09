@@ -36,7 +36,7 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
   return lancamentos.map(l => {
     const forn = fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
     const valor = l.sinal >= 0 ? l.valor : -l.valor;
-    const doc = formatDocumento((l as any).tipo_documento, l.nota_fiscal);
+    const doc = formatDocumento((l as any).tipo_documento, l.numero_documento);
     return {
       comp: fmtDate(l.data_competencia),
       pgto: fmtDate(l.data_pagamento),
