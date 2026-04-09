@@ -65,6 +65,7 @@ function makeLine(overrides: Partial<LinhaImportada> = {}): LinhaImportada {
     escopoNegocio: 'pecuaria',
     tipoDocumento: null,
     numeroDocumento: null,
+    documentoOriginal: null,
     ...overrides,
   };
 }
