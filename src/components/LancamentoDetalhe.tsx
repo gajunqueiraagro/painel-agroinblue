@@ -201,20 +201,28 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   // ---- Purchase zootécnico save ----
   const handleSalvarCompraZoo = async () => {
+    const dados: Partial<Lancamento> = {
+      data: compraForm.data,
+      tipo: compraForm.tipo,
+      quantidade: Number(compraForm.quantidade),
+      categoria: compraForm.categoria,
+      fazendaOrigem: compraForm.fazendaOrigem || undefined,
+      fazendaDestino: nomeFazenda,
+      pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
+      pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
+      cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
+      statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
+    };
+
+    if (p1Oficial && temAlteracaoEstrutural(lancamento, dados)) {
+      setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais podem ser editados.');
+      return;
+    }
+    setP1BloqueioMsg(null);
+
     setCompraSaving(true);
     try {
-      await onEditar(lancamento.id, {
-        data: compraForm.data,
-        tipo: compraForm.tipo,
-        quantidade: Number(compraForm.quantidade),
-        categoria: compraForm.categoria,
-        fazendaOrigem: compraForm.fazendaOrigem || undefined,
-        fazendaDestino: nomeFazenda,
-        pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
-        pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
-        cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
-        statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
-      });
+      await onEditar(lancamento.id, dados);
       setCompraZooSaved(true);
     } finally {
       setCompraSaving(false);
