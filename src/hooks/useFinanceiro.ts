@@ -994,7 +994,7 @@ export function useFinanceiro() {
   }, [lancamentos, rateioADM]);
 
   return {
-    importacoes, lancamentos, centrosCusto, indicadores,
+    importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho,
     fazendaMapForImport, loading, confirmarImportacao, excluirImportacao,
     reloadData: loadData, isGlobal, fazendaADM,
