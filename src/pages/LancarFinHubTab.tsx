@@ -24,7 +24,7 @@ import { StandardTooltip } from '@/lib/chartConfig';
 import { ChevronRight, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
-  isConciliado as isConciliadoShared,
+  isRealizado as isRealizadoShared,
   datePagtoAnoMes as datePagtoAnoMesShared,
 } from '@/lib/financeiro/filters';
 import type { TabId } from '@/components/BottomNav';
@@ -50,7 +50,7 @@ const MESES_FILTRO = [
   { value: '11', label: 'Novembro' }, { value: '12', label: 'Dezembro' },
 ];
 
-const isConciliado = (l: FinanceiroLancamento) => isConciliadoShared(l);
+const isRealizado = (l: FinanceiroLancamento) => isRealizadoShared(l);
 const datePagtoAnoMes = (l: FinanceiroLancamento) => datePagtoAnoMesShared(l);
 
 export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuarios = [], saldosIniciais = [] }: Props) {
@@ -127,7 +127,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     const periodoMes = `${localAno}-${String(localMes).padStart(2, '0')}`;
 
     const filtradosMes = lancFin.filter(l => {
-      if (!isConciliado(l)) return false;
+      if (!isRealizado(l)) return false;
       return datePagtoAnoMes(l) === periodoMes;
     });
 
@@ -144,7 +144,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
     // Acumulado
     const desembolsoAcumProprio = lancFin
       .filter(l => {
-        if (!isConciliado(l) || !isDesembolsoProdutivo(l)) return false;
+        if (!isRealizado(l) || !isDesembolsoProdutivo(l)) return false;
         const am = datePagtoAnoMes(l);
         if (!am || !am.startsWith(localAno)) return false;
         return Number(am.substring(5, 7)) <= localMes;
@@ -215,7 +215,7 @@ export function LancarFinHubTab({ onTabChange, filtroGlobal, lancamentosPecuario
   const lancConciliadosPorMes = useMemo(() => {
     const map = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancFin) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(localAno)) continue;
       const mesKey = am.substring(5, 7);

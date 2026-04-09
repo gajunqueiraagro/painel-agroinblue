@@ -36,7 +36,7 @@ import {
 } from '@/lib/calculos/zootecnicos';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  isConciliado as isFinConciliado,
+  isRealizado as isFinRealizado,
   isEntrada as isFinEntrada,
   isSaida as isFinSaida,
   classificarEntrada,
@@ -231,7 +231,7 @@ function buildMonthlyDataFromView(
     .reduce((s, l) => s + Math.abs(l.valorTotal || 0), 0);
 
   // Financial data (kept as-is from useFinanceiro)
-  const concFin = lancFin.filter(l => isFinConciliado(l));
+  const concFin = lancFin.filter(l => isFinRealizado(l));
   const finDoAno = concFin.filter(l => datePagtoAno(l) === ano);
   const finDoMes = (m: number) => finDoAno.filter(l => datePagtoMes(l) === m);
 

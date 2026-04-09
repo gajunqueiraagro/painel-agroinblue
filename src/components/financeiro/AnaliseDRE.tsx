@@ -29,7 +29,7 @@ import {
   normMacro,
   isInvestimento,
   isReposicaoBovinos,
-  isConciliado as isConciliadoHelper,
+  isRealizado as isRealizadoHelper,
 } from "./analiseHelpers";
 import { VariacaoEstoqueExplicacao } from "./VariacaoEstoqueExplicacao";
 import { supabase } from "@/integrations/supabase/client";

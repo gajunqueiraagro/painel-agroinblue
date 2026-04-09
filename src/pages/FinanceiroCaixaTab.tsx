@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import {
-  isConciliado as isConciliadoShared,
+  isRealizado as isRealizadoShared,
   isEntradaFinanceira,
   isSaidaFinanceira,
   datePagtoAnoMes as datePagtoAnoMesShared,
@@ -128,7 +128,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     const { categoria, tipo, periodo, ano, mes } = drillDown;
 
     return lancamentos.filter(l => {
-      if (!isConciliadoShared(l)) return false;
+      if (!isRealizadoShared(l)) return false;
 
       // Check tipo (entrada/saida)
       if (tipo === 'entrada' && !isEntradaFinanceira(l)) return false;
