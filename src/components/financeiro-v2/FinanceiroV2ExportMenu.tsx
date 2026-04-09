@@ -9,6 +9,7 @@ import { format, parseISO } from 'date-fns';
 import type { LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 
 interface FornecedorMap {
   id: string;
@@ -35,6 +36,7 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
   return lancamentos.map(l => {
     const forn = fornecedores.find(f => f.id === l.favorecido_id)?.nome || '';
     const valor = l.sinal >= 0 ? l.valor : -l.valor;
+    const doc = formatDocumento((l as any).tipo_documento, l.nota_fiscal);
     return {
       comp: fmtDate(l.data_competencia),
       pgto: fmtDate(l.data_pagamento),
@@ -42,7 +44,7 @@ function buildRows(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[]) {
       fornecedor: forn,
       valor,
       valorFmt: formatMoeda(Math.abs(l.valor)),
-      nf: l.nota_fiscal || '',
+      documento: doc,
       status: l.status_transacao || '',
       macro: l.macro_custo || '',
       centro: l.centro_custo || '',
@@ -60,7 +62,7 @@ function exportExcel(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[],
     'Produto': r.produto,
     'Fornecedor': r.fornecedor,
     'Valor': r.valor,
-    'NF': r.nf,
+    'Documento': r.documento,
     'Status': r.status,
     'Macro': r.macro,
     'Centro': r.centro,
@@ -102,11 +104,11 @@ function exportPDF(lancamentos: LancamentoV2[], fornecedores: FornecedorMap[], a
   y += 4;
 
   const rows = buildRows(lancamentos, fornecedores);
-  const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'NF', 'Status']];
+  const head = [['Comp.', 'Pgto', 'Produto', 'Fornecedor', 'Valor', 'Documento', 'Status']];
   const body = rows.map(r => [
     r.comp, r.pgto, r.produto, r.fornecedor,
     formatMoeda(r.sinal >= 0 ? Math.abs(r.valor) : -Math.abs(r.valor)),
-    r.nf, r.status,
+    r.documento, r.status,
   ]);
 
   const totalEnt = rows.filter(r => r.sinal > 0).reduce((s, r) => s + Math.abs(r.valor), 0);
