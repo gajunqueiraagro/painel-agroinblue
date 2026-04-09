@@ -78,6 +78,7 @@ export function FinV2ContasTab() {
   const [nomeExibicao, setNomeExibicao] = useState('');
   const [tipoConta, setTipoConta] = useState('cc');
   const [banco, setBanco] = useState('');
+  const [bancoOutro, setBancoOutro] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
 
