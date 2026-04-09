@@ -108,11 +108,15 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   const contaIds = useMemo(() => new Set(contas.map(c => c.id)), [contas]);
   const contaOptions = useMemo(
-    () => contas.map(c => ({ value: c.codigo_conta || c.nome_conta, label: c.nome_exibicao || c.nome_conta })),
+    () => contas
+      .map(c => ({ value: c.codigo_conta || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta }))
+      .filter(c => !!c.value),
     [contas],
   );
   const fazendaOptions = useMemo(
-    () => fazendas.map(f => ({ value: f.codigo, label: `${f.codigo} — ${f.nome}` })),
+    () => fazendas
+      .map(f => ({ value: f.codigo || f.id, label: `${f.codigo || f.id} — ${f.nome}` }))
+      .filter(f => !!f.value),
     [fazendas],
   );
 
