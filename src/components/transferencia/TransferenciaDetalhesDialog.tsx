@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
 import { ArrowRightLeft, DollarSign } from 'lucide-react';
-import type { StatusOperacional } from '@/lib/statusOperacional';
+import type { FiltroVisual } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
 import { buildTransferenciaCalculation, type TransferenciaCalculation } from '@/lib/calculos/transferencia';
 
@@ -37,7 +37,7 @@ interface Props {
   fazendaOrigem: string;
   fazendaDestino: string;
   data: string;
-  statusOp: StatusOperacional;
+  statusOp: FiltroVisual;
   observacao?: string;
 }
 
