@@ -485,6 +485,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           linhas={preview.lancamentos}
           contas={contasBancarias}
           fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
+          clienteId={clienteAtual?.id}
           onConfirmar={async (linhasCorrigidas) => {
             setImportando(true);
             const ok = await onConfirmar(
