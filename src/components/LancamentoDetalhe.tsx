@@ -940,6 +940,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               </div>
             </div>
 
+            {/* Bloqueio seletivo P1 - mensagem inline */}
+            {p1BloqueioMsg && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded px-3 py-2">
+                <p className="text-[10px] text-destructive font-semibold mb-0.5">⚠️ Alteração não salva</p>
+                <p className="text-[9px] text-destructive/90">{p1BloqueioMsg}</p>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
               <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos || p1Oficial}>
