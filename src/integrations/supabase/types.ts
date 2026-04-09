@@ -2340,6 +2340,7 @@ export type Database = {
           hash_importacao: string | null
           historico: string | null
           id: string
+          importado_duplicado: boolean
           lote_importacao_id: string | null
           macro_custo: string | null
           movimentacao_rebanho_id: string | null
@@ -2387,6 +2388,7 @@ export type Database = {
           hash_importacao?: string | null
           historico?: string | null
           id?: string
+          importado_duplicado?: boolean
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
@@ -2434,6 +2436,7 @@ export type Database = {
           hash_importacao?: string | null
           historico?: string | null
           id?: string
+          importado_duplicado?: boolean
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
