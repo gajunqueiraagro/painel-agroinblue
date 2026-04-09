@@ -202,7 +202,7 @@ export const ConsumoFinanceiroPanel = forwardRef<ConsumoFinanceiroPanelRef, Prop
         macro_custo: clasConsumo.macro_custo,
         centro_custo: clasConsumo.centro_custo,
         subcentro: clasConsumo.subcentro,
-        nota_fiscal: notaFiscal || undefined,
+        numero_documento: notaFiscal || undefined,
       };
 
       if (formaPag === 'prazo' && parcelas.length > 0) {

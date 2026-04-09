@@ -379,7 +379,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.acrescimos !== undefined) update.acrescimos = dados.acrescimos;
     if (dados.deducoes !== undefined) update.deducoes = dados.deducoes;
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
-    if (dados.notaFiscal !== undefined) update.nota_fiscal = dados.notaFiscal;
+    if (dados.notaFiscal !== undefined) update.numero_documento = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.cenario !== undefined) update.cenario = dados.cenario;
     if (dados.statusOperacional !== undefined) {

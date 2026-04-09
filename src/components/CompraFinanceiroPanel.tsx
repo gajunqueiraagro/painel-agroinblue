@@ -349,7 +349,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             descricao: `${compraLabel} - Parcela ${i + 1}/${parcelas.length}`,
             historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
             origem_tipo: 'compra_rebanho:parcela',
-            nota_fiscal: notaFiscal || undefined,
+            numero_documento: notaFiscal || undefined,
           });
         });
       } else {
@@ -363,7 +363,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           descricao: compraLabel,
           historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
           origem_tipo: 'compra_rebanho:parcela',
-          nota_fiscal: notaFiscal || undefined,
+          numero_documento: notaFiscal || undefined,
         });
       }
 
