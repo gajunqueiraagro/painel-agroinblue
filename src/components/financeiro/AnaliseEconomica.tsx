@@ -43,7 +43,7 @@ interface Props {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const isConciliado = (l: FinanceiroLancamento) =>
+const isRealizado = (l: FinanceiroLancamento) =>
   (l.status_transacao || '').toLowerCase() === 'realizado';
 
 const datePagtoAnoMes = (l: FinanceiroLancamento): string | null => {
@@ -159,7 +159,7 @@ export function AnaliseEconomica({
   const lancConciliadosPorMes = useMemo(() => {
     const map = new Map<string, FinanceiroLancamento[]>();
     for (const l of lancamentos) {
-      if (!isConciliado(l)) continue;
+      if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
       if (!am || !am.startsWith(anoFiltro)) continue;
       const mesKey = am.substring(5, 7);
