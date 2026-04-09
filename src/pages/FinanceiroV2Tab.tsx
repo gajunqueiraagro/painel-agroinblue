@@ -1374,6 +1374,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <Trash2 className="h-3 w-3" /> Excluir realizados importados ({realizadosImportadosCount})
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-6 text-[10px] gap-1 px-2"
+              onClick={() => setConfirmMigracaoOpen(true)}
+            >
+              <Trash2 className="h-3 w-3" /> Cancelar migração 2025
+            </Button>
           </div>
         </>
       )}
