@@ -514,7 +514,47 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap]);
 
   const totalLancamentosFiltrados = sortedLancamentos.length;
-  const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
+
+  // ── Bulk selection (depends on sortedLancamentos) ──
+  const allSelected = useMemo(() => selectedIds.size > 0 && sortedLancamentos.length > 0 && sortedLancamentos.every(l => selectedIds.has(l.id)), [selectedIds, sortedLancamentos]);
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedLancamentos.map(l => l.id)));
+    }
+  };
+
+  const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
+  const bloqueadosInfo = useMemo(() => {
+    const importados = selectedLancamentos.filter(l => !!l.lote_importacao_id);
+    const deletaveis = selectedLancamentos.filter(l => !l.lote_importacao_id);
+    const origens = new Set(selectedLancamentos.map(l => l.origem_lancamento));
+    return { importados, deletaveis, origens: Array.from(origens) };
+  }, [selectedLancamentos]);
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      const ids = bloqueadosInfo.deletaveis.map(l => l.id);
+      const result = await hook.excluirLancamentosEmLote(ids);
+      if (result.excluidos > 0) {
+        toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);
+      }
+      if (result.bloqueados.length > 0) {
+        toast.error(`${result.bloqueados.length} importado(s) não puderam ser excluídos`);
+      }
+      setSelectedIds(new Set());
+      await hook.loadLancamentos(filtros, hook.page);
+    } finally {
+      setBulkDeleting(false);
+      setConfirmDeleteOpen(false);
+    }
+  };
+
+
 
   useEffect(() => {
     if (currentPage > totalPages - 1) {
