@@ -584,6 +584,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     criarLancamentosEmLote,
     editarLancamento,
     excluirLancamento,
+    excluirLancamentosEmLote,
     duplicarLancamento,
     setPage,
   };
