@@ -808,7 +808,7 @@ export function useFinanceiro() {
           subcentro: l.subcentro,
           observacao: l.obs,
           escopo_negocio: l.escopoNegocio,
-          numero_documento: l.notaFiscal || null,
+          numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
           created_by: user.id,
         };

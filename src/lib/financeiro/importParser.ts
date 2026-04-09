@@ -322,7 +322,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         obs: str(col(r, colMap, 'Obs')),
         escopoNegocio: inferirEscopo(tipo, macro),
         tipoDocumento: tipoDocFinal,
-        notaFiscal: notaFiscalFinal,
+        numeroDocumento: notaFiscalFinal,
       });
 
     } else if (tipoRegistro === 'SALDO') {
