@@ -190,7 +190,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   
 
   // Sorting state
-   type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor';
+   type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
   type SortDir = 'asc' | 'desc';
    const [sortField, setSortField] = useState<SortField>('default');
    const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -477,6 +477,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
           primary = dir * nA.localeCompare(nB, 'pt-BR');
           break;
         }
+        case 'centro':
+          primary = dir * (a.centro_custo || '').localeCompare(b.centro_custo || '', 'pt-BR');
+          break;
+        case 'status':
+          primary = dir * (a.status_transacao || '').localeCompare(b.status_transacao || '', 'pt-BR');
+          break;
         default:
           primary = 0;
       }
@@ -509,9 +515,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       setSortDir(field === 'valor' ? 'desc' : 'asc');
     }
   };
-  const sortIcon = (field: Exclude<SortField, 'default'>) => {
-    if (sortField === 'default') return field === 'pgto' ? ' ↑' : '';
-    return sortField === field ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  const SortIndicator = ({ field }: { field: Exclude<SortField, 'default'> }) => {
+    if (sortField !== field) return <ArrowUpDown className="inline h-2.5 w-2.5 ml-0.5 opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="inline h-2.5 w-2.5 ml-0.5" />
+      : <ArrowDown className="inline h-2.5 w-2.5 ml-0.5" />;
   };
 
   const hasContaOrigemAtiva = contaOrigem && contaOrigem !== '__all__';
