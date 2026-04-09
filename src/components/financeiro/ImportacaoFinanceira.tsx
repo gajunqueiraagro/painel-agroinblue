@@ -217,9 +217,9 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
         </Button>
         <Button onClick={() => fileRef.current?.click()} className="flex-1" disabled={!!mesFechado}>
           <Upload className="h-4 w-4 mr-2" />
-          Importar Excel
+          Importar Excel / CSV
         </Button>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
       </div>
 
       {/* Prévia */}
