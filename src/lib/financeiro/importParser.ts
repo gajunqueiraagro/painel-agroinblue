@@ -1,5 +1,5 @@
 /**
- * Parser para importação financeira — Excel (aba EXPORT_APP_UNICO) ou CSV UTF-8.
+ * Parser para importação financeira — aba única EXPORT_APP_UNICO.
  */
 import * as XLSX from 'xlsx';
 
@@ -128,26 +128,13 @@ function isTransferencia(tipo: string | null): boolean {
   return t.startsWith('3') || t.includes('transfer') || t.includes('resgate') || t.includes('aplicaç');
 }
 
-/**
- * Normaliza status legado para nomenclatura oficial.
- * previsto → meta | conciliado → realizado | confirmado → programado
- */
-function normalizeStatus(raw: string | null): string | null {
-  if (!raw) return null;
-  const s = raw.toLowerCase().trim();
-  if (s === 'previsto') return 'meta';
-  if (s === 'conciliado') return 'realizado';
-  if (s === 'confirmado') return 'programado';
-  return s; // meta, realizado, programado, agendado passam direto
-}
-
 // ── Column index mapping ──
 
 const REQUIRED_COLUMNS = [
   'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Obs',
-  'Documento', 'Nota_Fiscal', 'NF',
+  'Documento', 'Nota_Fiscal',
 ];
 
 const MINIMUM_REQUIRED = ['Tipo_Registro', 'AnoMes', 'Fazenda', 'Valor'];
@@ -168,8 +155,8 @@ function getHeaderRow(wb: XLSX.WorkBook, sheetName: string): string[] {
 
 function normalizeCol(s: string): string {
   const n = s.toLowerCase().replace(/[_\s]/g, '');
-  // Aliases — NF e Nota_Fiscal mapeiam para a mesma coluna lógica
-  if (n === 'notafiscal' || n === 'nf') return 'nf';
+  // Aliases
+  if (n === 'notafiscal') return 'documento';
   return n;
 }
 
@@ -291,19 +278,16 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
 
       const macro = str(col(r, colMap, 'Macro_Custo'));
 
-      // Parse documento from Documento, Nota_Fiscal or NF columns
-      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'NF')) || str(col(r, colMap, 'Nota_Fiscal'));
+      // Parse documento from Documento or Nota_Fiscal columns
+      const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'Nota_Fiscal'));
       const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
-
-      // Normalizar status legado
-      const statusNorm = normalizeStatus(status);
 
       lancamentos.push({
         linha: linhaNum,
         anoMes: anoMes!,
         dataPagamento: dataRef,
         valor: valor!,
-        statusTransacao: statusNorm,
+        statusTransacao: status,
         fazenda,
         fazendaId: null,
         tipoOperacao: tipo,
@@ -368,172 +352,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
     }
   }
 
-  // ── Deduplicação intra-arquivo: Data_Ref + Valor + Conta + Fornecedor ──
-  const dedupSet = new Set<string>();
-  const lancamentosSemDup: LinhaImportada[] = [];
-  for (const l of lancamentos) {
-    const key = `${l.dataPagamento}|${l.valor}|${(l.contaOrigem || '').toLowerCase().trim()}|${(l.fornecedor || '').toLowerCase().trim()}`;
-    if (dedupSet.has(key)) {
-      erros.push({ linha: l.linha, campo: 'Duplicidade', mensagem: `Duplicidade intra-arquivo: Data_Ref=${l.dataPagamento}, Valor=${l.valor}, Conta=${l.contaOrigem}, Fornecedor=${l.fornecedor}`, aba: sheetName });
-    } else {
-      dedupSet.add(key);
-      lancamentosSemDup.push(l);
-    }
-  }
-
-  return { lancamentos: lancamentosSemDup, saldosBancarios, contas: [], resumoCaixa, erros, totalLinhas: dataRows.length };
-}
-
-// ── CSV parsing ──
-
-/**
- * Parse CSV UTF-8 file. All rows are treated as LANCAMENTO records.
- * The CSV must have header row matching the same column names as Excel.
- */
-export function parseCsv(text: string): ResultadoParsing {
-  // Use xlsx to parse CSV so we reuse the same column mapping logic
-  const wb = XLSX.read(text, { type: 'string' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) {
-    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [{ linha: 0, campo: 'Arquivo', mensagem: 'CSV vazio ou inválido' }], totalLinhas: 0 };
-  }
-
-  const allRows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-  if (allRows.length < 2) {
-    return { lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [], erros: [], totalLinhas: 0 };
-  }
-
-  const headers = (allRows[0] || []).map(c => String(c ?? '').trim());
-  const colMap = buildColMap(headers);
-  const dataRows = allRows.slice(1).filter(r => r.some(c => c !== null && c !== undefined && c !== ''));
-
-  // Check minimum required columns
-  const headersNorm = headers.map(normalizeCol);
-  const missing = MINIMUM_REQUIRED.filter(c => !headersNorm.includes(normalizeCol(c)));
-
-  // If Tipo_Registro is missing, treat all rows as LANCAMENTO
-  const autoLancamento = missing.includes('Tipo_Registro');
-  const realMissing = missing.filter(c => c !== 'Tipo_Registro');
-
-  if (realMissing.length > 0) {
-    return {
-      lancamentos: [], saldosBancarios: [], contas: [], resumoCaixa: [],
-      erros: [{ linha: 0, campo: 'Colunas', mensagem: `Colunas obrigatórias ausentes: ${realMissing.join(', ')}` }],
-      totalLinhas: 0,
-    };
-  }
-
-  const erros: ErroImportacao[] = [];
-  const lancamentos: LinhaImportada[] = [];
-
-  for (let i = 0; i < dataRows.length; i++) {
-    const r = dataRows[i];
-    const linhaNum = i + 2;
-    const tipoRegistro = autoLancamento ? 'LANCAMENTO' : (str(col(r, colMap, 'Tipo_Registro')) || '').toUpperCase();
-
-    if (tipoRegistro !== 'LANCAMENTO') {
-      erros.push({ linha: linhaNum, campo: 'Tipo_Registro', mensagem: `CSV suporta apenas LANCAMENTO. Encontrado: "${tipoRegistro}"` });
-      continue;
-    }
-
-    let hasError = false;
-    const anoMes = parseAnoMes(col(r, colMap, 'AnoMes'));
-    const valor = parseValor(col(r, colMap, 'Valor'));
-    const tipo = str(col(r, colMap, 'Tipo'));
-    const fazenda = str(col(r, colMap, 'Fazenda'));
-    const conta = str(col(r, colMap, 'Conta'));
-    const dataRef = parseDate(col(r, colMap, 'Data_Ref'));
-    const status = str(col(r, colMap, 'Status'));
-    const contaDestino = str(col(r, colMap, 'Conta_Destino'));
-
-    if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: 'Competência inválida ou ausente' }); hasError = true; }
-    if (!dataRef) { erros.push({ linha: linhaNum, campo: 'Data_Ref', mensagem: 'Data de referência ausente' }); hasError = true; }
-    if (!conta) { erros.push({ linha: linhaNum, campo: 'Conta', mensagem: 'Conta (origem) ausente' }); hasError = true; }
-    if (!tipo) { erros.push({ linha: linhaNum, campo: 'Tipo', mensagem: 'Tipo de operação ausente' }); hasError = true; }
-    if (valor === null) { erros.push({ linha: linhaNum, campo: 'Valor', mensagem: 'Valor inválido ou ausente' }); hasError = true; }
-    if (!status) { erros.push({ linha: linhaNum, campo: 'Status', mensagem: 'Status ausente' }); hasError = true; }
-    if (!fazenda) { erros.push({ linha: linhaNum, campo: 'Fazenda', mensagem: 'Código da fazenda ausente' }); hasError = true; }
-
-    if (isTransferencia(tipo) && !hasError) {
-      if (!contaDestino) {
-        erros.push({ linha: linhaNum, campo: 'Conta_Destino', mensagem: 'Transferência sem conta destino' });
-        hasError = true;
-      }
-      if (conta && contaDestino && conta.toLowerCase().trim() === contaDestino.toLowerCase().trim()) {
-        erros.push({ linha: linhaNum, campo: 'Conta_Destino', mensagem: `Conta origem e destino são iguais: "${conta}"` });
-        hasError = true;
-      }
-    }
-
-    if (hasError) continue;
-
-    const macro = str(col(r, colMap, 'Macro_Custo'));
-    const rawDocumento = str(col(r, colMap, 'Documento')) || str(col(r, colMap, 'NF')) || str(col(r, colMap, 'Nota_Fiscal'));
-    const docParsed = rawDocumento ? parseDocumentoImport(rawDocumento) : null;
-    const statusNorm = normalizeStatus(status);
-
-    lancamentos.push({
-      linha: linhaNum,
-      anoMes: anoMes!,
-      dataPagamento: dataRef,
-      valor: valor!,
-      statusTransacao: statusNorm,
-      fazenda,
-      fazendaId: null,
-      tipoOperacao: tipo,
-      macroCusto: macro,
-      grupoCusto: str(col(r, colMap, 'Grupo_Custo')),
-      centroCusto: str(col(r, colMap, 'Centro_Custo')),
-      subcentro: str(col(r, colMap, 'Subcentro')),
-      contaOrigem: conta,
-      contaDestino: isTransferencia(tipo) ? contaDestino : null,
-      fornecedor: str(col(r, colMap, 'Fornecedor')),
-      produto: str(col(r, colMap, 'Produto')),
-      obs: str(col(r, colMap, 'Obs')),
-      escopoNegocio: inferirEscopo(tipo, macro),
-      tipoDocumento: docParsed?.tipo || null,
-      notaFiscal: docParsed?.numero || null,
-    });
-  }
-
-  // Deduplicação intra-arquivo
-  const dedupSet = new Set<string>();
-  const lancamentosSemDup: LinhaImportada[] = [];
-  for (const l of lancamentos) {
-    const key = `${l.dataPagamento}|${l.valor}|${(l.contaOrigem || '').toLowerCase().trim()}|${(l.fornecedor || '').toLowerCase().trim()}`;
-    if (dedupSet.has(key)) {
-      erros.push({ linha: l.linha, campo: 'Duplicidade', mensagem: `Duplicidade intra-arquivo: Data_Ref=${l.dataPagamento}, Valor=${l.valor}, Conta=${l.contaOrigem}, Fornecedor=${l.fornecedor}` });
-    } else {
-      dedupSet.add(key);
-      lancamentosSemDup.push(l);
-    }
-  }
-
-  return { lancamentos: lancamentosSemDup, saldosBancarios: [], contas: [], resumoCaixa: [], erros, totalLinhas: dataRows.length };
-}
-
-/**
- * Validate CSV structure (header check).
- */
-export function validarEstruturaCsv(text: string): ValidacaoEstrutura {
-  const wb = XLSX.read(text, { type: 'string' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) {
-    return { valido: false, abasFaltando: ['CSV vazio'], colunasFaltando: [] };
-  }
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as unknown[][];
-  if (rows.length === 0) {
-    return { valido: false, abasFaltando: ['CSV sem cabeçalho'], colunasFaltando: [] };
-  }
-  const headers = (rows[0] || []).map(c => String(c ?? '').trim());
-  const headersNorm = headers.map(normalizeCol);
-  // For CSV, Tipo_Registro is optional (auto-LANCAMENTO)
-  const minRequired = MINIMUM_REQUIRED.filter(c => c !== 'Tipo_Registro');
-  const missing = minRequired.filter(c => !headersNorm.includes(normalizeCol(c)));
-  if (missing.length > 0) {
-    return { valido: false, abasFaltando: [], colunasFaltando: [{ aba: 'CSV', colunas: missing }] };
-  }
-  return { valido: true, abasFaltando: [], colunasFaltando: [] };
+  return { lancamentos, saldosBancarios, contas: [], resumoCaixa, erros, totalLinhas: dataRows.length };
 }
 
 // ── Fazenda resolution ──
