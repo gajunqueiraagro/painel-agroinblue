@@ -357,9 +357,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     tipo_operacao: tipoOperacao !== '__all__' ? tipoOperacao : undefined,
     status_transacao: statusTransacao !== '__all__' ? statusTransacao : undefined,
     macro_custo: macroFiltro !== '__all__' ? macroFiltro : undefined,
+    grupo_custo: grupoFiltro !== '__all__' ? grupoFiltro : undefined,
     centro_custo: centroFiltro !== '__all__' ? centroFiltro : undefined,
     subcentro: subcentroFiltro !== '__all__' ? subcentroFiltro : undefined,
-  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, centroFiltro, subcentroFiltro]);
+  }), [fazendaId, ano, mesesSelecionados, contaOrigem, contaDestino, tipoOperacao, statusTransacao, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro]);
 
   useEffect(() => {
     hook.loadLancamentos(filtros, 0);
@@ -663,6 +664,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     setContaOrigem('__all__');
     setContaDestino('__all__');
     setMacroFiltro('__all__');
+    setGrupoFiltro('__all__');
     setCentroFiltro('__all__');
     setSubcentroFiltro('__all__');
     setProdutoFiltro('');
@@ -772,9 +774,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           </div>
 
-          {/* LINE 2: Conta Origem | Conta Destino | Macro | Centro | Subcentro + Buttons */}
+          {/* LINE 2: Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Buttons */}
           <div className="flex items-end gap-1.5">
-            <div className="grid grid-cols-[145px_145px_130px_130px_130px] gap-1.5 items-end flex-1">
+            <div className="grid grid-cols-[130px_130px_120px_120px_120px_120px] gap-1.5 items-end flex-1">
               <div>
                 <label className={lblCls}>Conta Origem</label>
                 <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -799,10 +801,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 <label className={lblCls}>Macro</label>
                 <SearchableSelect
                   value={macroFiltro}
-                  onValueChange={v => { setMacroFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                   options={macrosUnicos.map(m => ({ value: m, label: m }))}
                   disabled={macroLocked}
                   placeholder="Buscar macro..."
+                />
+              </div>
+              <div>
+                <label className={lblCls}>Grupo</label>
+                <SearchableSelect
+                  value={grupoFiltro}
+                  onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
+                  options={gruposUnicos.map(g => ({ value: g, label: g }))}
+                  disabled={macroLocked}
+                  placeholder="Buscar grupo..."
                 />
               </div>
               <div>
