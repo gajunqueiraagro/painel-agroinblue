@@ -720,45 +720,48 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
 
   const [modoIntensivo, setModoIntensivo] = useState(false);
 
+  const actionButtons = (
+    <div className="flex items-center gap-1">
+      {!mesFechadoAtivo && (
+        <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
+          <Plus className="h-3 w-3" /> Novo
+        </Button>
+      )}
+      <FinanceiroV2ExportMenu
+        lancamentos={sortedLancamentos}
+        fornecedores={hook.fornecedores}
+        ano={ano}
+        fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+        totalCount={totalLancamentosFiltrados}
+      />
+      {onBack && (
+        <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5" title="Voltar">
+          <ChevronLeft className="h-3 w-3" /> Voltar
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant={modoIntensivo ? "default" : "outline"}
+        onClick={() => setModoIntensivo(v => !v)}
+        className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
+        title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
+      >
+        {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+        {modoIntensivo ? 'Sair' : 'Intensivo'}
+      </Button>
+    </div>
+  );
+
   return (
-    <div className={cn("space-y-1 pb-20 relative", modoIntensivo && "fixed inset-0 z-50 overflow-y-auto pb-4")} style={{ backgroundColor: '#F3F6FA' }}>
+    <div className={cn("space-y-1 relative", modoIntensivo ? "pb-2" : "pb-20")}>
       {modoIntensivo && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-primary text-primary-foreground">
-          <span className="text-xs font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
-          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-6 text-xs text-primary-foreground hover:bg-primary-foreground/20 gap-1">
+        <div className="flex items-center justify-between px-3 py-1 bg-primary text-primary-foreground rounded-md">
+          <span className="text-[10px] font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
+          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-5 text-[10px] text-primary-foreground hover:bg-primary-foreground/20 gap-1">
             <Minimize2 className="h-3 w-3" /> Sair
           </Button>
         </div>
       )}
-      {/* Sticky vertical action buttons — right side */}
-      <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
-        {!mesFechadoAtivo && (
-          <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-8 w-8 p-0 bg-[#E7C873] text-foreground hover:bg-[#D9B95F] shadow-lg" title="Novo Lançamento">
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
-        <FinanceiroV2ExportMenu
-          lancamentos={sortedLancamentos}
-          fornecedores={hook.fornecedores}
-          ano={ano}
-          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-          totalCount={totalLancamentosFiltrados}
-        />
-        {onBack && (
-          <Button size="sm" variant="outline" onClick={onBack} className="h-8 w-8 p-0 shadow-lg bg-background" title="Voltar">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant={modoIntensivo ? "default" : "outline"}
-          onClick={() => setModoIntensivo(v => !v)}
-          className={cn("h-8 w-8 p-0 shadow-lg", modoIntensivo ? "bg-primary text-primary-foreground" : "bg-background")}
-          title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
-        >
-          {modoIntensivo ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </Button>
-      </div>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         <CardContent className="p-2 space-y-1">
