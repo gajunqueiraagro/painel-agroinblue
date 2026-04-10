@@ -248,6 +248,7 @@ export function LancamentoV2Dialog({
       setSubcentro(lancamento.subcentro || '');
       setMacroCusto(lancamento.macro_custo || '');
       setCentroCusto(lancamento.centro_custo || '');
+      setEscopoNegocio(lancamento.escopo_negocio || '');
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
