@@ -290,6 +290,7 @@ export function LancamentoV2Dialog({
       setSubcentro('');
       setMacroCusto('');
       setCentroCusto('');
+      setEscopoNegocio('');
       setTipoOperacao('2-Saídas');
       setStatusTransacao('meta');
       setValorDisplay('0,00');
@@ -758,6 +759,7 @@ export function LancamentoV2Dialog({
       macro_custo: macroCusto,
       centro_custo: centroCusto,
       subcentro,
+      escopo_negocio: escopoNegocio || undefined,
       observacao,
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
