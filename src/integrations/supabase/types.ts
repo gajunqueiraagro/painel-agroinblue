@@ -2331,6 +2331,7 @@ export type Database = {
           data_pagamento: string | null
           descricao: string | null
           documento: string | null
+          duplicado_de_id: string | null
           editado_manual: boolean
           escopo_negocio: string | null
           favorecido_id: string | null
@@ -2351,6 +2352,7 @@ export type Database = {
           origem_tipo: string | null
           plano_conta_id: string | null
           sinal: number
+          status_duplicidade: string
           status_transacao: string | null
           subcentro: string | null
           tipo_documento: string | null
@@ -2380,6 +2382,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           documento?: string | null
+          duplicado_de_id?: string | null
           editado_manual?: boolean
           escopo_negocio?: string | null
           favorecido_id?: string | null
@@ -2400,6 +2403,7 @@ export type Database = {
           origem_tipo?: string | null
           plano_conta_id?: string | null
           sinal?: number
+          status_duplicidade?: string
           status_transacao?: string | null
           subcentro?: string | null
           tipo_documento?: string | null
@@ -2429,6 +2433,7 @@ export type Database = {
           data_pagamento?: string | null
           descricao?: string | null
           documento?: string | null
+          duplicado_de_id?: string | null
           editado_manual?: boolean
           escopo_negocio?: string | null
           favorecido_id?: string | null
@@ -2449,6 +2454,7 @@ export type Database = {
           origem_tipo?: string | null
           plano_conta_id?: string | null
           sinal?: number
+          status_duplicidade?: string
           status_transacao?: string | null
           subcentro?: string | null
           tipo_documento?: string | null
@@ -2499,6 +2505,13 @@ export type Database = {
             columns: ["contrato_id"]
             isOneToOne: false
             referencedRelation: "financeiro_contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_lancamentos_v2_duplicado_de_id_fkey"
+            columns: ["duplicado_de_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
             referencedColumns: ["id"]
           },
           {
