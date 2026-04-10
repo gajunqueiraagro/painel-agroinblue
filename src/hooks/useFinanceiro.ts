@@ -821,6 +821,16 @@ export function useFinanceiro() {
       let inseridos = 0;
       let ignorados = duplicados;
 
+      // ── Normalização JS de nomes de fornecedores ──
+      const normalizeFornecedorName = (value: string): string =>
+        value
+          .toUpperCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Z0-9 ]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
       // ── Resolver fornecedores (texto → UUID) com auto-criação ──
       const { data: fornecedoresData } = await supabase
         .from('financeiro_fornecedores')
@@ -830,18 +840,13 @@ export function useFinanceiro() {
 
       const fornecedorMap = new Map<string, string>();
       for (const f of (fornecedoresData || [])) {
+        // Index by DB-stored nome_normalizado
         if (f.nome_normalizado) fornecedorMap.set(f.nome_normalizado, f.id);
+        // Index by JS-normalized name (handles accent differences)
+        if (f.nome) fornecedorMap.set(normalizeFornecedorName(f.nome), f.id);
+        // Index by uppercase original name
         if (f.nome) fornecedorMap.set(f.nome.toUpperCase().trim(), f.id);
       }
-
-      const normalizeFornecedorName = (value: string): string =>
-        value
-          .toUpperCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^A-Z0-9 ]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
 
       const resolveOrCreateFornecedorId = async (
         nome: string | null,
@@ -852,10 +857,29 @@ export function useFinanceiro() {
         const nomeNormalizado = normalizeFornecedorName(nomeOriginal);
         if (!nomeNormalizado) return null;
 
+        // 1. Check local cache (populated with multiple key formats)
         const existente = fornecedorMap.get(nomeNormalizado);
         if (existente) return existente;
 
-        // fazenda_id obrigatório — usar a fazenda do lançamento que originou a criação
+        // Also try uppercase original (for non-accented exact matches)
+        const existenteUpper = fornecedorMap.get(nomeOriginal.toUpperCase());
+        if (existenteUpper) return existenteUpper;
+
+        // 2. Query DB directly before attempting insert (handles cases missed by initial load)
+        const { data: dbExisting } = await supabase
+          .from('financeiro_fornecedores')
+          .select('id')
+          .eq('cliente_id', cid)
+          .ilike('nome', nomeOriginal)
+          .limit(1)
+          .maybeSingle();
+
+        if (dbExisting) {
+          fornecedorMap.set(nomeNormalizado, dbExisting.id);
+          return dbExisting.id;
+        }
+
+        // 3. Not found — create new supplier
         const fazIdParaCriar = fazendaIdLinha || fazendas[0]?.id;
         if (!fazIdParaCriar) return null;
 
@@ -871,24 +895,23 @@ export function useFinanceiro() {
           .single();
 
         if (error) {
-          // Handle unique constraint conflict — another import or same batch created it
           if (error.code === '23505') {
+            // Concurrency: another row in the same batch just created it
+            // Use ilike on nome (not nome_normalizado) to avoid normalization mismatch
             const { data: existing } = await supabase
               .from('financeiro_fornecedores')
               .select('id')
               .eq('cliente_id', cid)
-              .eq('nome_normalizado', nomeNormalizado)
+              .ilike('nome', nomeOriginal)
               .limit(1)
-              .single();
+              .maybeSingle();
             if (existing) {
               fornecedorMap.set(nomeNormalizado, existing.id);
               return existing.id;
             }
-            // If lookup also failed, return null instead of breaking the import
-            console.warn(`Fornecedor duplicado não localizado após conflito: ${nomeOriginal}`);
+            console.warn(`[Importação] Fornecedor duplicado não localizado após conflito: ${nomeOriginal}`);
             return null;
           }
-          // Only throw for real errors, not concurrency conflicts
           throw new Error(`Erro ao criar fornecedor automaticamente: ${nomeOriginal} — ${error.message}`);
         }
 
