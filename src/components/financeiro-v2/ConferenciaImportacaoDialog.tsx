@@ -337,7 +337,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro, produto')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
             .eq('fazenda_id', fid).eq('cliente_id', clienteId).eq('cancelado', false)
             .range(from, from + batchSize - 1);
           if (!data || data.length === 0) break;
