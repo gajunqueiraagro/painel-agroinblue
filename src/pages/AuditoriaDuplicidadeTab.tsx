@@ -19,9 +19,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   ArrowLeft, Search, AlertTriangle, CheckCircle2, XCircle,
-  Copy, Eye, RefreshCw, Download, Loader2
+  Copy, Eye, RefreshCw, Download, Loader2, Shield, Clock
 } from 'lucide-react';
 
 interface Props {
@@ -75,6 +76,7 @@ interface RetroRecord {
   subcentro: string | null;
   lote_importacao_id: string | null;
   created_at: string;
+  status_duplicidade?: string;
 }
 
 interface ExistingLanc {
@@ -90,11 +92,14 @@ interface ExistingLanc {
   created_at: string;
 }
 
+type RetroGroupStatus = 'pendente' | 'resolvido';
+
 export function AuditoriaDuplicidadeTab({ onBack }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const [activeView, setActiveView] = useState<'log' | 'retro'>('log');
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // ── Log view state ──
   const [logs, setLogs] = useState<DupLog[]>([]);
@@ -107,6 +112,10 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
 
   // ── Retro view state ──
   const [retroRecords, setRetroRecords] = useState<RetroRecord[]>([]);
+  const [selectedPrincipal, setSelectedPrincipal] = useState<Record<string, string>>({});
+  const [retroConfirmOpen, setRetroConfirmOpen] = useState(false);
+  const [retroConfirmAction, setRetroConfirmAction] = useState<{ hash: string; action: 'legitimo' | 'duplicado' | 'revisar' } | null>(null);
+  const [retroConfirmObs, setRetroConfirmObs] = useState('');
 
   const cid = clienteAtual?.id;
   const fazendaMap = useMemo(() => {
@@ -175,8 +184,25 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
       arr.push(r);
       groups.set(r.grupo_hash, arr);
     }
-    return Array.from(groups.entries()).map(([hash, records]) => ({ hash, records }));
+    return Array.from(groups.entries()).map(([hash, records]) => {
+      // Determine group status based on individual record statuses
+      const allResolved = records.every(r =>
+        r.status_duplicidade && r.status_duplicidade !== 'pendente'
+      );
+      const status: RetroGroupStatus = allResolved ? 'resolvido' : 'pendente';
+      return { hash, records, status };
+    });
   }, [retroRecords]);
+
+  // ── Retro stats ──
+  const retroStats = useMemo(() => {
+    let pendente = 0, resolvido = 0;
+    for (const g of retroGroups) {
+      if (g.status === 'pendente') pendente++;
+      else resolvido++;
+    }
+    return { total: retroGroups.length, pendente, resolvido, registros: retroRecords.length };
+  }, [retroGroups, retroRecords]);
 
   // ── Stats ──
   const logStats = useMemo(() => {
@@ -203,7 +229,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
     }
   };
 
-  // ── Review action ──
+  // ── Review action (log view) ──
   const handleReview = async () => {
     if (!selectedLog) return;
     const { error } = await supabase
@@ -223,6 +249,101 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
     setReviewOpen(false);
     setSelectedLog(null);
     loadLogs();
+  };
+
+  // ══════════ RETRO GROUP ACTIONS ══════════
+
+  const openRetroConfirm = (hash: string, action: 'legitimo' | 'duplicado' | 'revisar') => {
+    if (action === 'duplicado') {
+      const principal = selectedPrincipal[hash];
+      if (!principal) {
+        toast.error('Selecione qual registro é o principal antes de marcar duplicados.');
+        return;
+      }
+    }
+    setRetroConfirmAction({ hash, action });
+    setRetroConfirmObs('');
+    setRetroConfirmOpen(true);
+  };
+
+  const executeRetroAction = async () => {
+    if (!retroConfirmAction || !cid) return;
+    const { hash, action } = retroConfirmAction;
+    const group = retroGroups.find(g => g.hash === hash);
+    if (!group) return;
+
+    setActionLoading(hash);
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    const ids = group.records.map(r => r.lancamento_id);
+
+    try {
+      if (action === 'legitimo') {
+        // Mark all as legitimate
+        const { error } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .update({ status_duplicidade: 'legitimo' } as any)
+          .in('id', ids);
+        if (error) throw error;
+        toast.success(`${ids.length} lançamentos marcados como legítimos`);
+
+      } else if (action === 'duplicado') {
+        const principalId = selectedPrincipal[hash];
+        const duplicadoIds = ids.filter(id => id !== principalId);
+
+        // Mark principal
+        const { error: e1 } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .update({ status_duplicidade: 'principal' } as any)
+          .eq('id', principalId);
+        if (e1) throw e1;
+
+        // Mark duplicates with reference
+        if (duplicadoIds.length > 0) {
+          const { error: e2 } = await supabase
+            .from('financeiro_lancamentos_v2')
+            .update({
+              status_duplicidade: 'duplicado',
+              duplicado_de_id: principalId,
+              cancelado: true,
+              cancelado_em: new Date().toISOString(),
+              cancelado_por: userId,
+            } as any)
+            .in('id', duplicadoIds);
+          if (e2) throw e2;
+        }
+
+        toast.success(`1 principal + ${duplicadoIds.length} duplicados marcados (soft delete)`);
+
+      } else if (action === 'revisar') {
+        const { error } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .update({ status_duplicidade: 'revisar' } as any)
+          .in('id', ids);
+        if (error) throw error;
+        toast.success(`${ids.length} lançamentos marcados para revisão`);
+      }
+
+      // Cross-update financeiro_duplicidade_log if matching hash exists
+      await supabase
+        .from('financeiro_duplicidade_log' as any)
+        .update({
+          status_revisao: action === 'legitimo' ? 'legitimo_inserido' : action === 'duplicado' ? 'duplicado_real' : 'pendente',
+          observacao_revisao: retroConfirmObs || `Decisão via auditoria retroativa: ${action}`,
+          revisado_em: new Date().toISOString(),
+          revisado_por: userId,
+        } as any)
+        .eq('cliente_id', cid)
+        .eq('hash_calculado', hash);
+
+    } catch (err: any) {
+      console.error('Retro action error:', err);
+      toast.error('Erro ao executar ação: ' + (err.message || ''));
+    } finally {
+      setActionLoading(null);
+      setRetroConfirmOpen(false);
+      setRetroConfirmAction(null);
+      loadRetro();
+    }
   };
 
   // ── Export CSV ──
@@ -246,8 +367,16 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
 
   const statusBadge = (status: string) => {
     if (status === 'pendente') return <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">Pendente</Badge>;
-    if (status === 'duplicado_real') return <Badge variant="outline" className="text-[9px] bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400">Duplicado Real</Badge>;
-    return <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">Legítimo</Badge>;
+    if (status === 'duplicado_real' || status === 'duplicado') return <Badge variant="outline" className="text-[9px] bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400">Duplicado</Badge>;
+    if (status === 'principal') return <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">Principal</Badge>;
+    if (status === 'revisar') return <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400">Revisão</Badge>;
+    if (status === 'legitimo' || status === 'legitimo_inserido') return <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">Legítimo</Badge>;
+    return <Badge variant="outline" className="text-[9px]">{status}</Badge>;
+  };
+
+  const dupStatusBadge = (status?: string) => {
+    if (!status || status === 'pendente') return <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">Pendente</Badge>;
+    return statusBadge(status);
   };
 
   return (
@@ -386,9 +515,37 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
 
           {/* ══════════ RETRO VIEW ══════════ */}
           <TabsContent value="retro" className="space-y-3 mt-3">
+            {/* Stats */}
+            <div className="grid grid-cols-4 gap-2">
+              <Card>
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{retroStats.total}</p>
+                  <p className="text-[9px] text-muted-foreground">Grupos</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-amber-600">{retroStats.pendente}</p>
+                  <p className="text-[9px] text-muted-foreground">Pendentes</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-green-600">{retroStats.resolvido}</p>
+                  <p className="text-[9px] text-muted-foreground">Resolvidos</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-center">
+                  <p className="text-lg font-bold text-muted-foreground">{retroStats.registros}</p>
+                  <p className="text-[9px] text-muted-foreground">Registros</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                Grupos de lançamentos com mesmo hash no banco ({retroGroups.length} grupos, {retroRecords.length} registros)
+                Cada grupo contém lançamentos com mesmo hash. Decida por grupo.
               </p>
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={loadRetro}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Atualizar
@@ -404,57 +561,145 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                 Nenhum grupo de duplicados encontrado no banco.
               </div>
             ) : (
-              <div className="space-y-3 max-h-[55vh] overflow-auto">
-                {retroGroups.map(group => (
-                  <Card key={group.hash} className="border-amber-200 dark:border-amber-800">
-                    <CardContent className="p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Copy className="h-3.5 w-3.5 text-amber-600" />
-                        <span className="text-[10px] font-mono text-muted-foreground">Hash: {group.hash?.slice(0, 12)}...</span>
-                        <Badge variant="outline" className="text-[9px]">{group.records.length} registros</Badge>
-                      </div>
-                      <div className="rounded border overflow-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Data</TableHead>
-                              <TableHead>Fazenda</TableHead>
-                              <TableHead>Descrição</TableHead>
-                              <TableHead>Fornecedor</TableHead>
-                              <TableHead>Documento</TableHead>
-                              <TableHead className="text-right">Valor</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Importação</TableHead>
-                              <TableHead>Criado em</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {group.records.map((r, i) => (
-                              <TableRow key={r.lancamento_id} className={i === 0 ? 'bg-primary/5' : ''}>
-                                <TableCell className="whitespace-nowrap">{r.data_pagamento || r.ano_mes}</TableCell>
-                                <TableCell className="whitespace-nowrap">{fazendaMap.get(r.fazenda_id || '') || '—'}</TableCell>
-                                <TableCell className="max-w-[200px] truncate">{r.descricao || '—'}</TableCell>
-                                <TableCell className="max-w-[140px] truncate">{r.fornecedor_nome || '—'}</TableCell>
-                                <TableCell>{r.numero_documento || '—'}</TableCell>
-                                <TableCell className="text-right font-mono whitespace-nowrap">{formatMoeda(r.valor)}</TableCell>
-                                <TableCell className="whitespace-nowrap">{r.tipo_operacao || '—'}</TableCell>
-                                <TableCell className="text-[9px]">{r.lote_importacao_id ? 'Importado' : 'Manual'}</TableCell>
-                                <TableCell className="text-[9px] whitespace-nowrap">{r.created_at ? format(new Date(r.created_at), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+              <div className="space-y-4 max-h-[55vh] overflow-auto">
+                {retroGroups.map(group => {
+                  const isLoading = actionLoading === group.hash;
+                  const isPendente = group.status === 'pendente';
+                  const principalId = selectedPrincipal[group.hash];
+
+                  return (
+                    <Card
+                      key={group.hash}
+                      className={
+                        isPendente
+                          ? 'border-amber-200 dark:border-amber-800'
+                          : 'border-green-200 dark:border-green-800 opacity-80'
+                      }
+                    >
+                      <CardContent className="p-3 space-y-3">
+                        {/* Group header */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <Copy className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                            <span className="text-[10px] font-mono text-muted-foreground">Hash: {group.hash?.slice(0, 12)}...</span>
+                            <Badge variant="outline" className="text-[9px]">{group.records.length} registros</Badge>
+                            {!isPendente && (
+                              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                                Resolvido
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Records table */}
+                        <div className="rounded border overflow-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                {isPendente && <TableHead className="w-[60px]">Principal</TableHead>}
+                                <TableHead>Status</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Fazenda</TableHead>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Fornecedor</TableHead>
+                                <TableHead>Documento</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Origem</TableHead>
+                                <TableHead>Criado em</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                            </TableHeader>
+                            <TableBody>
+                              {group.records.map((r) => {
+                                const isSelected = principalId === r.lancamento_id;
+                                return (
+                                  <TableRow
+                                    key={r.lancamento_id}
+                                    className={
+                                      isSelected
+                                        ? 'bg-blue-50/70 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-300 dark:ring-blue-700'
+                                        : ''
+                                    }
+                                  >
+                                    {isPendente && (
+                                      <TableCell>
+                                        <Checkbox
+                                          checked={isSelected}
+                                          onCheckedChange={(checked) => {
+                                            setSelectedPrincipal(prev => ({
+                                              ...prev,
+                                              [group.hash]: checked ? r.lancamento_id : ''
+                                            }));
+                                          }}
+                                        />
+                                      </TableCell>
+                                    )}
+                                    <TableCell>{dupStatusBadge(r.status_duplicidade)}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r.data_pagamento || r.ano_mes}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{fazendaMap.get(r.fazenda_id || '') || '—'}</TableCell>
+                                    <TableCell className="max-w-[180px] truncate">{r.descricao || '—'}</TableCell>
+                                    <TableCell className="max-w-[130px] truncate">{r.fornecedor_nome || '—'}</TableCell>
+                                    <TableCell>{r.numero_documento || '—'}</TableCell>
+                                    <TableCell className="text-right font-mono whitespace-nowrap">{formatMoeda(r.valor)}</TableCell>
+                                    <TableCell className="whitespace-nowrap">{r.tipo_operacao || '—'}</TableCell>
+                                    <TableCell className="text-[9px]">{r.lote_importacao_id ? 'Importado' : 'Manual'}</TableCell>
+                                    <TableCell className="text-[9px] whitespace-nowrap">{r.created_at ? format(new Date(r.created_at), 'dd/MM/yy HH:mm') : '—'}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        {/* Actions */}
+                        {isPendente && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/30"
+                              disabled={isLoading}
+                              onClick={() => openRetroConfirm(group.hash, 'legitimo')}
+                            >
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Manter Todos (Legítimos)
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                              disabled={isLoading || !principalId}
+                              onClick={() => openRetroConfirm(group.hash, 'duplicado')}
+                              title={!principalId ? 'Selecione o registro principal primeiro' : undefined}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Marcar Duplicados
+                              {principalId && <span className="ml-1 opacity-70">({group.records.length - 1} dup)</span>}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-950/30"
+                              disabled={isLoading}
+                              onClick={() => openRetroConfirm(group.hash, 'revisar')}
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Marcar para Revisão
+                            </Button>
+                            {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* ══════════ Comparison Dialog ══════════ */}
+      {/* ══════════ Comparison Dialog (Log view) ══════════ */}
       <Dialog open={!!selectedLog} onOpenChange={v => { if (!v) { setSelectedLog(null); setExistingLanc(null); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
           <DialogHeader>
@@ -467,7 +712,6 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
           {selectedLog && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                {/* Imported (blocked) */}
                 <Card className="border-amber-300 dark:border-amber-700">
                   <CardContent className="p-3 space-y-1.5">
                     <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">Lançamento Importado (bloqueado)</p>
@@ -486,7 +730,6 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                   </CardContent>
                 </Card>
 
-                {/* Existing */}
                 <Card className="border-primary/30">
                   <CardContent className="p-3 space-y-1.5">
                     <p className="text-xs font-bold text-primary uppercase">Lançamento Existente (que gerou match)</p>
@@ -511,13 +754,11 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                 </Card>
               </div>
 
-              {/* Status */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold">Status atual:</span>
                 {statusBadge(selectedLog.status_revisao)}
               </div>
 
-              {/* Actions */}
               {selectedLog.status_revisao === 'pendente' && (
                 <div className="flex gap-2">
                   <Button
@@ -543,7 +784,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* ══════════ Review confirmation ══════════ */}
+      {/* ══════════ Review confirmation (Log view) ══════════ */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -560,6 +801,75 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setReviewOpen(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleReview}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════ Retro Action Confirmation ══════════ */}
+      <Dialog open={retroConfirmOpen} onOpenChange={setRetroConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              {retroConfirmAction?.action === 'legitimo' && (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Confirmar: Todos Legítimos
+                </>
+              )}
+              {retroConfirmAction?.action === 'duplicado' && (
+                <>
+                  <XCircle className="h-4 w-4 text-red-600" />
+                  Confirmar: Marcar Duplicados
+                </>
+              )}
+              {retroConfirmAction?.action === 'revisar' && (
+                <>
+                  <Clock className="h-4 w-4 text-purple-600" />
+                  Confirmar: Marcar para Revisão
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {retroConfirmAction?.action === 'legitimo' && (
+              <p className="text-xs text-muted-foreground">
+                Todos os registros deste grupo serão marcados como <strong>legítimos</strong>.
+                Nenhum dado será alterado ou excluído.
+              </p>
+            )}
+            {retroConfirmAction?.action === 'duplicado' && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  O registro selecionado será marcado como <strong>principal</strong>.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Os demais serão marcados como <strong>duplicados</strong> e receberão soft delete (cancelamento lógico).
+                  Nenhum dado é apagado fisicamente.
+                </p>
+              </div>
+            )}
+            {retroConfirmAction?.action === 'revisar' && (
+              <p className="text-xs text-muted-foreground">
+                Todos os registros serão marcados para <strong>revisão futura</strong>.
+                Nenhum dado financeiro será alterado.
+              </p>
+            )}
+
+            <Textarea
+              placeholder="Observação (opcional)..."
+              className="text-xs"
+              value={retroConfirmObs}
+              onChange={e => setRetroConfirmObs(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRetroConfirmOpen(false)}>Cancelar</Button>
+            <Button size="sm" onClick={executeRetroAction} disabled={!!actionLoading}>
+              {actionLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+              Confirmar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
