@@ -46,19 +46,19 @@ function SortableRow({ item, onEdit, onToggle }: {
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg border bg-card ${!item.ativo ? 'opacity-50' : ''}`}
+      className={`flex items-center gap-1.5 px-2 py-1 rounded border bg-card ${!item.ativo ? 'opacity-50' : ''}`}
     >
       <button {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground">
-        <GripVertical className="h-4 w-4" />
+        <GripVertical className="h-3 w-3" />
       </button>
-      <span className="text-sm font-medium flex-1">{item.nome}</span>
-      <Badge variant={item.ativo ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0">
+      <span className="text-[11px] font-medium flex-1">{item.nome}</span>
+      <Badge variant={item.ativo ? 'default' : 'secondary'} className="text-[8px] px-1 py-0 leading-none">
         {item.ativo ? 'Ativo' : 'Inativo'}
       </Badge>
-      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-        <Pencil className="h-3.5 w-3.5" />
+      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onEdit}>
+        <Pencil className="h-3 w-3" />
       </Button>
-      <Switch checked={item.ativo} onCheckedChange={onToggle} className="h-4 w-7" />
+      <Switch checked={item.ativo} onCheckedChange={onToggle} className="h-3.5 w-6" />
     </div>
   );
 }
@@ -142,27 +142,27 @@ export function DividendosTab() {
   const openEdit = (item: Dividendo) => { setEditItem(item); setNome(item.nome); setDialogOpen(true); };
 
   return (
-    <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="w-full p-3 pb-20 space-y-2 animate-fade-in">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Dividendos</h2>
-          <p className="text-[10px] text-muted-foreground">Cadastro de nomes para distribuição de dividendos</p>
+          <h2 className="text-sm font-bold text-foreground">Dividendos</h2>
+          <p className="text-[9px] text-muted-foreground">Cadastro de nomes para distribuição de dividendos</p>
         </div>
         <div className="flex items-center gap-2">
           {items.some(i => !i.ativo) && (
-            <div className="flex items-center gap-1.5">
-              <Switch id="show-inativos" checked={showInativos} onCheckedChange={setShowInativos} className="h-4 w-7" />
-              <Label htmlFor="show-inativos" className="text-[10px] text-muted-foreground cursor-pointer">Inativos</Label>
+            <div className="flex items-center gap-1">
+              <Switch id="show-inativos" checked={showInativos} onCheckedChange={setShowInativos} className="h-3.5 w-6" />
+              <Label htmlFor="show-inativos" className="text-[9px] text-muted-foreground cursor-pointer">Inativos</Label>
             </div>
           )}
-          <Button size="sm" className="h-8 text-xs gap-1" onClick={openNew}>
-            <Plus className="h-3.5 w-3.5" /> Novo
+          <Button size="sm" className="h-6 text-[10px] gap-1 px-2" onClick={openNew}>
+            <Plus className="h-3 w-3" /> Novo
           </Button>
         </div>
       </div>
 
       <Card>
-        <CardContent className="p-3 space-y-1.5">
+        <CardContent className="p-2 space-y-0.5">
           {loading && <p className="text-xs text-muted-foreground text-center py-8">Carregando...</p>}
           {!loading && filtered.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-8">Nenhum dividendo cadastrado</p>
