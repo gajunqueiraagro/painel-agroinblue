@@ -169,8 +169,67 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const lancamentosReady = preview?.lancamentos.filter(l => l.fazendaId).length || 0;
   const totalReady = lancamentosReady + (preview?.saldosBancarios.length || 0) + (preview?.resumoCaixa.length || 0);
 
+  const exportarErros = () => {
+    if (!resultado || resultado.erros.length === 0) return;
+    const csvLines = ['Linha,Descrição,Valor,Fornecedor,Motivo'];
+    for (const e of resultado.erros) {
+      csvLines.push([e.linha ?? '', e.descricao ?? '', e.valor ?? '', e.fornecedor ?? '', `"${(e.motivo || '').replace(/"/g, '""')}"`].join(','));
+    }
+    const blob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `erros_importacao_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
+      {/* ── Resultado persistente da última importação ── */}
+      {resultado && (
+        <Card className={resultado.totalErro > 0 ? 'border-destructive/50 bg-destructive/5' : 'border-primary/30 bg-primary/5'}>
+          <CardContent className="py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                {resultado.totalErro > 0 ? (
+                  <><AlertTriangle className="h-4 w-4 text-destructive" /> Importação com erros</>
+                ) : (
+                  <><CheckCircle2 className="h-4 w-4 text-primary" /> Importação concluída</>
+                )}
+              </p>
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setResultado(null)}>✕ Fechar</Button>
+            </div>
+            <div className="flex gap-3 flex-wrap text-xs">
+              <span className="text-muted-foreground">Processados: <strong>{resultado.totalProcessado}</strong></span>
+              <span className="text-primary">Salvos: <strong>{resultado.totalSalvo}</strong></span>
+              {resultado.totalDuplicado > 0 && <span className="text-muted-foreground">Duplicados: <strong>{resultado.totalDuplicado}</strong></span>}
+              {resultado.totalErro > 0 && <span className="text-destructive">Erros: <strong>{resultado.totalErro}</strong></span>}
+            </div>
+            {resultado.erros.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-semibold text-destructive">Detalhes dos erros:</p>
+                  <Button variant="outline" size="sm" className="h-5 text-[9px] px-2" onClick={exportarErros}>
+                    <Download className="h-3 w-3 mr-1" /> Exportar CSV
+                  </Button>
+                </div>
+                <div className="max-h-40 overflow-auto border rounded p-2 bg-background">
+                  {resultado.erros.map((e, i) => (
+                    <p key={i} className="text-[10px] text-destructive leading-tight">
+                      {e.linha ? `Linha ${e.linha}: ` : ''}
+                      {e.descricao ? `"${e.descricao}" ` : ''}
+                      {e.valor ? `R$ ${e.valor.toFixed(2)} ` : ''}
+                      — {e.motivo}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {mesFechado && (
         <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs border bg-destructive/5 border-destructive/20">
           <span className="text-destructive font-semibold">🔒 Mês fechado — importação bloqueada.</span>
