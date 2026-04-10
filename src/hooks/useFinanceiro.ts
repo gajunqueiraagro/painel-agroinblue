@@ -36,6 +36,23 @@ export interface ImportacaoRecord {
   total_com_erro: number;
 }
 
+export interface ImportErroDetalhe {
+  linha?: number;
+  descricao?: string;
+  valor?: number;
+  fornecedor?: string;
+  motivo: string;
+}
+
+export interface ImportResultado {
+  ok: boolean;
+  totalProcessado: number;
+  totalSalvo: number;
+  totalDuplicado: number;
+  totalErro: number;
+  erros: ImportErroDetalhe[];
+}
+
 export interface FinanceiroLancamento {
   id: string;
   fazenda_id: string;
