@@ -132,6 +132,7 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onIntensiveToggle?: (active: boolean) => void;
 }
 
 function getInitialPageSize() {
@@ -142,7 +143,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -719,6 +720,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   ].filter(Boolean).length;
 
   const [modoIntensivo, setModoIntensivo] = useState(false);
+  const toggleIntensivo = useCallback((val?: boolean) => {
+    const next = val !== undefined ? val : !modoIntensivo;
+    setModoIntensivo(next);
+    onIntensiveToggle?.(next);
+  }, [modoIntensivo, onIntensiveToggle]);
 
   const actionButtons = (
     <div className="flex items-center gap-1">
