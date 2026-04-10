@@ -91,12 +91,16 @@ function isEntradaTipo(tipo: string | null | undefined) {
   return normalized.startsWith('1') || normalized.includes('entrada');
 }
 
+/**
+ * Check if a lancamento belongs to a given account.
+ * Must match the same logic as the lancamentos screen:
+ *   - Entries (1-Entradas) use conta_destino_id as relevant account
+ *   - Exits (2-Saídas) use conta_bancaria_id as relevant account
+ *   - Transfers check both fields
+ */
 function belongsToConta(lanc: LancamentoResumo, contaId: string) {
   if (contaId === '__all__') return true;
-  if (isTransferenciaTipo(lanc.tipo_operacao || '')) {
-    return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
-  }
-  return lanc.conta_bancaria_id === contaId;
+  return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
