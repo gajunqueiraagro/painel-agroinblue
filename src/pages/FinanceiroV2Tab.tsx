@@ -1333,6 +1333,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         onCriarFornecedor={hook.criarFornecedor}
       />
 
+      {/* Fullscreen dialog for new lancamento */}
+      <LancamentoV2Dialog
+        open={fullscreenDialog}
+        onClose={() => { setFullscreenDialog(false); setEditingLanc(null); }}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        lancamento={editingLanc}
+        fazendas={fazendas}
+        contas={hook.contasBancarias}
+        classificacoes={hook.classificacoes}
+        fornecedores={hook.fornecedores}
+        defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
+        onCriarFornecedor={hook.criarFornecedor}
+        fullscreen
+      />
+
       {/* Bulk delete confirmation */}
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
