@@ -71,7 +71,7 @@ interface MesCard {
   saldoCalculado: number;
   saldoExtrato: number | null;
   diferenca: number;
-  status: 'realizado' | 'atencao' | 'nao_conciliado' | 'pendente';
+  status: ConciliacaoStatus;
   saldoRow: SaldoRow | null;
   lancamentos: LancamentoResumo[];
 }
