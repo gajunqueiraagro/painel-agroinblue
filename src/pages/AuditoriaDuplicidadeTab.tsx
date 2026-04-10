@@ -112,6 +112,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
 
   // ── Retro view state ──
   const [retroRecords, setRetroRecords] = useState<RetroRecord[]>([]);
+  const [retroAnoMes, setRetroAnoMes] = useState('');
   const [selectedPrincipal, setSelectedPrincipal] = useState<Record<string, string>>({});
   const [retroConfirmOpen, setRetroConfirmOpen] = useState(false);
   const [retroConfirmAction, setRetroConfirmAction] = useState<{ hash: string; action: 'legitimo' | 'duplicado' | 'revisar' } | null>(null);
@@ -146,14 +147,17 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
   const loadRetro = useCallback(async () => {
     if (!cid) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('buscar_duplicados_retroativo', { _cliente_id: cid });
+    const { data, error } = await supabase.rpc('buscar_duplicados_retroativo', {
+      _cliente_id: cid,
+      _ano_mes: retroAnoMes || null,
+    });
     if (error) {
       console.error('Error loading retro dups:', error);
       toast.error('Erro ao carregar auditoria retroativa');
     }
     setRetroRecords((data || []) as RetroRecord[]);
     setLoading(false);
-  }, [cid]);
+  }, [cid, retroAnoMes]);
 
   useEffect(() => {
     if (activeView === 'log') loadLogs();
@@ -543,9 +547,28 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
               </Card>
             </div>
 
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                Cada grupo contém lançamentos com mesmo hash. Decida por grupo.
+            {/* Period filter + actions */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="month"
+                className="h-8 text-xs w-[160px]"
+                value={retroAnoMes}
+                onChange={e => setRetroAnoMes(e.target.value)}
+                placeholder="Filtrar período"
+              />
+              {retroAnoMes && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Período: {retroAnoMes.split('-').reverse().join('/')}
+                </Badge>
+              )}
+              {retroAnoMes && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setRetroAnoMes('')}>
+                  Limpar filtro
+                </Button>
+              )}
+              <div className="flex-1" />
+              <p className="text-[10px] text-muted-foreground hidden sm:block">
+                Cada grupo contém lançamentos com mesmo hash.
               </p>
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={loadRetro}>
                 <RefreshCw className="h-3 w-3 mr-1" /> Atualizar
