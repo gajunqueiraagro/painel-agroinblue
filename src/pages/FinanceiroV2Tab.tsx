@@ -1208,7 +1208,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         />
       )}
 
-      {mode === 'list' && !hook.loading && ano && (
+      {mode === 'list' && !hook.loading && ano && !modoIntensivo && (
         <>
           <CorrecaoTransferenciasBanner
             contas={hook.contasBancarias}
