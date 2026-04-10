@@ -996,7 +996,7 @@ export function useFinanceiro() {
           ano_mes: l.anoMes,
           descricao: l.produto,
           valor: l.valor,
-          status_transacao: l.statusTransacao,
+          status_transacao: (l.statusTransacao || '').toLowerCase().trim() || null,
           tipo_operacao: l.tipoOperacao || '2 - Saídas',
           macro_custo: l.macroCusto,
           centro_custo: l.centroCusto,
