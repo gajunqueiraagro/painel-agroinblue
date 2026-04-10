@@ -306,13 +306,13 @@ export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFlux
 
 /** É Desembolso Produtivo (Custeio Produtivo + Investimento na Fazenda) */
 export function isDesembolsoProdutivo(l: LancamentoClassificavel): boolean {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   return macro === 'custeio produtivo' || macro === 'investimento na fazenda';
 }
 
 /** É Receita operacional (macro_custo = "receitas") */
 export function isReceita(l: LancamentoClassificavel): boolean {
-  return normMacro(l) === 'receitas';
+  return canonicalMacro(l) === 'receitas';
 }
 
 // ---------------------------------------------------------------------------
