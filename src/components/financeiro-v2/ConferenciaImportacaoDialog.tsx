@@ -219,11 +219,17 @@ function classificarNivel(
   // 2. Valor
   const v1 = Math.round((imported.valor || 0) * 100);
   const v2 = Math.round((existing.valor || 0) * 100);
+  let valorSignificant = false;
   if (v1 !== v2) {
     // Significant value divergence (>20% relative difference) counts double
     const maxV = Math.max(v1, v2);
     const pctDiff = maxV > 0 ? Math.abs(v1 - v2) / maxV : 0;
-    diffCount += pctDiff > 0.20 ? 2 : 1;
+    if (pctDiff > 0.20) {
+      valorSignificant = true;
+      diffCount += 3; // Strongly different value → pushes toward LEGITIMO
+    } else {
+      diffCount += 1;
+    }
   }
 
   // 3. Descrição/Produto
@@ -255,8 +261,8 @@ function classificarNivel(
   if (nc !== ec && (nc || ec)) diffCount++;
 
   if (diffCount === 0) return 'D1';
-  if (diffCount === 1 && !docDiverge) return 'D2';
-  if (diffCount <= 2) return 'D2';
+  if (valorSignificant) return 'LEGITIMO'; // Significant value difference = new entry
+  if (diffCount <= 2 && !docDiverge) return 'D2';
   if (diffCount <= 3) return 'D3';
   return 'LEGITIMO';
 }
