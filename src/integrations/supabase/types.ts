@@ -4476,7 +4476,7 @@ export type Database = {
         }[]
       }
       buscar_duplicados_retroativo: {
-        Args: { _cliente_id: string }
+        Args: { _ano_mes?: string; _cliente_id: string }
         Returns: {
           ano_mes: string
           conta_bancaria_id: string
