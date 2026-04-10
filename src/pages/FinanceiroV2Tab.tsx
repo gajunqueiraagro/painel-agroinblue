@@ -960,26 +960,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               {/* MOBILE: Actions + Summary row */}
               <div className="flex items-center justify-between pt-0.5">
                 <div className="flex gap-1 items-center">
-                  {onBack && (
-                    <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[9px] gap-0.5 px-1 text-muted-foreground">
-                      <ChevronLeft className="h-3 w-3" />
-                    </Button>
-                  )}
+                  {actionButtons}
                   <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[9px] gap-0.5 px-1 text-muted-foreground">
                     <FilterX className="h-3 w-3" />
                   </Button>
-                  <FinanceiroV2ExportMenu
-                    lancamentos={sortedLancamentos}
-                    fornecedores={hook.fornecedores}
-                    ano={ano}
-                    fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-                    totalCount={totalLancamentosFiltrados}
-                  />
-                  {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
-                      <Plus className="h-3 w-3" /> Novo
-                    </Button>
-                  )}
                 </div>
                 <div className="flex gap-1.5 text-[9px] items-center">
                   <span className="text-success font-bold">{formatMoeda(totalEntradas)}</span>
@@ -1145,7 +1129,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                 </div>
               </div>
 
-              {/* DESKTOP: LINE 3 — Produto | Fornecedor + Summary */}
+              {/* DESKTOP: LINE 3 — Produto | Fornecedor + Actions + Summary */}
               <div className="flex items-end gap-1.5">
                 <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
                   <div>
@@ -1168,10 +1152,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     />
                   </div>
                 </div>
-                <div className="flex gap-2 text-[10px] items-center ml-auto pb-[1px]">
-                  <span className="text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
-                  <span className="text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
-                  <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+                <div className="flex gap-2 items-center ml-auto pb-[1px]">
+                  {actionButtons}
+                  <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
+                    <FilterX className="h-3 w-3" /> Limpar
+                  </Button>
+                  <span className="text-[10px] text-success font-bold">Entradas: {formatMoeda(totalEntradas)}</span>
+                  <span className="text-[10px] text-destructive font-bold">Saídas: {formatMoeda(totalSaidas)}</span>
+                  <span className="text-[10px] text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
                 </div>
               </div>
             </>
