@@ -69,6 +69,8 @@ interface Props {
   contas: ContaOption[];
   fazendas: FazendaOption[];
   clienteId?: string;
+  /** Official subcentros from plano de contas */
+  subcentrosOficiais?: Set<string>;
   onConfirmar: (linhas: LinhaImportada[]) => Promise<boolean>;
 }
 
@@ -122,7 +124,7 @@ function isTransf(tipo: string | null): boolean {
   return t.startsWith('3') || t.includes('transfer') || t.includes('resgate') || t.includes('aplicaç');
 }
 
-function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved>, fazendaLookup: Map<string, string>, isDuplicate: boolean): ValidationResult {
+function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved>, fazendaLookup: Map<string, string>, isDuplicate: boolean, subcentrosOficiais?: Set<string>): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const diagnostics: FieldDiagnostic[] = [];
@@ -192,6 +194,12 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
     diagnostics.push({ campo: 'AnoMes', valorRecebido: '(vazio)', motivo: 'Competência (YYYY-MM) obrigatória', tipo: 'error', categoria: 'outros' });
   }
 
+  // Validate subcentro against official plano de contas
+  if (row.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(row.subcentro)) {
+    errors.push(`Subcentro "${row.subcentro}" não existe no plano oficial`);
+    diagnostics.push({ campo: 'Subcentro', valorRecebido: row.subcentro, motivo: 'Não encontrado no plano de contas oficial. Corrija antes de importar.', tipo: 'error', categoria: 'outros' });
+  }
+
   let status: RowStatus;
   if (errors.length > 0) status = 'error';
   else if (isDuplicate) status = 'duplicated';
@@ -243,13 +251,13 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
   fornecedor_vazio: 'Fornecedor vazio',
   valor_negativo: 'Valor negativo',
   conta_nao_encontrada: 'Conta não encontrada',
-  subcentro_nao_encontrado: 'Subcentro vazio',
+  subcentro_nao_encontrado: 'Subcentro inválido/vazio',
   fazenda_nao_encontrada: 'Fazenda não encontrada',
 };
 
 // ── Component ──
 
-export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas, excelHeaders, contas, fazendas, clienteId, onConfirmar }: Props) {
+export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas, excelHeaders, contas, fazendas, clienteId, subcentrosOficiais, onConfirmar }: Props) {
   const contaLookup = useMemo(() => buildContaLookup(contas), [contas]);
   const fazendaLookup = useMemo(() => {
     const m = new Map<string, string>();
@@ -310,9 +318,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     if (!existingHashes) return;
     setRows(linhas.map(l => {
       const isDup = checkDuplicate(l, linhas, existingHashes);
-      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, isDup), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: isDup };
     }));
-  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate]);
+  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const contaOptions = useMemo(() => contas.map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta })).filter(c => !!c.value), [contas]);
   const fazendaOptions = useMemo(() => fazendas.map(f => ({ value: f.codigo || f.id, label: `${f.codigo} — ${f.nome}` })).filter(f => !!f.value), [fazendas]);
@@ -321,9 +329,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     if (!existingHashes) return currentRows;
     return currentRows.map(r => {
       const isDup = checkDuplicate(r, currentRows, existingHashes);
-      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
     });
-  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate]);
+  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate, subcentrosOficiais]);
 
   // Stats
   const stats = useMemo(() => {
@@ -337,7 +345,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       if (!r.fornecedor) fornecedorVazio++;
       if (r.valor < 0) valorNegativo++;
       if (r.contaOrigem && !r._resolved.contaResolvidaId) contaNaoEncontrada++;
-      if (!r.subcentro) subcentroVazio++;
+      if (!r.subcentro || (r.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(r.subcentro))) subcentroVazio++;
       if (r.fazenda && !r.fazendaId) fazendaNaoEncontrada++;
     }
     return { valid, warning, error, duplicated, total: rows.length, fornecedorVazio, valorNegativo, contaNaoEncontrada, subcentroVazio, fazendaNaoEncontrada };
@@ -354,7 +362,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       case 'fornecedor_vazio': return rows.filter(r => !r.fornecedor);
       case 'valor_negativo': return rows.filter(r => r.valor < 0);
       case 'conta_nao_encontrada': return rows.filter(r => r.contaOrigem && !r._resolved.contaResolvidaId);
-      case 'subcentro_nao_encontrado': return rows.filter(r => !r.subcentro);
+      case 'subcentro_nao_encontrado': return rows.filter(r => !r.subcentro || (r.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(r.subcentro)));
       case 'fazenda_nao_encontrada': return rows.filter(r => r.fazenda && !r.fazendaId);
       default: return rows;
     }

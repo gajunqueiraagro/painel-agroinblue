@@ -1,7 +1,7 @@
 /**
  * Tela de importação financeira via Excel — aba única EXPORT_APP_UNICO.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
@@ -9,6 +9,7 @@ import { ConferenciaImportacaoDialog } from '@/components/financeiro-v2/Conferen
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
   parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
@@ -71,6 +72,26 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
   const [conferenciaOpen, setConferenciaOpen] = useState(false);
   const [resultado, setResultado] = useState<ImportResultado | null>(null);
+  const [subcentrosOficiais, setSubcentrosOficiais] = useState<Set<string>>(new Set());
+
+  // Load official subcentros from plano de contas
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('financeiro_plano_contas')
+        .select('subcentro')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('ativo', true)
+        .not('subcentro', 'is', null);
+      const set = new Set<string>();
+      for (const r of (data || []) as any[]) {
+        if (r.subcentro) set.add(r.subcentro);
+      }
+      setSubcentrosOficiais(set);
+    };
+    load();
+  }, [clienteAtual?.id]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -588,6 +609,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           contas={contasBancarias}
           fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
           clienteId={clienteAtual?.id}
+          subcentrosOficiais={subcentrosOficiais}
           onConfirmar={async (linhasCorrigidas) => {
             setImportando(true);
             setResultado(null);
