@@ -968,7 +968,19 @@ export function useFinanceiro() {
           continue;
         }
 
-        if (error.code !== '23505') throw error;
+        if (error.code !== '23505') {
+          // Non-dedup error on batch — try row-by-row to isolate failures
+          for (const row of batch) {
+            const { error: rowError } = await supabase.from('financeiro_lancamentos_v2').insert(row);
+            if (!rowError) { inseridos += 1; continue; }
+            errosDetalhe.push({
+              descricao: row.descricao || undefined,
+              valor: row.valor,
+              motivo: rowError.message || `Erro ${rowError.code}`,
+            });
+          }
+          continue;
+        }
 
         for (const row of batch) {
           const { error: rowError } = await supabase.from('financeiro_lancamentos_v2').insert(row);
@@ -980,7 +992,11 @@ export function useFinanceiro() {
             ignorados += 1;
             continue;
           }
-          throw rowError;
+          errosDetalhe.push({
+            descricao: row.descricao || undefined,
+            valor: row.valor,
+            motivo: rowError.message || `Erro ${rowError.code}`,
+          });
         }
       }
 
