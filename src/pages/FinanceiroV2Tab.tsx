@@ -1177,7 +1177,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       </Card>
 
       {/* Fechamento mensal banner */}
-      {singleMonthSelected && fazendaId !== '__all__' && (
+      {!modoIntensivo && singleMonthSelected && fazendaId !== '__all__' && (
         <FechamentoMensalBanner
           anoMes={singleMonthSelected}
           status={singleMonthStatus as 'aberto' | 'fechado'}
