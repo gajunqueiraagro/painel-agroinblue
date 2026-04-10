@@ -954,16 +954,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
                     totalCount={totalLancamentosFiltrados}
                   />
-                  <Button
-                    size="sm"
-                    variant={mode === 'rapido' ? 'default' : 'outline'}
-                    onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                    className="h-6 text-[9px] gap-0.5 px-1.5"
-                  >
-                    {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                  </Button>
                   {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={openNew} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
+                    <Button size="sm" onClick={() => { setEditingLanc(null); setFullscreenDialog(true); }} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
                       <Plus className="h-3 w-3" /> Novo
                     </Button>
                   )}
