@@ -459,12 +459,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     [hook.fornecedores],
   );
 
-  // Derive atividade from subcentro
-  const getAtividade = (subcentro: string | null): string => {
-    if (!subcentro) return 'outros';
-    const s = subcentro.toUpperCase();
-    if (s.startsWith('PEC/') || s.startsWith('PEC ')) return 'pecuaria';
-    if (s.startsWith('AGRI/') || s.startsWith('AGRI ')) return 'agricultura';
+  // Derive atividade from escopo_negocio (official field) with subcentro fallback
+  const getAtividade = (l: LancamentoV2): string => {
+    // 1. Primary: use escopo_negocio from DB (set by plano de contas)
+    const escopo = (l.escopo_negocio || '').toLowerCase().trim();
+    if (escopo === 'pecuaria' || escopo === 'pecuária') return 'pecuaria';
+    if (escopo === 'agricultura' || escopo === 'agri') return 'agricultura';
+    // 2. Fallback: derive from subcentro keywords (legacy/missing escopo)
+    const sub = (l.subcentro || '').toUpperCase();
+    if (sub.includes('PECUÁRI') || sub.includes('PECUARIA') || sub.startsWith('PEC/') || sub.startsWith('PEC ')) return 'pecuaria';
+    if (sub.includes('AGRI') || sub.startsWith('AGRI/') || sub.startsWith('AGRI ')) return 'agricultura';
+    // 3. Second fallback: derive from centro_custo
+    const centro = (l.centro_custo || '').toUpperCase();
+    if (centro.includes('PECUÁRI') || centro.includes('PECUARIA')) return 'pecuaria';
+    if (centro.includes('AGRI')) return 'agricultura';
     return 'outros';
   };
 
