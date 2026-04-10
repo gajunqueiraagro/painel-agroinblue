@@ -642,6 +642,7 @@ export function useFinanceiro() {
     tipoOperacao: string | null, contaBancariaId: string | null,
     numeroDocumento?: string | null,
     descricao?: string | null, observacao?: string | null,
+    fornecedor?: string | null,
   ): string => {
     const parts = [
       clienteId,
@@ -653,6 +654,7 @@ export function useFinanceiro() {
       normalizeImportText(numeroDocumento),
       normalizeImportText(descricao),
       normalizeImportText(observacao),
+      normalizeImportText(fornecedor),
     ];
     return parts.join('|');
   };
@@ -743,7 +745,9 @@ export function useFinanceiro() {
         contaBancariaId: resolveContaBancariaId(saldo.contaBanco, saldo.fazendaId, contasBancarias),
       }));
 
-      // ── DEDUPLICAÇÃO ROBUSTA: buscar hashes existentes ──
+      // ── DETECÇÃO DE DUPLICIDADE (classificação, NÃO bloqueio) ──
+      // Regra: TODOS os lançamentos são inseridos. Suspeitos são marcados pelo trigger do banco.
+      // Nenhum lançamento é descartado no frontend.
       const fazendaIds = [...new Set(linhasResolvidas.map(l => l.fazendaId).filter(Boolean))] as string[];
       const existingHashes = new Set<string>();
 
@@ -753,7 +757,7 @@ export function useFinanceiro() {
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao, favorecido_id')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
             .eq('cancelado', false)
@@ -773,33 +777,9 @@ export function useFinanceiro() {
         }
       }
 
-      // Filtrar duplicados — com log persistente
-      const linhasNovas: LinhaImportadaResolvida[] = [];
-      const linhasDuplicadas: LinhaImportadaResolvida[] = [];
+      // Classificar duplicados para log, mas NÃO filtrar — todos seguem para insert
       let duplicados = 0;
-
-      // Build a map from hash → existing DB record ID for logging
-      const hashToExistingId = new Map<string, string>();
-      for (const fid of fazendaIds) {
-        let from2 = 0;
-        const bSize = 1000;
-        while (true) {
-          const { data: ex2 } = await supabase
-            .from('financeiro_lancamentos_v2')
-            .select('id, data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
-            .eq('fazenda_id', fid)
-            .eq('cliente_id', cid)
-            .eq('cancelado', false)
-            .range(from2, from2 + bSize - 1);
-          if (!ex2 || ex2.length === 0) break;
-          for (const e of ex2) {
-            const h = buildHashImportacao(cid, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao, e.observacao);
-            if (!hashToExistingId.has(h)) hashToExistingId.set(h, e.id);
-          }
-          if (ex2.length < bSize) break;
-          from2 += bSize;
-        }
-      }
+      const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string }> = [];
 
       for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
@@ -807,23 +787,18 @@ export function useFinanceiro() {
           l.dataPagamento || '', l.valor,
           l.tipoOperacao, l.contaBancariaId,
           l.numeroDocumento, l.produto, l.obs,
+          l.fornecedor,
         );
         if (existingHashes.has(hash)) {
           duplicados++;
-          linhasDuplicadas.push({ ...l, _hash: hash } as any);
-        } else {
-          linhasNovas.push(l);
-          existingHashes.add(hash);
+          linhasDuplicadasLog.push({ ...l, _hash: hash });
         }
+        // NÃO descarta — todos vão para inserção
       }
 
-      if (linhasNovas.length === 0 && duplicados > 0) {
-        toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
-      }
-
-      // Log duplicates persistently
-      if (linhasDuplicadas.length > 0) {
-        const dupLogs = linhasDuplicadas.map((l: any) => ({
+      // Log duplicates persistently for audit trail
+      if (linhasDuplicadasLog.length > 0) {
+        const dupLogs = linhasDuplicadasLog.map((l) => ({
           cliente_id: cid,
           fazenda_id: l.fazendaId || primaryFazendaId,
           nome_arquivo: nomeArquivo,
@@ -843,16 +818,10 @@ export function useFinanceiro() {
           macro_custo: l.macroCusto,
           centro_custo: l.centroCusto,
           hash_calculado: l._hash,
-          lancamento_existente_id: hashToExistingId.get(l._hash) || null,
         }));
-        // Insert in batches of 50
         for (let i = 0; i < dupLogs.length; i += 50) {
           await supabase.from('financeiro_duplicidade_log' as any).insert(dupLogs.slice(i, i + 50) as any);
         }
-      }
-
-      if (linhasNovas.length === 0 && duplicados > 0) {
-        return { ok: true, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: duplicados, totalErro: 0, erros: [] };
       }
 
       // ── Criar registro da importação (V2) ──
@@ -1041,7 +1010,7 @@ export function useFinanceiro() {
         favorecido_id?: string | null;
       }> = [];
 
-      for (const l of linhasNovas) {
+      for (const l of linhasResolvidas) {
         const tipoNorm = (l.tipoOperacao || '').toLowerCase();
         const ehTransf = tipoNorm.startsWith('3') || tipoNorm.includes('transfer') || tipoNorm.includes('resgate') || tipoNorm.includes('aplicaç');
         const clienteIdLinha = fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid;
