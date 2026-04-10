@@ -492,6 +492,15 @@ export function LancamentoV2Dialog({
     if (cls) {
       setMacroCusto(cls.macro_custo);
       setCentroCusto(cls.centro_custo);
+      // Derive escopo_negocio from grupo_custo (official hierarchy)
+      const grupo = (cls.grupo_custo || '').toLowerCase();
+      if (grupo.includes('pecuári') || grupo.includes('pecuaria')) {
+        setEscopoNegocio('pecuaria');
+      } else if (grupo.includes('agri')) {
+        setEscopoNegocio('agricultura');
+      } else {
+        setEscopoNegocio('');
+      }
     }
   };
 
