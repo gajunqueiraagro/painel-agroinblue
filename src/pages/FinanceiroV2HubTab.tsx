@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, Construction, SearchCheck,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, Construction, SearchCheck, UserCircle,
 } from 'lucide-react';
 
 interface Props {
@@ -13,6 +13,7 @@ const CADASTRO_ITEMS = [
   { label: 'Contas Bancárias', tab: 'fin_v2_contas' as TabId, icon: Building2, description: 'Cadastro e manutenção de contas' },
   { label: 'Fornecedores', tab: 'fin_v2_fornecedores' as TabId, icon: Users, description: 'Cadastro de fornecedores e favorecidos' },
   { label: 'Plano de Contas', tab: 'fin_v2_plano' as TabId, icon: BookOpen, description: 'Subcentros, centros e macro custos' },
+  { label: 'Dividendos', tab: 'fin_v2_dividendos' as TabId, icon: UserCircle, description: 'Cadastro de nomes para distribuição' },
 ];
 
 export function FinanceiroV2HubTab({ onTabChange }: Props) {
