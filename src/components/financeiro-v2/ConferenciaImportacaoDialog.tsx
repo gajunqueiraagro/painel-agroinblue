@@ -194,6 +194,12 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
     diagnostics.push({ campo: 'AnoMes', valorRecebido: '(vazio)', motivo: 'Competência (YYYY-MM) obrigatória', tipo: 'error', categoria: 'outros' });
   }
 
+  // Validate subcentro against official plano de contas
+  if (row.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(row.subcentro)) {
+    errors.push(`Subcentro "${row.subcentro}" não existe no plano oficial`);
+    diagnostics.push({ campo: 'Subcentro', valorRecebido: row.subcentro, motivo: 'Não encontrado no plano de contas oficial. Corrija antes de importar.', tipo: 'error', categoria: 'outros' });
+  }
+
   let status: RowStatus;
   if (errors.length > 0) status = 'error';
   else if (isDuplicate) status = 'duplicated';
