@@ -636,12 +636,13 @@ export function useFinanceiro() {
     return contaGlobal?.id || null;
   };
 
+  /** Hash núcleo para detecção de duplicidade — alinhado com SQL */
   const buildHashImportacao = (
     clienteId: string, fazendaId: string,
     dataPagamento: string | null, valor: number,
     tipoOperacao: string | null, contaBancariaId: string | null,
     numeroDocumento?: string | null,
-    descricao?: string | null, observacao?: string | null,
+    descricao?: string | null,
     fornecedor?: string | null,
   ): string => {
     const parts = [
@@ -653,10 +654,38 @@ export function useFinanceiro() {
       contaBancariaId || '',
       normalizeImportText(numeroDocumento),
       normalizeImportText(descricao),
-      normalizeImportText(observacao),
       normalizeImportText(fornecedor),
     ];
     return parts.join('|');
+  };
+
+  type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
+
+  /** Classificação multinível — espelha SQL classificar_nivel_duplicidade */
+  const classificarNivel = (
+    newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+    existing: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+  ): NivelDuplicidade => {
+    let diffCount = 0;
+    let docDiverge = false;
+
+    if (normalizeImportText(newRow.fornecedor) !== normalizeImportText(existing.fornecedor)) diffCount++;
+    if (normalizeImportText(newRow.descricao) !== normalizeImportText(existing.descricao)
+        && (newRow.descricao || existing.descricao)) diffCount++;
+
+    const newDoc = normalizeImportText(newRow.numeroDocumento);
+    const exDoc = normalizeImportText(existing.numeroDocumento);
+    if (newDoc && exDoc) {
+      if (newDoc !== exDoc) { docDiverge = true; diffCount++; }
+    }
+
+    if (normalizeImportText(newRow.subcentro) !== normalizeImportText(existing.subcentro)
+        && (newRow.subcentro || existing.subcentro)) diffCount++;
+
+    if (diffCount === 0) return 'D1';
+    if (diffCount === 1 && !docDiverge) return 'D2';
+    if (diffCount <= 2) return 'D3';
+    return 'LEGITIMO';
   };
 
   // --- Confirmar importação (incremental com dedup) ---
@@ -757,7 +786,7 @@ export function useFinanceiro() {
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao, favorecido_id')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
             .eq('cancelado', false)
@@ -768,7 +797,7 @@ export function useFinanceiro() {
               cid, fid,
               e.data_pagamento, e.valor,
               e.tipo_operacao, e.conta_bancaria_id,
-              e.numero_documento, e.descricao, e.observacao,
+              e.numero_documento, e.descricao,
             );
             existingHashes.add(hash);
           }
@@ -779,19 +808,24 @@ export function useFinanceiro() {
 
       // Classificar duplicados para log, mas NÃO filtrar — todos seguem para insert
       let duplicados = 0;
-      const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string }> = [];
+      const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string; _nivel: NivelDuplicidade }> = [];
 
       for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
           cid, l.fazendaId || '',
           l.dataPagamento || '', l.valor,
           l.tipoOperacao, l.contaBancariaId,
-          l.numeroDocumento, l.produto, l.obs,
+          l.numeroDocumento, l.produto,
           l.fornecedor,
         );
         if (existingHashes.has(hash)) {
+          // Compute multinível score against nucleus match
+          const nivel = classificarNivel(
+            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
+            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
+          );
           duplicados++;
-          linhasDuplicadasLog.push({ ...l, _hash: hash });
+          linhasDuplicadasLog.push({ ...l, _hash: hash, _nivel: nivel });
         }
         // NÃO descarta — todos vão para inserção
       }
@@ -801,23 +835,22 @@ export function useFinanceiro() {
         const dupLogs = linhasDuplicadasLog.map((l) => ({
           cliente_id: cid,
           fazenda_id: l.fazendaId || primaryFazendaId,
-          nome_arquivo: nomeArquivo,
-          linha_excel: l.linha || null,
-          data_competencia: l.dataPagamento || (l.anoMes + '-01'),
-          data_pagamento: l.dataPagamento || null,
-          ano_mes: l.anoMes,
-          valor: Math.abs(l.valor),
-          tipo_operacao: l.tipoOperacao,
-          descricao: l.produto,
-          fornecedor: l.fornecedor,
-          numero_documento: l.numeroDocumento,
-          observacao: l.obs,
-          conta_bancaria_id: l.contaBancariaId,
-          conta_nome: l.contaOrigem,
-          subcentro: l.subcentro,
-          macro_custo: l.macroCusto,
-          centro_custo: l.centroCusto,
           hash_calculado: l._hash,
+          nivel_duplicidade: l._nivel,
+          motivo: `Importação ${nomeArquivo} — linha ${l.linha || '?'}`,
+          dados_linha: {
+            linha_excel: l.linha,
+            ano_mes: l.anoMes,
+            data_pagamento: l.dataPagamento,
+            valor: l.valor,
+            tipo_operacao: l.tipoOperacao,
+            descricao: l.produto,
+            fornecedor: l.fornecedor,
+            numero_documento: l.numeroDocumento,
+            subcentro: l.subcentro,
+            conta_origem: l.contaOrigem,
+            obs: l.obs,
+          },
         }));
         for (let i = 0; i < dupLogs.length; i += 50) {
           await supabase.from('financeiro_duplicidade_log' as any).insert(dupLogs.slice(i, i + 50) as any);

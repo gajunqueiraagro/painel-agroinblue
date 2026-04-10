@@ -1823,6 +1823,60 @@ export type Database = {
           },
         ]
       }
+      financeiro_duplicidade_log: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          dados_linha: Json | null
+          fazenda_id: string | null
+          hash_calculado: string | null
+          id: string
+          lancamento_match_id: string | null
+          lote_importacao_id: string | null
+          motivo: string | null
+          nivel_duplicidade: string | null
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          dados_linha?: Json | null
+          fazenda_id?: string | null
+          hash_calculado?: string | null
+          id?: string
+          lancamento_match_id?: string | null
+          lote_importacao_id?: string | null
+          motivo?: string | null
+          nivel_duplicidade?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          dados_linha?: Json | null
+          fazenda_id?: string | null
+          hash_calculado?: string | null
+          id?: string
+          lancamento_match_id?: string | null
+          lote_importacao_id?: string | null
+          motivo?: string | null
+          nivel_duplicidade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_duplicidade_log_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_duplicidade_log_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_extrato_bancario: {
         Row: {
           cliente_id: string
@@ -2346,6 +2400,7 @@ export type Database = {
           lote_importacao_id: string | null
           macro_custo: string | null
           movimentacao_rebanho_id: string | null
+          nivel_duplicidade: string | null
           numero_documento: string | null
           observacao: string | null
           origem_lancamento: string
@@ -2397,6 +2452,7 @@ export type Database = {
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
+          nivel_duplicidade?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_lancamento?: string
@@ -2448,6 +2504,7 @@ export type Database = {
           lote_importacao_id?: string | null
           macro_custo?: string | null
           movimentacao_rebanho_id?: string | null
+          nivel_duplicidade?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_lancamento?: string
@@ -4507,6 +4564,27 @@ export type Database = {
       cancel_financeiro_importacao_v2: {
         Args: { _importacao_id: string }
         Returns: Json
+      }
+      classificar_nivel_duplicidade: {
+        Args: {
+          _existing_conta_bancaria_id: string
+          _existing_data_pagamento: string
+          _existing_descricao: string
+          _existing_favorecido_id: string
+          _existing_numero_documento: string
+          _existing_subcentro: string
+          _existing_tipo_operacao: string
+          _existing_valor: number
+          _new_conta_bancaria_id: string
+          _new_data_pagamento: string
+          _new_descricao: string
+          _new_favorecido_id: string
+          _new_numero_documento: string
+          _new_subcentro: string
+          _new_tipo_operacao: string
+          _new_valor: number
+        }
+        Returns: string
       }
       compute_financeiro_lancamento_v2_hash: {
         Args: {
