@@ -227,13 +227,14 @@ export function LancamentoV2Dialog({
   }, [classificacoes]);
 
   /** Subcentros filtered by tipo_operacao then by search text.
-   *  Transferências (3-Transferência) share the same cost tree as Saídas (2-Saídas). */
+   *  Uses the selected tipoOperacao directly – each type has its own subtree. */
   const filteredSubcentros = useMemo(() => {
     const unique = Array.from(classMap.values());
-    const tipoFiltro = tipoOperacao === '3-Transferência' ? '2-Saídas' : tipoOperacao;
     const byTipo = unique.filter(c => {
-      if (!tipoFiltro) return true;
-      return c.tipo_operacao === tipoFiltro;
+      if (!tipoOperacao) return true;
+      // Flexible match: DB may store "3-Transferências" while UI uses "3-Transferência"
+      if (tipoOperacao.startsWith('3-')) return c.tipo_operacao.startsWith('3-');
+      return c.tipo_operacao === tipoOperacao;
     });
     if (!subcentroSearch.trim()) return byTipo;
     const term = subcentroSearch.toLowerCase();
