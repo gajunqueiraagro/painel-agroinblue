@@ -69,6 +69,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
+import { cn } from '@/lib/utils';
 
 export interface FiltroGlobal {
   ano: string;
@@ -757,7 +758,7 @@ const Index = () => {
         />
       )}
       </div>
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </div>
   );
 };
