@@ -202,12 +202,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [confirmCleanupOpen, setConfirmCleanupOpen] = useState(false);
-  const [cleanupDeleting, setCleanupDeleting] = useState(false);
-  const [cleanupConfirmText, setCleanupConfirmText] = useState('');
-  const [confirmMigracaoOpen, setConfirmMigracaoOpen] = useState(false);
-  const [migracaoDeleting, setMigracaoDeleting] = useState(false);
-  const [migracaoConfirmText, setMigracaoConfirmText] = useState('');
 
   // Sorting state
    type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
@@ -623,57 +617,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     }
   };
 
-  // Cleanup: count imported realizado in current filtered set
-  const realizadosImportadosCount = useMemo(() =>
-    sortedLancamentos.filter(l => l.status_transacao === 'realizado' && !!l.lote_importacao_id && !l.cancelado).length,
-    [sortedLancamentos]
-  );
-
-  const handleCleanupRealizados = async () => {
-    setCleanupDeleting(true);
-    try {
-      const result = await hook.cancelarRealizadosImportados(filtros);
-      if (result.cancelados > 0) {
-        toast.success(`${result.cancelados} lançamento${result.cancelados !== 1 ? 's' : ''} realizado${result.cancelados !== 1 ? 's' : ''} importado${result.cancelados !== 1 ? 's' : ''} removido${result.cancelados !== 1 ? 's' : ''}`);
-        await hook.loadLancamentos(filtros, hook.page);
-      } else {
-        toast.info('Nenhum lançamento encontrado para remoção');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao executar limpeza');
-    } finally {
-      setCleanupDeleting(false);
-      setConfirmCleanupOpen(false);
-      setCleanupConfirmText('');
-    }
-  };
-
-  const handleCancelarMigracao2025 = async () => {
-    setMigracaoDeleting(true);
-    try {
-      const result = await hook.cancelarMigracao('2025');
-      if (result.cancelados > 0) {
-        toast.success(`${result.cancelados} registros de migração 2025 cancelados`);
-        if (result.restantes.length > 0) {
-          const resumo = result.restantes.map(r => `${r.origem}: ${r.qtd}`).join(', ');
-          toast.info(`Restam ativos em 2025: ${resumo}`);
-        } else {
-          toast.info('Nenhum registro ativo restante em 2025');
-        }
-        await hook.loadLancamentos(filtros, hook.page);
-      } else {
-        toast.info('Nenhum registro de migração encontrado em 2025');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao cancelar migração');
-    } finally {
-      setMigracaoDeleting(false);
-      setConfirmMigracaoOpen(false);
-      setMigracaoConfirmText('');
-    }
-  };
 
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
@@ -1359,29 +1302,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           )}
 
-          {/* Total count + cleanup button */}
-          <div className="flex items-center justify-between px-1 py-1">
+          {/* Total count */}
+          <div className="flex items-center px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
-            {realizadosImportadosCount > 0 && (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-6 text-[10px] gap-1 px-2"
-                onClick={() => setConfirmCleanupOpen(true)}
-              >
-                <Trash2 className="h-3 w-3" /> Excluir realizados importados ({realizadosImportadosCount})
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-6 text-[10px] gap-1 px-2"
-              onClick={() => setConfirmMigracaoOpen(true)}
-            >
-              <Trash2 className="h-3 w-3" /> Cancelar migração 2025
-            </Button>
           </div>
         </>
       )}
@@ -1432,94 +1357,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Cleanup imported realizado confirmation */}
-      <AlertDialog open={confirmCleanupOpen} onOpenChange={(open) => { setConfirmCleanupOpen(open); if (!open) setCleanupConfirmText(''); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">⚠ Excluir realizados importados</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                <p>Você está prestes a <strong className="text-destructive">cancelar permanentemente</strong> todos os lançamentos que atendem aos critérios:</p>
-                <ul className="list-disc pl-4 space-y-1 text-[12px]">
-                  <li>Status: <strong>Realizado</strong></li>
-                  <li>Origem: <strong>Importação</strong> (possuem lote de importação)</li>
-                  <li>Dentro dos filtros atualmente aplicados</li>
-                </ul>
-                <p className="text-[12px] text-muted-foreground">Metas, programados e contratos <strong>não serão afetados</strong>.</p>
-                <p className="font-bold text-destructive">{realizadosImportadosCount} lançamento{realizadosImportadosCount !== 1 ? 's serão' : ' será'} removido{realizadosImportadosCount !== 1 ? 's' : ''}.</p>
-                <div className="pt-2 border-t">
-                  <label className="text-[11px] font-semibold block mb-1">Digite <span className="font-mono text-destructive">CONFIRMAR</span> para prosseguir:</label>
-                  <Input
-                    value={cleanupConfirmText}
-                    onChange={(e) => setCleanupConfirmText(e.target.value)}
-                    placeholder="CONFIRMAR"
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={cleanupDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCleanupRealizados}
-              disabled={cleanupDeleting || cleanupConfirmText !== 'CONFIRMAR'}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {cleanupDeleting ? 'Excluindo...' : `Excluir ${realizadosImportadosCount} realizado${realizadosImportadosCount !== 1 ? 's' : ''}`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Cancel migration 2025 confirmation */}
-      <AlertDialog open={confirmMigracaoOpen} onOpenChange={(open) => { setConfirmMigracaoOpen(open); if (!open) setMigracaoConfirmText(''); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-destructive">🔴 Cancelar registros de migração 2025</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                <p>Você está prestes a <strong className="text-destructive">cancelar permanentemente</strong> todos os registros de migração do ano 2025.</p>
-                <ul className="list-disc pl-4 space-y-1 text-[12px]">
-                  <li>Origem: <strong>migracao</strong></li>
-                  <li>Status: <strong>realizado</strong></li>
-                  <li>Período: <strong>Jan/2025 a Dez/2025</strong></li>
-                  <li>Total estimado: <strong>6.088 registros</strong></li>
-                </ul>
-                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 text-[12px]">
-                  <p className="font-semibold text-green-700 dark:text-green-400">✅ Serão preservados:</p>
-                  <ul className="list-disc pl-4 mt-1 space-y-0.5">
-                    <li>46 registros de origem <strong>manual</strong></li>
-                    <li>4 registros de origem <strong>movimentação de rebanho</strong></li>
-                    <li>1 registro <strong>meta</strong> de migração</li>
-                  </ul>
-                </div>
-                <div className="pt-2 border-t">
-                  <label className="text-[11px] font-semibold block mb-1">Digite <span className="font-mono text-destructive">CONFIRMAR</span> para prosseguir:</label>
-                  <Input
-                    value={migracaoConfirmText}
-                    onChange={(e) => setMigracaoConfirmText(e.target.value)}
-                    placeholder="CONFIRMAR"
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={migracaoDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelarMigracao2025}
-              disabled={migracaoDeleting || migracaoConfirmText !== 'CONFIRMAR'}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {migracaoDeleting ? 'Cancelando...' : 'Cancelar migração 2025'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
     </div>
   );
