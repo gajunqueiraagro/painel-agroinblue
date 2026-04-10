@@ -808,7 +808,7 @@ export function useFinanceiro() {
 
       // Classificar duplicados para log, mas NÃO filtrar — todos seguem para insert
       let duplicados = 0;
-      const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string }> = [];
+      const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string; _nivel: NivelDuplicidade }> = [];
 
       for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
@@ -819,8 +819,13 @@ export function useFinanceiro() {
           l.fornecedor,
         );
         if (existingHashes.has(hash)) {
+          // Compute multinível score against nucleus match
+          const nivel = classificarNivel(
+            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
+            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
+          );
           duplicados++;
-          linhasDuplicadasLog.push({ ...l, _hash: hash });
+          linhasDuplicadasLog.push({ ...l, _hash: hash, _nivel: nivel });
         }
         // NÃO descarta — todos vão para inserção
       }
