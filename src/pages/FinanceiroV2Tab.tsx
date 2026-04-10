@@ -506,7 +506,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       items = items.filter(l => l.favorecido_id === fornecedorFiltro);
     }
     if (atividadeFiltro !== '__all__') {
-      items = items.filter(l => getAtividade(l.subcentro) === atividadeFiltro);
+      items = items.filter(l => getAtividade(l) === atividadeFiltro);
     }
     // Client-side grupo_custo filter (not a DB column on lancamentos)
     if (grupoFiltro !== '__all__') {
