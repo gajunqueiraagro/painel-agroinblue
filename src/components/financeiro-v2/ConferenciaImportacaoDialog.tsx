@@ -55,6 +55,7 @@ interface EditableRow extends LinhaImportada {
   _validation: ValidationResult;
   _resolved: ResolvedInfo;
   _isDuplicate: boolean;
+  _nivelDuplicidade?: NivelDuplicidade | null;
 }
 
 interface ContaOption { id: string; nome_conta: string; nome_exibicao?: string | null; codigo_conta?: string | null; }
