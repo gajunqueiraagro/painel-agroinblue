@@ -4452,6 +4452,16 @@ export type Database = {
         Args: { r: Database["public"]["Tables"]["lancamentos"]["Row"] }
         Returns: string
       }
+      auditar_integridade_classificacao: {
+        Args: { _cliente_id: string }
+        Returns: {
+          campo_divergente: string
+          lancamento_id: string
+          subcentro: string
+          valor_lancamento: string
+          valor_plano: string
+        }[]
+      }
       can_manage_financeiro_importacao_v2: {
         Args: { _cliente_id: string }
         Returns: boolean
