@@ -800,7 +800,7 @@ export function useFinanceiro() {
       let inseridos = 0;
       let ignorados = duplicados;
 
-      // ── Resolver fornecedores (texto → UUID) ──
+      // ── Resolver fornecedores (texto → UUID) com auto-criação ──
       const { data: fornecedoresData } = await supabase
         .from('financeiro_fornecedores')
         .select('id, nome, nome_normalizado')
@@ -813,10 +813,56 @@ export function useFinanceiro() {
         if (f.nome) fornecedorMap.set(f.nome.toUpperCase().trim(), f.id);
       }
 
-      const resolveFornecedorId = (nome: string | null): string | null => {
-        if (!nome) return null;
-        const norm = nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-        return fornecedorMap.get(norm) || fornecedorMap.get(nome.toUpperCase().trim()) || null;
+      const normalizeFornecedorName = (value: string): string =>
+        value
+          .toUpperCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Z0-9 ]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+      const resolveOrCreateFornecedorId = async (
+        nome: string | null,
+      ): Promise<string | null> => {
+        if (!nome || !nome.trim()) return null;
+        const nomeOriginal = nome.trim();
+        const nomeNormalizado = normalizeFornecedorName(nomeOriginal);
+        if (!nomeNormalizado) return null;
+
+        const existente = fornecedorMap.get(nomeNormalizado);
+        if (existente) return existente;
+
+        const { data, error } = await supabase
+          .from('financeiro_fornecedores')
+          .insert({
+            cliente_id: cid,
+            nome: nomeOriginal,
+            ativo: true,
+          })
+          .select('id')
+          .single();
+
+        if (error) {
+          // Handle unique constraint conflict — another import may have created it
+          if (error.code === '23505') {
+            const { data: existing } = await supabase
+              .from('financeiro_fornecedores')
+              .select('id')
+              .eq('cliente_id', cid)
+              .eq('nome_normalizado', nomeNormalizado)
+              .limit(1)
+              .single();
+            if (existing) {
+              fornecedorMap.set(nomeNormalizado, existing.id);
+              return existing.id;
+            }
+          }
+          throw new Error(`Erro ao criar fornecedor automaticamente: ${nomeOriginal} — ${error.message}`);
+        }
+
+        fornecedorMap.set(nomeNormalizado, data.id);
+        return data.id;
       };
 
       // ── Expand transfers into paired records (debit + credit) ──
