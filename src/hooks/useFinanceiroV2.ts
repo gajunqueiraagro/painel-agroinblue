@@ -186,27 +186,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const loadClassificacoes = useCallback(async () => {
     if (!clienteId) return;
-    const { data } = await supabase
-      .from('financeiro_plano_contas')
-      .select('subcentro, centro_custo, grupo_custo, macro_custo, tipo_operacao, escopo_negocio')
-      .eq('cliente_id', clienteId)
-      .eq('ativo', true)
-      .not('subcentro', 'is', null)
-      .order('ordem_exibicao');
 
-    const items: ClassificacaoItem[] = [];
-    for (const row of (data || []) as any[]) {
-      if (!row.subcentro) continue;
-      items.push({
-        subcentro: row.subcentro,
-        centro_custo: row.centro_custo || '',
-        grupo_custo: row.grupo_custo || '',
-        macro_custo: row.macro_custo || '',
-        tipo_operacao: row.tipo_operacao || '',
-        escopo_negocio: row.escopo_negocio || '',
-      });
-    }
-    setClassificacoes(items);
+    const { loadPlanoContasCompleto, planoToClassificacoes } = await import('@/lib/financeiro/planoContasBuilder');
+    const plano = await loadPlanoContasCompleto(clienteId);
+    setClassificacoes(planoToClassificacoes(plano));
   }, [clienteId]);
 
   const buildLancamentosQuery = useCallback((filtros: FiltrosV2) => {
