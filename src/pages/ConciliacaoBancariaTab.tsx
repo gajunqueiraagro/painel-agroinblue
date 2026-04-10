@@ -144,6 +144,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [loading, setLoading] = useState(false);
   const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2, '0'));
   const [filtroTipoLanc, setFiltroTipoLanc] = useState<'todos' | 'entradas' | 'saidas' | 'transf_entrada' | 'transf_saida'>('todos');
+  const [lancSort, setLancSort] = useState<{ col: 'data' | 'descricao' | 'fornecedor' | 'valor'; dir: 'asc' | 'desc' }>({ col: 'data', dir: 'asc' });
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
 
