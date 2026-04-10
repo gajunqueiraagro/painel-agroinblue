@@ -905,7 +905,7 @@ export function useFinanceiro() {
           escopo_negocio: l.escopoNegocio,
           numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
-          favorecido_id: resolveFornecedorId(l.fornecedor),
+          favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor),
           created_by: user.id,
         };
 
