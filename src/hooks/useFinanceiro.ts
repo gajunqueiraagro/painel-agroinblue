@@ -1048,15 +1048,35 @@ export function useFinanceiro() {
 
       const msgs: string[] = [`${inseridos} lançamentos inseridos`];
       if (ignorados > 0) msgs.push(`${ignorados} duplicados ignorados`);
+      if (errosDetalhe.length > 0) msgs.push(`${errosDetalhe.length} com erro`);
       if (saldosResolvidos.length) msgs.push(`${saldosResolvidos.length} saldos`);
       if (resumoCaixa?.length) msgs.push(`${resumoCaixa.length} resumos`);
-      toast.success(`Importação concluída: ${msgs.join(' · ')}`);
+
+      if (errosDetalhe.length > 0) {
+        toast.warning(`Importação parcial: ${msgs.join(' · ')}`);
+      } else {
+        toast.success(`Importação concluída: ${msgs.join(' · ')}`);
+      }
 
       await loadData();
-      return true;
+      return {
+        ok: errosDetalhe.length === 0,
+        totalProcessado: expandedRows.length,
+        totalSalvo: inseridos,
+        totalDuplicado: ignorados,
+        totalErro: errosDetalhe.length,
+        erros: errosDetalhe,
+      };
     } catch (err: any) {
       toast.error('Erro na importação: ' + (err.message || err));
-      return false;
+      return {
+        ok: false,
+        totalProcessado: linhas.length,
+        totalSalvo: 0,
+        totalDuplicado: 0,
+        totalErro: 1,
+        erros: [{ motivo: err.message || String(err) }],
+      };
     }
   }, [user, loadData, fazendas]);
 
