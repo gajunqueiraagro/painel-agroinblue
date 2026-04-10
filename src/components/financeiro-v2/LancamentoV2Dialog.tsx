@@ -187,6 +187,7 @@ export function LancamentoV2Dialog({
   const [subcentro, setSubcentro] = useState('');
   const [macroCusto, setMacroCusto] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
+  const [escopoNegocio, setEscopoNegocio] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState('meta');
   const [valorDisplay, setValorDisplay] = useState('0,00');
@@ -247,6 +248,7 @@ export function LancamentoV2Dialog({
       setSubcentro(lancamento.subcentro || '');
       setMacroCusto(lancamento.macro_custo || '');
       setCentroCusto(lancamento.centro_custo || '');
+      setEscopoNegocio(lancamento.escopo_negocio || '');
       setTipoOperacao(lancamento.tipo_operacao);
       setStatusTransacao(normalizeStatusTransacao(lancamento.status_transacao));
       setValorDisplay(toBRL(Math.abs(lancamento.valor)));
@@ -288,6 +290,7 @@ export function LancamentoV2Dialog({
       setSubcentro('');
       setMacroCusto('');
       setCentroCusto('');
+      setEscopoNegocio('');
       setTipoOperacao('2-Saídas');
       setStatusTransacao('meta');
       setValorDisplay('0,00');
@@ -492,6 +495,15 @@ export function LancamentoV2Dialog({
     if (cls) {
       setMacroCusto(cls.macro_custo);
       setCentroCusto(cls.centro_custo);
+      // Derive escopo_negocio from grupo_custo (official hierarchy)
+      const grupo = (cls.grupo_custo || '').toLowerCase();
+      if (grupo.includes('pecuári') || grupo.includes('pecuaria')) {
+        setEscopoNegocio('pecuaria');
+      } else if (grupo.includes('agri')) {
+        setEscopoNegocio('agricultura');
+      } else {
+        setEscopoNegocio('');
+      }
     }
   };
 
@@ -747,6 +759,7 @@ export function LancamentoV2Dialog({
       macro_custo: macroCusto,
       centro_custo: centroCusto,
       subcentro,
+      escopo_negocio: escopoNegocio || undefined,
       observacao,
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
