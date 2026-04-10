@@ -72,6 +72,26 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
   const [conferenciaOpen, setConferenciaOpen] = useState(false);
   const [resultado, setResultado] = useState<ImportResultado | null>(null);
+  const [subcentrosOficiais, setSubcentrosOficiais] = useState<Set<string>>(new Set());
+
+  // Load official subcentros from plano de contas
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('financeiro_plano_contas')
+        .select('subcentro')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('ativo', true)
+        .not('subcentro', 'is', null);
+      const set = new Set<string>();
+      for (const r of (data || []) as any[]) {
+        if (r.subcentro) set.add(r.subcentro);
+      }
+      setSubcentrosOficiais(set);
+    };
+    load();
+  }, [clienteAtual?.id]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
