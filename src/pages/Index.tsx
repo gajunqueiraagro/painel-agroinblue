@@ -402,19 +402,19 @@ const Index = () => {
     <div className={cn("h-screen flex flex-col bg-background max-w-[1280px] mx-auto", finV2Intensivo ? "px-1" : "px-4 md:px-6 lg:px-8")}>
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
       {!finV2Intensivo && (
-      <Header
-        title={TITLES[activeTab]}
-        clienteNome={clienteNomeHeader}
-        fazendaNome={fazendaNome}
-        periodo={undefined}
-        
-        rightAction={
-          <div className="flex flex-col gap-1">
-            {clientes.length > 1 && <ClienteSelector />}
-            {fazendas.length > 1 && <FazendaSelector />}
-          </div>
-        }
-      />
+        <Header
+          title={TITLES[activeTab]}
+          clienteNome={clienteNomeHeader}
+          fazendaNome={fazendaNome}
+          periodo={undefined}
+          rightAction={
+            <div className="flex flex-col gap-1">
+              {clientes.length > 1 && <ClienteSelector />}
+              {fazendas.length > 1 && <FazendaSelector />}
+            </div>
+          }
+        />
+      )}
 
 
       <div className={`flex-1 min-h-0 ${(activeTab === 'mapa_geo_pastos' || activeTab === 'mapa_pastos') ? 'overflow-hidden' : 'overflow-y-auto'}`}>
