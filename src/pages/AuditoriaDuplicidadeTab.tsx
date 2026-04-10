@@ -129,7 +129,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
       console.error('Error loading dup logs:', error);
       toast.error('Erro ao carregar log de duplicidades');
     }
-    setLogs((data || []) as DupLog[]);
+    setLogs((data || []) as unknown as DupLog[]);
     setLoading(false);
   }, [cid]);
 
