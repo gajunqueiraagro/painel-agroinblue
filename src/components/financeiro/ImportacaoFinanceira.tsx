@@ -531,7 +531,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           clienteId={clienteAtual?.id}
           onConfirmar={async (linhasCorrigidas) => {
             setImportando(true);
-            const ok = await onConfirmar(
+            setResultado(null);
+            const res = await onConfirmar(
               preview.nomeArquivo,
               linhasCorrigidas,
               preview.totalLinhas,
@@ -541,12 +542,13 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
               preview.resumoCaixa.filter(r => r.fazendaId),
               tipoImportacao,
             );
-            if (ok) {
+            setResultado(res);
+            if (res.ok && res.totalErro === 0) {
               setPreview(null);
               setConferenciaOpen(false);
             }
             setImportando(false);
-            return ok;
+            return res.ok;
           }}
         />
       )}
