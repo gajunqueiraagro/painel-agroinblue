@@ -206,8 +206,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const mov = movSummary[key];
     if (!mov) return null;
     const expected = s.saldo_inicial + mov.entradas - mov.saidas;
-    const diff = Math.abs(expected - s.saldo_final);
-    return diff > 0.01 ? diff : null;
+    const diff = Math.round((expected - s.saldo_final) * 100) / 100;
+    return diff !== 0 ? Math.abs(diff) : null;
   }, [movSummary]);
 
   /* ── permission helpers ── */
@@ -375,7 +375,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       // Always propagate to next month automatically
       const nextAm = nextAnoMes(anoMes);
       const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === contaId && s.ano_mes === nextAm);
-      if (nextSaldo && Math.abs(nextSaldo.saldo_inicial - saldoFinalVal) > 0.01) {
+      if (nextSaldo && Math.round((nextSaldo.saldo_inicial - saldoFinalVal) * 100) !== 0) {
         await supabase
           .from('financeiro_saldos_bancarios_v2')
           .update({ saldo_inicial: saldoFinalVal, origem_saldo_inicial: 'automatico' })
@@ -520,7 +520,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                       // Chain integrity: always use previous month's saldo_final as saldo_inicial
                       const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
                       const saldoInicialEfetivo = prevFinal !== null ? prevFinal : s.saldo_inicial;
-                      const chainBroken = prevFinal !== null && Math.abs(prevFinal - s.saldo_inicial) > 0.01;
+                      const chainBroken = prevFinal !== null && Math.round((prevFinal - s.saldo_inicial) * 100) !== 0;
 
                       return (
                         <TableRow key={s.id} className={`text-[11px] ${inconsistency || chainBroken ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
@@ -556,8 +556,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                               const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
                               const mov = movSummary[key];
                               const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
-                              const diff = Math.abs(s.saldo_final - saldoCalculado);
-                              const isConciliado = diff < 0.01;
+                              const diff = Math.round((s.saldo_final - saldoCalculado) * 100) / 100;
+                              const isConciliado = diff === 0;
 
                               return (
                                 <Tooltip>

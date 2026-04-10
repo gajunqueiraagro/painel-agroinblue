@@ -71,7 +71,7 @@ interface MesCard {
   saldoCalculado: number;
   saldoExtrato: number | null;
   diferenca: number;
-  status: 'realizado' | 'atencao' | 'nao_conciliado' | 'pendente';
+  status: ConciliacaoStatus;
   saldoRow: SaldoRow | null;
   lancamentos: LancamentoResumo[];
 }
@@ -106,9 +106,8 @@ function contaLabel(c: ContaRef): string {
 // Use shared getConciliacaoStatus from conciliacaoCalc
 
 const STATUS_CONFIG = {
-  realizado: { label: 'Realizado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
-  atencao: { label: 'Atenção', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300', icon: AlertTriangle, iconColor: 'text-yellow-600' },
-  nao_realizado: { label: 'Não Conciliado', color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: XCircle, iconColor: 'text-red-600' },
+  realizado: { label: 'Conciliado', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300', icon: CheckCircle2, iconColor: 'text-green-600' },
+  nao_conciliado: { label: 'Não Conciliado', color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300', icon: XCircle, iconColor: 'text-red-600' },
   pendente: { label: 'Pendente', color: 'bg-muted text-muted-foreground', icon: AlertTriangle, iconColor: 'text-muted-foreground' },
 };
 
@@ -304,12 +303,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               }
             }
             const accCalc = accSaldoInicial + accEntradas - accSaidas;
-            const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
-            return accDiff < 0.01 ? 'realizado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+            const accDiff = Math.round(((accSaldoRow.saldo_final || 0) - accCalc) * 100) / 100;
+            return accDiff === 0 ? 'realizado' as const : 'nao_conciliado' as const;
           });
           const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
-          const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
-          status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'realizado';
+          status = hasNaoConc ? 'nao_conciliado' : 'realizado';
         }
       } else {
         status = getConciliacaoStatus(diferenca, saldoExtrato);
@@ -503,7 +501,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
                     <div className="border-t pt-1.5 flex items-center justify-between">
                       <p className="text-[10px] text-muted-foreground">Diferença para Conciliar</p>
-                      <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.diferenca)}
                       </p>
                     </div>
@@ -567,21 +565,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     ? 'bg-green-50/60 dark:bg-green-950/20'
                     : isPendente
                       ? 'bg-muted/30'
-                      : card.status === 'atencao'
-                        ? 'bg-yellow-50/60 dark:bg-yellow-950/20'
-                        : 'bg-red-50/60 dark:bg-red-950/20'
+                      : 'bg-red-50/60 dark:bg-red-950/20'
                 }`}>
                   <StatusIcon className={`h-8 w-8 ${cfg.iconColor}`} />
                   <p className={`text-sm font-extrabold ${
                     isConciliado ? 'text-green-700 dark:text-green-300'
                       : isPendente ? 'text-muted-foreground'
-                        : card.status === 'atencao' ? 'text-yellow-700 dark:text-yellow-300'
-                          : 'text-red-700 dark:text-red-300'
+                        : 'text-red-700 dark:text-red-300'
                   }`}>
-                    {isConciliado ? '✅ Conciliado' : isPendente ? '⏳ Pendente' : card.status === 'atencao' ? '⚠️ Atenção' : '❌ Não Conciliado'}
+                    {isConciliado ? '✅ Conciliado' : isPendente ? '⏳ Pendente' : '❌ Não Conciliado'}
                   </p>
                   {!isPendente && (
-                    <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
                       Diferença: {formatMoeda(card.diferenca)}
                     </p>
                   )}

@@ -23,7 +23,7 @@ export interface MovSummary {
 }
 
 /** Status de conciliação único no sistema */
-export type ConciliacaoStatus = 'realizado' | 'atencao' | 'nao_conciliado' | 'pendente';
+export type ConciliacaoStatus = 'realizado' | 'nao_conciliado' | 'pendente';
 
 /**
  * Only these status_transacao values count as "realised" for reconciliation.
@@ -60,11 +60,18 @@ export function buildMovSummary(lancamentos: MovimentoResumo[]): Record<string, 
 }
 
 /**
+ * Round to 2 decimal places to avoid floating-point noise.
+ */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
  * Calculate the reconciliation difference for a given account/month.
- * Returns the absolute difference, or null if no movements exist.
+ * Returns the rounded difference value (positive = over, negative = under), or null if no movements.
  *
  * Formula: expected = saldoInicial + entradas - saidas
- *          diff = |saldoFinal - expected|
+ *          diff = saldoFinal - expected
  */
 export function calcConciliacaoDiff(
   saldoInicial: number,
@@ -73,17 +80,16 @@ export function calcConciliacaoDiff(
 ): number | null {
   if (!mov) return null;
   const expected = saldoInicial + mov.entradas - mov.saidas;
-  const diff = Math.abs(saldoFinal - expected);
-  return diff > 0.01 ? diff : null;
+  const diff = round2(saldoFinal - expected);
+  return diff !== 0 ? diff : null;
 }
 
 /**
  * Derive the conciliation status from a difference and saldo extrato.
+ * Regra absoluta: diferença = 0 → verde, diferença ≠ 0 → vermelho.
  */
 export function getConciliacaoStatus(diferenca: number, saldoExtrato: number | null): ConciliacaoStatus {
   if (saldoExtrato === null) return 'pendente';
-  const abs = Math.abs(diferenca);
-  if (abs < 0.01) return 'realizado';
-  if (abs <= 100) return 'atencao';
-  return 'nao_conciliado';
+  const rounded = round2(diferenca);
+  return rounded === 0 ? 'realizado' : 'nao_conciliado';
 }
