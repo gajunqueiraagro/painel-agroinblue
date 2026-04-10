@@ -265,10 +265,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           } else if (l.conta_bancaria_id === contaId) {
             transferenciasEnviadas += valor;
           }
-        } else if (isEntradaTipo(l.tipo_operacao)) {
-          entradasTerceiros += valor;
         } else {
-          saidasTerceiros += valor;
+          // Non-transfer: use field match to determine direction
+          // Entries use conta_destino_id, exits use conta_bancaria_id
+          if (isAllContas) {
+            // When viewing all accounts, use tipo_operacao
+            if (isEntradaTipo(l.tipo_operacao)) {
+              entradasTerceiros += valor;
+            } else {
+              saidasTerceiros += valor;
+            }
+          } else {
+            // When filtering by account, determine by which field matches
+            if (l.conta_destino_id === contaId) {
+              entradasTerceiros += valor;
+            } else if (l.conta_bancaria_id === contaId) {
+              saidasTerceiros += valor;
+            }
+          }
         }
       }
 
