@@ -832,11 +832,12 @@ export function useFinanceiro() {
           .trim();
 
       // ── Resolver fornecedores (texto → UUID) com auto-criação ──
+      // Load ALL fornecedores (active + inactive) for name resolution
+      // Inactive suppliers must still be linked to preserve historical data
       const { data: fornecedoresData } = await supabase
         .from('financeiro_fornecedores')
         .select('id, nome, nome_normalizado')
-        .eq('cliente_id', cid)
-        .eq('ativo', true);
+        .eq('cliente_id', cid);
 
       const fornecedorMap = new Map<string, string>();
       for (const f of (fornecedoresData || [])) {
