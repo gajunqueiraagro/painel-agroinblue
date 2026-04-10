@@ -55,6 +55,7 @@ import { ContratosTab } from './ContratosTab';
 import { ConciliacaoBancariaTab } from './ConciliacaoBancariaTab';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { AuditoriaTab } from './AuditoriaTab';
+import { AuditoriaDuplicidadeTab } from './AuditoriaDuplicidadeTab';
 import { ContaBoitelTab } from './ContaBoitelTab';
 import { StatusFechamentosTab } from './StatusFechamentosTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
@@ -122,6 +123,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_saldos: 'Saldos Mensais',
   contratos: 'Contratos / Recorrências',
   conciliacao_bancaria: 'Conciliação Bancária',
+  auditoria_duplicidade: 'Auditoria de Duplicidade',
   painel_consultor: 'Painel do Consultor',
   painel_consultor_hub: 'Painel do Consultor',
   auditoria: 'Central de Auditoria',
@@ -361,6 +363,7 @@ const Index = () => {
     contratos: () => setActiveTab('financeiro_v2_hub'),
     conciliacao_bancaria: () => setActiveTab('financeiro_v2_hub'),
     conta_boitel: () => setActiveTab('financeiro_v2_hub'),
+    auditoria_duplicidade: () => setActiveTab('financeiro_v2_hub'),
     // Zootécnico (analysis) sub-screens
     zootecnico: goToVisaoZooHub,
     indicadores: goToVisaoZooHub,
@@ -688,6 +691,9 @@ const Index = () => {
         />
       )}
       {activeTab === 'auditoria' && <AuditoriaTab />}
+      {activeTab === 'auditoria_duplicidade' && (
+        <AuditoriaDuplicidadeTab onBack={() => setActiveTab('financeiro_v2_hub')} />
+      )}
       {activeTab === 'conta_boitel' && (
         <ContaBoitelTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
