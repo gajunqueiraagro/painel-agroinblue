@@ -4462,6 +4462,26 @@ export type Database = {
           valor_plano: string
         }[]
       }
+      buscar_duplicados_retroativo: {
+        Args: { _cliente_id: string }
+        Returns: {
+          ano_mes: string
+          conta_bancaria_id: string
+          created_at: string
+          data_pagamento: string
+          descricao: string
+          fazenda_id: string
+          fornecedor_nome: string
+          grupo_hash: string
+          lancamento_id: string
+          lote_importacao_id: string
+          numero_documento: string
+          observacao: string
+          subcentro: string
+          tipo_operacao: string
+          valor: number
+        }[]
+      }
       can_manage_financeiro_importacao_v2: {
         Args: { _cliente_id: string }
         Returns: boolean
