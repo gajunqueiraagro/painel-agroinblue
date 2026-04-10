@@ -200,7 +200,7 @@ function mapV2ToLancamento(r: any): FinanceiroLancamento {
     conta_origem: null, // V2 uses conta_bancaria_id
     conta_destino: null,
     macro_custo: r.macro_custo,
-    grupo_custo: null, // Not in V2
+    grupo_custo: r.grupo_custo || null,
     centro_custo: r.centro_custo,
     subcentro: r.subcentro,
     numero_documento: r.numero_documento,

@@ -105,13 +105,30 @@ export function getEscopo(l: LancamentoClassificavel): Escopo {
 
 const normMacro = (l: LancamentoClassificavel) => norm(l.macro_custo);
 
+/** Normalize macro_custo to canonical groups (handles both old and new plano de contas names) */
+function canonicalMacro(l: LancamentoClassificavel): string {
+  const m = normMacro(l);
+  // Old names → keep as-is (already handled below)
+  // New names → map to old canonical
+  if (m === 'receita operacional') return 'receitas';
+  if (m === 'entrada financeira' || m === 'outras entradas financeiras') return 'outras entradas financeiras';
+  if (m === 'custeio produção' || m === 'custeio produtivo') return 'custeio produtivo';
+  if (m === 'investimento' || m === 'investimento na fazenda') return 'investimento na fazenda';
+  if (m === 'investimento em bovinos') return 'investimento em bovinos';
+  if (m === 'deduções de receitas' || (m.includes('dedu') && m.includes('receita'))) return 'dedução de receitas';
+  if (m === 'distribuição' || m === 'dividendos') return 'dividendos';
+  if (m === 'saída financeira' || m.includes('amortiza')) return 'amortizações financeiras';
+  if (m === 'transferências' || m === 'entre contas') return 'transferencias';
+  return m;
+}
+
 function isAporte(l: LancamentoClassificavel): boolean {
   const macro = normMacro(l);
   const grupo = norm(l.grupo_custo);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
   return macro.includes('aporte')
-    || grupo.includes('aporte')
+    || grupo.includes('aporte') || grupo.includes('entradas de capital')
     || centro.includes('aporte')
     || sub.includes('aporte');
 }
