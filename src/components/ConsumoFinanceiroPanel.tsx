@@ -176,7 +176,6 @@ export const ConsumoFinanceiroPanel = forwardRef<ConsumoFinanceiroPanelRef, Prop
       const { data: planoContas } = await supabase
         .from('financeiro_plano_contas')
         .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteAtual.id)
         .eq('ativo', true)
         .eq('tipo_operacao', '2-Saídas')
         .in('subcentro', subcentroCandidates);

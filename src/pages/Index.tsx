@@ -58,6 +58,7 @@ import { AuditoriaTab } from './AuditoriaTab';
 import { AuditoriaDuplicidadeTab } from './AuditoriaDuplicidadeTab';
 import { ContaBoitelTab } from './ContaBoitelTab';
 import { StatusFechamentosTab } from './StatusFechamentosTab';
+import { DividendosTab } from './DividendosTab';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -123,6 +124,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_plano: 'Plano de Contas',
   fin_v2_saldos: 'Saldos Mensais',
   contratos: 'Contratos / Recorrências',
+  fin_v2_dividendos: 'Dividendos',
   conciliacao_bancaria: 'Conciliação Bancária',
   auditoria_duplicidade: 'Auditoria de Duplicidade',
   painel_consultor: 'Painel do Consultor',
@@ -680,6 +682,7 @@ const Index = () => {
         />
       )}
       {activeTab === 'contratos' && <ContratosTab />}
+      {activeTab === 'fin_v2_dividendos' && <DividendosTab />}
       {activeTab === 'conciliacao_bancaria' && (
         <ConciliacaoBancariaTab
           initialAno={conciliacaoContext?.ano}

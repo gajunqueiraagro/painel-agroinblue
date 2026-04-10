@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,21 +7,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search } from 'lucide-react';
-
-interface PlanoItem {
-  id: string;
-  tipo_operacao: string;
-  macro_custo: string;
-  grupo_custo: string | null;
-  centro_custo: string;
-  subcentro: string | null;
-  ativo: boolean;
-  ordem_exibicao: number;
-}
+import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
 
 export function FinV2PlanoContasTab() {
   const { clienteAtual } = useCliente();
-  const [items, setItems] = useState<PlanoItem[]>([]);
+  const [items, setItems] = useState<PlanoContasItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [showInativos, setShowInativos] = useState(false);
@@ -30,12 +19,8 @@ export function FinV2PlanoContasTab() {
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('financeiro_plano_contas')
-      .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, ativo, ordem_exibicao')
-      .eq('cliente_id', clienteAtual.id)
-      .order('ordem_exibicao');
-    setItems((data as PlanoItem[]) || []);
+    const data = await loadPlanoContasCompleto(clienteAtual.id);
+    setItems(data);
     setLoading(false);
   }, [clienteAtual?.id]);
 
@@ -73,7 +58,7 @@ export function FinV2PlanoContasTab() {
     });
 
   // Group by macro_custo for visual separation
-  const groups: { label: string; items: PlanoItem[] }[] = [];
+  const groups: { label: string; items: PlanoContasItem[] }[] = [];
   let lastGroup = '';
   for (const item of filtered) {
     const key = `${tipoLabel(item.tipo_operacao)} › ${item.macro_custo}${item.grupo_custo ? ' › ' + item.grupo_custo : ''}`;

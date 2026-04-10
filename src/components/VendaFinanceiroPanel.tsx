@@ -536,7 +536,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       const { data: planoReceita } = await supabase
         .from('financeiro_plano_contas')
         .select('id, macro_custo, centro_custo, subcentro')
-        .eq('cliente_id', clienteAtual.id)
         .eq('ativo', true)
         .eq('tipo_operacao', '1-Entradas')
         .in('subcentro', subcentroCandidates);
@@ -605,7 +604,6 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const { data: planoDeducao } = await supabase
           .from('financeiro_plano_contas')
           .select('id, macro_custo, centro_custo, subcentro')
-          .eq('cliente_id', clienteAtual.id)
           .eq('ativo', true)
           .eq('tipo_operacao', '2-Saídas')
           .eq('subcentro', subcentroDeducao)

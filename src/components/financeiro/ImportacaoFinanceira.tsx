@@ -81,7 +81,6 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
       const { data } = await supabase
         .from('financeiro_plano_contas')
         .select('subcentro')
-        .eq('cliente_id', clienteAtual.id)
         .eq('ativo', true)
         .not('subcentro', 'is', null);
       const set = new Set<string>();

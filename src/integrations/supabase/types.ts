@@ -1823,6 +1823,41 @@ export type Database = {
           },
         ]
       }
+      financeiro_dividendos: {
+        Row: {
+          ativo: boolean
+          cliente_id: string
+          created_at: string
+          id: string
+          nome: string
+          ordem_exibicao: number
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id: string
+          created_at?: string
+          id?: string
+          nome: string
+          ordem_exibicao?: number
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          ordem_exibicao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financeiro_dividendos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financeiro_duplicidade_log: {
         Row: {
           cliente_id: string
@@ -2668,7 +2703,7 @@ export type Database = {
         Row: {
           ativo: boolean
           centro_custo: string
-          cliente_id: string
+          cliente_id: string | null
           created_at: string
           escopo_negocio: string | null
           grupo_custo: string | null
@@ -2683,7 +2718,7 @@ export type Database = {
         Insert: {
           ativo?: boolean
           centro_custo: string
-          cliente_id: string
+          cliente_id?: string | null
           created_at?: string
           escopo_negocio?: string | null
           grupo_custo?: string | null
@@ -2698,7 +2733,7 @@ export type Database = {
         Update: {
           ativo?: boolean
           centro_custo?: string
-          cliente_id?: string
+          cliente_id?: string | null
           created_at?: string
           escopo_negocio?: string | null
           grupo_custo?: string | null
@@ -2710,15 +2745,7 @@ export type Database = {
           tipo_operacao?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "financeiro_plano_contas_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       financeiro_rateio_adm: {
         Row: {
