@@ -138,7 +138,17 @@ interface ExistingDiffRecord {
   produto: string | null;
 }
 
-/** Classify duplication level by comparing differentiators */
+/**
+ * Classify duplication level by comparing fingerprint differentiators.
+ *
+ * Collision key (nucleus): cliente_id + fazenda_id + data_pagamento + valor + tipo_operacao + conta_bancaria_id
+ * Fingerprint differentiators: fornecedor, descricao, numero_documento, subcentro
+ *
+ * All same → D1 (duplicado real)
+ * 1 diff (not doc) → D2 (suspeita forte)
+ * 1-2 diffs → D3 (suspeita fraca)
+ * 3+ diffs → LEGITIMO
+ */
 function classificarNivelConferencia(
   newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
   existing: ExistingDiffRecord,
@@ -146,16 +156,24 @@ function classificarNivelConferencia(
   let diffCount = 0;
   let docDiverge = false;
 
+  // 1. Fornecedor (obrigatório na decisão final)
+  const nForn = normalizeImportText(newRow.fornecedor);
+  const eForn = normalizeImportText(existing.favorecido_nome);
+  if (nForn !== eForn && (nForn || eForn)) diffCount++;
+
+  // 2. Descrição/Produto
   const nd = normalizeImportText(newRow.descricao);
   const ed = normalizeImportText(existing.descricao);
   if (nd !== ed && (nd || ed)) diffCount++;
 
+  // 3. Número do documento
   const nDoc = normalizeImportText(newRow.numeroDocumento);
   const eDoc = normalizeImportText(existing.numero_documento);
   if (nDoc && eDoc) {
     if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
   }
 
+  // 4. Subcentro (auxiliar)
   const nSub = normalizeImportText(newRow.subcentro);
   const eSub = normalizeImportText(existing.subcentro);
   if (nSub !== eSub && (nSub || eSub)) diffCount++;
@@ -330,6 +348,26 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     const fetchExisting = async () => {
       setLoadingHashes(true);
       const map = new Map<string, ExistingDiffRecord[]>();
+
+      // 1. Build fornecedor id→name lookup
+      const fornecedorMap = new Map<string, string>();
+      {
+        let from = 0;
+        const batchSize = 1000;
+        while (!cancelled) {
+          const { data } = await supabase
+            .from('financeiro_fornecedores')
+            .select('id, nome')
+            .eq('cliente_id', clienteId)
+            .range(from, from + batchSize - 1);
+          if (!data || data.length === 0) break;
+          for (const f of data) fornecedorMap.set(f.id, f.nome);
+          if (data.length < batchSize) break;
+          from += batchSize;
+        }
+      }
+
+      // 2. Fetch existing lancamentos and build nucleus map
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
       for (const fid of fazendaIds) {
         let from = 0;
@@ -347,7 +385,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
               descricao: e.descricao,
               numero_documento: e.numero_documento,
               favorecido_id: e.favorecido_id,
-              favorecido_nome: null,
+              favorecido_nome: e.favorecido_id ? (fornecedorMap.get(e.favorecido_id) || null) : null,
               subcentro: e.subcentro,
               data_pagamento: e.data_pagamento,
               valor: e.valor,
