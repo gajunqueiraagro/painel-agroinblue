@@ -285,12 +285,12 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao')
             .eq('fazenda_id', fid).eq('cliente_id', clienteId).eq('cancelado', false)
             .range(from, from + batchSize - 1);
           if (!data || data.length === 0) break;
           for (const e of data) {
-            hashes.add(buildHashImportacao(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao, e.observacao));
+            hashes.add(buildHashImportacao(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao));
           }
           if (data.length < batchSize) break;
           from += batchSize;
@@ -306,7 +306,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     if (!clienteId || !existingH) return false;
     const contaKey = normalizeImportText(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
-    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.obs, row.fornecedor);
+    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.fornecedor);
     // Only check against existing DB records — never deduplicate within the same import file
     return existingH.has(hash);
   }, [clienteId, contaLookup]);
