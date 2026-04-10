@@ -840,14 +840,58 @@ export function useFinanceiro() {
         .eq('cliente_id', cid);
 
       const fornecedorMap = new Map<string, string>();
+      // Also store original entries for fuzzy search
+      const fornecedorEntries: Array<{ id: string; nome: string; normalizado: string }> = [];
       for (const f of (fornecedoresData || [])) {
+        const norm = f.nome ? normalizeFornecedorName(f.nome) : '';
         // Index by DB-stored nome_normalizado
         if (f.nome_normalizado) fornecedorMap.set(f.nome_normalizado, f.id);
         // Index by JS-normalized name (handles accent differences)
-        if (f.nome) fornecedorMap.set(normalizeFornecedorName(f.nome), f.id);
+        if (norm) fornecedorMap.set(norm, f.id);
         // Index by uppercase original name
         if (f.nome) fornecedorMap.set(f.nome.toUpperCase().trim(), f.id);
+        if (f.nome && norm) fornecedorEntries.push({ id: f.id, nome: f.nome, normalizado: norm });
       }
+
+      // ── Fuzzy matching helpers ──
+      const extractWords = (s: string): string[] =>
+        s.split(/\s+/).filter(w => w.length >= 3);
+
+      const fuzzyMatchFornecedor = (nomeNorm: string): string | null => {
+        const inputWords = extractWords(nomeNorm);
+        if (inputWords.length === 0) return null;
+
+        // Tier 1: ilike-style — one name contains the other
+        for (const entry of fornecedorEntries) {
+          if (entry.normalizado.includes(nomeNorm) || nomeNorm.includes(entry.normalizado)) {
+            return entry.id;
+          }
+        }
+
+        // Tier 2: first significant keyword match (first word with 4+ chars)
+        const primaryKeyword = inputWords.find(w => w.length >= 4);
+        if (primaryKeyword) {
+          const candidates = fornecedorEntries.filter(e =>
+            e.normalizado.includes(primaryKeyword)
+          );
+          if (candidates.length === 1) return candidates[0].id;
+        }
+
+        // Tier 3: multi-word overlap scoring (Jaccard-like)
+        let bestMatch: { id: string; score: number } | null = null;
+        for (const entry of fornecedorEntries) {
+          const entryWords = extractWords(entry.normalizado);
+          if (entryWords.length === 0) continue;
+          const shared = inputWords.filter(w => entryWords.some(ew => ew.includes(w) || w.includes(ew)));
+          const score = shared.length / Math.max(inputWords.length, entryWords.length);
+          if (score >= 0.5 && (!bestMatch || score > bestMatch.score)) {
+            bestMatch = { id: entry.id, score };
+          }
+        }
+        if (bestMatch) return bestMatch.id;
+
+        return null;
+      };
 
       const resolveOrCreateFornecedorId = async (
         nome: string | null,
@@ -858,20 +902,26 @@ export function useFinanceiro() {
         const nomeNormalizado = normalizeFornecedorName(nomeOriginal);
         if (!nomeNormalizado) return null;
 
-        // 1. Check local cache (populated with multiple key formats)
+        // 1. Exact match in local cache
         const existente = fornecedorMap.get(nomeNormalizado);
         if (existente) return existente;
 
-        // Also try uppercase original (for non-accented exact matches)
         const existenteUpper = fornecedorMap.get(nomeOriginal.toUpperCase());
         if (existenteUpper) return existenteUpper;
 
-        // 2. Query DB directly before attempting insert (handles cases missed by initial load)
+        // 2. Fuzzy match in local cache
+        const fuzzyId = fuzzyMatchFornecedor(nomeNormalizado);
+        if (fuzzyId) {
+          fornecedorMap.set(nomeNormalizado, fuzzyId);
+          return fuzzyId;
+        }
+
+        // 3. Query DB with ilike as last resort before creating
         const { data: dbExisting } = await supabase
           .from('financeiro_fornecedores')
           .select('id')
           .eq('cliente_id', cid)
-          .ilike('nome', nomeOriginal)
+          .ilike('nome', `%${nomeOriginal}%`)
           .limit(1)
           .maybeSingle();
 
@@ -880,7 +930,7 @@ export function useFinanceiro() {
           return dbExisting.id;
         }
 
-        // 3. Not found — create new supplier
+        // 4. Not found — create new supplier
         const fazIdParaCriar = fazendaIdLinha || fazendas[0]?.id;
         if (!fazIdParaCriar) return null;
 
