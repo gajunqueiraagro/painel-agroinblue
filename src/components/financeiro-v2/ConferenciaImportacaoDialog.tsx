@@ -345,7 +345,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       if (!r.fornecedor) fornecedorVazio++;
       if (r.valor < 0) valorNegativo++;
       if (r.contaOrigem && !r._resolved.contaResolvidaId) contaNaoEncontrada++;
-      if (!r.subcentro) subcentroVazio++;
+      if (!r.subcentro || (r.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(r.subcentro))) subcentroVazio++;
       if (r.fazenda && !r.fazendaId) fazendaNaoEncontrada++;
     }
     return { valid, warning, error, duplicated, total: rows.length, fornecedorVazio, valorNegativo, contaNaoEncontrada, subcentroVazio, fazendaNaoEncontrada };
@@ -362,7 +362,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       case 'fornecedor_vazio': return rows.filter(r => !r.fornecedor);
       case 'valor_negativo': return rows.filter(r => r.valor < 0);
       case 'conta_nao_encontrada': return rows.filter(r => r.contaOrigem && !r._resolved.contaResolvidaId);
-      case 'subcentro_nao_encontrado': return rows.filter(r => !r.subcentro);
+      case 'subcentro_nao_encontrado': return rows.filter(r => !r.subcentro || (r.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(r.subcentro)));
       case 'fazenda_nao_encontrada': return rows.filter(r => r.fazenda && !r.fazendaId);
       default: return rows;
     }
