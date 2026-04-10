@@ -636,12 +636,13 @@ export function useFinanceiro() {
     return contaGlobal?.id || null;
   };
 
+  /** Hash núcleo para detecção de duplicidade — alinhado com SQL */
   const buildHashImportacao = (
     clienteId: string, fazendaId: string,
     dataPagamento: string | null, valor: number,
     tipoOperacao: string | null, contaBancariaId: string | null,
     numeroDocumento?: string | null,
-    descricao?: string | null, observacao?: string | null,
+    descricao?: string | null,
     fornecedor?: string | null,
   ): string => {
     const parts = [
@@ -653,10 +654,38 @@ export function useFinanceiro() {
       contaBancariaId || '',
       normalizeImportText(numeroDocumento),
       normalizeImportText(descricao),
-      normalizeImportText(observacao),
       normalizeImportText(fornecedor),
     ];
     return parts.join('|');
+  };
+
+  type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
+
+  /** Classificação multinível — espelha SQL classificar_nivel_duplicidade */
+  const classificarNivel = (
+    newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+    existing: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+  ): NivelDuplicidade => {
+    let diffCount = 0;
+    let docDiverge = false;
+
+    if (normalizeImportText(newRow.fornecedor) !== normalizeImportText(existing.fornecedor)) diffCount++;
+    if (normalizeImportText(newRow.descricao) !== normalizeImportText(existing.descricao)
+        && (newRow.descricao || existing.descricao)) diffCount++;
+
+    const newDoc = normalizeImportText(newRow.numeroDocumento);
+    const exDoc = normalizeImportText(existing.numeroDocumento);
+    if (newDoc && exDoc) {
+      if (newDoc !== exDoc) { docDiverge = true; diffCount++; }
+    }
+
+    if (normalizeImportText(newRow.subcentro) !== normalizeImportText(existing.subcentro)
+        && (newRow.subcentro || existing.subcentro)) diffCount++;
+
+    if (diffCount === 0) return 'D1';
+    if (diffCount === 1 && !docDiverge) return 'D2';
+    if (diffCount <= 2) return 'D3';
+    return 'LEGITIMO';
   };
 
   // --- Confirmar importação (incremental com dedup) ---
