@@ -196,7 +196,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
-        .in('status_transacao', [...STATUS_REALIZADOS])
+        .neq('status_transacao', 'meta')
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
       if (contaId !== '__all__') {
