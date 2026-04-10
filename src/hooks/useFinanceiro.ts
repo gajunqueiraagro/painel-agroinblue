@@ -850,7 +850,7 @@ export function useFinanceiro() {
           .single();
 
         if (error) {
-          // Handle unique constraint conflict — another import may have created it
+          // Handle unique constraint conflict — another import or same batch created it
           if (error.code === '23505') {
             const { data: existing } = await supabase
               .from('financeiro_fornecedores')
@@ -863,7 +863,11 @@ export function useFinanceiro() {
               fornecedorMap.set(nomeNormalizado, existing.id);
               return existing.id;
             }
+            // If lookup also failed, return null instead of breaking the import
+            console.warn(`Fornecedor duplicado não localizado após conflito: ${nomeOriginal}`);
+            return null;
           }
+          // Only throw for real errors, not concurrency conflicts
           throw new Error(`Erro ao criar fornecedor automaticamente: ${nomeOriginal} — ${error.message}`);
         }
 
