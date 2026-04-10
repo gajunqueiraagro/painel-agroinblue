@@ -229,10 +229,7 @@ export function DashboardFinanceiro({
   const custoRebanho = useMemo(() => {
     // Calculate rebanho from saldos iniciais + lancamentos pecuários
     // Saldo inicial for the year
-    const siAno = saldosIniciais.filter(si => {
-      const d = si.data || '';
-      return d.startsWith(anoFiltro);
-    });
+    const siAno = saldosIniciais.filter(si => si.ano === Number(anoFiltro));
     const totalSI = siAno.reduce((s, si) => s + (si.quantidade || 0), 0);
 
     // Count entradas/saídas pecuárias by month to estimate rebanho médio
