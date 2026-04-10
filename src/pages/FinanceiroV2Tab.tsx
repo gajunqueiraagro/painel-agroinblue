@@ -617,57 +617,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     }
   };
 
-  // Cleanup: count imported realizado in current filtered set
-  const realizadosImportadosCount = useMemo(() =>
-    sortedLancamentos.filter(l => l.status_transacao === 'realizado' && !!l.lote_importacao_id && !l.cancelado).length,
-    [sortedLancamentos]
-  );
-
-  const handleCleanupRealizados = async () => {
-    setCleanupDeleting(true);
-    try {
-      const result = await hook.cancelarRealizadosImportados(filtros);
-      if (result.cancelados > 0) {
-        toast.success(`${result.cancelados} lançamento${result.cancelados !== 1 ? 's' : ''} realizado${result.cancelados !== 1 ? 's' : ''} importado${result.cancelados !== 1 ? 's' : ''} removido${result.cancelados !== 1 ? 's' : ''}`);
-        await hook.loadLancamentos(filtros, hook.page);
-      } else {
-        toast.info('Nenhum lançamento encontrado para remoção');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao executar limpeza');
-    } finally {
-      setCleanupDeleting(false);
-      setConfirmCleanupOpen(false);
-      setCleanupConfirmText('');
-    }
-  };
-
-  const handleCancelarMigracao2025 = async () => {
-    setMigracaoDeleting(true);
-    try {
-      const result = await hook.cancelarMigracao('2025');
-      if (result.cancelados > 0) {
-        toast.success(`${result.cancelados} registros de migração 2025 cancelados`);
-        if (result.restantes.length > 0) {
-          const resumo = result.restantes.map(r => `${r.origem}: ${r.qtd}`).join(', ');
-          toast.info(`Restam ativos em 2025: ${resumo}`);
-        } else {
-          toast.info('Nenhum registro ativo restante em 2025');
-        }
-        await hook.loadLancamentos(filtros, hook.page);
-      } else {
-        toast.info('Nenhum registro de migração encontrado em 2025');
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao cancelar migração');
-    } finally {
-      setMigracaoDeleting(false);
-      setConfirmMigracaoOpen(false);
-      setMigracaoConfirmText('');
-    }
-  };
 
   const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
