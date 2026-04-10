@@ -1114,20 +1114,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
                     totalCount={totalLancamentosFiltrados}
                   />
-                  <Button
-                    size="sm"
-                    variant={mode === 'rapido' ? 'default' : 'outline'}
-                    onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                    className="h-6 text-[10px] gap-0.5 px-2"
-                  >
-                    {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                    {mode === 'rapido' ? 'Lista' : 'Rápido'}
-                  </Button>
-                  {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
-                      <Plus className="h-3 w-3" /> Novo
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -1207,15 +1193,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 28 }} />
-                <col style={{ width: 62 }} />
-                <col style={{ width: 62 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 60 }} />
                 <col />
-                <col style={{ width: 200 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 110 }} />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 100 }} />
                 <col style={{ width: 90 }} />
-                <col style={{ width: 68 }} />
-                <col style={{ width: 40 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 58 }} />
+                <col style={{ width: 36 }} />
               </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
@@ -1226,7 +1214,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[90px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Fazenda</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Doc.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
@@ -1236,7 +1226,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={10} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={12} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
