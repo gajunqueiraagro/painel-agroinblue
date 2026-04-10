@@ -721,7 +721,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [modoIntensivo, setModoIntensivo] = useState(false);
 
   return (
-    <div className="space-y-1 pb-20 relative" style={{ backgroundColor: '#F3F6FA' }}>
+    <div className={cn("space-y-1 pb-20 relative", modoIntensivo && "fixed inset-0 z-50 overflow-y-auto pb-4")} style={{ backgroundColor: '#F3F6FA' }}>
+      {modoIntensivo && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-primary text-primary-foreground">
+          <span className="text-xs font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
+          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-6 text-xs text-primary-foreground hover:bg-primary-foreground/20 gap-1">
+            <Minimize2 className="h-3 w-3" /> Sair
+          </Button>
+        </div>
+      )}
       {/* Sticky vertical action buttons — right side */}
       <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
         {!mesFechadoAtivo && (
