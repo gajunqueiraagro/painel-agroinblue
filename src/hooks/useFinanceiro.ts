@@ -778,7 +778,10 @@ export function useFinanceiro() {
       // Regra: TODOS os lançamentos são inseridos. Suspeitos são marcados pelo trigger do banco.
       // Nenhum lançamento é descartado no frontend.
       const fazendaIds = [...new Set(linhasResolvidas.map(l => l.fazendaId).filter(Boolean))] as string[];
-      const existingHashes = new Set<string>();
+      // Store existing records keyed by nucleus hash → differentiator fields
+      // This allows comparing import line vs actual existing record
+      type ExistingDiff = { fornecedor: string | null; descricao: string | null; numeroDocumento: string | null; subcentro: string | null };
+      const existingByHash = new Map<string, ExistingDiff[]>();
 
       for (const fid of fazendaIds) {
         let from = 0;
@@ -799,7 +802,15 @@ export function useFinanceiro() {
               e.tipo_operacao, e.conta_bancaria_id,
               e.numero_documento, e.descricao,
             );
-            existingHashes.add(hash);
+            const diffs: ExistingDiff = {
+              fornecedor: e.favorecido_id || null,
+              descricao: e.descricao,
+              numeroDocumento: e.numero_documento,
+              subcentro: e.subcentro,
+            };
+            const arr = existingByHash.get(hash);
+            if (arr) arr.push(diffs);
+            else existingByHash.set(hash, [diffs]);
           }
           if (existing.length < batchSize) break;
           from += batchSize;
@@ -807,6 +818,8 @@ export function useFinanceiro() {
       }
 
       // Classificar duplicados para log, mas NÃO filtrar — todos seguem para insert
+      // A classificação oficial final é feita pelo trigger no banco.
+      // O frontend faz pré-classificação para o log usando o registro existente real.
       let duplicados = 0;
       const linhasDuplicadasLog: Array<LinhaImportadaResolvida & { _hash: string; _nivel: NivelDuplicidade }> = [];
 
@@ -818,14 +831,21 @@ export function useFinanceiro() {
           l.numeroDocumento, l.produto,
           l.fornecedor,
         );
-        if (existingHashes.has(hash)) {
-          // Compute multinível score against nucleus match
-          const nivel = classificarNivel(
-            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
-            { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
-          );
+        const existingMatches = existingByHash.get(hash);
+        if (existingMatches && existingMatches.length > 0) {
+          // Compare against the actual existing record — pick strongest suspicion
+          let bestNivel = 'LEGITIMO' as NivelDuplicidade;
+          for (const ex of existingMatches) {
+            const nivel = classificarNivel(
+              { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
+              { fornecedor: ex.fornecedor, descricao: ex.descricao, numeroDocumento: ex.numeroDocumento, subcentro: ex.subcentro },
+            );
+            const rank = { D1: 3, D2: 2, D3: 1, LEGITIMO: 0 } as const;
+            if (rank[nivel] > rank[bestNivel]) bestNivel = nivel;
+            if (bestNivel === 'D1') break;
+          }
           duplicados++;
-          linhasDuplicadasLog.push({ ...l, _hash: hash, _nivel: nivel });
+          linhasDuplicadasLog.push({ ...l, _hash: hash, _nivel: bestNivel });
         }
         // NÃO descarta — todos vão para inserção
       }
