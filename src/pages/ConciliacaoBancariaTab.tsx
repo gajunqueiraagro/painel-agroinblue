@@ -12,6 +12,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink, ArrowLeft,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -143,6 +144,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [loading, setLoading] = useState(false);
   const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2, '0'));
   const [filtroTipoLanc, setFiltroTipoLanc] = useState<'todos' | 'entradas' | 'saidas' | 'transf_entrada' | 'transf_saida'>('todos');
+  const [lancSort, setLancSort] = useState<{ col: 'data' | 'descricao' | 'fornecedor' | 'valor'; dir: 'asc' | 'desc' }>({ col: 'data', dir: 'asc' });
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -676,29 +678,68 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <div className="max-h-[300px] overflow-y-auto rounded border">
                       <Table>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-[9px] w-[50px]">Data</TableHead>
-                            <TableHead className="text-[9px]">Descrição</TableHead>
-                            <TableHead className="text-[9px]">Fornecedor</TableHead>
-                            <TableHead className="text-[9px] text-right w-[130px]">Valor</TableHead>
+                          <TableRow className="bg-blue-600 hover:bg-blue-600">
+                            {([
+                              { key: 'data' as const, label: 'Data', cls: 'w-[50px]', align: '' },
+                              { key: 'descricao' as const, label: 'Descrição', cls: '', align: '' },
+                              { key: 'fornecedor' as const, label: 'Fornecedor', cls: '', align: '' },
+                              { key: 'valor' as const, label: 'Valor', cls: 'w-[130px]', align: 'text-right' },
+                            ]).map(h => {
+                              const active = lancSort.col === h.key;
+                              const Icon = active ? (lancSort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+                              return (
+                                <TableHead
+                                  key={h.key}
+                                  className={`text-[9px] text-white font-semibold cursor-pointer select-none ${h.cls} ${h.align}`}
+                                  onClick={() => setLancSort(prev => prev.col === h.key ? { col: h.key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col: h.key, dir: 'asc' })}
+                                >
+                                  <span className="inline-flex items-center gap-0.5">
+                                    {h.label}
+                                    <Icon className={`h-2.5 w-2.5 ${active ? 'opacity-100' : 'opacity-50'}`} />
+                                  </span>
+                                </TableHead>
+                              );
+                            })}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {lancFiltrados.slice(0, 50).map((l, idx) => {
-                            const cls = classifyLanc(l);
-                            const isEntrada = cls === 'entrada' || cls === 'transf_entrada';
-                            const fornNome = l.favorecido_id ? fornecedorMap.get(l.favorecido_id) || '' : '';
-                            return (
-                              <TableRow key={idx}>
-                                <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
-                                <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
-                                <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{fornNome || <span className="italic text-muted-foreground">n/c</span>}</TableCell>
-                                <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums whitespace-nowrap ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
-                                  {formatMoeda(isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor))}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
+                          {(() => {
+                            const sorted = [...lancFiltrados].sort((a, b) => {
+                              const dir = lancSort.dir === 'asc' ? 1 : -1;
+                              switch (lancSort.col) {
+                                case 'data': return dir * (a.data_pagamento || a.data_competencia || '').localeCompare(b.data_pagamento || b.data_competencia || '');
+                                case 'descricao': return dir * (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
+                                case 'fornecedor': {
+                                  const fa = a.favorecido_id ? fornecedorMap.get(a.favorecido_id) || '' : '';
+                                  const fb = b.favorecido_id ? fornecedorMap.get(b.favorecido_id) || '' : '';
+                                  return dir * fa.localeCompare(fb, 'pt-BR');
+                                }
+                                case 'valor': {
+                                  const clsA = classifyLanc(a);
+                                  const clsB = classifyLanc(b);
+                                  const va = (clsA === 'entrada' || clsA === 'transf_entrada') ? Math.abs(a.valor) : -Math.abs(a.valor);
+                                  const vb = (clsB === 'entrada' || clsB === 'transf_entrada') ? Math.abs(b.valor) : -Math.abs(b.valor);
+                                  return dir * (va - vb);
+                                }
+                                default: return 0;
+                              }
+                            });
+                            return sorted.slice(0, 50).map((l, idx) => {
+                              const cls = classifyLanc(l);
+                              const isEntrada = cls === 'entrada' || cls === 'transf_entrada';
+                              const fornNome = l.favorecido_id ? fornecedorMap.get(l.favorecido_id) || '' : '';
+                              return (
+                                <TableRow key={idx}>
+                                  <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento || l.data_competencia)}</TableCell>
+                                  <TableCell className="text-[9px] py-0.5 truncate max-w-[150px]">{l.descricao || '-'}</TableCell>
+                                  <TableCell className="text-[9px] py-0.5 truncate max-w-[120px]">{fornNome || <span className="italic text-muted-foreground">n/c</span>}</TableCell>
+                                  <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums whitespace-nowrap ${isEntrada ? 'text-green-700' : 'text-red-700'}`}>
+                                    {formatMoeda(isEntrada ? Math.abs(l.valor) : -Math.abs(l.valor))}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                          })()}
                         </TableBody>
                       </Table>
                       {lancFiltrados.length > 50 && (
