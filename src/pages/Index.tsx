@@ -69,6 +69,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
+import { cn } from '@/lib/utils';
 
 export interface FiltroGlobal {
   ano: string;
@@ -154,6 +155,7 @@ const Index = () => {
   const [movFiltroStatus, setMovFiltroStatus] = useState<string | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
+  const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -295,6 +297,7 @@ const Index = () => {
       setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
+    if (tab !== 'financeiro_v2') setFinV2Intensivo(false);
     if (tab === 'conferencia_gmd' || tab === 'mapa_pastos') {
       gmdOriginRef.current = activeTab as TabId;
     }
@@ -398,24 +401,25 @@ const Index = () => {
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
-    <div className="h-screen flex flex-col bg-background max-w-[1280px] mx-auto px-4 md:px-6 lg:px-8">
+    <div className={cn("h-screen flex flex-col bg-background max-w-[1280px] mx-auto", finV2Intensivo ? "px-1" : "px-4 md:px-6 lg:px-8")}>
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
-      <Header
-        title={TITLES[activeTab]}
-        clienteNome={clienteNomeHeader}
-        fazendaNome={fazendaNome}
-        periodo={undefined}
-        
-        rightAction={
-          <div className="flex flex-col gap-1">
-            {clientes.length > 1 && <ClienteSelector />}
-            {fazendas.length > 1 && <FazendaSelector />}
-          </div>
-        }
-      />
+      {!finV2Intensivo && (
+        <Header
+          title={TITLES[activeTab]}
+          clienteNome={clienteNomeHeader}
+          fazendaNome={fazendaNome}
+          periodo={undefined}
+          rightAction={
+            <div className="flex flex-col gap-1">
+              {clientes.length > 1 && <ClienteSelector />}
+              {fazendas.length > 1 && <FazendaSelector />}
+            </div>
+          }
+        />
+      )}
 
 
-      <div className={`flex-1 min-h-0 ${(activeTab === 'mapa_geo_pastos' || activeTab === 'mapa_pastos') ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+      <div className={`flex-1 min-h-0 ${finV2Intensivo ? 'overflow-hidden flex flex-col' : (activeTab === 'mapa_geo_pastos' || activeTab === 'mapa_pastos') ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {activeTab === 'resumo' && (
         <ResumoTab
           lancamentos={lancamentosVisiveis}
@@ -658,6 +662,7 @@ const Index = () => {
           onBack={() => setActiveTab('financeiro_v2_hub')}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onIntensiveToggle={setFinV2Intensivo}
         />
       )}
       {activeTab === 'financeiro_v2_hub' && (
@@ -755,7 +760,7 @@ const Index = () => {
         />
       )}
       </div>
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </div>
   );
 };

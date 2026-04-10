@@ -132,6 +132,7 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onIntensiveToggle?: (active: boolean) => void;
 }
 
 function getInitialPageSize() {
@@ -142,7 +143,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -719,6 +720,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   ].filter(Boolean).length;
 
   const [modoIntensivo, setModoIntensivo] = useState(false);
+  const toggleIntensivo = useCallback((val?: boolean) => {
+    const next = val !== undefined ? val : !modoIntensivo;
+    setModoIntensivo(next);
+    onIntensiveToggle?.(next);
+  }, [modoIntensivo, onIntensiveToggle]);
 
   const actionButtons = (
     <div className="flex items-center gap-1">
@@ -742,7 +748,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       <Button
         size="sm"
         variant={modoIntensivo ? "default" : "outline"}
-        onClick={() => setModoIntensivo(v => !v)}
+        onClick={() => toggleIntensivo()}
         className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
         title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
       >
@@ -753,17 +759,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   );
 
   return (
-    <div className={cn("space-y-1 relative", modoIntensivo ? "pb-2" : "pb-20")}>
-      {modoIntensivo && (
-        <div className="flex items-center justify-between px-3 py-1 bg-primary text-primary-foreground rounded-md">
-          <span className="text-[10px] font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
-          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-5 text-[10px] text-primary-foreground hover:bg-primary-foreground/20 gap-1">
-            <Minimize2 className="h-3 w-3" /> Sair
-          </Button>
-        </div>
-      )}
+    <div className={cn("relative", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
-      <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+      <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
             <>
@@ -1202,7 +1200,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               onFixed={() => hook.loadLancamentos(filtros, hook.page)}
             />
           )}
-           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: modoIntensivo ? 'calc(100vh - 140px)' : 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
+           <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 28 }} />
