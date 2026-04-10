@@ -14,6 +14,7 @@ export interface Pasto {
   entra_conciliacao: boolean;
   ativo: boolean;
   observacoes: string | null;
+  ordem_exibicao: number;
   created_at: string;
   updated_at: string;
 }
@@ -53,14 +54,12 @@ export function usePastos() {
     if (data) setCategorias(data);
   }, []);
 
-  // IDs de fazendas com pecuária para modo global
   const globalFazendaIds = useMemo(() => {
     if (!isGlobal) return [];
     return todasFazendas.filter(f => f.id !== '__global__' && f.tem_pecuaria !== false).map(f => f.id);
   }, [isGlobal, todasFazendas]);
 
   const loadPastos = useCallback(async () => {
-    // Global mode: load pastos from all pecuária farms
     if (isGlobal) {
       if (globalFazendaIds.length === 0) { setPastos([]); setLoading(false); return; }
       setLoading(true);
@@ -68,6 +67,7 @@ export function usePastos() {
         .from('pastos')
         .select('*')
         .in('fazenda_id', globalFazendaIds)
+        .order('ordem_exibicao')
         .order('nome');
       if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
       else setPastos(data || []);
@@ -80,6 +80,7 @@ export function usePastos() {
       .from('pastos')
       .select('*')
       .eq('fazenda_id', fazendaId)
+      .order('ordem_exibicao')
       .order('nome');
     if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
     else setPastos(data || []);
@@ -90,12 +91,17 @@ export function usePastos() {
   useEffect(() => { loadPastos(); }, [loadPastos]);
 
   const criarPasto = useCallback(async (pasto: Omit<Pasto, 'id' | 'created_at' | 'updated_at'>) => {
-    const { error } = await supabase.from('pastos').insert({ ...pasto, cliente_id: fazendaAtual?.cliente_id! } as any);
+    const maxOrdem = pastos.length > 0 ? Math.max(...pastos.map(p => p.ordem_exibicao || 0)) : 0;
+    const { error } = await supabase.from('pastos').insert({
+      ...pasto,
+      ordem_exibicao: maxOrdem + 1,
+      cliente_id: fazendaAtual?.cliente_id!,
+    } as any);
     if (error) { toast.error('Erro ao criar pasto'); console.error(error); return false; }
     toast.success('Pasto criado');
     await loadPastos();
     return true;
-  }, [loadPastos]);
+  }, [loadPastos, pastos, fazendaAtual]);
 
   const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>) => {
     const { error } = await supabase.from('pastos').update(updates).eq('id', id);
@@ -109,5 +115,24 @@ export function usePastos() {
     return editarPasto(id, { ativo });
   }, [editarPasto]);
 
-  return { pastos, categorias, loading, criarPasto, editarPasto, toggleAtivo, loadPastos };
+  const reorderPastos = useCallback(async (orderedIds: string[]) => {
+    // Optimistic update
+    setPastos(prev => {
+      const map = new Map(prev.map(p => [p.id, p]));
+      return orderedIds.map((id, i) => ({ ...map.get(id)!, ordem_exibicao: i })).filter(Boolean);
+    });
+
+    // Batch update in DB
+    const updates = orderedIds.map((id, i) =>
+      supabase.from('pastos').update({ ordem_exibicao: i } as any).eq('id', id)
+    );
+    const results = await Promise.all(updates);
+    const hasError = results.some(r => r.error);
+    if (hasError) {
+      toast.error('Erro ao salvar ordem');
+      await loadPastos();
+    }
+  }, [loadPastos]);
+
+  return { pastos, categorias, loading, criarPasto, editarPasto, toggleAtivo, loadPastos, reorderPastos };
 }
