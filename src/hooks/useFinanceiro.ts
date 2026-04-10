@@ -847,7 +847,7 @@ export function useFinanceiro() {
         }));
         // Insert in batches of 50
         for (let i = 0; i < dupLogs.length; i += 50) {
-          await supabase.from('financeiro_duplicidade_log').insert(dupLogs.slice(i, i + 50));
+          await supabase.from('financeiro_duplicidade_log' as any).insert(dupLogs.slice(i, i + 50) as any);
         }
       }
 
