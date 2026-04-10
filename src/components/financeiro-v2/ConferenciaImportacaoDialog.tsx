@@ -353,7 +353,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
               valor: e.valor,
               tipo_operacao: e.tipo_operacao,
               conta_bancaria_id: e.conta_bancaria_id,
-              produto: (e as any).produto || null,
+              produto: e.descricao,
             };
             const arr = map.get(nucleus);
             if (arr) arr.push(diff); else map.set(nucleus, [diff]);
