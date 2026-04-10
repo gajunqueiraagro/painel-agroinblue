@@ -12,6 +12,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   CheckCircle2, AlertTriangle, XCircle, Pencil, ExternalLink, ArrowLeft,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
