@@ -20,6 +20,7 @@ export interface LancamentoV2 {
   status_transacao: string | null;
   descricao: string | null;
   macro_custo: string | null;
+  grupo_custo: string | null;
   centro_custo: string | null;
   subcentro: string | null;
   escopo_negocio: string | null;
@@ -114,6 +115,7 @@ export interface ClassificacaoItem {
   grupo_custo: string;
   macro_custo: string;
   tipo_operacao: string;
+  escopo_negocio: string;
 }
 
 const DEFAULT_PAGE_SIZE = 30;
@@ -186,7 +188,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (!clienteId) return;
     const { data } = await supabase
       .from('financeiro_plano_contas')
-      .select('subcentro, centro_custo, grupo_custo, macro_custo, tipo_operacao')
+      .select('subcentro, centro_custo, grupo_custo, macro_custo, tipo_operacao, escopo_negocio')
       .eq('cliente_id', clienteId)
       .eq('ativo', true)
       .not('subcentro', 'is', null)
@@ -201,6 +203,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         grupo_custo: row.grupo_custo || '',
         macro_custo: row.macro_custo || '',
         tipo_operacao: row.tipo_operacao || '',
+        escopo_negocio: row.escopo_negocio || '',
       });
     }
     setClassificacoes(items);
@@ -256,7 +259,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     if (filtros.status_transacao) query = query.eq('status_transacao', filtros.status_transacao);
     if (filtros.macro_custo) query = query.eq('macro_custo', filtros.macro_custo);
-    // grupo_custo is filtered client-side (not a column in lancamentos_v2)
+    if (filtros.grupo_custo) query = query.eq('grupo_custo', filtros.grupo_custo);
     if (filtros.centro_custo) query = query.eq('centro_custo', filtros.centro_custo);
     if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
 
@@ -340,15 +343,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
   }, [fetchAllLancamentos]);
 
-  /** Derive escopo_negocio from grupo_custo in classificacoes (plano de contas) */
+  /** Derive escopo_negocio from official plano de contas (no keyword heuristic) */
   const deriveEscopoFromSubcentro = useCallback((subcentroValue: string | undefined | null): string | null => {
     if (!subcentroValue) return null;
     const cls = classificacoes.find(c => c.subcentro === subcentroValue);
     if (!cls) return null;
-    const grupo = (cls.grupo_custo || '').toLowerCase();
-    if (grupo.includes('pecuári') || grupo.includes('pecuaria')) return 'pecuaria';
-    if (grupo.includes('agri')) return 'agricultura';
-    return null;
+    return cls.escopo_negocio || null;
   }, [classificacoes]);
 
   const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
