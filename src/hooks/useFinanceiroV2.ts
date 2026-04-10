@@ -411,6 +411,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       : form.data_competencia.substring(0, 7);
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
 
+    // Auto-derive escopo_negocio from plano de contas if not explicitly set
+    const escopo = form.escopo_negocio || deriveEscopoFromSubcentro(form.subcentro) || null;
+
     const updatePayload = {
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
@@ -425,7 +428,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
       subcentro: form.subcentro || null,
-      escopo_negocio: form.escopo_negocio || null,
+      escopo_negocio: escopo,
       observacao: form.observacao || null,
       numero_documento: form.numero_documento || null,
       tipo_documento: form.tipo_documento || null,
