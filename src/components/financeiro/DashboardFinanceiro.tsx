@@ -1,9 +1,5 @@
-/**
- * Dashboard financeiro — versão executiva.
- *
- * Prioridade: leitura rápida, forte e limpa.
- * Base: somente lançamentos realizados, data_pagamento, tipo_operacao 1*/2*.
- */
+// Dashboard financeiro — versão executiva.
+// Base: somente lançamentos realizados, data_pagamento, tipo_operacao 1-Entradas / 2-Saídas.
 import { useMemo, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
