@@ -793,7 +793,7 @@ export function useFinanceiro() {
 
       if (linhasNovas.length === 0 && duplicados > 0) {
         toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
-        return true;
+        return { ok: true, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: duplicados, totalErro: 0, erros: [] };
       }
 
       // ── Criar registro da importação (V2) ──
