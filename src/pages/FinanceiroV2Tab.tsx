@@ -1194,13 +1194,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         />
       )}
 
-      {mode === 'list' && !hook.loading && ano && !modoIntensivo && (
+      {mode === 'list' && !hook.loading && ano && (
         <>
-          <CorrecaoTransferenciasBanner
-            contas={hook.contasBancarias}
-            onFixed={() => hook.loadLancamentos(filtros, hook.page)}
-          />
-           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative pr-3" style={{ maxHeight: 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
+          {!modoIntensivo && (
+            <CorrecaoTransferenciasBanner
+              contas={hook.contasBancarias}
+              onFixed={() => hook.loadLancamentos(filtros, hook.page)}
+            />
+          )}
+           <div ref={scrollContainerRef} className="rounded-lg border border-[hsl(var(--border))] overflow-auto relative" style={{ maxHeight: modoIntensivo ? 'calc(100vh - 140px)' : 'calc(100vh - 260px - var(--bottom-nav-safe, 64px))' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 28 }} />
