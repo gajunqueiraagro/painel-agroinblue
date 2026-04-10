@@ -17,7 +17,7 @@ import {
   type ValidacaoEstrutura,
 } from '@/lib/financeiro/importParser';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import type { ImportacaoRecord } from '@/hooks/useFinanceiro';
+import type { ImportacaoRecord, ImportResultado, ImportErroDetalhe } from '@/hooks/useFinanceiro';
 import { format } from 'date-fns';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
