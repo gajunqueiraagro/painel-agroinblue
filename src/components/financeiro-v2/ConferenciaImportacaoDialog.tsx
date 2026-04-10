@@ -219,7 +219,12 @@ function classificarNivel(
   // 2. Valor
   const v1 = Math.round((imported.valor || 0) * 100);
   const v2 = Math.round((existing.valor || 0) * 100);
-  if (v1 !== v2) diffCount++;
+  if (v1 !== v2) {
+    // Significant value divergence (>20% relative difference) counts double
+    const maxV = Math.max(v1, v2);
+    const pctDiff = maxV > 0 ? Math.abs(v1 - v2) / maxV : 0;
+    diffCount += pctDiff > 0.20 ? 2 : 1;
+  }
 
   // 3. Descrição/Produto
   const nd = norm(imported.descricao);
