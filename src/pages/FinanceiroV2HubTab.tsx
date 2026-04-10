@@ -131,24 +131,44 @@ export function FinanceiroV2HubTab({ onTabChange }: Props) {
           </Card>
         </div>
 
-        {/* Bottom – Conta Boitel */}
-        <button
-          onClick={() => onTabChange('conta_boitel' as TabId)}
-          className="group text-left w-full md:w-1/3"
-        >
-          <Card className="hover:shadow-sm transition-shadow border-muted-foreground/15">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Landmark className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Conta Boitel</p>
-                  <p className="text-[10px] text-muted-foreground">Controle financeiro por lote de boitel</p>
+        {/* Bottom row */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => onTabChange('conta_boitel' as TabId)}
+            className="group text-left flex-1 min-w-[200px] max-w-[33%]"
+          >
+            <Card className="hover:shadow-sm transition-shadow border-muted-foreground/15">
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Landmark className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Conta Boitel</p>
+                    <p className="text-[10px] text-muted-foreground">Controle financeiro por lote de boitel</p>
+                  </div>
                 </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
-            </CardContent>
-          </Card>
-        </button>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+              </CardContent>
+            </Card>
+          </button>
+
+          <button
+            onClick={() => onTabChange('auditoria_duplicidade' as TabId)}
+            className="group text-left flex-1 min-w-[200px] max-w-[33%]"
+          >
+            <Card className="hover:shadow-sm transition-shadow border-muted-foreground/15">
+              <CardContent className="p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <SearchCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Auditoria de Duplicidade</p>
+                    <p className="text-[10px] text-muted-foreground">Revisão de lançamentos sinalizados como duplicados</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+              </CardContent>
+            </Card>
+          </button>
+        </div>
       </div>
     </div>
   );
