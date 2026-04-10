@@ -257,7 +257,7 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
 
 // ── Component ──
 
-export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas, excelHeaders, contas, fazendas, clienteId, onConfirmar }: Props) {
+export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas, excelHeaders, contas, fazendas, clienteId, subcentrosOficiais, onConfirmar }: Props) {
   const contaLookup = useMemo(() => buildContaLookup(contas), [contas]);
   const fazendaLookup = useMemo(() => {
     const m = new Map<string, string>();
