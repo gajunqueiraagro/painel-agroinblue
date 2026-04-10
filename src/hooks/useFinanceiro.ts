@@ -800,6 +800,25 @@ export function useFinanceiro() {
       let inseridos = 0;
       let ignorados = duplicados;
 
+      // ── Resolver fornecedores (texto → UUID) ──
+      const { data: fornecedoresData } = await supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome, nome_normalizado')
+        .eq('cliente_id', cid)
+        .eq('ativo', true);
+
+      const fornecedorMap = new Map<string, string>();
+      for (const f of (fornecedoresData || [])) {
+        if (f.nome_normalizado) fornecedorMap.set(f.nome_normalizado, f.id);
+        if (f.nome) fornecedorMap.set(f.nome.toUpperCase().trim(), f.id);
+      }
+
+      const resolveFornecedorId = (nome: string | null): string | null => {
+        if (!nome) return null;
+        const norm = nome.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        return fornecedorMap.get(norm) || fornecedorMap.get(nome.toUpperCase().trim()) || null;
+      };
+
       // ── Expand transfers into paired records (debit + credit) ──
       const expandedRows: Array<{
         fazenda_id: string; cliente_id: string; lote_importacao_id: string;
@@ -809,6 +828,7 @@ export function useFinanceiro() {
         tipo_operacao: string; macro_custo: string | null; centro_custo: string | null;
         subcentro: string | null; observacao: string | null; escopo_negocio: string;
         created_by: string; transferencia_grupo_id: string | null;
+        favorecido_id?: string | null;
       }> = [];
 
       for (const l of linhasNovas) {
