@@ -55,6 +55,7 @@ interface EditableRow extends LinhaImportada {
   _validation: ValidationResult;
   _resolved: ResolvedInfo;
   _isDuplicate: boolean;
+  _nivelDuplicidade?: NivelDuplicidade | null;
 }
 
 interface ContaOption { id: string; nome_conta: string; nome_exibicao?: string | null; codigo_conta?: string | null; }
@@ -107,18 +108,59 @@ function buildContaLookup(contas: ContaOption[]): Map<string, ContaResolved> {
   return m;
 }
 
-/** Hash núcleo para detecção de duplicidade — alinhado com SQL */
-function buildHashImportacao(
+/** Nucleus hash — only core identity fields for collision detection.
+ *  Differentiators (fornecedor, descricao, documento, subcentro) are compared AFTER match. */
+function buildNucleusHash(
   clienteId: string, fazendaId: string, dataPagamento: string | null, valor: number,
   tipoOperacao: string | null, contaBancariaId: string | null,
-  numeroDocumento?: string | null, descricao?: string | null,
-  fornecedor?: string | null,
 ): string {
   return [clienteId, fazendaId, (dataPagamento || '').trim(), valor.toFixed(2),
     (tipoOperacao || '').trim().toLowerCase(), contaBancariaId || '',
-    normalizeImportText(numeroDocumento), normalizeImportText(descricao),
-    normalizeImportText(fornecedor),
   ].join('|');
+}
+
+type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
+
+interface ExistingDiffRecord {
+  descricao: string | null;
+  numero_documento: string | null;
+  favorecido_id: string | null;
+  subcentro: string | null;
+}
+
+/** Classify duplication level by comparing differentiators */
+function classificarNivelConferencia(
+  newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+  existing: ExistingDiffRecord,
+): NivelDuplicidade {
+  let diffCount = 0;
+  let docDiverge = false;
+
+  // Fornecedor: compare text vs text (favorecido_id is UUID, so if it exists and differs from text, count as different)
+  // Since we can't compare text↔UUID reliably, we skip fornecedor in pre-detection.
+  // The DB trigger handles this with resolved UUID comparison.
+
+  // Descricao
+  const nd = normalizeImportText(newRow.descricao);
+  const ed = normalizeImportText(existing.descricao);
+  if (nd !== ed && (nd || ed)) diffCount++;
+
+  // Numero documento
+  const nDoc = normalizeImportText(newRow.numeroDocumento);
+  const eDoc = normalizeImportText(existing.numero_documento);
+  if (nDoc && eDoc) {
+    if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
+  }
+
+  // Subcentro
+  const nSub = normalizeImportText(newRow.subcentro);
+  const eSub = normalizeImportText(existing.subcentro);
+  if (nSub !== eSub && (nSub || eSub)) diffCount++;
+
+  if (diffCount === 0) return 'D1';
+  if (diffCount === 1 && !docDiverge) return 'D2';
+  if (diffCount <= 2) return 'D3';
+  return 'LEGITIMO';
 }
 
 function isTransf(tipo: string | null): boolean {
@@ -268,16 +310,16 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return m;
   }, [fazendas]);
 
-  const [existingHashes, setExistingHashes] = useState<Set<string> | null>(null);
+  const [existingByNucleus, setExistingByNucleus] = useState<Map<string, ExistingDiffRecord[]> | null>(null);
   const [loadingHashes, setLoadingHashes] = useState(false);
   const [showOriginal, setShowOriginal] = useState(true);
 
   useEffect(() => {
-    if (!open || !clienteId) { setExistingHashes(new Set()); return; }
+    if (!open || !clienteId) { setExistingByNucleus(new Map()); return; }
     let cancelled = false;
-    const fetchHashes = async () => {
+    const fetchExisting = async () => {
       setLoadingHashes(true);
-      const hashes = new Set<string>();
+      const map = new Map<string, ExistingDiffRecord[]>();
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
       for (const fid of fazendaIds) {
         let from = 0;
@@ -285,30 +327,47 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
             .eq('fazenda_id', fid).eq('cliente_id', clienteId).eq('cancelado', false)
             .range(from, from + batchSize - 1);
           if (!data || data.length === 0) break;
           for (const e of data) {
-            hashes.add(buildHashImportacao(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao));
+            const nucleus = buildNucleusHash(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id);
+            const diff: ExistingDiffRecord = { descricao: e.descricao, numero_documento: e.numero_documento, favorecido_id: e.favorecido_id, subcentro: e.subcentro };
+            const arr = map.get(nucleus);
+            if (arr) arr.push(diff); else map.set(nucleus, [diff]);
           }
           if (data.length < batchSize) break;
           from += batchSize;
         }
       }
-      if (!cancelled) { setExistingHashes(hashes); setLoadingHashes(false); }
+      if (!cancelled) { setExistingByNucleus(map); setLoadingHashes(false); }
     };
-    fetchHashes();
+    fetchExisting();
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingH: Set<string>): boolean => {
-    if (!clienteId || !existingH) return false;
+  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingMap: Map<string, ExistingDiffRecord[]>): { isDuplicate: boolean; nivel: NivelDuplicidade | null } => {
+    if (!clienteId || !existingMap) return { isDuplicate: false, nivel: null };
     const contaKey = normalizeImportText(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
-    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.fornecedor);
-    // Only check against existing DB records — never deduplicate within the same import file
-    return existingH.has(hash);
+    const nucleus = buildNucleusHash(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null);
+    const matches = existingMap.get(nucleus);
+    if (!matches || matches.length === 0) return { isDuplicate: false, nivel: null };
+
+    // Found nucleus match — classify using differentiators
+    let bestNivel = 'LEGITIMO' as NivelDuplicidade;
+    const rank = { D1: 3, D2: 2, D3: 1, LEGITIMO: 0 } as const;
+    for (const ex of matches) {
+      const nivel = classificarNivelConferencia(
+        { fornecedor: row.fornecedor, descricao: row.produto, numeroDocumento: row.numeroDocumento, subcentro: row.subcentro },
+        ex,
+      );
+      if (rank[nivel] > rank[bestNivel]) bestNivel = nivel;
+      if (bestNivel === 'D1') break;
+    }
+    // D1/D2/D3 = duplicate suspicion; LEGITIMO = nucleus match but differentiators diverge enough
+    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel };
   }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -318,23 +377,23 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [bulkOpen, setBulkOpen] = useState(false);
 
   useEffect(() => {
-    if (!existingHashes) return;
+    if (!existingByNucleus) return;
     setRows(linhas.map(l => {
-      const isDup = checkDuplicate(l, linhas, existingHashes);
-      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      const result = checkDuplicate(l, linhas, existingByNucleus);
+      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
     }));
-  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
+  }, [linhas, existingByNucleus, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const contaOptions = useMemo(() => contas.map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta })).filter(c => !!c.value), [contas]);
   const fazendaOptions = useMemo(() => fazendas.map(f => ({ value: f.codigo || f.id, label: `${f.codigo} — ${f.nome}` })).filter(f => !!f.value), [fazendas]);
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
-    if (!existingHashes) return currentRows;
+    if (!existingByNucleus) return currentRows;
     return currentRows.map(r => {
-      const isDup = checkDuplicate(r, currentRows, existingHashes);
-      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      const result = checkDuplicate(r, currentRows, existingByNucleus);
+      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
     });
-  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate, subcentrosOficiais]);
+  }, [contaLookup, fazendaLookup, existingByNucleus, checkDuplicate, subcentrosOficiais]);
 
   // Stats
   const stats = useMemo(() => {
@@ -386,10 +445,10 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         }
         return updated;
       });
-      if (!existingHashes) return nextRows;
+      if (!existingByNucleus) return nextRows;
       return nextRows.map(r => {
-        const isDup = checkDuplicate(r, nextRows, existingHashes);
-        return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
+        const result = checkDuplicate(r, nextRows, existingByNucleus);
+        return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, result.isDuplicate), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
       });
     });
   };
@@ -431,7 +490,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   const hasBlockingErrors = stats.error > 0;
   const importableCount = stats.valid + stats.warning + stats.duplicated;
-  const isLoading = loadingHashes || existingHashes === null;
+  const isLoading = loadingHashes || existingByNucleus === null;
 
   // Excel headers to show (filter out Tipo_Registro which is always LANCAMENTO at this point)
   const visibleExcelHeaders = useMemo(() => excelHeaders.filter(h => h && h !== ''), [excelHeaders]);
