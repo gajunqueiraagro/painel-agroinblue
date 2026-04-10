@@ -153,27 +153,32 @@ function classificarNivelConferencia(
   newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
   existing: ExistingDiffRecord,
 ): NivelDuplicidade {
+  // ── Regra profissional: fornecedor é barreira de entrada ──
+  // Se o fornecedor diverge, não pode ser D1/D2/D3 — é LEGÍTIMO (NOVO).
+  // D2/D3 só existem quando o fornecedor bate mas outros diferenciadores divergem.
+  const nForn = normalizeImportText(newRow.fornecedor);
+  const eForn = normalizeImportText(existing.favorecido_nome);
+  const fornecedorDiverge = (nForn !== eForn) && (nForn !== '' || eForn !== '');
+
+  if (fornecedorDiverge) return 'LEGITIMO';
+
+  // Fornecedor bate — comparar diferenciadores secundários
   let diffCount = 0;
   let docDiverge = false;
 
-  // 1. Fornecedor (obrigatório na decisão final)
-  const nForn = normalizeImportText(newRow.fornecedor);
-  const eForn = normalizeImportText(existing.favorecido_nome);
-  if (nForn !== eForn && (nForn || eForn)) diffCount++;
-
-  // 2. Descrição/Produto
+  // 1. Descrição/Produto
   const nd = normalizeImportText(newRow.descricao);
   const ed = normalizeImportText(existing.descricao);
   if (nd !== ed && (nd || ed)) diffCount++;
 
-  // 3. Número do documento
+  // 2. Número do documento
   const nDoc = normalizeImportText(newRow.numeroDocumento);
   const eDoc = normalizeImportText(existing.numero_documento);
   if (nDoc && eDoc) {
     if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
   }
 
-  // 4. Subcentro (auxiliar)
+  // 3. Subcentro (auxiliar)
   const nSub = normalizeImportText(newRow.subcentro);
   const eSub = normalizeImportText(existing.subcentro);
   if (nSub !== eSub && (nSub || eSub)) diffCount++;
