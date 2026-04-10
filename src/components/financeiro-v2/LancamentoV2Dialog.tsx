@@ -187,6 +187,7 @@ export function LancamentoV2Dialog({
   const [subcentro, setSubcentro] = useState('');
   const [macroCusto, setMacroCusto] = useState('');
   const [centroCusto, setCentroCusto] = useState('');
+  const [escopoNegocio, setEscopoNegocio] = useState('');
   const [tipoOperacao, setTipoOperacao] = useState('2-Saídas');
   const [statusTransacao, setStatusTransacao] = useState('meta');
   const [valorDisplay, setValorDisplay] = useState('0,00');
