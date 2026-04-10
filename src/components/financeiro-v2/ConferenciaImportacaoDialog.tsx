@@ -533,11 +533,16 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       if (bestNivel === 'D1') break;
     }
 
-    // If no resolved ID but supplier text exists, also scan by name containment as fallback
-    if (bestNivel === 'LEGITIMO' && row.fornecedor && !resolvedId) {
+    // Fallback: scan by name containment when:
+    // - resolvedId found no candidates, OR
+    // - resolvedId was not found at all
+    // This handles cases where the same person has multiple supplier records (e.g. "Claudinei" vs "Pec.3M-(Claudinei)")
+    if (bestNivel === 'LEGITIMO' && row.fornecedor) {
       const prefix = `${row.fazendaId}|${row.anoMes}|`;
       for (const [k, cands] of cMap.entries()) {
         if (!k.startsWith(prefix)) continue;
+        // Skip the key we already checked
+        if (k === key) continue;
         const candName = cands[0]?.favorecido_nome;
         if (!candName) continue;
         const importNorm = normFornecedor(row.fornecedor);
