@@ -112,6 +112,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
 
   // ── Retro view state ──
   const [retroRecords, setRetroRecords] = useState<RetroRecord[]>([]);
+  const [retroAnoMes, setRetroAnoMes] = useState('');
   const [selectedPrincipal, setSelectedPrincipal] = useState<Record<string, string>>({});
   const [retroConfirmOpen, setRetroConfirmOpen] = useState(false);
   const [retroConfirmAction, setRetroConfirmAction] = useState<{ hash: string; action: 'legitimo' | 'duplicado' | 'revisar' } | null>(null);
