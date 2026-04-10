@@ -169,16 +169,15 @@ export const CATEGORIAS_ENTRADA: CategoriaEntrada[] = [
  *   → fallback → Aportes Pessoais
  */
 export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const escopo = getEscopo(l);
   const grupo = norm(l.grupo_custo);
 
   // Receitas: macro_custo = "receitas"
   if (macro === 'receitas') {
-    // "Rendimentos e Outros" → Outras Receitas
-    if (grupo.includes('rendimentos')) return 'Outras Receitas';
-    if (escopo === 'agri') return 'Receitas Agricultura';
-    if (escopo === 'pec') return 'Receitas Pecuárias';
+    if (grupo.includes('rendimentos') || grupo.includes('outras receitas')) return 'Outras Receitas';
+    if (escopo === 'agri' || grupo.includes('agri')) return 'Receitas Agricultura';
+    if (escopo === 'pec' || grupo.includes('pecuári') || grupo.includes('pecuaria')) return 'Receitas Pecuárias';
     return 'Outras Receitas';
   }
 
@@ -236,23 +235,23 @@ export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
  *   → macro = "dividendos" OU centro_custo = "dividendos"
  */
 export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const escopo = getEscopo(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
 
-  // Dedução de Receitas (prioridade alta para evitar classificar como desembolso)
-  if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
-  if (centro.includes('dedução') || centro.includes('deducao')) return 'Dedução de Receitas';
+  // Dedução de Receitas
+  if (macro === 'dedução de receitas') return 'Dedução de Receitas';
+  if (centro.includes('dedução') || centro.includes('deducao') || centro.includes('deduções')) return 'Dedução de Receitas';
 
-  // Dividendos: macro OU centro_custo
+  // Dividendos
   if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'Dividendos';
 
-  // Reposição Bovinos: macro OU centro_custo contém "reposição"
+  // Reposição Bovinos
   if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'Reposição Bovinos';
 
   // Amortizações Financeiras
-  if (macro.includes('amortiza')) {
+  if (macro === 'amortizações financeiras') {
     return escopo === 'agri' ? 'Amortizações Fin. Agri.' : 'Amortizações Fin. Pec.';
   }
 
