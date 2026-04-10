@@ -1122,11 +1122,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     />
                   </div>
                 </div>
-                <div className="flex gap-1 items-end pb-[1px]">
-                  <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
-                    <FilterX className="h-3 w-3" /> Limpar
-                  </Button>
-                </div>
               </div>
 
               {/* DESKTOP: LINE 3 — Produto | Fornecedor + Actions + Summary */}
