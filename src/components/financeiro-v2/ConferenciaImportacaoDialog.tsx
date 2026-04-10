@@ -309,16 +309,16 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return m;
   }, [fazendas]);
 
-  const [existingHashes, setExistingHashes] = useState<Set<string> | null>(null);
+  const [existingByNucleus, setExistingByNucleus] = useState<Map<string, ExistingDiffRecord[]> | null>(null);
   const [loadingHashes, setLoadingHashes] = useState(false);
   const [showOriginal, setShowOriginal] = useState(true);
 
   useEffect(() => {
-    if (!open || !clienteId) { setExistingHashes(new Set()); return; }
+    if (!open || !clienteId) { setExistingByNucleus(new Map()); return; }
     let cancelled = false;
-    const fetchHashes = async () => {
+    const fetchExisting = async () => {
       setLoadingHashes(true);
-      const hashes = new Set<string>();
+      const map = new Map<string, ExistingDiffRecord[]>();
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
       for (const fid of fazendaIds) {
         let from = 0;
@@ -326,30 +326,47 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
             .eq('fazenda_id', fid).eq('cliente_id', clienteId).eq('cancelado', false)
             .range(from, from + batchSize - 1);
           if (!data || data.length === 0) break;
           for (const e of data) {
-            hashes.add(buildHashImportacao(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao));
+            const nucleus = buildNucleusHash(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id);
+            const diff: ExistingDiffRecord = { descricao: e.descricao, numero_documento: e.numero_documento, favorecido_id: e.favorecido_id, subcentro: e.subcentro };
+            const arr = map.get(nucleus);
+            if (arr) arr.push(diff); else map.set(nucleus, [diff]);
           }
           if (data.length < batchSize) break;
           from += batchSize;
         }
       }
-      if (!cancelled) { setExistingHashes(hashes); setLoadingHashes(false); }
+      if (!cancelled) { setExistingByNucleus(map); setLoadingHashes(false); }
     };
-    fetchHashes();
+    fetchExisting();
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingH: Set<string>): boolean => {
-    if (!clienteId || !existingH) return false;
+  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingMap: Map<string, ExistingDiffRecord[]>): { isDuplicate: boolean; nivel: NivelDuplicidade | null } => {
+    if (!clienteId || !existingMap) return { isDuplicate: false, nivel: null };
     const contaKey = normalizeImportText(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
-    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.fornecedor);
-    // Only check against existing DB records — never deduplicate within the same import file
-    return existingH.has(hash);
+    const nucleus = buildNucleusHash(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null);
+    const matches = existingMap.get(nucleus);
+    if (!matches || matches.length === 0) return { isDuplicate: false, nivel: null };
+
+    // Found nucleus match — classify using differentiators
+    let bestNivel = 'LEGITIMO' as NivelDuplicidade;
+    const rank = { D1: 3, D2: 2, D3: 1, LEGITIMO: 0 } as const;
+    for (const ex of matches) {
+      const nivel = classificarNivelConferencia(
+        { fornecedor: row.fornecedor, descricao: row.produto, numeroDocumento: row.numeroDocumento, subcentro: row.subcentro },
+        ex,
+      );
+      if (rank[nivel] > rank[bestNivel]) bestNivel = nivel;
+      if (bestNivel === 'D1') break;
+    }
+    // D1/D2/D3 = duplicate suspicion; LEGITIMO = nucleus match but differentiators diverge enough
+    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel };
   }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
