@@ -4,6 +4,7 @@ import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -717,14 +718,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     atividadeFiltro !== '__all__',
   ].filter(Boolean).length;
 
-  const [fullscreenDialog, setFullscreenDialog] = useState(false);
+  const [modoIntensivo, setModoIntensivo] = useState(false);
 
   return (
-    <div className="space-y-1 pb-20 relative" style={{ backgroundColor: '#F3F6FA' }}>
+    <div className={cn("space-y-1 pb-20 relative", modoIntensivo && "fixed inset-0 z-50 overflow-y-auto pb-4")} style={{ backgroundColor: '#F3F6FA' }}>
+      {modoIntensivo && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-primary text-primary-foreground">
+          <span className="text-xs font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
+          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-6 text-xs text-primary-foreground hover:bg-primary-foreground/20 gap-1">
+            <Minimize2 className="h-3 w-3" /> Sair
+          </Button>
+        </div>
+      )}
       {/* Sticky vertical action buttons — right side */}
       <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
         {!mesFechadoAtivo && (
-          <Button size="sm" onClick={() => { setEditingLanc(null); setFullscreenDialog(true); }} className="h-8 w-8 p-0 bg-[#E7C873] text-foreground hover:bg-[#D9B95F] shadow-lg" title="Novo Lançamento">
+          <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-8 w-8 p-0 bg-[#E7C873] text-foreground hover:bg-[#D9B95F] shadow-lg" title="Novo Lançamento">
             <Plus className="h-4 w-4" />
           </Button>
         )}
@@ -740,6 +749,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <ChevronLeft className="h-4 w-4" />
           </Button>
         )}
+        <Button
+          size="sm"
+          variant={modoIntensivo ? "default" : "outline"}
+          onClick={() => setModoIntensivo(v => !v)}
+          className={cn("h-8 w-8 p-0 shadow-lg", modoIntensivo ? "bg-primary text-primary-foreground" : "bg-background")}
+          title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
+        >
+          {modoIntensivo ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
       </div>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
@@ -955,7 +973,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     totalCount={totalLancamentosFiltrados}
                   />
                   {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={() => { setEditingLanc(null); setFullscreenDialog(true); }} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
+                    <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
                       <Plus className="h-3 w-3" /> Novo
                     </Button>
                   )}
@@ -1159,7 +1177,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
       </Card>
 
       {/* Fechamento mensal banner */}
-      {singleMonthSelected && fazendaId !== '__all__' && (
+      {!modoIntensivo && singleMonthSelected && fazendaId !== '__all__' && (
         <FechamentoMensalBanner
           anoMes={singleMonthSelected}
           status={singleMonthStatus as 'aberto' | 'fechado'}
@@ -1190,7 +1208,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         />
       )}
 
-      {mode === 'list' && !hook.loading && ano && (
+      {mode === 'list' && !hook.loading && ano && !modoIntensivo && (
         <>
           <CorrecaoTransferenciasBanner
             contas={hook.contasBancarias}
@@ -1321,21 +1339,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         onCriarFornecedor={hook.criarFornecedor}
       />
 
-      {/* Fullscreen dialog for new lancamento */}
-      <LancamentoV2Dialog
-        open={fullscreenDialog}
-        onClose={() => { setFullscreenDialog(false); setEditingLanc(null); }}
-        onSave={handleSave}
-        onDelete={handleDelete}
-        lancamento={editingLanc}
-        fazendas={fazendas}
-        contas={hook.contasBancarias}
-        classificacoes={hook.classificacoes}
-        fornecedores={hook.fornecedores}
-        defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
-        onCriarFornecedor={hook.criarFornecedor}
-        fullscreen
-      />
 
       {/* Bulk delete confirmation */}
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>

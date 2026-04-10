@@ -31,7 +31,7 @@ interface Props {
   fornecedores: FornecedorV2[];
   defaultFazendaId?: string;
   onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
-  fullscreen?: boolean;
+  
 }
 
 const TIPOS_OPERACAO = [
@@ -151,7 +151,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, defaultFazendaId, onCriarFornecedor, fullscreen,
+  fornecedores, defaultFazendaId, onCriarFornecedor,
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
@@ -816,12 +816,7 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className={cn(
-          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden",
-          fullscreen
-            ? "fixed inset-0 max-w-none max-h-none w-screen h-screen rounded-none translate-x-0 translate-y-0 left-0 top-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0"
-            : "max-w-3xl max-h-[92vh]"
-        )}>
+        <DialogContent className="flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden max-w-3xl max-h-[92vh]">
           {/* Header */}
           <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
             <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
