@@ -799,7 +799,6 @@ export function useFinanceiro() {
               e.tipo_operacao, e.conta_bancaria_id,
               e.numero_documento, e.descricao,
             );
-            );
             existingHashes.add(hash);
           }
           if (existing.length < batchSize) break;
