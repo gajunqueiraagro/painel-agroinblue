@@ -816,7 +816,12 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden">
+        <DialogContent className={cn(
+          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden",
+          fullscreen
+            ? "fixed inset-0 max-w-none max-h-none w-screen h-screen rounded-none translate-x-0 translate-y-0 left-0 top-0 data-[state=open]:slide-in-from-bottom-0 data-[state=closed]:slide-out-to-bottom-0"
+            : "max-w-3xl max-h-[92vh]"
+        )}>
           {/* Header */}
           <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
             <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
