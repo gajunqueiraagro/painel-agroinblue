@@ -294,7 +294,7 @@ export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFlux
 
   if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'reposicao';
 
-  if (macro.includes('amortiza')) return 'amortizacoes';
+  if (macro === 'amortizações financeiras') return 'amortizacoes';
 
   return 'desembolso';
 }
