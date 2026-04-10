@@ -348,6 +348,26 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     const fetchExisting = async () => {
       setLoadingHashes(true);
       const map = new Map<string, ExistingDiffRecord[]>();
+
+      // 1. Build fornecedor id→name lookup
+      const fornecedorMap = new Map<string, string>();
+      {
+        let from = 0;
+        const batchSize = 1000;
+        while (!cancelled) {
+          const { data } = await supabase
+            .from('financeiro_fornecedores')
+            .select('id, nome')
+            .eq('cliente_id', clienteId)
+            .range(from, from + batchSize - 1);
+          if (!data || data.length === 0) break;
+          for (const f of data) fornecedorMap.set(f.id, f.nome);
+          if (data.length < batchSize) break;
+          from += batchSize;
+        }
+      }
+
+      // 2. Fetch existing lancamentos and build nucleus map
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
       for (const fid of fazendaIds) {
         let from = 0;
@@ -365,7 +385,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
               descricao: e.descricao,
               numero_documento: e.numero_documento,
               favorecido_id: e.favorecido_id,
-              favorecido_nome: null,
+              favorecido_nome: e.favorecido_id ? (fornecedorMap.get(e.favorecido_id) || null) : null,
               subcentro: e.subcentro,
               data_pagamento: e.data_pagamento,
               valor: e.valor,
