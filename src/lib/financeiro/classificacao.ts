@@ -105,13 +105,30 @@ export function getEscopo(l: LancamentoClassificavel): Escopo {
 
 const normMacro = (l: LancamentoClassificavel) => norm(l.macro_custo);
 
+/** Normalize macro_custo to canonical groups (handles both old and new plano de contas names) */
+function canonicalMacro(l: LancamentoClassificavel): string {
+  const m = normMacro(l);
+  // Old names → keep as-is (already handled below)
+  // New names → map to old canonical
+  if (m === 'receita operacional') return 'receitas';
+  if (m === 'entrada financeira' || m === 'outras entradas financeiras') return 'outras entradas financeiras';
+  if (m === 'custeio produção' || m === 'custeio produtivo') return 'custeio produtivo';
+  if (m === 'investimento' || m === 'investimento na fazenda') return 'investimento na fazenda';
+  if (m === 'investimento em bovinos') return 'investimento em bovinos';
+  if (m === 'deduções de receitas' || (m.includes('dedu') && m.includes('receita'))) return 'dedução de receitas';
+  if (m === 'distribuição' || m === 'dividendos') return 'dividendos';
+  if (m === 'saída financeira' || m.includes('amortiza')) return 'amortizações financeiras';
+  if (m === 'transferências' || m === 'entre contas') return 'transferencias';
+  return m;
+}
+
 function isAporte(l: LancamentoClassificavel): boolean {
   const macro = normMacro(l);
   const grupo = norm(l.grupo_custo);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
   return macro.includes('aporte')
-    || grupo.includes('aporte')
+    || grupo.includes('aporte') || grupo.includes('entradas de capital')
     || centro.includes('aporte')
     || sub.includes('aporte');
 }
@@ -152,16 +169,15 @@ export const CATEGORIAS_ENTRADA: CategoriaEntrada[] = [
  *   → fallback → Aportes Pessoais
  */
 export function classificarEntrada(l: LancamentoClassificavel): CategoriaEntrada {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const escopo = getEscopo(l);
   const grupo = norm(l.grupo_custo);
 
   // Receitas: macro_custo = "receitas"
   if (macro === 'receitas') {
-    // "Rendimentos e Outros" → Outras Receitas
-    if (grupo.includes('rendimentos')) return 'Outras Receitas';
-    if (escopo === 'agri') return 'Receitas Agricultura';
-    if (escopo === 'pec') return 'Receitas Pecuárias';
+    if (grupo.includes('rendimentos') || grupo.includes('outras receitas')) return 'Outras Receitas';
+    if (escopo === 'agri' || grupo.includes('agri')) return 'Receitas Agricultura';
+    if (escopo === 'pec' || grupo.includes('pecuári') || grupo.includes('pecuaria')) return 'Receitas Pecuárias';
     return 'Outras Receitas';
   }
 
@@ -219,23 +235,23 @@ export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
  *   → macro = "dividendos" OU centro_custo = "dividendos"
  */
 export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const escopo = getEscopo(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
 
-  // Dedução de Receitas (prioridade alta para evitar classificar como desembolso)
-  if (macro.includes('dedu') && macro.includes('receita')) return 'Dedução de Receitas';
-  if (centro.includes('dedução') || centro.includes('deducao')) return 'Dedução de Receitas';
+  // Dedução de Receitas
+  if (macro === 'dedução de receitas') return 'Dedução de Receitas';
+  if (centro.includes('dedução') || centro.includes('deducao') || centro.includes('deduções')) return 'Dedução de Receitas';
 
-  // Dividendos: macro OU centro_custo
+  // Dividendos
   if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'Dividendos';
 
-  // Reposição Bovinos: macro OU centro_custo contém "reposição"
+  // Reposição Bovinos
   if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'Reposição Bovinos';
 
   // Amortizações Financeiras
-  if (macro.includes('amortiza')) {
+  if (macro === 'amortizações financeiras') {
     return escopo === 'agri' ? 'Amortizações Fin. Agri.' : 'Amortizações Fin. Pec.';
   }
 
@@ -256,10 +272,9 @@ export type CategoriaFluxoEntrada = 'receitas' | 'captacao' | 'aportes';
 
 /** Classifica entrada para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFluxoEntrada {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   if (macro === 'receitas') return 'receitas';
   if (isAporte(l)) return 'aportes';
-  // Anomalias (macro inesperado como entrada) → aportes para não distorcer receitas
   if (macro && macro !== 'outras entradas financeiras') return 'aportes';
   return 'captacao';
 }
@@ -268,18 +283,18 @@ export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amor
 
 /** Classifica saída para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFluxoSaida {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
 
-  if (macro.includes('dedu') && macro.includes('receita')) return 'deducao';
-  if (centro.includes('dedução') || centro.includes('deducao')) return 'deducao';
+  if (macro === 'dedução de receitas') return 'deducao';
+  if (centro.includes('dedução') || centro.includes('deducao') || centro.includes('deduções')) return 'deducao';
 
   if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'dividendos';
 
   if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'reposicao';
 
-  if (macro.includes('amortiza')) return 'amortizacoes';
+  if (macro === 'amortizações financeiras') return 'amortizacoes';
 
   return 'desembolso';
 }
@@ -290,13 +305,13 @@ export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFlux
 
 /** É Desembolso Produtivo (Custeio Produtivo + Investimento na Fazenda) */
 export function isDesembolsoProdutivo(l: LancamentoClassificavel): boolean {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   return macro === 'custeio produtivo' || macro === 'investimento na fazenda';
 }
 
 /** É Receita operacional (macro_custo = "receitas") */
 export function isReceita(l: LancamentoClassificavel): boolean {
-  return normMacro(l) === 'receitas';
+  return canonicalMacro(l) === 'receitas';
 }
 
 // ---------------------------------------------------------------------------
