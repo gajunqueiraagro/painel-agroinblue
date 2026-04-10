@@ -69,6 +69,8 @@ interface Props {
   contas: ContaOption[];
   fazendas: FazendaOption[];
   clienteId?: string;
+  /** Official subcentros from plano de contas */
+  subcentrosOficiais?: Set<string>;
   onConfirmar: (linhas: LinhaImportada[]) => Promise<boolean>;
 }
 
@@ -122,7 +124,7 @@ function isTransf(tipo: string | null): boolean {
   return t.startsWith('3') || t.includes('transfer') || t.includes('resgate') || t.includes('aplicaç');
 }
 
-function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved>, fazendaLookup: Map<string, string>, isDuplicate: boolean): ValidationResult {
+function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved>, fazendaLookup: Map<string, string>, isDuplicate: boolean, subcentrosOficiais?: Set<string>): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const diagnostics: FieldDiagnostic[] = [];
