@@ -661,6 +661,7 @@ const Index = () => {
           onBack={() => setActiveTab('financeiro_v2_hub')}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onIntensiveToggle={setFinV2Intensivo}
         />
       )}
       {activeTab === 'financeiro_v2_hub' && (
