@@ -833,10 +833,15 @@ export function useFinanceiro() {
         const existente = fornecedorMap.get(nomeNormalizado);
         if (existente) return existente;
 
+        // fazenda_id is required — use the first fazenda from the client
+        const primeiraFazendaId = fazendas[0]?.id;
+        if (!primeiraFazendaId) return null;
+
         const { data, error } = await supabase
           .from('financeiro_fornecedores')
           .insert({
             cliente_id: cid,
+            fazenda_id: primeiraFazendaId,
             nome: nomeOriginal,
             ativo: true,
           })
