@@ -609,6 +609,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
           contas={contasBancarias}
           fazendas={fazendas.map(f => ({ id: f.id, nome: f.nome, codigo: f.codigo }))}
           clienteId={clienteAtual?.id}
+          subcentrosOficiais={subcentrosOficiais}
           onConfirmar={async (linhasCorrigidas) => {
             setImportando(true);
             setResultado(null);
