@@ -592,13 +592,13 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   }, [linhas, candidateMap, fornecedorResolver, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
-    if (!candidateMap) return currentRows;
+    if (!candidateMap || !fornecedorResolver) return currentRows;
     return currentRows.map(r => {
-      const result = checkDuplicate(r, candidateMap);
+      const result = checkDuplicate(r, candidateMap, fornecedorResolver);
       const validation = validateRow(r, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais);
       return { ...r, _validation: validation, _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel, _existingMatch: result.match };
     });
-  }, [contaLookup, fazendaLookup, candidateMap, checkDuplicate, subcentrosOficiais]);
+  }, [contaLookup, fazendaLookup, candidateMap, fornecedorResolver, checkDuplicate, subcentrosOficiais]);
 
   const contaOptions = useMemo(() => contas.map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta })).filter(c => !!c.value), [contas]);
   const fazendaOptions = useMemo(() => fazendas.map(f => ({ value: f.codigo || f.id, label: `${f.codigo} — ${f.nome}` })).filter(f => !!f.value), [fazendas]);
@@ -667,9 +667,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         }
         return updated;
       });
-      if (!candidateMap) return nextRows;
+      if (!candidateMap || !fornecedorResolver) return nextRows;
       return nextRows.map(r => {
-        const result = checkDuplicate(r, candidateMap);
+        const result = checkDuplicate(r, candidateMap, fornecedorResolver);
         const validation = validateRow(r, contaLookup, fazendaLookup, result.isDuplicate);
         return { ...r, _validation: validation, _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel, _existingMatch: result.match };
       });
