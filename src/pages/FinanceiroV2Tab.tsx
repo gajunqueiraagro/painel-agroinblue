@@ -1057,9 +1057,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
               </div>
 
-              {/* DESKTOP: LINE 2 — Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Buttons */}
+              {/* DESKTOP: LINE 2 — Conta Origem | Conta Destino | Macro | Grupo | Centro | Subcentro + Action Buttons */}
               <div className="flex items-end gap-1.5">
-                <div className="grid grid-cols-[130px_130px_120px_120px_120px_120px] gap-1.5 items-end flex-1">
+                <div className="grid grid-cols-[120px_120px_110px_110px_110px_110px] gap-1 items-end flex-1 min-w-0">
                   <div>
                     <label className={lblCls}>Conta Origem</label>
                     <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
@@ -1120,11 +1120,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     />
                   </div>
                 </div>
+                <div className="flex items-center gap-1 shrink-0 pb-[1px]">
+                  {actionButtons}
+                </div>
               </div>
 
-              {/* DESKTOP: LINE 3 — Produto | Fornecedor + Actions + Summary */}
+              {/* DESKTOP: LINE 3 — Produto | Fornecedor + Limpar + Summary */}
               <div className="flex items-end gap-1.5">
-                <div className="grid grid-cols-[200px_300px] gap-1.5 items-end">
+                <div className="grid grid-cols-[180px_260px] gap-1.5 items-end">
                   <div>
                     <label className={lblCls}>Produto</label>
                     <Input
@@ -1146,7 +1149,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </div>
                 </div>
                 <div className="flex gap-2 items-center ml-auto pb-[1px]">
-                  {actionButtons}
                   <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                     <FilterX className="h-3 w-3" /> Limpar
                   </Button>
