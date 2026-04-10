@@ -459,6 +459,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     [hook.fornecedores],
   );
 
+  const fazendaNameMap = useMemo(
+    () => new Map(fazOperacionais.map(f => [f.id, f.nome])),
+    [fazOperacionais],
+  );
+
   // Derive atividade from escopo_negocio (official field from plano de contas)
   const getAtividade = (l: LancamentoV2): string => {
     const escopo = (l.escopo_negocio || '').toLowerCase().trim();
@@ -712,8 +717,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     atividadeFiltro !== '__all__',
   ].filter(Boolean).length;
 
+  const [fullscreenDialog, setFullscreenDialog] = useState(false);
+
   return (
-    <div className="space-y-1 pb-20" style={{ backgroundColor: '#F3F6FA' }}>
+    <div className="space-y-1 pb-20 relative" style={{ backgroundColor: '#F3F6FA' }}>
+      {/* Sticky vertical action buttons — right side */}
+      <div className="fixed right-3 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1.5">
+        {!mesFechadoAtivo && (
+          <Button size="sm" onClick={() => { setEditingLanc(null); setFullscreenDialog(true); }} className="h-8 w-8 p-0 bg-[#E7C873] text-foreground hover:bg-[#D9B95F] shadow-lg" title="Novo Lançamento">
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
+        <FinanceiroV2ExportMenu
+          lancamentos={sortedLancamentos}
+          fornecedores={hook.fornecedores}
+          ano={ano}
+          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+          totalCount={totalLancamentosFiltrados}
+        />
+        {onBack && (
+          <Button size="sm" variant="outline" onClick={onBack} className="h-8 w-8 p-0 shadow-lg bg-background" title="Voltar">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         <CardContent className="p-2 space-y-1">
@@ -927,16 +954,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                     fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
                     totalCount={totalLancamentosFiltrados}
                   />
-                  <Button
-                    size="sm"
-                    variant={mode === 'rapido' ? 'default' : 'outline'}
-                    onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                    className="h-6 text-[9px] gap-0.5 px-1.5"
-                  >
-                    {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                  </Button>
                   {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={openNew} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
+                    <Button size="sm" onClick={() => { setEditingLanc(null); setFullscreenDialog(true); }} className="h-6 text-[9px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
                       <Plus className="h-3 w-3" /> Novo
                     </Button>
                   )}
@@ -1099,35 +1118,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   </div>
                 </div>
                 <div className="flex gap-1 items-end pb-[1px]">
-                  {onBack && (
-                    <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
-                      <ChevronLeft className="h-3 w-3" /> Voltar
-                    </Button>
-                  )}
                   <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                     <FilterX className="h-3 w-3" /> Limpar
                   </Button>
-                  <FinanceiroV2ExportMenu
-                    lancamentos={sortedLancamentos}
-                    fornecedores={hook.fornecedores}
-                    ano={ano}
-                    fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-                    totalCount={totalLancamentosFiltrados}
-                  />
-                  <Button
-                    size="sm"
-                    variant={mode === 'rapido' ? 'default' : 'outline'}
-                    onClick={() => setMode(mode === 'rapido' ? 'list' : 'rapido')}
-                    className="h-6 text-[10px] gap-0.5 px-2"
-                  >
-                    {mode === 'rapido' ? <List className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                    {mode === 'rapido' ? 'Lista' : 'Rápido'}
-                  </Button>
-                  {mode === 'list' && !mesFechadoAtivo && (
-                    <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-2 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]">
-                      <Plus className="h-3 w-3" /> Novo
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -1207,15 +1200,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 28 }} />
-                <col style={{ width: 62 }} />
-                <col style={{ width: 62 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 60 }} />
                 <col />
-                <col style={{ width: 200 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 110 }} />
+                <col style={{ width: 140 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 100 }} />
                 <col style={{ width: 90 }} />
-                <col style={{ width: 68 }} />
-                <col style={{ width: 40 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 58 }} />
+                <col style={{ width: 36 }} />
               </colgroup>
               <thead className="[&_tr]:border-b sticky top-0 z-20 bg-primary">
                 <tr className="border-b !h-auto">
@@ -1226,7 +1221,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[90px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto<SortIndicator field="pgto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Fazenda</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Doc.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
@@ -1236,7 +1233,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
               <tbody className="[&_tr:last-child]:border-0">
                 {totalLancamentosFiltrados === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={10} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={12} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -1262,12 +1259,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
-                        <td className={`text-right font-semibold whitespace-nowrap px-2 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
+                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
+                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        <td className="truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaNameMap.get(l.fazenda_id) || '-'}</td>
+                        <td className={`text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
                         <td className="font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatNF(l)}>{formatNF(l)}</td>
-                        <td className={`text-center px-1 py-1 align-middle text-[12px] leading-tight ${stColor}`}>{stLabel}</td>
+                        <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
@@ -1320,6 +1319,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         fornecedores={hook.fornecedores}
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
+      />
+
+      {/* Fullscreen dialog for new lancamento */}
+      <LancamentoV2Dialog
+        open={fullscreenDialog}
+        onClose={() => { setFullscreenDialog(false); setEditingLanc(null); }}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        lancamento={editingLanc}
+        fazendas={fazendas}
+        contas={hook.contasBancarias}
+        classificacoes={hook.classificacoes}
+        fornecedores={hook.fornecedores}
+        defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
+        onCriarFornecedor={hook.criarFornecedor}
+        fullscreen
       />
 
       {/* Bulk delete confirmation */}
