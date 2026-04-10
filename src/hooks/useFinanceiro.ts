@@ -786,7 +786,7 @@ export function useFinanceiro() {
         while (true) {
           const { data: existing } = await supabase
             .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao, favorecido_id')
+            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
             .eq('fazenda_id', fid)
             .eq('cliente_id', cid)
             .eq('cancelado', false)
@@ -797,7 +797,8 @@ export function useFinanceiro() {
               cid, fid,
               e.data_pagamento, e.valor,
               e.tipo_operacao, e.conta_bancaria_id,
-              e.numero_documento, e.descricao, e.observacao,
+              e.numero_documento, e.descricao,
+            );
             );
             existingHashes.add(hash);
           }
@@ -815,7 +816,7 @@ export function useFinanceiro() {
           cid, l.fazendaId || '',
           l.dataPagamento || '', l.valor,
           l.tipoOperacao, l.contaBancariaId,
-          l.numeroDocumento, l.produto, l.obs,
+          l.numeroDocumento, l.produto,
           l.fornecedor,
         );
         if (existingHashes.has(hash)) {
