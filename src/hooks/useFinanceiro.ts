@@ -667,8 +667,9 @@ export function useFinanceiro() {
     _contas?: unknown[],
     resumoCaixa?: ResumoCaixaImportado[],
     tipoImportacao?: string,
-  ) => {
-    if (!user) return false;
+  ): Promise<ImportResultado> => {
+    const errosDetalhe: ImportErroDetalhe[] = [];
+    if (!user) return { ok: false, totalProcessado: 0, totalSalvo: 0, totalDuplicado: 0, totalErro: 0, erros: [{ motivo: 'Usuário não autenticado' }] };
 
     try {
       const primaryFazendaId = linhas[0]?.fazendaId
