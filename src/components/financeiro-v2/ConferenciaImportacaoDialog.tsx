@@ -111,10 +111,12 @@ function buildHashImportacao(
   clienteId: string, fazendaId: string, dataPagamento: string | null, valor: number,
   tipoOperacao: string | null, contaBancariaId: string | null,
   numeroDocumento?: string | null, descricao?: string | null, observacao?: string | null,
+  fornecedor?: string | null,
 ): string {
   return [clienteId, fazendaId, (dataPagamento || '').trim(), valor.toFixed(2),
     (tipoOperacao || '').trim().toLowerCase(), contaBancariaId || '',
     normalizeImportText(numeroDocumento), normalizeImportText(descricao), normalizeImportText(observacao),
+    normalizeImportText(fornecedor),
   ].join('|');
 }
 
