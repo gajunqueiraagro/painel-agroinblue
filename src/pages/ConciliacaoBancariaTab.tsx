@@ -303,12 +303,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               }
             }
             const accCalc = accSaldoInicial + accEntradas - accSaidas;
-            const accDiff = Math.abs((accSaldoRow.saldo_final || 0) - accCalc);
-            return accDiff < 0.01 ? 'realizado' as const : accDiff <= 100 ? 'atencao' as const : 'nao_conciliado' as const;
+            const accDiff = Math.round(((accSaldoRow.saldo_final || 0) - accCalc) * 100) / 100;
+            return accDiff === 0 ? 'realizado' as const : 'nao_conciliado' as const;
           });
           const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
-          const hasAtencao = perAccountStatuses.some(s => s === 'atencao');
-          status = hasNaoConc ? 'nao_conciliado' : hasAtencao ? 'atencao' : 'realizado';
+          status = hasNaoConc ? 'nao_conciliado' : 'realizado';
         }
       } else {
         status = getConciliacaoStatus(diferenca, saldoExtrato);
