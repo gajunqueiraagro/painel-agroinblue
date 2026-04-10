@@ -43,17 +43,14 @@ export function SearchableSelect({
     return options.filter(o => o.label.toLowerCase().includes(q));
   }, [options, search]);
 
-  // Build full selectable list: [allValue, ...filtered]
   const selectableItems = useMemo(() => {
     return [{ value: allValue, label: allLabel }, ...filtered];
   }, [filtered, allValue, allLabel]);
 
-  // Reset highlight when filtered list changes
   useEffect(() => {
-    setHighlightIdx(filtered.length > 0 ? 1 : 0); // default to first real item
+    setHighlightIdx(filtered.length > 0 ? 1 : 0);
   }, [filtered]);
 
-  // Scroll highlighted item into view
   useEffect(() => {
     const el = itemRefs.current[highlightIdx];
     if (el) {
@@ -80,7 +77,6 @@ export function SearchableSelect({
 
   const handleTriggerClick = () => {
     if (disabled) return;
-    // Determine if dropdown should open upward
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -128,7 +124,6 @@ export function SearchableSelect({
         setOpen(false);
         setSearch('');
       }
-      // Return focus to trigger so Tab continues naturally from there
       setTimeout(() => {
         const trigger = containerRef.current?.querySelector('button') as HTMLButtonElement | null;
         if (trigger) {
@@ -138,7 +133,6 @@ export function SearchableSelect({
     }
   };
 
-  // Reset refs array size
   itemRefs.current = [];
 
   return (
@@ -220,3 +214,4 @@ export function SearchableSelect({
       )}
     </div>
   );
+}
