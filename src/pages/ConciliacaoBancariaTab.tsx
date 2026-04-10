@@ -317,10 +317,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               if (isTransferenciaTipo(l.tipo_operacao || '')) {
                 if (l.conta_destino_id === conta.id) accEntradas += valor;
                 else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
-              } else if (isEntradaTipo(l.tipo_operacao)) {
-                if (l.conta_bancaria_id === conta.id) accEntradas += valor;
-              } else if (l.conta_bancaria_id === conta.id) {
-                accSaidas += valor;
+              } else {
+                // Non-transfer: determine direction by which field matches
+                if (l.conta_destino_id === conta.id) accEntradas += valor;
+                else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
               }
             }
 
