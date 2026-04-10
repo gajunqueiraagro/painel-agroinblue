@@ -3665,6 +3665,7 @@ export type Database = {
           lote_padrao: string | null
           nome: string
           observacoes: string | null
+          ordem_exibicao: number
           qualidade: number | null
           referencia_rebanho: string | null
           situacao: string
@@ -3682,6 +3683,7 @@ export type Database = {
           lote_padrao?: string | null
           nome: string
           observacoes?: string | null
+          ordem_exibicao?: number
           qualidade?: number | null
           referencia_rebanho?: string | null
           situacao?: string
@@ -3699,6 +3701,7 @@ export type Database = {
           lote_padrao?: string | null
           nome?: string
           observacoes?: string | null
+          ordem_exibicao?: number
           qualidade?: number | null
           referencia_rebanho?: string | null
           situacao?: string
