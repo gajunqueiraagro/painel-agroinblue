@@ -258,7 +258,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
       // Required: Tipo_Registro, AnoMes, Data_Ref, Conta, Tipo, Valor, Status, Fazenda
       let hasError = false;
       const dataRef = parseDate(col(r, colMap, 'Data_Ref'));
-      const status = str(col(r, colMap, 'Status'));
+      const status = (str(col(r, colMap, 'Status')) || '').toLowerCase().trim() || null;
       const contaDestino = str(col(r, colMap, 'Conta_Destino'));
 
       if (!anoMes) { erros.push({ linha: linhaNum, campo: 'AnoMes', mensagem: `${errPrefix} Competência inválida ou ausente`, aba: sheetName }); hasError = true; }
