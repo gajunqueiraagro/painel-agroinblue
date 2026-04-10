@@ -1010,7 +1010,7 @@ export function useFinanceiro() {
         favorecido_id?: string | null;
       }> = [];
 
-      for (const l of linhasNovas) {
+      for (const l of linhasResolvidas) {
         const tipoNorm = (l.tipoOperacao || '').toLowerCase();
         const ehTransf = tipoNorm.startsWith('3') || tipoNorm.includes('transfer') || tipoNorm.includes('resgate') || tipoNorm.includes('aplicaç');
         const clienteIdLinha = fazendas.find(f => f.id === l.fazendaId)?.cliente_id || cid;
