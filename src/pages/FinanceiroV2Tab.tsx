@@ -1118,21 +1118,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
                   </div>
                 </div>
                 <div className="flex gap-1 items-end pb-[1px]">
-                  {onBack && (
-                    <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
-                      <ChevronLeft className="h-3 w-3" /> Voltar
-                    </Button>
-                  )}
                   <Button size="sm" variant="ghost" onClick={handleLimparFiltros} className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground">
                     <FilterX className="h-3 w-3" /> Limpar
                   </Button>
-                  <FinanceiroV2ExportMenu
-                    lancamentos={sortedLancamentos}
-                    fornecedores={hook.fornecedores}
-                    ano={ano}
-                    fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-                    totalCount={totalLancamentosFiltrados}
-                  />
                 </div>
               </div>
 
