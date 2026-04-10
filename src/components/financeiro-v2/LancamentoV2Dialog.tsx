@@ -31,6 +31,7 @@ interface Props {
   fornecedores: FornecedorV2[];
   defaultFazendaId?: string;
   onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  fullscreen?: boolean;
 }
 
 const TIPOS_OPERACAO = [
@@ -150,7 +151,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, defaultFazendaId, onCriarFornecedor,
+  fornecedores, defaultFazendaId, onCriarFornecedor, fullscreen,
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
