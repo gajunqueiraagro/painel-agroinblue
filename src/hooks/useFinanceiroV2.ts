@@ -340,11 +340,25 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
   }, [fetchAllLancamentos]);
 
+  /** Derive escopo_negocio from grupo_custo in classificacoes (plano de contas) */
+  const deriveEscopoFromSubcentro = useCallback((subcentroValue: string | undefined | null): string | null => {
+    if (!subcentroValue) return null;
+    const cls = classificacoes.find(c => c.subcentro === subcentroValue);
+    if (!cls) return null;
+    const grupo = (cls.grupo_custo || '').toLowerCase();
+    if (grupo.includes('pecuári') || grupo.includes('pecuaria')) return 'pecuaria';
+    if (grupo.includes('agri')) return 'agricultura';
+    return null;
+  }, [classificacoes]);
+
   const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
     const sinal = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+
+    // Auto-derive escopo_negocio from plano de contas if not explicitly set
+    const escopo = form.escopo_negocio || deriveEscopoFromSubcentro(form.subcentro) || null;
 
     return {
       cliente_id: clienteId!,
@@ -361,7 +375,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       macro_custo: form.macro_custo || null,
       centro_custo: form.centro_custo || null,
       subcentro: form.subcentro || null,
-      escopo_negocio: form.escopo_negocio || null,
+      escopo_negocio: escopo,
       observacao: form.observacao || null,
       numero_documento: form.numero_documento || null,
       tipo_documento: form.tipo_documento || null,
