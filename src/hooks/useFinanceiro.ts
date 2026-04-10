@@ -824,6 +824,7 @@ export function useFinanceiro() {
 
       const resolveOrCreateFornecedorId = async (
         nome: string | null,
+        fazendaIdLinha: string | null,
       ): Promise<string | null> => {
         if (!nome || !nome.trim()) return null;
         const nomeOriginal = nome.trim();
@@ -833,15 +834,15 @@ export function useFinanceiro() {
         const existente = fornecedorMap.get(nomeNormalizado);
         if (existente) return existente;
 
-        // fazenda_id is required — use the first fazenda from the client
-        const primeiraFazendaId = fazendas[0]?.id;
-        if (!primeiraFazendaId) return null;
+        // fazenda_id obrigatório — usar a fazenda do lançamento que originou a criação
+        const fazIdParaCriar = fazendaIdLinha || fazendas[0]?.id;
+        if (!fazIdParaCriar) return null;
 
         const { data, error } = await supabase
           .from('financeiro_fornecedores')
           .insert({
             cliente_id: cid,
-            fazenda_id: primeiraFazendaId,
+            fazenda_id: fazIdParaCriar,
             nome: nomeOriginal,
             ativo: true,
           })
@@ -905,7 +906,7 @@ export function useFinanceiro() {
           escopo_negocio: l.escopoNegocio,
           numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
-          favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor),
+          favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor, l.fazendaId),
           created_by: user.id,
         };
 
