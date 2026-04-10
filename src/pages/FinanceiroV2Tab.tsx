@@ -459,20 +459,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     [hook.fornecedores],
   );
 
-  // Derive atividade from escopo_negocio (official field) with subcentro fallback
+  // Derive atividade from escopo_negocio (official field from plano de contas)
   const getAtividade = (l: LancamentoV2): string => {
-    // 1. Primary: use escopo_negocio from DB (set by plano de contas)
     const escopo = (l.escopo_negocio || '').toLowerCase().trim();
     if (escopo === 'pecuaria' || escopo === 'pecuária') return 'pecuaria';
     if (escopo === 'agricultura' || escopo === 'agri') return 'agricultura';
-    // 2. Fallback: derive from subcentro keywords (legacy/missing escopo)
-    const sub = (l.subcentro || '').toUpperCase();
-    if (sub.includes('PECUÁRI') || sub.includes('PECUARIA') || sub.startsWith('PEC/') || sub.startsWith('PEC ')) return 'pecuaria';
-    if (sub.includes('AGRI') || sub.startsWith('AGRI/') || sub.startsWith('AGRI ')) return 'agricultura';
-    // 3. Second fallback: derive from centro_custo
-    const centro = (l.centro_custo || '').toUpperCase();
-    if (centro.includes('PECUÁRI') || centro.includes('PECUARIA')) return 'pecuaria';
-    if (centro.includes('AGRI')) return 'agricultura';
+    if (escopo === 'administrativo') return 'administrativo';
     return 'outros';
   };
 
@@ -508,12 +500,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
     if (atividadeFiltro !== '__all__') {
       items = items.filter(l => getAtividade(l) === atividadeFiltro);
     }
-    // Client-side grupo_custo filter (not a DB column on lancamentos)
+    // grupo_custo now is a DB column — filter directly
     if (grupoFiltro !== '__all__') {
-      items = items.filter(l => {
-        const grupo = centroToGrupo.get(l.centro_custo || '');
-        return grupo === grupoFiltro;
-      });
+      items = items.filter(l => (l as any).grupo_custo === grupoFiltro);
     }
     return items;
   }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro, centroToGrupo]);
