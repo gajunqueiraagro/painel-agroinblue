@@ -123,6 +123,7 @@ const TITLES: Record<TabId, string> = {
   fin_v2_plano: 'Plano de Contas',
   fin_v2_saldos: 'Saldos Mensais',
   contratos: 'Contratos / Recorrências',
+  fin_v2_dividendos: 'Dividendos',
   conciliacao_bancaria: 'Conciliação Bancária',
   auditoria_duplicidade: 'Auditoria de Duplicidade',
   painel_consultor: 'Painel do Consultor',
