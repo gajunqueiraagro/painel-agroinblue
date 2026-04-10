@@ -305,7 +305,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     if (!clienteId || !existingH) return false;
     const contaKey = normalizeImportText(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
-    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.obs);
+    const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.obs, row.fornecedor);
     // Only check against existing DB records — never deduplicate within the same import file
     return existingH.has(hash);
   }, [clienteId, contaLookup]);
