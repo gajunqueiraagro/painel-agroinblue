@@ -104,6 +104,70 @@ function norm(value: string | null | undefined): string {
   return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/** Normalize supplier name same way as DB trigger (upper, no accents, no special chars) */
+function normFornecedor(value: string): string {
+  return value
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Fuzzy supplier resolver — mirrors the import logic in useFinanceiro.ts */
+function buildFornecedorResolver(
+  fornecedores: Array<{ id: string; nome: string; nome_normalizado: string | null }>,
+): (nomeRaw: string | null) => string | null {
+  const exactMap = new Map<string, string>();
+  const entries: Array<{ id: string; normalizado: string }> = [];
+  for (const f of fornecedores) {
+    const n = f.nome ? normFornecedor(f.nome) : '';
+    if (f.nome_normalizado) exactMap.set(f.nome_normalizado, f.id);
+    if (n) exactMap.set(n, f.id);
+    if (f.nome) exactMap.set(f.nome.toUpperCase().trim(), f.id);
+    if (n) entries.push({ id: f.id, normalizado: n });
+  }
+
+  const extractWords = (s: string): string[] => s.split(/\s+/).filter(w => w.length >= 3);
+
+  return (nomeRaw: string | null): string | null => {
+    if (!nomeRaw || !nomeRaw.trim()) return null;
+    const nomeNorm = normFornecedor(nomeRaw.trim());
+    if (!nomeNorm) return null;
+
+    // 1. Exact
+    const exact = exactMap.get(nomeNorm) || exactMap.get(nomeRaw.trim().toUpperCase());
+    if (exact) return exact;
+
+    // 2. Substring containment
+    for (const e of entries) {
+      if (e.normalizado.includes(nomeNorm) || nomeNorm.includes(e.normalizado)) return e.id;
+    }
+
+    // 3. Primary keyword
+    const inputWords = extractWords(nomeNorm);
+    const primaryKeyword = inputWords.find(w => w.length >= 4);
+    if (primaryKeyword) {
+      const cands = entries.filter(e => e.normalizado.includes(primaryKeyword));
+      if (cands.length === 1) return cands[0].id;
+    }
+
+    // 4. Jaccard overlap
+    let best: { id: string; score: number } | null = null;
+    for (const e of entries) {
+      const ew = extractWords(e.normalizado);
+      if (ew.length === 0) continue;
+      const shared = inputWords.filter(w => ew.some(x => x.includes(w) || w.includes(x)));
+      const score = shared.length / Math.max(inputWords.length, ew.length);
+      if (score >= 0.5 && (!best || score > best.score)) best = { id: e.id, score };
+    }
+    if (best) return best.id;
+
+    return null;
+  };
+}
+
 interface ContaResolved { label: string; id: string; }
 
 function buildContaLookup(contas: ContaOption[]): Map<string, ContaResolved> {
@@ -334,6 +398,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   // Phase 1 data: Map<candidateKey, ExistingRecord[]>
   const [candidateMap, setCandidateMap] = useState<Map<string, ExistingRecord[]> | null>(null);
+  const [fornecedorResolver, setFornecedorResolver] = useState<((nome: string | null) => string | null) | null>(null);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
@@ -346,23 +411,29 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
       setLoadingCandidates(true);
       const map = new Map<string, ExistingRecord[]>();
 
-      // Build fornecedor id→name lookup
-      const fornecedorMap = new Map<string, string>();
+      // Build fornecedor lookup (id→name AND resolver for fuzzy matching)
+      const fornecedorIdToName = new Map<string, string>();
+      const fornecedorRecords: Array<{ id: string; nome: string; nome_normalizado: string | null }> = [];
       {
         let from = 0;
         const batchSize = 1000;
         while (!cancelled) {
           const { data } = await supabase
             .from('financeiro_fornecedores')
-            .select('id, nome')
+            .select('id, nome, nome_normalizado')
             .eq('cliente_id', clienteId)
             .range(from, from + batchSize - 1);
           if (!data || data.length === 0) break;
-          for (const f of data) fornecedorMap.set(f.id, f.nome);
+          for (const f of data) {
+            fornecedorIdToName.set(f.id, f.nome);
+            fornecedorRecords.push({ id: f.id, nome: f.nome, nome_normalizado: f.nome_normalizado });
+          }
           if (data.length < batchSize) break;
           from += batchSize;
         }
       }
+
+      const resolver = buildFornecedorResolver(fornecedorRecords);
 
       // Get unique fazenda+anoMes combos from import
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
@@ -389,7 +460,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                 descricao: e.descricao,
                 numero_documento: e.numero_documento,
                 favorecido_id: e.favorecido_id,
-                favorecido_nome: e.favorecido_id ? (fornecedorMap.get(e.favorecido_id) || null) : null,
+                favorecido_nome: e.favorecido_id ? (fornecedorIdToName.get(e.favorecido_id) || null) : null,
                 subcentro: e.subcentro,
                 data_pagamento: e.data_pagamento,
                 valor: e.valor,
@@ -407,68 +478,85 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
           }
         }
       }
-      if (!cancelled) { setCandidateMap(map); setLoadingCandidates(false); }
+      if (!cancelled) {
+        setCandidateMap(map);
+        setFornecedorResolver(() => resolver);
+        setLoadingCandidates(false);
+      }
     };
     fetchCandidates();
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  // Phase 2: Check duplicate for a single row
-  const checkDuplicate = useCallback((row: LinhaImportada, cMap: Map<string, ExistingRecord[]>): { isDuplicate: boolean; nivel: NivelDuplicidade | null; match: ExistingRecord | null } => {
-    if (!clienteId || !cMap || !row.fazendaId || !row.anoMes) return { isDuplicate: false, nivel: null, match: null };
+  /**
+   * Phase 2: Check duplicate for a single row.
+   * Uses the RESOLVED fornecedor ID (same fuzzy logic as import) to find candidates.
+   */
+  const checkDuplicate = useCallback((
+    row: LinhaImportada,
+    cMap: Map<string, ExistingRecord[]>,
+    resolveFornecedor: (nome: string | null) => string | null,
+  ): { isDuplicate: boolean; nivel: NivelDuplicidade | null; match: ExistingRecord | null; resolvedFornecedorId: string | null } => {
+    if (!clienteId || !cMap || !row.fazendaId || !row.anoMes) return { isDuplicate: false, nivel: null, match: null, resolvedFornecedorId: null };
 
-    // Resolve fornecedor ID from the row's resolved fornecedor
-    // The row may have fornecedorId set by the import parser, or we need to look up by name
-    // We search candidates by the fornecedor that was resolved during import
     const contaKey = norm(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
 
-    // Try to find candidates: first by exact fornecedor match
-    // We need to search across all fornecedor IDs since we don't have the resolved ID here
-    // Strategy: iterate candidate keys that match fazenda+anoMes, compare fornecedor by name
-    const prefix = `${row.fazendaId}|${row.anoMes}|`;
-    
+    // Resolve the imported supplier name to a DB fornecedor ID using the SAME fuzzy logic as import
+    const resolvedId = resolveFornecedor(row.fornecedor);
+
+    // Look up candidates by the resolved fornecedor ID
+    const key = buildCandidateKey(row.fazendaId, row.anoMes, resolvedId);
+    const candidates = cMap.get(key) || [];
+
     let bestNivel: NivelDuplicidade = 'LEGITIMO';
     let bestMatch: ExistingRecord | null = null;
     const rank = { D1: 4, D2: 3, D3: 2, LEGITIMO: 0 } as const;
 
-    for (const [key, candidates] of cMap.entries()) {
-      if (!key.startsWith(prefix)) continue;
-      
-      // Check if fornecedor matches (by name comparison)
-      const candidateFornecedorNome = candidates[0]?.favorecido_nome;
-      const importFornecedor = norm(row.fornecedor);
-      const existingFornecedor = norm(candidateFornecedorNome);
-      
-      // Skip if fornecedor doesn't match at all
-      if (importFornecedor && existingFornecedor && importFornecedor !== existingFornecedor) continue;
-      // If both are empty, they match
-      if (!importFornecedor && !existingFornecedor) { /* match */ }
-      // If one is empty and the other isn't, still consider as candidate but with penalty
-      
-      for (const ex of candidates) {
-        const nivel = classificarNivel(
-          {
-            dataPagamento: row.dataPagamento,
-            valor: row.valor,
-            tipoOperacao: row.tipoOperacao,
-            contaBancariaId: contaR?.id || null,
-            descricao: row.produto || row.subcentro,
-            numeroDocumento: row.numeroDocumento,
-            subcentro: row.subcentro,
-          },
-          ex,
-        );
-        if (rank[nivel] > rank[bestNivel]) {
-          bestNivel = nivel;
-          bestMatch = ex;
-        }
-        if (bestNivel === 'D1') break;
+    for (const ex of candidates) {
+      const nivel = classificarNivel(
+        {
+          dataPagamento: row.dataPagamento,
+          valor: row.valor,
+          tipoOperacao: row.tipoOperacao,
+          contaBancariaId: contaR?.id || null,
+          descricao: row.produto || row.subcentro,
+          numeroDocumento: row.numeroDocumento,
+          subcentro: row.subcentro,
+        },
+        ex,
+      );
+      if (rank[nivel] > rank[bestNivel]) {
+        bestNivel = nivel;
+        bestMatch = ex;
       }
       if (bestNivel === 'D1') break;
     }
 
-    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel === 'LEGITIMO' ? null : bestNivel, match: bestMatch };
+    // If no resolved ID but supplier text exists, also scan by name containment as fallback
+    if (bestNivel === 'LEGITIMO' && row.fornecedor && !resolvedId) {
+      const prefix = `${row.fazendaId}|${row.anoMes}|`;
+      for (const [k, cands] of cMap.entries()) {
+        if (!k.startsWith(prefix)) continue;
+        const candName = cands[0]?.favorecido_nome;
+        if (!candName) continue;
+        const importNorm = normFornecedor(row.fornecedor);
+        const existNorm = normFornecedor(candName);
+        if (!importNorm || !existNorm) continue;
+        if (!(existNorm.includes(importNorm) || importNorm.includes(existNorm))) continue;
+        for (const ex of cands) {
+          const nivel = classificarNivel(
+            { dataPagamento: row.dataPagamento, valor: row.valor, tipoOperacao: row.tipoOperacao, contaBancariaId: contaR?.id || null, descricao: row.produto || row.subcentro, numeroDocumento: row.numeroDocumento, subcentro: row.subcentro },
+            ex,
+          );
+          if (rank[nivel] > rank[bestNivel]) { bestNivel = nivel; bestMatch = ex; }
+          if (bestNivel === 'D1') break;
+        }
+        if (bestNivel === 'D1') break;
+      }
+    }
+
+    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel === 'LEGITIMO' ? null : bestNivel, match: bestMatch, resolvedFornecedorId: resolvedId };
   }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -479,24 +567,29 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!candidateMap) return;
+    if (!candidateMap || !fornecedorResolver) return;
     setRows(linhas.map(l => {
-      const result = checkDuplicate(l, candidateMap);
+      const result = checkDuplicate(l, candidateMap, fornecedorResolver);
       const validation = validateRow(l, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais);
       const autoSelect = validation.status === 'error' ? false
         : result.nivel === 'D1' ? false
         : true;
+      const resolvedFornecedorNome = result.resolvedFornecedorId && result.match?.favorecido_nome
+        ? result.match.favorecido_nome : null;
       return {
         ...l,
         _validation: validation,
-        _resolved: resolveInfo(l, contaLookup, fazendaLookup),
+        _resolved: {
+          ...resolveInfo(l, contaLookup, fazendaLookup),
+          fornecedorResolvido: resolvedFornecedorNome || l.fornecedor || null,
+        },
         _isDuplicate: result.isDuplicate,
         _nivelDuplicidade: result.nivel,
         _selected: autoSelect,
         _existingMatch: result.match,
       };
     }));
-  }, [linhas, candidateMap, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
+  }, [linhas, candidateMap, fornecedorResolver, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
     if (!candidateMap) return currentRows;
