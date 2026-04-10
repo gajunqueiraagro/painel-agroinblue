@@ -297,6 +297,7 @@ const Index = () => {
       setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
+    if (tab !== 'financeiro_v2') setFinV2Intensivo(false);
     if (tab === 'conferencia_gmd' || tab === 'mapa_pastos') {
       gmdOriginRef.current = activeTab as TabId;
     }
