@@ -773,9 +773,34 @@ export function useFinanceiro() {
         }
       }
 
-      // Filtrar duplicados
+      // Filtrar duplicados — com log persistente
       const linhasNovas: LinhaImportadaResolvida[] = [];
+      const linhasDuplicadas: LinhaImportadaResolvida[] = [];
       let duplicados = 0;
+
+      // Build a map from hash → existing DB record ID for logging
+      const hashToExistingId = new Map<string, string>();
+      for (const fid of fazendaIds) {
+        let from2 = 0;
+        const bSize = 1000;
+        while (true) {
+          const { data: ex2 } = await supabase
+            .from('financeiro_lancamentos_v2')
+            .select('id, data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, observacao')
+            .eq('fazenda_id', fid)
+            .eq('cliente_id', cid)
+            .eq('cancelado', false)
+            .range(from2, from2 + bSize - 1);
+          if (!ex2 || ex2.length === 0) break;
+          for (const e of ex2) {
+            const h = buildHashImportacao(cid, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id, e.numero_documento, e.descricao, e.observacao);
+            if (!hashToExistingId.has(h)) hashToExistingId.set(h, e.id);
+          }
+          if (ex2.length < bSize) break;
+          from2 += bSize;
+        }
+      }
+
       for (const l of linhasResolvidas) {
         const hash = buildHashImportacao(
           cid, l.fazendaId || '',
@@ -785,6 +810,7 @@ export function useFinanceiro() {
         );
         if (existingHashes.has(hash)) {
           duplicados++;
+          linhasDuplicadas.push({ ...l, _hash: hash } as any);
         } else {
           linhasNovas.push(l);
           existingHashes.add(hash);
@@ -793,6 +819,39 @@ export function useFinanceiro() {
 
       if (linhasNovas.length === 0 && duplicados > 0) {
         toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
+      }
+
+      // Log duplicates persistently
+      if (linhasDuplicadas.length > 0) {
+        const dupLogs = linhasDuplicadas.map((l: any) => ({
+          cliente_id: cid,
+          fazenda_id: l.fazendaId || primaryFazendaId,
+          nome_arquivo: nomeArquivo,
+          linha_excel: l.linha || null,
+          data_competencia: l.dataPagamento || (l.anoMes + '-01'),
+          data_pagamento: l.dataPagamento || null,
+          ano_mes: l.anoMes,
+          valor: Math.abs(l.valor),
+          tipo_operacao: l.tipoOperacao,
+          descricao: l.produto,
+          fornecedor: l.fornecedor,
+          numero_documento: l.numeroDocumento,
+          observacao: l.obs,
+          conta_bancaria_id: l.contaBancariaId,
+          conta_nome: l.contaOrigem,
+          subcentro: l.subcentro,
+          macro_custo: l.macroCusto,
+          centro_custo: l.centroCusto,
+          hash_calculado: l._hash,
+          lancamento_existente_id: hashToExistingId.get(l._hash) || null,
+        }));
+        // Insert in batches of 50
+        for (let i = 0; i < dupLogs.length; i += 50) {
+          await supabase.from('financeiro_duplicidade_log').insert(dupLogs.slice(i, i + 50));
+        }
+      }
+
+      if (linhasNovas.length === 0 && duplicados > 0) {
         return { ok: true, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: duplicados, totalErro: 0, erros: [] };
       }
 
