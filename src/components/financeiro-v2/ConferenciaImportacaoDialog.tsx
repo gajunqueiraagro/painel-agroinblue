@@ -251,7 +251,7 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
   fornecedor_vazio: 'Fornecedor vazio',
   valor_negativo: 'Valor negativo',
   conta_nao_encontrada: 'Conta não encontrada',
-  subcentro_nao_encontrado: 'Subcentro vazio',
+  subcentro_nao_encontrado: 'Subcentro inválido/vazio',
   fazenda_nao_encontrada: 'Fazenda não encontrada',
 };
 
