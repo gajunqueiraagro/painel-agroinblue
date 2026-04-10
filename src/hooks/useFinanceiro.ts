@@ -642,6 +642,7 @@ export function useFinanceiro() {
     tipoOperacao: string | null, contaBancariaId: string | null,
     numeroDocumento?: string | null,
     descricao?: string | null, observacao?: string | null,
+    fornecedor?: string | null,
   ): string => {
     const parts = [
       clienteId,
@@ -653,6 +654,7 @@ export function useFinanceiro() {
       normalizeImportText(numeroDocumento),
       normalizeImportText(descricao),
       normalizeImportText(observacao),
+      normalizeImportText(fornecedor),
     ];
     return parts.join('|');
   };
