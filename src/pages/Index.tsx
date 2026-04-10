@@ -154,6 +154,7 @@ const Index = () => {
   const [movFiltroStatus, setMovFiltroStatus] = useState<string | undefined>(undefined);
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
+  const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -398,8 +399,9 @@ const Index = () => {
   const fazendaNome = isGlobal ? '🌐 Global' : (fazendaAtual?.nome || '');
 
   return (
-    <div className="h-screen flex flex-col bg-background max-w-[1280px] mx-auto px-4 md:px-6 lg:px-8">
+    <div className={cn("h-screen flex flex-col bg-background max-w-[1280px] mx-auto", finV2Intensivo ? "px-1" : "px-4 md:px-6 lg:px-8")}>
       <SyncStatus online={online} pendingCount={pendingCount} syncing={syncing} onSync={syncQueue} />
+      {!finV2Intensivo && (
       <Header
         title={TITLES[activeTab]}
         clienteNome={clienteNomeHeader}
