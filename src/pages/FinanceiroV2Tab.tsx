@@ -1312,7 +1312,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingLanc(null); }}
         onSave={handleSave}
-        onDelete={editingLanc?.lote_importacao_id ? undefined : handleDelete}
+        onDelete={handleDelete}
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}

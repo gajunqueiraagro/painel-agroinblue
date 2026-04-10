@@ -467,67 +467,54 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   }, [clienteId, user]);
 
   const excluirLancamento = useCallback(async (id: string) => {
-    const { data: row, error: loadError } = await supabase
+    // Universal soft delete: mark as cancelled regardless of origin
+    const { error } = await supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, lote_importacao_id, origem_lancamento')
-      .eq('id', id)
-      .single();
+      .update({
+        cancelado: true,
+        cancelado_em: new Date().toISOString(),
+        cancelado_por: user?.id ?? null,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id ?? null,
+      })
+      .eq('id', id);
 
-    if (loadError) {
-      toast.error('Erro ao validar lançamento');
-      return false;
-    }
-
-    if (row?.lote_importacao_id) {
-      toast.error('Lançamentos importados no V2 não podem ser apagados fisicamente.');
-      return false;
-    }
-
-    const { error } = await supabase.from('financeiro_lancamentos_v2').delete().eq('id', id);
     if (error) {
       toast.error('Erro ao excluir lançamento');
       return false;
     }
-    toast.success('Lançamento excluído');
+    toast.success('Lançamento excluído com sucesso');
     return true;
-  }, []);
+  }, [user]);
 
   const excluirLancamentosEmLote = useCallback(async (ids: string[]): Promise<{ excluidos: number; bloqueados: string[] }> => {
     if (ids.length === 0) return { excluidos: 0, bloqueados: [] };
 
-    // Fetch all to check which can be deleted
-    const { data: rows, error: loadError } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('id, lote_importacao_id, origem_lancamento, descricao')
-      .in('id', ids);
-
-    if (loadError || !rows) {
-      toast.error('Erro ao validar lançamentos para exclusão');
-      return { excluidos: 0, bloqueados: [] };
-    }
-
-    const bloqueados = rows.filter(r => !!r.lote_importacao_id).map(r => r.id);
-    const deletaveis = rows.filter(r => !r.lote_importacao_id).map(r => r.id);
-
-    if (deletaveis.length === 0) {
-      return { excluidos: 0, bloqueados };
-    }
-
-    // Delete in batches of 100
+    // Universal soft delete in batches of 100 - no origin-based blocking
     let totalExcluidos = 0;
-    for (let i = 0; i < deletaveis.length; i += 100) {
-      const batch = deletaveis.slice(i, i + 100);
-      const { error } = await supabase.from('financeiro_lancamentos_v2').delete().in('id', batch);
+    for (let i = 0; i < ids.length; i += 100) {
+      const batch = ids.slice(i, i + 100);
+      const { error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .update({
+          cancelado: true,
+          cancelado_em: new Date().toISOString(),
+          cancelado_por: user?.id ?? null,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id ?? null,
+        })
+        .in('id', batch);
+
       if (error) {
-        console.error('[FinV2] batch delete error', error);
+        console.error('[FinV2] batch soft-delete error', error);
         toast.error(`Erro ao excluir lote (${i}): ${error.message}`);
         break;
       }
       totalExcluidos += batch.length;
     }
 
-    return { excluidos: totalExcluidos, bloqueados };
-  }, []);
+    return { excluidos: totalExcluidos, bloqueados: [] };
+  }, [user]);
 
   /** Cancel (soft-delete) imported "realizado" lancamentos matching filters */
   const cancelarRealizadosImportados = useCallback(async (filtros: FiltrosV2): Promise<{ cancelados: number }> => {
