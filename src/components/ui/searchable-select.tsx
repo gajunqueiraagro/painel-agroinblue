@@ -158,7 +158,7 @@ export function SearchableSelect({
             setSearch(e.key);
             handleTriggerClick();
           }
-        }
+        }}
         disabled={disabled}
         className={cn(
           'flex h-6 w-full items-center justify-between rounded-md border border-input bg-background px-1.5 text-[10px] ring-offset-background',
