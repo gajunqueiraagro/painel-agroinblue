@@ -740,6 +740,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             <ChevronLeft className="h-4 w-4" />
           </Button>
         )}
+        <Button
+          size="sm"
+          variant={modoIntensivo ? "default" : "outline"}
+          onClick={() => setModoIntensivo(v => !v)}
+          className={cn("h-8 w-8 p-0 shadow-lg", modoIntensivo ? "bg-primary text-primary-foreground" : "bg-background")}
+          title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
+        >
+          {modoIntensivo ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
       </div>
       {/* FILTERS */}
       <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
