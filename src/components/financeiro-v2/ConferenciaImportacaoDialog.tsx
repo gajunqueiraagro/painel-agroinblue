@@ -138,7 +138,17 @@ interface ExistingDiffRecord {
   produto: string | null;
 }
 
-/** Classify duplication level by comparing differentiators */
+/**
+ * Classify duplication level by comparing fingerprint differentiators.
+ *
+ * Collision key (nucleus): cliente_id + fazenda_id + data_pagamento + valor + tipo_operacao + conta_bancaria_id
+ * Fingerprint differentiators: fornecedor, descricao, numero_documento, subcentro
+ *
+ * All same → D1 (duplicado real)
+ * 1 diff (not doc) → D2 (suspeita forte)
+ * 1-2 diffs → D3 (suspeita fraca)
+ * 3+ diffs → LEGITIMO
+ */
 function classificarNivelConferencia(
   newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
   existing: ExistingDiffRecord,
@@ -146,16 +156,24 @@ function classificarNivelConferencia(
   let diffCount = 0;
   let docDiverge = false;
 
+  // 1. Fornecedor (obrigatório na decisão final)
+  const nForn = normalizeImportText(newRow.fornecedor);
+  const eForn = normalizeImportText(existing.favorecido_nome);
+  if (nForn !== eForn && (nForn || eForn)) diffCount++;
+
+  // 2. Descrição/Produto
   const nd = normalizeImportText(newRow.descricao);
   const ed = normalizeImportText(existing.descricao);
   if (nd !== ed && (nd || ed)) diffCount++;
 
+  // 3. Número do documento
   const nDoc = normalizeImportText(newRow.numeroDocumento);
   const eDoc = normalizeImportText(existing.numero_documento);
   if (nDoc && eDoc) {
     if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
   }
 
+  // 4. Subcentro (auxiliar)
   const nSub = normalizeImportText(newRow.subcentro);
   const eSub = normalizeImportText(existing.subcentro);
   if (nSub !== eSub && (nSub || eSub)) diffCount++;
