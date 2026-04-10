@@ -70,7 +70,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [detalhesLote, setDetalhesLote] = useState<{ total: number; periodos: string[]; fazendaIds: string[] } | null>(null);
   const [tipoImportacao, setTipoImportacao] = useState<string>('importacao_incremental');
   const [conferenciaOpen, setConferenciaOpen] = useState(false);
-
+  const [resultado, setResultado] = useState<ImportResultado | null>(null);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,10 +136,11 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
     if (linhasSemFazenda.length > 0 && preview.lancamentos.length > 0) return;
 
     setImportando(true);
+    setResultado(null);
     const errosBloqueantes = preview.erros.filter(e => e.campo !== 'Centro de Custo');
     const resumoComFazenda = preview.resumoCaixa.filter(r => r.fazendaId);
 
-    const ok = await onConfirmar(
+    const res = await onConfirmar(
       preview.nomeArquivo,
       linhasComFazenda,
       preview.totalLinhas,
@@ -149,7 +150,8 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
       resumoComFazenda,
       tipoImportacao,
     );
-    if (ok) setPreview(null);
+    setResultado(res);
+    if (res.ok && res.totalErro === 0) setPreview(null);
     setImportando(false);
   };
 
