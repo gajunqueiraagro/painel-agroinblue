@@ -748,7 +748,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       <Button
         size="sm"
         variant={modoIntensivo ? "default" : "outline"}
-        onClick={() => setModoIntensivo(v => !v)}
+        onClick={() => toggleIntensivo()}
         className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
         title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
       >
