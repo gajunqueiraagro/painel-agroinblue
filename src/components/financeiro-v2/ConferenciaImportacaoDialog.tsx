@@ -377,23 +377,23 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [bulkOpen, setBulkOpen] = useState(false);
 
   useEffect(() => {
-    if (!existingHashes) return;
+    if (!existingByNucleus) return;
     setRows(linhas.map(l => {
-      const isDup = checkDuplicate(l, linhas, existingHashes);
-      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      const result = checkDuplicate(l, linhas, existingByNucleus);
+      return { ...l, _validation: validateRow(l, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais), _resolved: resolveInfo(l, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
     }));
-  }, [linhas, existingHashes, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
+  }, [linhas, existingByNucleus, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const contaOptions = useMemo(() => contas.map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta })).filter(c => !!c.value), [contas]);
   const fazendaOptions = useMemo(() => fazendas.map(f => ({ value: f.codigo || f.id, label: `${f.codigo} — ${f.nome}` })).filter(f => !!f.value), [fazendas]);
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
-    if (!existingHashes) return currentRows;
+    if (!existingByNucleus) return currentRows;
     return currentRows.map(r => {
-      const isDup = checkDuplicate(r, currentRows, existingHashes);
-      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup, subcentrosOficiais), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
+      const result = checkDuplicate(r, currentRows, existingByNucleus);
+      return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
     });
-  }, [contaLookup, fazendaLookup, existingHashes, checkDuplicate, subcentrosOficiais]);
+  }, [contaLookup, fazendaLookup, existingByNucleus, checkDuplicate, subcentrosOficiais]);
 
   // Stats
   const stats = useMemo(() => {
@@ -445,10 +445,10 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         }
         return updated;
       });
-      if (!existingHashes) return nextRows;
+      if (!existingByNucleus) return nextRows;
       return nextRows.map(r => {
-        const isDup = checkDuplicate(r, nextRows, existingHashes);
-        return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, isDup), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: isDup };
+        const result = checkDuplicate(r, nextRows, existingByNucleus);
+        return { ...r, _validation: validateRow(r, contaLookup, fazendaLookup, result.isDuplicate), _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel };
       });
     });
   };
@@ -490,7 +490,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
 
   const hasBlockingErrors = stats.error > 0;
   const importableCount = stats.valid + stats.warning + stats.duplicated;
-  const isLoading = loadingHashes || existingHashes === null;
+  const isLoading = loadingHashes || existingByNucleus === null;
 
   // Excel headers to show (filter out Tipo_Registro which is always LANCAMENTO at this point)
   const visibleExcelHeaders = useMemo(() => excelHeaders.filter(h => h && h !== ''), [excelHeaders]);
