@@ -678,7 +678,7 @@ export function useFinanceiro() {
         || fazendas.find(f => f.id !== '__global__')?.id;
       if (!primaryFazendaId) {
         toast.error('Nenhum registro com fazenda válida');
-        return false;
+        return { ok: false, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: 0, totalErro: linhas.length, erros: [{ motivo: 'Nenhum registro com fazenda válida' }] };
       }
 
       const cid = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
@@ -729,11 +729,14 @@ export function useFinanceiro() {
       }
 
       if (linhasBloqueadas.length > 0) {
-        const detalhes = linhasBloqueadas.slice(0, 5).map(b =>
-          `Linha ${b.linha.linha}: ${b.motivo} (valor: ${b.linha.valor})`
-        ).join('\n');
-        toast.error(`${linhasBloqueadas.length} transferência(s) bloqueada(s):\n${detalhes}`, { duration: 10000 });
-        return false;
+        const bloqErros: ImportErroDetalhe[] = linhasBloqueadas.map(b => ({
+          linha: b.linha.linha,
+          descricao: b.linha.produto || undefined,
+          valor: b.linha.valor,
+          fornecedor: b.linha.fornecedor || undefined,
+          motivo: b.motivo,
+        }));
+        return { ok: false, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: 0, totalErro: linhasBloqueadas.length, erros: bloqErros };
       }
       const saldosResolvidos: SaldoImportadoResolvido[] = (saldosBancarios || []).map((saldo) => ({
         ...saldo,
