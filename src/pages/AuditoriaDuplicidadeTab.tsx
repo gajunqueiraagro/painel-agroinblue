@@ -147,14 +147,17 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
   const loadRetro = useCallback(async () => {
     if (!cid) return;
     setLoading(true);
-    const { data, error } = await supabase.rpc('buscar_duplicados_retroativo', { _cliente_id: cid });
+    const { data, error } = await supabase.rpc('buscar_duplicados_retroativo', {
+      _cliente_id: cid,
+      _ano_mes: retroAnoMes || null,
+    });
     if (error) {
       console.error('Error loading retro dups:', error);
       toast.error('Erro ao carregar auditoria retroativa');
     }
     setRetroRecords((data || []) as RetroRecord[]);
     setLoading(false);
-  }, [cid]);
+  }, [cid, retroAnoMes]);
 
   useEffect(() => {
     if (activeView === 'log') loadLogs();
