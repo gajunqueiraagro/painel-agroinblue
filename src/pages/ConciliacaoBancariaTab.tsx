@@ -501,7 +501,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
                     <div className="border-t pt-1.5 flex items-center justify-between">
                       <p className="text-[10px] text-muted-foreground">Diferença para Conciliar</p>
-                      <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.diferenca)}
                       </p>
                     </div>
@@ -565,21 +565,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     ? 'bg-green-50/60 dark:bg-green-950/20'
                     : isPendente
                       ? 'bg-muted/30'
-                      : card.status === 'atencao'
-                        ? 'bg-yellow-50/60 dark:bg-yellow-950/20'
-                        : 'bg-red-50/60 dark:bg-red-950/20'
+                      : 'bg-red-50/60 dark:bg-red-950/20'
                 }`}>
                   <StatusIcon className={`h-8 w-8 ${cfg.iconColor}`} />
                   <p className={`text-sm font-extrabold ${
                     isConciliado ? 'text-green-700 dark:text-green-300'
                       : isPendente ? 'text-muted-foreground'
-                        : card.status === 'atencao' ? 'text-yellow-700 dark:text-yellow-300'
-                          : 'text-red-700 dark:text-red-300'
+                        : 'text-red-700 dark:text-red-300'
                   }`}>
-                    {isConciliado ? '✅ Conciliado' : isPendente ? '⏳ Pendente' : card.status === 'atencao' ? '⚠️ Atenção' : '❌ Não Conciliado'}
+                    {isConciliado ? '✅ Conciliado' : isPendente ? '⏳ Pendente' : '❌ Não Conciliado'}
                   </p>
                   {!isPendente && (
-                    <p className={`text-xs font-bold tabular-nums ${diffAbs < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
                       Diferença: {formatMoeda(card.diferenca)}
                     </p>
                   )}
