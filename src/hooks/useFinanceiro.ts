@@ -36,6 +36,23 @@ export interface ImportacaoRecord {
   total_com_erro: number;
 }
 
+export interface ImportErroDetalhe {
+  linha?: number;
+  descricao?: string;
+  valor?: number;
+  fornecedor?: string;
+  motivo: string;
+}
+
+export interface ImportResultado {
+  ok: boolean;
+  totalProcessado: number;
+  totalSalvo: number;
+  totalDuplicado: number;
+  totalErro: number;
+  erros: ImportErroDetalhe[];
+}
+
 export interface FinanceiroLancamento {
   id: string;
   fazenda_id: string;
@@ -650,8 +667,9 @@ export function useFinanceiro() {
     _contas?: unknown[],
     resumoCaixa?: ResumoCaixaImportado[],
     tipoImportacao?: string,
-  ) => {
-    if (!user) return false;
+  ): Promise<ImportResultado> => {
+    const errosDetalhe: ImportErroDetalhe[] = [];
+    if (!user) return { ok: false, totalProcessado: 0, totalSalvo: 0, totalDuplicado: 0, totalErro: 0, erros: [{ motivo: 'Usuário não autenticado' }] };
 
     try {
       const primaryFazendaId = linhas[0]?.fazendaId
@@ -660,7 +678,7 @@ export function useFinanceiro() {
         || fazendas.find(f => f.id !== '__global__')?.id;
       if (!primaryFazendaId) {
         toast.error('Nenhum registro com fazenda válida');
-        return false;
+        return { ok: false, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: 0, totalErro: linhas.length, erros: [{ motivo: 'Nenhum registro com fazenda válida' }] };
       }
 
       const cid = fazendas.find(f => f.id === primaryFazendaId)?.cliente_id || fazendaAtual?.cliente_id || '';
@@ -711,11 +729,14 @@ export function useFinanceiro() {
       }
 
       if (linhasBloqueadas.length > 0) {
-        const detalhes = linhasBloqueadas.slice(0, 5).map(b =>
-          `Linha ${b.linha.linha}: ${b.motivo} (valor: ${b.linha.valor})`
-        ).join('\n');
-        toast.error(`${linhasBloqueadas.length} transferência(s) bloqueada(s):\n${detalhes}`, { duration: 10000 });
-        return false;
+        const bloqErros: ImportErroDetalhe[] = linhasBloqueadas.map(b => ({
+          linha: b.linha.linha,
+          descricao: b.linha.produto || undefined,
+          valor: b.linha.valor,
+          fornecedor: b.linha.fornecedor || undefined,
+          motivo: b.motivo,
+        }));
+        return { ok: false, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: 0, totalErro: linhasBloqueadas.length, erros: bloqErros };
       }
       const saldosResolvidos: SaldoImportadoResolvido[] = (saldosBancarios || []).map((saldo) => ({
         ...saldo,
@@ -772,7 +793,7 @@ export function useFinanceiro() {
 
       if (linhasNovas.length === 0 && duplicados > 0) {
         toast.info(`Todos os ${duplicados} lançamentos já existem na base. Nenhum registro inserido.`);
-        return true;
+        return { ok: true, totalProcessado: linhas.length, totalSalvo: 0, totalDuplicado: duplicados, totalErro: 0, erros: [] };
       }
 
       // ── Criar registro da importação (V2) ──
@@ -947,7 +968,19 @@ export function useFinanceiro() {
           continue;
         }
 
-        if (error.code !== '23505') throw error;
+        if (error.code !== '23505') {
+          // Non-dedup error on batch — try row-by-row to isolate failures
+          for (const row of batch) {
+            const { error: rowError } = await supabase.from('financeiro_lancamentos_v2').insert(row);
+            if (!rowError) { inseridos += 1; continue; }
+            errosDetalhe.push({
+              descricao: row.descricao || undefined,
+              valor: row.valor,
+              motivo: rowError.message || `Erro ${rowError.code}`,
+            });
+          }
+          continue;
+        }
 
         for (const row of batch) {
           const { error: rowError } = await supabase.from('financeiro_lancamentos_v2').insert(row);
@@ -959,7 +992,11 @@ export function useFinanceiro() {
             ignorados += 1;
             continue;
           }
-          throw rowError;
+          errosDetalhe.push({
+            descricao: row.descricao || undefined,
+            valor: row.valor,
+            motivo: rowError.message || `Erro ${rowError.code}`,
+          });
         }
       }
 
@@ -1011,15 +1048,35 @@ export function useFinanceiro() {
 
       const msgs: string[] = [`${inseridos} lançamentos inseridos`];
       if (ignorados > 0) msgs.push(`${ignorados} duplicados ignorados`);
+      if (errosDetalhe.length > 0) msgs.push(`${errosDetalhe.length} com erro`);
       if (saldosResolvidos.length) msgs.push(`${saldosResolvidos.length} saldos`);
       if (resumoCaixa?.length) msgs.push(`${resumoCaixa.length} resumos`);
-      toast.success(`Importação concluída: ${msgs.join(' · ')}`);
+
+      if (errosDetalhe.length > 0) {
+        toast.warning(`Importação parcial: ${msgs.join(' · ')}`);
+      } else {
+        toast.success(`Importação concluída: ${msgs.join(' · ')}`);
+      }
 
       await loadData();
-      return true;
+      return {
+        ok: errosDetalhe.length === 0,
+        totalProcessado: expandedRows.length,
+        totalSalvo: inseridos,
+        totalDuplicado: ignorados,
+        totalErro: errosDetalhe.length,
+        erros: errosDetalhe,
+      };
     } catch (err: any) {
       toast.error('Erro na importação: ' + (err.message || err));
-      return false;
+      return {
+        ok: false,
+        totalProcessado: linhas.length,
+        totalSalvo: 0,
+        totalDuplicado: 0,
+        totalErro: 1,
+        erros: [{ motivo: err.message || String(err) }],
+      };
     }
   }, [user, loadData, fazendas]);
 
