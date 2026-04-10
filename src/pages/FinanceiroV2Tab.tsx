@@ -759,17 +759,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   );
 
   return (
-    <div className={cn("space-y-1 relative", modoIntensivo ? "pb-2" : "pb-20")}>
-      {modoIntensivo && (
-        <div className="flex items-center justify-between px-3 py-1 bg-primary text-primary-foreground rounded-md">
-          <span className="text-[10px] font-bold tracking-wide">⚡ Modo Intensivo — Lançamentos</span>
-          <Button size="sm" variant="ghost" onClick={() => setModoIntensivo(false)} className="h-5 text-[10px] text-primary-foreground hover:bg-primary-foreground/20 gap-1">
-            <Minimize2 className="h-3 w-3" /> Sair
-          </Button>
-        </div>
-      )}
+    <div className={cn("relative", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
-      <Card className="rounded-lg bg-white" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+      <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
             <>
