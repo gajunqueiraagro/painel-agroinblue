@@ -291,20 +291,13 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  const checkDuplicate = useCallback((row: LinhaImportada, allRows: LinhaImportada[], existingH: Set<string>): boolean => {
+  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingH: Set<string>): boolean => {
     if (!clienteId || !existingH) return false;
     const contaKey = normalizeImportText(row.contaOrigem);
     const contaR = contaKey ? contaLookup.get(contaKey) : null;
     const hash = buildHashImportacao(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null, row.numeroDocumento, row.produto, row.obs);
-    if (existingH.has(hash)) return true;
-    for (const sibling of allRows) {
-      if (sibling.linha >= row.linha) break;
-      const sContaKey = normalizeImportText(sibling.contaOrigem);
-      const sContaR = sContaKey ? contaLookup.get(sContaKey) : null;
-      const sHash = buildHashImportacao(clienteId, sibling.fazendaId || '', sibling.dataPagamento || '', sibling.valor, sibling.tipoOperacao, sContaR?.id || null, sibling.numeroDocumento, sibling.produto, sibling.obs);
-      if (sHash === hash) return true;
-    }
-    return false;
+    // Only check against existing DB records — never deduplicate within the same import file
+    return existingH.has(hash);
   }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
