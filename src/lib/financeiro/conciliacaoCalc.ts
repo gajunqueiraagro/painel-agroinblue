@@ -39,20 +39,33 @@ export function buildMovSummary(lancamentos: MovimentoResumo[]): Record<string, 
   const summary: Record<string, MovSummary> = {};
 
   for (const l of lancamentos) {
-    if (!l.conta_bancaria_id) continue;
+    const valor = Math.abs(Number(l.valor));
+    const isTransf = isTransferenciaTipo(l.tipo_operacao);
 
-    const key = `${l.conta_bancaria_id}|${l.ano_mes}`;
-    if (!summary[key]) summary[key] = { entradas: 0, saidas: 0 };
-
-    if (isTransferenciaTipo(l.tipo_operacao) && l.conta_destino_id) {
-      // Transfer: always debit origin, credit destination
-      summary[key].saidas += Number(l.valor);
-      const destKey = `${l.conta_destino_id}|${l.ano_mes}`;
-      if (!summary[destKey]) summary[destKey] = { entradas: 0, saidas: 0 };
-      summary[destKey].entradas += Number(l.valor);
+    if (isTransf) {
+      // Transfer: debit origin, credit destination
+      if (l.conta_bancaria_id) {
+        const keyOrig = `${l.conta_bancaria_id}|${l.ano_mes}`;
+        if (!summary[keyOrig]) summary[keyOrig] = { entradas: 0, saidas: 0 };
+        summary[keyOrig].saidas += valor;
+      }
+      if (l.conta_destino_id) {
+        const keyDest = `${l.conta_destino_id}|${l.ano_mes}`;
+        if (!summary[keyDest]) summary[keyDest] = { entradas: 0, saidas: 0 };
+        summary[keyDest].entradas += valor;
+      }
     } else {
-      if (l.sinal > 0) summary[key].entradas += Number(l.valor);
-      else summary[key].saidas += Number(l.valor);
+      // Non-transfer: entries use conta_destino_id, exits use conta_bancaria_id
+      if (l.conta_destino_id) {
+        const key = `${l.conta_destino_id}|${l.ano_mes}`;
+        if (!summary[key]) summary[key] = { entradas: 0, saidas: 0 };
+        summary[key].entradas += valor;
+      }
+      if (l.conta_bancaria_id) {
+        const key = `${l.conta_bancaria_id}|${l.ano_mes}`;
+        if (!summary[key]) summary[key] = { entradas: 0, saidas: 0 };
+        summary[key].saidas += valor;
+      }
     }
   }
 

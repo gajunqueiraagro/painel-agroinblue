@@ -91,12 +91,16 @@ function isEntradaTipo(tipo: string | null | undefined) {
   return normalized.startsWith('1') || normalized.includes('entrada');
 }
 
+/**
+ * Check if a lancamento belongs to a given account.
+ * Must match the same logic as the lancamentos screen:
+ *   - Entries (1-Entradas) use conta_destino_id as relevant account
+ *   - Exits (2-Saídas) use conta_bancaria_id as relevant account
+ *   - Transfers check both fields
+ */
 function belongsToConta(lanc: LancamentoResumo, contaId: string) {
   if (contaId === '__all__') return true;
-  if (isTransferenciaTipo(lanc.tipo_operacao || '')) {
-    return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
-  }
-  return lanc.conta_bancaria_id === contaId;
+  return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -261,10 +265,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           } else if (l.conta_bancaria_id === contaId) {
             transferenciasEnviadas += valor;
           }
-        } else if (isEntradaTipo(l.tipo_operacao)) {
-          entradasTerceiros += valor;
         } else {
-          saidasTerceiros += valor;
+          // Non-transfer: use field match to determine direction
+          // Entries use conta_destino_id, exits use conta_bancaria_id
+          if (isAllContas) {
+            // When viewing all accounts, use tipo_operacao
+            if (isEntradaTipo(l.tipo_operacao)) {
+              entradasTerceiros += valor;
+            } else {
+              saidasTerceiros += valor;
+            }
+          } else {
+            // When filtering by account, determine by which field matches
+            if (l.conta_destino_id === contaId) {
+              entradasTerceiros += valor;
+            } else if (l.conta_bancaria_id === contaId) {
+              saidasTerceiros += valor;
+            }
+          }
         }
       }
 
@@ -299,10 +317,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               if (isTransferenciaTipo(l.tipo_operacao || '')) {
                 if (l.conta_destino_id === conta.id) accEntradas += valor;
                 else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
-              } else if (isEntradaTipo(l.tipo_operacao)) {
-                if (l.conta_bancaria_id === conta.id) accEntradas += valor;
-              } else if (l.conta_bancaria_id === conta.id) {
-                accSaidas += valor;
+              } else {
+                // Non-transfer: determine direction by which field matches
+                if (l.conta_destino_id === conta.id) accEntradas += valor;
+                else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
               }
             }
 
