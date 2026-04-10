@@ -50,6 +50,7 @@ interface LancamentoResumo {
   numero_documento: string | null;
   conta_bancaria_id: string | null;
   conta_destino_id: string | null;
+  ano_mes: string;
 }
 
 interface FornecedorRef {
@@ -76,12 +77,26 @@ interface MesCard {
   lancamentos: LancamentoResumo[];
 }
 
-
-
-
 function fmtDate(d: string | null) {
   if (!d) return '-';
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
+}
+
+function normalizeTipoOperacao(tipo: string | null | undefined) {
+  return (tipo || '').toLowerCase().replace(/[\s\-–—]/g, '');
+}
+
+function isEntradaTipo(tipo: string | null | undefined) {
+  const normalized = normalizeTipoOperacao(tipo);
+  return normalized.startsWith('1') || normalized.includes('entrada');
+}
+
+function belongsToConta(lanc: LancamentoResumo, contaId: string) {
+  if (contaId === '__all__') return true;
+  if (isTransferenciaTipo(lanc.tipo_operacao || '')) {
+    return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
+  }
+  return lanc.conta_bancaria_id === contaId;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -192,20 +207,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       let lQuery = supabase
         .from('financeiro_lancamentos_v2')
-        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id')
+        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id, ano_mes')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
-        .neq('status_transacao', 'meta')
+        .in('status_transacao', [...STATUS_REALIZADOS])
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
       if (contaId !== '__all__') {
-        // Fetch records where this account is origin OR destination
         lQuery = lQuery.or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`);
       }
-      lQuery = lQuery.order('data_competencia').range(from, from + batchSize - 1);
+      lQuery = lQuery.order('ano_mes').order('data_competencia').range(from, from + batchSize - 1);
       const { data: lData } = await lQuery;
       if (!lData || lData.length === 0) break;
-      allLanc.push(...(lData as LancamentoResumo[]));
+      allLanc.push(...((lData as LancamentoResumo[]).filter(l => belongsToConta(l, contaId))));
       if (lData.length < batchSize) break;
       from += batchSize;
     }
@@ -219,7 +233,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   const mesCards: MesCard[] = useMemo(() => {
     const cards: MesCard[] = [];
-    let saldoAcumulado = 0;
 
     for (let m = 1; m <= 12; m++) {
       const mesStr = String(m).padStart(2, '0');
@@ -227,13 +240,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
       const saldoRows = saldos.filter(s => s.ano_mes === anoMes);
       const saldoRow = contaId !== '__all__' ? saldoRows[0] || null : null;
-
       const saldoInicial = saldoRows.reduce((sum, s) => sum + (s.saldo_inicial || 0), 0);
 
-      const mesLancs = lancamentos.filter(l => {
-        const d = l.data_pagamento || l.data_competencia;
-        return d && d.substring(0, 7) === anoMes;
-      });
+      const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, contaId));
 
       let entradasTerceiros = 0;
       let transferenciasRecebidas = 0;
@@ -242,22 +251,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       const isAllContas = contaId === '__all__';
 
       for (const l of mesLancs) {
-        const tipo = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
         const valor = Math.abs(l.valor);
-        const isTransf = tipo.startsWith('3') || tipo.includes('transfer');
+        const isTransf = isTransferenciaTipo(l.tipo_operacao || '');
 
         if (isTransf) {
-          if (isAllContas) {
-            // No consolidado, transferências se anulam — ignorar completamente
-            continue;
-          }
-          const isDestino = l.conta_destino_id === contaId;
-          if (isDestino) {
+          if (isAllContas) continue;
+          if (l.conta_destino_id === contaId) {
             transferenciasRecebidas += valor;
-          } else {
+          } else if (l.conta_bancaria_id === contaId) {
             transferenciasEnviadas += valor;
           }
-        } else if (tipo.startsWith('1') || tipo.includes('entrada')) {
+        } else if (isEntradaTipo(l.tipo_operacao)) {
           entradasTerceiros += valor;
         } else {
           saidasTerceiros += valor;
@@ -272,12 +276,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         ? saldoRows.reduce((sum, s) => sum + (s.saldo_final || 0), 0)
         : null;
 
-      const diferenca = saldoExtrato !== null ? saldoExtrato - saldoCalculado : 0;
+      const diferenca = saldoExtrato !== null
+        ? Math.round((saldoExtrato - saldoCalculado) * 100) / 100
+        : 0;
 
-      // For "Todas as contas", derive status from per-account conciliation
       let status: MesCard['status'];
       if (isAllContas && contas.length > 0) {
-        // Only evaluate accounts that have saldo data for this month
         const accountsWithSaldo = contas.filter(conta =>
           saldos.some(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id)
         );
@@ -289,31 +293,28 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
             let accEntradas = 0;
             let accSaidas = 0;
-            for (const l of mesLancs) {
-              const t = (l.tipo_operacao || '').toLowerCase().replace(/[\s\-–—]/g, '');
-              const v = Math.abs(l.valor);
-              const isTr = t.startsWith('3') || t.includes('transfer');
-              if (isTr) {
-                if (l.conta_destino_id === conta.id) accEntradas += v;
-                else if (l.conta_bancaria_id === conta.id) accSaidas += v;
-              } else if (t.startsWith('1') || t.includes('entrada')) {
-                if (l.conta_bancaria_id === conta.id) accEntradas += v;
-              } else {
-                if (l.conta_bancaria_id === conta.id) accSaidas += v;
+
+            for (const l of mesLancs.filter(row => belongsToConta(row, conta.id))) {
+              const valor = Math.abs(l.valor);
+              if (isTransferenciaTipo(l.tipo_operacao || '')) {
+                if (l.conta_destino_id === conta.id) accEntradas += valor;
+                else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
+              } else if (isEntradaTipo(l.tipo_operacao)) {
+                if (l.conta_bancaria_id === conta.id) accEntradas += valor;
+              } else if (l.conta_bancaria_id === conta.id) {
+                accSaidas += valor;
               }
             }
+
             const accCalc = accSaldoInicial + accEntradas - accSaidas;
             const accDiff = Math.round(((accSaldoRow.saldo_final || 0) - accCalc) * 100) / 100;
             return accDiff === 0 ? 'realizado' as const : 'nao_conciliado' as const;
           });
-          const hasNaoConc = perAccountStatuses.some(s => s === 'nao_conciliado');
-          status = hasNaoConc ? 'nao_conciliado' : 'realizado';
+          status = perAccountStatuses.some(s => s === 'nao_conciliado') ? 'nao_conciliado' : 'realizado';
         }
       } else {
         status = getConciliacaoStatus(diferenca, saldoExtrato);
       }
-
-      saldoAcumulado += (totalEntradas - totalSaidas);
 
       cards.push({
         mes: mesStr,
@@ -336,7 +337,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
 
     return cards;
-  }, [ano, contaId, saldos, lancamentos]);
+  }, [ano, contaId, saldos, lancamentos, contas]);
 
   const summary = useMemo(() => {
     const totalEntradas = mesCards.reduce((s, c) => s + c.totalEntradas, 0);
