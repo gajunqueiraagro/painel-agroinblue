@@ -152,7 +152,13 @@ export function SearchableSelect({
             e.preventDefault();
             handleTriggerClick();
           }
-        }}
+          // Printable key → open dropdown and seed search with that char
+          if (!open && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            setSearch(e.key);
+            handleTriggerClick();
+          }
+        }
         disabled={disabled}
         className={cn(
           'flex h-6 w-full items-center justify-between rounded-md border border-input bg-background px-1.5 text-[10px] ring-offset-background',
