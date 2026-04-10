@@ -4490,6 +4490,7 @@ export type Database = {
           lote_importacao_id: string
           numero_documento: string
           observacao: string
+          status_duplicidade: string
           subcentro: string
           tipo_operacao: string
           valor: number
