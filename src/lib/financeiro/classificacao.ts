@@ -272,10 +272,9 @@ export type CategoriaFluxoEntrada = 'receitas' | 'captacao' | 'aportes';
 
 /** Classifica entrada para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFluxoEntrada {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   if (macro === 'receitas') return 'receitas';
   if (isAporte(l)) return 'aportes';
-  // Anomalias (macro inesperado como entrada) → aportes para não distorcer receitas
   if (macro && macro !== 'outras entradas financeiras') return 'aportes';
   return 'captacao';
 }
@@ -284,12 +283,12 @@ export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amor
 
 /** Classifica saída para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFluxoSaida {
-  const macro = normMacro(l);
+  const macro = canonicalMacro(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
 
-  if (macro.includes('dedu') && macro.includes('receita')) return 'deducao';
-  if (centro.includes('dedução') || centro.includes('deducao')) return 'deducao';
+  if (macro === 'dedução de receitas') return 'deducao';
+  if (centro.includes('dedução') || centro.includes('deducao') || centro.includes('deduções')) return 'deducao';
 
   if (macro === 'dividendos' || centro === 'dividendos' || sub.includes('dividendo')) return 'dividendos';
 
