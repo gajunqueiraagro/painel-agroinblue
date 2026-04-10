@@ -202,12 +202,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [confirmCleanupOpen, setConfirmCleanupOpen] = useState(false);
-  const [cleanupDeleting, setCleanupDeleting] = useState(false);
-  const [cleanupConfirmText, setCleanupConfirmText] = useState('');
-  const [confirmMigracaoOpen, setConfirmMigracaoOpen] = useState(false);
-  const [migracaoDeleting, setMigracaoDeleting] = useState(false);
-  const [migracaoConfirmText, setMigracaoConfirmText] = useState('');
 
   // Sorting state
    type SortField = 'default' | 'data' | 'pgto' | 'valor' | 'produto' | 'fornecedor' | 'centro' | 'status';
