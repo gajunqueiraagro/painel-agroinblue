@@ -1353,29 +1353,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial }: 
             </div>
           )}
 
-          {/* Total count + cleanup button */}
-          <div className="flex items-center justify-between px-1 py-1">
+          {/* Total count */}
+          <div className="flex items-center px-1 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
             </span>
-            {realizadosImportadosCount > 0 && (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-6 text-[10px] gap-1 px-2"
-                onClick={() => setConfirmCleanupOpen(true)}
-              >
-                <Trash2 className="h-3 w-3" /> Excluir realizados importados ({realizadosImportadosCount})
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="destructive"
-              className="h-6 text-[10px] gap-1 px-2"
-              onClick={() => setConfirmMigracaoOpen(true)}
-            >
-              <Trash2 className="h-3 w-3" /> Cancelar migração 2025
-            </Button>
           </div>
         </>
       )}
