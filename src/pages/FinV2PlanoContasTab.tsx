@@ -58,7 +58,7 @@ export function FinV2PlanoContasTab() {
     });
 
   // Group by macro_custo for visual separation
-  const groups: { label: string; items: PlanoItem[] }[] = [];
+  const groups: { label: string; items: PlanoContasItem[] }[] = [];
   let lastGroup = '';
   for (const item of filtered) {
     const key = `${tipoLabel(item.tipo_operacao)} › ${item.macro_custo}${item.grupo_custo ? ' › ' + item.grupo_custo : ''}`;
