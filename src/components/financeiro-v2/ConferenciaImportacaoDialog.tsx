@@ -107,18 +107,59 @@ function buildContaLookup(contas: ContaOption[]): Map<string, ContaResolved> {
   return m;
 }
 
-/** Hash núcleo para detecção de duplicidade — alinhado com SQL */
-function buildHashImportacao(
+/** Nucleus hash — only core identity fields for collision detection.
+ *  Differentiators (fornecedor, descricao, documento, subcentro) are compared AFTER match. */
+function buildNucleusHash(
   clienteId: string, fazendaId: string, dataPagamento: string | null, valor: number,
   tipoOperacao: string | null, contaBancariaId: string | null,
-  numeroDocumento?: string | null, descricao?: string | null,
-  fornecedor?: string | null,
 ): string {
   return [clienteId, fazendaId, (dataPagamento || '').trim(), valor.toFixed(2),
     (tipoOperacao || '').trim().toLowerCase(), contaBancariaId || '',
-    normalizeImportText(numeroDocumento), normalizeImportText(descricao),
-    normalizeImportText(fornecedor),
   ].join('|');
+}
+
+type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
+
+interface ExistingDiffRecord {
+  descricao: string | null;
+  numero_documento: string | null;
+  favorecido_id: string | null;
+  subcentro: string | null;
+}
+
+/** Classify duplication level by comparing differentiators */
+function classificarNivelConferencia(
+  newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+  existing: ExistingDiffRecord,
+): NivelDuplicidade {
+  let diffCount = 0;
+  let docDiverge = false;
+
+  // Fornecedor: compare text vs text (favorecido_id is UUID, so if it exists and differs from text, count as different)
+  // Since we can't compare text↔UUID reliably, we skip fornecedor in pre-detection.
+  // The DB trigger handles this with resolved UUID comparison.
+
+  // Descricao
+  const nd = normalizeImportText(newRow.descricao);
+  const ed = normalizeImportText(existing.descricao);
+  if (nd !== ed && (nd || ed)) diffCount++;
+
+  // Numero documento
+  const nDoc = normalizeImportText(newRow.numeroDocumento);
+  const eDoc = normalizeImportText(existing.numero_documento);
+  if (nDoc && eDoc) {
+    if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
+  }
+
+  // Subcentro
+  const nSub = normalizeImportText(newRow.subcentro);
+  const eSub = normalizeImportText(existing.subcentro);
+  if (nSub !== eSub && (nSub || eSub)) diffCount++;
+
+  if (diffCount === 0) return 'D1';
+  if (diffCount === 1 && !docDiverge) return 'D2';
+  if (diffCount <= 2) return 'D3';
+  return 'LEGITIMO';
 }
 
 function isTransf(tipo: string | null): boolean {
