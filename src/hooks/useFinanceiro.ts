@@ -834,15 +834,15 @@ export function useFinanceiro() {
         const existingMatches = existingByHash.get(hash);
         if (existingMatches && existingMatches.length > 0) {
           // Compare against the actual existing record — pick strongest suspicion
-          let bestNivel: NivelDuplicidade = 'LEGITIMO';
+          let bestNivel = 'LEGITIMO' as NivelDuplicidade;
           for (const ex of existingMatches) {
             const nivel = classificarNivel(
               { fornecedor: l.fornecedor, descricao: l.produto, numeroDocumento: l.numeroDocumento, subcentro: l.subcentro },
               { fornecedor: ex.fornecedor, descricao: ex.descricao, numeroDocumento: ex.numeroDocumento, subcentro: ex.subcentro },
             );
-            if (nivel === 'D1') { bestNivel = 'D1'; break; }
-            if (nivel === 'D2' && bestNivel !== 'D1') bestNivel = 'D2';
-            if (nivel === 'D3' && bestNivel === 'LEGITIMO') bestNivel = 'D3';
+            const rank = { D1: 3, D2: 2, D3: 1, LEGITIMO: 0 } as const;
+            if (rank[nivel] > rank[bestNivel]) bestNivel = nivel;
+            if (bestNivel === 'D1') break;
           }
           duplicados++;
           linhasDuplicadasLog.push({ ...l, _hash: hash, _nivel: bestNivel });
