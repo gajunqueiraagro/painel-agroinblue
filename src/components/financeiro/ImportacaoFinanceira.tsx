@@ -1,7 +1,7 @@
 /**
  * Tela de importação financeira via Excel — aba única EXPORT_APP_UNICO.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
@@ -9,6 +9,7 @@ import { ConferenciaImportacaoDialog } from '@/components/financeiro-v2/Conferen
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
 import { downloadModeloExcel } from '@/lib/financeiro/excelTemplate';
 import {
   parseExcel, resolverFazendas, resolverFazendasExtras, validarCentrosCusto, validarEstruturaExcel,
