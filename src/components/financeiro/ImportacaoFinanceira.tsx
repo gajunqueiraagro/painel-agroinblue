@@ -40,7 +40,7 @@ interface Props {
     contas?: never[],
     resumoCaixa?: ResumoCaixaImportado[],
     tipoImportacao?: string,
-  ) => Promise<boolean>;
+  ) => Promise<ImportResultado>;
   onExcluir: (importacaoId: string) => Promise<boolean>;
   onBuscarDetalhesLote?: (importacaoId: string) => Promise<{ total: number; periodos: string[]; fazendaIds: string[] } | null>;
 }
