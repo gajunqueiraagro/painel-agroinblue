@@ -1,8 +1,8 @@
 /**
- * Prévia Completa da Importação Financeira
- * Exibe todas as colunas do Excel com 3 camadas: original → interpretado → final.
- * Permite edição inline, filtros avançados e diagnóstico por linha.
- * Modelo de decisão: seleção por linha, classificação D1/D2/D3, comparação com banco.
+ * Conferência de Importação Financeira — Modelo Profissional v3
+ * 
+ * Fase 1: Busca de candidatos por (fazenda + anoMes + fornecedor)
+ * Fase 2: Classificação D1/D2/D3/NOVO comparando todos os campos
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,7 +19,6 @@ import {
   ChevronDown, ChevronUp, CheckSquare, Square, Filter, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { formatMoeda } from '@/lib/calculos/formatters';
 import { TIPOS_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
 import type { LinhaImportada } from '@/lib/financeiro/importParser';
 
@@ -54,13 +53,31 @@ interface ResolvedInfo {
   fornecedorResolvido: string | null;
 }
 
+/** Record from the database used for comparison */
+interface ExistingRecord {
+  id: string;
+  descricao: string | null;
+  numero_documento: string | null;
+  favorecido_id: string | null;
+  favorecido_nome: string | null;
+  subcentro: string | null;
+  data_pagamento: string | null;
+  valor: number | null;
+  tipo_operacao: string | null;
+  conta_bancaria_id: string | null;
+  centro_custo: string | null;
+  ano_mes: string | null;
+}
+
+type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
+
 interface EditableRow extends LinhaImportada {
   _validation: ValidationResult;
   _resolved: ResolvedInfo;
   _isDuplicate: boolean;
   _nivelDuplicidade?: NivelDuplicidade | null;
   _selected: boolean;
-  _existingMatch?: ExistingDiffRecord | null;
+  _existingMatch?: ExistingRecord | null;
 }
 
 interface ContaOption { id: string; nome_conta: string; nome_exibicao?: string | null; codigo_conta?: string | null; }
@@ -75,17 +92,15 @@ interface Props {
   contas: ContaOption[];
   fazendas: FazendaOption[];
   clienteId?: string;
-  /** Official subcentros from plano de contas */
   subcentrosOficiais?: Set<string>;
   onConfirmar: (linhas: LinhaImportada[]) => Promise<boolean>;
 }
 
-const TIPOS_OPERACAO = ['1-Entradas', '2-Saídas', '3-Transferência'];
 const PAGE_SIZE = 50;
 
 // ── Helpers ──
 
-function normalizeImportText(value: string | null | undefined): string {
+function norm(value: string | null | undefined): string {
   return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
@@ -96,96 +111,84 @@ function buildContaLookup(contas: ContaOption[]): Map<string, ContaResolved> {
   const codigoCount = new Map<string, number>();
   for (const c of contas) {
     if (c.codigo_conta) {
-      const ck = normalizeImportText(c.codigo_conta);
+      const ck = norm(c.codigo_conta);
       codigoCount.set(ck, (codigoCount.get(ck) || 0) + 1);
     }
   }
   for (const c of contas) {
     const label = c.nome_exibicao || c.nome_conta;
     const resolved = { label, id: c.id };
-    const exibKey = normalizeImportText(c.nome_exibicao);
+    const exibKey = norm(c.nome_exibicao);
     if (exibKey) m.set(exibKey, resolved);
     if (c.codigo_conta) {
-      const ck = normalizeImportText(c.codigo_conta);
+      const ck = norm(c.codigo_conta);
       if ((codigoCount.get(ck) || 0) <= 1 && ck) m.set(ck, resolved);
     }
   }
   return m;
 }
 
-/** Nucleus hash — only core identity fields for collision detection. */
-function buildNucleusHash(
-  clienteId: string, fazendaId: string, dataPagamento: string | null, valor: number,
-  tipoOperacao: string | null, contaBancariaId: string | null,
-): string {
-  return [clienteId, fazendaId, (dataPagamento || '').trim(), valor.toFixed(2),
-    (tipoOperacao || '').trim().toLowerCase(), contaBancariaId || '',
-  ].join('|');
-}
-
-type NivelDuplicidade = 'D1' | 'D2' | 'D3' | 'LEGITIMO';
-
-interface ExistingDiffRecord {
-  descricao: string | null;
-  numero_documento: string | null;
-  favorecido_id: string | null;
-  favorecido_nome: string | null;
-  subcentro: string | null;
-  data_pagamento: string | null;
-  valor: number | null;
-  tipo_operacao: string | null;
-  conta_bancaria_id: string | null;
-  produto: string | null;
+/**
+ * Phase 1 key: fazenda + anoMes + fornecedor (resolved ID)
+ * This is the BROAD search key — value is NOT included.
+ */
+function buildCandidateKey(fazendaId: string, anoMes: string, favorecidoId: string | null): string {
+  return [fazendaId, anoMes, favorecidoId || ''].join('|');
 }
 
 /**
- * Classify duplication level by comparing fingerprint differentiators.
- *
- * Collision key (nucleus): cliente_id + fazenda_id + data_pagamento + valor + tipo_operacao + conta_bancaria_id
- * Fingerprint differentiators: fornecedor, descricao, numero_documento, subcentro
- *
- * All same → D1 (duplicado real)
- * 1 diff (not doc) → D2 (suspeita forte)
- * 1-2 diffs → D3 (suspeita fraca)
- * 3+ diffs → LEGITIMO
+ * Phase 2: Classification based on field-by-field comparison.
+ * Called only when a candidate was found (same fazenda + anoMes + fornecedor).
  */
-function classificarNivelConferencia(
-  newRow: { fornecedor?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
-  existing: ExistingDiffRecord,
+function classificarNivel(
+  imported: { dataPagamento?: string | null; valor: number; tipoOperacao?: string | null; contaBancariaId?: string | null; descricao?: string | null; numeroDocumento?: string | null; subcentro?: string | null },
+  existing: ExistingRecord,
 ): NivelDuplicidade {
-  // ── Regra profissional: fornecedor é barreira de entrada ──
-  // Se o fornecedor diverge, não pode ser D1/D2/D3 — é LEGÍTIMO (NOVO).
-  // D2/D3 só existem quando o fornecedor bate mas outros diferenciadores divergem.
-  const nForn = normalizeImportText(newRow.fornecedor);
-  const eForn = normalizeImportText(existing.favorecido_nome);
-  const fornecedorDiverge = (nForn !== eForn) && (nForn !== '' || eForn !== '');
-
-  if (fornecedorDiverge) return 'LEGITIMO';
-
-  // Fornecedor bate — comparar diferenciadores secundários
   let diffCount = 0;
   let docDiverge = false;
 
-  // 1. Descrição/Produto
-  const nd = normalizeImportText(newRow.descricao);
-  const ed = normalizeImportText(existing.descricao);
+  // 1. Data pagamento
+  const dp1 = (imported.dataPagamento || '').trim();
+  const dp2 = (existing.data_pagamento || '').trim();
+  if (dp1 !== dp2 && (dp1 || dp2)) diffCount++;
+
+  // 2. Valor
+  const v1 = Math.round((imported.valor || 0) * 100);
+  const v2 = Math.round((existing.valor || 0) * 100);
+  if (v1 !== v2) diffCount++;
+
+  // 3. Descrição/Produto
+  const nd = norm(imported.descricao);
+  const ed = norm(existing.descricao);
   if (nd !== ed && (nd || ed)) diffCount++;
 
-  // 2. Número do documento
-  const nDoc = normalizeImportText(newRow.numeroDocumento);
-  const eDoc = normalizeImportText(existing.numero_documento);
-  if (nDoc && eDoc) {
-    if (nDoc !== eDoc) { docDiverge = true; diffCount++; }
+  // 4. Subcentro
+  const ns = norm(imported.subcentro);
+  const es = norm(existing.subcentro);
+  if (ns !== es && (ns || es)) diffCount++;
+
+  // 5. Número documento
+  const nDoc = norm(imported.numeroDocumento);
+  const eDoc = norm(existing.numero_documento);
+  if (nDoc && eDoc && nDoc !== eDoc) {
+    docDiverge = true;
+    diffCount++;
   }
 
-  // 3. Subcentro (auxiliar)
-  const nSub = normalizeImportText(newRow.subcentro);
-  const eSub = normalizeImportText(existing.subcentro);
-  if (nSub !== eSub && (nSub || eSub)) diffCount++;
+  // 6. Tipo operação (lightweight)
+  const nt = norm(imported.tipoOperacao);
+  const et = norm(existing.tipo_operacao);
+  if (nt !== et && (nt || et)) diffCount++;
+
+  // 7. Conta bancária
+  const nc = (imported.contaBancariaId || '').trim();
+  const ec = (existing.conta_bancaria_id || '').trim();
+  if (nc !== ec && (nc || ec)) diffCount++;
 
   if (diffCount === 0) return 'D1';
   if (diffCount === 1 && !docDiverge) return 'D2';
-  if (diffCount <= 2) return 'D3';
+  if (diffCount <= 2) return 'D2';
+  if (diffCount <= 3) return 'D3';
   return 'LEGITIMO';
 }
 
@@ -202,7 +205,7 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
 
   if (isDuplicate) {
     warnings.push('Lançamento duplicado detectado');
-    diagnostics.push({ campo: 'Duplicidade', valorRecebido: `${row.dataPagamento || row.anoMes} | ${row.valor} | ${row.tipoOperacao}`, motivo: 'Já existe um lançamento com mesma data, valor, tipo e conta na base.', tipo: 'warning', categoria: 'duplicidade' });
+    diagnostics.push({ campo: 'Duplicidade', valorRecebido: `${row.dataPagamento || row.anoMes} | ${row.valor} | ${row.fornecedor}`, motivo: 'Existe lançamento similar no banco (mesmo fornecedor e competência).', tipo: 'warning', categoria: 'duplicidade' });
   }
 
   if (!row.fazenda && !row.fazendaId) {
@@ -226,7 +229,7 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
     diagnostics.push({ campo: 'Tipo', valorRecebido: '(vazio)', motivo: 'Tipo de operação não preenchido', tipo: 'error', categoria: 'outros' });
   }
 
-  const contaKey = normalizeImportText(row.contaOrigem);
+  const contaKey = norm(row.contaOrigem);
   const contaResolved = contaKey ? contaLookup.get(contaKey) : null;
   if (!row.contaOrigem) {
     errors.push('Conta obrigatória');
@@ -238,7 +241,7 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
 
   const ehTransf = isTransf(row.tipoOperacao);
   if (ehTransf) {
-    const contaDestKey = normalizeImportText(row.contaDestino);
+    const contaDestKey = norm(row.contaDestino);
     const contaDestResolved = contaDestKey ? contaLookup.get(contaDestKey) : null;
     if (!row.contaDestino) {
       errors.push('Conta Destino obrigatória para transferência');
@@ -267,7 +270,7 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
 
   if (row.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(row.subcentro)) {
     errors.push(`Subcentro "${row.subcentro}" não existe no plano oficial`);
-    diagnostics.push({ campo: 'Subcentro', valorRecebido: row.subcentro, motivo: 'Não encontrado no plano de contas oficial. Corrija antes de importar.', tipo: 'error', categoria: 'outros' });
+    diagnostics.push({ campo: 'Subcentro', valorRecebido: row.subcentro, motivo: 'Não encontrado no plano de contas oficial.', tipo: 'error', categoria: 'outros' });
   }
 
   let status: RowStatus;
@@ -280,8 +283,8 @@ function validateRow(row: LinhaImportada, contaLookup: Map<string, ContaResolved
 }
 
 function resolveInfo(row: LinhaImportada, contaLookup: Map<string, ContaResolved>, fazendaLookup: Map<string, string>): ResolvedInfo {
-  const contaKey = normalizeImportText(row.contaOrigem);
-  const contaDestKey = normalizeImportText(row.contaDestino);
+  const contaKey = norm(row.contaOrigem);
+  const contaDestKey = norm(row.contaDestino);
   const fazKey = (row.fazenda || '').toLowerCase().trim();
   const contaR = contaKey ? contaLookup.get(contaKey) : null;
   const contaDestR = contaDestKey ? contaLookup.get(contaDestKey) : null;
@@ -296,21 +299,7 @@ function resolveInfo(row: LinhaImportada, contaLookup: Map<string, ContaResolved
   };
 }
 
-// ── Resolved columns definition ──
-
-const RESOLVED_COLS = [
-  { key: 'fazendaRes', label: 'Fazenda ✓', editable: 'fazenda' as const },
-  { key: 'contaRes', label: 'Conta ✓', editable: 'contaOrigem' as const },
-  { key: 'contaDestRes', label: 'Conta Dest. ✓', editable: 'contaDestino' as const },
-  { key: 'fornecedorRes', label: 'Fornecedor ✓', editable: 'fornecedor' as const },
-  { key: 'subcentroRes', label: 'Subcentro ✓', editable: 'subcentro' as const },
-  { key: 'tipoDocRes', label: 'Tipo Doc. ✓', editable: 'tipoDocumento' as const },
-  { key: 'numDocRes', label: 'Nº Doc. ✓', editable: 'numeroDocumento' as const },
-  { key: 'valorFinal', label: 'Valor Final', editable: null },
-  { key: 'statusValidacao', label: 'Status', editable: null },
-] as const;
-
-// ── FILTER_LABELS ──
+// ── Filter labels ──
 
 const FILTER_LABELS: Record<StatusFilter, string> = {
   all: 'Todos',
@@ -343,18 +332,21 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return m;
   }, [fazendas]);
 
-  const [existingByNucleus, setExistingByNucleus] = useState<Map<string, ExistingDiffRecord[]> | null>(null);
-  const [loadingHashes, setLoadingHashes] = useState(false);
-  const [showOriginal, setShowOriginal] = useState(true);
+  // Phase 1 data: Map<candidateKey, ExistingRecord[]>
+  const [candidateMap, setCandidateMap] = useState<Map<string, ExistingRecord[]> | null>(null);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
 
+  // Phase 1: Fetch ALL existing records for the relevant fazendas+anoMeses, indexed by (fazenda+anoMes+fornecedor)
   useEffect(() => {
-    if (!open || !clienteId) { setExistingByNucleus(new Map()); return; }
+    if (!open || !clienteId) { setCandidateMap(new Map()); return; }
     let cancelled = false;
-    const fetchExisting = async () => {
-      setLoadingHashes(true);
-      const map = new Map<string, ExistingDiffRecord[]>();
 
-      // 1. Build fornecedor id→name lookup
+    const fetchCandidates = async () => {
+      setLoadingCandidates(true);
+      const map = new Map<string, ExistingRecord[]>();
+
+      // Build fornecedor id→name lookup
       const fornecedorMap = new Map<string, string>();
       {
         let from = 0;
@@ -372,65 +364,111 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         }
       }
 
-      // 2. Fetch existing lancamentos and build nucleus map
+      // Get unique fazenda+anoMes combos from import
       const fazendaIds = [...new Set(linhas.map(l => l.fazendaId).filter(Boolean))] as string[];
+      const anoMeses = [...new Set(linhas.map(l => l.anoMes).filter(Boolean))] as string[];
+
+      // Fetch all existing lancamentos for those fazendas and anoMeses
       for (const fid of fazendaIds) {
-        let from = 0;
-        const batchSize = 1000;
-        while (!cancelled) {
-          const { data } = await supabase
-            .from('financeiro_lancamentos_v2')
-            .select('data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro')
-            .eq('fazenda_id', fid).eq('cliente_id', clienteId).eq('cancelado', false)
-            .range(from, from + batchSize - 1);
-          if (!data || data.length === 0) break;
-          for (const e of data) {
-            const nucleus = buildNucleusHash(clienteId, fid, e.data_pagamento, e.valor, e.tipo_operacao, e.conta_bancaria_id);
-            const diff: ExistingDiffRecord = {
-              descricao: e.descricao,
-              numero_documento: e.numero_documento,
-              favorecido_id: e.favorecido_id,
-              favorecido_nome: e.favorecido_id ? (fornecedorMap.get(e.favorecido_id) || null) : null,
-              subcentro: e.subcentro,
-              data_pagamento: e.data_pagamento,
-              valor: e.valor,
-              tipo_operacao: e.tipo_operacao,
-              conta_bancaria_id: e.conta_bancaria_id,
-              produto: e.descricao,
-            };
-            const arr = map.get(nucleus);
-            if (arr) arr.push(diff); else map.set(nucleus, [diff]);
+        for (const am of anoMeses) {
+          let from = 0;
+          const batchSize = 1000;
+          while (!cancelled) {
+            const { data } = await supabase
+              .from('financeiro_lancamentos_v2')
+              .select('id, data_pagamento, valor, tipo_operacao, conta_bancaria_id, numero_documento, descricao, favorecido_id, subcentro, centro_custo, ano_mes')
+              .eq('fazenda_id', fid)
+              .eq('cliente_id', clienteId)
+              .eq('ano_mes', am)
+              .eq('cancelado', false)
+              .range(from, from + batchSize - 1);
+            if (!data || data.length === 0) break;
+            for (const e of data) {
+              const rec: ExistingRecord = {
+                id: e.id,
+                descricao: e.descricao,
+                numero_documento: e.numero_documento,
+                favorecido_id: e.favorecido_id,
+                favorecido_nome: e.favorecido_id ? (fornecedorMap.get(e.favorecido_id) || null) : null,
+                subcentro: e.subcentro,
+                data_pagamento: e.data_pagamento,
+                valor: e.valor,
+                tipo_operacao: e.tipo_operacao,
+                conta_bancaria_id: e.conta_bancaria_id,
+                centro_custo: e.centro_custo,
+                ano_mes: e.ano_mes,
+              };
+              const key = buildCandidateKey(fid, am, e.favorecido_id);
+              const arr = map.get(key);
+              if (arr) arr.push(rec); else map.set(key, [rec]);
+            }
+            if (data.length < batchSize) break;
+            from += batchSize;
           }
-          if (data.length < batchSize) break;
-          from += batchSize;
         }
       }
-      if (!cancelled) { setExistingByNucleus(map); setLoadingHashes(false); }
+      if (!cancelled) { setCandidateMap(map); setLoadingCandidates(false); }
     };
-    fetchExisting();
+    fetchCandidates();
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  const checkDuplicate = useCallback((row: LinhaImportada, _allRows: LinhaImportada[], existingMap: Map<string, ExistingDiffRecord[]>): { isDuplicate: boolean; nivel: NivelDuplicidade | null; match: ExistingDiffRecord | null } => {
-    if (!clienteId || !existingMap) return { isDuplicate: false, nivel: null, match: null };
-    const contaKey = normalizeImportText(row.contaOrigem);
-    const contaR = contaKey ? contaLookup.get(contaKey) : null;
-    const nucleus = buildNucleusHash(clienteId, row.fazendaId || '', row.dataPagamento || '', row.valor, row.tipoOperacao, contaR?.id || null);
-    const matches = existingMap.get(nucleus);
-    if (!matches || matches.length === 0) return { isDuplicate: false, nivel: null, match: null };
+  // Phase 2: Check duplicate for a single row
+  const checkDuplicate = useCallback((row: LinhaImportada, cMap: Map<string, ExistingRecord[]>): { isDuplicate: boolean; nivel: NivelDuplicidade | null; match: ExistingRecord | null } => {
+    if (!clienteId || !cMap || !row.fazendaId || !row.anoMes) return { isDuplicate: false, nivel: null, match: null };
 
-    let bestNivel = 'LEGITIMO' as NivelDuplicidade;
-    let bestMatch: ExistingDiffRecord | null = null;
-    const rank = { D1: 3, D2: 2, D3: 1, LEGITIMO: 0 } as const;
-    for (const ex of matches) {
-      const nivel = classificarNivelConferencia(
-        { fornecedor: row.fornecedor, descricao: row.produto, numeroDocumento: row.numeroDocumento, subcentro: row.subcentro },
-        ex,
-      );
-      if (rank[nivel] > rank[bestNivel]) { bestNivel = nivel; bestMatch = ex; }
+    // Resolve fornecedor ID from the row's resolved fornecedor
+    // The row may have fornecedorId set by the import parser, or we need to look up by name
+    // We search candidates by the fornecedor that was resolved during import
+    const contaKey = norm(row.contaOrigem);
+    const contaR = contaKey ? contaLookup.get(contaKey) : null;
+
+    // Try to find candidates: first by exact fornecedor match
+    // We need to search across all fornecedor IDs since we don't have the resolved ID here
+    // Strategy: iterate candidate keys that match fazenda+anoMes, compare fornecedor by name
+    const prefix = `${row.fazendaId}|${row.anoMes}|`;
+    
+    let bestNivel: NivelDuplicidade = 'LEGITIMO';
+    let bestMatch: ExistingRecord | null = null;
+    const rank = { D1: 4, D2: 3, D3: 2, LEGITIMO: 0 } as const;
+
+    for (const [key, candidates] of cMap.entries()) {
+      if (!key.startsWith(prefix)) continue;
+      
+      // Check if fornecedor matches (by name comparison)
+      const candidateFornecedorNome = candidates[0]?.favorecido_nome;
+      const importFornecedor = norm(row.fornecedor);
+      const existingFornecedor = norm(candidateFornecedorNome);
+      
+      // Skip if fornecedor doesn't match at all
+      if (importFornecedor && existingFornecedor && importFornecedor !== existingFornecedor) continue;
+      // If both are empty, they match
+      if (!importFornecedor && !existingFornecedor) { /* match */ }
+      // If one is empty and the other isn't, still consider as candidate but with penalty
+      
+      for (const ex of candidates) {
+        const nivel = classificarNivel(
+          {
+            dataPagamento: row.dataPagamento,
+            valor: row.valor,
+            tipoOperacao: row.tipoOperacao,
+            contaBancariaId: contaR?.id || null,
+            descricao: row.produto || row.subcentro,
+            numeroDocumento: row.numeroDocumento,
+            subcentro: row.subcentro,
+          },
+          ex,
+        );
+        if (rank[nivel] > rank[bestNivel]) {
+          bestNivel = nivel;
+          bestMatch = ex;
+        }
+        if (bestNivel === 'D1') break;
+      }
       if (bestNivel === 'D1') break;
     }
-    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel, match: bestMatch };
+
+    return { isDuplicate: bestNivel !== 'LEGITIMO', nivel: bestNivel === 'LEGITIMO' ? null : bestNivel, match: bestMatch };
   }, [clienteId, contaLookup]);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -441,11 +479,10 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!existingByNucleus) return;
+    if (!candidateMap) return;
     setRows(linhas.map(l => {
-      const result = checkDuplicate(l, linhas, existingByNucleus);
+      const result = checkDuplicate(l, candidateMap);
       const validation = validateRow(l, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais);
-      // Auto-select: new and warnings selected by default, D1 deselected, D2/D3 selected, errors deselected
       const autoSelect = validation.status === 'error' ? false
         : result.nivel === 'D1' ? false
         : true;
@@ -459,16 +496,16 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         _existingMatch: result.match,
       };
     }));
-  }, [linhas, existingByNucleus, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
+  }, [linhas, candidateMap, contaLookup, fazendaLookup, checkDuplicate, subcentrosOficiais]);
 
   const revalidateRows = useCallback((currentRows: EditableRow[]): EditableRow[] => {
-    if (!existingByNucleus) return currentRows;
+    if (!candidateMap) return currentRows;
     return currentRows.map(r => {
-      const result = checkDuplicate(r, currentRows, existingByNucleus);
+      const result = checkDuplicate(r, candidateMap);
       const validation = validateRow(r, contaLookup, fazendaLookup, result.isDuplicate, subcentrosOficiais);
       return { ...r, _validation: validation, _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel, _existingMatch: result.match };
     });
-  }, [contaLookup, fazendaLookup, existingByNucleus, checkDuplicate, subcentrosOficiais]);
+  }, [contaLookup, fazendaLookup, candidateMap, checkDuplicate, subcentrosOficiais]);
 
   const contaOptions = useMemo(() => contas.map(c => ({ value: c.nome_exibicao || c.nome_conta || c.id, label: c.nome_exibicao || c.nome_conta })).filter(c => !!c.value), [contas]);
   const fazendaOptions = useMemo(() => fazendas.map(f => ({ value: f.codigo || f.id, label: `${f.codigo} — ${f.nome}` })).filter(f => !!f.value), [fazendas]);
@@ -537,9 +574,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
         }
         return updated;
       });
-      if (!existingByNucleus) return nextRows;
+      if (!candidateMap) return nextRows;
       return nextRows.map(r => {
-        const result = checkDuplicate(r, nextRows, existingByNucleus);
+        const result = checkDuplicate(r, candidateMap);
         const validation = validateRow(r, contaLookup, fazendaLookup, result.isDuplicate);
         return { ...r, _validation: validation, _resolved: resolveInfo(r, contaLookup, fazendaLookup), _isDuplicate: result.isDuplicate, _nivelDuplicidade: result.nivel, _existingMatch: result.match };
       });
@@ -570,7 +607,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     const a = document.createElement('a'); a.href = url; a.download = `erros_importacao_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
-  // Import — ONLY selected rows
+  // Import
   const handleImport = async () => {
     const toImport = rows.filter(r => r._selected && r._validation.status !== 'error');
     if (toImport.length === 0) return;
@@ -582,11 +619,10 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
   };
 
   const selectedImportable = rows.filter(r => r._selected && r._validation.status !== 'error').length;
-  const isLoading = loadingHashes || existingByNucleus === null;
+  const isLoading = loadingCandidates || candidateMap === null;
 
   const visibleExcelHeaders = useMemo(() => excelHeaders.filter(h => h && h !== ''), [excelHeaders]);
 
-  // All filtered rows selected?
   const allFilteredSelected = filteredRows.length > 0 && filteredRows.every(r => r._selected);
   const toggleFilteredSelection = () => {
     const linhaSet = new Set(filteredRows.map(r => r.linha));
@@ -597,20 +633,32 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     }
   };
 
+  // Main columns for the simplified table
+  const mainCols = [
+    { key: 'anoMes', label: 'Competência' },
+    { key: 'dataPagamento', label: 'Dt Pagto' },
+    { key: 'fornecedor', label: 'Fornecedor' },
+    { key: 'produto', label: 'Produto' },
+    { key: 'valor', label: 'Valor' },
+    { key: 'subcentro', label: 'Centro/Subcentro' },
+    { key: 'numeroDocumento', label: 'Documento' },
+    { key: 'status', label: 'Status' },
+  ] as const;
+
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       <DialogContent className="max-w-[98vw] w-[98vw] max-h-[92vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-2 shrink-0">
           <DialogTitle className="text-sm flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-primary" />
-            Prévia Completa da Importação
+            Conferência de Importação
           </DialogTitle>
           <p className="text-xs text-muted-foreground">{nomeArquivo} — {stats.total} lançamentos</p>
         </DialogHeader>
 
         {isLoading && (
           <div className="px-4 pb-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando duplicidades...
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando candidatos no banco...
           </div>
         )}
 
@@ -620,7 +668,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
             <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
               <span className="text-xs text-amber-800 dark:text-amber-300">
-                <strong>{negativeCount}</strong> valor(es) negativo(s). O sistema aplica o sinal automaticamente.
+                <strong>{negativeCount}</strong> valor(es) negativo(s).
               </span>
               <Button variant="outline" size="sm" className="h-6 text-[10px] ml-auto" onClick={bulkFixNegativeValues}>
                 Converter todos para positivo
@@ -649,6 +697,9 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
               <Badge variant="outline" className="text-[10px] h-5 tabular-nums">
                 {stats.selected}/{stats.total} selecionadas
               </Badge>
+              {stats.d1 > 0 && <Badge variant="outline" className="text-[10px] h-5 text-red-600">D1: {stats.d1}</Badge>}
+              {stats.d2 > 0 && <Badge variant="outline" className="text-[10px] h-5 text-orange-600">D2: {stats.d2}</Badge>}
+              {stats.d3 > 0 && <Badge variant="outline" className="text-[10px] h-5 text-amber-600">D3: {stats.d3}</Badge>}
               <div className="flex gap-1 ml-auto flex-wrap">
                 <Button variant="outline" size="sm" className="h-6 text-[9px]" onClick={() => bulkSelect(() => true)}>
                   <CheckSquare className="h-3 w-3 mr-0.5" /> Todas
@@ -751,45 +802,41 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
           </div>
         </div>
 
-        {/* Grid */}
+        {/* Grid — simplified columns */}
         <TooltipProvider delayDuration={200}>
           <div className="flex-1 overflow-auto px-1 min-h-0">
             <table className="w-full text-[9px] border-collapse">
               <thead className="sticky top-0 z-10 bg-background">
                 <tr className="border-b">
-                  {/* Selection column */}
                   <th className="px-1 py-1.5 text-center w-6 sticky left-0 bg-background z-20">
-                    <Checkbox
-                      checked={allFilteredSelected}
-                      onCheckedChange={toggleFilteredSelection}
-                      className="h-3 w-3"
-                    />
+                    <Checkbox checked={allFilteredSelected} onCheckedChange={toggleFilteredSelection} className="h-3 w-3" />
                   </th>
-                  <th className="px-1 py-1.5 text-left font-semibold text-muted-foreground w-6">#</th>
+                  <th className="px-1 py-1.5 text-left font-semibold text-muted-foreground w-8">Status</th>
                   <th className="px-1 py-1.5 text-left font-semibold text-muted-foreground w-6">Ln</th>
 
-                  {/* Excel original columns */}
+                  {/* Excel original columns — hidden by default */}
                   {showOriginal && visibleExcelHeaders.map(h => (
                     <th key={`orig-${h}`} className="px-1.5 py-1.5 text-left font-semibold bg-blue-50/60 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 whitespace-nowrap min-w-[60px]">
                       {h}
                     </th>
                   ))}
-
                   {showOriginal && <th className="w-1 bg-border" />}
 
-                  {/* Resolved / system columns */}
-                  {RESOLVED_COLS.map(c => (
-                    <th key={c.key} className="px-1.5 py-1.5 text-left font-semibold bg-green-50/60 dark:bg-green-950/20 text-green-800 dark:text-green-300 whitespace-nowrap min-w-[70px]">
-                      {c.label}
-                    </th>
-                  ))}
-
-                  <th className="px-1.5 py-1.5 text-left font-semibold min-w-[180px]">Diagnóstico</th>
+                  {/* Main simplified columns */}
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[60px]">Competência</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[70px]">Dt Pagto</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[120px]">Fornecedor</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[100px]">Produto</th>
+                  <th className="px-1.5 py-1.5 text-right font-semibold whitespace-nowrap min-w-[70px]">Valor</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[100px]">Centro/Subcentro</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[60px]">Documento</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold whitespace-nowrap min-w-[70px]">Conta</th>
+                  <th className="px-1.5 py-1.5 text-left font-semibold min-w-[120px]">Diagnóstico</th>
                 </tr>
               </thead>
               <tbody>
                 {pagedRows.map(row => (
-                  <PreviewRow
+                  <ConferenceRow
                     key={row.linha}
                     row={row}
                     showOriginal={showOriginal}
@@ -800,6 +847,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
                     onToggleSelect={toggleSelect}
                     expanded={expandedRow === row.linha}
                     onToggleExpand={() => setExpandedRow(expandedRow === row.linha ? null : row.linha)}
+                    totalCols={4 + (showOriginal ? visibleExcelHeaders.length + 1 : 0) + 8 + 1}
                   />
                 ))}
                 {pagedRows.length === 0 && (
@@ -871,7 +919,6 @@ function DiagnosticBadge({ d }: { d: FieldDiagnostic }) {
   );
 }
 
-/** Nivel badge with D1/D2/D3/Novo label */
 function NivelBadge({ row }: { row: EditableRow }) {
   if (row._validation.status === 'error') {
     const cfg = NIVEL_LABELS.ERRO;
@@ -885,54 +932,35 @@ function NivelBadge({ row }: { row: EditableRow }) {
   return <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>;
 }
 
-/** Comparison panel showing imported vs existing record */
-function ComparisonPanel({ row }: { row: EditableRow }) {
-  const existing = row._existingMatch;
-  if (!existing) return <div className="text-[9px] text-muted-foreground p-2">Sem registro existente para comparar.</div>;
-
-  const fields: { label: string; imported: string; existing: string; match: boolean }[] = [
-    { label: 'Data Pagamento', imported: row.dataPagamento || '—', existing: existing.data_pagamento || '—', match: (row.dataPagamento || '') === (existing.data_pagamento || '') },
-    { label: 'Valor', imported: row.valor != null ? `R$ ${row.valor.toFixed(2)}` : '—', existing: existing.valor != null ? `R$ ${existing.valor.toFixed(2)}` : '—', match: row.valor === existing.valor },
-    { label: 'Tipo Operação', imported: row.tipoOperacao || '—', existing: existing.tipo_operacao || '—', match: normalizeImportText(row.tipoOperacao) === normalizeImportText(existing.tipo_operacao) },
-    { label: 'Descrição/Produto', imported: row.produto || '—', existing: existing.descricao || existing.produto || '—', match: normalizeImportText(row.produto) === normalizeImportText(existing.descricao) },
-    { label: 'Fornecedor', imported: row.fornecedor || '—', existing: existing.favorecido_nome || existing.favorecido_id || '—', match: false },
-    { label: 'Nº Documento', imported: row.numeroDocumento || '—', existing: existing.numero_documento || '—', match: normalizeImportText(row.numeroDocumento) === normalizeImportText(existing.numero_documento) },
-    { label: 'Subcentro', imported: row.subcentro || '—', existing: existing.subcentro || '—', match: normalizeImportText(row.subcentro) === normalizeImportText(existing.subcentro) },
-  ];
+/** Inline comparison: existing bank record shown below the imported row */
+function ExistingRecordRow({ existing, imported }: { existing: ExistingRecord; imported: EditableRow }) {
+  const cmpClass = (a: string | null | undefined, b: string | null | undefined) => {
+    const na = norm(a); const nb = norm(b);
+    if (na === nb) return 'text-muted-foreground';
+    return 'text-amber-600 dark:text-amber-400 font-semibold';
+  };
+  const valMatch = Math.round((imported.valor || 0) * 100) === Math.round((existing.valor || 0) * 100);
 
   return (
-    <div className="p-2 space-y-1">
-      <p className="text-[9px] font-bold text-muted-foreground uppercase">Comparação: Importado vs Existente</p>
-      <table className="w-full text-[9px] border-collapse">
-        <thead>
-          <tr className="border-b">
-            <th className="text-left py-0.5 px-1 text-muted-foreground w-[120px]">Campo</th>
-            <th className="text-left py-0.5 px-1 text-blue-700 dark:text-blue-400">Importando</th>
-            <th className="text-left py-0.5 px-1 text-amber-700 dark:text-amber-400">Já no banco</th>
-            <th className="text-center py-0.5 px-1 w-8">≡</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map(f => (
-            <tr key={f.label} className={`border-b border-border/30 ${!f.match ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}>
-              <td className="py-0.5 px-1 font-semibold text-muted-foreground">{f.label}</td>
-              <td className="py-0.5 px-1 font-mono">{f.imported}</td>
-              <td className="py-0.5 px-1 font-mono">{f.existing}</td>
-              <td className="py-0.5 px-1 text-center">
-                {f.match ? <CheckCircle2 className="h-3 w-3 text-green-500 inline" /> : <XCircle className="h-3 w-3 text-amber-500 inline" />}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-[8px] text-muted-foreground italic">
-        Campos iguais = núcleo do hash. Campos diferentes = diferenciadores que definem o nível.
-      </p>
-    </div>
+    <tr className="border-b border-border/30 bg-muted/40">
+      <td className="px-1 py-0.5" />
+      <td className="px-1 py-0.5 text-[8px] text-muted-foreground italic" colSpan={2}>↳ banco</td>
+      <td className="px-1.5 py-0.5 text-muted-foreground font-mono">{existing.ano_mes || '—'}</td>
+      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(imported.dataPagamento, existing.data_pagamento)}`}>{existing.data_pagamento || '—'}</td>
+      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(imported.fornecedor, existing.favorecido_nome)}`}>{existing.favorecido_nome || '—'}</td>
+      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(imported.produto, existing.descricao)}`}>{existing.descricao || '—'}</td>
+      <td className={`px-1.5 py-0.5 text-right tabular-nums font-mono ${valMatch ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400 font-semibold'}`}>
+        {existing.valor != null ? `R$ ${existing.valor.toFixed(2)}` : '—'}
+      </td>
+      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(imported.subcentro, existing.subcentro)}`}>{existing.subcentro || '—'}</td>
+      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(imported.numeroDocumento, existing.numero_documento)}`}>{existing.numero_documento || '—'}</td>
+      <td className="px-1.5 py-0.5 text-muted-foreground font-mono text-[8px]">{existing.conta_bancaria_id ? '✓' : '—'}</td>
+      <td className="px-1.5 py-0.5" />
+    </tr>
   );
 }
 
-function PreviewRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOptions, onUpdate, onToggleSelect, expanded, onToggleExpand }: {
+function ConferenceRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOptions, onUpdate, onToggleSelect, expanded, onToggleExpand, totalCols }: {
   row: EditableRow;
   showOriginal: boolean;
   excelHeaders: string[];
@@ -942,6 +970,7 @@ function PreviewRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOpti
   onToggleSelect: (linha: number) => void;
   expanded: boolean;
   onToggleExpand: () => void;
+  totalCols: number;
 }) {
   const v = row._validation;
   const r = row._resolved;
@@ -950,48 +979,20 @@ function PreviewRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOpti
     : v.status === 'warning' ? 'bg-amber-50/60 dark:bg-amber-950/20' : '';
 
   const origCellCls = 'px-1.5 py-0.5 text-muted-foreground font-mono bg-blue-50/20 dark:bg-blue-950/5 whitespace-nowrap max-w-[120px] overflow-hidden text-ellipsis';
-  const resCellCls = 'px-1.5 py-0.5 bg-green-50/20 dark:bg-green-950/5';
-
-  const editSelect = (field: keyof LinhaImportada, current: string | null, options: { value: string; label: string }[], placeholder = '—') => (
-    <Select value={current || ''} onValueChange={val => onUpdate(row.linha, field, val || null)}>
-      <SelectTrigger className="h-5 text-[9px] px-1 border-0 bg-transparent shadow-none min-w-[60px]">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="__none__" className="text-xs">— Nenhum —</SelectItem>
-        {options.map(o => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-
-  const editInput = (field: keyof LinhaImportada, current: string | null, className = '') => (
-    <Input
-      className={`h-5 text-[9px] px-1 border-0 bg-transparent shadow-none ${className}`}
-      value={current || ''}
-      onChange={e => onUpdate(row.linha, field, e.target.value || null)}
-    />
-  );
-
-  const isDupRow = row._isDuplicate && row._nivelDuplicidade && row._nivelDuplicidade !== 'LEGITIMO';
-  const totalCols = 3 + (showOriginal ? excelHeaders.length + 1 : 0) + RESOLVED_COLS.length + 1;
+  const hasMatch = row._existingMatch && row._nivelDuplicidade && row._nivelDuplicidade !== 'LEGITIMO';
 
   return (
     <>
       <tr className={`border-b border-border/50 ${bgClass} ${!row._selected ? 'opacity-50' : ''} hover:bg-muted/30`}>
         {/* Checkbox */}
         <td className="px-1 py-0.5 text-center sticky left-0 bg-background z-10">
-          <Checkbox
-            checked={row._selected}
-            onCheckedChange={() => onToggleSelect(row.linha)}
-            className="h-3 w-3"
-            disabled={v.status === 'error'}
-          />
+          <Checkbox checked={row._selected} onCheckedChange={() => onToggleSelect(row.linha)} className="h-3 w-3" disabled={v.status === 'error'} />
         </td>
-        {/* Status icon + nivel */}
+        {/* Status + expand */}
         <td className="px-1 py-0.5">
           <div className="flex items-center gap-0.5">
             <NivelBadge row={row} />
-            {isDupRow && (
+            {hasMatch && (
               <button onClick={onToggleExpand} className="text-muted-foreground hover:text-foreground">
                 {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </button>
@@ -1008,51 +1009,28 @@ function PreviewRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOpti
         ))}
         {showOriginal && <td className="w-1 bg-border" />}
 
-        {/* Resolved columns */}
-        <td className={resCellCls}>
-          {editSelect('fazenda', row.fazenda, fazendaOptions)}
-          {r.fazendaResolvidaNome && <span className="text-[7px] text-green-600 block pl-1">✓ {r.fazendaResolvidaNome}</span>}
+        {/* Main columns */}
+        <td className="px-1.5 py-0.5 tabular-nums">{row.anoMes || '—'}</td>
+        <td className="px-1.5 py-0.5 tabular-nums">{row.dataPagamento || '—'}</td>
+        <td className="px-1.5 py-0.5 max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap" title={row.fornecedor || ''}>
+          {row.fornecedor || <span className="text-muted-foreground italic">vazio</span>}
         </td>
-        <td className={resCellCls}>
-          {editSelect('contaOrigem', row.contaOrigem, contaOptions)}
-          {r.contaResolvidaNome && <span className="text-[7px] text-green-600 block pl-1">✓ {r.contaResolvidaNome}</span>}
+        <td className="px-1.5 py-0.5 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title={row.produto || ''}>
+          {row.produto || row.subcentro || '—'}
         </td>
-        <td className={resCellCls}>
-          {editSelect('contaDestino', row.contaDestino, contaOptions)}
-          {r.contaDestinoResolvidaNome && <span className="text-[7px] text-green-600 block pl-1">✓ {r.contaDestinoResolvidaNome}</span>}
+        <td className="px-1.5 py-0.5 text-right tabular-nums font-bold text-[10px]">
+          {row.valor != null ? `R$ ${row.valor.toFixed(2)}` : '—'}
         </td>
-        <td className={resCellCls}>
-          {editInput('fornecedor', row.fornecedor)}
+        <td className="px-1.5 py-0.5 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title={row.subcentro || ''}>
+          {row.subcentro || '—'}
         </td>
-        <td className={resCellCls}>
-          {editInput('subcentro', row.subcentro)}
-        </td>
-        <td className={resCellCls}>
-          <Select value={row.tipoDocumento || ''} onValueChange={val => onUpdate(row.linha, 'tipoDocumento', val || null)}>
-            <SelectTrigger className="h-5 text-[9px] px-1 border-0 bg-transparent shadow-none min-w-[50px]">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__" className="text-xs">—</SelectItem>
-              {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </td>
-        <td className={resCellCls}>
-          {editInput('numeroDocumento', row.numeroDocumento, 'tabular-nums')}
-        </td>
-        <td className={`${resCellCls} text-right tabular-nums font-bold text-[10px]`}>
-          <Input
-            className="h-5 text-[9px] px-1 border-0 bg-transparent shadow-none text-right tabular-nums w-[70px]"
-            value={row.valor != null ? String(row.valor) : ''}
-            onChange={e => {
-              const num = parseFloat(e.target.value);
-              if (!isNaN(num)) onUpdate(row.linha, 'valor', num);
-            }}
-          />
-        </td>
-        <td className={`${resCellCls} font-semibold`}>
-          <NivelBadge row={row} />
+        <td className="px-1.5 py-0.5 tabular-nums">{row.numeroDocumento || '—'}</td>
+        <td className="px-1.5 py-0.5 text-[8px]">
+          {r.contaResolvidaNome ? (
+            <span className="text-green-600" title={r.contaResolvidaNome}>✓ {r.contaResolvidaNome.substring(0, 12)}</span>
+          ) : (
+            <span className="text-red-500">{row.contaOrigem?.substring(0, 12) || '—'}</span>
+          )}
         </td>
 
         {/* Diagnostics */}
@@ -1067,18 +1045,10 @@ function PreviewRow({ row, showOriginal, excelHeaders, contaOptions, fazendaOpti
         </td>
       </tr>
 
-      {/* Expanded comparison row */}
-      {expanded && isDupRow && (
-        <tr className="border-b border-border/50 bg-muted/20">
-          <td colSpan={totalCols + 1}>
-            <ComparisonPanel row={row} />
-          </td>
-        </tr>
+      {/* Expanded: show existing bank record inline for comparison */}
+      {expanded && hasMatch && row._existingMatch && (
+        <ExistingRecordRow existing={row._existingMatch} imported={row} />
       )}
     </>
   );
-}
-
-function normalizeImportTextForCompare(value: string | null | undefined): string {
-  return normalizeImportText(value);
 }
