@@ -25,7 +25,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     // Lanç. Zoo sub-screens
     const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'resumo_pastos'];
     // Lanç. Fin sub-screens (V2 operational)
-    const lancarFinTabs: TabId[] = ['financeiro_v2_hub', 'financeiro_v2', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria', 'conta_boitel'];
+    const lancarFinTabs: TabId[] = ['financeiro_v2_hub', 'financeiro_v2', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria', 'conta_boitel', 'auditoria_duplicidade'];
     // Zootécnico (analysis) sub-screens
     const zooTabs: TabId[] = ['visao_zoo_hub', 'zootecnico', 'zootecnico_hub', 'indicadores', 'visao_anual_zoo', 'conciliacao', 'preco_mercado', 'graficos_analise', 'movimentacao', 'fluxo_anual', 'evolucao_rebanho_hub', 'evolucao_categoria', 'evolucao', 'valor_rebanho', 'pastos', 'fechamento_executivo', 'analise_consultor', 'analise_operacional', 'mapa_pastos', 'mapa_geo_pastos', 'painel_consultor_hub', 'painel_consultor', 'meta_gmd', 'meta_preco', 'meta_consolidacao', 'meta_movimentacoes', 'precos_mercado_hub', 'conferencia_gmd'];
     // Financeiro (analysis) sub-screens
