@@ -254,7 +254,7 @@ export function useContratos() {
         ano_mes: anoMes,
         valor: contrato.valor,
         tipo_operacao: '2-Saídas',
-        status_transacao: 'meta',
+        status_transacao: 'programado',
         descricao: contrato.produto || null,
         macro_custo: contrato.macro_custo || null,
         centro_custo: contrato.centro_custo || null,
