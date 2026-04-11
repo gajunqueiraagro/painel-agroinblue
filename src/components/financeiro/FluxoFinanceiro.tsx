@@ -419,7 +419,8 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 <td
                   className={`px-1 py-px text-left leading-tight ${rowFont} ${getIndentClass(row)} ${
                     isSubSub ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 ${nivel === 1 ? 'bg-muted/60' : nivel === 2 ? 'bg-muted/20' : 'bg-card'} z-10 truncate`}
+                  } sticky left-0 z-10 truncate`}
+                  style={{ background: nivel === 1 || nivel === 2 ? 'hsl(var(--muted))' : 'hsl(var(--card))' }}
                 >
                   {row.label}
                 </td>
