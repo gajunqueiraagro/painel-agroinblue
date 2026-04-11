@@ -46,35 +46,40 @@ interface RowDef {
   indent?: number;
   tipo?: 'entrada' | 'saida' | 'saldo';
   amploOnly?: boolean;
+  /** Nível visual: 1=total forte, 2=subtotal/grupo médio, 3=detalhe (default) */
+  nivel?: 1 | 2 | 3;
 }
 
 const ROWS: RowDef[] = [
   { label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
 
-  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada' },
-  { label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada' },
+  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada', nivel: 1 },
+  { label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada', nivel: 2 },
   { label: 'Receitas Pecuárias', key: 'receitasPec', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Receitas Agricultura', key: 'receitasAgri', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Outras Receitas', key: 'receitasOutras', indent: 2, tipo: 'entrada', amploOnly: true },
-  { label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada' },
+  { label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada', nivel: 2 },
   { label: 'Captação Financ. Pec.', key: 'captacaoPec', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Captação Financ. Agri.', key: 'captacaoAgri', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Aportes Pessoais', key: 'aportes', indent: 2, tipo: 'entrada', amploOnly: true },
 
-  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida' },
-  { label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida' },
-  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida' },
+  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida', nivel: 1 },
+  { label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida', nivel: 2 },
+  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida', nivel: 2 },
   { label: 'Desemb. Produtivo Pec.', key: 'desembolsoPec', indent: 2, tipo: 'saida', amploOnly: true },
   { label: 'Desemb. Produtivo Agri.', key: 'desembolsoAgri', indent: 2, tipo: 'saida', amploOnly: true },
-  { label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida' },
-  { label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida' },
+  { label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida', nivel: 2 },
+  { label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida', nivel: 2 },
   { label: 'Amortizações Fin. Pec.', key: 'amortizacoesPec', indent: 2, tipo: 'saida', amploOnly: true },
   { label: 'Amortizações Fin. Agri.', key: 'amortizacoesAgri', indent: 2, tipo: 'saida', amploOnly: true },
-  { label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida' },
+  { label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida', nivel: 2 },
 
-  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
-  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
+  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo', bold: true, nivel: 1 },
+  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo', nivel: 1 },
 ];
+
+/** Meses que fecham trimestre — borda direita mais visível */
+const QUARTER_END = new Set([3, 6, 9]);
 
 // ---------------------------------------------------------------------------
 // Props
@@ -264,12 +269,12 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 key={m.mes}
                 className={`px-1 py-0.5 text-right text-[10px] font-bold ${
                   m.mes > mesAte ? 'text-muted-foreground/40' : 'text-muted-foreground'
-                }`}
+                } ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
               >
                 {m.label}
               </th>
             ))}
-            <th className="px-1 py-0.5 text-right text-[10px] font-bold text-foreground bg-muted/50">
+            <th className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground bg-muted border-l-2 border-border">
               Total
             </th>
           </tr>
@@ -277,13 +282,24 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
         <tbody>
           {visibleRows.map(row => {
             const isSubSub = row.indent === 2;
+            const nivel = row.nivel ?? 3;
+
+            const rowBg =
+              nivel === 1 ? 'bg-muted/60' :
+              nivel === 2 ? 'bg-muted/20' :
+              '';
+
+            const rowFont =
+              nivel === 1 ? 'font-bold text-[10px]' :
+              nivel === 2 ? 'font-semibold text-[9px]' :
+              'font-normal text-[9px]';
 
             return (
-              <tr key={row.key} className={`border-b border-border/40 ${row.bold ? 'bg-muted/30' : ''}`}>
+              <tr key={row.key} className={`border-b border-border/40 ${rowBg}`}>
                 <td
-                  className={`px-1 py-px text-left leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} ${getIndentClass(row)} ${
+                  className={`px-1 py-px text-left leading-tight ${rowFont} ${getIndentClass(row)} ${
                     isSubSub ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 bg-card z-10 truncate`}
+                  } sticky left-0 ${nivel === 1 ? 'bg-muted/60' : nivel === 2 ? 'bg-muted/20' : 'bg-card'} z-10 truncate`}
                 >
                   {row.label}
                 </td>
@@ -297,13 +313,13 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-px text-right leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} ${colorClass}`}
+                      className={`px-1 py-px text-right leading-tight ${rowFont} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
-                <td className={`px-1 py-px text-right leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} bg-muted/50 ${getValueColor(totals[row.key] || 0, row, false)}`}>
+                <td className={`px-1 py-px text-right leading-tight ${rowFont} bg-muted border-l-2 border-border ${getValueColor(totals[row.key] || 0, row, false)}`}>
                   {fmtVal(totals[row.key] || 0, fmtMode)}
                 </td>
               </tr>
