@@ -147,11 +147,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  const anos = useMemo(() => {
-    const arr: string[] = [];
-    for (let y = currentYear; y >= currentYear - 3; y--) arr.push(String(y));
-    return arr;
-  }, [currentYear]);
+  const [anos, setAnos] = useState<string[]>([String(currentYear)]);
+
+  // Load dynamic years from saldos + lancamentos
+  useEffect(() => {
+    if (!clienteId) return;
+    Promise.all([
+      supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId),
+      supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false),
+    ]).then(([sRes, lRes]) => {
+      const set = new Set<string>();
+      set.add(String(currentYear));
+      (sRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
+      (lRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
+      setAnos(Array.from(set).sort((a, b) => b.localeCompare(a)));
+    });
+  }, [clienteId, currentYear]);
 
   const [ano, setAno] = useState(initialAno || String(currentYear));
   const [contaId, setContaId] = useState<string>(initialConta || '__all__');
