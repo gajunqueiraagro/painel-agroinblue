@@ -257,7 +257,7 @@ export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
     return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
   }
 
-  // Fallback: classificar pelo escopo como desembolso
+  // Fallback: tudo que não é agricultura vai para pecuária
   return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
 }
 
