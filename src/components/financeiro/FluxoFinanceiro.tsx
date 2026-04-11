@@ -134,6 +134,26 @@ function buildPlanoTree(
     sMap.get(sub)![m - 1] += val;
   }
 
+  // Fixed executive order for macros
+  const MACRO_ORDER_ENTRADA: string[] = [
+    'receita operacional',
+    'entradas financeiras',
+  ];
+  const MACRO_ORDER_SAIDA: string[] = [
+    'deduções receitas',
+    'dedução de receitas',
+    'custeio produção',
+    'custeio produtivo',
+    'investimentos',
+    'investimento na fazenda',
+    'investimento em bovinos',
+    'saídas financeiras',
+    'amortizações financeiras',
+    'distribuição',
+    'dividendos',
+  ];
+  const orderList = tipoFilter === 'entrada' ? MACRO_ORDER_ENTRADA : MACRO_ORDER_SAIDA;
+
   // Build tree
   const roots: TreeNode[] = [];
 
@@ -202,7 +222,18 @@ function buildPlanoTree(
     roots.push(macroNode);
   }
 
-  roots.sort((a, b) => b.total - a.total);
+  // Sort by fixed executive order; unknown macros go to end sorted by value
+  roots.sort((a, b) => {
+    const aKey = a.label.toLowerCase().trim();
+    const bKey = b.label.toLowerCase().trim();
+    const aIdx = orderList.findIndex(o => aKey === o || aKey.includes(o) || o.includes(aKey));
+    const bIdx = orderList.findIndex(o => bKey === o || bKey.includes(o) || o.includes(bKey));
+    const aPos = aIdx >= 0 ? aIdx : 999;
+    const bPos = bIdx >= 0 ? bIdx : 999;
+    if (aPos !== bPos) return aPos - bPos;
+    return b.total - a.total;
+  });
+
   return roots;
 }
 
