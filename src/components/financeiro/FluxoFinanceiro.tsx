@@ -269,12 +269,12 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 key={m.mes}
                 className={`px-1 py-0.5 text-right text-[10px] font-bold ${
                   m.mes > mesAte ? 'text-muted-foreground/40' : 'text-muted-foreground'
-                }`}
+                } ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
               >
                 {m.label}
               </th>
             ))}
-            <th className="px-1 py-0.5 text-right text-[10px] font-bold text-foreground bg-muted/50">
+            <th className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground bg-muted border-l-2 border-border">
               Total
             </th>
           </tr>
@@ -282,13 +282,24 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
         <tbody>
           {visibleRows.map(row => {
             const isSubSub = row.indent === 2;
+            const nivel = row.nivel ?? 3;
+
+            const rowBg =
+              nivel === 1 ? 'bg-muted/60' :
+              nivel === 2 ? 'bg-muted/20' :
+              '';
+
+            const rowFont =
+              nivel === 1 ? 'font-bold text-[10px]' :
+              nivel === 2 ? 'font-semibold text-[9px]' :
+              'font-normal text-[9px]';
 
             return (
-              <tr key={row.key} className={`border-b border-border/40 ${row.bold ? 'bg-muted/30' : ''}`}>
+              <tr key={row.key} className={`border-b border-border/40 ${rowBg}`}>
                 <td
-                  className={`px-1 py-px text-left leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} ${getIndentClass(row)} ${
+                  className={`px-1 py-px text-left leading-tight ${rowFont} ${getIndentClass(row)} ${
                     isSubSub ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 bg-card z-10 truncate`}
+                  } sticky left-0 ${nivel === 1 ? 'bg-muted/60' : nivel === 2 ? 'bg-muted/20' : 'bg-card'} z-10 truncate`}
                 >
                   {row.label}
                 </td>
@@ -302,13 +313,13 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-px text-right leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} ${colorClass}`}
+                      className={`px-1 py-px text-right leading-tight ${rowFont} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
-                <td className={`px-1 py-px text-right leading-tight ${row.bold ? 'font-bold text-[10px]' : 'font-normal text-[9px]'} bg-muted/50 ${getValueColor(totals[row.key] || 0, row, false)}`}>
+                <td className={`px-1 py-px text-right leading-tight ${rowFont} bg-muted border-l-2 border-border ${getValueColor(totals[row.key] || 0, row, false)}`}>
                   {fmtVal(totals[row.key] || 0, fmtMode)}
                 </td>
               </tr>
