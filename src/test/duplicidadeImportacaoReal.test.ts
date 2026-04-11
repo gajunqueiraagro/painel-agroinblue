@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classificarLinha,
+  classificarLote,
   gerarHashImportacao,
   type RegistroExistente,
   type LinhaParaClassificar,
