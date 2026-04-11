@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classificarLinha,
+  classificarLote,
   gerarHashImportacao,
   type RegistroExistente,
   type LinhaParaClassificar,
@@ -306,5 +307,121 @@ describe('Validação 4 — Cenários reais problemáticos', () => {
       expect(typeof m.match).toBe('boolean');
       expect(m.detalhe).toBeTruthy();
     }
+  });
+});
+
+// ── Cardinality-aware group tests ──
+
+describe('classificarLote — cardinalidade de grupo', () => {
+  const baseLinha: LinhaParaClassificar = {
+    dataPagamento: '2020-06-01',
+    anoMes: '2020-06',
+    valor: 1537.52,
+    fornecedorId: FORNECEDOR_BRADESCO,
+    fornecedorNome: 'Banco Bradesco',
+    contaBancariaId: CONTA_BB,
+    subcentro: 'Distribuição de Dividendos Despesas Pessoais',
+    descricao: 'Distribuição de Dividendos Despesas Pessoais',
+    numeroDocumento: null,
+    tipoOperacao: '2-Saídas',
+  };
+
+  const baseExistente: RegistroExistente = {
+    id: 'ex-div-1',
+    data_pagamento: '2020-06-01',
+    data_competencia: '2020-06-01',
+    valor: 1537.52,
+    fornecedor_id: FORNECEDOR_BRADESCO,
+    fornecedor_nome: 'Banco Bradesco',
+    conta_bancaria_id: CONTA_BB,
+    subcentro: 'Distribuição de Dividendos Despesas Pessoais',
+    centro_custo: 'Pessoas',
+    descricao: 'Distribuição de Dividendos Despesas Pessoais',
+    numero_documento: null,
+    tipo_operacao: '2-Saídas',
+    ano_mes: '2020-06',
+  };
+
+  it('4 arquivo × 4 banco = 4 DUPLICADO_EXATO', () => {
+    const linhas = Array.from({ length: 4 }, (_, i) => ({ index: i, linha: { ...baseLinha } }));
+    const existentes = Array.from({ length: 4 }, (_, i) => ({ ...baseExistente, id: `ex-div-${i}` }));
+
+    const resultados = classificarLote(linhas, existentes);
+
+    expect(resultados.size).toBe(4);
+    for (const [, r] of resultados) {
+      expect(r.classificacao).toBe('DUPLICADO_EXATO');
+      expect(r.grupoArquivo).toBe(4);
+      expect(r.grupoBanco).toBe(4);
+    }
+  });
+
+  it('4 arquivo × 3 banco = 3 DUPLICADO_EXATO + 1 NOVO', () => {
+    const linhas = Array.from({ length: 4 }, (_, i) => ({ index: i, linha: { ...baseLinha } }));
+    const existentes = Array.from({ length: 3 }, (_, i) => ({ ...baseExistente, id: `ex-div-${i}` }));
+
+    const resultados = classificarLote(linhas, existentes);
+
+    expect(resultados.size).toBe(4); // nenhuma linha some
+    const dupes = [...resultados.values()].filter(r => r.classificacao === 'DUPLICADO_EXATO');
+    const novos = [...resultados.values()].filter(r => r.classificacao === 'NOVO');
+    expect(dupes.length).toBe(3);
+    expect(novos.length).toBe(1);
+  });
+
+  it('4 arquivo × 0 banco = 4 NOVO', () => {
+    const linhas = Array.from({ length: 4 }, (_, i) => ({ index: i, linha: { ...baseLinha } }));
+
+    const resultados = classificarLote(linhas, []);
+
+    expect(resultados.size).toBe(4);
+    for (const [, r] of resultados) {
+      expect(r.classificacao).toBe('NOVO');
+    }
+  });
+
+  it('2 arquivo × 5 banco = 2 DUPLICADO_EXATO', () => {
+    const linhas = Array.from({ length: 2 }, (_, i) => ({ index: i, linha: { ...baseLinha } }));
+    const existentes = Array.from({ length: 5 }, (_, i) => ({ ...baseExistente, id: `ex-div-${i}` }));
+
+    const resultados = classificarLote(linhas, existentes);
+
+    expect(resultados.size).toBe(2);
+    for (const [, r] of resultados) {
+      expect(r.classificacao).toBe('DUPLICADO_EXATO');
+    }
+  });
+
+  it('descrição com variação "ok" prefix cai em grupo correto', () => {
+    const linhaComOk = { ...baseLinha, descricao: 'okBradesco Consorcio' };
+    const linhaSemOk = { ...baseLinha, descricao: 'Bradesco Consorcio' };
+    const existente = { ...baseExistente, descricao: 'Bradesco Consorcio' };
+
+    const linhas = [
+      { index: 0, linha: linhaComOk },
+      { index: 1, linha: linhaSemOk },
+    ];
+    const resultados = classificarLote(linhas, [existente]);
+
+    // Both should group to same key (normDesc strips "ok" prefix)
+    expect(resultados.size).toBe(2);
+    const dupes = [...resultados.values()].filter(r => r.classificacao === 'DUPLICADO_EXATO');
+    const novos = [...resultados.values()].filter(r => r.classificacao === 'NOVO');
+    expect(dupes.length).toBe(1); // only 1 existing record
+    expect(novos.length).toBe(1); // excess becomes NOVO
+  });
+
+  it('todas as linhas sempre aparecem no resultado', () => {
+    const mixed = [
+      { index: 0, linha: { ...baseLinha } },
+      { index: 1, linha: { ...baseLinha, valor: 999.99 } },
+      { index: 2, linha: { ...baseLinha } },
+      { index: 3, linha: { ...baseLinha, fornecedorId: 'other', fornecedorNome: 'Outro' } },
+    ];
+    const existentes = [{ ...baseExistente }];
+
+    const resultados = classificarLote(mixed, existentes);
+
+    expect(resultados.size).toBe(4); // NENHUMA LINHA SOME
   });
 });

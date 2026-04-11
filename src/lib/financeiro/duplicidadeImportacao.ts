@@ -169,7 +169,71 @@ export function gerarHashImportacao(
   return `h${Math.abs(hash).toString(36)}`;
 }
 
-// ── Classification ──
+// ── Strong key for cardinality grouping ──
+
+function normDesc(value: string | null | undefined): string {
+  const n = norm(value);
+  // Remove common prefixes like "ok" that appear in bank descriptions
+  return n.replace(/^ok\s*/i, '').trim();
+}
+
+export function gerarChaveForte(
+  tipoOperacao: string | null,
+  contaId: string | null,
+  valor: number,
+  fornecedorNorm: string | null,
+  subcentro: string | null,
+  descricao: string | null,
+  documento: string | null,
+): string {
+  return [
+    norm(tipoOperacao),
+    (contaId || '').trim(),
+    String(Math.round(valor * 100)),
+    norm(fornecedorNorm),
+    norm(subcentro),
+    normDesc(descricao),
+    norm(documento),
+  ].join('|');
+}
+
+export function gerarChaveForteExistente(ex: RegistroExistente): string {
+  return gerarChaveForte(
+    ex.tipo_operacao,
+    ex.conta_bancaria_id,
+    ex.valor ?? 0,
+    ex.fornecedor_nome,
+    ex.subcentro,
+    ex.descricao,
+    ex.numero_documento,
+  );
+}
+
+export function gerarChaveForteLinha(linha: LinhaParaClassificar): string {
+  return gerarChaveForte(
+    linha.tipoOperacao,
+    linha.contaBancariaId,
+    linha.valor,
+    linha.fornecedorNome,
+    linha.subcentro,
+    linha.descricao,
+    linha.numeroDocumento,
+  );
+}
+
+// ── Cardinality result for a single line within a group ──
+
+export interface ResultadoCardinalidade {
+  classificacao: ClassificacaoImportacao;
+  motivos: MotivoConflito[];
+  resumo: string;
+  registroExistenteId: string | null;
+  grupoArquivo: number;
+  grupoBanco: number;
+  chaveGrupo: string;
+}
+
+// ── Classification (single line, kept for backward compat) ──
 
 /**
  * Classifica uma linha importada contra TODOS os registros existentes
@@ -192,7 +256,6 @@ export function classificarLinha(
   for (const ex of existentes) {
     const motivos: MotivoConflito[] = [];
     
-    // Check each field
     const mValor = valorIgual(linha.valor, ex.valor);
     motivos.push({ campo: 'Valor', match: mValor, detalhe: mValor ? `Igual: R$ ${linha.valor.toFixed(2)}` : `Arquivo: R$ ${linha.valor.toFixed(2)} | Banco: R$ ${(ex.valor ?? 0).toFixed(2)}` });
 
@@ -212,9 +275,6 @@ export function classificarLinha(
     const mDescricao = textoSimilar(linha.descricao, ex.descricao);
     motivos.push({ campo: 'Descrição', match: mDescricao, detalhe: mDescricao ? 'Descrição similar (≥90%)' : `Arquivo: "${(linha.descricao || '').substring(0, 40)}" | Banco: "${(ex.descricao || '').substring(0, 40)}"` });
 
-    // ── DUPLICADO EXATO ──
-    // Todas obrigatórias: valor + data + conta + fornecedor
-    // + pelo menos 1 complementar: documento OU descrição similar
     const obrigatoriasOk = mValor && mDataPagto && mConta && mFornecedor;
     const complementarOk = mDocumento || mDescricao;
 
@@ -222,18 +282,14 @@ export function classificarLinha(
       const resumoParts = ['valor igual', 'mesma data', 'mesma conta', 'mesmo fornecedor'];
       if (mDocumento) resumoParts.push('mesmo documento');
       if (mDescricao) resumoParts.push('descrição similar');
-      const resumo = `DUPLICADO EXATO: ${resumoParts.join(' + ')}`;
-      // Always pick exact match if found
-      return { classificacao: 'DUPLICADO_EXATO', motivos, resumo, registroExistenteId: ex.id };
+      return { classificacao: 'DUPLICADO_EXATO', motivos, resumo: `DUPLICADO EXATO: ${resumoParts.join(' + ')}`, registroExistenteId: ex.id };
     }
 
     if (obrigatoriasOk && !complementarOk) {
-      // All 4 mandatory match but no complementary → still exact
-      const resumo = 'DUPLICADO EXATO: valor + data + conta + fornecedor iguais';
-      return { classificacao: 'DUPLICADO_EXATO', motivos, resumo, registroExistenteId: ex.id };
+      return { classificacao: 'DUPLICADO_EXATO', motivos, resumo: 'DUPLICADO EXATO: valor + data + conta + fornecedor iguais', registroExistenteId: ex.id };
     }
 
-    // ── SUSPEITA ──
+    // SUSPEITA scoring
     let score = 0;
     const suspeitaParts: string[] = [];
 
@@ -258,4 +314,123 @@ export function classificarLinha(
   }
 
   return { classificacao: 'NOVO', motivos: [], resumo: 'Nenhum conflito relevante encontrado', registroExistenteId: null };
+}
+
+// ── Batch classification with cardinality awareness ──
+
+/**
+ * Classifica um lote inteiro de linhas considerando cardinalidade de grupos.
+ * 
+ * Etapa A: agrupa linhas do arquivo por chave forte
+ * Etapa B: agrupa registros existentes pela mesma chave forte
+ * Etapa C: compara cardinalidade e distribui classificações
+ * 
+ * Para grupos com chave forte idêntica:
+ * - Se arquivo=4, banco=4 → 4 DUPLICADO_EXATO
+ * - Se arquivo=4, banco=3 → 3 DUPLICADO_EXATO + 1 NOVO
+ * - Se arquivo=4, banco=0 → 4 NOVO (ou SUSPEITA via fallback)
+ * 
+ * Linhas que não agrupam por chave forte caem no fallback individual.
+ */
+export function classificarLote(
+  linhasIndexadas: Array<{ index: number; linha: LinhaParaClassificar }>,
+  existentes: RegistroExistente[],
+): Map<number, ResultadoCardinalidade> {
+  const resultados = new Map<number, ResultadoCardinalidade>();
+
+  // Etapa A: group file lines by strong key
+  const gruposArquivo = new Map<string, Array<{ index: number; linha: LinhaParaClassificar }>>();
+  for (const item of linhasIndexadas) {
+    const chave = gerarChaveForteLinha(item.linha);
+    const arr = gruposArquivo.get(chave);
+    if (arr) arr.push(item); else gruposArquivo.set(chave, [item]);
+  }
+
+  // Etapa B: group existing records by same strong key
+  const gruposBanco = new Map<string, RegistroExistente[]>();
+  for (const ex of existentes) {
+    const chave = gerarChaveForteExistente(ex);
+    const arr = gruposBanco.get(chave);
+    if (arr) arr.push(ex); else gruposBanco.set(chave, [ex]);
+  }
+
+  // Track consumed existing record IDs so they aren't reused
+  const consumedIds = new Set<string>();
+
+  // Etapa C: compare cardinality per group
+  for (const [chave, grupoFile] of gruposArquivo.entries()) {
+    const grupoDB = gruposBanco.get(chave) || [];
+    const countFile = grupoFile.length;
+    const countDB = grupoDB.length;
+
+    // Only do cardinality matching when there ARE existing records with this key
+    if (countDB > 0) {
+      // Match up to min(countFile, countDB) as DUPLICADO_EXATO
+      const matchCount = Math.min(countFile, countDB);
+
+      for (let i = 0; i < grupoFile.length; i++) {
+        const item = grupoFile[i];
+        if (i < matchCount) {
+          // This line is a cardinality-matched duplicate
+          const matchedEx = grupoDB[i];
+          consumedIds.add(matchedEx.id);
+
+          const motivos: MotivoConflito[] = [
+            { campo: 'Grupo', match: true, detalhe: `Grupo idêntico: ${countFile} no arquivo, ${countDB} no banco` },
+            { campo: 'Valor', match: true, detalhe: `R$ ${item.linha.valor.toFixed(2)}` },
+            { campo: 'Fornecedor', match: true, detalhe: item.linha.fornecedorNome || '—' },
+            { campo: 'Conta', match: true, detalhe: 'Mesma conta' },
+          ];
+
+          resultados.set(item.index, {
+            classificacao: 'DUPLICADO_EXATO',
+            motivos,
+            resumo: `DUPLICADO EXATO (grupo ${countFile}×arquivo ↔ ${countDB}×banco): chave forte idêntica`,
+            registroExistenteId: matchedEx.id,
+            grupoArquivo: countFile,
+            grupoBanco: countDB,
+            chaveGrupo: chave,
+          });
+        } else {
+          // Excess lines: file has more than bank → these are NEW
+          resultados.set(item.index, {
+            classificacao: 'NOVO',
+            motivos: [{ campo: 'Grupo', match: false, detalhe: `Excedente: arquivo tem ${countFile}, banco tem ${countDB}. Esta é a linha ${i + 1 - matchCount} nova.` }],
+            resumo: `NOVO (excedente do grupo): arquivo=${countFile}, banco=${countDB}`,
+            registroExistenteId: null,
+            grupoArquivo: countFile,
+            grupoBanco: countDB,
+            chaveGrupo: chave,
+          });
+        }
+      }
+    } else {
+      // No exact key match in bank → fallback to individual classification
+      // (will be handled below)
+    }
+  }
+
+  // Fallback: lines not yet classified go through individual classification
+  // Use remaining (unconsumed) existing records
+  const remainingExistentes = existentes.filter(ex => !consumedIds.has(ex.id));
+
+  for (const item of linhasIndexadas) {
+    if (resultados.has(item.index)) continue; // already classified by cardinality
+
+    const resultado = classificarLinha(item.linha, remainingExistentes);
+
+    resultados.set(item.index, {
+      ...resultado,
+      grupoArquivo: 1,
+      grupoBanco: 0,
+      chaveGrupo: gerarChaveForteLinha(item.linha),
+    });
+
+    // If this line matched an existing record, consume it
+    if (resultado.registroExistenteId) {
+      consumedIds.add(resultado.registroExistenteId);
+    }
+  }
+
+  return resultados;
 }
