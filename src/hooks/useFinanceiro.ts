@@ -2,6 +2,8 @@
  * Hook central do módulo financeiro.
  * Gerencia importações, lançamentos financeiros, indicadores e rateio ADM.
  *
+ * hash_importacao: campo técnico de apoio para rastreabilidade de dedup.
+ *
  * ═══════════════════════════════════════════════════════════════════════
  * RATEIO ADM v2 — Critério: REBANHO MÉDIO do período
  * ═══════════════════════════════════════════════════════════════════════
