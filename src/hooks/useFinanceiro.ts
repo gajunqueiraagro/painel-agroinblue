@@ -2,6 +2,8 @@
  * Hook central do módulo financeiro.
  * Gerencia importações, lançamentos financeiros, indicadores e rateio ADM.
  *
+ * hash_importacao: campo técnico de apoio para rastreabilidade de dedup.
+ *
  * ═══════════════════════════════════════════════════════════════════════
  * RATEIO ADM v2 — Critério: REBANHO MÉDIO do período
  * ═══════════════════════════════════════════════════════════════════════
@@ -21,6 +23,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { LinhaImportada, SaldoBancarioImportado, ResumoCaixaImportado, CentroCustoOficial } from '@/lib/financeiro/importParser';
+import { gerarHashImportacao } from '@/lib/financeiro/duplicidadeImportacao';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1087,6 +1090,7 @@ export function useFinanceiro() {
           numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
           favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor, l.fazendaId),
+          hash_importacao: gerarHashImportacao(l.dataPagamento, l.valor, l.fornecedor, l.contaBancariaId, l.numeroDocumento),
           created_by: user.id,
         };
 
