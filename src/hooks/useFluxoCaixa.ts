@@ -257,10 +257,6 @@ export function useFluxoCaixa(
       if (!isRealizado(l)) return false;
       const a = datePagtoAnoClass(l);
       if (a !== ano) return false;
-      // Apply hierarchical filters
-      if (filtros?.grupo && (l.grupo_custo || '') !== filtros.grupo) return false;
-      if (filtros?.centro && (l.centro_custo || '') !== filtros.centro) return false;
-      if (filtros?.subcentro && (l.subcentro || '') !== filtros.subcentro) return false;
       return true;
     });
 
