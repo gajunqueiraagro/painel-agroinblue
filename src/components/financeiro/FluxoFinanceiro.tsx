@@ -46,35 +46,40 @@ interface RowDef {
   indent?: number;
   tipo?: 'entrada' | 'saida' | 'saldo';
   amploOnly?: boolean;
+  /** Nível visual: 1=total forte, 2=subtotal/grupo médio, 3=detalhe (default) */
+  nivel?: 1 | 2 | 3;
 }
 
 const ROWS: RowDef[] = [
   { label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
 
-  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada' },
-  { label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada' },
+  { label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada', nivel: 1 },
+  { label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada', nivel: 2 },
   { label: 'Receitas Pecuárias', key: 'receitasPec', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Receitas Agricultura', key: 'receitasAgri', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Outras Receitas', key: 'receitasOutras', indent: 2, tipo: 'entrada', amploOnly: true },
-  { label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada' },
+  { label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada', nivel: 2 },
   { label: 'Captação Financ. Pec.', key: 'captacaoPec', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Captação Financ. Agri.', key: 'captacaoAgri', indent: 2, tipo: 'entrada', amploOnly: true },
   { label: 'Aportes Pessoais', key: 'aportes', indent: 2, tipo: 'entrada', amploOnly: true },
 
-  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida' },
-  { label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida' },
-  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida' },
+  { label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida', nivel: 1 },
+  { label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida', nivel: 2 },
+  { label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida', nivel: 2 },
   { label: 'Desemb. Produtivo Pec.', key: 'desembolsoPec', indent: 2, tipo: 'saida', amploOnly: true },
   { label: 'Desemb. Produtivo Agri.', key: 'desembolsoAgri', indent: 2, tipo: 'saida', amploOnly: true },
-  { label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida' },
-  { label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida' },
+  { label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida', nivel: 2 },
+  { label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida', nivel: 2 },
   { label: 'Amortizações Fin. Pec.', key: 'amortizacoesPec', indent: 2, tipo: 'saida', amploOnly: true },
   { label: 'Amortizações Fin. Agri.', key: 'amortizacoesAgri', indent: 2, tipo: 'saida', amploOnly: true },
-  { label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida' },
+  { label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida', nivel: 2 },
 
-  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo' },
-  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo' },
+  { label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo', bold: true, nivel: 1 },
+  { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo', nivel: 1 },
 ];
+
+/** Meses que fecham trimestre — borda direita mais visível */
+const QUARTER_END = new Set([3, 6, 9]);
 
 // ---------------------------------------------------------------------------
 // Props
