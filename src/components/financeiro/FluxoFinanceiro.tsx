@@ -372,9 +372,12 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
           ))}
           <col style={{ width: 70 }} />
         </colgroup>
-        <thead className="sticky top-0 z-20 bg-card">
+        <thead className="sticky top-0 z-20" style={{ background: 'hsl(var(--card))' }}>
           <tr className="border-b border-border">
-            <th className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 bg-card z-30">
+            <th
+              className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 z-30"
+              style={{ background: 'hsl(var(--card))' }}
+            >
               
             </th>
             {meses.map(m => (
@@ -383,11 +386,15 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 className={`px-1 py-0.5 text-right text-[10px] font-bold ${
                   m.mes > mesAte ? 'text-muted-foreground/40' : 'text-muted-foreground'
                 } ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                style={{ background: 'hsl(var(--card))' }}
               >
                 {m.label}
               </th>
             ))}
-            <th className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground bg-muted border-l-2 border-border">
+            <th
+              className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground border-l-2 border-border"
+              style={{ background: 'hsl(var(--muted))' }}
+            >
               Total
             </th>
           </tr>
