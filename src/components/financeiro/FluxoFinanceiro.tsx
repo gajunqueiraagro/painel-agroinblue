@@ -400,7 +400,7 @@ function FluxoTable({
   lancamentosGlobais: FluxoLancRaw[];
   ano: number;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
