@@ -372,9 +372,12 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
           ))}
           <col style={{ width: 70 }} />
         </colgroup>
-        <thead className="sticky top-0 z-20 bg-card">
+        <thead className="sticky top-0 z-20" style={{ background: 'hsl(var(--card))' }}>
           <tr className="border-b border-border">
-            <th className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 bg-card z-30">
+            <th
+              className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 z-30"
+              style={{ background: 'hsl(var(--card))' }}
+            >
               
             </th>
             {meses.map(m => (
@@ -383,11 +386,15 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 className={`px-1 py-0.5 text-right text-[10px] font-bold ${
                   m.mes > mesAte ? 'text-muted-foreground/40' : 'text-muted-foreground'
                 } ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                style={{ background: 'hsl(var(--card))' }}
               >
                 {m.label}
               </th>
             ))}
-            <th className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground bg-muted border-l-2 border-border">
+            <th
+              className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground border-l-2 border-border"
+              style={{ background: 'hsl(var(--muted))' }}
+            >
               Total
             </th>
           </tr>
@@ -412,7 +419,8 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                 <td
                   className={`px-1 py-px text-left leading-tight ${rowFont} ${getIndentClass(row)} ${
                     isSubSub ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 ${nivel === 1 ? 'bg-muted/60' : nivel === 2 ? 'bg-muted/20' : 'bg-card'} z-10 truncate`}
+                  } sticky left-0 z-10 truncate`}
+                  style={{ background: nivel === 1 || nivel === 2 ? 'hsl(var(--muted))' : 'hsl(var(--card))' }}
                 >
                   {row.label}
                 </td>
