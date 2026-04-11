@@ -26,13 +26,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { TIPOS_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
 import type { LinhaImportada } from '@/lib/financeiro/importParser';
 import {
-  classificarLinha,
+  classificarLote,
   gerarHashImportacao,
   type ClassificacaoImportacao,
   type ResultadoClassificacao,
   type RegistroExistente,
   type LinhaParaClassificar,
   type MotivoConflito,
+  type ResultadoCardinalidade,
 } from '@/lib/financeiro/duplicidadeImportacao';
 
 // ── Types ──
