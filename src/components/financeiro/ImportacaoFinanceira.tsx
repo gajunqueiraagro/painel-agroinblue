@@ -74,18 +74,15 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   const [resultado, setResultado] = useState<ImportResultado | null>(null);
   const [subcentrosOficiais, setSubcentrosOficiais] = useState<Set<string>>(new Set());
 
-  // Load official subcentros from plano de contas
+  // Load official subcentros from plano de contas + dividendos dinâmicos do cliente
   useEffect(() => {
     if (!clienteAtual?.id) return;
     const load = async () => {
-      const { data } = await supabase
-        .from('financeiro_plano_contas')
-        .select('subcentro')
-        .eq('ativo', true)
-        .not('subcentro', 'is', null);
+      const { loadPlanoContasCompleto } = await import('@/lib/financeiro/planoContasBuilder');
+      const items = await loadPlanoContasCompleto(clienteAtual.id);
       const set = new Set<string>();
-      for (const r of (data || []) as any[]) {
-        if (r.subcentro) set.add(r.subcentro);
+      for (const item of items) {
+        if (item.subcentro) set.add(item.subcentro);
       }
       setSubcentrosOficiais(set);
     };
