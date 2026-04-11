@@ -1090,6 +1090,7 @@ export function useFinanceiro() {
           numero_documento: l.numeroDocumento || null,
           tipo_documento: l.tipoDocumento || null,
           favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor, l.fazendaId),
+          hash_importacao: gerarHashImportacao(l.dataPagamento, l.valor, l.fornecedor, l.contaBancariaId, l.numeroDocumento),
           created_by: user.id,
         };
 
