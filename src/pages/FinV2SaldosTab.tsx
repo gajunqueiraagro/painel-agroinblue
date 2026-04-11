@@ -109,8 +109,26 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SaldoBancario | null>(null);
 
+  const [anosDisponiveis, setAnosDisponiveis] = useState<string[]>([String(new Date().getFullYear())]);
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroMes, setFiltroMes] = useState('__all__');
+
+  // Load dynamic years from saldos table
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    supabase
+      .from('financeiro_saldos_bancarios_v2')
+      .select('ano_mes')
+      .eq('cliente_id', clienteAtual.id)
+      .then(({ data }) => {
+        const anos = new Set<string>();
+        anos.add(String(new Date().getFullYear()));
+        (data || []).forEach((r: any) => {
+          if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
+        });
+        setAnosDisponiveis(Array.from(anos).sort((a, b) => b.localeCompare(a)));
+      });
+  }, [clienteAtual?.id]);
 
   const [anoMes, setAnoMes] = useState('');
   const [contaId, setContaId] = useState('');
@@ -451,7 +469,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
             <Select value={filtroAno} onValueChange={setFiltroAno}>
               <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ANOS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                {anosDisponiveis.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filtroMes} onValueChange={setFiltroMes}>
