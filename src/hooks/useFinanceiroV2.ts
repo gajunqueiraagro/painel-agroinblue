@@ -189,7 +189,35 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     const { loadPlanoContasCompleto, planoToClassificacoes } = await import('@/lib/financeiro/planoContasBuilder');
     const plano = await loadPlanoContasCompleto(clienteId);
-    setClassificacoes(planoToClassificacoes(plano));
+    const planoCls = planoToClassificacoes(plano);
+
+    // Enrich with distinct classification combos from actual lancamentos
+    // so legacy records (not in plano) are still filterable
+    const { data: lancCls } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('subcentro, centro_custo, grupo_custo, macro_custo, tipo_operacao, escopo_negocio')
+      .eq('cliente_id', clienteId)
+      .eq('cancelado', false)
+      .not('subcentro', 'is', null);
+
+    if (lancCls && lancCls.length > 0) {
+      const planoSubcentros = new Set(planoCls.map(c => c.subcentro));
+      const seen = new Set<string>();
+      for (const l of lancCls) {
+        if (!l.subcentro || planoSubcentros.has(l.subcentro) || seen.has(l.subcentro)) continue;
+        seen.add(l.subcentro);
+        planoCls.push({
+          subcentro: l.subcentro,
+          centro_custo: l.centro_custo || '',
+          grupo_custo: l.grupo_custo || '',
+          macro_custo: l.macro_custo || '',
+          tipo_operacao: l.tipo_operacao || '',
+          escopo_negocio: l.escopo_negocio || '',
+        });
+      }
+    }
+
+    setClassificacoes(planoCls);
   }, [clienteId]);
 
   const buildLancamentosQuery = useCallback((filtros: FiltrosV2) => {
