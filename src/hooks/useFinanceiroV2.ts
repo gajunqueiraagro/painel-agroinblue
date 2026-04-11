@@ -648,6 +648,18 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  /** Fetch distinct years from financeiro_lancamentos_v2 for the current client */
+  const loadAnosDisponiveis = useCallback(async (): Promise<string[]> => {
+    if (!clienteId) return [String(new Date().getFullYear())];
+    const { data, error } = await supabase.rpc('get_anos_financeiro_v2' as any, { p_cliente_id: clienteId });
+    const anos = new Set<string>();
+    anos.add(String(new Date().getFullYear()));
+    if (!error && data) {
+      (data as any[]).forEach((r: any) => anos.add(String(r.ano)));
+    }
+    return Array.from(anos).sort().reverse();
+  }, [clienteId]);
+
   return {
     lancamentos,
     contasBancarias,
@@ -672,6 +684,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     duplicarLancamento,
     cancelarRealizadosImportados,
     cancelarMigracao,
+    loadAnosDisponiveis,
     setPage,
   };
 }

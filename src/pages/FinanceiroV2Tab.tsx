@@ -152,11 +152,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
-  const anos = useMemo(() => {
+  const [anos, setAnos] = useState<string[]>(() => {
     const arr: string[] = [];
     for (let y = currentYear; y >= currentYear - 5; y--) arr.push(String(y));
     return arr;
-  }, [currentYear]);
+  });
+
+  // Load dynamic years from DB
+  useEffect(() => {
+    hook.loadAnosDisponiveis().then(setAnos);
+  }, [hook.loadAnosDisponiveis]);
 
   const defaultFazendaId = fazendaAtual?.id !== '__global__' ? fazendaAtual?.id || '__all__' : '__all__';
 

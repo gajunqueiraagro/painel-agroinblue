@@ -4647,6 +4647,12 @@ export type Database = {
           mes: number
         }[]
       }
+      get_anos_financeiro_v2: {
+        Args: { p_cliente_id: string }
+        Returns: {
+          ano: number
+        }[]
+      }
       get_status_pilares_fechamento: {
         Args: { _ano_mes: string; _fazenda_id: string }
         Returns: Json
