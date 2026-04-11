@@ -8,8 +8,7 @@ import { useState, useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal, type FluxoFiltros } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { isRealizado } from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
