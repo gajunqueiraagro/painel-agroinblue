@@ -388,7 +388,7 @@ export function useFluxoCaixa(
     }
 
     return result;
-  }, [lancamentosGlobais, ano, mesAte, saldoInicialAno]);
+  }, [lancamentosGlobais, ano, mesAte, saldoInicialAno, filtros?.grupo, filtros?.centro, filtros?.subcentro]);
 
   return {
     meses,
@@ -396,5 +396,6 @@ export function useFluxoCaixa(
     saldoInicialAno,
     saldoInicialAusente,
     saldoInicialAudit,
+    lancamentosGlobais,
   } as FluxoCaixaResult;
 }
