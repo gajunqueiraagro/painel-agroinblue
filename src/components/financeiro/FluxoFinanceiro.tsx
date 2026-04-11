@@ -228,39 +228,45 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
             </div>
           </div>
 
-          {/* Hierarchical filters — only in Amplo mode */}
+          {/* Hierarchical filters — only in Amplo mode, vertical cascade */}
           {visao === 'amplo' && (
-            <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <FilterSelect
-                label="Grupo"
-                value={filtroGrupo}
-                options={grupos}
-                onChange={(v) => { setFiltroGrupo(v); setFiltroCentro(null); setFiltroSubcentro(null); }}
-              />
-              {filtroGrupo && centros.length > 0 && (
+            <div className="space-y-1 mb-2">
+              <div className="flex items-center gap-2">
                 <FilterSelect
-                  label="Centro"
-                  value={filtroCentro}
-                  options={centros}
-                  onChange={(v) => { setFiltroCentro(v); setFiltroSubcentro(null); }}
+                  label="Grupo"
+                  value={filtroGrupo}
+                  options={grupos}
+                  onChange={(v) => { setFiltroGrupo(v); setFiltroCentro(null); setFiltroSubcentro(null); }}
                 />
+                {hasFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border bg-background transition-colors"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                    Limpar
+                  </button>
+                )}
+              </div>
+              {filtroGrupo && centros.length > 0 && (
+                <div className="pl-3 border-l-2 border-primary/20">
+                  <FilterSelect
+                    label="Centro"
+                    value={filtroCentro}
+                    options={centros}
+                    onChange={(v) => { setFiltroCentro(v); setFiltroSubcentro(null); }}
+                  />
+                </div>
               )}
               {filtroCentro && subcentros.length > 0 && (
-                <FilterSelect
-                  label="Subcentro"
-                  value={filtroSubcentro}
-                  options={subcentros}
-                  onChange={setFiltroSubcentro}
-                />
-              )}
-              {hasFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border bg-background transition-colors"
-                >
-                  <X className="h-2.5 w-2.5" />
-                  Limpar
-                </button>
+                <div className="pl-6 border-l-2 border-primary/20">
+                  <FilterSelect
+                    label="Subcentro"
+                    value={filtroSubcentro}
+                    options={subcentros}
+                    onChange={setFiltroSubcentro}
+                  />
+                </div>
               )}
             </div>
           )}
