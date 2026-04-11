@@ -69,7 +69,7 @@ function currentAnoMes(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-const ANOS = ['2023', '2024', '2025', '2026', '2027'];
+/* ANOS is built dynamically per client – see anosDisponiveis state */
 const MESES = [
   { v: '__all__', l: 'Todos' },
   { v: '01', l: 'Jan' }, { v: '02', l: 'Fev' }, { v: '03', l: 'Mar' },
