@@ -5,9 +5,38 @@
  * at runtime. Dividendos are injected under:
  *   Tipo: 2-Saídas > Macro: Distribuição > Grupo: Dividendos > Centro: Pessoas
  *   Subcentro: "Distribuição de Dividendos {nome}"
+ *
+ * REGRA CANÔNICA: Toda resolução de dividendos DEVE usar buildSubcentroDividendo()
+ * para gerar o subcentro canônico. Nenhum outro ponto do sistema pode montar
+ * o texto "Distribuição de Dividendos ..." manualmente.
  */
 
 import { supabase } from '@/integrations/supabase/client';
+
+// ── Constantes canônicas para dividendos ──
+
+export const DIVIDENDO_TIPO = '2-Saídas';
+export const DIVIDENDO_MACRO = 'Distribuição';
+export const DIVIDENDO_GRUPO = 'Dividendos';
+export const DIVIDENDO_CENTRO = 'Pessoas';
+export const DIVIDENDO_ESCOPO = 'pecuaria';
+export const DIVIDENDO_SUBCENTRO_PREFIX = 'Distribuição de Dividendos';
+
+/**
+ * Gera o subcentro canônico para um dividendo.
+ * FONTE ÚNICA — todo o sistema deve usar esta função.
+ */
+export function buildSubcentroDividendo(nomeDividendo: string): string {
+  return `${DIVIDENDO_SUBCENTRO_PREFIX} ${nomeDividendo.trim()}`;
+}
+
+/**
+ * Verifica se um subcentro pertence à família de dividendos dinâmicos.
+ */
+export function isDividendoSubcentro(subcentro: string | null | undefined): boolean {
+  if (!subcentro) return false;
+  return subcentro.startsWith(DIVIDENDO_SUBCENTRO_PREFIX);
+}
 
 export interface PlanoContasItem {
   id: string;
@@ -49,12 +78,12 @@ export async function loadDividendos(clienteId: string): Promise<Dividendo[]> {
 export function buildDividendoEntries(dividendos: Dividendo[], baseOrdem: number = 9000): PlanoContasItem[] {
   return dividendos.map((d, i) => ({
     id: `dividendo-${d.id}`,
-    tipo_operacao: '2-Saídas',
-    macro_custo: 'Distribuição',
-    grupo_custo: 'Dividendos',
-    centro_custo: 'Pessoas',
-    subcentro: `Distribuição de Dividendos ${d.nome}`,
-    escopo_negocio: 'Administrativo',
+    tipo_operacao: DIVIDENDO_TIPO,
+    macro_custo: DIVIDENDO_MACRO,
+    grupo_custo: DIVIDENDO_GRUPO,
+    centro_custo: DIVIDENDO_CENTRO,
+    subcentro: buildSubcentroDividendo(d.nome),
+    escopo_negocio: DIVIDENDO_ESCOPO,
     ativo: true,
     ordem_exibicao: baseOrdem + i,
     is_dividendo: true,
