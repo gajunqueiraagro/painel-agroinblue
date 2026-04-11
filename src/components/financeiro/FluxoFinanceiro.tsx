@@ -1,15 +1,16 @@
 /**
  * Fluxo de Caixa Global — tabela 12 linhas, jan-dez + coluna Total.
- * Duas visualizações: Resumido (executivo) e Amplo (analítico com sub-categorias).
+ * Duas visualizações: Resumido (executivo) e Amplo (analítico com sub-categorias + filtros).
  * Base: data_pagamento + Conciliado.
  * SEMPRE GLOBAL — independente da fazenda selecionada.
  */
 import { useState, useMemo } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
+import { useFluxoCaixa, type FluxoMensal, type FluxoFiltros } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Loader2, AlertTriangle, ChevronDown, X } from 'lucide-react';
+import { isRealizado } from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,6 @@ interface RowDef {
   indent?: number;
   tipo?: 'entrada' | 'saida' | 'saldo';
   amploOnly?: boolean;
-  /** Nível visual: 1=total forte, 2=subtotal/grupo médio, 3=detalhe (default) */
   nivel?: 1 | 2 | 3;
 }
 
@@ -78,7 +78,6 @@ const ROWS: RowDef[] = [
   { label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo', nivel: 1 },
 ];
 
-/** Meses que fecham trimestre — borda direita mais visível */
 const QUARTER_END = new Set([3, 6, 9]);
 
 // ---------------------------------------------------------------------------
@@ -101,7 +100,51 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
   const isMobile = useIsMobile();
   const [visao, setVisao] = useState<VisaoFluxo>('resumido');
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
-  const { meses, loading, saldoInicialAusente, saldoInicialAudit } = useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
+
+  // Hierarchical filters (Amplo mode)
+  const [filtroGrupo, setFiltroGrupo] = useState<string | null>(null);
+  const [filtroCentro, setFiltroCentro] = useState<string | null>(null);
+  const [filtroSubcentro, setFiltroSubcentro] = useState<string | null>(null);
+
+  const filtros: FluxoFiltros | undefined = (visao === 'amplo' && (filtroGrupo || filtroCentro || filtroSubcentro))
+    ? { grupo: filtroGrupo, centro: filtroCentro, subcentro: filtroSubcentro }
+    : undefined;
+
+  const { meses, loading, saldoInicialAusente, saldoInicialAudit, lancamentosGlobais } =
+    useFluxoCaixa(lancamentos, rateioADM, ano, mesAte, filtros);
+
+  // Compute distinct values for hierarchical filters from raw realizados
+  const { grupos, centros, subcentros } = useMemo(() => {
+    const realizados = lancamentosGlobais.filter(l => isRealizado(l));
+    const grupoSet = new Set<string>();
+    const centroSet = new Set<string>();
+    const subcentroSet = new Set<string>();
+
+    for (const l of realizados) {
+      const g = (l as any).grupo_custo || '';
+      const c = (l as any).centro_custo || '';
+      const s = (l as any).subcentro || '';
+      if (g) grupoSet.add(g);
+      if (filtroGrupo && g !== filtroGrupo) continue;
+      if (c) centroSet.add(c);
+      if (filtroCentro && c !== filtroCentro) continue;
+      if (s) subcentroSet.add(s);
+    }
+
+    return {
+      grupos: [...grupoSet].sort(),
+      centros: [...centroSet].sort(),
+      subcentros: [...subcentroSet].sort(),
+    };
+  }, [lancamentosGlobais, filtroGrupo, filtroCentro]);
+
+  const clearFilters = () => {
+    setFiltroGrupo(null);
+    setFiltroCentro(null);
+    setFiltroSubcentro(null);
+  };
+
+  const hasFilters = !!(filtroGrupo || filtroCentro || filtroSubcentro);
 
   if (loading) {
     return (
@@ -147,7 +190,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
       )}
 
       <Card>
-        <CardContent className="pt-2 pb-1 overflow-x-auto">
+        <CardContent className="pt-2 pb-1">
           <div className="flex items-center justify-between mb-1.5 gap-2">
             <h3 className="text-xs font-bold text-card-foreground">
               Fluxo de Caixa Global
@@ -179,7 +222,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
               {/* Toggle Resumido / Amplo */}
               <div className="flex rounded border border-border overflow-hidden">
                 <button
-                  onClick={() => setVisao('resumido')}
+                  onClick={() => { setVisao('resumido'); clearFilters(); }}
                   className={`px-2 py-0.5 text-[9px] font-medium transition-colors ${
                     visao === 'resumido'
                       ? 'bg-primary text-primary-foreground'
@@ -201,9 +244,79 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
               </div>
             </div>
           </div>
+
+          {/* Hierarchical filters — only in Amplo mode */}
+          {visao === 'amplo' && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <FilterSelect
+                label="Grupo"
+                value={filtroGrupo}
+                options={grupos}
+                onChange={(v) => { setFiltroGrupo(v); setFiltroCentro(null); setFiltroSubcentro(null); }}
+              />
+              {filtroGrupo && centros.length > 0 && (
+                <FilterSelect
+                  label="Centro"
+                  value={filtroCentro}
+                  options={centros}
+                  onChange={(v) => { setFiltroCentro(v); setFiltroSubcentro(null); }}
+                />
+              )}
+              {filtroCentro && subcentros.length > 0 && (
+                <FilterSelect
+                  label="Subcentro"
+                  value={filtroSubcentro}
+                  options={subcentros}
+                  onChange={setFiltroSubcentro}
+                />
+              )}
+              {hasFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border bg-background transition-colors"
+                >
+                  <X className="h-2.5 w-2.5" />
+                  Limpar
+                </button>
+              )}
+            </div>
+          )}
+
           <FluxoTable meses={meses} mesAte={mesAte} isMobile={isMobile} visao={visao} fmtMode={fmtMode} />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FilterSelect — compact cascading dropdown
+// ---------------------------------------------------------------------------
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  options: string[];
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[9px] font-semibold text-muted-foreground">{label}:</span>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="text-[9px] bg-background border border-border rounded px-1 py-0.5 max-w-[180px] truncate text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+      >
+        <option value="">Todos</option>
+        {options.map(o => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -250,7 +363,7 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
   };
 
   return (
-    <div className="overflow-x-auto -mx-1">
+    <div className="overflow-auto -mx-1 max-h-[60vh]">
       <table className="w-full min-w-[700px] text-[10px] tabular-nums" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: isMobile ? 100 : 150 }} />
@@ -259,7 +372,7 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
           ))}
           <col style={{ width: 70 }} />
         </colgroup>
-        <thead>
+        <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b border-border">
             <th className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 bg-card z-30">
               
