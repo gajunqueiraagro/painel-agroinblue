@@ -256,7 +256,12 @@ export function useFluxoCaixa(
     const realizados = lancamentosGlobais.filter(l => {
       if (!isRealizado(l)) return false;
       const a = datePagtoAnoClass(l);
-      return a === ano;
+      if (a !== ano) return false;
+      // Apply hierarchical filters
+      if (filtros?.grupo && (l.grupo_custo || '') !== filtros.grupo) return false;
+      if (filtros?.centro && (l.centro_custo || '') !== filtros.centro) return false;
+      if (filtros?.subcentro && (l.subcentro || '') !== filtros.subcentro) return false;
+      return true;
     });
 
     // Group by month
