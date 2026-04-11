@@ -350,75 +350,107 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     return () => { cancelled = true; };
   }, [open, clienteId, linhas]);
 
-  // Phase 2: Classify all rows
+  // Phase 2: Classify all rows using cardinality-aware batch logic
   useEffect(() => {
     if (!existingMap || !fornecedorResolverFn) return;
 
-    const classified = linhas.map(l => {
+    // Pre-resolve all lines
+    const preResolved = linhas.map((l, idx) => {
       const erros = validarEstrutura(l, contaLookup, fazendaLookup, subcentrosOficiais);
       const contaKey = norm(l.contaOrigem);
       const contaR = contaKey ? contaLookup.get(contaKey) : null;
       const fornecedorResolved = fornecedorResolverFn(l.fornecedor);
-
       const hash = gerarHashImportacao(l.dataPagamento, l.valor, l.fornecedor, contaR?.id || null, l.numeroDocumento);
-
-      if (erros.length > 0) {
-        return {
-          ...l,
-          _classificacao: 'ERRO' as const,
-          _erros: erros,
-          _resultadoDuplicidade: null,
-          _registroExistente: null,
-          _selected: false, // ERRO = bloqueado
-          _hashImportacao: hash,
-          _contaResolvidaId: contaR?.id || null,
-          _contaResolvidaNome: contaR?.label || null,
-          _fornecedorResolvidoId: fornecedorResolved.id,
-        };
-      }
-
-      // Get existing records for this fazenda+anoMes
-      const key = `${l.fazendaId}|${l.anoMes}`;
-      const existentes = existingMap.get(key) || [];
-
-      const linhaClassificar: LinhaParaClassificar = {
-        dataPagamento: l.dataPagamento,
-        anoMes: l.anoMes,
-        valor: l.valor,
-        fornecedorId: fornecedorResolved.id,
-        fornecedorNome: l.fornecedor,
-        contaBancariaId: contaR?.id || null,
-        subcentro: l.subcentro,
-        descricao: l.produto || l.subcentro,
-        numeroDocumento: l.numeroDocumento,
-        tipoOperacao: l.tipoOperacao,
-      };
-
-      const resultado = classificarLinha(linhaClassificar, existentes);
-
-      // Find the full existing record for display
-      let registroExistente: RegistroExistente | null = null;
-      if (resultado.registroExistenteId) {
-        registroExistente = existentes.find(e => e.id === resultado.registroExistenteId) || null;
-      }
-
-      const autoSelect = resultado.classificacao === 'NOVO'; // DUPLICADO and SUSPEITA = unchecked
-
-      return {
-        ...l,
-        _classificacao: resultado.classificacao,
-        _erros: [],
-        _resultadoDuplicidade: resultado,
-        _registroExistente: registroExistente,
-        _selected: autoSelect,
-        _hashImportacao: hash,
-        _contaResolvidaId: contaR?.id || null,
-        _contaResolvidaNome: contaR?.label || null,
-        _fornecedorResolvidoId: fornecedorResolved.id,
-      };
+      return { l, idx, erros, contaR, fornecedorResolved, hash };
     });
 
-    setRows(classified);
+    // Group valid lines by fazenda+anoMes for batch classification
+    const byFazAno = new Map<string, Array<{ idx: number; linha: LinhaParaClassificar; contaR: any; fornecedorResolved: any; hash: string; original: LinhaImportada }>>();
+    const errorRows: EditableRow[] = [];
+
+    for (const pr of preResolved) {
+      if (pr.erros.length > 0) {
+        errorRows.push({
+          ...pr.l,
+          _classificacao: 'ERRO' as const,
+          _erros: pr.erros,
+          _resultadoDuplicidade: null,
+          _registroExistente: null,
+          _selected: false,
+          _hashImportacao: pr.hash,
+          _contaResolvidaId: pr.contaR?.id || null,
+          _contaResolvidaNome: pr.contaR?.label || null,
+          _fornecedorResolvidoId: pr.fornecedorResolved.id,
+        });
+        continue;
+      }
+
+      const key = `${pr.l.fazendaId}|${pr.l.anoMes}`;
+      const linhaC: LinhaParaClassificar = {
+        dataPagamento: pr.l.dataPagamento,
+        anoMes: pr.l.anoMes,
+        valor: pr.l.valor,
+        fornecedorId: pr.fornecedorResolved.id,
+        fornecedorNome: pr.l.fornecedor,
+        contaBancariaId: pr.contaR?.id || null,
+        subcentro: pr.l.subcentro,
+        descricao: pr.l.produto || pr.l.subcentro,
+        numeroDocumento: pr.l.numeroDocumento,
+        tipoOperacao: pr.l.tipoOperacao,
+      };
+
+      const arr = byFazAno.get(key);
+      const entry = { idx: pr.idx, linha: linhaC, contaR: pr.contaR, fornecedorResolved: pr.fornecedorResolved, hash: pr.hash, original: pr.l };
+      if (arr) arr.push(entry); else byFazAno.set(key, [entry]);
+    }
+
+    // Classify each fazenda+anoMes group using cardinality-aware batch
+    const classifiedMap = new Map<number, EditableRow>();
+
+    for (const [key, items] of byFazAno.entries()) {
+      const existentes = existingMap.get(key) || [];
+      const indexedLinhas = items.map(it => ({ index: it.idx, linha: it.linha }));
+      const resultados = classificarLote(indexedLinhas, existentes);
+
+      for (const it of items) {
+        const res = resultados.get(it.idx);
+        if (!res) continue;
+
+        let registroExistente: RegistroExistente | null = null;
+        if (res.registroExistenteId) {
+          registroExistente = existentes.find(e => e.id === res.registroExistenteId) || null;
+        }
+
+        const autoSelect = res.classificacao === 'NOVO';
+
+        classifiedMap.set(it.idx, {
+          ...it.original,
+          _classificacao: res.classificacao,
+          _erros: [],
+          _resultadoDuplicidade: { classificacao: res.classificacao, motivos: res.motivos, resumo: res.resumo, registroExistenteId: res.registroExistenteId },
+          _registroExistente: registroExistente,
+          _selected: autoSelect,
+          _hashImportacao: it.hash,
+          _contaResolvidaId: it.contaR?.id || null,
+          _contaResolvidaNome: it.contaR?.label || null,
+          _fornecedorResolvidoId: it.fornecedorResolved.id,
+        });
+      }
+    }
+
+    // Merge: maintain original order
+    const finalRows: EditableRow[] = [];
+    let errorIdx = 0;
+    for (const pr of preResolved) {
+      if (pr.erros.length > 0) {
+        finalRows.push(errorRows[errorIdx++]);
+      } else {
+        const row = classifiedMap.get(pr.idx);
+        if (row) finalRows.push(row);
+      }
+    }
+
+    setRows(finalRows);
   }, [linhas, existingMap, fornecedorResolverFn, contaLookup, fazendaLookup, subcentrosOficiais]);
 
   // Stats
