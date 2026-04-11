@@ -83,12 +83,20 @@ export interface SaldoInicialAudit {
   somaTotal: number;
 }
 
+export interface FluxoFiltros {
+  grupo?: string | null;
+  centro?: string | null;
+  subcentro?: string | null;
+}
+
 export interface FluxoCaixaResult {
   meses: FluxoMensal[];
   loading: boolean;
   saldoInicialAno: number;
   saldoInicialAusente: boolean;
   saldoInicialAudit: SaldoInicialAudit | null;
+  /** Raw lancamentos for extracting distinct filter values */
+  lancamentosGlobais: FluxoLancamentoBase[];
 }
 
 // ---------------------------------------------------------------------------
