@@ -110,6 +110,7 @@ export function useFluxoCaixa(
   _rateioADM: unknown[],
   ano: number,
   mesAte: number,
+  filtros?: FluxoFiltros,
 ) {
   const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
