@@ -246,13 +246,11 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   return (
     <div className="max-w-full mx-auto animate-fade-in pb-20">
-      {/* ── Topo fixo: filtros ── */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm space-y-1.5 px-4 pt-2 pb-2">
-
-        {/* Linha 1: filtros de ano e mês */}
-        <div className="flex gap-1.5">
+      {/* ── Topo fixo: filtros + abas na mesma linha ── */}
+      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
           <Select value={localAno} onValueChange={setLocalAno}>
-            <SelectTrigger className="w-20 h-7 text-xs font-bold">
+            <SelectTrigger className="w-20 h-7 text-xs font-bold shrink-0">
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
             <SelectContent side="bottom">
@@ -262,7 +260,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             </SelectContent>
           </Select>
           <Select value={String(localMes)} onValueChange={v => setLocalMes(Number(v))}>
-            <SelectTrigger className="w-28 h-7 text-xs font-bold">
+            <SelectTrigger className="w-36 h-7 text-xs font-bold shrink-0">
               <SelectValue placeholder="Até o mês" />
             </SelectTrigger>
             <SelectContent side="bottom">
@@ -273,18 +271,17 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ))}
             </SelectContent>
           </Select>
-        </div>
 
-        {/* Linha 2: sub-abas horizontais */}
-        <div className="flex gap-0 overflow-x-auto">
+          <div className="h-5 w-px bg-border shrink-0 mx-1" />
+
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => setSubTab(t.id)}
-              className={`px-3 py-1.5 text-[11px] font-bold whitespace-nowrap border-b-2 transition-colors ${
+              className={`px-2.5 py-1 text-[11px] font-bold whitespace-nowrap rounded-md transition-colors shrink-0 ${
                 subTab === t.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }`}
             >
               {t.label}
