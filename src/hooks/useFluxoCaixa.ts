@@ -83,12 +83,20 @@ export interface SaldoInicialAudit {
   somaTotal: number;
 }
 
+export interface FluxoFiltros {
+  grupo?: string | null;
+  centro?: string | null;
+  subcentro?: string | null;
+}
+
 export interface FluxoCaixaResult {
   meses: FluxoMensal[];
   loading: boolean;
   saldoInicialAno: number;
   saldoInicialAusente: boolean;
   saldoInicialAudit: SaldoInicialAudit | null;
+  /** Raw lancamentos for extracting distinct filter values */
+  lancamentosGlobais: FluxoLancamentoBase[];
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +110,7 @@ export function useFluxoCaixa(
   _rateioADM: unknown[],
   ano: number,
   mesAte: number,
+  filtros?: FluxoFiltros,
 ) {
   const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -247,7 +256,12 @@ export function useFluxoCaixa(
     const realizados = lancamentosGlobais.filter(l => {
       if (!isRealizado(l)) return false;
       const a = datePagtoAnoClass(l);
-      return a === ano;
+      if (a !== ano) return false;
+      // Apply hierarchical filters
+      if (filtros?.grupo && (l.grupo_custo || '') !== filtros.grupo) return false;
+      if (filtros?.centro && (l.centro_custo || '') !== filtros.centro) return false;
+      if (filtros?.subcentro && (l.subcentro || '') !== filtros.subcentro) return false;
+      return true;
     });
 
     // Group by month
@@ -374,7 +388,7 @@ export function useFluxoCaixa(
     }
 
     return result;
-  }, [lancamentosGlobais, ano, mesAte, saldoInicialAno]);
+  }, [lancamentosGlobais, ano, mesAte, saldoInicialAno, filtros?.grupo, filtros?.centro, filtros?.subcentro]);
 
   return {
     meses,
@@ -382,5 +396,6 @@ export function useFluxoCaixa(
     saldoInicialAno,
     saldoInicialAusente,
     saldoInicialAudit,
+    lancamentosGlobais,
   } as FluxoCaixaResult;
 }
