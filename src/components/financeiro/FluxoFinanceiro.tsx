@@ -2,8 +2,8 @@
  * Fluxo de Caixa Global — tabela 12 linhas, jan-dez + coluna Total.
  * Duas visualizações:
  *   Resumido — executivo, linhas fixas.
- *   Amplo   — linhas expansíveis: clique na linha para revelar filhos.
- *             Nível 2 → Nível 3 (estáticos). Nível 3 → subcentros (dinâmicos).
+ *   Amplo   — drill-down fiel ao plano de contas oficial:
+ *             Macro → Grupo → Centro → Subcentro
  * Base: data_pagamento + Realizado.
  * SEMPRE GLOBAL — independente da fazenda selecionada.
  */
@@ -16,8 +16,6 @@ import {
   isRealizado,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
-  classificarEntrada,
-  classificarSaida,
   datePagtoMes as datePagtoMesClass,
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
@@ -46,7 +44,7 @@ const fmtVal = (v: number, mode: FmtMode): string =>
   mode === 'compact' ? fmtK(v) : fmtFull(v);
 
 // ---------------------------------------------------------------------------
-// Row definitions
+// Row definitions for RESUMIDO
 // ---------------------------------------------------------------------------
 
 type VisaoFluxo = 'resumido' | 'amplo';
@@ -59,36 +57,20 @@ interface RowDef {
   indent?: number;
   tipo?: 'entrada' | 'saida' | 'saldo';
   nivel?: 1 | 2 | 3;
-  parentId?: string; // which nivel-2 row is the parent
-  /** For nivel-3 rows, the dashboard classification label used to match lancamentos */
-  classLabel?: string;
+  parentId?: string;
 }
 
-const ROWS: RowDef[] = [
+const ROWS_RESUMIDO: RowDef[] = [
   { id: 'saldoInicial', label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
-
   { id: 'totalEntradas', label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada', nivel: 1 },
   { id: 'receitas', label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada', nivel: 2 },
-  { id: 'receitasPec', label: 'Receitas Pecuárias', key: 'receitasPec', indent: 2, tipo: 'entrada', parentId: 'receitas', nivel: 3, classLabel: 'Receitas Pecuárias' },
-  { id: 'receitasAgri', label: 'Receitas Agricultura', key: 'receitasAgri', indent: 2, tipo: 'entrada', parentId: 'receitas', nivel: 3, classLabel: 'Receitas Agricultura' },
-  { id: 'receitasOutras', label: 'Outras Receitas', key: 'receitasOutras', indent: 2, tipo: 'entrada', parentId: 'receitas', nivel: 3, classLabel: 'Outras Receitas' },
-
   { id: 'outrasEntradas', label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada', nivel: 2 },
-  { id: 'captacaoPec', label: 'Captação Financ. Pec.', key: 'captacaoPec', indent: 2, tipo: 'entrada', parentId: 'outrasEntradas', nivel: 3, classLabel: 'Captação Financ. Pec.' },
-  { id: 'captacaoAgri', label: 'Captação Financ. Agri.', key: 'captacaoAgri', indent: 2, tipo: 'entrada', parentId: 'outrasEntradas', nivel: 3, classLabel: 'Captação Financ. Agri.' },
-  { id: 'aportes', label: 'Aportes Pessoais', key: 'aportes', indent: 2, tipo: 'entrada', parentId: 'outrasEntradas', nivel: 3, classLabel: 'Aportes Pessoais' },
-
   { id: 'totalSaidas', label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida', nivel: 1 },
   { id: 'deducaoReceitas', label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida', nivel: 2 },
   { id: 'desembolsoProdutivo', label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'desembolsoPec', label: 'Desemb. Produtivo Pec.', key: 'desembolsoPec', indent: 2, tipo: 'saida', parentId: 'desembolsoProdutivo', nivel: 3, classLabel: 'Desemb. Produtivo Pec.' },
-  { id: 'desembolsoAgri', label: 'Desemb. Produtivo Agri.', key: 'desembolsoAgri', indent: 2, tipo: 'saida', parentId: 'desembolsoProdutivo', nivel: 3, classLabel: 'Desemb. Produtivo Agri.' },
   { id: 'reposicao', label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida', nivel: 2 },
   { id: 'amortizacoes', label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'amortizacoesPec', label: 'Amortizações Fin. Pec.', key: 'amortizacoesPec', indent: 2, tipo: 'saida', parentId: 'amortizacoes', nivel: 3, classLabel: 'Amortizações Fin. Pec.' },
-  { id: 'amortizacoesAgri', label: 'Amortizações Fin. Agri.', key: 'amortizacoesAgri', indent: 2, tipo: 'saida', parentId: 'amortizacoes', nivel: 3, classLabel: 'Amortizações Fin. Agri.' },
   { id: 'dividendos', label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida', nivel: 2 },
-
   { id: 'saldoFinal', label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo', bold: true, nivel: 1 },
   { id: 'saldoAcumulado', label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo', nivel: 1 },
 ];
@@ -96,15 +78,8 @@ const ROWS: RowDef[] = [
 const QUARTER_END = new Set([3, 6, 9]);
 
 // ---------------------------------------------------------------------------
-// Dynamic sub-row: aggregated from raw lancamentos by subcentro
+// Dynamic tree builder from real lancamentos
 // ---------------------------------------------------------------------------
-
-interface DynRow {
-  label: string;
-  monthValues: number[]; // index 0 = Jan … 11 = Dec
-  total: number;
-  tipo: 'entrada' | 'saida';
-}
 
 interface FluxoLancRaw extends LancamentoClassificavel {
   grupo_custo: string | null;
@@ -112,57 +87,124 @@ interface FluxoLancRaw extends LancamentoClassificavel {
   subcentro: string | null;
 }
 
-function buildDynamicRows(
+interface TreeNode {
+  id: string;
+  label: string;
+  monthValues: number[]; // 12 months
+  total: number;
+  tipo: 'entrada' | 'saida';
+  depth: number; // 0=macro, 1=grupo, 2=centro, 3=subcentro
+  children: TreeNode[];
+}
+
+function buildPlanoTree(
   lancamentos: FluxoLancRaw[],
-  classLabel: string,
-  tipo: 'entrada' | 'saida',
   ano: number,
   mesAte: number,
-): DynRow[] {
+  tipoFilter: 'entrada' | 'saida',
+): TreeNode[] {
   const realizados = lancamentos.filter(l => {
     if (!isRealizado(l)) return false;
     if (datePagtoAnoClass(l) !== ano) return false;
     const m = datePagtoMesClass(l);
     if (!m || m > mesAte) return false;
-
-    // Match classification
-    if (tipo === 'entrada' && isEntradaClass(l)) {
-      return classificarEntrada(l) === classLabel;
-    }
-    if (tipo === 'saida' && isSaidaClass(l)) {
-      return classificarSaida(l) === classLabel;
-    }
+    if (tipoFilter === 'entrada') return isEntradaClass(l);
+    if (tipoFilter === 'saida') return isSaidaClass(l);
     return false;
   });
 
-  if (realizados.length === 0) return [];
+  // 4-level grouping: macro → grupo → centro → subcentro
+  const macroMap = new Map<string, Map<string, Map<string, Map<string, number[]>>>>();
 
-  // Group by subcentro (or centro_custo if subcentro is empty)
-  const map = new Map<string, number[]>();
   for (const l of realizados) {
-    const key = l.subcentro || l.centro_custo || '(sem classificação)';
-    if (!map.has(key)) map.set(key, new Array(12).fill(0));
+    const macro = l.macro_custo || '(sem macro)';
+    const grupo = l.grupo_custo || '(sem grupo)';
+    const centro = l.centro_custo || '(sem centro)';
+    const sub = l.subcentro || '(sem subcentro)';
     const m = datePagtoMesClass(l)!;
-    map.get(key)![m - 1] += Math.abs(l.valor);
+    const val = Math.abs(l.valor);
+
+    if (!macroMap.has(macro)) macroMap.set(macro, new Map());
+    const gMap = macroMap.get(macro)!;
+    if (!gMap.has(grupo)) gMap.set(grupo, new Map());
+    const cMap = gMap.get(grupo)!;
+    if (!cMap.has(centro)) cMap.set(centro, new Map());
+    const sMap = cMap.get(centro)!;
+    if (!sMap.has(sub)) sMap.set(sub, new Array(12).fill(0));
+    sMap.get(sub)![m - 1] += val;
   }
 
-  return [...map.entries()]
-    .map(([label, monthValues]) => ({
-      label,
-      monthValues,
-      total: monthValues.reduce((a, b) => a + b, 0),
-      tipo,
-    }))
-    .sort((a, b) => b.total - a.total);
-}
+  // Build tree
+  const roots: TreeNode[] = [];
 
-// Rows for nivel-2 that have no static children (e.g. Dedução de Receitas, Reposição Bovinos, Dividendos)
-// These expand directly to subcentros
-const NIVEL2_DIRECT_EXPAND: Record<string, { classLabels: string[]; tipo: 'entrada' | 'saida' }> = {
-  deducaoReceitas: { classLabels: ['Dedução de Receitas'], tipo: 'saida' },
-  reposicao: { classLabels: ['Reposição Bovinos'], tipo: 'saida' },
-  dividendos: { classLabels: ['Dividendos'], tipo: 'saida' },
-};
+  for (const [macroLabel, grupoMap] of macroMap) {
+    const macroNode: TreeNode = {
+      id: `m_${tipoFilter}_${macroLabel}`,
+      label: macroLabel,
+      monthValues: new Array(12).fill(0),
+      total: 0,
+      tipo: tipoFilter,
+      depth: 0,
+      children: [],
+    };
+
+    for (const [grupoLabel, centroMap] of grupoMap) {
+      const grupoNode: TreeNode = {
+        id: `g_${tipoFilter}_${macroLabel}_${grupoLabel}`,
+        label: grupoLabel,
+        monthValues: new Array(12).fill(0),
+        total: 0,
+        tipo: tipoFilter,
+        depth: 1,
+        children: [],
+      };
+
+      for (const [centroLabel, subMap] of centroMap) {
+        const centroNode: TreeNode = {
+          id: `c_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}`,
+          label: centroLabel,
+          monthValues: new Array(12).fill(0),
+          total: 0,
+          tipo: tipoFilter,
+          depth: 2,
+          children: [],
+        };
+
+        for (const [subLabel, months] of subMap) {
+          const subTotal = months.reduce((a, b) => a + b, 0);
+          const subNode: TreeNode = {
+            id: `s_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}_${subLabel}`,
+            label: subLabel,
+            monthValues: [...months],
+            total: subTotal,
+            tipo: tipoFilter,
+            depth: 3,
+            children: [],
+          };
+          centroNode.children.push(subNode);
+          for (let i = 0; i < 12; i++) centroNode.monthValues[i] += months[i];
+          centroNode.total += subTotal;
+        }
+
+        centroNode.children.sort((a, b) => b.total - a.total);
+        grupoNode.children.push(centroNode);
+        for (let i = 0; i < 12; i++) grupoNode.monthValues[i] += centroNode.monthValues[i];
+        grupoNode.total += centroNode.total;
+      }
+
+      grupoNode.children.sort((a, b) => b.total - a.total);
+      macroNode.children.push(grupoNode);
+      for (let i = 0; i < 12; i++) macroNode.monthValues[i] += grupoNode.monthValues[i];
+      macroNode.total += grupoNode.total;
+    }
+
+    macroNode.children.sort((a, b) => b.total - a.total);
+    roots.push(macroNode);
+  }
+
+  roots.sort((a, b) => b.total - a.total);
+  return roots;
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -220,7 +262,6 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
               Fluxo de Caixa Global
             </h3>
             <div className="flex items-center gap-1.5">
-              {/* Toggle formato valores */}
               <div className="flex rounded border border-border overflow-hidden">
                 <button
                   onClick={() => setFmtMode('compact')}
@@ -243,7 +284,6 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
                   123
                 </button>
               </div>
-              {/* Toggle Resumido / Amplo */}
               <div className="flex rounded border border-border overflow-hidden">
                 <button
                   onClick={() => setVisao('resumido')}
@@ -303,6 +343,21 @@ const BG_NIVEL2 = 'color-mix(in srgb, hsl(var(--muted)) 45%, hsl(var(--card)))';
 const BG_ZEBRA = 'color-mix(in srgb, hsl(var(--muted)) 18%, hsl(var(--card)))';
 const BG_DYN = 'color-mix(in srgb, hsl(var(--muted)) 10%, hsl(var(--card)))';
 
+// Depth-based indentation and styling
+const DEPTH_INDENT = [4, 16, 28, 40]; // px
+const DEPTH_FONT = [
+  'font-semibold text-[9px]',   // depth 0 = macro
+  'font-medium text-[9px]',     // depth 1 = grupo
+  'font-normal text-[9px]',     // depth 2 = centro
+  'font-normal text-[8px] italic', // depth 3 = subcentro
+];
+const DEPTH_BG = (depth: number, idx: number) => {
+  if (depth === 0) return BG_NIVEL2;
+  if (depth === 1) return BG_ZEBRA;
+  if (depth === 2) return BG_DYN;
+  return idx % 2 === 0 ? BG_CARD : BG_DYN;
+};
+
 function FluxoTable({
   meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano,
 }: {
@@ -314,7 +369,6 @@ function FluxoTable({
   lancamentosGlobais: FluxoLancRaw[];
   ano: number;
 }) {
-  // Expanded state: set of row IDs that are expanded
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleExpand = useCallback((id: string) => {
@@ -326,43 +380,21 @@ function FluxoTable({
     });
   }, []);
 
-  // In resumido mode, show only rows without parentId and without amploOnly equivalent
-  const baseRows = useMemo(() => {
-    if (visao === 'resumido') {
-      return ROWS.filter(r => !r.parentId);
-    }
-    // In amplo, show nivel 1 and nivel 2 always. Nivel 3 only if parent is expanded.
-    return ROWS.filter(r => !r.parentId);
-  }, [visao]);
+  // Build dynamic trees for Amplo mode
+  const entradaTree = useMemo(() => {
+    if (visao !== 'amplo') return [];
+    return buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada');
+  }, [visao, lancamentosGlobais, ano, mesAte]);
 
-  // Compute dynamic sub-rows for expanded nivel-3 rows
-  const dynRowsCache = useMemo(() => {
-    if (visao !== 'amplo') return {};
-    const cache: Record<string, DynRow[]> = {};
-    for (const row of ROWS) {
-      if (row.nivel === 3 && row.classLabel && expanded.has(row.id)) {
-        cache[row.id] = buildDynamicRows(
-          lancamentosGlobais, row.classLabel, row.tipo as 'entrada' | 'saida', ano, mesAte,
-        );
-      }
-    }
-    // Direct-expand nivel-2 rows (no static children)
-    for (const [rowId, cfg] of Object.entries(NIVEL2_DIRECT_EXPAND)) {
-      if (expanded.has(rowId)) {
-        const allDyn: DynRow[] = [];
-        for (const cl of cfg.classLabels) {
-          allDyn.push(...buildDynamicRows(lancamentosGlobais, cl, cfg.tipo, ano, mesAte));
-        }
-        cache[rowId] = allDyn;
-      }
-    }
-    return cache;
-  }, [visao, expanded, lancamentosGlobais, ano, mesAte]);
+  const saidaTree = useMemo(() => {
+    if (visao !== 'amplo') return [];
+    return buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida');
+  }, [visao, lancamentosGlobais, ano, mesAte]);
 
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
     const result: Record<string, number> = {};
-    for (const row of ROWS) {
+    for (const row of ROWS_RESUMIDO) {
       if (row.key === 'saldoInicial') {
         result[row.key] = meses.length > 0 ? meses[0].saldoInicial : 0;
       } else if (row.key === 'saldoFinal') {
@@ -376,71 +408,81 @@ function FluxoTable({
     return result;
   }, [meses, mesAte]);
 
-  // Check if a nivel-2 row has static children
-  const childrenOf = useCallback((parentId: string) => {
-    return ROWS.filter(r => r.parentId === parentId);
-  }, []);
-
-  // Can a row be expanded?
-  const isExpandable = useCallback((row: RowDef) => {
-    if (visao !== 'amplo') return false;
-    if (row.nivel === 2) {
-      // Has static children or is a direct-expand row
-      return childrenOf(row.id).length > 0 || NIVEL2_DIRECT_EXPAND[row.id];
-    }
-    if (row.nivel === 3 && row.classLabel) return true;
-    return false;
-  }, [visao, childrenOf]);
-
-  const getBgForRow = (nivel: number, idx: number) => {
-    if (nivel === 1) return BG_NIVEL1;
-    if (nivel === 2) return BG_NIVEL2;
-    return idx % 2 === 1 ? BG_ZEBRA : BG_CARD;
-  };
-
-  // Build flat render list
-  const renderRows = useMemo(() => {
-    const result: Array<{ type: 'static'; row: RowDef } | { type: 'dynamic'; dyn: DynRow; parentId: string }> = [];
-
-    for (const row of baseRows) {
-      result.push({ type: 'static', row });
-
-      if (visao === 'amplo' && expanded.has(row.id)) {
-        const staticChildren = childrenOf(row.id);
-        if (staticChildren.length > 0) {
-          // Show static children
-          for (const child of staticChildren) {
-            result.push({ type: 'static', row: child });
-            // If this child is also expanded, show dynamic sub-rows
-            if (expanded.has(child.id) && dynRowsCache[child.id]) {
-              for (const dyn of dynRowsCache[child.id]) {
-                result.push({ type: 'dynamic', dyn, parentId: child.id });
-              }
-            }
-          }
-        } else if (dynRowsCache[row.id]) {
-          // Direct dynamic children (e.g. Dividendos → subcentros)
-          for (const dyn of dynRowsCache[row.id]) {
-            result.push({ type: 'dynamic', dyn, parentId: row.id });
-          }
-        }
+  // Flatten tree nodes respecting expansion
+  const flattenTree = useCallback((nodes: TreeNode[]): TreeNode[] => {
+    const result: TreeNode[] = [];
+    for (const node of nodes) {
+      result.push(node);
+      if (expanded.has(node.id) && node.children.length > 0) {
+        result.push(...flattenTree(node.children));
       }
     }
     return result;
-  }, [baseRows, visao, expanded, childrenOf, dynRowsCache]);
+  }, [expanded]);
+
+  // Build final render list
+  type RenderItem =
+    | { type: 'static'; row: RowDef }
+    | { type: 'tree'; node: TreeNode };
+
+  const renderRows = useMemo((): RenderItem[] => {
+    if (visao === 'resumido') {
+      return ROWS_RESUMIDO.map(r => ({ type: 'static' as const, row: r }));
+    }
+
+    // Amplo: static summary rows + tree nodes injected after Total Entradas / Total Saídas
+    const result: RenderItem[] = [];
+    const summaryRows: RowDef[] = [
+      ROWS_RESUMIDO.find(r => r.id === 'saldoInicial')!,
+      ROWS_RESUMIDO.find(r => r.id === 'totalEntradas')!,
+    ];
+
+    // Saldo Inicial
+    result.push({ type: 'static', row: summaryRows[0] });
+
+    // Total Entradas
+    result.push({ type: 'static', row: summaryRows[1] });
+    // Inject entrada tree
+    if (expanded.has('totalEntradas')) {
+      for (const node of flattenTree(entradaTree)) {
+        result.push({ type: 'tree', node });
+      }
+    }
+
+    // Total Saídas
+    const totalSaidasRow = ROWS_RESUMIDO.find(r => r.id === 'totalSaidas')!;
+    result.push({ type: 'static', row: totalSaidasRow });
+    // Inject saida tree
+    if (expanded.has('totalSaidas')) {
+      for (const node of flattenTree(saidaTree)) {
+        result.push({ type: 'tree', node });
+      }
+    }
+
+    // Saldo Final + Acumulado
+    result.push({ type: 'static', row: ROWS_RESUMIDO.find(r => r.id === 'saldoFinal')! });
+    result.push({ type: 'static', row: ROWS_RESUMIDO.find(r => r.id === 'saldoAcumulado')! });
+
+    return result;
+  }, [visao, expanded, entradaTree, saidaTree, flattenTree]);
+
+  // Which static rows are expandable in Amplo
+  const isStaticExpandable = (rowId: string) => {
+    if (visao !== 'amplo') return false;
+    return rowId === 'totalEntradas' || rowId === 'totalSaidas';
+  };
 
   return (
     <div className="overflow-auto -mx-1 max-h-[60vh]" style={{ scrollbarGutter: 'stable' }}>
       <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
         <colgroup>
-          <col style={{ width: isMobile ? 100 : 160 }} />
+          <col style={{ width: isMobile ? 100 : 180 }} />
           {meses.map(m => (
             <col key={m.mes} style={{ width: 58 }} />
           ))}
           <col style={{ width: 66 }} />
         </colgroup>
 
-        {/* ── HEADER ── */}
         <thead className="sticky top-0 z-20">
           <tr className="border-b-2 border-border">
             <th
@@ -467,81 +509,102 @@ function FluxoTable({
           </tr>
         </thead>
 
-        {/* ── BODY ── */}
         <tbody>
           {renderRows.map((item, rowIdx) => {
-            if (item.type === 'dynamic') {
+            if (item.type === 'static') {
+              const row = item.row;
+              const nivel = row.nivel ?? 3;
+              const bg = nivel === 1 ? BG_NIVEL1 : nivel === 2 ? BG_NIVEL2 : rowIdx % 2 === 1 ? BG_ZEBRA : BG_CARD;
+              const expandable = isStaticExpandable(row.id);
+              const isExp = expanded.has(row.id);
+              const fontCls = nivel === 1 ? 'font-bold text-[9px]' : nivel === 2 ? 'font-semibold text-[9px]' : 'font-normal text-[9px]';
+              const borderCls = nivel === 1 ? 'border-b border-border' : 'border-b border-border/30';
+              const indentPx = row.indent === 2 ? 20 : row.indent === 1 ? 12 : 0;
+
               return (
-                <DynamicRowTr
-                  key={`dyn-${item.parentId}-${item.dyn.label}`}
-                  dyn={item.dyn}
-                  meses={meses}
-                  mesAte={mesAte}
-                  fmtMode={fmtMode}
-                  rowIdx={rowIdx}
-                />
+                <tr key={row.id} className={borderCls}>
+                  <td
+                    className={`px-1 py-[2px] text-left leading-tight ${fontCls} text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap ${expandable ? 'cursor-pointer select-none' : ''}`}
+                    style={{ background: bg, paddingLeft: indentPx + 4 }}
+                    onClick={expandable ? () => toggleExpand(row.id) : undefined}
+                  >
+                    <span className="inline-flex items-center gap-0.5">
+                      {expandable && (
+                        isExp
+                          ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                          : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                      )}
+                      {row.label}
+                    </span>
+                  </td>
+                  {meses.map(m => {
+                    const val = m[row.key] as number;
+                    const isAfter = m.mes > mesAte;
+                    const colorClass = getValueColor(val, row.tipo, isAfter);
+                    return (
+                      <td
+                        key={m.mes}
+                        className={`px-1 py-[2px] text-right leading-tight ${fontCls} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                        style={{ background: bg }}
+                      >
+                        {isAfter ? '-' : fmtVal(val, fmtMode)}
+                      </td>
+                    );
+                  })}
+                  <td
+                    className={`px-1 py-[2px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(totals[row.key] || 0, row.tipo)}`}
+                    style={{ background: nivel === 1 ? BG_NIVEL1 : BG_MUTED }}
+                  >
+                    {fmtVal(totals[row.key] || 0, fmtMode)}
+                  </td>
+                </tr>
               );
             }
 
-            const row = item.row;
-            const nivel = row.nivel ?? 3;
-            const bg = getBgForRow(nivel, rowIdx);
-            const expandable = isExpandable(row);
-            const isExpanded = expanded.has(row.id);
-
-            const fontCls =
-              nivel === 1 ? 'font-bold text-[9px]' :
-              nivel === 2 ? 'font-semibold text-[9px]' :
-              'font-normal text-[9px]';
-
-            const borderCls = nivel === 1 ? 'border-b border-border' : 'border-b border-border/30';
-
-            const indentPx =
-              row.indent === 2 ? 20 :
-              row.indent === 1 ? 12 : 0;
+            // Tree node row
+            const node = item.node;
+            const hasChildren = node.children.length > 0;
+            const isExp = expanded.has(node.id);
+            const bg = DEPTH_BG(node.depth, rowIdx);
+            const fontCls = DEPTH_FONT[node.depth] || DEPTH_FONT[3];
+            const indent = DEPTH_INDENT[node.depth] || 40;
+            const textColor = node.depth <= 1 ? 'text-card-foreground' : 'text-muted-foreground';
 
             return (
-              <tr key={row.id} className={borderCls}>
+              <tr key={node.id} className="border-b border-border/20">
                 <td
-                  className={`px-1 py-[2px] text-left leading-tight ${fontCls} ${
-                    row.indent === 2 ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 z-10 truncate whitespace-nowrap ${expandable ? 'cursor-pointer select-none' : ''}`}
-                  style={{ background: bg, paddingLeft: indentPx + 4 }}
-                  onClick={expandable ? () => toggleExpand(row.id) : undefined}
+                  className={`px-1 py-[1.5px] text-left leading-tight ${fontCls} ${textColor} sticky left-0 z-10 truncate whitespace-nowrap ${hasChildren ? 'cursor-pointer select-none' : ''}`}
+                  style={{ background: bg, paddingLeft: indent }}
+                  onClick={hasChildren ? () => toggleExpand(node.id) : undefined}
                 >
                   <span className="inline-flex items-center gap-0.5">
-                    {expandable && (
-                      isExpanded
+                    {hasChildren && (
+                      isExp
                         ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                         : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                     )}
-                    {row.label}
+                    {node.label}
                   </span>
                 </td>
-
                 {meses.map(m => {
-                  const val = m[row.key] as number;
+                  const val = node.monthValues[m.mes - 1] || 0;
                   const isAfter = m.mes > mesAte;
-                  const colorClass = (row.indent === 2 && val === 0)
-                    ? 'text-muted-foreground/40'
-                    : getValueColor(val, row.tipo, isAfter);
-
+                  const color = isAfter ? 'text-muted-foreground/30' : val === 0 ? 'text-muted-foreground/40' : getValueColor(val, node.tipo);
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-[2px] text-right leading-tight ${fontCls} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                      className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
                       style={{ background: bg }}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
-
                 <td
-                  className={`px-1 py-[2px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(totals[row.key] || 0, row.tipo)}`}
-                  style={{ background: nivel === 1 ? BG_NIVEL1 : BG_MUTED }}
+                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)}`}
+                  style={{ background: BG_MUTED }}
                 >
-                  {fmtVal(totals[row.key] || 0, fmtMode)}
+                  {fmtVal(node.total, fmtMode)}
                 </td>
               </tr>
             );
@@ -549,52 +612,5 @@ function FluxoTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Dynamic row component (subcentro detail)
-// ---------------------------------------------------------------------------
-
-function DynamicRowTr({
-  dyn, meses, mesAte, fmtMode, rowIdx,
-}: {
-  dyn: DynRow;
-  meses: FluxoMensal[];
-  mesAte: number;
-  fmtMode: FmtMode;
-  rowIdx: number;
-}) {
-  const bg = rowIdx % 2 === 1 ? BG_DYN : BG_CARD;
-
-  return (
-    <tr className="border-b border-border/20">
-      <td
-        className="px-1 py-[1px] text-left text-[8px] font-normal text-muted-foreground truncate whitespace-nowrap sticky left-0 z-10 italic"
-        style={{ background: bg, paddingLeft: 32 }}
-      >
-        {dyn.label}
-      </td>
-      {meses.map(m => {
-        const val = dyn.monthValues[m.mes - 1] || 0;
-        const isAfter = m.mes > mesAte;
-        const color = isAfter ? 'text-muted-foreground/30' : val === 0 ? 'text-muted-foreground/40' : getValueColor(val, dyn.tipo);
-        return (
-          <td
-            key={m.mes}
-            className={`px-1 py-[1px] text-right text-[8px] leading-tight ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
-            style={{ background: bg }}
-          >
-            {isAfter ? '-' : fmtVal(val, fmtMode)}
-          </td>
-        );
-      })}
-      <td
-        className={`px-1 py-[1px] text-right text-[8px] leading-tight border-l-2 border-border ${getValueColor(dyn.total, dyn.tipo)}`}
-        style={{ background: BG_MUTED }}
-      >
-        {fmtVal(dyn.total, fmtMode)}
-      </td>
-    </tr>
   );
 }
