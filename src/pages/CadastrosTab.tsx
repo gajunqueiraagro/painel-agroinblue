@@ -5,10 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Save, FileText, Share2, Pencil, Trash2, MapPin, Tag, Users, Building2, ShieldCheck } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Save, FileText, Share2, Pencil, Trash2, MapPin, Users, Building2, ShieldCheck, Landmark, Phone, Truck, Settings, DollarSign, LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import logoUrl from '@/assets/logo.png';
@@ -16,7 +14,12 @@ import { PastosTab } from './PastosTab';
 import { FazendasList } from '@/components/FazendasList';
 import { AcessosTab } from './AcessosTab';
 import { ClientesTab } from './ClientesTab';
+import { DividendosTab } from './DividendosTab';
 import { useCliente } from '@/contexts/ClienteContext';
+
+// ---------------------------------------------------------------------------
+// Types & Constants
+// ---------------------------------------------------------------------------
 
 interface CadastroData {
   id?: string;
@@ -41,6 +44,35 @@ const EMPTY: CadastroData = {
   area_total: '', area_produtiva: '', inscricao_rural: '', roteiro: '',
 };
 
+type ModuleKey = 'clientes' | 'fazendas' | 'dados' | 'contato' | 'bancario' | 'roteiro' | 'pastos' | 'acessos' | 'dividendos' | 'auditoria' | 'ajustes';
+
+interface ModuleCard {
+  key: ModuleKey;
+  icon: LucideIcon;
+  label: string;
+  desc: string;
+  adminOnly?: boolean;
+  wide?: boolean;
+}
+
+const MODULES: ModuleCard[] = [
+  { key: 'clientes', icon: Building2, label: 'Clientes', desc: 'Gerenciar clientes', adminOnly: true },
+  { key: 'fazendas', icon: Building2, label: 'Fazendas', desc: 'Lista de fazendas' },
+  { key: 'dados', icon: FileText, label: 'Dados da Fazenda', desc: 'Município, IE, área' },
+  { key: 'contato', icon: Phone, label: 'Contato', desc: 'Endereço, email, telefone' },
+  { key: 'bancario', icon: Landmark, label: 'Bancário', desc: 'Banco e PIX' },
+  { key: 'roteiro', icon: Truck, label: 'Roteiro', desc: 'Roteiro de embarque' },
+  { key: 'pastos', icon: MapPin, label: 'Pastos', desc: 'Cadastro de pastos', wide: true },
+  { key: 'dividendos', icon: DollarSign, label: 'Dividendos', desc: 'Cadastro por cliente' },
+  { key: 'acessos', icon: Users, label: 'Acessos', desc: 'Membros e permissões', wide: true },
+  { key: 'auditoria', icon: ShieldCheck, label: 'Auditoria', desc: 'Log de ações' },
+  { key: 'ajustes', icon: Settings, label: 'Ajustes Finais', desc: 'Telas legadas' },
+];
+
+// ---------------------------------------------------------------------------
+// PDF helpers (kept from original)
+// ---------------------------------------------------------------------------
+
 function loadLogoBase64(): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -57,27 +89,29 @@ function loadLogoBase64(): Promise<string> {
   });
 }
 
-function LegacyLink({ label, tabId }: { label: string; tabId: string }) {
-  return (
-    <div className="flex items-center justify-between px-3 py-2 rounded-md bg-muted/40 text-sm text-muted-foreground">
-      <span>{label}</span>
-      <span className="text-[10px] font-mono opacity-60">{tabId}</span>
-    </div>
-  );
-}
+const normalizePdfText = (value?: string) => {
+  if (!value) return '—';
+  const s = value.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ').replace(/[^\S\r\n]+/g, ' ').trim();
+  return s || '—';
+};
+
+const preventOverflow = (value: string) => value.replace(/(\S{24})(?=\S)/g, '$1 ');
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => void }) {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual } = useFazenda();
   const { isAdmin } = useCliente();
   const [data, setData] = useState<CadastroData>(EMPTY);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [openModal, setOpenModal] = useState<ModuleKey | null>(null);
 
-  useEffect(() => {
-    loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null));
-  }, []);
+  useEffect(() => { loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null)); }, []);
 
   const load = useCallback(async () => {
     if (!fazendaAtual) return;
@@ -114,6 +148,7 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
 
   useEffect(() => { load(); }, [load]);
 
+  // ---- CRUD ----
   const handleSave = async () => {
     if (!fazendaAtual) return;
     setSaving(true);
@@ -134,7 +169,6 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
       inscricao_rural: data.inscricao_rural || null,
       roteiro: data.roteiro || null,
     };
-
     let error;
     if (data.id) {
       ({ error } = await supabase.from('fazenda_cadastros').update(payload).eq('id', data.id));
@@ -143,13 +177,8 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
       error = res.error;
       if (res.data) setData(prev => ({ ...prev, id: res.data.id }));
     }
-
-    if (error) {
-      toast.error('Erro ao salvar: ' + error.message);
-    } else {
-      toast.success('Cadastro salvo!');
-      setEditing(false);
-    }
+    if (error) { toast.error('Erro ao salvar: ' + error.message); }
+    else { toast.success('Cadastro salvo!'); setEditing(false); }
     setSaving(false);
   };
 
@@ -157,368 +186,257 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
     if (!data.id) return;
     if (!confirm('Tem certeza que deseja apagar todos os dados de cadastro?')) return;
     const { error } = await supabase.from('fazenda_cadastros').delete().eq('id', data.id);
-    if (error) {
-      toast.error('Erro ao apagar: ' + error.message);
-    } else {
-      setData(EMPTY);
-      setEditing(true);
-      toast.success('Cadastro apagado!');
-    }
+    if (error) { toast.error('Erro ao apagar: ' + error.message); }
+    else { setData(EMPTY); setEditing(true); toast.success('Cadastro apagado!'); }
   };
 
+  // ---- Field renderer ----
   const field = (label: string, key: keyof CadastroData, type = 'text', placeholder = '') => (
-    <div className="space-y-1">
-      <Label className="text-xs font-semibold text-muted-foreground">{label}</Label>
+    <div className="space-y-0.5">
+      <Label className="text-[10px] font-semibold text-muted-foreground">{label}</Label>
       {editing ? (
         <Input
           type={type}
           value={data[key] || ''}
           onChange={e => setData(prev => ({ ...prev, [key]: e.target.value }))}
           placeholder={placeholder || label}
-          className="h-9 text-sm"
+          className="h-7 text-xs"
         />
       ) : (
-        <p className="text-sm font-medium text-foreground min-h-[36px] flex items-center px-3 py-2 rounded-md bg-muted/50">
+        <p className="text-xs font-medium text-foreground min-h-[28px] flex items-center px-2 py-1 rounded bg-muted/50">
           {data[key] || <span className="text-muted-foreground italic">—</span>}
         </p>
       )}
     </div>
   );
 
+  // ---- PDF Export ----
   const downloadPdf = (doc: jsPDF, fileName: string) => {
     const pdfBlob = doc.output('blob');
     const url = URL.createObjectURL(pdfBlob);
     try {
-      const downloadLink = document.createElement('a');
-      downloadLink.href = url;
-      downloadLink.download = fileName;
-      downloadLink.style.display = 'none';
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const isEmbedded = window.self !== window.top;
-      if (isMobile || isEmbedded) {
-        const dataUri = doc.output('datauristring');
-        const openInSameTab = document.createElement('a');
-        openInSameTab.href = dataUri;
-        openInSameTab.target = '_self';
-        openInSameTab.rel = 'noopener noreferrer';
-        openInSameTab.style.display = 'none';
-        document.body.appendChild(openInSameTab);
-        openInSameTab.click();
-        document.body.removeChild(openInSameTab);
-        toast.info('Se não baixar automático, o PDF foi aberto para salvar/compartilhar.');
-      }
-    } catch (error) {
-      console.error('Erro ao iniciar download do PDF:', error);
-      toast.error('Não foi possível iniciar o download do PDF.');
-    } finally {
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    }
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.style.display = 'none';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    } catch { toast.error('Erro no download.'); }
+    finally { setTimeout(() => URL.revokeObjectURL(url), 10000); }
   };
-
-  const normalizePdfText = (value?: string) => {
-    if (!value) return '—';
-    const normalizedSpaces = value.replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ').replace(/[^\S\r\n]+/g, ' ').trim();
-    const fixedSpacedChars = normalizedSpaces.replace(/(?:\b[\p{L}\p{N}]\s+){2,}[\p{L}\p{N}]\b/gu, (match) => match.replace(/\s+/g, ''));
-    return fixedSpacedChars || '—';
-  };
-
-  const preventOverflow = (value: string) => value.replace(/(\S{24})(?=\S)/g, '$1 ');
 
   const drawPdfHeader = (doc: jsPDF, title: string) => {
     const pageW = doc.internal.pageSize.getWidth();
     let y = 10;
-    if (logoBase64) {
-      const logoH = 14;
-      const logoW = logoH * 2;
-      doc.addImage(logoBase64, 'PNG', pageW / 2 - logoW / 2, y, logoW, logoH);
-      y += logoH + 6;
-    }
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    if (logoBase64) { doc.addImage(logoBase64, 'PNG', pageW / 2 - 14, y, 28, 14); y += 20; }
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
     doc.text(title, pageW / 2, y, { align: 'center' });
     return y + 12;
   };
 
-  const drawLabeledRows = (doc: jsPDF, rows: Array<[string, string | undefined]>, startY: number, options?: { preserveLineBreaks?: boolean }) => {
+  const drawRows = (doc: jsPDF, rows: [string, string | undefined][], startY: number, opts?: { preserveLineBreaks?: boolean }) => {
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
-    const marginX = 18;
-    const labelWidth = 42;
-    const lineHeight = 6;
-    const rowGap = 2;
     let y = startY;
-
     rows.forEach(([label, raw]) => {
-      const normalized = options?.preserveLineBreaks
-        ? (raw || '').replace(/\u00a0/g, ' ').replace(/\r/g, '').split('\n').map(part => normalizePdfText(part)).filter(Boolean).join('\n') || '—'
+      const text = opts?.preserveLineBreaks
+        ? (raw || '').split('\n').map(p => normalizePdfText(p)).filter(Boolean).join('\n') || '—'
         : normalizePdfText(raw);
-      const wrapped = doc.splitTextToSize(preventOverflow(normalized), pageW - marginX * 2 - labelWidth);
-      const requiredHeight = Math.max(lineHeight, wrapped.length * lineHeight) + rowGap;
-      if (y + requiredHeight > pageH - 18) { doc.addPage(); y = 20; }
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${label}:`, marginX, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(wrapped, marginX + labelWidth, y);
-      y += requiredHeight;
+      const wrapped = doc.splitTextToSize(preventOverflow(text), pageW - 78);
+      const h = Math.max(6, wrapped.length * 6) + 2;
+      if (y + h > pageH - 18) { doc.addPage(); y = 20; }
+      doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, 18, y);
+      doc.setFont('helvetica', 'normal'); doc.text(wrapped, 60, y);
+      y += h;
     });
     return y;
   };
 
   const generateRoteiroPDF = () => {
-    try {
-      const doc = new jsPDF();
-      let y = drawPdfHeader(doc, 'Roteiro para Embarque');
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      y = drawLabeledRows(doc, [
-        ['Fazenda', fazendaAtual?.nome || ''],
-        ['Município', data.municipio],
-        ['IE', data.ie],
-        ['Proprietário', data.proprietario_nome],
-        ['Roteiro', data.roteiro],
-      ], y, { preserveLineBreaks: true });
-      downloadPdf(doc, `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
-      toast.success('PDF do roteiro exportado!');
-    } catch (error) {
-      console.error('Erro ao exportar PDF de roteiro:', error);
-      toast.error('Não foi possível exportar o PDF do roteiro.');
-    }
+    const doc = new jsPDF();
+    let y = drawPdfHeader(doc, 'Roteiro para Embarque');
+    doc.setFontSize(11);
+    drawRows(doc, [
+      ['Fazenda', fazendaAtual?.nome], ['Município', data.municipio],
+      ['IE', data.ie], ['Proprietário', data.proprietario_nome], ['Roteiro', data.roteiro],
+    ], y, { preserveLineBreaks: true });
+    downloadPdf(doc, `roteiro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+    toast.success('PDF exportado!');
   };
 
   const generateCadastroPDF = () => {
-    try {
-      const doc = new jsPDF();
-      const y = drawPdfHeader(doc, 'Dados para Cadastro');
-      doc.setFontSize(11);
-      drawLabeledRows(doc, [
-        ['Fazenda', fazendaAtual?.nome || ''],
-        ['Município', data.municipio],
-        ['IE', data.ie],
-        ['Proprietário', data.proprietario_nome],
-        ['CPF/CNPJ', data.cpf_cnpj],
-        ['Endereço', data.endereco],
-        ['Email', data.email],
-        ['Telefone', data.telefone],
-      ], y);
-      downloadPdf(doc, `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
-      toast.success('PDF do cadastro exportado!');
-    } catch (error) {
-      console.error('Erro ao exportar PDF de cadastro:', error);
-      toast.error('Não foi possível exportar o PDF do cadastro.');
-    }
+    const doc = new jsPDF();
+    const y = drawPdfHeader(doc, 'Dados para Cadastro');
+    doc.setFontSize(11);
+    drawRows(doc, [
+      ['Fazenda', fazendaAtual?.nome], ['Município', data.municipio],
+      ['IE', data.ie], ['Proprietário', data.proprietario_nome],
+      ['CPF/CNPJ', data.cpf_cnpj], ['Endereço', data.endereco],
+      ['Email', data.email], ['Telefone', data.telefone],
+    ], y);
+    downloadPdf(doc, `cadastro_${fazendaAtual?.nome || 'fazenda'}.pdf`);
+    toast.success('PDF exportado!');
   };
 
   const shareWhatsApp = (type: 'roteiro' | 'cadastro') => {
     const nome = fazendaAtual?.nome || '';
-    let text = '';
-    if (type === 'roteiro') {
-      text = `*Roteiro para Embarque*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`;
-    } else {
-      text = `*Dados para Cadastro*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
-    }
+    const text = type === 'roteiro'
+      ? `*Roteiro para Embarque*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*Roteiro:* ${data.roteiro || '—'}`
+      : `*Dados para Cadastro*\n\n*Fazenda:* ${nome}\n*Município:* ${data.municipio || '—'}\n*IE:* ${data.ie || '—'}\n*Proprietário:* ${data.proprietario_nome || '—'}\n*CPF/CNPJ:* ${data.cpf_cnpj || '—'}\n*Endereço:* ${data.endereco || '—'}\n*Email:* ${data.email || '—'}\n*Telefone:* ${data.telefone || '—'}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  if (loading) return <div className="p-4 text-center text-muted-foreground">Carregando...</div>;
+  // ---- Modal content renderers ----
+  const renderModalContent = (key: ModuleKey) => {
+    switch (key) {
+      case 'clientes': return <ClientesTab />;
+      case 'fazendas': return <FazendasList />;
+      case 'dados': return (
+        <div className="space-y-2">
+          <div className="flex gap-1.5 justify-end">
+            {!editing && data.id && (
+              <>
+                <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setEditing(true)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>
+                <Button variant="destructive" size="sm" className="h-6 text-[10px]" onClick={handleDelete}><Trash2 className="h-3 w-3 mr-1" /> Apagar</Button>
+              </>
+            )}
+            {editing && (
+              <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}>
+                <Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
+              </Button>
+            )}
+          </div>
+          {field('Município', 'municipio')}
+          {field('Inscrição Estadual (IE)', 'ie')}
+          {field('Nome do Proprietário', 'proprietario_nome')}
+          {field('CPF ou CNPJ', 'cpf_cnpj')}
+          {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
+          {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
+          {field('Inscrição Rural (IR)', 'inscricao_rural')}
+        </div>
+      );
+      case 'contato': return (
+        <div className="space-y-2">
+          <div className="flex gap-1.5 justify-end">
+            {!editing && data.id && <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setEditing(true)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>}
+            {editing && <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}><Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}</Button>}
+          </div>
+          {field('Endereço', 'endereco')}
+          {field('Email', 'email', 'email')}
+          {field('Telefone', 'telefone', 'tel')}
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={generateCadastroPDF}>
+              <FileText className="h-3 w-3 mr-1 text-destructive" /> PDF Cadastro
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={() => shareWhatsApp('cadastro')}>
+              <Share2 className="h-3 w-3 mr-1 text-green-600" /> WhatsApp
+            </Button>
+          </div>
+        </div>
+      );
+      case 'bancario': return (
+        <div className="space-y-2">
+          <div className="flex gap-1.5 justify-end">
+            {!editing && data.id && <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setEditing(true)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>}
+            {editing && <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}><Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}</Button>}
+          </div>
+          {field('Banco', 'banco')}
+          {field('PIX', 'pix')}
+        </div>
+      );
+      case 'roteiro': return (
+        <div className="space-y-2">
+          <div className="flex gap-1.5 justify-end">
+            {!editing && data.id && <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => setEditing(true)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>}
+            {editing && <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}><Save className="h-3 w-3 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}</Button>}
+          </div>
+          <div className="space-y-0.5">
+            <Label className="text-[10px] font-semibold text-muted-foreground">Roteiro para Embarque</Label>
+            {editing ? (
+              <Textarea
+                value={data.roteiro}
+                onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
+                placeholder="Descreva o roteiro de acesso à fazenda..."
+                className="text-xs min-h-[80px]"
+              />
+            ) : (
+              <p className="text-xs font-medium text-foreground min-h-[28px] px-2 py-1 rounded bg-muted/50 whitespace-pre-wrap">
+                {data.roteiro || <span className="text-muted-foreground italic">—</span>}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={generateRoteiroPDF}>
+              <FileText className="h-3 w-3 mr-1 text-destructive" /> PDF
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={() => shareWhatsApp('roteiro')}>
+              <Share2 className="h-3 w-3 mr-1 text-green-600" /> WhatsApp
+            </Button>
+          </div>
+        </div>
+      );
+      case 'pastos': return <PastosTab />;
+      case 'dividendos': return <DividendosTab />;
+      case 'acessos': return <AcessosTab />;
+      case 'auditoria': return (
+        <div className="space-y-2">
+          <p className="text-[10px] text-muted-foreground">Monitore todas as ações realizadas no sistema.</p>
+          <Button variant="outline" size="sm" className="w-full h-7 text-[10px]" onClick={() => { setOpenModal(null); onTabChange?.('auditoria'); }}>
+            <ShieldCheck className="h-3 w-3 mr-1" /> Abrir Central de Auditoria
+          </Button>
+        </div>
+      );
+      case 'ajustes': return (
+        <div className="space-y-1">
+          <p className="text-[9px] text-muted-foreground mb-1">Telas legadas para revisão.</p>
+          {['Evolução Categorias por Mês', 'Evolução por Categoria', 'Análise Gráfica', 'Análise de Entradas', 'Análise de Saídas', 'Desfrute', 'Conciliação (Legado)', 'Movimentação'].map(l => (
+            <div key={l} className="px-2 py-1 rounded bg-muted/40 text-[10px] text-muted-foreground">{l}</div>
+          ))}
+        </div>
+      );
+      default: return null;
+    }
+  };
+
+  const isWide = (key: ModuleKey) => MODULES.find(m => m.key === key)?.wide;
+
+  if (loading) return <div className="p-4 text-center text-xs text-muted-foreground">Carregando...</div>;
+
+  const visibleModules = MODULES.filter(m => !m.adminOnly || isAdmin);
 
   return (
-    <div className="pb-24 w-full">
-      {/* Sticky action buttons */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 pt-2 pb-2">
-        <div className="flex gap-2 justify-end">
-          {!editing && data.id && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="h-4 w-4 mr-1" /> Editar
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 mr-1" /> Apagar
-              </Button>
-            </>
-          )}
-          {editing && (
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              <Save className="h-4 w-4 mr-1" /> {saving ? 'Salvando...' : 'Salvar'}
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="w-full px-3 py-2 animate-fade-in">
+      <h2 className="text-sm font-bold text-foreground mb-2">Cadastros & Configurações</h2>
 
-      <div className="px-3 pt-2 space-y-4">
-
-      <Accordion type="multiple" defaultValue={[]} className="space-y-2">
-        {/* Clientes - admin only */}
-        {isAdmin && (
-          <AccordionItem value="clientes" className="border rounded-lg">
-            <AccordionTrigger className="px-4 py-3 text-sm font-bold">
-              <span className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" /> Clientes
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4">
-              <ClientesTab />
-            </AccordionContent>
-          </AccordionItem>
-        )}
-
-        {/* Fazendas - always visible */}
-        <AccordionItem value="fazendas" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏡 Fazendas</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <FazendasList />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="dados" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏠 Dados da Fazenda</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-3">
-            {field('Município', 'municipio')}
-            {field('Inscrição Estadual (IE)', 'ie')}
-            {field('Nome do Proprietário', 'proprietario_nome')}
-            {field('CPF ou CNPJ', 'cpf_cnpj')}
-            {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
-            {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
-            {field('Inscrição Rural (IR)', 'inscricao_rural')}
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="contato" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">📍 Contato e Endereço</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-3">
-            {field('Endereço para Correspondência', 'endereco')}
-            {field('Email', 'email', 'email')}
-            {field('Telefone', 'telefone', 'tel')}
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="bancario" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🏦 Dados Bancários</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-3">
-            {field('Banco', 'banco')}
-            {field('PIX', 'pix')}
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="roteiro" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">🚛 Roteiro</AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-muted-foreground">Roteiro para Embarque</Label>
-              {editing ? (
-                <Textarea
-                  value={data.roteiro}
-                  onChange={e => setData(prev => ({ ...prev, roteiro: e.target.value }))}
-                  placeholder="Descreva o roteiro de acesso à fazenda..."
-                  className="text-sm min-h-[100px]"
-                />
-              ) : (
-                <p className="text-sm font-medium text-foreground min-h-[36px] px-3 py-2 rounded-md bg-muted/50 whitespace-pre-wrap">
-                  {data.roteiro || <span className="text-muted-foreground italic">—</span>}
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={generateRoteiroPDF} className="flex-1">
-                <FileText className="h-4 w-4 mr-1 text-destructive" /> PDF
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => shareWhatsApp('roteiro')} className="flex-1">
-                <Share2 className="h-4 w-4 mr-1 text-success" /> WhatsApp
-              </Button>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="pastos" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
-            <span className="flex items-center gap-2">
-              <MapPin className="h-4 w-4" /> Pastos
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-0 pb-0">
-            <PastosTab />
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Acessos */}
-        <AccordionItem value="acessos" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
-            <span className="flex items-center gap-2">
-              <Users className="h-4 w-4" /> Acessos
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-0 pb-0">
-            <AcessosTab />
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Central de Auditoria */}
-        <AccordionItem value="auditoria" className="border rounded-lg">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold">
-            <span className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4" /> Central de Auditoria
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <p className="text-xs text-muted-foreground mb-3">
-              Monitore todas as ações realizadas no sistema: criações, edições, cancelamentos e exclusões.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => onTabChange?.('auditoria')}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {visibleModules.map(mod => {
+          const Icon = mod.icon;
+          return (
+            <button
+              key={mod.key}
+              onClick={() => setOpenModal(mod.key)}
+              className="flex items-start gap-2 p-2.5 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors text-left group"
             >
-              <ShieldCheck className="h-4 w-4 mr-1" /> Abrir Central de Auditoria
-            </Button>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* Ajustes Finais — telas legadas */}
-        <AccordionItem value="ajustes_finais" className="border rounded-lg border-dashed border-muted-foreground/30">
-          <AccordionTrigger className="px-4 py-3 text-sm font-bold text-muted-foreground">
-            <span className="flex items-center gap-2">
-              🔧 Ajustes Finais
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
-            <p className="text-xs text-muted-foreground mb-3">
-              Telas legadas mantidas para revisão. Serão removidas após validação.
-            </p>
-            <div className="space-y-2">
-              <LegacyLink label="Evolução Categorias por Mês" tabId="evolucao" />
-              <LegacyLink label="Evolução por Categoria" tabId="evolucao_categoria" />
-              <LegacyLink label="Análise Gráfica" tabId="analise" />
-              <LegacyLink label="Análise de Entradas" tabId="analise_entradas" />
-              <LegacyLink label="Análise de Saídas" tabId="analise_saidas" />
-              <LegacyLink label="Desfrute" tabId="desfrute" />
-              <LegacyLink label="Conciliação (Legado)" tabId="conciliacao" />
-              <LegacyLink label="Movimentação" tabId="movimentacao" />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-
-      <Separator />
-
-      {/* Export: Cadastro */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Exportar Dados para Cadastro</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={generateCadastroPDF} className="flex-1">
-            <FileText className="h-4 w-4 mr-1 text-destructive" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => shareWhatsApp('cadastro')} className="flex-1">
-            <Share2 className="h-4 w-4 mr-1 text-success" /> WhatsApp
-          </Button>
-        </CardContent>
-      </Card>
+              <div className="rounded-md bg-primary/10 p-1.5 shrink-0 group-hover:bg-primary/20 transition-colors">
+                <Icon className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold text-card-foreground leading-tight truncate">{mod.label}</p>
+                <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">{mod.desc}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      {/* Modal */}
+      <Dialog open={!!openModal} onOpenChange={open => { if (!open) setOpenModal(null); }}>
+        <DialogContent className={`${isWide(openModal!) ? 'max-w-3xl' : 'max-w-lg'} max-h-[85vh] overflow-y-auto`}>
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold">
+              {MODULES.find(m => m.key === openModal)?.label || ''}
+            </DialogTitle>
+          </DialogHeader>
+          {openModal && renderModalContent(openModal)}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
