@@ -362,68 +362,86 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
     return 'pl-3';
   };
 
+  // Solid background helpers (no transparency — critical for sticky overlap)
+  const BG_CARD = 'hsl(var(--card))';
+  const BG_MUTED = 'hsl(var(--muted))';
+  const BG_NIVEL1 = 'hsl(var(--muted))';
+  const BG_NIVEL2 = 'color-mix(in srgb, hsl(var(--muted)) 45%, hsl(var(--card)))';
+  const BG_ZEBRA = 'color-mix(in srgb, hsl(var(--muted)) 18%, hsl(var(--card)))';
+
+  const getBgForRow = (nivel: number, idx: number) => {
+    if (nivel === 1) return BG_NIVEL1;
+    if (nivel === 2) return BG_NIVEL2;
+    return idx % 2 === 1 ? BG_ZEBRA : BG_CARD;
+  };
+
   return (
-    <div className="overflow-auto -mx-1 max-h-[60vh]">
-      <table className="w-full min-w-[700px] text-[10px] tabular-nums" style={{ tableLayout: 'fixed' }}>
+    <div className="overflow-auto -mx-1 max-h-[60vh]" style={{ scrollbarGutter: 'stable' }}>
+      <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
         <colgroup>
-          <col style={{ width: isMobile ? 100 : 150 }} />
+          <col style={{ width: isMobile ? 100 : 140 }} />
           {meses.map(m => (
-            <col key={m.mes} style={{ width: 62 }} />
+            <col key={m.mes} style={{ width: 58 }} />
           ))}
-          <col style={{ width: 70 }} />
+          <col style={{ width: 66 }} />
         </colgroup>
-        <thead className="sticky top-0 z-20" style={{ background: 'hsl(var(--card))' }}>
-          <tr className="border-b border-border">
+
+        {/* ── HEADER ── sticky top, opaque, z-20 */}
+        <thead className="sticky top-0 z-20">
+          <tr className="border-b-2 border-border">
             <th
-              className="px-1 py-0.5 text-left text-[10px] font-bold text-muted-foreground sticky left-0 z-30"
-              style={{ background: 'hsl(var(--card))' }}
+              className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30"
+              style={{ background: BG_CARD }}
             >
               
             </th>
             {meses.map(m => (
               <th
                 key={m.mes}
-                className={`px-1 py-0.5 text-right text-[10px] font-bold ${
+                className={`px-1 py-[3px] text-right text-[9px] font-bold uppercase tracking-wider ${
                   m.mes > mesAte ? 'text-muted-foreground/40' : 'text-muted-foreground'
                 } ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
-                style={{ background: 'hsl(var(--card))' }}
+                style={{ background: BG_CARD }}
               >
                 {m.label}
               </th>
             ))}
             <th
-              className="px-1 py-0.5 text-right text-[10px] font-extrabold text-foreground border-l-2 border-border"
-              style={{ background: 'hsl(var(--muted))' }}
+              className="px-1 py-[3px] text-right text-[9px] font-extrabold text-foreground uppercase tracking-wider border-l-2 border-border"
+              style={{ background: BG_MUTED }}
             >
               Total
             </th>
           </tr>
         </thead>
+
+        {/* ── BODY ── */}
         <tbody>
-          {visibleRows.map(row => {
+          {visibleRows.map((row, rowIdx) => {
             const isSubSub = row.indent === 2;
             const nivel = row.nivel ?? 3;
+            const bg = getBgForRow(nivel, rowIdx);
 
-            const rowBg =
-              nivel === 1 ? 'bg-muted/60' :
-              nivel === 2 ? 'bg-muted/20' :
-              '';
-
-            const rowFont =
-              nivel === 1 ? 'font-bold text-[10px]' :
+            const fontCls =
+              nivel === 1 ? 'font-bold text-[9px]' :
               nivel === 2 ? 'font-semibold text-[9px]' :
               'font-normal text-[9px]';
 
+            const borderCls = nivel === 1 ? 'border-b border-border' : 'border-b border-border/30';
+
             return (
-              <tr key={row.key} className={`border-b border-border/40 ${rowBg}`}>
+              <tr key={row.key} className={borderCls}>
+                {/* Sticky label column — z-10, solid bg */}
                 <td
-                  className={`px-1 py-px text-left leading-tight ${rowFont} ${getIndentClass(row)} ${
+                  className={`px-1 py-[2px] text-left leading-tight ${fontCls} ${getIndentClass(row)} ${
                     isSubSub ? 'text-muted-foreground' : 'text-card-foreground'
-                  } sticky left-0 z-10 truncate`}
-                  style={{ background: nivel === 1 || nivel === 2 ? 'hsl(var(--muted))' : 'hsl(var(--card))' }}
+                  } sticky left-0 z-10 truncate whitespace-nowrap`}
+                  style={{ background: bg }}
                 >
                   {row.label}
                 </td>
+
+                {/* Month cells */}
                 {meses.map(m => {
                   const val = m[row.key] as number;
                   const isAfter = m.mes > mesAte;
@@ -434,13 +452,19 @@ function FluxoTable({ meses, mesAte, isMobile, visao, fmtMode }: { meses: FluxoM
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-px text-right leading-tight ${rowFont} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                      className={`px-1 py-[2px] text-right leading-tight ${fontCls} ${colorClass} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                      style={{ background: bg }}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
-                <td className={`px-1 py-px text-right leading-tight ${rowFont} bg-muted border-l-2 border-border ${getValueColor(totals[row.key] || 0, row, false)}`}>
+
+                {/* Total column — always muted bg */}
+                <td
+                  className={`px-1 py-[2px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(totals[row.key] || 0, row, false)}`}
+                  style={{ background: nivel === 1 ? BG_NIVEL1 : BG_MUTED }}
+                >
                   {fmtVal(totals[row.key] || 0, fmtMode)}
                 </td>
               </tr>
