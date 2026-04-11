@@ -205,8 +205,14 @@ function validarEstrutura(
 
   if (!row.anoMes) erros.push({ campo: 'Competência', mensagem: 'Competência ausente' });
 
-  if (row.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0 && !subcentrosOficiais.has(row.subcentro)) {
-    erros.push({ campo: 'Subcentro', mensagem: `Subcentro "${row.subcentro}" não existe no plano oficial` });
+  if (row.subcentro && subcentrosOficiais && subcentrosOficiais.size > 0) {
+    // Normalizar para comparação: trim, lowercase, remover acentos, espaços duplicados
+    const normSub = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const subNorm = normSub(row.subcentro);
+    const found = Array.from(subcentrosOficiais).some(s => normSub(s) === subNorm);
+    if (!found) {
+      erros.push({ campo: 'Subcentro', mensagem: `Subcentro "${row.subcentro}" não existe no plano oficial` });
+    }
   }
 
   return erros;
