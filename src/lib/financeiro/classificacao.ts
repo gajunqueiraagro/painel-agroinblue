@@ -82,21 +82,18 @@ export function getEscopo(l: LancamentoClassificavel): Escopo {
   const sub = norm(l.subcentro);
   const grupo = norm(l.grupo_custo);
 
-  // Agricultura: centro_custo contém "agri" ou subcentro começa com "agri/"
-  const hasAgri =
-    centro.includes('agri') ||
-    sub.startsWith('agri/') || sub.startsWith('agri\\') ||
-    grupo.includes('agri');
-  if (hasAgri) return 'agri';
+  // Agricultura: centro_custo contém EXATAMENTE "agricultura" (não substring parcial)
+  if (
+    centro === 'agricultura' ||
+    centro.startsWith('agricultura ') ||
+    sub.startsWith('agricultura/') || sub.startsWith('agricultura\\') ||
+    grupo === 'agricultura'
+  ) return 'agri';
 
-  // Pecuária: centro_custo contém "pecuári" / "pecuaria" / "pec"
-  const hasPec =
-    centro.includes('pecuári') || centro.includes('pecuaria') || centro.includes('pec') ||
-    sub.startsWith('pec/') || sub.startsWith('pec\\') ||
-    grupo.includes('pecuári') || grupo.includes('pecuaria');
-  if (hasPec) return 'pec';
-
-  return 'outras';
+  // Pecuária: centro_custo/grupo_custo contém referências a pecuária
+  // ou qualquer outro centro_custo que não seja explicitamente agricultura
+  // → default é pecuária (NÃO agricultura)
+  return 'pec';
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +257,7 @@ export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
     return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
   }
 
-  // Fallback: classificar pelo escopo como desembolso
+  // Fallback: tudo que não é agricultura vai para pecuária
   return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
 }
 

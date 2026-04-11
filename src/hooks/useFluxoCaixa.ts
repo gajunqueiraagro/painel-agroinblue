@@ -18,9 +18,10 @@ import {
   isRealizado,
   isEntrada as isEntradaClass,
   isSaida as isSaidaClass,
-  getEscopo,
   classificarEntradaFluxo,
   classificarSaidaFluxo,
+  classificarEntrada,
+  classificarSaida,
   datePagtoMes as datePagtoMesClass,
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
@@ -129,7 +130,7 @@ export function useFluxoCaixa(
       while (true) {
         const { data } = await supabase
           .from('financeiro_lancamentos_v2')
-          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro')
+          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro, grupo_custo')
           .eq('cliente_id', clienteId)
           .eq('cancelado', false)
           .gte('data_pagamento', `${ano}-01-01`)
@@ -151,7 +152,7 @@ export function useFluxoCaixa(
           macro_custo: r.macro_custo,
           produto: r.descricao,
           escopo_negocio: r.escopo_negocio,
-          grupo_custo: null,
+          grupo_custo: r.grupo_custo,
           centro_custo: r.centro_custo,
           subcentro: r.subcentro,
         })),
@@ -277,44 +278,47 @@ export function useFluxoCaixa(
       if (!isAfterFilter) {
         for (const l of lancs) {
           const val = Math.abs(l.valor);
-          const escopo = getEscopo(l);
 
           if (isEntradaClass(l)) {
-            const cat = classificarEntradaFluxo(l);
-            if (cat === 'receitas') {
+            // Classificação direta pelo classificador central (usa macro_custo + centro_custo)
+            const catDash = classificarEntrada(l);
+            const catFluxo = classificarEntradaFluxo(l);
+
+            if (catFluxo === 'receitas') {
               receitas += val;
-              if (escopo === 'pec') receitasPec += val;
-              else if (escopo === 'agri') receitasAgri += val;
+              if (catDash === 'Receitas Pecuárias') receitasPec += val;
+              else if (catDash === 'Receitas Agricultura') receitasAgri += val;
               else receitasOutras += val;
-            } else if (cat === 'captacao') {
+            } else if (catFluxo === 'captacao') {
               captacao += val;
-              if (escopo === 'agri') captacaoAgri += val;
+              if (catDash === 'Captação Financ. Agri.') captacaoAgri += val;
               else captacaoPec += val;
             } else {
               aportes += val;
             }
           } else if (isSaidaClass(l)) {
-            const cat = classificarSaidaFluxo(l);
+            const catFluxo = classificarSaidaFluxo(l);
+            const catDash = classificarSaida(l);
             const macro = (l.macro_custo || '').toLowerCase().trim();
 
-            if (cat === 'deducao') {
+            if (catFluxo === 'deducao') {
               deducaoReceitas += val;
-            } else if (cat === 'desembolso') {
+            } else if (catFluxo === 'desembolso') {
               desembolso += val;
-              if (escopo === 'pec') desembolsoPec += val;
-              else desembolsoAgri += val;
+              if (catDash === 'Desemb. Produtivo Agri.') desembolsoAgri += val;
+              else desembolsoPec += val;
               if (macro === 'custeio produtivo') {
-                if (escopo === 'agri') custoioAgri += val;
+                if (catDash === 'Desemb. Produtivo Agri.') custoioAgri += val;
                 else custeioPec += val;
               } else {
-                if (escopo === 'agri') investAgri += val;
+                if (catDash === 'Desemb. Produtivo Agri.') investAgri += val;
                 else investPec += val;
               }
-            } else if (cat === 'reposicao') {
+            } else if (catFluxo === 'reposicao') {
               reposicao += val;
-            } else if (cat === 'amortizacoes') {
+            } else if (catFluxo === 'amortizacoes') {
               amortizacoes += val;
-              if (escopo === 'agri') amortizacoesAgri += val;
+              if (catDash === 'Amortizações Fin. Agri.') amortizacoesAgri += val;
               else amortizacoesPec += val;
             } else {
               dividendos += val;
