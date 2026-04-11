@@ -601,11 +601,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
   const bloqueadosInfo = useMemo(() => {
-    const importados = selectedLancamentos.filter(l => !!l.lote_importacao_id);
-    const deletaveis = selectedLancamentos.filter(l => !l.lote_importacao_id);
+    const bloqueadosMesFechado = selectedLancamentos.filter(l =>
+      fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes)
+    );
+    const deletaveis = selectedLancamentos.filter(l =>
+      !(fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes))
+    );
     const origens = new Set(selectedLancamentos.map(l => l.origem_lancamento));
-    return { importados, deletaveis, origens: Array.from(origens) };
-  }, [selectedLancamentos]);
+    return { bloqueadosMesFechado, deletaveis, origens: Array.from(origens) };
+  }, [selectedLancamentos, fazendaId, fechamentoHook.isMesFechado]);
 
   const handleBulkDelete = async () => {
     setBulkDeleting(true);
@@ -1262,7 +1266,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     return (
                       <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
                         <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
-                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} className="h-3 w-3" />
+                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={rowMesFechado} className="h-3 w-3" />
                         </td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[90px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
@@ -1337,18 +1341,17 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir lançamentos em massa</AlertDialogTitle>
+            <AlertDialogTitle>Excluir lançamentos em lote</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-sm">
                 <p><strong>{selectedIds.size}</strong> lançamento{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}.</p>
-                {bloqueadosInfo.importados.length > 0 && (
+                {bloqueadosInfo.bloqueadosMesFechado.length > 0 && (
                   <p className="text-destructive font-semibold">
-                    ⚠ {bloqueadosInfo.importados.length} lançamento{bloqueadosInfo.importados.length !== 1 ? 's' : ''} importado{bloqueadosInfo.importados.length !== 1 ? 's' : ''} não {bloqueadosInfo.importados.length !== 1 ? 'podem' : 'pode'} ser excluído{bloqueadosInfo.importados.length !== 1 ? 's' : ''}.
+                    🔒 {bloqueadosInfo.bloqueadosMesFechado.length} lançamento{bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 's' : ''} de mês fechado — não {bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 'podem' : 'pode'} ser excluído{bloqueadosInfo.bloqueadosMesFechado.length !== 1 ? 's' : ''}.
                   </p>
                 )}
-                <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} excluído{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} permanentemente.</p>
+                <p><strong>{bloqueadosInfo.deletaveis.length}</strong> lançamento{bloqueadosInfo.deletaveis.length !== 1 ? 's serão' : ' será'} cancelado{bloqueadosInfo.deletaveis.length !== 1 ? 's' : ''} (exclusão lógica).</p>
                 <p className="text-[11px] text-muted-foreground">Origens: {bloqueadosInfo.origens.join(', ')}</p>
-                <p className="text-destructive font-bold text-xs mt-2">Essa ação não pode ser desfeita.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
