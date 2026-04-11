@@ -171,23 +171,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
         </div>
       )}
 
-      {saldoInicialAudit && (
-        <Collapsible>
-          <CollapsibleTrigger className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors">
-            <ChevronDown className="h-3 w-3" />
-            Auditoria Saldo Inicial
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-1 text-[9px] bg-muted rounded-md px-2 py-1.5 space-y-0.5">
-            <p><strong>Fonte:</strong> {saldoInicialAudit.fonte}</p>
-            <p><strong>Período:</strong> {saldoInicialAudit.periodo}</p>
-            <p><strong>Registros:</strong> {saldoInicialAudit.qtdRegistros}</p>
-            {saldoInicialAudit.contas.length > 0 && (
-              <p><strong>Contas:</strong> {saldoInicialAudit.contas.join(', ')}</p>
-            )}
-            <p><strong>Soma:</strong> R$ {saldoInicialAudit.somaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+      {/* Auditoria Saldo Inicial — oculta da visão principal */}
 
       <Card>
         <CardContent className="pt-2 pb-1">
