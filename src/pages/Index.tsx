@@ -71,6 +71,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
+import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 
 export interface FiltroGlobal {
   ano: string;
@@ -138,6 +139,7 @@ const TITLES: Record<TabId, string> = {
   meta_consolidacao: 'Consolidação Meta',
   precos_mercado_hub: 'Preços de Mercado',
   conferencia_gmd: 'Conferência de GMD',
+  import_zoot_historico: 'Importação Zootécnica',
 };
 
 const Index = () => {
@@ -763,6 +765,9 @@ const Index = () => {
             setActiveTab('meta_movimentacoes');
           }}
         />
+      )}
+      {activeTab === 'import_zoot_historico' && (
+        <ImportZootHistoricoTab />
       )}
       </div>
       {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}

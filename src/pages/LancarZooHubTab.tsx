@@ -6,7 +6,7 @@ import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
   Lock, AlertCircle,
-  ArrowLeftRight, LayoutGrid, CloudRain,
+  ArrowLeftRight, LayoutGrid, CloudRain, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,6 +40,12 @@ const ACOES_PRINCIPAIS = [
     tab: 'chuvas' as TabId,
     icon: CloudRain,
     description: 'Registro climático',
+  },
+  {
+    label: 'Importar Histórico Zootécnico',
+    tab: 'import_zoot_historico' as TabId,
+    icon: Upload,
+    description: 'Carga de dados desde 2020',
   },
 ];
 
