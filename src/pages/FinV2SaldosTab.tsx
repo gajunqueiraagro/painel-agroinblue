@@ -145,9 +145,10 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     });
   }, [clienteAtual?.id]);
 
-  const [anoMes, setAnoMes] = useState('');
+  const [dialogAno, setDialogAno] = useState(String(new Date().getFullYear()));
+  const [dialogMes, setDialogMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const anoMes = `${dialogAno}-${dialogMes}`;
   const [contaId, setContaId] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
   const [saldoInicial, setSaldoInicial] = useState('0,00');
   const [saldoFinal, setSaldoFinal] = useState('0,00');
   const [origem, setOrigem] = useState('manual');
