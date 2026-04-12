@@ -604,8 +604,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     } else {
       const { id: savedId, error } = await persistSaldoV2({ saldoPayload: payload });
       if (error || !savedId) {
-        toast.error('Erro ao criar');
-        console.error(error);
+        const msg = (error as any)?.message || 'Erro desconhecido ao criar saldo';
+        console.error('[SaldoV2 create] error:', error);
+        toast.error(`Não foi possível salvar: ${msg}`);
         return;
       }
       await logAudit(savedId, 'criacao');
