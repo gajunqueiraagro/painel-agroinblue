@@ -187,7 +187,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const loadClassificacoes = useCallback(async () => {
     if (!clienteId) return;
 
-    const { loadPlanoContasCompleto, planoToClassificacoes } = await import('@/lib/financeiro/planoContasBuilder');
+    const { loadPlanoContasCompleto, planoToClassificacoes, normalizeDividendoSubcentro } = await import('@/lib/financeiro/planoContasBuilder');
     const plano = await loadPlanoContasCompleto(clienteId);
     const planoCls = planoToClassificacoes(plano);
 
@@ -201,13 +201,17 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .not('subcentro', 'is', null);
 
     if (lancCls && lancCls.length > 0) {
+      // Build set of canonical subcentros already in plano
       const planoSubcentros = new Set(planoCls.map(c => c.subcentro));
       const seen = new Set<string>();
       for (const l of lancCls) {
-        if (!l.subcentro || planoSubcentros.has(l.subcentro) || seen.has(l.subcentro)) continue;
-        seen.add(l.subcentro);
+        if (!l.subcentro) continue;
+        // Normalize legacy dividendo names to canonical form
+        const canonical = normalizeDividendoSubcentro(l.subcentro) || l.subcentro;
+        if (planoSubcentros.has(canonical) || seen.has(canonical)) continue;
+        seen.add(canonical);
         planoCls.push({
-          subcentro: l.subcentro,
+          subcentro: canonical,
           centro_custo: l.centro_custo || '',
           grupo_custo: l.grupo_custo || '',
           macro_custo: l.macro_custo || '',
