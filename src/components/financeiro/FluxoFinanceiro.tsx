@@ -6,6 +6,9 @@
  * SEMPRE GLOBAL — independente da fazenda selecionada.
  *
  * Drill-down: abre modal de auditoria in-page (não navega para outra tela).
+ *
+ * REGRA ESTRUTURAL: cada nó da árvore carrega lancamentoIds[].
+ * O modal abre por esses IDs — nunca refaz filtro textual.
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -69,16 +72,46 @@ const ROWS_SUMMARY: RowDef[] = [
 const QUARTER_END = new Set([3, 6, 9]);
 
 // ---------------------------------------------------------------------------
+// Inconsistency types
+// ---------------------------------------------------------------------------
+
+export type InconsistenciaTipo =
+  | 'sem_macro'
+  | 'macro_sem_grupo'
+  | 'grupo_sem_centro'
+  | 'centro_sem_subcentro'
+  | 'subcentro_fora_plano';
+
+export interface Inconsistencia {
+  tipo: InconsistenciaTipo;
+  lancamentoId: string;
+}
+
+function detectarInconsistencia(l: FluxoLancRaw): InconsistenciaTipo | null {
+  const macro = (l.macro_custo || '').trim();
+  const grupo = (l.grupo_custo || '').trim();
+  const centro = (l.centro_custo || '').trim();
+  const sub = (l.subcentro || '').trim();
+
+  if (!macro) return 'sem_macro';
+  if (!grupo) return 'macro_sem_grupo';
+  if (!centro) return 'grupo_sem_centro';
+  if (!sub) return 'centro_sem_subcentro';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Dynamic tree builder from real lancamentos
 // ---------------------------------------------------------------------------
 
 interface FluxoLancRaw extends LancamentoClassificavel {
+  id: string;
   grupo_custo: string | null;
   centro_custo: string | null;
   subcentro: string | null;
 }
 
-interface TreeNode {
+export interface TreeNode {
   id: string;
   label: string;
   monthValues: number[];
@@ -90,6 +123,10 @@ interface TreeNode {
   grupo?: string;
   centro?: string;
   subcentro?: string;
+  /** IDs dos lançamentos por mês (index 0-11) + index 12 = todos */
+  lancamentoIdsByMonth: string[][];
+  /** Inconsistências encontradas nos lançamentos deste nó */
+  inconsistencias: Inconsistencia[];
 }
 
 function buildPlanoTree(
@@ -108,7 +145,14 @@ function buildPlanoTree(
     return false;
   });
 
-  const macroMap = new Map<string, Map<string, Map<string, Map<string, number[]>>>>();
+  // Structure: macro -> grupo -> centro -> sub -> { months, ids by month, inconsistencias }
+  interface LeafData {
+    months: number[];
+    idsByMonth: string[][]; // 0-11
+    inconsistencias: Inconsistencia[];
+  }
+
+  const macroMap = new Map<string, Map<string, Map<string, Map<string, LeafData>>>>();
 
   for (const l of realizados) {
     const macro = l.macro_custo || '(sem macro)';
@@ -124,8 +168,21 @@ function buildPlanoTree(
     const cMap = gMap.get(grupo)!;
     if (!cMap.has(centro)) cMap.set(centro, new Map());
     const sMap = cMap.get(centro)!;
-    if (!sMap.has(sub)) sMap.set(sub, new Array(12).fill(0));
-    sMap.get(sub)![m - 1] += val;
+    if (!sMap.has(sub)) {
+      sMap.set(sub, {
+        months: new Array(12).fill(0),
+        idsByMonth: Array.from({ length: 12 }, () => []),
+        inconsistencias: [],
+      });
+    }
+    const leaf = sMap.get(sub)!;
+    leaf.months[m - 1] += val;
+    leaf.idsByMonth[m - 1].push(l.id);
+
+    const inc = detectarInconsistencia(l);
+    if (inc) {
+      leaf.inconsistencias.push({ tipo: inc, lancamentoId: l.id });
+    }
   }
 
   const MACRO_ORDER_ENTRADA: string[] = ['receita operacional', 'entradas financeiras'];
@@ -134,6 +191,8 @@ function buildPlanoTree(
   ];
   const orderList = tipoFilter === 'entrada' ? MACRO_ORDER_ENTRADA : MACRO_ORDER_SAIDA;
 
+  const emptyIdsByMonth = (): string[][] => Array.from({ length: 13 }, () => []);
+
   const roots: TreeNode[] = [];
 
   for (const [macroLabel, grupoMap] of macroMap) {
@@ -141,6 +200,8 @@ function buildPlanoTree(
       id: `m_${tipoFilter}_${macroLabel}`, label: macroLabel,
       monthValues: new Array(12).fill(0), total: 0,
       tipo: tipoFilter, depth: 0, children: [], macro: macroLabel,
+      lancamentoIdsByMonth: emptyIdsByMonth(),
+      inconsistencias: [],
     };
 
     for (const [grupoLabel, centroMap] of grupoMap) {
@@ -149,6 +210,8 @@ function buildPlanoTree(
         monthValues: new Array(12).fill(0), total: 0,
         tipo: tipoFilter, depth: 1, children: [],
         macro: macroLabel, grupo: grupoLabel,
+        lancamentoIdsByMonth: emptyIdsByMonth(),
+        inconsistencias: [],
       };
 
       for (const [centroLabel, subMap] of centroMap) {
@@ -157,29 +220,49 @@ function buildPlanoTree(
           monthValues: new Array(12).fill(0), total: 0,
           tipo: tipoFilter, depth: 2, children: [],
           macro: macroLabel, grupo: grupoLabel, centro: centroLabel,
+          lancamentoIdsByMonth: emptyIdsByMonth(),
+          inconsistencias: [],
         };
 
-        for (const [subLabel, months] of subMap) {
-          const subTotal = months.reduce((a, b) => a + b, 0);
+        for (const [subLabel, leaf] of subMap) {
+          const subTotal = leaf.months.reduce((a, b) => a + b, 0);
+          const subIdsByMonth = [...leaf.idsByMonth, leaf.idsByMonth.flat()];
           const subNode: TreeNode = {
             id: `s_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}_${subLabel}`,
-            label: subLabel, monthValues: [...months], total: subTotal,
+            label: subLabel, monthValues: [...leaf.months], total: subTotal,
             tipo: tipoFilter, depth: 3, children: [],
             macro: macroLabel, grupo: grupoLabel, centro: centroLabel, subcentro: subLabel,
+            lancamentoIdsByMonth: subIdsByMonth,
+            inconsistencias: [...leaf.inconsistencias],
           };
           centroNode.children.push(subNode);
-          for (let i = 0; i < 12; i++) centroNode.monthValues[i] += months[i];
+          for (let i = 0; i < 12; i++) {
+            centroNode.monthValues[i] += leaf.months[i];
+            centroNode.lancamentoIdsByMonth[i].push(...leaf.idsByMonth[i]);
+          }
+          centroNode.lancamentoIdsByMonth[12].push(...leaf.idsByMonth.flat());
           centroNode.total += subTotal;
+          centroNode.inconsistencias.push(...leaf.inconsistencias);
         }
         centroNode.children.sort((a, b) => b.total - a.total);
         grupoNode.children.push(centroNode);
-        for (let i = 0; i < 12; i++) grupoNode.monthValues[i] += centroNode.monthValues[i];
+        for (let i = 0; i < 12; i++) {
+          grupoNode.monthValues[i] += centroNode.monthValues[i];
+          grupoNode.lancamentoIdsByMonth[i].push(...centroNode.lancamentoIdsByMonth[i]);
+        }
+        grupoNode.lancamentoIdsByMonth[12].push(...centroNode.lancamentoIdsByMonth[12]);
         grupoNode.total += centroNode.total;
+        grupoNode.inconsistencias.push(...centroNode.inconsistencias);
       }
       grupoNode.children.sort((a, b) => b.total - a.total);
       macroNode.children.push(grupoNode);
-      for (let i = 0; i < 12; i++) macroNode.monthValues[i] += grupoNode.monthValues[i];
+      for (let i = 0; i < 12; i++) {
+        macroNode.monthValues[i] += grupoNode.monthValues[i];
+        macroNode.lancamentoIdsByMonth[i].push(...grupoNode.lancamentoIdsByMonth[i]);
+      }
+      macroNode.lancamentoIdsByMonth[12].push(...grupoNode.lancamentoIdsByMonth[12]);
       macroNode.total += grupoNode.total;
+      macroNode.inconsistencias.push(...grupoNode.inconsistencias);
     }
     macroNode.children.sort((a, b) => b.total - a.total);
     roots.push(macroNode);
@@ -213,10 +296,12 @@ export interface FluxoDrillPayload {
   ano: number;
   mes: number | null;
   tipo: 'entrada' | 'saida';
-  macro?: string;
-  grupo?: string;
-  centro?: string;
-  subcentro?: string;
+  /** IDs dos lançamentos que compõem o valor clicado — FONTE ÚNICA */
+  lancamentoIds: string[];
+  /** Inconsistências do nó clicado */
+  inconsistencias: Inconsistencia[];
+  /** Label hierarchy for display */
+  hierarquia: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -556,21 +641,30 @@ function FluxoTable({
             const fontCls = DEPTH_FONT[node.depth] || DEPTH_FONT[3];
             const indent = DEPTH_INDENT[node.depth] || 40;
             const textColor = node.depth <= 1 ? 'text-card-foreground' : 'text-muted-foreground';
+            const hasInconsistencias = node.inconsistencias.length > 0;
 
-            const buildPayload = (mes: number | null): FluxoDrillPayload => ({
-              origem: 'fluxo_caixa_amplo',
-              ano,
-              mes,
-              tipo: node.tipo,
-              macro: node.macro,
-              grupo: node.grupo,
-              centro: node.centro,
-              subcentro: node.subcentro,
-            });
+            const buildHierarchy = (): string =>
+              [node.macro, node.grupo, node.centro, node.subcentro].filter(Boolean).join(' › ');
 
             const handleCellClick = (mes: number | null, val: number) => {
               if (val === 0) return;
-              onDrillDown(buildPayload(mes), val);
+              const monthIdx = mes ? mes - 1 : 12;
+              const ids = node.lancamentoIdsByMonth[monthIdx] || [];
+              // Filter inconsistencias for this month
+              const incIds = mes
+                ? new Set(ids)
+                : new Set(node.lancamentoIdsByMonth[12]);
+              const incs = node.inconsistencias.filter(i => incIds.has(i.lancamentoId));
+
+              onDrillDown({
+                origem: 'fluxo_caixa_amplo',
+                ano,
+                mes,
+                tipo: node.tipo,
+                lancamentoIds: ids,
+                inconsistencias: incs,
+                hierarquia: buildHierarchy(),
+              }, val);
             };
 
             return (
@@ -587,6 +681,9 @@ function FluxoTable({
                         : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                     )}
                     {node.label}
+                    {hasInconsistencias && (
+                      <AlertTriangle className="h-2.5 w-2.5 text-amber-500 shrink-0 ml-0.5" />
+                    )}
                   </span>
                 </td>
                 {meses.map(m => {
