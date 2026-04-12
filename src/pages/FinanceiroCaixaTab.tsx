@@ -158,8 +158,14 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     if (!id) return false;
     const ok = await v2Hook.editarLancamento(id, form);
     if (ok) {
-      // Reload financial data so tree + modal reflect the updated record
-      await reloadData();
+      // Close edit dialog but keep audit modal open
+      setEditDialogOpen(false);
+      setEditingLancV2(null);
+      // Reload both data sources in parallel
+      await Promise.all([
+        reloadData(),
+        fluxoReloadRef.current?.(),
+      ]);
     }
     return ok;
   }, [v2Hook, reloadData]);
@@ -167,7 +173,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const handleEditDelete = useCallback(async (id: string) => {
     const ok = await v2Hook.excluirLancamento(id);
     if (ok) {
-      await reloadData();
+      setEditDialogOpen(false);
+      setEditingLancV2(null);
+      await Promise.all([
+        reloadData(),
+        fluxoReloadRef.current?.(),
+      ]);
     }
     return ok;
   }, [v2Hook, reloadData]);
