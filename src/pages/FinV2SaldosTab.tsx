@@ -674,7 +674,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     });
 
     if (error || !savedId) {
-      toast.error('Erro ao alterar status');
+      const msg = (error as any)?.message || 'Erro desconhecido ao alterar status';
+      console.error('[SaldoV2 status] error:', error);
+      toast.error(`Não foi possível salvar: ${msg}`);
       return;
     }
 
