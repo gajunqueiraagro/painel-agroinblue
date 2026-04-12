@@ -529,7 +529,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 )}
                 {!loading && saldos.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo registrado</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo bancário cadastrado para {filtroAno}. Cadastre saldos manualmente ou importe via planilha.</TableCell></TableRow>
                 )}
                 {!loading && grouped.map(g => (
                   <>{/* group header */}
