@@ -330,10 +330,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   const openNew = () => {
     setEditing(null);
-    const m = String(new Date().getMonth() + 1).padStart(2, '0');
-    setAnoMes(`${filtroAno}-${m}`);
+    setDialogAno(filtroAno);
+    setDialogMes(String(new Date().getMonth() + 1).padStart(2, '0'));
     setContaId(contas[0]?.id || '');
-    setFazendaId(fazendaAtual?.id || fazendas[0]?.id || '');
     setSaldoInicial('0,00');
     setSaldoFinal('0,00');
     setOrigem('manual');
@@ -353,9 +352,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     }
 
     setEditing(s);
-    setAnoMes(s.ano_mes);
+    setDialogAno(s.ano_mes.slice(0, 4));
+    setDialogMes(s.ano_mes.slice(5, 7));
     setContaId(s.conta_bancaria_id);
-    setFazendaId(s.fazenda_id);
     setSaldoInicial(toBRL(s.saldo_inicial));
     setSaldoFinal(toBRL(s.saldo_final));
     setOrigem(s.origem_saldo || 'manual');
@@ -459,9 +458,38 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   /* ── save ── */
   const save = async () => {
-    if (!clienteAtual?.id || !anoMes || !fazendaId) {
+    if (!clienteAtual?.id || !anoMes || !contaId) {
       toast.error('Preencha todos os campos');
       return;
+    }
+
+    // Resolve fazenda_id from conta bancária
+    const contaRef = contas.find(c => c.id === (editing ? resolveContaPersistId(editing) || contaId : contaId));
+    // For new records, derive fazenda from the selected conta via a lookup
+    const resolveFazendaId = async (): Promise<string | null> => {
+      if (editing) return editing.fazenda_id;
+      const { data } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('fazenda_id')
+        .eq('id', contaId)
+        .single();
+      return data?.fazenda_id || fazendaAtual?.id || fazendas[0]?.id || null;
+    };
+    const fazendaId = await resolveFazendaId();
+    if (!fazendaId) {
+      toast.error('Não foi possível determinar a fazenda da conta');
+      return;
+    }
+
+    // Duplicate guard for new records
+    if (!editing) {
+      const existing = allSaldos.find(s =>
+        (s.conta_bancaria_id === contaId || s.conta_bancaria_id_v2 === contaId) && s.ano_mes === anoMes
+      );
+      if (existing) {
+        toast.error(`Já existe saldo para esta conta em ${anoMes}. Edite o registro existente.`);
+        return;
+      }
     }
 
     if (editing && !hasPersistableConta(editing)) {
