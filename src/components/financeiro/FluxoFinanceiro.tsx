@@ -528,6 +528,18 @@ function FluxoTable({
   onDrillDown: (payload: FluxoDrillPayload, valorClicado: number) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
+  const [ordemMap, setOrdemMap] = useState<PlanoOrdemMap>(new Map());
+
+  // Load plano ordem_exibicao once
+  useEffect(() => {
+    supabase
+      .from('financeiro_plano_contas')
+      .select('macro_custo, grupo_custo, centro_custo, subcentro, ordem_exibicao')
+      .eq('ativo', true)
+      .then(({ data }) => {
+        if (data) setOrdemMap(buildPlanoOrdemMap(data as any));
+      });
+  }, []);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
@@ -539,12 +551,12 @@ function FluxoTable({
   }, []);
 
   const entradaTree = useMemo(() =>
-    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada'),
-    [lancamentosGlobais, ano, mesAte]);
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada', ordemMap),
+    [lancamentosGlobais, ano, mesAte, ordemMap]);
 
   const saidaTree = useMemo(() =>
-    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida'),
-    [lancamentosGlobais, ano, mesAte]);
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida', ordemMap),
+    [lancamentosGlobais, ano, mesAte, ordemMap]);
 
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
