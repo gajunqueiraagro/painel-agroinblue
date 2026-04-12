@@ -76,7 +76,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho, fazendaMapForImport,
     loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote, fazendaADM,
-    totalLancamentosADM,
+    totalLancamentosADM, reloadData,
   } = useFinanceiro();
 
   // V2 hook for editing lancamentos from audit modal
