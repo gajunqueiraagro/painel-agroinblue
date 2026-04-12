@@ -432,6 +432,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
               onEditLancamento={handleEditFromAuditoria}
+              modalOpen={auditModalOpen}
+              modalPayload={auditPayload}
+              modalValorClicado={auditValorClicado}
+              onModalOpen={handleAuditModalOpen}
+              onModalClose={handleAuditModalClose}
+              onFluxoReloadRef={handleFluxoReloadRef}
             />
           )}
           {subTab === 'rateio' && (
