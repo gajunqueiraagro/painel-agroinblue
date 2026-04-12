@@ -33,6 +33,7 @@ import {
   classificarSaida as classificarSaidaCentral,
 } from '@/lib/financeiro/classificacao';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import type { FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { toast } from 'sonner';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
