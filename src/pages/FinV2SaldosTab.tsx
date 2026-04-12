@@ -922,19 +922,31 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
               )}
             </DialogHeader>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label className="text-xs">Ano-Mês *</Label>
-                  <Input
-                    value={anoMes}
-                    onChange={e => setAnoMes(e.target.value)}
-                    placeholder="2026-03"
-                    className="h-9"
-                    disabled={!!editing}
-                  />
+                  <Label className="text-xs">Ano *</Label>
+                  <Select value={dialogAno} onValueChange={setDialogAno} disabled={!!editing}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - 5 + i)).map(a => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Conta Bancária *</Label>
+                  <Label className="text-xs">Mês *</Label>
+                  <Select value={dialogMes} onValueChange={setDialogMes} disabled={!!editing}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MESES.filter(m => m.v !== '__all__').map(m => (
+                        <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Conta *</Label>
                   <Select value={contaId} onValueChange={setContaId} disabled={!!editing}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
@@ -944,17 +956,6 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs">Fazenda *</Label>
-                <Select value={fazendaId} onValueChange={setFazendaId} disabled={!!editing}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {fazendas.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Saldo Inicial — always automatic except first month (admin only) */}
