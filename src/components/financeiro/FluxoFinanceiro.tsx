@@ -156,10 +156,18 @@ function buildPlanoTree(
   const macroMap = new Map<string, Map<string, Map<string, Map<string, LeafData>>>>();
 
   for (const l of realizados) {
-    const macro = l.macro_custo || '(sem macro)';
-    const grupo = l.grupo_custo || '(sem grupo)';
-    const centro = l.centro_custo || '(sem centro)';
+    let macro = l.macro_custo || '(sem macro)';
+    let grupo = l.grupo_custo || '(sem grupo)';
+    let centro = l.centro_custo || '(sem centro)';
     const sub = l.subcentro || '(sem subcentro)';
+
+    // ── Dividend normalization: force correct hierarchy ──
+    if (isDividendoSubcentro(sub)) {
+      macro = 'Distribuição';
+      grupo = 'Dividendos';
+      centro = 'Pessoas';
+    }
+
     const m = datePagtoMesClass(l)!;
     const val = Math.abs(l.valor);
 
