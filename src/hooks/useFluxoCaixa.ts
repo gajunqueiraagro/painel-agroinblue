@@ -179,6 +179,8 @@ export function useFluxoCaixa(
   }, [ano, clienteId, allFazendaIds.join(',')]);
 
   // Fetch saldo inicial GLOBAL de Dez do ano anterior (V2)
+  // Se não existir registro de saldo para Dez do ano anterior,
+  // busca o último saldo disponível e encadeia com lançamentos até Dez.
   const loadSaldoInicial = useCallback(async () => {
     if (!clienteId || allFazendaIds.length === 0) {
       setSaldoInicialAno(0);
@@ -191,55 +193,56 @@ export function useFluxoCaixa(
     try {
       const anoAnterior = ano - 1;
       const anoMesDez = `${anoAnterior}-12`;
-      const { data } = await supabase
+
+      // 1) Try V2 for exact Dec of previous year
+      const { data: v2Data } = await supabase
         .from('financeiro_saldos_bancarios_v2')
         .select('saldo_final, conta_bancaria_id')
         .eq('cliente_id', clienteId)
         .eq('ano_mes', anoMesDez);
 
-      if (data && data.length > 0) {
-        const total = data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
-        const contas = data.map(r => r.conta_bancaria_id).filter(Boolean);
+      if (v2Data && v2Data.length > 0) {
+        const total = v2Data.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
         setSaldoInicialAno(total);
         setSaldoInicialAusente(false);
+        setSaldoInicialAudit({ fonte: 'financeiro_saldos_bancarios_v2', periodo: anoMesDez, qtdRegistros: v2Data.length, contas: v2Data.map(r => r.conta_bancaria_id).filter(Boolean), somaTotal: total });
+        setLoadingSaldo(false);
+        return;
+      }
+
+      // 2) Try legacy for exact Dec of previous year
+      const { data: legacyData } = await supabase
+        .from('financeiro_saldos_bancarios')
+        .select('saldo_final, conta_banco')
+        .in('fazenda_id', allFazendaIds)
+        .eq('ano_mes', anoMesDez);
+
+      if (legacyData && legacyData.length > 0) {
+        const total = legacyData.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+        setSaldoInicialAno(total);
+        setSaldoInicialAusente(false);
+        setSaldoInicialAudit({ fonte: 'financeiro_saldos_bancarios (legado)', periodo: anoMesDez, qtdRegistros: legacyData.length, contas: legacyData.map(r => r.conta_banco).filter(Boolean), somaTotal: total });
+        setLoadingSaldo(false);
+        return;
+      }
+
+      // 3) FALLBACK: find the latest saldo before the target year and chain forward
+      //    using lancamentos to compute Dec's final balance
+      const computed = await computeSaldoFromChain(clienteId, allFazendaIds, ano);
+      if (computed !== null) {
+        setSaldoInicialAno(computed.total);
+        setSaldoInicialAusente(false);
         setSaldoInicialAudit({
-          fonte: 'financeiro_saldos_bancarios_v2',
+          fonte: `encadeamento desde ${computed.baseAnoMes}`,
           periodo: anoMesDez,
-          qtdRegistros: data.length,
-          contas,
-          somaTotal: total,
+          qtdRegistros: computed.qtdRegistrosBase,
+          contas: computed.contas,
+          somaTotal: computed.total,
         });
       } else {
-        // Fallback: try legacy table
-        const { data: legacyData } = await supabase
-          .from('financeiro_saldos_bancarios')
-          .select('saldo_final, conta_banco')
-          .in('fazenda_id', allFazendaIds)
-          .eq('ano_mes', anoMesDez);
-
-        if (legacyData && legacyData.length > 0) {
-          const total = legacyData.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
-          const contas = legacyData.map(r => r.conta_banco).filter(Boolean);
-          setSaldoInicialAno(total);
-          setSaldoInicialAusente(false);
-          setSaldoInicialAudit({
-            fonte: 'financeiro_saldos_bancarios (legado - fallback)',
-            periodo: anoMesDez,
-            qtdRegistros: legacyData.length,
-            contas,
-            somaTotal: total,
-          });
-        } else {
-          setSaldoInicialAno(0);
-          setSaldoInicialAusente(true);
-          setSaldoInicialAudit({
-            fonte: 'financeiro_saldos_bancarios_v2',
-            periodo: anoMesDez,
-            qtdRegistros: 0,
-            contas: [],
-            somaTotal: 0,
-          });
-        }
+        setSaldoInicialAno(0);
+        setSaldoInicialAusente(true);
+        setSaldoInicialAudit({ fonte: 'nenhum registro encontrado', periodo: anoMesDez, qtdRegistros: 0, contas: [], somaTotal: 0 });
       }
     } catch {
       setSaldoInicialAno(0);
@@ -250,6 +253,123 @@ export function useFluxoCaixa(
     }
   }, [ano, clienteId, allFazendaIds.join(',')]);
 
+  /**
+   * Finds the most recent saldo record before `ano` and chains forward
+   * with lancamentos to compute the saldo_final of Dec(ano-1).
+   */
+  async function computeSaldoFromChain(
+    cId: string,
+    fazIds: string[],
+    targetAno: number,
+  ): Promise<{ total: number; baseAnoMes: string; qtdRegistrosBase: number; contas: string[] } | null> {
+    const anoAnterior = targetAno - 1;
+    const anoMesDez = `${anoAnterior}-12`;
+
+    // Find latest V2 saldo before the target year
+    const { data: latestV2 } = await supabase
+      .from('financeiro_saldos_bancarios_v2')
+      .select('ano_mes, saldo_final, conta_bancaria_id')
+      .eq('cliente_id', cId)
+      .lt('ano_mes', `${targetAno}-01`)
+      .order('ano_mes', { ascending: false })
+      .limit(50);
+
+    // Find latest legacy saldo before the target year
+    const { data: latestLegacy } = await supabase
+      .from('financeiro_saldos_bancarios')
+      .select('ano_mes, saldo_final, conta_banco')
+      .in('fazenda_id', fazIds)
+      .lt('ano_mes', `${targetAno}-01`)
+      .order('ano_mes', { ascending: false })
+      .limit(50);
+
+    // Determine the most recent month with saldo data
+    let baseAnoMes: string | null = null;
+    let baseSaldo = 0;
+    let qtdRegistrosBase = 0;
+    let contas: string[] = [];
+
+    const v2MaxMonth = latestV2 && latestV2.length > 0 ? latestV2[0].ano_mes : null;
+    const legMaxMonth = latestLegacy && latestLegacy.length > 0 ? latestLegacy[0].ano_mes : null;
+
+    if (v2MaxMonth && (!legMaxMonth || v2MaxMonth >= legMaxMonth)) {
+      baseAnoMes = v2MaxMonth;
+      const monthRows = latestV2!.filter(r => r.ano_mes === v2MaxMonth);
+      baseSaldo = monthRows.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+      qtdRegistrosBase = monthRows.length;
+      contas = monthRows.map(r => r.conta_bancaria_id).filter(Boolean);
+    } else if (legMaxMonth) {
+      baseAnoMes = legMaxMonth;
+      const monthRows = latestLegacy!.filter(r => r.ano_mes === legMaxMonth);
+      baseSaldo = monthRows.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+      qtdRegistrosBase = monthRows.length;
+      contas = monthRows.map(r => r.conta_banco).filter(Boolean);
+    }
+
+    if (!baseAnoMes) return null;
+    if (baseAnoMes === anoMesDez) {
+      return { total: baseSaldo, baseAnoMes, qtdRegistrosBase, contas };
+    }
+
+    // Load lancamentos from baseAnoMes+1 through Dec of previous year
+    const nextMonth = incrementAnoMes(baseAnoMes);
+    const PAGE_SIZE = 1000;
+    let allLancs: { data_pagamento: string; valor: number; tipo_operacao: string; status_transacao: string }[] = [];
+    let from = 0;
+
+    while (true) {
+      const { data } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('data_pagamento, valor, tipo_operacao, status_transacao')
+        .eq('cliente_id', cId)
+        .eq('cancelado', false)
+        .gte('data_pagamento', `${nextMonth}-01`)
+        .lte('data_pagamento', `${anoAnterior}-12-31`)
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (!data || data.length === 0) break;
+      allLancs = allLancs.concat(data as any);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    // Chain: compute net per month from nextMonth to anoMesDez
+    let saldo = baseSaldo;
+    const months = getMonthRange(nextMonth, anoMesDez);
+
+    for (const ym of months) {
+      let entradas = 0;
+      let saidas = 0;
+      for (const l of allLancs) {
+        if (!l.data_pagamento || (l.status_transacao || '').toLowerCase() !== 'realizado') continue;
+        const lym = l.data_pagamento.substring(0, 7);
+        if (lym !== ym) continue;
+        const val = Math.abs(Number(l.valor) || 0);
+        const tipo = (l.tipo_operacao || '').toLowerCase();
+        if (tipo === 'entrada' || tipo === 'receita') entradas += val;
+        else saidas += val;
+      }
+      saldo = saldo + entradas - saidas;
+    }
+
+    return { total: saldo, baseAnoMes, qtdRegistrosBase, contas };
+  }
+
+  function incrementAnoMes(ym: string): string {
+    const [y, m] = ym.split('-').map(Number);
+    if (m === 12) return `${y + 1}-01`;
+    return `${y}-${String(m + 1).padStart(2, '0')}`;
+  }
+
+  function getMonthRange(from: string, to: string): string[] {
+    const result: string[] = [];
+    let current = from;
+    while (current <= to) {
+      result.push(current);
+      current = incrementAnoMes(current);
+    }
+    return result;
+  }
   useEffect(() => {
     loadSaldoInicial();
     loadLancamentosGlobais();
