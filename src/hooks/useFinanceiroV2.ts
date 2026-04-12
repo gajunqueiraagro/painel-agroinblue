@@ -1,11 +1,12 @@
 /**
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { isDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
 
 export interface LancamentoV2 {
   id: string;
