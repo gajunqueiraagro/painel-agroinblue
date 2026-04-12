@@ -361,6 +361,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
             fmtMode={fmtMode}
             lancamentosGlobais={lancamentosGlobais as FluxoLancRaw[]}
             ano={ano}
+            onDrillDown={onDrillDown}
           />
         </CardContent>
       </Card>
