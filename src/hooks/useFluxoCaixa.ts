@@ -166,7 +166,7 @@ export function useFluxoCaixa(
           escopo_negocio: r.escopo_negocio,
           grupo_custo: r.grupo_custo,
           centro_custo: r.centro_custo,
-          subcentro: r.subcentro,
+          subcentro: normalizeDividendoSubcentro(r.subcentro) || r.subcentro,
         })),
       );
     } catch {
