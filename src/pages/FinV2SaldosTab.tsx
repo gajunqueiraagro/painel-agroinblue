@@ -466,10 +466,25 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       return;
     }
 
-    // For new records, derive fazenda from the selected conta via a lookup
-    // For new records, derive fazenda from the selected conta via a lookup
+    // Resolve fazenda_id: for legacy edits, derive from the V2 conta; for V2 edits, keep existing; for new, lookup
     const resolveFazendaId = async (): Promise<string | null> => {
-      if (editing) return editing.fazenda_id;
+      if (editing) {
+        // For legacy records, resolve fazenda from the matched V2 conta
+        if (editing.fonte === 'legado') {
+          const v2ContaId = resolveContaPersistId(editing);
+          if (v2ContaId) {
+            const { data } = await supabase
+              .from('financeiro_contas_bancarias')
+              .select('fazenda_id')
+              .eq('id', v2ContaId)
+              .single();
+            if (data?.fazenda_id) return data.fazenda_id;
+          }
+          // fallback to editing fazenda_id if available
+          return editing.fazenda_id || null;
+        }
+        return editing.fazenda_id;
+      }
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
         .select('fazenda_id')
@@ -479,7 +494,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     };
     const fazendaId = await resolveFazendaId();
     if (!fazendaId) {
-      toast.error('Não foi possível determinar a fazenda da conta');
+      toast.error('Não foi possível salvar: fazenda_id não resolvido a partir da conta bancária');
       return;
     }
 
@@ -503,10 +518,31 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const saldoFinalVal = parseBRL(saldoFinal);
     const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
+    const resolvedContaId = editing ? resolveContaPersistId(editing) : contaId;
+
+    // Validate all mandatory fields before persisting
+    if (!clienteAtual.id) { toast.error('Não foi possível salvar: cliente_id ausente'); return; }
+    if (!anoMes || !/^\d{4}-\d{2}$/.test(anoMes)) { toast.error('Não foi possível salvar: ano_mes inválido'); return; }
+    if (!resolvedContaId) { toast.error('Não foi possível salvar: conta bancária não vinculada'); return; }
+    if (!fazendaId) { toast.error('Não foi possível salvar: fazenda_id não resolvido'); return; }
+
+    console.log('[SaldoV2 save] payload debug', {
+      cliente_id: clienteAtual.id,
+      ano_mes: anoMes,
+      conta_bancaria_id: resolvedContaId,
+      fazenda_id: fazendaId,
+      saldo_inicial: saldoInicialVal,
+      saldo_final: saldoFinalVal,
+      origem_saldo: origem,
+      status_mes: editing?.status_mes || 'aberto',
+      fonte: editing?.fonte || 'novo',
+      conta_bancaria_id_v2: editing?.conta_bancaria_id_v2 || null,
+    });
+
     const payload = {
       ano_mes: anoMes,
       fazenda_id: fazendaId,
-      conta_bancaria_id: editing ? resolveContaPersistId(editing) : contaId,
+      conta_bancaria_id: resolvedContaId,
       saldo_inicial: saldoInicialVal,
       saldo_final: saldoFinalVal,
       origem_saldo: origem,
@@ -526,7 +562,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         saldoPayload: payload,
       });
       if (error || !savedId) {
-        toast.error('Erro ao atualizar saldo');
+        const msg = (error as any)?.message || 'Erro desconhecido ao atualizar saldo';
+        console.error('[SaldoV2 save] error:', error);
+        toast.error(`Não foi possível salvar: ${msg}`);
         return;
       }
 
@@ -566,8 +604,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     } else {
       const { id: savedId, error } = await persistSaldoV2({ saldoPayload: payload });
       if (error || !savedId) {
-        toast.error('Erro ao criar');
-        console.error(error);
+        const msg = (error as any)?.message || 'Erro desconhecido ao criar saldo';
+        console.error('[SaldoV2 create] error:', error);
+        toast.error(`Não foi possível salvar: ${msg}`);
         return;
       }
       await logAudit(savedId, 'criacao');
@@ -635,7 +674,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     });
 
     if (error || !savedId) {
-      toast.error('Erro ao alterar status');
+      const msg = (error as any)?.message || 'Erro desconhecido ao alterar status';
+      console.error('[SaldoV2 status] error:', error);
+      toast.error(`Não foi possível salvar: ${msg}`);
       return;
     }
 
