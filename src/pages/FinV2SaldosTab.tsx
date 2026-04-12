@@ -113,21 +113,30 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroMes, setFiltroMes] = useState('__all__');
 
-  // Load dynamic years from saldos table
+  // Load dynamic years from saldos + lancamentos tables
   useEffect(() => {
     if (!clienteAtual?.id) return;
-    supabase
-      .from('financeiro_saldos_bancarios_v2')
-      .select('ano_mes')
-      .eq('cliente_id', clienteAtual.id)
-      .then(({ data }) => {
-        const anos = new Set<string>();
-        anos.add(String(new Date().getFullYear()));
-        (data || []).forEach((r: any) => {
-          if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
-        });
-        setAnosDisponiveis(Array.from(anos).sort((a, b) => b.localeCompare(a)));
+    Promise.all([
+      supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .select('ano_mes')
+        .eq('cliente_id', clienteAtual.id),
+      supabase
+        .from('financeiro_lancamentos_v2')
+        .select('ano_mes')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('cancelado', false),
+    ]).then(([{ data: sData }, { data: lData }]) => {
+      const anos = new Set<string>();
+      anos.add(String(new Date().getFullYear()));
+      (sData || []).forEach((r: any) => {
+        if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
       });
+      (lData || []).forEach((r: any) => {
+        if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
+      });
+      setAnosDisponiveis(Array.from(anos).sort((a, b) => b.localeCompare(a)));
+    });
   }, [clienteAtual?.id]);
 
   const [anoMes, setAnoMes] = useState('');
@@ -520,7 +529,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 )}
                 {!loading && saldos.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo registrado</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo bancário cadastrado para {filtroAno}. Cadastre saldos manualmente ou importe via planilha.</TableCell></TableRow>
                 )}
                 {!loading && grouped.map(g => (
                   <>{/* group header */}
