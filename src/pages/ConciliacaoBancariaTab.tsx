@@ -154,11 +154,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     if (!clienteId) return;
     Promise.all([
       supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId),
+      supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id', clienteId),
       supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false),
-    ]).then(([sRes, lRes]) => {
+    ]).then(([sRes, legRes, lRes]) => {
       const set = new Set<string>();
       set.add(String(currentYear));
       (sRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
+      (legRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
       (lRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
       setAnos(Array.from(set).sort((a, b) => b.localeCompare(a)));
     });
