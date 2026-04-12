@@ -196,7 +196,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
           .select('conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
           .eq('cliente_id', clienteAtual.id)
           .eq('cancelado', false)
-          .in('status_transacao', [...STATUS_REALIZADOS]),
+          .in('status_transacao', [...STATUS_REALIZADOS])
+          .limit(10000),
       ]);
 
       const contasData = (cData as ContaRef[]) || [];
