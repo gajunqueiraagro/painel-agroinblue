@@ -94,6 +94,27 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLancV2, setEditingLancV2] = useState<any>(null);
 
+  // Lifted audit modal state — persists across useFinanceiro reload cycles
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditPayload, setAuditPayload] = useState<FluxoDrillPayload | null>(null);
+  const [auditValorClicado, setAuditValorClicado] = useState(0);
+
+  const handleAuditModalOpen = useCallback((payload: FluxoDrillPayload, valorClicado: number) => {
+    setAuditPayload(payload);
+    setAuditValorClicado(valorClicado);
+    setAuditModalOpen(true);
+  }, []);
+
+  const handleAuditModalClose = useCallback(() => {
+    setAuditModalOpen(false);
+  }, []);
+
+  // Ref to fluxo reload function
+  const fluxoReloadRef = useRef<(() => void) | null>(null);
+  const handleFluxoReloadRef = useCallback((reload: () => void) => {
+    fluxoReloadRef.current = reload;
+  }, []);
+
   // Convert FinanceiroLancamento to LancamentoV2-like for the dialog
   const handleEditFromAuditoria = useCallback((lanc: FinanceiroLancamento) => {
     const v2Like = {
