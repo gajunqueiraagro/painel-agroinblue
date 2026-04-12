@@ -95,6 +95,11 @@ interface TreeNode {
   tipo: 'entrada' | 'saida';
   depth: number; // 0=macro, 1=grupo, 2=centro, 3=subcentro
   children: TreeNode[];
+  // Hierarchy for drill-down
+  macro: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
 }
 
 function buildPlanoTree(
