@@ -285,7 +285,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
     setLancamentos(allLanc);
     setLoading(false);
-  }, [clienteId, ano, contaId]);
+  }, [clienteId, ano, contaId, contas]);
 
   useEffect(() => {
     loadData();
