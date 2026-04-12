@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -24,7 +24,14 @@ import {
   LockKeyhole, ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { buildMovSummary, STATUS_REALIZADOS, type MovimentoResumo } from '@/lib/financeiro/conciliacaoCalc';
+import {
+  buildMovSummary,
+  calcConciliacaoMensal,
+  isDebugConciliacaoBancoBrasilCase,
+  STATUS_REALIZADOS,
+  type ConciliacaoLancamentoBase,
+  type MovimentoResumo,
+} from '@/lib/financeiro/conciliacaoCalc';
 import { buildSaldosAnosDisponiveis, buildUnifiedSaldos } from '@/lib/financeiro/saldosBancarios';
 
 /* ── types ── */
@@ -167,7 +174,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     newValue: number;
   } | null>(null);
 
-  const [movSummary, setMovSummary] = useState<Record<string, { entradas: number; saidas: number }>>({});
+  const [conciliacaoLancamentos, setConciliacaoLancamentos] = useState<ConciliacaoLancamentoBase[]>([]);
+  const debugLoggedRef = useRef<Set<string>>(new Set());
 
   /* ── data loading ── */
   const load = useCallback(async () => {
@@ -216,10 +224,35 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         return saldo.ano_mes === `${filtroAno}-${filtroMes}`;
       });
 
+      const anoMesMin = filtroMes === '__all__' ? `${filtroAno}-01` : `${filtroAno}-${filtroMes}`;
+      const anoMesMax = filtroMes === '__all__' ? `${filtroAno}-12` : `${filtroAno}-${filtroMes}`;
+      const detailedLancamentos: ConciliacaoLancamentoBase[] = [];
+      const batchSize = 1000;
+      let from = 0;
+
+      while (true) {
+        const { data: pageData } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id, conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('cancelado', false)
+          .in('status_transacao', [...STATUS_REALIZADOS])
+          .gte('ano_mes', anoMesMin)
+          .lte('ano_mes', anoMesMax)
+          .order('ano_mes')
+          .order('id')
+          .range(from, from + batchSize - 1);
+
+        if (!pageData || pageData.length === 0) break;
+        detailedLancamentos.push(...(pageData as unknown as ConciliacaoLancamentoBase[]));
+        if (pageData.length < batchSize) break;
+        from += batchSize;
+      }
+
       setSaldos(filtered);
       setContas(contasData);
       setAllSaldos(unifiedAll);
-      setMovSummary(movSummaryData);
+      setConciliacaoLancamentos(detailedLancamentos);
     } finally {
       setLoading(false);
     }
@@ -266,29 +299,66 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
    * Rule: use the ROW's saldo_inicial when it exists; only chain from
    * previous month's saldo_final when no row is available.
    */
-  const calcConciliacaoRow = useCallback((s: SaldoBancario): { diff: number; isConciliado: boolean } | null => {
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const resolvedId = s.conta_bancaria_id_v2 || s.conta_bancaria_id;
-    const key = `${resolvedId}|${s.ano_mes}`;
-    const mov = movSummary[key];
+  const calcConciliacaoRow = useCallback((s: SaldoBancario) => {
+    const resolvedId = s.fonte === 'v2' ? s.conta_bancaria_id : s.conta_bancaria_id_v2;
+    if (!resolvedId) return null;
 
-    // ── saldo_inicial: same rule as Conciliação tab ──
-    // Use the row's own saldo_inicial (which already reflects the DB value).
-    // Only fall back to chaining from previous month when no row exists (handled upstream).
-    const saldoIni = r2(s.saldo_inicial);
-
-    const entradas = mov ? r2(mov.entradas) : 0;
-    const saidas = mov ? r2(mov.saidas) : 0;
-    const saldoCalculado = r2(saldoIni + entradas - saidas);
-    const diff = r2(s.saldo_final - saldoCalculado);
-    return { diff, isConciliado: diff === 0 };
-  }, [movSummary]);
+    return calcConciliacaoMensal({
+      contaId: resolvedId,
+      anoMes: s.ano_mes,
+      saldoRows: [{
+        conta_bancaria_id: resolvedId,
+        ano_mes: s.ano_mes,
+        saldo_inicial: Number(s.saldo_inicial) || 0,
+        saldo_final: Number(s.saldo_final) || 0,
+      }],
+      lancamentos: conciliacaoLancamentos,
+    });
+  }, [conciliacaoLancamentos]);
 
   const getInconsistency = useCallback((s: SaldoBancario): number | null => {
     const result = calcConciliacaoRow(s);
     if (!result) return null;
-    return result.diff !== 0 ? Math.abs(result.diff) : null;
+    return result.status === 'nao_conciliado' ? Math.abs(result.diferenca) : null;
   }, [calcConciliacaoRow]);
+
+  useEffect(() => {
+    saldos.forEach((saldo) => {
+      const resolvedId = saldo.fonte === 'v2' ? saldo.conta_bancaria_id : saldo.conta_bancaria_id_v2;
+      if (!resolvedId) return;
+      if (!isDebugConciliacaoBancoBrasilCase({ anoMes: saldo.ano_mes, accountLabel: saldo.conta_label })) return;
+
+      const logKey = `saldos:${resolvedId}:${saldo.ano_mes}`;
+      if (debugLoggedRef.current.has(logKey)) return;
+
+      const result = calcConciliacaoMensal({
+        contaId: resolvedId,
+        anoMes: saldo.ano_mes,
+        saldoRows: [{
+          conta_bancaria_id: resolvedId,
+          ano_mes: saldo.ano_mes,
+          saldo_inicial: Number(saldo.saldo_inicial) || 0,
+          saldo_final: Number(saldo.saldo_final) || 0,
+        }],
+        lancamentos: conciliacaoLancamentos,
+      });
+
+      debugLoggedRef.current.add(logKey);
+      console.info('[conciliacao-debug][saldos]', {
+        accountKey: result.accountKey,
+        accountLabel: saldo.conta_label,
+        anoMes: saldo.ano_mes,
+        saldoInicial: result.saldoInicial,
+        entradas: result.totalEntradas,
+        saidas: result.totalSaidas,
+        saldoCalculado: result.saldoCalculado,
+        saldoExtrato: result.saldoExtrato,
+        diferenca: result.diferenca,
+        quantidadeLancamentos: result.quantidadeLancamentos,
+        lancamentoIds: result.lancamentoIds,
+      });
+    });
+  }, [saldos, conciliacaoLancamentos]);
 
   /* ── permission helpers ── */
   const canEditSaldoFinal = (s: SaldoBancario): boolean => {
@@ -856,8 +926,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                               }
 
                               const result = calcConciliacaoRow(s);
-                              const diff = result?.diff ?? 0;
-                              const isConciliado = result?.isConciliado ?? false;
+                              const diff = result?.diferenca ?? 0;
+                              const isConciliado = result?.status === 'realizado';
 
                               return (
                                 <Tooltip>
