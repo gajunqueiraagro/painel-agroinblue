@@ -214,48 +214,38 @@ export function buildUnifiedSaldos({
     });
 
   // Dedup: V2 takes priority over legacy; within legacy, structured entries (cc-001|...) take priority over plain names
-  // Build a set of V2 keys (ignoring fazenda_id since legacy fazenda may differ from V2 conta fazenda)
   const v2KeysByContaMonth = new Set(v2Unified.map((row) => `${row.ano_mes}|${row.conta_bancaria_id}`));
 
-  // For legacy records with a resolved V2 conta, dedup by conta_bancaria_id_v2 + ano_mes
-  const legacySeenByContaMonth = new Map<string, number>();
-  const legacyFiltered = legacyBase.filter((row, idx) => {
+  // Track best legacy record per conta+month
+  const legacyBestByKey = new Map<string, number>();
+  const legacyStructured = new Map<string, boolean>();
+
+  legacyBase.forEach((row, idx) => {
     const contaKey = row.conta_bancaria_id_v2 || row.conta_bancaria_id;
     const dedupKey = `${row.ano_mes}|${contaKey}`;
 
-    // If V2 already has this conta+month, skip legacy entirely
-    if (row.conta_bancaria_id_v2 && v2KeysByContaMonth.has(dedupKey)) {
-      return false;
-    }
+    // Skip if V2 already covers this
+    if (row.conta_bancaria_id_v2 && v2KeysByContaMonth.has(dedupKey)) return;
 
-    // Dedup within legacy: if we already saw this conta+month, keep the structured one
-    const prevIdx = legacySeenByContaMonth.get(dedupKey);
-    if (prevIdx !== undefined) {
-      const prev = legacyBase[prevIdx];
-      // Prefer structured (cc-001|...) over plain name
-      if ((row as any)._hasStructuredCode && !(prev as any)._hasStructuredCode) {
-        // Replace previous with current: mark previous as filtered out
-        legacySeenByContaMonth.set(dedupKey, idx);
-        return true; // We'll filter the previous one below
+    const isStructured = (row as any)._hasStructuredCode as boolean;
+    const prevIdx = legacyBestByKey.get(dedupKey);
+
+    if (prevIdx === undefined) {
+      legacyBestByKey.set(dedupKey, idx);
+      legacyStructured.set(dedupKey, isStructured);
+    } else {
+      const prevIsStructured = legacyStructured.get(dedupKey) || false;
+      if (isStructured && !prevIsStructured) {
+        legacyBestByKey.set(dedupKey, idx);
+        legacyStructured.set(dedupKey, isStructured);
       }
-      return false; // Duplicate, skip
     }
-
-    legacySeenByContaMonth.set(dedupKey, idx);
-    return true;
   });
 
-  // Second pass: remove earlier duplicates that were superseded
-  const keepIndices = new Set(legacySeenByContaMonth.values());
-  const legacyDeduplicated = legacyFiltered.filter((row) => {
-    const idx = legacyBase.indexOf(row);
-    const contaKey = row.conta_bancaria_id_v2 || row.conta_bancaria_id;
-    const dedupKey = `${row.ano_mes}|${contaKey}`;
-    return keepIndices.has(idx) || !legacySeenByContaMonth.has(dedupKey);
-  });
-
-  // Clean up internal property
-  const legacyCleaned: UnifiedSaldoRow[] = legacyDeduplicated.map(({ _hasStructuredCode, ...rest }) => rest as UnifiedSaldoRow);
+  const keepLegacyIndices = new Set(legacyBestByKey.values());
+  const legacyCleaned: UnifiedSaldoRow[] = legacyBase
+    .filter((_, idx) => keepLegacyIndices.has(idx))
+    .map(({ _hasStructuredCode, ...rest }: any) => rest as UnifiedSaldoRow);
 
   const combined = [...v2Unified, ...legacyBase].sort((a, b) => {
     return a.ano_mes.localeCompare(b.ano_mes)
