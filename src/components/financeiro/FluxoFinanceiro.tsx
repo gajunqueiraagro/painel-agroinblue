@@ -23,6 +23,7 @@ import {
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
 } from '@/lib/financeiro/classificacao';
+import { isDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 import { FluxoAuditoriaModal } from './FluxoAuditoriaModal';
 
