@@ -154,11 +154,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     if (!clienteId) return;
     Promise.all([
       supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId),
+      supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id', clienteId),
       supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false),
-    ]).then(([sRes, lRes]) => {
+    ]).then(([sRes, legRes, lRes]) => {
       const set = new Set<string>();
       set.add(String(currentYear));
       (sRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
+      (legRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
       (lRes.data || []).forEach((r: any) => { if (r.ano_mes) set.add(r.ano_mes.substring(0, 4)); });
       setAnos(Array.from(set).sort((a, b) => b.localeCompare(a)));
     });
@@ -205,12 +207,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
     const anoMesMin = `${ano}-01`;
     const anoMesMax = `${ano}-12`;
+    // Also load December of previous year for saldo_inicial chaining into Jan
+    const prevDec = `${Number(ano) - 1}-12`;
 
     let sQuery = supabase
       .from('financeiro_saldos_bancarios_v2')
       .select('id, ano_mes, conta_bancaria_id, saldo_inicial, saldo_final, status_mes, origem_saldo_inicial')
       .eq('cliente_id', clienteId)
-      .gte('ano_mes', anoMesMin)
+      .gte('ano_mes', prevDec)
       .lte('ano_mes', anoMesMax);
     if (contaId !== '__all__') sQuery = sQuery.eq('conta_bancaria_id', contaId);
     const { data: sData } = await sQuery;
@@ -248,6 +252,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   const mesCards: MesCard[] = useMemo(() => {
     const cards: MesCard[] = [];
+    // Track previous month's saldo_final per conta for chaining
+    // Initialize from December of previous year if available
+    const prevFinalByAccount = new Map<string, number>();
+    const prevDec = `${Number(ano) - 1}-12`;
+    for (const s of saldos.filter(row => row.ano_mes === prevDec)) {
+      prevFinalByAccount.set(s.conta_bancaria_id, (prevFinalByAccount.get(s.conta_bancaria_id) || 0) + s.saldo_final);
+    }
 
     for (let m = 1; m <= 12; m++) {
       const mesStr = String(m).padStart(2, '0');
@@ -255,7 +266,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
       const saldoRows = saldos.filter(s => s.ano_mes === anoMes);
       const saldoRow = contaId !== '__all__' ? saldoRows[0] || null : null;
-      const saldoInicial = saldoRows.reduce((sum, s) => sum + (s.saldo_inicial || 0), 0);
+
+      // Saldo inicial: prefer registered value, then chain from previous month
+      let saldoInicial: number;
+      if (saldoRows.length > 0) {
+        saldoInicial = saldoRows.reduce((sum, s) => sum + (s.saldo_inicial || 0), 0);
+      } else if (contaId !== '__all__') {
+        saldoInicial = prevFinalByAccount.get(contaId) || 0;
+      } else {
+        // All accounts: sum all tracked previous finals
+        saldoInicial = Array.from(prevFinalByAccount.values()).reduce((s, v) => s + v, 0);
+      }
 
       const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, contaId));
 
@@ -363,6 +384,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         saldoRow,
         lancamentos: mesLancs,
       });
+
+      // Update chain tracking for next month
+      if (saldoRows.length > 0) {
+        for (const s of saldoRows) {
+          prevFinalByAccount.set(s.conta_bancaria_id, s.saldo_final || 0);
+        }
+      } else if (contaId !== '__all__') {
+        // No saldo row — track calculated value as chain
+        prevFinalByAccount.set(contaId, saldoCalculado);
+      }
     }
 
     return cards;
