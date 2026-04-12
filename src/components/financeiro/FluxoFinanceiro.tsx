@@ -229,13 +229,14 @@ interface Props {
   ano: number;
   mesAte: number;
   fazendaAtualNome?: string;
+  onEditLancamento?: (lancamento: FinanceiroLancamento) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onEditLancamento }: Props) {
   const isMobile = useIsMobile();
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
 
@@ -272,11 +273,8 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
         </div>
       )}
 
-      {saldoInicialAusente && (
-        <div className="text-[9px] text-muted-foreground bg-muted rounded-md px-2 py-1">
-          ⓘ Saldo inicial zerado — sem registros SALDO em Dez/{ano - 1}
-        </div>
-      )}
+      {/* saldoInicialAusente silenced — info only in console */}
+      {saldoInicialAusente && (() => { console.debug(`[FluxoCaixa] Saldo inicial ausente — Dez/${ano - 1}`); return null; })()}
 
       <Card>
         <CardContent className="pt-2 pb-1">
@@ -328,6 +326,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
         payload={modalPayload}
         lancamentos={lancamentos}
         valorClicado={modalValorClicado}
+        onEditLancamento={onEditLancamento}
       />
     </div>
   );
@@ -461,7 +460,7 @@ function FluxoTable({
     rowId === 'totalEntradas' || rowId === 'totalSaidas';
 
   return (
-    <div className="overflow-auto -mx-1 max-h-[60vh]" style={{ scrollbarGutter: 'stable' }}>
+    <div className="overflow-auto -mx-1 max-h-[70vh]" style={{ scrollbarGutter: 'stable' }}>
       <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: isMobile ? 100 : 180 }} />

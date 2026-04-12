@@ -2,7 +2,7 @@
  * Modal de Auditoria — abre ao clicar num valor do Fluxo de Caixa (modo Amplo).
  * Mostra lançamentos reais filtrados hierarquicamente.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import {
@@ -24,6 +25,7 @@ import {
 } from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import type { FluxoDrillPayload } from './FluxoFinanceiro';
+import { Pencil } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -31,9 +33,10 @@ interface Props {
   payload: FluxoDrillPayload | null;
   lancamentos: FinanceiroLancamento[];
   valorClicado: number;
+  onEditLancamento?: (lancamento: FinanceiroLancamento) => void;
 }
 
-export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valorClicado }: Props) {
+export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valorClicado, onEditLancamento }: Props) {
   const filtered = useMemo(() => {
     if (!payload) return [];
 
@@ -88,8 +91,9 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-4 pt-4 pb-2 border-b border-border space-y-1">
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0">
+        {/* Fixed header */}
+        <DialogHeader className="px-4 pt-4 pb-2 border-b border-border space-y-1 shrink-0 bg-muted/50">
           <DialogTitle className="text-sm font-bold flex items-center gap-2">
             🔍 Auditoria — {hierarquia}
           </DialogTitle>
@@ -98,6 +102,7 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
           </DialogDescription>
         </DialogHeader>
 
+        {/* Scrollable body */}
         <ScrollArea className="flex-1 min-h-0">
           <div className="px-2 pb-2">
             {filtered.length === 0 ? (
@@ -107,16 +112,19 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[9px] px-1.5 py-1 whitespace-nowrap">Data Pgto</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Fornecedor</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Produto</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Macro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Grupo</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Centro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Subcentro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1 text-right">Valor</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1">Status</TableHead>
+                  <TableRow className="bg-muted/60">
+                    <TableHead className="text-[9px] px-1.5 py-1.5 whitespace-nowrap font-bold">Data Pgto</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Fornecedor</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Produto</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Macro</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Grupo</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Centro</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Subcentro</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 text-right font-bold">Valor</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Status</TableHead>
+                    {onEditLancamento && (
+                      <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-8" />
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -135,6 +143,19 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
                         {formatMoeda(Math.abs(l.valor))}
                       </TableCell>
                       <TableCell className="text-[9px] px-1.5 py-1">{l.status_transacao || '-'}</TableCell>
+                      {onEditLancamento && (
+                        <TableCell className="px-1 py-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => onEditLancamento(l)}
+                            title="Editar lançamento"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -143,9 +164,9 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
           </div>
         </ScrollArea>
 
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-2 flex items-center justify-between text-[10px]">
-          <span className="text-muted-foreground">{filtered.length} lançamentos</span>
+        {/* Fixed footer */}
+        <div className="border-t border-border px-4 py-2.5 flex items-center justify-between text-[10px] shrink-0 bg-muted/50">
+          <span className="text-muted-foreground font-medium">{filtered.length} lançamentos</span>
           <div className="flex items-center gap-3">
             <span className={`font-bold font-mono ${
               payload.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
