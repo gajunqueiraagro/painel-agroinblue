@@ -338,23 +338,49 @@ interface Props {
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onEditLancamento }: Props) {
+export function FluxoFinanceiro({
+  lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onEditLancamento,
+  modalOpen: externalModalOpen, modalPayload: externalPayload,
+  modalValorClicado: externalValorClicado,
+  onModalOpen, onModalClose, onFluxoReloadRef,
+}: Props) {
   const isMobile = useIsMobile();
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
 
-  // Modal state
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalPayload, setModalPayload] = useState<FluxoDrillPayload | null>(null);
-  const [modalValorClicado, setModalValorClicado] = useState(0);
+  // Use external (lifted) modal state if provided, otherwise local
+  const [localModalOpen, setLocalModalOpen] = useState(false);
+  const [localPayload, setLocalPayload] = useState<FluxoDrillPayload | null>(null);
+  const [localValorClicado, setLocalValorClicado] = useState(0);
+
+  const modalOpen = externalModalOpen ?? localModalOpen;
+  const modalPayload = externalPayload ?? localPayload;
+  const modalValorClicado = externalValorClicado ?? localValorClicado;
 
   const handleDrillDown = useCallback((payload: FluxoDrillPayload, valorClicado: number) => {
-    setModalPayload(payload);
-    setModalValorClicado(valorClicado);
-    setModalOpen(true);
-  }, []);
+    if (onModalOpen) {
+      onModalOpen(payload, valorClicado);
+    } else {
+      setLocalPayload(payload);
+      setLocalValorClicado(valorClicado);
+      setLocalModalOpen(true);
+    }
+  }, [onModalOpen]);
 
-  const { meses, loading, saldoInicialAusente, lancamentosGlobais } =
+  const handleModalClose = useCallback(() => {
+    if (onModalClose) {
+      onModalClose();
+    } else {
+      setLocalModalOpen(false);
+    }
+  }, [onModalClose]);
+
+  const { meses, loading, saldoInicialAusente, lancamentosGlobais, reload: reloadFluxo } =
     useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
+
+  // Expose reload to parent
+  if (onFluxoReloadRef) {
+    onFluxoReloadRef(reloadFluxo);
+  }
 
   if (loading) {
     return (
@@ -375,7 +401,6 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
         </div>
       )}
 
-      {/* saldoInicialAusente silenced — info only in console */}
       {saldoInicialAusente && (() => { console.debug(`[FluxoCaixa] Saldo inicial ausente — Dez/${ano - 1}`); return null; })()}
 
       <Card>
@@ -424,7 +449,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
 
       <FluxoAuditoriaModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={handleModalClose}
         payload={modalPayload}
         lancamentos={lancamentos}
         valorClicado={modalValorClicado}
