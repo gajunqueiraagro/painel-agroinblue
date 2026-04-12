@@ -466,10 +466,25 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       return;
     }
 
-    // For new records, derive fazenda from the selected conta via a lookup
-    // For new records, derive fazenda from the selected conta via a lookup
+    // Resolve fazenda_id: for legacy edits, derive from the V2 conta; for V2 edits, keep existing; for new, lookup
     const resolveFazendaId = async (): Promise<string | null> => {
-      if (editing) return editing.fazenda_id;
+      if (editing) {
+        // For legacy records, resolve fazenda from the matched V2 conta
+        if (editing.fonte === 'legado') {
+          const v2ContaId = resolveContaPersistId(editing);
+          if (v2ContaId) {
+            const { data } = await supabase
+              .from('financeiro_contas_bancarias')
+              .select('fazenda_id')
+              .eq('id', v2ContaId)
+              .single();
+            if (data?.fazenda_id) return data.fazenda_id;
+          }
+          // fallback to editing fazenda_id if available
+          return editing.fazenda_id || null;
+        }
+        return editing.fazenda_id;
+      }
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
         .select('fazenda_id')
@@ -479,7 +494,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     };
     const fazendaId = await resolveFazendaId();
     if (!fazendaId) {
-      toast.error('Não foi possível determinar a fazenda da conta');
+      toast.error('Não foi possível salvar: fazenda_id não resolvido a partir da conta bancária');
       return;
     }
 
