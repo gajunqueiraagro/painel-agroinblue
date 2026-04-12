@@ -324,6 +324,14 @@ interface Props {
   mesAte: number;
   fazendaAtualNome?: string;
   onEditLancamento?: (lancamento: FinanceiroLancamento) => void;
+  // Lifted modal state
+  modalOpen?: boolean;
+  modalPayload?: FluxoDrillPayload | null;
+  modalValorClicado?: number;
+  onModalOpen?: (payload: FluxoDrillPayload, valorClicado: number) => void;
+  onModalClose?: () => void;
+  /** Expose reload so parent can trigger it after edits */
+  onFluxoReloadRef?: (reload: () => void) => void;
 }
 
 // ---------------------------------------------------------------------------
