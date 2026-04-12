@@ -167,6 +167,7 @@ function buildPlanoTree(
       tipo: tipoFilter,
       depth: 0,
       children: [],
+      macro: macroLabel,
     };
 
     for (const [grupoLabel, centroMap] of grupoMap) {
@@ -178,6 +179,8 @@ function buildPlanoTree(
         tipo: tipoFilter,
         depth: 1,
         children: [],
+        macro: macroLabel,
+        grupo: grupoLabel,
       };
 
       for (const [centroLabel, subMap] of centroMap) {
@@ -189,6 +192,9 @@ function buildPlanoTree(
           tipo: tipoFilter,
           depth: 2,
           children: [],
+          macro: macroLabel,
+          grupo: grupoLabel,
+          centro: centroLabel,
         };
 
         for (const [subLabel, months] of subMap) {
@@ -201,6 +207,10 @@ function buildPlanoTree(
             tipo: tipoFilter,
             depth: 3,
             children: [],
+            macro: macroLabel,
+            grupo: grupoLabel,
+            centro: centroLabel,
+            subcentro: subLabel,
           };
           centroNode.children.push(subNode);
           for (let i = 0; i < 12; i++) centroNode.monthValues[i] += months[i];
