@@ -95,6 +95,11 @@ interface TreeNode {
   tipo: 'entrada' | 'saida';
   depth: number; // 0=macro, 1=grupo, 2=centro, 3=subcentro
   children: TreeNode[];
+  // Hierarchy for drill-down
+  macro: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
 }
 
 function buildPlanoTree(
@@ -162,6 +167,7 @@ function buildPlanoTree(
       tipo: tipoFilter,
       depth: 0,
       children: [],
+      macro: macroLabel,
     };
 
     for (const [grupoLabel, centroMap] of grupoMap) {
@@ -173,6 +179,8 @@ function buildPlanoTree(
         tipo: tipoFilter,
         depth: 1,
         children: [],
+        macro: macroLabel,
+        grupo: grupoLabel,
       };
 
       for (const [centroLabel, subMap] of centroMap) {
@@ -184,6 +192,9 @@ function buildPlanoTree(
           tipo: tipoFilter,
           depth: 2,
           children: [],
+          macro: macroLabel,
+          grupo: grupoLabel,
+          centro: centroLabel,
         };
 
         for (const [subLabel, months] of subMap) {
@@ -196,6 +207,10 @@ function buildPlanoTree(
             tipo: tipoFilter,
             depth: 3,
             children: [],
+            macro: macroLabel,
+            grupo: grupoLabel,
+            centro: centroLabel,
+            subcentro: subLabel,
           };
           centroNode.children.push(subNode);
           for (let i = 0; i < 12; i++) centroNode.monthValues[i] += months[i];
@@ -242,19 +257,31 @@ function buildPlanoTree(
 // Props
 // ---------------------------------------------------------------------------
 
+export interface FluxoDrillPayload {
+  origem: 'fluxo_caixa_amplo';
+  ano: number;
+  mes: number | null; // null = Total column
+  tipo: 'entrada' | 'saida';
+  macro?: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
+}
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   rateioADM: RateioADM[];
   ano: number;
   mesAte: number;
   fazendaAtualNome?: string;
+  onDrillDown?: (payload: FluxoDrillPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onDrillDown }: Props) {
   const isMobile = useIsMobile();
   const [visao, setVisao] = useState<VisaoFluxo>('resumido');
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
@@ -349,6 +376,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
             fmtMode={fmtMode}
             lancamentosGlobais={lancamentosGlobais as FluxoLancRaw[]}
             ano={ano}
+            onDrillDown={onDrillDown}
           />
         </CardContent>
       </Card>
@@ -391,7 +419,7 @@ const DEPTH_BG = (depth: number, idx: number) => {
 };
 
 function FluxoTable({
-  meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano,
+  meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano, onDrillDown,
 }: {
   meses: FluxoMensal[];
   mesAte: number;
@@ -400,6 +428,7 @@ function FluxoTable({
   fmtMode: FmtMode;
   lancamentosGlobais: FluxoLancRaw[];
   ano: number;
+  onDrillDown?: (payload: FluxoDrillPayload) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
 
@@ -602,6 +631,24 @@ function FluxoTable({
             const indent = DEPTH_INDENT[node.depth] || 40;
             const textColor = node.depth <= 1 ? 'text-card-foreground' : 'text-muted-foreground';
 
+            const buildPayload = (mes: number | null): FluxoDrillPayload => ({
+              origem: 'fluxo_caixa_amplo',
+              ano,
+              mes,
+              tipo: node.tipo,
+              macro: node.macro,
+              grupo: node.grupo,
+              centro: node.centro,
+              subcentro: node.subcentro,
+            });
+
+            const handleCellClick = (mes: number | null, val: number) => {
+              if (!onDrillDown || val === 0) return;
+              onDrillDown(buildPayload(mes));
+            };
+
+            const cellClickable = !!onDrillDown;
+
             return (
               <tr key={node.id} className="border-b border-border/20">
                 <td
@@ -622,19 +669,22 @@ function FluxoTable({
                   const val = node.monthValues[m.mes - 1] || 0;
                   const isAfter = m.mes > mesAte;
                   const color = isAfter ? 'text-muted-foreground/30' : val === 0 ? 'text-muted-foreground/40' : getValueColor(val, node.tipo);
+                  const clickable = cellClickable && !isAfter && val !== 0;
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                      className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''} ${clickable ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
                       style={{ background: bg }}
+                      onClick={clickable ? () => handleCellClick(m.mes, val) : undefined}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
                 <td
-                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)}`}
+                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)} ${cellClickable && node.total !== 0 ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
                   style={{ background: BG_MUTED }}
+                  onClick={cellClickable && node.total !== 0 ? () => handleCellClick(null, node.total) : undefined}
                 >
                   {fmtVal(node.total, fmtMode)}
                 </td>

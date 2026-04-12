@@ -128,11 +128,23 @@ function formatNF(l: LancamentoV2): string {
   return formatDocumento((l as any).tipo_documento, l.numero_documento);
 }
 
+export interface FinV2DrillFilters {
+  ano?: string;
+  mes?: number;
+  tipo?: string; // '1-Entradas' | '2-Saídas'
+  macro?: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
+  statusTransacao?: string;
+}
+
 interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onIntensiveToggle?: (active: boolean) => void;
+  drillFilters?: FinV2DrillFilters | null;
 }
 
 function getInitialPageSize() {
@@ -143,7 +155,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -310,6 +322,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       }
     }
   };
+
+  // Apply drill filters from FluxoCaixa navigation
+  useEffect(() => {
+    if (!drillFilters) return;
+    if (drillFilters.ano) setAno(drillFilters.ano);
+    if (drillFilters.mes) setMesesSelecionados([String(drillFilters.mes).padStart(2, '0')]);
+    if (drillFilters.tipo) setTipoOperacao(drillFilters.tipo);
+    if (drillFilters.statusTransacao) setStatusTransacao(drillFilters.statusTransacao);
+    if (drillFilters.macro) setMacroFiltro(drillFilters.macro);
+    if (drillFilters.grupo) setGrupoFiltro(drillFilters.grupo);
+    if (drillFilters.centro) setCentroFiltro(drillFilters.centro);
+    if (drillFilters.subcentro) setSubcentroFiltro(drillFilters.subcentro);
+    setFazendaId('__all__'); // Fluxo de Caixa is always global
+  }, []); // Run once on mount
 
   useEffect(() => {
     hook.loadContas();

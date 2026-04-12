@@ -158,6 +158,7 @@ const Index = () => {
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
+  const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -299,7 +300,7 @@ const Index = () => {
       setEditOriginMesFiltro(undefined);
     }
     if (tab !== 'fechamento') setFechamentoFromConciliacao(false);
-    if (tab !== 'financeiro_v2') setFinV2Intensivo(false);
+    if (tab !== 'financeiro_v2') { setFinV2Intensivo(false); setFinV2DrillFilters(null); }
     if (tab === 'conferencia_gmd' || tab === 'mapa_pastos') {
       gmdOriginRef.current = activeTab as TabId;
     }
@@ -630,6 +631,20 @@ const Index = () => {
           onBack={goToLancarFinHub}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onFluxoDrillDown={(payload) => {
+            const tipoMap: Record<string, string> = { entrada: '1-Entradas', saida: '2-Saídas' };
+            setFinV2DrillFilters({
+              ano: String(payload.ano),
+              mes: payload.mes ?? undefined,
+              tipo: tipoMap[payload.tipo] || undefined,
+              macro: payload.macro,
+              grupo: payload.grupo,
+              centro: payload.centro,
+              subcentro: payload.subcentro,
+              statusTransacao: 'Realizado',
+            });
+            setActiveTab('financeiro_v2');
+          }}
         />
       )}
       {activeTab === 'analise_economica' && (
@@ -661,10 +676,11 @@ const Index = () => {
       )}
       {activeTab === 'financeiro_v2' && (
         <FinanceiroV2Tab
-          onBack={() => setActiveTab('financeiro_v2_hub')}
+          onBack={() => { setFinV2DrillFilters(null); setActiveTab('financeiro_v2_hub'); }}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onIntensiveToggle={setFinV2Intensivo}
+          drillFilters={finV2DrillFilters}
         />
       )}
       {activeTab === 'financeiro_v2_hub' && (

@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
-import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
+import { FluxoFinanceiro, type FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -41,6 +41,7 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onFluxoDrillDown?: (payload: FluxoDrillPayload) => void;
 }
 
 const MESES_FILTRO = [
@@ -61,7 +62,7 @@ function classifySaida(l: FinanceiroLancamento): string {
   return classificarSaidaCentral(l);
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, onFluxoDrillDown }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
@@ -323,6 +324,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ano={Number(localAno)}
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
+              onDrillDown={onFluxoDrillDown}
             />
           )}
           {subTab === 'rateio' && (
