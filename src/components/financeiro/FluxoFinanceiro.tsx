@@ -229,13 +229,14 @@ interface Props {
   ano: number;
   mesAte: number;
   fazendaAtualNome?: string;
+  onEditLancamento?: (lancamento: FinanceiroLancamento) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onEditLancamento }: Props) {
   const isMobile = useIsMobile();
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
 
@@ -325,6 +326,7 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
         payload={modalPayload}
         lancamentos={lancamentos}
         valorClicado={modalValorClicado}
+        onEditLancamento={onEditLancamento}
       />
     </div>
   );
