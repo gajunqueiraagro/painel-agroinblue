@@ -140,17 +140,13 @@ function buildPlanoTree(
     'entradas financeiras',
   ];
   const MACRO_ORDER_SAIDA: string[] = [
-    'deduções receitas',
-    'dedução de receitas',
-    'custeio produção',
-    'custeio produtivo',
-    'investimentos',
-    'investimento na fazenda',
-    'investimento em bovinos',
-    'saídas financeiras',
-    'amortizações financeiras',
-    'distribuição',
-    'dividendos',
+    'dedu',           // matches Deduções, Dedução, Deduções de Receitas, etc.
+    'custeio',        // Custeio Produção, Custeio Produtivo
+    'investimento',   // Investimentos, Investimento na Fazenda, etc.
+    'saída',          // Saídas Financeiras, Saída Financeira
+    'amortiza',       // Amortizações Financeiras
+    'distribuição',   // Distribuição
+    'dividendo',      // Dividendos
   ];
   const orderList = tipoFilter === 'entrada' ? MACRO_ORDER_ENTRADA : MACRO_ORDER_SAIDA;
 
