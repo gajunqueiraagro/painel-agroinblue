@@ -247,7 +247,7 @@ export function buildUnifiedSaldos({
     .filter((_, idx) => keepLegacyIndices.has(idx))
     .map(({ _hasStructuredCode, ...rest }: any) => rest as UnifiedSaldoRow);
 
-  const combined = [...v2Unified, ...legacyBase].sort((a, b) => {
+  const combined = [...v2Unified, ...legacyCleaned].sort((a, b) => {
     return a.ano_mes.localeCompare(b.ano_mes)
       || a.fazenda_id.localeCompare(b.fazenda_id)
       || a.conta_label.localeCompare(b.conta_label);
