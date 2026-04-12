@@ -847,11 +847,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                                 return <Badge variant="outline" className="text-[9px] px-1.5 py-0">Conta não vinculada</Badge>;
                               }
 
-                              const key = `${contaPersistId}|${s.ano_mes}`;
-                              const mov = movSummary[key];
-                              const saldoCalculado = saldoInicialEfetivo + (mov ? mov.entradas - mov.saidas : 0);
-                              const diff = Math.round((s.saldo_final - saldoCalculado) * 100) / 100;
-                              const isConciliado = diff === 0;
+                              const result = calcConciliacaoRow(s);
+                              const diff = result?.diff ?? 0;
+                              const isConciliado = result?.isConciliado ?? false;
 
                               return (
                                 <Tooltip>
