@@ -26,6 +26,7 @@ import {
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
 } from '@/lib/financeiro/classificacao';
+import { normalizeDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
 
 interface FluxoLancamentoBase extends LancamentoClassificavel {
   id: string;
