@@ -4,7 +4,7 @@
  * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
  * Suporta drill-down: ao clicar numa categoria no dashboard, mostra lançamentos filtrados.
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
@@ -33,6 +33,7 @@ import {
   classificarSaida as classificarSaidaCentral,
 } from '@/lib/financeiro/classificacao';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import type { FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { toast } from 'sonner';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
@@ -93,6 +94,27 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLancV2, setEditingLancV2] = useState<any>(null);
 
+  // Lifted audit modal state — persists across useFinanceiro reload cycles
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditPayload, setAuditPayload] = useState<FluxoDrillPayload | null>(null);
+  const [auditValorClicado, setAuditValorClicado] = useState(0);
+
+  const handleAuditModalOpen = useCallback((payload: FluxoDrillPayload, valorClicado: number) => {
+    setAuditPayload(payload);
+    setAuditValorClicado(valorClicado);
+    setAuditModalOpen(true);
+  }, []);
+
+  const handleAuditModalClose = useCallback(() => {
+    setAuditModalOpen(false);
+  }, []);
+
+  // Ref to fluxo reload function
+  const fluxoReloadRef = useRef<(() => void) | null>(null);
+  const handleFluxoReloadRef = useCallback((reload: () => void) => {
+    fluxoReloadRef.current = reload;
+  }, []);
+
   // Convert FinanceiroLancamento to LancamentoV2-like for the dialog
   const handleEditFromAuditoria = useCallback((lanc: FinanceiroLancamento) => {
     const v2Like = {
@@ -136,8 +158,14 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     if (!id) return false;
     const ok = await v2Hook.editarLancamento(id, form);
     if (ok) {
-      // Reload financial data so tree + modal reflect the updated record
-      await reloadData();
+      // Close edit dialog but keep audit modal open
+      setEditDialogOpen(false);
+      setEditingLancV2(null);
+      // Reload both data sources in parallel
+      await Promise.all([
+        reloadData(),
+        fluxoReloadRef.current?.(),
+      ]);
     }
     return ok;
   }, [v2Hook, reloadData]);
@@ -145,7 +173,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   const handleEditDelete = useCallback(async (id: string) => {
     const ok = await v2Hook.excluirLancamento(id);
     if (ok) {
-      await reloadData();
+      setEditDialogOpen(false);
+      setEditingLancV2(null);
+      await Promise.all([
+        reloadData(),
+        fluxoReloadRef.current?.(),
+      ]);
     }
     return ok;
   }, [v2Hook, reloadData]);
@@ -399,6 +432,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
               onEditLancamento={handleEditFromAuditoria}
+              modalOpen={auditModalOpen}
+              modalPayload={auditPayload}
+              modalValorClicado={auditValorClicado}
+              onModalOpen={handleAuditModalOpen}
+              onModalClose={handleAuditModalClose}
+              onFluxoReloadRef={handleFluxoReloadRef}
             />
           )}
           {subTab === 'rateio' && (
