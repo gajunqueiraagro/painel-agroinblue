@@ -404,7 +404,7 @@ const DEPTH_BG = (depth: number, idx: number) => {
 };
 
 function FluxoTable({
-  meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano,
+  meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano, onDrillDown,
 }: {
   meses: FluxoMensal[];
   mesAte: number;
@@ -413,6 +413,7 @@ function FluxoTable({
   fmtMode: FmtMode;
   lancamentosGlobais: FluxoLancRaw[];
   ano: number;
+  onDrillDown?: (payload: FluxoDrillPayload) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
 
