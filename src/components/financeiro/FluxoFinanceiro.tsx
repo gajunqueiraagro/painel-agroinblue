@@ -242,12 +242,24 @@ function buildPlanoTree(
 // Props
 // ---------------------------------------------------------------------------
 
+export interface FluxoDrillPayload {
+  origem: 'fluxo_caixa_amplo';
+  ano: number;
+  mes: number | null; // null = Total column
+  tipo: 'entrada' | 'saida';
+  macro?: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
+}
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   rateioADM: RateioADM[];
   ano: number;
   mesAte: number;
   fazendaAtualNome?: string;
+  onDrillDown?: (payload: FluxoDrillPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
