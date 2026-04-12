@@ -3104,6 +3104,7 @@ export type Database = {
           categoria_destino: string | null
           cenario: string
           cliente_id: string
+          comprador_fornecedor: string | null
           created_at: string
           created_by: string | null
           data: string
@@ -3117,16 +3118,22 @@ export type Database = {
           fazenda_destino: string | null
           fazenda_id: string
           fazenda_origem: string | null
+          finalidade: string | null
           id: string
+          lote: string | null
           numero_documento: string | null
           observacao: string | null
+          origem_registro: string
           outros_descontos: number | null
           peso_carcaca_kg: number | null
           peso_medio_arrobas: number | null
           peso_medio_kg: number | null
+          peso_vivo_total: number | null
           preco_arroba: number | null
           preco_medio_cabeca: number | null
           quantidade: number
+          rendimento_carcaca: number | null
+          sexo: string | null
           status_operacional: string | null
           tipo: string
           tipo_abate: string | null
@@ -3151,6 +3158,7 @@ export type Database = {
           categoria_destino?: string | null
           cenario?: string
           cliente_id: string
+          comprador_fornecedor?: string | null
           created_at?: string
           created_by?: string | null
           data: string
@@ -3164,16 +3172,22 @@ export type Database = {
           fazenda_destino?: string | null
           fazenda_id: string
           fazenda_origem?: string | null
+          finalidade?: string | null
           id?: string
+          lote?: string | null
           numero_documento?: string | null
           observacao?: string | null
+          origem_registro?: string
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
+          peso_vivo_total?: number | null
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade: number
+          rendimento_carcaca?: number | null
+          sexo?: string | null
           status_operacional?: string | null
           tipo: string
           tipo_abate?: string | null
@@ -3198,6 +3212,7 @@ export type Database = {
           categoria_destino?: string | null
           cenario?: string
           cliente_id?: string
+          comprador_fornecedor?: string | null
           created_at?: string
           created_by?: string | null
           data?: string
@@ -3211,16 +3226,22 @@ export type Database = {
           fazenda_destino?: string | null
           fazenda_id?: string
           fazenda_origem?: string | null
+          finalidade?: string | null
           id?: string
+          lote?: string | null
           numero_documento?: string | null
           observacao?: string | null
+          origem_registro?: string
           outros_descontos?: number | null
           peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
+          peso_vivo_total?: number | null
           preco_arroba?: number | null
           preco_medio_cabeca?: number | null
           quantidade?: number
+          rendimento_carcaca?: number | null
+          sexo?: string | null
           status_operacional?: string | null
           tipo?: string
           tipo_abate?: string | null
