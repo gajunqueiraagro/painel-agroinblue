@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
-import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
+import { FluxoFinanceiro, type FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -41,6 +41,7 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onFluxoDrillDown?: (payload: FluxoDrillPayload) => void;
 }
 
 const MESES_FILTRO = [
