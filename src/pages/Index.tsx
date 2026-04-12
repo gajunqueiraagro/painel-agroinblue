@@ -71,6 +71,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
+import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 
 export interface FiltroGlobal {
   ano: string;
