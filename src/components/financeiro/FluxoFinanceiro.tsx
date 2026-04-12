@@ -266,7 +266,7 @@ interface Props {
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onDrillDown }: Props) {
   const isMobile = useIsMobile();
   const [visao, setVisao] = useState<VisaoFluxo>('resumido');
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
