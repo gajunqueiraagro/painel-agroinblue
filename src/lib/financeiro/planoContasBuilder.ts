@@ -4,11 +4,11 @@
  * Merges the global plano de contas with client-specific dividendos
  * at runtime. Dividendos are injected under:
  *   Tipo: 2-Saídas > Macro: Distribuição > Grupo: Dividendos > Centro: Pessoas
- *   Subcentro: "Distribuição de Dividendos {nome}"
+ *   Subcentro: "Dividendos {nome}"
  *
  * REGRA CANÔNICA: Toda resolução de dividendos DEVE usar buildSubcentroDividendo()
  * para gerar o subcentro canônico. Nenhum outro ponto do sistema pode montar
- * o texto "Distribuição de Dividendos ..." manualmente.
+ * o texto "Dividendos ..." manualmente.
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -20,11 +20,20 @@ export const DIVIDENDO_MACRO = 'Distribuição';
 export const DIVIDENDO_GRUPO = 'Dividendos';
 export const DIVIDENDO_CENTRO = 'Pessoas';
 export const DIVIDENDO_ESCOPO = 'pecuaria';
-export const DIVIDENDO_SUBCENTRO_PREFIX = 'Distribuição de Dividendos';
+
+/** Prefixo NOVO (padrão oficial) */
+export const DIVIDENDO_SUBCENTRO_PREFIX = 'Dividendos';
+
+/** Prefixo LEGADO — usado apenas para compatibilidade de leitura */
+export const DIVIDENDO_SUBCENTRO_PREFIX_LEGACY = 'Distribuição de Dividendos';
+
+/** Prefixo LEGADO slash — usado apenas para compatibilidade de leitura */
+export const DIVIDENDO_SUBCENTRO_PREFIX_SLASH = 'DIVIDENDOS/DIVIDENDOS/';
 
 /**
  * Gera o subcentro canônico para um dividendo.
  * FONTE ÚNICA — todo o sistema deve usar esta função.
+ * Formato oficial: "Dividendos {nome}"
  */
 export function buildSubcentroDividendo(nomeDividendo: string): string {
   return `${DIVIDENDO_SUBCENTRO_PREFIX} ${nomeDividendo.trim()}`;
@@ -32,10 +41,59 @@ export function buildSubcentroDividendo(nomeDividendo: string): string {
 
 /**
  * Verifica se um subcentro pertence à família de dividendos dinâmicos.
+ * Reconhece todos os formatos (novo + legados) para compatibilidade de leitura.
  */
 export function isDividendoSubcentro(subcentro: string | null | undefined): boolean {
   if (!subcentro) return false;
-  return subcentro.startsWith(DIVIDENDO_SUBCENTRO_PREFIX);
+  const s = subcentro.trim();
+  // Novo padrão: "Dividendos X"
+  if (s.startsWith(DIVIDENDO_SUBCENTRO_PREFIX + ' ')) return true;
+  // Legado: "Distribuição de Dividendos X"
+  if (s.startsWith(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY + ' ')) return true;
+  if (s.toUpperCase().startsWith(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY.toUpperCase() + ' ')) return true;
+  // Legado slash: "DIVIDENDOS/DIVIDENDOS/X"
+  if (s.toUpperCase().startsWith(DIVIDENDO_SUBCENTRO_PREFIX_SLASH)) return true;
+  return false;
+}
+
+/**
+ * Extrai o nome do dividendo de qualquer formato de subcentro.
+ * Retorna null se não for dividendo.
+ */
+export function extractDividendoNome(subcentro: string | null | undefined): string | null {
+  if (!subcentro) return null;
+  const s = subcentro.trim();
+  const sUpper = s.toUpperCase();
+
+  // Novo padrão: "Dividendos X"
+  if (s.startsWith(DIVIDENDO_SUBCENTRO_PREFIX + ' ')) {
+    return s.substring(DIVIDENDO_SUBCENTRO_PREFIX.length + 1).trim();
+  }
+  // Legado: "Distribuição de Dividendos X"
+  if (s.startsWith(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY + ' ')) {
+    return s.substring(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY.length + 1).trim();
+  }
+  if (sUpper.startsWith(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY.toUpperCase() + ' ')) {
+    return s.substring(DIVIDENDO_SUBCENTRO_PREFIX_LEGACY.length + 1).trim();
+  }
+  // Legado slash: "DIVIDENDOS/DIVIDENDOS/X"
+  if (sUpper.startsWith(DIVIDENDO_SUBCENTRO_PREFIX_SLASH)) {
+    const raw = s.substring(DIVIDENDO_SUBCENTRO_PREFIX_SLASH.length).trim();
+    // Convert from UPPERCASE to Title Case
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  }
+  return null;
+}
+
+/**
+ * Converte qualquer formato de subcentro de dividendo para o padrão canônico.
+ * Retorna o subcentro inalterado se não for dividendo.
+ */
+export function normalizeDividendoSubcentro(subcentro: string | null | undefined): string | null {
+  if (!subcentro) return null;
+  const nome = extractDividendoNome(subcentro);
+  if (nome) return buildSubcentroDividendo(nome);
+  return subcentro;
 }
 
 export interface PlanoContasItem {
