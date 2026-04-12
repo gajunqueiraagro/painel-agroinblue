@@ -155,7 +155,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
