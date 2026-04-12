@@ -28,6 +28,7 @@ import {
 } from '@/lib/financeiro/classificacao';
 
 interface FluxoLancamentoBase extends LancamentoClassificavel {
+  id: string;
   produto: string | null;
   grupo_custo: string | null;
   centro_custo: string | null;
@@ -139,7 +140,7 @@ export function useFluxoCaixa(
       while (true) {
         const { data } = await supabase
           .from('financeiro_lancamentos_v2')
-          .select('status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro, grupo_custo')
+          .select('id, status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro, grupo_custo')
           .eq('cliente_id', clienteId)
           .eq('cancelado', false)
           .gte('data_pagamento', `${ano}-01-01`)
@@ -154,6 +155,7 @@ export function useFluxoCaixa(
 
       setLancamentosGlobais(
         allData.map((r: any) => ({
+          id: r.id,
           status_transacao: r.status_transacao,
           data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
           valor: Number(r.valor) || 0,

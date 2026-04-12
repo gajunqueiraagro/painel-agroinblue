@@ -1,6 +1,6 @@
 /**
  * Modal de Auditoria — abre ao clicar num valor do Fluxo de Caixa (modo Amplo).
- * Mostra lançamentos reais filtrados hierarquicamente.
+ * Mostra lançamentos reais filtrados POR IDs do nó — nunca refaz filtro textual.
  * Layout: Header fixo → Tabela com scroll → Footer fixo.
  */
 import { useMemo } from 'react';
@@ -16,17 +16,17 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
-import {
-  isRealizado,
-  isEntrada as isEntradaClass,
-  isSaida as isSaidaClass,
-  datePagtoMes,
-  datePagtoAno,
-  type LancamentoClassificavel,
-} from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
-import type { FluxoDrillPayload } from './FluxoFinanceiro';
-import { Pencil } from 'lucide-react';
+import type { FluxoDrillPayload, Inconsistencia, InconsistenciaTipo } from './FluxoFinanceiro';
+import { Pencil, AlertTriangle } from 'lucide-react';
+
+const INCONSISTENCIA_LABELS: Record<InconsistenciaTipo, string> = {
+  sem_macro: 'Sem macro',
+  macro_sem_grupo: 'Macro sem grupo',
+  grupo_sem_centro: 'Grupo sem centro',
+  centro_sem_subcentro: 'Centro sem subcentro',
+  subcentro_fora_plano: 'Subcentro fora do plano',
+};
 
 interface Props {
   open: boolean;
@@ -38,32 +38,42 @@ interface Props {
 }
 
 export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valorClicado, onEditLancamento }: Props) {
+  // Build a lookup map once
+  const lancMap = useMemo(() => {
+    const m = new Map<string, FinanceiroLancamento>();
+    for (const l of lancamentos) m.set(l.id, l);
+    return m;
+  }, [lancamentos]);
+
   const filtered = useMemo(() => {
     if (!payload) return [];
-
-    return lancamentos.filter(l => {
-      if (!isRealizado(l as LancamentoClassificavel)) return false;
-      if (payload.tipo === 'entrada' && !isEntradaClass(l as LancamentoClassificavel)) return false;
-      if (payload.tipo === 'saida' && !isSaidaClass(l as LancamentoClassificavel)) return false;
-      if (datePagtoAno(l as LancamentoClassificavel) !== payload.ano) return false;
-      if (payload.mes !== null) {
-        if (datePagtoMes(l as LancamentoClassificavel) !== payload.mes) return false;
-      }
-
-      const norm = (s: string | null | undefined) => (s || '').toLowerCase().trim();
-      if (payload.macro && norm(l.macro_custo) !== norm(payload.macro)) return false;
-      if (payload.grupo && norm(l.grupo_custo) !== norm(payload.grupo)) return false;
-      if (payload.centro && norm(l.centro_custo) !== norm(payload.centro)) return false;
-      if (payload.subcentro && norm(l.subcentro) !== norm(payload.subcentro)) return false;
-
-      return true;
-    });
-  }, [payload, lancamentos]);
+    const idSet = new Set(payload.lancamentoIds);
+    const result: FinanceiroLancamento[] = [];
+    for (const id of idSet) {
+      const l = lancMap.get(id);
+      if (l) result.push(l);
+    }
+    return result;
+  }, [payload, lancMap]);
 
   const totalLanc = useMemo(
     () => filtered.reduce((s, l) => s + Math.abs(l.valor), 0),
     [filtered],
   );
+
+  // Build inconsistency summary
+  const incSummary = useMemo(() => {
+    if (!payload || !payload.inconsistencias.length) return null;
+    const counts = new Map<InconsistenciaTipo, number>();
+    for (const inc of payload.inconsistencias) {
+      counts.set(inc.tipo, (counts.get(inc.tipo) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([tipo, qtd]) => ({
+      tipo,
+      label: INCONSISTENCIA_LABELS[tipo],
+      qtd,
+    }));
+  }, [payload]);
 
   const diff = totalLanc - valorClicado;
   const hasDiff = Math.abs(diff) > 0.01;
@@ -71,7 +81,6 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
   if (!payload) return null;
 
   const mesLabel = payload.mes ? MESES_NOMES[payload.mes - 1] : 'Acumulado';
-  const hierarquia = [payload.macro, payload.grupo, payload.centro, payload.subcentro].filter(Boolean).join(' › ');
   const tipoLabel = payload.tipo === 'entrada' ? 'Entrada' : 'Saída';
   const isEntrada = payload.tipo === 'entrada';
   const valColor = isEntrada ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
@@ -84,7 +93,7 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
               <DialogTitle className="text-sm font-bold flex items-center gap-1.5 truncate">
-                🔎 Auditoria — {hierarquia}
+                🔎 Auditoria — {payload.hierarquia}
               </DialogTitle>
               <DialogDescription className="text-[10px] text-muted-foreground">
                 {tipoLabel} · {mesLabel}/{payload.ano} · {filtered.length} lançamentos
@@ -104,6 +113,21 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
               )}
             </div>
           </div>
+
+          {/* Inconsistency alerts */}
+          {incSummary && incSummary.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {incSummary.map(({ tipo, label, qtd }) => (
+                <div
+                  key={tipo}
+                  className="inline-flex items-center gap-1 text-[9px] bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5"
+                >
+                  <AlertTriangle className="h-2.5 w-2.5 text-amber-500" />
+                  <span className="text-amber-800 dark:text-amber-300 font-medium">{label}: {qtd}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogHeader>
 
         {/* ── TABELA COM SCROLL ── */}
@@ -130,35 +154,44 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((l, idx) => (
-                    <TableRow
-                      key={l.id}
-                      className={`hover:bg-accent/40 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/15'}`}
-                    >
-                      <TableCell className="text-[9px] px-1.5 py-1 whitespace-nowrap">{l.data_pagamento || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[120px]" title={l.fornecedor || undefined}>{l.fornecedor || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[200px]" title={l.produto || undefined}>{l.produto || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.centro_custo || undefined}>{l.centro_custo || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.subcentro || undefined}>{l.subcentro || '-'}</TableCell>
-                      <TableCell className={`text-[9px] px-1.5 py-1 text-right font-mono font-bold whitespace-nowrap ${valColor}`}>
-                        {formatMoeda(Math.abs(l.valor))}
-                      </TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 truncate">{l.status_transacao || '-'}</TableCell>
-                      {onEditLancamento && (
-                        <TableCell className="px-1 py-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 hover:bg-primary/10"
-                            onClick={() => onEditLancamento(l)}
-                            title="Editar lançamento"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                  {filtered.map((l, idx) => {
+                    // Check if this lancamento has inconsistency
+                    const inc = payload.inconsistencias.find(i => i.lancamentoId === l.id);
+
+                    return (
+                      <TableRow
+                        key={l.id}
+                        className={`hover:bg-accent/40 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/15'} ${inc ? 'border-l-2 border-l-amber-400' : ''}`}
+                      >
+                        <TableCell className="text-[9px] px-1.5 py-1 whitespace-nowrap">{l.data_pagamento || '-'}</TableCell>
+                        <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[120px]" title={l.fornecedor || undefined}>{l.fornecedor || '-'}</TableCell>
+                        <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[200px]" title={l.produto || undefined}>{l.produto || '-'}</TableCell>
+                        <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.centro_custo || undefined}>
+                          {l.centro_custo || <span className="text-amber-500 italic">vazio</span>}
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                        <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.subcentro || undefined}>
+                          {l.subcentro || <span className="text-amber-500 italic">vazio</span>}
+                        </TableCell>
+                        <TableCell className={`text-[9px] px-1.5 py-1 text-right font-mono font-bold whitespace-nowrap ${valColor}`}>
+                          {formatMoeda(Math.abs(l.valor))}
+                        </TableCell>
+                        <TableCell className="text-[9px] px-1.5 py-1 truncate">{l.status_transacao || '-'}</TableCell>
+                        {onEditLancamento && (
+                          <TableCell className="px-1 py-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 hover:bg-primary/10"
+                              onClick={() => onEditLancamento(l)}
+                              title="Editar lançamento"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
