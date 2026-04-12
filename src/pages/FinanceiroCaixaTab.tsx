@@ -10,6 +10,7 @@ import { DashboardFinanceiro, type DrillDownPayload } from '@/components/finance
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
@@ -31,6 +32,8 @@ import {
   classificarEntrada as classificarEntradaCentral,
   classificarSaida as classificarSaidaCentral,
 } from '@/lib/financeiro/classificacao';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { toast } from 'sonner';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
 type SubTab = 'dashboard' | 'fluxo' | 'rateio' | 'importacao';
@@ -75,6 +78,77 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote, fazendaADM,
     totalLancamentosADM,
   } = useFinanceiro();
+
+  // V2 hook for editing lancamentos from audit modal
+  const v2Hook = useFinanceiroV2(1);
+
+  // Load V2 supporting data on mount
+  useEffect(() => {
+    v2Hook.loadContas();
+    v2Hook.loadFornecedores();
+    v2Hook.loadClassificacoes();
+  }, [v2Hook.loadContas, v2Hook.loadFornecedores, v2Hook.loadClassificacoes]);
+
+  // Edit dialog state — opens ON TOP of audit modal
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingLancV2, setEditingLancV2] = useState<any>(null);
+
+  // Convert FinanceiroLancamento to LancamentoV2-like for the dialog
+  const handleEditFromAuditoria = useCallback((lanc: FinanceiroLancamento) => {
+    const v2Like = {
+      id: lanc.id,
+      cliente_id: '',
+      fazenda_id: lanc.fazenda_id,
+      conta_bancaria_id: lanc.conta_bancaria_id || null,
+      data_competencia: lanc.data_realizacao || lanc.ano_mes?.replace('-', '-') + '-01' || '',
+      data_pagamento: lanc.data_pagamento || null,
+      valor: Math.abs(lanc.valor),
+      sinal: lanc.sinal ?? (lanc.valor >= 0 ? 1 : -1),
+      tipo_operacao: lanc.tipo_operacao || '2-Saídas',
+      status_transacao: lanc.status_transacao || 'realizado',
+      descricao: lanc.descricao || lanc.produto || '',
+      macro_custo: lanc.macro_custo || null,
+      grupo_custo: lanc.grupo_custo || null,
+      centro_custo: lanc.centro_custo || null,
+      subcentro: lanc.subcentro || null,
+      escopo_negocio: lanc.escopo_negocio || null,
+      observacao: lanc.observacao || lanc.obs || null,
+      ano_mes: lanc.ano_mes || '',
+      documento: null,
+      historico: null,
+      numero_documento: lanc.numero_documento || null,
+      favorecido_id: lanc.favorecido_id || null,
+      conta_destino_id: null,
+      origem_lancamento: lanc.origem_lancamento || 'importacao',
+      lote_importacao_id: lanc.lote_importacao_id || null,
+      forma_pagamento: lanc.forma_pagamento || null,
+      dados_pagamento: null,
+      cancelado: lanc.cancelado || false,
+      editado_manual: lanc.editado_manual || false,
+      created_at: '',
+      updated_at: '',
+    };
+    setEditingLancV2(v2Like);
+    setEditDialogOpen(true);
+  }, []);
+
+  const handleEditSave = useCallback(async (form: any, id?: string) => {
+    if (!id) return false;
+    const ok = await v2Hook.editarLancamento(id, form);
+    if (ok) {
+      toast.success('Lançamento atualizado');
+      // Data will refresh via useFinanceiro's realtime/refetch
+    }
+    return ok;
+  }, [v2Hook]);
+
+  const handleEditDelete = useCallback(async (id: string) => {
+    const ok = await v2Hook.excluirLancamento(id);
+    if (ok) {
+      toast.success('Lançamento excluído');
+    }
+    return ok;
+  }, [v2Hook]);
 
   // Filtro único — herdado do Resumo, ajustável localmente
   const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
@@ -324,7 +398,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ano={Number(localAno)}
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
-              
+              onEditLancamento={handleEditFromAuditoria}
             />
           )}
           {subTab === 'rateio' && (
@@ -351,6 +425,21 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
           )}
         </>
       )}
+
+      {/* Edit dialog overlay — renders ON TOP of audit modal */}
+      <LancamentoV2Dialog
+        open={editDialogOpen}
+        onClose={() => { setEditDialogOpen(false); setEditingLancV2(null); }}
+        onSave={handleEditSave}
+        onDelete={handleEditDelete}
+        lancamento={editingLancV2}
+        fazendas={fazendas}
+        contas={v2Hook.contasBancarias}
+        classificacoes={v2Hook.classificacoes}
+        fornecedores={v2Hook.fornecedores}
+        defaultFazendaId={fazendaId !== '__global__' ? fazendaId || '' : ''}
+        onCriarFornecedor={v2Hook.criarFornecedor}
+      />
     </div>
   );
 }
