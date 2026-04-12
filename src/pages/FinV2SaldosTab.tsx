@@ -718,8 +718,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
             </Select>
             <Select value={filtroMes} onValueChange={setFiltroMes}>
               <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MESES.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+              <SelectContent className="max-h-[260px] overflow-y-auto">
+                {MESES.map(m => <SelectItem key={m.v} value={m.v} className="text-xs py-1">{m.l}</SelectItem>)}
               </SelectContent>
             </Select>
 
