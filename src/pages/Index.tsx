@@ -631,6 +631,20 @@ const Index = () => {
           onBack={goToLancarFinHub}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onFluxoDrillDown={(payload) => {
+            const tipoMap: Record<string, string> = { entrada: '1-Entradas', saida: '2-Saídas' };
+            setFinV2DrillFilters({
+              ano: String(payload.ano),
+              mes: payload.mes ?? undefined,
+              tipo: tipoMap[payload.tipo] || undefined,
+              macro: payload.macro,
+              grupo: payload.grupo,
+              centro: payload.centro,
+              subcentro: payload.subcentro,
+              statusTransacao: 'Realizado',
+            });
+            setActiveTab('financeiro_v2');
+          }}
         />
       )}
       {activeTab === 'analise_economica' && (
@@ -662,10 +676,12 @@ const Index = () => {
       )}
       {activeTab === 'financeiro_v2' && (
         <FinanceiroV2Tab
-          onBack={() => setActiveTab('financeiro_v2_hub')}
+          onBack={() => { setFinV2DrillFilters(null); setActiveTab('financeiro_v2_hub'); }}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onIntensiveToggle={setFinV2Intensivo}
+          drillFilters={finV2DrillFilters}
+        />
         />
       )}
       {activeTab === 'financeiro_v2_hub' && (
