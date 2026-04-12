@@ -128,11 +128,23 @@ function formatNF(l: LancamentoV2): string {
   return formatDocumento((l as any).tipo_documento, l.numero_documento);
 }
 
+export interface FinV2DrillFilters {
+  ano?: string;
+  mes?: number;
+  tipo?: string; // '1-Entradas' | '2-Saídas'
+  macro?: string;
+  grupo?: string;
+  centro?: string;
+  subcentro?: string;
+  statusTransacao?: string;
+}
+
 interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onIntensiveToggle?: (active: boolean) => void;
+  drillFilters?: FinV2DrillFilters | null;
 }
 
 function getInitialPageSize() {
