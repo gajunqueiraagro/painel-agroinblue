@@ -384,6 +384,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         saldoRow,
         lancamentos: mesLancs,
       });
+
+      // Update chain tracking for next month
+      if (saldoRows.length > 0) {
+        for (const s of saldoRows) {
+          prevFinalByAccount.set(s.conta_bancaria_id, s.saldo_final || 0);
+        }
+      } else if (contaId !== '__all__') {
+        // No saldo row — track calculated value as chain
+        prevFinalByAccount.set(contaId, saldoCalculado);
+      }
     }
 
     return cards;
