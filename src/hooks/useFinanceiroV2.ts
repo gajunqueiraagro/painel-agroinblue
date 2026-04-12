@@ -503,7 +503,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     toast.success('Lançamento atualizado');
     return true;
-  }, [clienteId, user]);
+  }, [clienteId, user, classificacoes]);
 
   const excluirLancamento = useCallback(async (id: string) => {
     // Universal soft delete: mark as cancelled regardless of origin
