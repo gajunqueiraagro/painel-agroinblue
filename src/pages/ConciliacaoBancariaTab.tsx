@@ -292,13 +292,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   }, [loadData]);
 
   const mesCards: MesCard[] = useMemo(() => {
+    /** Round to 2 decimal places — single source of monetary rounding */
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+
     const cards: MesCard[] = [];
     // Track previous month's saldo_final per conta for chaining
     // Initialize from December of previous year if available
     const prevFinalByAccount = new Map<string, number>();
     const prevDec = `${Number(ano) - 1}-12`;
     for (const s of saldos.filter(row => row.ano_mes === prevDec)) {
-      prevFinalByAccount.set(s.conta_bancaria_id, (prevFinalByAccount.get(s.conta_bancaria_id) || 0) + s.saldo_final);
+      prevFinalByAccount.set(s.conta_bancaria_id, r2((prevFinalByAccount.get(s.conta_bancaria_id) || 0) + s.saldo_final));
     }
 
     for (let m = 1; m <= 12; m++) {
@@ -311,12 +314,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       // Saldo inicial: prefer registered value, then chain from previous month
       let saldoInicial: number;
       if (saldoRows.length > 0) {
-        saldoInicial = saldoRows.reduce((sum, s) => sum + (s.saldo_inicial || 0), 0);
+        saldoInicial = r2(saldoRows.reduce((sum, s) => sum + (s.saldo_inicial || 0), 0));
       } else if (contaId !== '__all__') {
         saldoInicial = prevFinalByAccount.get(contaId) || 0;
       } else {
         // All accounts: sum all tracked previous finals
-        saldoInicial = Array.from(prevFinalByAccount.values()).reduce((s, v) => s + v, 0);
+        saldoInicial = r2(Array.from(prevFinalByAccount.values()).reduce((s, v) => s + v, 0));
       }
 
       const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, contaId));
@@ -328,47 +331,43 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       const isAllContas = contaId === '__all__';
 
       for (const l of mesLancs) {
-        const valor = Math.abs(l.valor);
+        const valor = r2(Math.abs(l.valor));
         const isTransf = isTransferenciaTipo(l.tipo_operacao || '');
 
         if (isTransf) {
           if (isAllContas) continue;
           if (l.conta_destino_id === contaId) {
-            transferenciasRecebidas += valor;
+            transferenciasRecebidas = r2(transferenciasRecebidas + valor);
           } else if (l.conta_bancaria_id === contaId) {
-            transferenciasEnviadas += valor;
+            transferenciasEnviadas = r2(transferenciasEnviadas + valor);
           }
         } else {
-          // Non-transfer: use field match to determine direction
-          // Entries use conta_destino_id, exits use conta_bancaria_id
           if (isAllContas) {
-            // When viewing all accounts, use tipo_operacao
             if (isEntradaTipo(l.tipo_operacao)) {
-              entradasTerceiros += valor;
+              entradasTerceiros = r2(entradasTerceiros + valor);
             } else {
-              saidasTerceiros += valor;
+              saidasTerceiros = r2(saidasTerceiros + valor);
             }
           } else {
-            // When filtering by account, determine by which field matches
             if (l.conta_destino_id === contaId) {
-              entradasTerceiros += valor;
+              entradasTerceiros = r2(entradasTerceiros + valor);
             } else if (l.conta_bancaria_id === contaId) {
-              saidasTerceiros += valor;
+              saidasTerceiros = r2(saidasTerceiros + valor);
             }
           }
         }
       }
 
-      const totalEntradas = entradasTerceiros + transferenciasRecebidas;
-      const totalSaidas = saidasTerceiros + transferenciasEnviadas;
-      const saldoCalculado = saldoInicial + totalEntradas - totalSaidas;
+      const totalEntradas = r2(entradasTerceiros + transferenciasRecebidas);
+      const totalSaidas = r2(saidasTerceiros + transferenciasEnviadas);
+      const saldoCalculado = r2(saldoInicial + totalEntradas - totalSaidas);
 
       const saldoExtrato = saldoRows.length > 0
-        ? saldoRows.reduce((sum, s) => sum + (s.saldo_final || 0), 0)
+        ? r2(saldoRows.reduce((sum, s) => sum + (s.saldo_final || 0), 0))
         : null;
 
       const diferenca = saldoExtrato !== null
-        ? Math.round((saldoExtrato - saldoCalculado) * 100) / 100
+        ? r2(saldoExtrato - saldoCalculado)
         : 0;
 
       let status: MesCard['status'];
@@ -381,24 +380,23 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         } else {
           const perAccountStatuses = accountsWithSaldo.map(conta => {
             const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id)!;
-            const accSaldoInicial = accSaldoRow.saldo_inicial || 0;
+            const accSaldoInicial = r2(accSaldoRow.saldo_inicial || 0);
             let accEntradas = 0;
             let accSaidas = 0;
 
             for (const l of mesLancs.filter(row => belongsToConta(row, conta.id))) {
-              const valor = Math.abs(l.valor);
+              const valor = r2(Math.abs(l.valor));
               if (isTransferenciaTipo(l.tipo_operacao || '')) {
-                if (l.conta_destino_id === conta.id) accEntradas += valor;
-                else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
+                if (l.conta_destino_id === conta.id) accEntradas = r2(accEntradas + valor);
+                else if (l.conta_bancaria_id === conta.id) accSaidas = r2(accSaidas + valor);
               } else {
-                // Non-transfer: determine direction by which field matches
-                if (l.conta_destino_id === conta.id) accEntradas += valor;
-                else if (l.conta_bancaria_id === conta.id) accSaidas += valor;
+                if (l.conta_destino_id === conta.id) accEntradas = r2(accEntradas + valor);
+                else if (l.conta_bancaria_id === conta.id) accSaidas = r2(accSaidas + valor);
               }
             }
 
-            const accCalc = accSaldoInicial + accEntradas - accSaidas;
-            const accDiff = Math.round(((accSaldoRow.saldo_final || 0) - accCalc) * 100) / 100;
+            const accCalc = r2(accSaldoInicial + accEntradas - accSaidas);
+            const accDiff = r2((accSaldoRow.saldo_final || 0) - accCalc);
             return accDiff === 0 ? 'realizado' as const : 'nao_conciliado' as const;
           });
           status = perAccountStatuses.some(s => s === 'nao_conciliado') ? 'nao_conciliado' : 'realizado';
@@ -429,10 +427,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       // Update chain tracking for next month
       if (saldoRows.length > 0) {
         for (const s of saldoRows) {
-          prevFinalByAccount.set(s.conta_bancaria_id, s.saldo_final || 0);
+          prevFinalByAccount.set(s.conta_bancaria_id, r2(s.saldo_final || 0));
         }
       } else if (contaId !== '__all__') {
-        // No saldo row — track calculated value as chain
         prevFinalByAccount.set(contaId, saldoCalculado);
       }
     }
