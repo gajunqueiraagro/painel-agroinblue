@@ -326,7 +326,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       setSaldoInicial(toBRL(prevFinal));
       setOverrideInicial(false);
     }
-  }, [contaId, anoMes, dialogOpen, allSaldos]);
+  }, [contaId, dialogAno, dialogMes, dialogOpen, allSaldos]);
 
   const openNew = () => {
     setEditing(null);
@@ -463,8 +463,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       return;
     }
 
-    // Resolve fazenda_id from conta bancária
-    const contaRef = contas.find(c => c.id === (editing ? resolveContaPersistId(editing) || contaId : contaId));
+    // For new records, derive fazenda from the selected conta via a lookup
     // For new records, derive fazenda from the selected conta via a lookup
     const resolveFazendaId = async (): Promise<string | null> => {
       if (editing) return editing.fazenda_id;
