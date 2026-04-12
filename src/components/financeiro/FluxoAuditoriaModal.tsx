@@ -6,8 +6,8 @@
  * Funcionalidades de auditoria:
  *  - Filtro por tipo de inconsistência (clicável no header)
  *  - Destaque visual em linhas inconsistentes
- *  - Botão de edição em cada linha
- *  - Preservação de contexto ao editar
+ *  - Botão de edição em cada linha (abre dialog overlay, preserva contexto)
+ *  - Alerta de divergência no rodapé
  */
 import { useState, useMemo } from 'react';
 import {
@@ -100,12 +100,21 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
     return allFiltered.filter(l => incIds.has(l.id));
   }, [allFiltered, filtroInc, payload]);
 
-  const totalLanc = useMemo(
+  const totalAllLanc = useMemo(
+    () => allFiltered.reduce((s, l) => s + Math.abs(l.valor), 0),
+    [allFiltered],
+  );
+
+  const totalFiltered = useMemo(
     () => filtered.reduce((s, l) => s + Math.abs(l.valor), 0),
     [filtered],
   );
 
-  // Reset filter when modal closes/opens
+  // Divergence check — always compare full node total vs clicked value
+  const diff = totalAllLanc - valorClicado;
+  const hasDiff = Math.abs(diff) > 0.01;
+
+  // Reset filter when modal closes
   const handleOpenChange = (v: boolean) => {
     if (!v) {
       setFiltroInc(null);
@@ -168,6 +177,16 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
               )}
             </div>
           )}
+
+          {/* Divergence alert in header */}
+          {hasDiff && (
+            <div className="mt-2 flex items-center gap-1.5 text-[9px] bg-destructive/10 border border-destructive/30 rounded px-2 py-1">
+              <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+              <span className="text-destructive font-medium">
+                Divergência detectada: valor na árvore {formatMoeda(valorClicado)} ≠ soma dos lançamentos {formatMoeda(totalAllLanc)} (Δ {formatMoeda(diff)})
+              </span>
+            </div>
+          )}
         </DialogHeader>
 
         {/* ── TABELA COM SCROLL + HEADER STICKY ── */}
@@ -181,8 +200,8 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
               </div>
             ) : (
               <table className="w-full caption-bottom text-sm">
-                <thead className="[&_tr]:border-b bg-muted/50 sticky top-0 z-10">
-                  <tr className="border-b transition-colors bg-muted hover:bg-muted">
+                <thead className="[&_tr]:border-b sticky top-0 z-10">
+                  <tr className="border-b transition-colors" style={{ background: 'hsl(var(--muted))' }}>
                     <th className="text-[9px] px-1.5 py-1.5 text-left font-bold whitespace-nowrap w-[68px] uppercase tracking-wider text-muted-foreground">Data Pgto</th>
                     <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[110px] uppercase tracking-wider text-muted-foreground">Fornecedor</th>
                     <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[100px] uppercase tracking-wider text-muted-foreground">Produto</th>
@@ -258,9 +277,16 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
               ? `${filtered.length} inconsistentes de ${allFiltered.length}`
               : `${filtered.length} lançamentos`}
           </span>
-          <span className={`font-bold font-mono text-xs ${valColor}`}>
-            Total: {formatMoeda(totalLanc)}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`font-bold font-mono text-xs ${valColor}`}>
+              Total: {formatMoeda(filtroInc ? totalFiltered : totalAllLanc)}
+            </span>
+            {hasDiff && !filtroInc && (
+              <span className="font-bold font-mono text-xs text-destructive">
+                Δ {formatMoeda(diff)}
+              </span>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
