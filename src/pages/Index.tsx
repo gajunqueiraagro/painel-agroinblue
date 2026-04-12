@@ -158,6 +158,7 @@ const Index = () => {
   const [lancamentosFromConciliacao, setLancamentosFromConciliacao] = useState(false);
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
+  const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
