@@ -261,20 +261,28 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
    * row-highlight logic and the conciliation badge.  Returns { diff, isConciliado }.
    * diff = saldo_final - (saldoInicialEfetivo + entradas - saidas), rounded to 2dp.
    */
+  /**
+   * Single conciliation calculation — matches ConciliacaoBancariaTab exactly.
+   * Rule: use the ROW's saldo_inicial when it exists; only chain from
+   * previous month's saldo_final when no row is available.
+   */
   const calcConciliacaoRow = useCallback((s: SaldoBancario): { diff: number; isConciliado: boolean } | null => {
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const resolvedId = s.conta_bancaria_id_v2 || s.conta_bancaria_id;
     const key = `${resolvedId}|${s.ano_mes}`;
     const mov = movSummary[key];
-    // Use chained saldo_inicial (same as Conciliação)
-    const prevFinal = allSaldos.find(x => x.conta_bancaria_id === s.conta_bancaria_id && x.ano_mes === prevAnoMes(s.ano_mes))?.saldo_final;
-    const saldoIni = r2(prevFinal !== null && prevFinal !== undefined ? prevFinal : s.saldo_inicial);
+
+    // ── saldo_inicial: same rule as Conciliação tab ──
+    // Use the row's own saldo_inicial (which already reflects the DB value).
+    // Only fall back to chaining from previous month when no row exists (handled upstream).
+    const saldoIni = r2(s.saldo_inicial);
+
     const entradas = mov ? r2(mov.entradas) : 0;
     const saidas = mov ? r2(mov.saidas) : 0;
     const saldoCalculado = r2(saldoIni + entradas - saidas);
     const diff = r2(s.saldo_final - saldoCalculado);
     return { diff, isConciliado: diff === 0 };
-  }, [movSummary, allSaldos]);
+  }, [movSummary]);
 
   const getInconsistency = useCallback((s: SaldoBancario): number | null => {
     const result = calcConciliacaoRow(s);
