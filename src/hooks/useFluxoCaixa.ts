@@ -28,6 +28,7 @@ import {
 } from '@/lib/financeiro/classificacao';
 
 interface FluxoLancamentoBase extends LancamentoClassificavel {
+  id: string;
   produto: string | null;
   grupo_custo: string | null;
   centro_custo: string | null;
