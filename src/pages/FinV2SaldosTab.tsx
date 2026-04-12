@@ -25,20 +25,26 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildMovSummary, STATUS_REALIZADOS, type MovimentoResumo } from '@/lib/financeiro/conciliacaoCalc';
+import { buildSaldosAnosDisponiveis, buildUnifiedSaldos } from '@/lib/financeiro/saldosBancarios';
 
 /* ── types ── */
 interface SaldoBancario {
   id: string;
   ano_mes: string;
   conta_bancaria_id: string;
+  conta_bancaria_id_v2: string | null;
   fazenda_id: string;
   saldo_inicial: number;
   saldo_final: number;
   fechado: boolean;
   status_mes: string;          // aberto | fechado | travado
   origem_saldo: string | null;
-  origem_saldo_inicial: string; // automatico | manual
+  origem_saldo_inicial: string; // automatico | manual | calculado_legado
   observacao: string | null;
+  fonte: 'v2' | 'legado';
+  conta_label: string;
+  tipo_conta: string | null;
+  legacy_conta_banco: string | null;
 }
 
 interface ContaRef {
@@ -52,13 +58,13 @@ interface ContaRef {
 
 
 
-function prevAnoMes(am: string): string {
+function prevAnoMes(am: string) {
   const [y, m] = am.split('-').map(Number);
   if (m === 1) return `${y - 1}-12`;
   return `${y}-${String(m - 1).padStart(2, '0')}`;
 }
 
-function nextAnoMes(am: string): string {
+function nextAnoMes(am: string) {
   const [y, m] = am.split('-').map(Number);
   if (m === 12) return `${y + 1}-01`;
   return `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -113,7 +119,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroMes, setFiltroMes] = useState('__all__');
 
-  // Load dynamic years from saldos + lancamentos tables
+  // Load dynamic years from V2 + legado + lançamentos
   useEffect(() => {
     if (!clienteAtual?.id) return;
     Promise.all([
@@ -122,20 +128,20 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         .select('ano_mes')
         .eq('cliente_id', clienteAtual.id),
       supabase
+        .from('financeiro_saldos_bancarios')
+        .select('ano_mes')
+        .eq('cliente_id', clienteAtual.id),
+      supabase
         .from('financeiro_lancamentos_v2')
         .select('ano_mes')
         .eq('cliente_id', clienteAtual.id)
         .eq('cancelado', false),
-    ]).then(([{ data: sData }, { data: lData }]) => {
-      const anos = new Set<string>();
-      anos.add(String(new Date().getFullYear()));
-      (sData || []).forEach((r: any) => {
-        if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
-      });
-      (lData || []).forEach((r: any) => {
-        if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
-      });
-      setAnosDisponiveis(Array.from(anos).sort((a, b) => b.localeCompare(a)));
+    ]).then(([v2Res, legacyRes, lancRes]) => {
+      setAnosDisponiveis(buildSaldosAnosDisponiveis({
+        saldosV2: (v2Res.data as Array<{ ano_mes: string | null }> | null) || [],
+        saldosLegacy: (legacyRes.data as Array<{ ano_mes: string | null }> | null) || [],
+        lancamentos: (lancRes.data as Array<{ ano_mes: string | null }> | null) || [],
+      }));
     });
   }, [clienteAtual?.id]);
 
@@ -164,47 +170,54 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     if (!clienteAtual?.id) return;
     setLoading(true);
 
-    let sQuery = supabase
-      .from('financeiro_saldos_bancarios_v2')
-      .select('*')
-      .eq('cliente_id', clienteAtual.id)
-      .order('ano_mes', { ascending: false });
+    try {
+      const [{ data: v2Data }, { data: legacyData }, { data: cData }, { data: movData }] = await Promise.all([
+        supabase
+          .from('financeiro_saldos_bancarios_v2')
+          .select('*')
+          .eq('cliente_id', clienteAtual.id)
+          .order('ano_mes', { ascending: false }),
+        supabase
+          .from('financeiro_saldos_bancarios')
+          .select('id, ano_mes, conta_banco, fazenda_id, saldo_final')
+          .eq('cliente_id', clienteAtual.id)
+          .order('ano_mes', { ascending: false }),
+        supabase
+          .from('financeiro_contas_bancarias')
+          .select('id, nome_conta, nome_exibicao, tipo_conta, codigo_conta')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('ativa', true),
+        supabase
+          .from('financeiro_lancamentos_v2')
+          .select('conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('cancelado', false)
+          .in('status_transacao', [...STATUS_REALIZADOS]),
+      ]);
 
-    if (filtroMes === '__all__') {
-      sQuery = sQuery.gte('ano_mes', `${filtroAno}-01`).lte('ano_mes', `${filtroAno}-12`);
-    } else {
-      sQuery = sQuery.eq('ano_mes', `${filtroAno}-${filtroMes}`);
+      const contasData = (cData as ContaRef[]) || [];
+      const movSummaryData = buildMovSummary((movData as MovimentoResumo[]) || []);
+      const unifiedAll = buildUnifiedSaldos({
+        v2Saldos: (v2Data as any[]) || [],
+        legacySaldos: (legacyData as any[]) || [],
+        contas: contasData,
+        movSummary: movSummaryData,
+      }) as SaldoBancario[];
+
+      const filtered = unifiedAll.filter((saldo) => {
+        if (filtroMes === '__all__') {
+          return saldo.ano_mes >= `${filtroAno}-01` && saldo.ano_mes <= `${filtroAno}-12`;
+        }
+        return saldo.ano_mes === `${filtroAno}-${filtroMes}`;
+      });
+
+      setSaldos(filtered);
+      setContas(contasData);
+      setAllSaldos(unifiedAll);
+      setMovSummary(movSummaryData);
+    } finally {
+      setLoading(false);
     }
-
-    const [{ data: sData }, { data: cData }, { data: allData }] = await Promise.all([
-      sQuery,
-      supabase
-        .from('financeiro_contas_bancarias')
-        .select('id, nome_conta, nome_exibicao, tipo_conta, codigo_conta')
-        .eq('cliente_id', clienteAtual.id)
-        .eq('ativa', true),
-      supabase
-        .from('financeiro_saldos_bancarios_v2')
-        .select('*')
-        .eq('cliente_id', clienteAtual.id)
-        .order('ano_mes', { ascending: false }),
-    ]);
-    setSaldos((sData as SaldoBancario[]) || []);
-    setContas((cData as ContaRef[]) || []);
-    setAllSaldos((allData as SaldoBancario[]) || []);
-
-    // CRITICAL: filter by STATUS_REALIZADOS to match Conciliação tab logic
-    const { data: movData } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('conta_bancaria_id, conta_destino_id, ano_mes, valor, sinal, tipo_operacao')
-      .eq('cliente_id', clienteAtual.id)
-      .eq('cancelado', false)
-      .in('status_transacao', [...STATUS_REALIZADOS]);
-
-    if (movData) {
-      setMovSummary(buildMovSummary(movData as MovimentoResumo[]));
-    }
-    setLoading(false);
   }, [clienteAtual?.id, filtroAno, filtroMes]);
 
   useEffect(() => { load(); }, [load]);
@@ -215,11 +228,22 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     return m;
   }, [contas]);
 
-  const contaNome = (id: string) => {
-    const c = contaMap.get(id);
-    return c?.nome_exibicao || c?.nome_conta || '-';
+  const contaNome = (saldo: Pick<SaldoBancario, 'conta_bancaria_id' | 'conta_label'>) => {
+    const conta = contaMap.get(saldo.conta_bancaria_id);
+    return saldo.conta_label || conta?.nome_exibicao || conta?.nome_conta || '-';
   };
-  const contaTipo = (id: string): string => contaMap.get(id)?.tipo_conta || 'cc';
+
+  const contaTipo = (saldo: Pick<SaldoBancario, 'conta_bancaria_id' | 'tipo_conta'>): string => {
+    return saldo.tipo_conta || contaMap.get(saldo.conta_bancaria_id)?.tipo_conta || 'cc';
+  };
+
+  const resolveContaPersistId = (saldo: SaldoBancario | null | undefined): string | null => {
+    if (!saldo) return null;
+    if (saldo.fonte === 'v2') return saldo.conta_bancaria_id;
+    return saldo.conta_bancaria_id_v2;
+  };
+
+  const hasPersistableConta = (saldo: SaldoBancario | null | undefined) => Boolean(resolveContaPersistId(saldo));
 
   const findPrevSaldoFinal = useCallback((cId: string, am: string): number | null => {
     const prev = prevAnoMes(am);
@@ -238,22 +262,22 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   /* ── permission helpers ── */
   const canEditSaldoFinal = (s: SaldoBancario): boolean => {
+    if (!hasPersistableConta(s)) return false;
     if (s.status_mes === 'travado') return isAdmin;
     if (s.status_mes === 'fechado') return isAdmin;
     if (s.ano_mes < curAM) return isAdmin;
-    // Current month, aberto
     return isAdmin || isFinanceiro;
   };
 
   const canEditSaldoInicial = (s: SaldoBancario): boolean => {
-    // Saldo inicial is ONLY editable for the first month of the account (no previous saldo exists)
-    // AND only by admin
+    if (!hasPersistableConta(s)) return false;
     const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
-    if (prevFinal !== null) return false; // Chain exists — never editable
-    return isAdmin; // First month — admin only
+    if (prevFinal !== null) return false;
+    return isAdmin;
   };
 
   const getEditBlockReason = (s: SaldoBancario): string | null => {
+    if (!hasPersistableConta(s)) return 'Registro legado sem conta bancária correspondente no cadastro atual';
     if (s.status_mes === 'travado') return 'Mês travado — somente administrador';
     if (s.status_mes === 'fechado') return 'Mês fechado — somente administrador';
     if (s.ano_mes < curAM && !isAdmin) return 'Edição bloqueada para meses anteriores';
@@ -265,15 +289,15 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const groups: { tipo: string; label: string; items: SaldoBancario[]; totalFinal: number }[] = [];
     const byTipo: Record<string, SaldoBancario[]> = {};
     for (const s of saldos) {
-      const tipo = contaTipo(s.conta_bancaria_id);
+      const tipo = contaTipo(s);
       if (!byTipo[tipo]) byTipo[tipo] = [];
       byTipo[tipo].push(s);
     }
     const orderedTypes = Object.keys(byTipo).sort((a, b) => (TIPO_ORDER[a] ?? 99) - (TIPO_ORDER[b] ?? 99));
     for (const tipo of orderedTypes) {
       const items = byTipo[tipo].sort((a, b) => {
-        const na = contaNome(a.conta_bancaria_id);
-        const nb = contaNome(b.conta_bancaria_id);
+        const na = contaNome(a);
+        const nb = contaNome(b);
         return na.localeCompare(nb) || a.ano_mes.localeCompare(b.ano_mes);
       });
       groups.push({
@@ -354,73 +378,171 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     });
   };
 
+  const persistSaldoV2 = async ({
+    targetSaldo,
+    saldoPayload,
+  }: {
+    targetSaldo?: SaldoBancario | null;
+    saldoPayload: {
+      ano_mes: string;
+      fazenda_id: string;
+      conta_bancaria_id?: string | null;
+      saldo_inicial: number;
+      saldo_final: number;
+      origem_saldo: string | null;
+      origem_saldo_inicial: string;
+      status_mes?: string;
+      observacao?: string | null;
+    };
+  }) => {
+    if (!clienteAtual?.id) {
+      return { id: null, created: false, error: new Error('Cliente não selecionado') };
+    }
+
+    const contaPersistId = targetSaldo ? resolveContaPersistId(targetSaldo) : (saldoPayload.conta_bancaria_id || null);
+    if (!contaPersistId) {
+      return { id: null, created: false, error: new Error('Registro legado sem conta correspondente no cadastro atual') };
+    }
+
+    const payload = {
+      cliente_id: clienteAtual.id,
+      fazenda_id: saldoPayload.fazenda_id,
+      conta_bancaria_id: contaPersistId,
+      ano_mes: saldoPayload.ano_mes,
+      saldo_inicial: saldoPayload.saldo_inicial,
+      saldo_final: saldoPayload.saldo_final,
+      origem_saldo: saldoPayload.origem_saldo,
+      origem_saldo_inicial: saldoPayload.origem_saldo_inicial,
+      status_mes: saldoPayload.status_mes || 'aberto',
+      observacao: saldoPayload.observacao || null,
+      updated_by: user?.id || null,
+    };
+
+    if (targetSaldo?.fonte === 'v2') {
+      const { error } = await supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .update(payload)
+        .eq('id', targetSaldo.id);
+      return { id: targetSaldo.id, created: false, error };
+    }
+
+    const { data: existingRow, error: lookupError } = await supabase
+      .from('financeiro_saldos_bancarios_v2')
+      .select('id')
+      .eq('cliente_id', clienteAtual.id)
+      .eq('fazenda_id', saldoPayload.fazenda_id)
+      .eq('conta_bancaria_id', contaPersistId)
+      .eq('ano_mes', saldoPayload.ano_mes)
+      .maybeSingle();
+
+    if (lookupError) {
+      return { id: null, created: false, error: lookupError };
+    }
+
+    if (existingRow?.id) {
+      const { error } = await supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .update(payload)
+        .eq('id', existingRow.id);
+      return { id: existingRow.id, created: false, error };
+    }
+
+    const { data: inserted, error } = await supabase
+      .from('financeiro_saldos_bancarios_v2')
+      .insert({ ...payload, created_by: user?.id || null })
+      .select('id')
+      .single();
+
+    return { id: inserted?.id ?? null, created: true, error };
+  };
+
   /* ── save ── */
   const save = async () => {
-    if (!clienteAtual?.id || !anoMes || !contaId || !fazendaId) {
+    if (!clienteAtual?.id || !anoMes || !fazendaId) {
       toast.error('Preencha todos os campos');
+      return;
+    }
+
+    if (editing && !hasPersistableConta(editing)) {
+      toast.error('Registro legado sem conta bancária correspondente no cadastro atual');
       return;
     }
 
     const saldoInicialVal = parseBRL(saldoInicial);
     const saldoFinalVal = parseBRL(saldoFinal);
-    // Saldo inicial is always automatic when previous month exists
     const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
-    const payload: any = {
-      cliente_id: clienteAtual.id,
-      fazenda_id: fazendaId,
-      conta_bancaria_id: contaId,
+    const payload = {
       ano_mes: anoMes,
+      fazenda_id: fazendaId,
+      conta_bancaria_id: editing ? resolveContaPersistId(editing) : contaId,
       saldo_inicial: saldoInicialVal,
       saldo_final: saldoFinalVal,
       origem_saldo: origem,
       origem_saldo_inicial: origemInicialFinal,
-      updated_by: user?.id || null,
+      status_mes: editing?.status_mes || 'aberto',
+      observacao: editing?.observacao || null,
     };
 
     if (editing) {
-      // Check permission
-      if (!canEditSaldoFinal(editing)) {
-        toast.error('Sem permissão para editar este mês');
+      if (!canEditSaldoFinal(editing) && !canEditSaldoInicial(editing)) {
+        toast.error(getEditBlockReason(editing) || 'Sem permissão para editar este mês');
         return;
       }
 
-      const { error } = await supabase.from('financeiro_saldos_bancarios_v2').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar'); return; }
+      const { id: savedId, created, error } = await persistSaldoV2({
+        targetSaldo: editing,
+        saldoPayload: payload,
+      });
+      if (error || !savedId) {
+        toast.error('Erro ao atualizar saldo');
+        return;
+      }
 
-      // Audit
+      if (editing.fonte === 'legado' && created) {
+        await logAudit(savedId, 'migracao_legado');
+      }
       if (editing.saldo_final !== saldoFinalVal) {
-        await logAudit(editing.id, 'alteracao', 'saldo_final', String(editing.saldo_final), String(saldoFinalVal));
+        await logAudit(savedId, 'alteracao', 'saldo_final', String(editing.saldo_final), String(saldoFinalVal));
       }
       if (editing.saldo_inicial !== saldoInicialVal) {
-        await logAudit(editing.id, 'alteracao', 'saldo_inicial', String(editing.saldo_inicial), String(saldoInicialVal));
+        await logAudit(savedId, 'alteracao', 'saldo_inicial', String(editing.saldo_inicial), String(saldoInicialVal));
       }
 
-      toast.success('Saldo atualizado');
+      toast.success(editing.fonte === 'legado' ? 'Saldo histórico sincronizado na base atual' : 'Saldo atualizado');
 
-      // Always propagate to next month automatically
       const nextAm = nextAnoMes(anoMes);
-      const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === contaId && s.ano_mes === nextAm);
+      const nextSaldo = allSaldos.find(s => s.conta_bancaria_id === (editing.conta_bancaria_id_v2 || editing.conta_bancaria_id) && s.ano_mes === nextAm);
       if (nextSaldo && Math.round((nextSaldo.saldo_inicial - saldoFinalVal) * 100) !== 0) {
-        await supabase
-          .from('financeiro_saldos_bancarios_v2')
-          .update({ saldo_inicial: saldoFinalVal, origem_saldo_inicial: 'automatico' })
-          .eq('id', nextSaldo.id);
-        await logAudit(nextSaldo.id, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
+        const { id: nextId, error: nextError } = await persistSaldoV2({
+          targetSaldo: nextSaldo,
+          saldoPayload: {
+            ano_mes: nextSaldo.ano_mes,
+            fazenda_id: nextSaldo.fazenda_id,
+            conta_bancaria_id: resolveContaPersistId(nextSaldo),
+            saldo_inicial: saldoFinalVal,
+            saldo_final: nextSaldo.saldo_final,
+            origem_saldo: nextSaldo.origem_saldo,
+            origem_saldo_inicial: 'automatico',
+            status_mes: nextSaldo.status_mes,
+            observacao: nextSaldo.observacao,
+          },
+        });
+        if (!nextError && nextId) {
+          await logAudit(nextId, 'propagacao_automatica', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(saldoFinalVal));
+        }
       }
     } else {
-      payload.created_by = user?.id || null;
-      const { data: inserted, error } = await supabase
-        .from('financeiro_saldos_bancarios_v2')
-        .insert(payload)
-        .select('id')
-        .single();
-      if (error) { toast.error('Erro ao criar'); console.error(error); return; }
-      if (inserted) {
-        await logAudit(inserted.id, 'criacao');
+      const { id: savedId, error } = await persistSaldoV2({ saldoPayload: payload });
+      if (error || !savedId) {
+        toast.error('Erro ao criar');
+        console.error(error);
+        return;
       }
+      await logAudit(savedId, 'criacao');
       toast.success('Saldo registrado');
     }
+
     setDialogOpen(false);
     load();
   };
@@ -430,13 +552,28 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     if (!propagateConfirm) return;
     const { nextSaldo, newValue } = propagateConfirm;
     if (update) {
-      await supabase
-        .from('financeiro_saldos_bancarios_v2')
-        .update({ saldo_inicial: newValue, origem_saldo_inicial: 'automatico' })
-        .eq('id', nextSaldo.id);
-      await logAudit(nextSaldo.id, 'propagacao_aceita', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(newValue));
-      toast.success('Saldo inicial do próximo mês atualizado');
-      load();
+      const { id: savedId, error } = await persistSaldoV2({
+        targetSaldo: nextSaldo,
+        saldoPayload: {
+          ano_mes: nextSaldo.ano_mes,
+          fazenda_id: nextSaldo.fazenda_id,
+          conta_bancaria_id: resolveContaPersistId(nextSaldo),
+          saldo_inicial: newValue,
+          saldo_final: nextSaldo.saldo_final,
+          origem_saldo: nextSaldo.origem_saldo,
+          origem_saldo_inicial: 'automatico',
+          status_mes: nextSaldo.status_mes,
+          observacao: nextSaldo.observacao,
+        },
+      });
+
+      if (error || !savedId) {
+        toast.error('Erro ao atualizar saldo inicial do próximo mês');
+      } else {
+        await logAudit(savedId, 'propagacao_aceita', 'saldo_inicial', String(nextSaldo.saldo_inicial), String(newValue));
+        toast.success('Saldo inicial do próximo mês atualizado');
+        load();
+      }
     }
     setPropagateConfirm(null);
   };
@@ -445,12 +582,33 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const handleStatusChange = async () => {
     if (!statusAction || !clienteAtual?.id) return;
     const { saldo, newStatus } = statusAction;
-    const { error } = await supabase
-      .from('financeiro_saldos_bancarios_v2')
-      .update({ status_mes: newStatus, updated_by: user?.id })
-      .eq('id', saldo.id);
-    if (error) { toast.error('Erro ao alterar status'); return; }
-    await logAudit(saldo.id, `status_${newStatus}`, 'status_mes', saldo.status_mes, newStatus);
+
+    if (!hasPersistableConta(saldo)) {
+      toast.error('Registro legado sem conta bancária correspondente no cadastro atual');
+      return;
+    }
+
+    const { id: savedId, error } = await persistSaldoV2({
+      targetSaldo: saldo,
+      saldoPayload: {
+        ano_mes: saldo.ano_mes,
+        fazenda_id: saldo.fazenda_id,
+        conta_bancaria_id: resolveContaPersistId(saldo),
+        saldo_inicial: saldo.saldo_inicial,
+        saldo_final: saldo.saldo_final,
+        origem_saldo: saldo.origem_saldo,
+        origem_saldo_inicial: saldo.origem_saldo_inicial,
+        status_mes: newStatus,
+        observacao: saldo.observacao,
+      },
+    });
+
+    if (error || !savedId) {
+      toast.error('Erro ao alterar status');
+      return;
+    }
+
+    await logAudit(savedId, `status_${newStatus}`, 'status_mes', saldo.status_mes, newStatus);
     toast.success(`Mês ${STATUS_LABELS[newStatus] || newStatus}`);
     setStatusAction(null);
     load();
@@ -467,8 +625,13 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   return (
     <TooltipProvider>
       <div className="w-full p-4 pb-20 space-y-3 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Saldos Bancários Mensais</h2>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="space-y-1">
+            <h2 className="text-lg font-bold text-foreground">Saldos Bancários Mensais</h2>
+            <p className="text-xs text-muted-foreground">
+              Leitura consolidada da base atual + histórico legado. A importação financeira grava lançamentos, não saldos bancários.
+            </p>
+          </div>
           <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
         </div>
 
@@ -529,7 +692,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                   <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 )}
                 {!loading && saldos.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Nenhum saldo bancário cadastrado para {filtroAno}. Cadastre saldos manualmente ou importe via planilha.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">Não há saldos bancários cadastrados para {filtroAno}. Os lançamentos importados continuam válidos, mas a importação financeira não cria saldos mensais automaticamente.</TableCell></TableRow>
                 )}
                 {!loading && grouped.map(g => (
                   <>{/* group header */}
@@ -540,10 +703,10 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                     </TableRow>
                     {g.items.map(s => {
                       const inconsistency = getInconsistency(s);
-                      const isAuto = s.origem_saldo_inicial === 'automatico';
+                      const isAuto = s.origem_saldo_inicial !== 'manual';
                       const editable = canEditSaldoFinal(s);
                       const blockReason = getEditBlockReason(s);
-                      // Chain integrity: always use previous month's saldo_final as saldo_inicial
+                      const contaPersistId = resolveContaPersistId(s);
                       const prevFinal = findPrevSaldoFinal(s.conta_bancaria_id, s.ano_mes);
                       const saldoInicialEfetivo = prevFinal !== null ? prevFinal : s.saldo_inicial;
                       const chainBroken = prevFinal !== null && Math.round((prevFinal - s.saldo_inicial) * 100) !== 0;
@@ -551,7 +714,16 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                       return (
                         <TableRow key={s.id} className={`text-[11px] ${inconsistency || chainBroken ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
                           <TableCell className="py-1">{mesLabel(s.ano_mes)}</TableCell>
-                          <TableCell className="py-1">{contaNome(s.conta_bancaria_id)}</TableCell>
+                          <TableCell className="py-1">
+                            <div className="flex flex-col leading-tight">
+                              <span>{contaNome(s)}</span>
+                              {s.fonte === 'legado' && (
+                                <span className={`text-[9px] ${contaPersistId ? 'text-muted-foreground' : 'text-amber-600'}`}>
+                                  {contaPersistId ? 'Histórico legado' : 'Histórico legado sem vínculo com conta atual'}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right tabular-nums py-1">
                             <div className="flex items-center justify-end gap-1">
                               {prevFinal !== null ? (
@@ -573,13 +745,19 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                                 )}
                               </TooltipTrigger>
                               <TooltipContent className="text-[10px]">
-                                {isAuto ? 'Saldo inicial herdado automaticamente' : 'Saldo inicial definido manualmente'}
+                                {s.origem_saldo_inicial === 'automatico' && 'Saldo inicial herdado automaticamente do mês anterior'}
+                                {s.origem_saldo_inicial === 'calculado_legado' && 'Saldo inicial inferido a partir do histórico legado e da movimentação do mês'}
+                                {s.origem_saldo_inicial === 'manual' && 'Saldo inicial definido manualmente'}
                               </TooltipContent>
                             </Tooltip>
                           </TableCell>
                           <TableCell className="py-1">
                             {(() => {
-                              const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
+                              if (!contaPersistId) {
+                                return <Badge variant="outline" className="text-[9px] px-1.5 py-0">Conta não vinculada</Badge>;
+                              }
+
+                              const key = `${contaPersistId}|${s.ano_mes}`;
                               const mov = movSummary[key];
                               const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
                               const diff = Math.round((s.saldo_final - saldoCalculado) * 100) / 100;
@@ -594,7 +772,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                                       onClick={() => {
                                         if (onNavigateToConciliacao) {
                                           const [y, m] = s.ano_mes.split('-');
-                                          onNavigateToConciliacao(y, m, s.conta_bancaria_id);
+                                          onNavigateToConciliacao(y, m, contaPersistId);
                                         }
                                       }}
                                     >
@@ -619,7 +797,6 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                           </TableCell>
                           <TableCell className="py-1">
                             <div className="flex items-center gap-0.5">
-                              {/* Edit button */}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span>
@@ -639,8 +816,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                                 )}
                               </Tooltip>
 
-                              {/* Admin status actions */}
-                              {isAdmin && (
+                              {isAdmin && hasPersistableConta(s) && (
                                 <>
                                   {s.status_mes === 'aberto' && (
                                     <Tooltip>
