@@ -209,11 +209,45 @@ export function buildUnifiedSaldos({
         conta_label: contaLabel,
         tipo_conta: conta?.tipo_conta || parsed.tipo || null,
         legacy_conta_banco: row.conta_banco,
+        _hasStructuredCode: Boolean(parsed.tipo && parsed.codigo !== null),
       };
-    })
-    .filter((row) => !row.conta_bancaria_id_v2 || !v2Keys.has(`${row.fazenda_id}|${row.ano_mes}|${row.conta_bancaria_id_v2}`));
+    });
 
-  const combined = [...v2Unified, ...legacyBase].sort((a, b) => {
+  // Dedup: V2 takes priority over legacy; within legacy, structured entries (cc-001|...) take priority over plain names
+  const v2KeysByContaMonth = new Set(v2Unified.map((row) => `${row.ano_mes}|${row.conta_bancaria_id}`));
+
+  // Track best legacy record per conta+month
+  const legacyBestByKey = new Map<string, number>();
+  const legacyStructured = new Map<string, boolean>();
+
+  legacyBase.forEach((row, idx) => {
+    const contaKey = row.conta_bancaria_id_v2 || row.conta_bancaria_id;
+    const dedupKey = `${row.ano_mes}|${contaKey}`;
+
+    // Skip if V2 already covers this
+    if (row.conta_bancaria_id_v2 && v2KeysByContaMonth.has(dedupKey)) return;
+
+    const isStructured = (row as any)._hasStructuredCode as boolean;
+    const prevIdx = legacyBestByKey.get(dedupKey);
+
+    if (prevIdx === undefined) {
+      legacyBestByKey.set(dedupKey, idx);
+      legacyStructured.set(dedupKey, isStructured);
+    } else {
+      const prevIsStructured = legacyStructured.get(dedupKey) || false;
+      if (isStructured && !prevIsStructured) {
+        legacyBestByKey.set(dedupKey, idx);
+        legacyStructured.set(dedupKey, isStructured);
+      }
+    }
+  });
+
+  const keepLegacyIndices = new Set(legacyBestByKey.values());
+  const legacyCleaned: UnifiedSaldoRow[] = legacyBase
+    .filter((_, idx) => keepLegacyIndices.has(idx))
+    .map(({ _hasStructuredCode, ...rest }: any) => rest as UnifiedSaldoRow);
+
+  const combined = [...v2Unified, ...legacyCleaned].sort((a, b) => {
     return a.ano_mes.localeCompare(b.ano_mes)
       || a.fazenda_id.localeCompare(b.fazenda_id)
       || a.conta_label.localeCompare(b.conta_label);
