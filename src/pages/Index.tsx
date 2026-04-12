@@ -766,6 +766,9 @@ const Index = () => {
           }}
         />
       )}
+      {activeTab === 'import_zoot_historico' && (
+        <ImportZootHistoricoTab />
+      )}
       </div>
       {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
     </div>
