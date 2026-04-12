@@ -99,6 +99,8 @@ export interface FluxoCaixaResult {
   saldoInicialAudit: SaldoInicialAudit | null;
   /** Raw lancamentos for extracting distinct filter values */
   lancamentosGlobais: FluxoLancamentoBase[];
+  /** Force reload of lancamentos + saldos */
+  reload: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -389,6 +391,11 @@ export function useFluxoCaixa(
     return result;
   }, [lancamentosGlobais, ano, mesAte, saldoInicialAno, filtros?.grupo, filtros?.centro, filtros?.subcentro]);
 
+  const reload = useCallback(() => {
+    loadSaldoInicial();
+    loadLancamentosGlobais();
+  }, [loadSaldoInicial, loadLancamentosGlobais]);
+
   return {
     meses,
     loading: loadingSaldo || loadingLancamentos,
@@ -396,5 +403,6 @@ export function useFluxoCaixa(
     saldoInicialAusente,
     saldoInicialAudit,
     lancamentosGlobais,
+    reload,
   } as FluxoCaixaResult;
 }
