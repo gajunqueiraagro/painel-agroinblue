@@ -518,10 +518,31 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const saldoFinalVal = parseBRL(saldoFinal);
     const origemInicialFinal = autoSaldoInicial !== null ? 'automatico' : 'manual';
 
+    const resolvedContaId = editing ? resolveContaPersistId(editing) : contaId;
+
+    // Validate all mandatory fields before persisting
+    if (!clienteAtual.id) { toast.error('Não foi possível salvar: cliente_id ausente'); return; }
+    if (!anoMes || !/^\d{4}-\d{2}$/.test(anoMes)) { toast.error('Não foi possível salvar: ano_mes inválido'); return; }
+    if (!resolvedContaId) { toast.error('Não foi possível salvar: conta bancária não vinculada'); return; }
+    if (!fazendaId) { toast.error('Não foi possível salvar: fazenda_id não resolvido'); return; }
+
+    console.log('[SaldoV2 save] payload debug', {
+      cliente_id: clienteAtual.id,
+      ano_mes: anoMes,
+      conta_bancaria_id: resolvedContaId,
+      fazenda_id: fazendaId,
+      saldo_inicial: saldoInicialVal,
+      saldo_final: saldoFinalVal,
+      origem_saldo: origem,
+      status_mes: editing?.status_mes || 'aberto',
+      fonte: editing?.fonte || 'novo',
+      conta_bancaria_id_v2: editing?.conta_bancaria_id_v2 || null,
+    });
+
     const payload = {
       ano_mes: anoMes,
       fazenda_id: fazendaId,
-      conta_bancaria_id: editing ? resolveContaPersistId(editing) : contaId,
+      conta_bancaria_id: resolvedContaId,
       saldo_inicial: saldoInicialVal,
       saldo_final: saldoFinalVal,
       origem_saldo: origem,
@@ -541,7 +562,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
         saldoPayload: payload,
       });
       if (error || !savedId) {
-        toast.error('Erro ao atualizar saldo');
+        const msg = (error as any)?.message || 'Erro desconhecido ao atualizar saldo';
+        console.error('[SaldoV2 save] error:', error);
+        toast.error(`Não foi possível salvar: ${msg}`);
         return;
       }
 
