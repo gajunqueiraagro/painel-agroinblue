@@ -220,12 +220,17 @@ function buildPlanoTree(
 
   // Sort by fixed executive order; unknown macros go to end sorted by value
   roots.sort((a, b) => {
-    const aKey = a.label.toLowerCase().trim();
-    const bKey = b.label.toLowerCase().trim();
-    const aIdx = orderList.findIndex(o => aKey === o || aKey.includes(o) || o.includes(aKey));
-    const bIdx = orderList.findIndex(o => bKey === o || bKey.includes(o) || o.includes(bKey));
-    const aPos = aIdx >= 0 ? aIdx : 999;
-    const bPos = bIdx >= 0 ? bIdx : 999;
+    const aKey = a.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const bKey = b.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const findPos = (k: string) => {
+      const idx = orderList.findIndex(o => {
+        const oNorm = o.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return k.startsWith(oNorm) || k.includes(oNorm);
+      });
+      return idx >= 0 ? idx : 999;
+    };
+    const aPos = findPos(aKey);
+    const bPos = findPos(bKey);
     if (aPos !== bPos) return aPos - bPos;
     return b.total - a.total;
   });
