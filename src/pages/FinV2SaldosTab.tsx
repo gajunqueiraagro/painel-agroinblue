@@ -27,7 +27,6 @@ import { toast } from 'sonner';
 import {
   buildMovSummary,
   calcConciliacaoMensal,
-  isDebugConciliacaoBancoBrasilCase,
   STATUS_REALIZADOS,
   type ConciliacaoLancamentoBase,
   type MovimentoResumo,
@@ -175,7 +174,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   } | null>(null);
 
   const [conciliacaoLancamentos, setConciliacaoLancamentos] = useState<ConciliacaoLancamentoBase[]>([]);
-  const debugLoggedRef = useRef<Set<string>>(new Set());
+  
 
   /* ── data loading ── */
   const load = useCallback(async () => {

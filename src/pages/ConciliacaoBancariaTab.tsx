@@ -20,7 +20,6 @@ import {
   STATUS_REALIZADOS,
   belongsToConta,
   calcConciliacaoMensal,
-  isDebugConciliacaoBancoBrasilCase,
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
@@ -175,7 +174,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [lancSort, setLancSort] = useState<{ col: 'data' | 'descricao' | 'fornecedor' | 'valor'; dir: 'asc' | 'desc' }>({ col: 'data', dir: 'asc' });
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
-  const debugLoggedRef = useRef<Set<string>>(new Set());
+  
 
   useEffect(() => {
     if (!clienteId) return;
