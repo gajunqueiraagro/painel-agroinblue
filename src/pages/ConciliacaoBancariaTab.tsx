@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { STATUS_REALIZADOS, getConciliacaoStatus, type ConciliacaoStatus } from '@/lib/financeiro/conciliacaoCalc';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 
 /* ── Types ── */
 interface ContaRef {
