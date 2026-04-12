@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -16,7 +16,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
-import { STATUS_REALIZADOS, getConciliacaoStatus, type ConciliacaoStatus } from '@/lib/financeiro/conciliacaoCalc';
+import {
+  STATUS_REALIZADOS,
+  belongsToConta,
+  calcConciliacaoMensal,
+  isDebugConciliacaoBancoBrasilCase,
+  type ConciliacaoLancamentoBase,
+  type ConciliacaoStatus,
+} from '@/lib/financeiro/conciliacaoCalc';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 
@@ -40,6 +47,7 @@ interface SaldoRow {
 }
 
 interface LancamentoResumo {
+  id: string;
   tipo_operacao: string;
   valor: number;
   sinal: number;
@@ -90,18 +98,6 @@ function normalizeTipoOperacao(tipo: string | null | undefined) {
 function isEntradaTipo(tipo: string | null | undefined) {
   const normalized = normalizeTipoOperacao(tipo);
   return normalized.startsWith('1') || normalized.includes('entrada');
-}
-
-/**
- * Check if a lancamento belongs to a given account.
- * Must match the same logic as the lancamentos screen:
- *   - Entries (1-Entradas) use conta_destino_id as relevant account
- *   - Exits (2-Saídas) use conta_bancaria_id as relevant account
- *   - Transfers check both fields
- */
-function belongsToConta(lanc: LancamentoResumo, contaId: string) {
-  if (contaId === '__all__') return true;
-  return lanc.conta_bancaria_id === contaId || lanc.conta_destino_id === contaId;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -179,6 +175,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [lancSort, setLancSort] = useState<{ col: 'data' | 'descricao' | 'fornecedor' | 'valor'; dir: 'asc' | 'desc' }>({ col: 'data', dir: 'asc' });
   const [editingSaldo, setEditingSaldo] = useState<{ anoMes: string; contaId: string; current: number } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const debugLoggedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!clienteId) return;
@@ -267,7 +264,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       let lQuery = supabase
         .from('financeiro_lancamentos_v2')
-        .select('tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id, ano_mes')
+        .select('id, tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id, ano_mes')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
         .in('status_transacao', [...STATUS_REALIZADOS])
@@ -307,9 +304,50 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     for (let m = 1; m <= 12; m++) {
       const mesStr = String(m).padStart(2, '0');
       const anoMes = `${ano}-${mesStr}`;
+      const isAllContas = contaId === '__all__';
 
       const saldoRows = saldos.filter(s => s.ano_mes === anoMes);
       const saldoRow = contaId !== '__all__' ? saldoRows[0] || null : null;
+      const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, contaId));
+
+      if (!isAllContas) {
+        const official = calcConciliacaoMensal({
+          contaId,
+          anoMes,
+          saldoRows,
+          lancamentos: lancamentos as ConciliacaoLancamentoBase[],
+          fallbackSaldoInicial: prevFinalByAccount.get(contaId) || 0,
+        });
+
+        cards.push({
+          mes: mesStr,
+          label: MESES_LABELS[m - 1],
+          anoMes,
+          saldoInicial: official.saldoInicial,
+          entradasTerceiros: official.entradasTerceiros,
+          transferenciasRecebidas: official.transferenciasRecebidas,
+          totalEntradas: official.totalEntradas,
+          saidasTerceiros: official.saidasTerceiros,
+          transferenciasEnviadas: official.transferenciasEnviadas,
+          totalSaidas: official.totalSaidas,
+          saldoCalculado: official.saldoCalculado,
+          saldoExtrato: official.saldoExtrato,
+          diferenca: official.diferenca,
+          status: official.status,
+          saldoRow,
+          lancamentos: mesLancs,
+        });
+
+        if (saldoRows.length > 0) {
+          for (const s of saldoRows) {
+            prevFinalByAccount.set(s.conta_bancaria_id, s.saldo_final);
+          }
+        } else {
+          prevFinalByAccount.set(contaId, official.saldoCalculado);
+        }
+
+        continue;
+      }
 
       // Saldo inicial: prefer registered value, then chain from previous month
       let saldoInicial: number;
@@ -322,13 +360,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         saldoInicial = r2(Array.from(prevFinalByAccount.values()).reduce((s, v) => s + v, 0));
       }
 
-      const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, contaId));
-
       let entradasTerceiros = 0;
       let transferenciasRecebidas = 0;
       let saidasTerceiros = 0;
       let transferenciasEnviadas = 0;
-      const isAllContas = contaId === '__all__';
 
       for (const l of mesLancs) {
         const valor = r2(Math.abs(l.valor));
@@ -379,30 +414,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           status = 'pendente';
         } else {
           const perAccountStatuses = accountsWithSaldo.map(conta => {
-            const accSaldoRow = saldos.find(s => s.ano_mes === anoMes && s.conta_bancaria_id === conta.id)!;
-            const accSaldoInicial = r2(accSaldoRow.saldo_inicial || 0);
-            let accEntradas = 0;
-            let accSaidas = 0;
-
-            for (const l of mesLancs.filter(row => belongsToConta(row, conta.id))) {
-              const valor = r2(Math.abs(l.valor));
-              if (isTransferenciaTipo(l.tipo_operacao || '')) {
-                if (l.conta_destino_id === conta.id) accEntradas = r2(accEntradas + valor);
-                else if (l.conta_bancaria_id === conta.id) accSaidas = r2(accSaidas + valor);
-              } else {
-                if (l.conta_destino_id === conta.id) accEntradas = r2(accEntradas + valor);
-                else if (l.conta_bancaria_id === conta.id) accSaidas = r2(accSaidas + valor);
-              }
-            }
-
-            const accCalc = r2(accSaldoInicial + accEntradas - accSaidas);
-            const accDiff = r2((accSaldoRow.saldo_final || 0) - accCalc);
-            return accDiff === 0 ? 'realizado' as const : 'nao_conciliado' as const;
+            const official = calcConciliacaoMensal({
+              contaId: conta.id,
+              anoMes,
+              saldoRows: saldos,
+              lancamentos: lancamentos as ConciliacaoLancamentoBase[],
+              fallbackSaldoInicial: prevFinalByAccount.get(conta.id) || 0,
+            });
+            return official.status === 'realizado' ? 'realizado' as const : 'nao_conciliado' as const;
           });
           status = perAccountStatuses.some(s => s === 'nao_conciliado') ? 'nao_conciliado' : 'realizado';
         }
-      } else {
-        status = getConciliacaoStatus(diferenca, saldoExtrato);
       }
 
       cards.push({
@@ -436,6 +458,39 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
     return cards;
   }, [ano, contaId, saldos, lancamentos, contas]);
+
+  useEffect(() => {
+    const contasAlvo = (contaId === '__all__' ? contas : contas.filter((conta) => conta.id === contaId))
+      .filter((conta) => isDebugConciliacaoBancoBrasilCase({ anoMes: '2020-11', accountLabel: contaLabel(conta) }));
+
+    contasAlvo.forEach((conta) => {
+      const logKey = `conciliacao:${conta.id}:2020-11`;
+      if (debugLoggedRef.current.has(logKey)) return;
+
+      const result = calcConciliacaoMensal({
+        contaId: conta.id,
+        anoMes: '2020-11',
+        saldoRows: saldos,
+        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
+        fallbackSaldoInicial: saldos.find((row) => row.conta_bancaria_id === conta.id && row.ano_mes === '2020-10')?.saldo_final || 0,
+      });
+
+      debugLoggedRef.current.add(logKey);
+      console.info('[conciliacao-debug][conciliacao]', {
+        accountKey: result.accountKey,
+        accountLabel: contaLabel(conta),
+        anoMes: result.anoMes,
+        saldoInicial: result.saldoInicial,
+        entradas: result.totalEntradas,
+        saidas: result.totalSaidas,
+        saldoCalculado: result.saldoCalculado,
+        saldoExtrato: result.saldoExtrato,
+        diferenca: result.diferenca,
+        quantidadeLancamentos: result.quantidadeLancamentos,
+        lancamentoIds: result.lancamentoIds,
+      });
+    });
+  }, [contaId, contas, saldos, lancamentos]);
 
   const summary = useMemo(() => {
     const totalEntradas = mesCards.reduce((s, c) => s + c.totalEntradas, 0);
