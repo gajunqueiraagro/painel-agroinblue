@@ -324,6 +324,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ano={Number(localAno)}
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
+              onDrillDown={onFluxoDrillDown}
             />
           )}
           {subTab === 'rateio' && (
