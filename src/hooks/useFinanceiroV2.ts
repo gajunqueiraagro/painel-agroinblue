@@ -429,6 +429,27 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     // Auto-derive escopo_negocio from plano de contas if not explicitly set
     const escopo = form.escopo_negocio || deriveEscopoFromSubcentro(form.subcentro) || null;
 
+    // Resolve full hierarchy from plano de contas based on subcentro
+    let resolvedMacro = form.macro_custo || null;
+    let resolvedGrupo = form.grupo_custo || null;
+    let resolvedCentro = form.centro_custo || null;
+    const resolvedSubcentro = form.subcentro || null;
+
+    // If subcentro is a dividend, force canonical hierarchy
+    if (resolvedSubcentro && isDividendoSubcentro(resolvedSubcentro)) {
+      resolvedMacro = 'Distribuição';
+      resolvedGrupo = 'Dividendos';
+      resolvedCentro = 'Pessoas';
+    } else if (resolvedSubcentro && classificacoesRef.current.length > 0) {
+      // Try to resolve from plano de contas
+      const match = classificacoesRef.current.find(c => c.subcentro === resolvedSubcentro);
+      if (match) {
+        resolvedMacro = match.macro_custo || resolvedMacro;
+        resolvedGrupo = match.grupo_custo || resolvedGrupo;
+        resolvedCentro = match.centro_custo || resolvedCentro;
+      }
+    }
+
     const updatePayload = {
       fazenda_id: form.fazenda_id,
       conta_bancaria_id: form.conta_bancaria_id || null,
@@ -440,9 +461,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       tipo_operacao: form.tipo_operacao,
       status_transacao: form.status_transacao || 'meta',
       descricao: form.descricao || null,
-      macro_custo: form.macro_custo || null,
-      centro_custo: form.centro_custo || null,
-      subcentro: form.subcentro || null,
+      macro_custo: resolvedMacro,
+      grupo_custo: resolvedGrupo,
+      centro_custo: resolvedCentro,
+      subcentro: resolvedSubcentro,
       escopo_negocio: escopo,
       observacao: form.observacao || null,
       numero_documento: form.numero_documento || null,
