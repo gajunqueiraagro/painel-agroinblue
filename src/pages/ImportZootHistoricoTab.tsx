@@ -191,7 +191,7 @@ export default function ImportZootHistoricoTab() {
             <CardContent className="pt-4">
               <div className="flex flex-wrap gap-3">
                 <Badge variant="secondary">{stats.total} linhas</Badge>
-                <Badge className="bg-green-100 text-green-800">{stats.validas} válidas</Badge>
+                <Badge className="bg-primary/10 text-primary">{stats.validas} válidas</Badge>
                 {stats.erros > 0 && (
                   <Badge variant="destructive">{stats.erros} com erro</Badge>
                 )}
