@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { STATUS_REALIZADOS, getConciliacaoStatus, type ConciliacaoStatus } from '@/lib/financeiro/conciliacaoCalc';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 
 /* ── Types ── */
 interface ContaRef {
@@ -210,15 +211,55 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     // Also load December of previous year for saldo_inicial chaining into Jan
     const prevDec = `${Number(ano) - 1}-12`;
 
+    // Load V2 saldos
     let sQuery = supabase
       .from('financeiro_saldos_bancarios_v2')
-      .select('id, ano_mes, conta_bancaria_id, saldo_inicial, saldo_final, status_mes, origem_saldo_inicial')
+      .select('id, ano_mes, conta_bancaria_id, fazenda_id, saldo_inicial, saldo_final, fechado, status_mes, origem_saldo, origem_saldo_inicial, observacao')
       .eq('cliente_id', clienteId)
       .gte('ano_mes', prevDec)
       .lte('ano_mes', anoMesMax);
     if (contaId !== '__all__') sQuery = sQuery.eq('conta_bancaria_id', contaId);
-    const { data: sData } = await sQuery;
-    setSaldos((sData as SaldoRow[]) || []);
+
+    // Load legacy saldos
+    let legQuery = supabase
+      .from('financeiro_saldos_bancarios')
+      .select('id, ano_mes, conta_banco, fazenda_id, saldo_final')
+      .eq('cliente_id', clienteId)
+      .gte('ano_mes', prevDec)
+      .lte('ano_mes', anoMesMax);
+
+    const [{ data: sData }, { data: legData }] = await Promise.all([sQuery, legQuery]);
+
+    // Unify using buildUnifiedSaldos so legacy saldos chain correctly
+    const contasRef: ContaSaldoRef[] = contas.map(c => ({
+      id: c.id,
+      nome_conta: c.nome_conta,
+      nome_exibicao: c.nome_exibicao,
+      tipo_conta: c.tipo_conta,
+      codigo_conta: c.codigo_conta,
+    }));
+
+    const unified = buildUnifiedSaldos({
+      v2Saldos: (sData as SaldoV2SourceRow[]) || [],
+      legacySaldos: (legData as SaldoLegacySourceRow[]) || [],
+      contas: contasRef,
+      movSummary: {},
+    });
+
+    // Map unified rows to SaldoRow shape for the existing card logic
+    const mappedSaldos: SaldoRow[] = unified
+      .filter(u => contaId === '__all__' || u.conta_bancaria_id === contaId || u.conta_bancaria_id_v2 === contaId)
+      .map(u => ({
+        id: u.id,
+        ano_mes: u.ano_mes,
+        conta_bancaria_id: u.conta_bancaria_id_v2 || u.conta_bancaria_id,
+        saldo_inicial: u.saldo_inicial,
+        saldo_final: u.saldo_final,
+        status_mes: u.status_mes,
+        origem_saldo_inicial: u.origem_saldo_inicial,
+      }));
+
+    setSaldos(mappedSaldos);
 
     const batchSize = 1000;
     const allLanc: LancamentoResumo[] = [];
@@ -244,7 +285,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
     setLancamentos(allLanc);
     setLoading(false);
-  }, [clienteId, ano, contaId]);
+  }, [clienteId, ano, contaId, contas]);
 
   useEffect(() => {
     loadData();
