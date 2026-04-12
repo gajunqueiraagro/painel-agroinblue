@@ -226,24 +226,10 @@ export function useFluxoCaixa(
         return;
       }
 
-      // 3) FALLBACK: find the latest saldo before the target year and chain forward
-      //    using lancamentos to compute Dec's final balance
-      const computed = await computeSaldoFromChain(clienteId, allFazendaIds, ano);
-      if (computed !== null) {
-        setSaldoInicialAno(computed.total);
-        setSaldoInicialAusente(false);
-        setSaldoInicialAudit({
-          fonte: `encadeamento desde ${computed.baseAnoMes}`,
-          periodo: anoMesDez,
-          qtdRegistros: computed.qtdRegistrosBase,
-          contas: computed.contas,
-          somaTotal: computed.total,
-        });
-      } else {
-        setSaldoInicialAno(0);
-        setSaldoInicialAusente(true);
-        setSaldoInicialAudit({ fonte: 'nenhum registro encontrado', periodo: anoMesDez, qtdRegistros: 0, contas: [], somaTotal: 0 });
-      }
+      // 3) No record found — leave blank with warning
+      setSaldoInicialAno(0);
+      setSaldoInicialAusente(true);
+      setSaldoInicialAudit({ fonte: 'nenhum registro encontrado', periodo: anoMesDez, qtdRegistros: 0, contas: [], somaTotal: 0 });
     } catch {
       setSaldoInicialAno(0);
       setSaldoInicialAusente(true);
