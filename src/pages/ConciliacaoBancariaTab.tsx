@@ -207,12 +207,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
     const anoMesMin = `${ano}-01`;
     const anoMesMax = `${ano}-12`;
+    // Also load December of previous year for saldo_inicial chaining into Jan
+    const prevDec = `${Number(ano) - 1}-12`;
 
     let sQuery = supabase
       .from('financeiro_saldos_bancarios_v2')
       .select('id, ano_mes, conta_bancaria_id, saldo_inicial, saldo_final, status_mes, origem_saldo_inicial')
       .eq('cliente_id', clienteId)
-      .gte('ano_mes', anoMesMin)
+      .gte('ano_mes', prevDec)
       .lte('ano_mes', anoMesMax);
     if (contaId !== '__all__') sQuery = sQuery.eq('conta_bancaria_id', contaId);
     const { data: sData } = await sQuery;
