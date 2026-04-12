@@ -1,15 +1,16 @@
 /**
  * Modal de Auditoria — abre ao clicar num valor do Fluxo de Caixa (modo Amplo).
  * Mostra lançamentos reais filtrados POR IDs do nó — nunca refaz filtro textual.
- * Layout: Header fixo → Tabela com scroll (header sticky) → Footer fixo.
+ * Layout: Header fixo → Tabela com scroll (header sticky azul) → Footer fixo.
  *
  * Funcionalidades de auditoria:
+ *  - Ordenação por coluna (clique no cabeçalho)
  *  - Filtro por tipo de inconsistência (clicável no header)
  *  - Destaque visual em linhas inconsistentes
  *  - Botão de edição em cada linha (abre dialog overlay, preserva contexto)
  *  - Alerta de divergência no rodapé
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { MESES_NOMES } from '@/lib/calculos/labels';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import type { FluxoDrillPayload, Inconsistencia, InconsistenciaTipo } from './FluxoFinanceiro';
-import { Pencil, AlertTriangle, Filter, X } from 'lucide-react';
+import { Pencil, AlertTriangle, Filter, X, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 const INCONSISTENCIA_LABELS: Record<InconsistenciaTipo, string> = {
   sem_macro: 'Sem macro',
@@ -43,8 +44,91 @@ interface Props {
   onEditLancamento?: (lancamento: FinanceiroLancamento) => void;
 }
 
+// ---------------------------------------------------------------------------
+// Sorting
+// ---------------------------------------------------------------------------
+
+type SortKey = 'data_pagamento' | 'fornecedor' | 'produto' | 'centro_custo' | 'subcentro' | 'valor' | 'status_transacao';
+type SortDir = 'asc' | 'desc';
+
+const TEXT_KEYS: SortKey[] = ['fornecedor', 'produto', 'centro_custo', 'subcentro', 'status_transacao'];
+
+function compareLanc(a: FinanceiroLancamento, b: FinanceiroLancamento, key: SortKey, dir: SortDir): number {
+  let cmp = 0;
+  if (key === 'valor') {
+    cmp = Math.abs(a.valor) - Math.abs(b.valor);
+  } else if (key === 'data_pagamento') {
+    const da = a.data_pagamento || '';
+    const db = b.data_pagamento || '';
+    cmp = da.localeCompare(db);
+  } else {
+    const va = ((a as any)[key] || '').toLowerCase();
+    const vb = ((b as any)[key] || '').toLowerCase();
+    cmp = va.localeCompare(vb, 'pt-BR');
+  }
+  return dir === 'asc' ? cmp : -cmp;
+}
+
+// ---------------------------------------------------------------------------
+// Column header component
+// ---------------------------------------------------------------------------
+
+const HEADER_BG = 'hsl(215 50% 23%)'; // Azul Marinho padrão do sistema
+
+function SortableHeader({
+  label, sortKey, currentKey, currentDir, onSort, align = 'left', className = '',
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentKey: SortKey | null;
+  currentDir: SortDir;
+  onSort: (key: SortKey) => void;
+  align?: 'left' | 'right';
+  className?: string;
+}) {
+  const isActive = currentKey === sortKey;
+  return (
+    <th
+      className={`text-[9px] px-1.5 py-1.5 font-bold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors hover:brightness-125 ${
+        align === 'right' ? 'text-right' : 'text-left'
+      } ${className}`}
+      style={{ background: HEADER_BG, color: 'hsl(210 40% 96%)' }}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        {isActive ? (
+          currentDir === 'asc'
+            ? <ArrowUp className="h-2.5 w-2.5 opacity-90" />
+            : <ArrowDown className="h-2.5 w-2.5 opacity-90" />
+        ) : (
+          <ArrowUpDown className="h-2.5 w-2.5 opacity-40" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal
+// ---------------------------------------------------------------------------
+
 export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valorClicado, onEditLancamento }: Props) {
   const [filtroInc, setFiltroInc] = useState<InconsistenciaTipo | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        return key;
+      }
+      // Default direction: text = asc (A-Z), numeric/date = desc (maior primeiro)
+      setSortDir(TEXT_KEYS.includes(key) ? 'asc' : 'desc');
+      return key;
+    });
+  }, []);
 
   // Build a lookup map once
   const lancMap = useMemo(() => {
@@ -89,16 +173,22 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
     }));
   }, [payload]);
 
-  // Apply inconsistency filter
+  // Apply inconsistency filter + sorting
   const filtered = useMemo(() => {
-    if (!filtroInc) return allFiltered;
-    const incIds = new Set(
-      (payload?.inconsistencias ?? [])
-        .filter(i => i.tipo === filtroInc)
-        .map(i => i.lancamentoId)
-    );
-    return allFiltered.filter(l => incIds.has(l.id));
-  }, [allFiltered, filtroInc, payload]);
+    let list = allFiltered;
+    if (filtroInc) {
+      const incIds = new Set(
+        (payload?.inconsistencias ?? [])
+          .filter(i => i.tipo === filtroInc)
+          .map(i => i.lancamentoId)
+      );
+      list = list.filter(l => incIds.has(l.id));
+    }
+    if (sortKey) {
+      list = [...list].sort((a, b) => compareLanc(a, b, sortKey, sortDir));
+    }
+    return list;
+  }, [allFiltered, filtroInc, payload, sortKey, sortDir]);
 
   const totalAllLanc = useMemo(
     () => allFiltered.reduce((s, l) => s + Math.abs(l.valor), 0),
@@ -118,6 +208,7 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
   const handleOpenChange = (v: boolean) => {
     if (!v) {
       setFiltroInc(null);
+      setSortKey(null);
       onClose();
     }
   };
@@ -189,7 +280,7 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
           )}
         </DialogHeader>
 
-        {/* ── TABELA COM SCROLL + HEADER STICKY ── */}
+        {/* ── TABELA COM SCROLL + HEADER STICKY AZUL ── */}
         <ScrollArea className="flex-1 min-h-0">
           <div className="px-2 pb-1">
             {filtered.length === 0 ? (
@@ -201,16 +292,16 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
             ) : (
               <table className="w-full caption-bottom text-sm">
                 <thead className="[&_tr]:border-b sticky top-0 z-10">
-                  <tr className="border-b transition-colors" style={{ background: 'hsl(var(--muted))' }}>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold whitespace-nowrap w-[68px] uppercase tracking-wider text-muted-foreground">Data Pgto</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[110px] uppercase tracking-wider text-muted-foreground">Fornecedor</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[100px] uppercase tracking-wider text-muted-foreground">Produto</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[130px] uppercase tracking-wider text-muted-foreground">Centro</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[140px] uppercase tracking-wider text-muted-foreground">Subcentro</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-right font-bold w-[80px] uppercase tracking-wider text-muted-foreground">Valor</th>
-                    <th className="text-[9px] px-1.5 py-1.5 text-left font-bold w-[55px] uppercase tracking-wider text-muted-foreground">Status</th>
+                  <tr className="border-b">
+                    <SortableHeader label="Data Pgto" sortKey="data_pagamento" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[68px]" />
+                    <SortableHeader label="Fornecedor" sortKey="fornecedor" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[110px]" />
+                    <SortableHeader label="Produto" sortKey="produto" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[100px]" />
+                    <SortableHeader label="Centro" sortKey="centro_custo" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[130px]" />
+                    <SortableHeader label="Subcentro" sortKey="subcentro" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[140px]" />
+                    <SortableHeader label="Valor" sortKey="valor" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" className="w-[80px]" />
+                    <SortableHeader label="Status" sortKey="status_transacao" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} className="w-[55px]" />
                     {onEditLancamento && (
-                      <th className="text-[9px] px-1.5 py-1.5 font-bold w-[32px]" />
+                      <th className="text-[9px] px-1.5 py-1.5 font-bold w-[32px]" style={{ background: HEADER_BG }} />
                     )}
                   </tr>
                 </thead>
