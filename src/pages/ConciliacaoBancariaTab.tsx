@@ -459,38 +459,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     return cards;
   }, [ano, contaId, saldos, lancamentos, contas]);
 
-  useEffect(() => {
-    const contasAlvo = (contaId === '__all__' ? contas : contas.filter((conta) => conta.id === contaId))
-      .filter((conta) => isDebugConciliacaoBancoBrasilCase({ anoMes: '2020-11', accountLabel: contaLabel(conta) }));
-
-    contasAlvo.forEach((conta) => {
-      const logKey = `conciliacao:${conta.id}:2020-11`;
-      if (debugLoggedRef.current.has(logKey)) return;
-
-      const result = calcConciliacaoMensal({
-        contaId: conta.id,
-        anoMes: '2020-11',
-        saldoRows: saldos,
-        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-        fallbackSaldoInicial: saldos.find((row) => row.conta_bancaria_id === conta.id && row.ano_mes === '2020-10')?.saldo_final || 0,
-      });
-
-      debugLoggedRef.current.add(logKey);
-      console.info('[conciliacao-debug][conciliacao]', {
-        accountKey: result.accountKey,
-        accountLabel: contaLabel(conta),
-        anoMes: result.anoMes,
-        saldoInicial: result.saldoInicial,
-        entradas: result.totalEntradas,
-        saidas: result.totalSaidas,
-        saldoCalculado: result.saldoCalculado,
-        saldoExtrato: result.saldoExtrato,
-        diferenca: result.diferenca,
-        quantidadeLancamentos: result.quantidadeLancamentos,
-        lancamentoIds: result.lancamentoIds,
-      });
-    });
-  }, [contaId, contas, saldos, lancamentos]);
 
   const summary = useMemo(() => {
     const totalEntradas = mesCards.reduce((s, c) => s + c.totalEntradas, 0);

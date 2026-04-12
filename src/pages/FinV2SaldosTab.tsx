@@ -322,43 +322,6 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     return result.status === 'nao_conciliado' ? Math.abs(result.diferenca) : null;
   }, [calcConciliacaoRow]);
 
-  useEffect(() => {
-    saldos.forEach((saldo) => {
-      const resolvedId = saldo.fonte === 'v2' ? saldo.conta_bancaria_id : saldo.conta_bancaria_id_v2;
-      if (!resolvedId) return;
-      if (!isDebugConciliacaoBancoBrasilCase({ anoMes: saldo.ano_mes, accountLabel: saldo.conta_label })) return;
-
-      const logKey = `saldos:${resolvedId}:${saldo.ano_mes}`;
-      if (debugLoggedRef.current.has(logKey)) return;
-
-      const result = calcConciliacaoMensal({
-        contaId: resolvedId,
-        anoMes: saldo.ano_mes,
-        saldoRows: [{
-          conta_bancaria_id: resolvedId,
-          ano_mes: saldo.ano_mes,
-          saldo_inicial: Number(saldo.saldo_inicial) || 0,
-          saldo_final: Number(saldo.saldo_final) || 0,
-        }],
-        lancamentos: conciliacaoLancamentos,
-      });
-
-      debugLoggedRef.current.add(logKey);
-      console.info('[conciliacao-debug][saldos]', {
-        accountKey: result.accountKey,
-        accountLabel: saldo.conta_label,
-        anoMes: saldo.ano_mes,
-        saldoInicial: result.saldoInicial,
-        entradas: result.totalEntradas,
-        saidas: result.totalSaidas,
-        saldoCalculado: result.saldoCalculado,
-        saldoExtrato: result.saldoExtrato,
-        diferenca: result.diferenca,
-        quantidadeLancamentos: result.quantidadeLancamentos,
-        lancamentoIds: result.lancamentoIds,
-      });
-    });
-  }, [saldos, conciliacaoLancamentos]);
 
   /* ── permission helpers ── */
   const canEditSaldoFinal = (s: SaldoBancario): boolean => {
