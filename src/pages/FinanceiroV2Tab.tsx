@@ -323,6 +323,20 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
   };
 
+  // Apply drill filters from FluxoCaixa navigation
+  useEffect(() => {
+    if (!drillFilters) return;
+    if (drillFilters.ano) setAno(drillFilters.ano);
+    if (drillFilters.mes) setMesesSelecionados([String(drillFilters.mes).padStart(2, '0')]);
+    if (drillFilters.tipo) setTipoOperacao(drillFilters.tipo);
+    if (drillFilters.statusTransacao) setStatusTransacao(drillFilters.statusTransacao);
+    if (drillFilters.macro) setMacroFiltro(drillFilters.macro);
+    if (drillFilters.grupo) setGrupoFiltro(drillFilters.grupo);
+    if (drillFilters.centro) setCentroFiltro(drillFilters.centro);
+    if (drillFilters.subcentro) setSubcentroFiltro(drillFilters.subcentro);
+    setFazendaId('__all__'); // Fluxo de Caixa is always global
+  }, []); // Run once on mount
+
   useEffect(() => {
     hook.loadContas();
     hook.loadClassificacoes();
