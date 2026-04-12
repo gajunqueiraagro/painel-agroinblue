@@ -927,7 +927,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                   <Select value={dialogAno} onValueChange={setDialogAno} disabled={!!editing}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - 5 + i)).map(a => (
+                      {anosDisponiveis.map(a => (
                         <SelectItem key={a} value={a}>{a}</SelectItem>
                       ))}
                     </SelectContent>
