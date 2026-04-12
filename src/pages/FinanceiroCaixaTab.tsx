@@ -136,19 +136,19 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     if (!id) return false;
     const ok = await v2Hook.editarLancamento(id, form);
     if (ok) {
-      toast.success('Lançamento atualizado');
-      // Data will refresh via useFinanceiro's realtime/refetch
+      // Reload financial data so tree + modal reflect the updated record
+      await reloadData();
     }
     return ok;
-  }, [v2Hook]);
+  }, [v2Hook, reloadData]);
 
   const handleEditDelete = useCallback(async (id: string) => {
     const ok = await v2Hook.excluirLancamento(id);
     if (ok) {
-      toast.success('Lançamento excluído');
+      await reloadData();
     }
     return ok;
-  }, [v2Hook]);
+  }, [v2Hook, reloadData]);
 
   // Filtro único — herdado do Resumo, ajustável localmente
   const [localAno, setLocalAno] = useState(filtroAnoInicial || String(new Date().getFullYear()));
