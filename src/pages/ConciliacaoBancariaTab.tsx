@@ -150,13 +150,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const currentMonth = new Date().getMonth() + 1;
   const [anos, setAnos] = useState<string[]>([String(currentYear)]);
 
-  // Load dynamic years from saldos + lancamentos
+  // Load dynamic years from saldos + lancamentos (use high limit to avoid 1000-row cap)
   useEffect(() => {
     if (!clienteId) return;
     Promise.all([
-      supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId),
-      supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id', clienteId),
-      supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false),
+      supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId).limit(10000),
+      supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id', clienteId).limit(10000),
+      supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false).limit(10000),
     ]).then(([sRes, legRes, lRes]) => {
       const set = new Set<string>();
       set.add(String(currentYear));

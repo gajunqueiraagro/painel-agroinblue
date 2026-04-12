@@ -126,16 +126,19 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       supabase
         .from('financeiro_saldos_bancarios_v2')
         .select('ano_mes')
-        .eq('cliente_id', clienteAtual.id),
+        .eq('cliente_id', clienteAtual.id)
+        .limit(10000),
       supabase
         .from('financeiro_saldos_bancarios')
         .select('ano_mes')
-        .eq('cliente_id', clienteAtual.id),
+        .eq('cliente_id', clienteAtual.id)
+        .limit(10000),
       supabase
         .from('financeiro_lancamentos_v2')
         .select('ano_mes')
         .eq('cliente_id', clienteAtual.id)
-        .eq('cancelado', false),
+        .eq('cancelado', false)
+        .limit(10000),
     ]).then(([v2Res, legacyRes, lancRes]) => {
       setAnosDisponiveis(buildSaldosAnosDisponiveis({
         saldosV2: (v2Res.data as Array<{ ano_mes: string | null }> | null) || [],
