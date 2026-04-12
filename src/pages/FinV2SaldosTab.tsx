@@ -584,17 +584,33 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     if (!resolvedContaId) { toast.error('Não foi possível salvar: conta bancária não vinculada'); return; }
     if (!fazendaId) { toast.error('Não foi possível salvar: fazenda_id não resolvido'); return; }
 
-    console.log('[SaldoV2 save] payload debug', {
-      cliente_id: clienteAtual.id,
+    // ── Debug: reconciliation validation on save ──
+    const debugContaId = resolvedContaId!;
+    const debugResult = calcConciliacaoMensal({
+      contaId: debugContaId,
+      anoMes,
+      saldoRows: [{
+        conta_bancaria_id: debugContaId,
+        ano_mes: anoMes,
+        saldo_inicial: saldoInicialVal,
+        saldo_final: saldoFinalVal,
+      }],
+      lancamentos: conciliacaoLancamentos,
+    });
+    console.log('[SaldoV2 save] payload + reconciliation debug', {
+      conta_id: debugContaId,
       ano_mes: anoMes,
-      conta_bancaria_id: resolvedContaId,
+      saldo_inicial_validacao: saldoInicialVal,
+      entradas_mes: debugResult.totalEntradas,
+      saidas_mes: debugResult.totalSaidas,
+      saldo_final_esperado: debugResult.saldoCalculado,
+      saldo_final_informado: saldoFinalVal,
+      diferenca: debugResult.diferenca,
+      origem_saldo_inicial: origemInicialFinal,
+      quantidade_lancamentos: debugResult.quantidadeLancamentos,
+      lancamento_ids: debugResult.lancamentoIds,
       fazenda_id: fazendaId,
-      saldo_inicial: saldoInicialVal,
-      saldo_final: saldoFinalVal,
-      origem_saldo: origem,
-      status_mes: editing?.status_mes || 'aberto',
       fonte: editing?.fonte || 'novo',
-      conta_bancaria_id_v2: editing?.conta_bancaria_id_v2 || null,
     });
 
     const payload = {
@@ -913,10 +929,20 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                                       </Badge>
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent className="text-[10px]">
+                                  <TooltipContent className="text-[10px] max-w-[280px]">
                                     {isConciliado
                                       ? 'Saldo extrato = Saldo calculado'
-                                      : `Diferença: ${formatMoeda(diff)}`}
+                                      : (
+                                        <div className="space-y-0.5">
+                                          <div>Saldo Inicial: {formatMoeda(result?.saldoInicial ?? 0)}</div>
+                                          <div>Entradas: {formatMoeda(result?.totalEntradas ?? 0)}</div>
+                                          <div>Saídas: {formatMoeda(result?.totalSaidas ?? 0)}</div>
+                                          <div>Saldo Esperado: {formatMoeda(result?.saldoCalculado ?? 0)}</div>
+                                          <div>Saldo Informado: {formatMoeda(result?.saldoExtrato ?? 0)}</div>
+                                          <div className="font-bold text-red-400">Diferença: {formatMoeda(diff)}</div>
+                                          <div>Lançamentos: {result?.quantidadeLancamentos ?? 0}</div>
+                                        </div>
+                                      )}
                                     <br /><span className="text-muted-foreground">Clique para ver conciliação</span>
                                   </TooltipContent>
                                 </Tooltip>
