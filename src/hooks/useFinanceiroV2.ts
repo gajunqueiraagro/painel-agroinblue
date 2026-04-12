@@ -53,6 +53,7 @@ export interface LancamentoV2Form {
   status_transacao?: string;
   descricao?: string;
   macro_custo?: string;
+  grupo_custo?: string;
   centro_custo?: string;
   subcentro?: string;
   escopo_negocio?: string;
