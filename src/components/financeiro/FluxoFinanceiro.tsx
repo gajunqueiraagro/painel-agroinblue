@@ -10,9 +10,10 @@
  * REGRA ESTRUTURAL: cada nó da árvore carrega lancamentoIds[].
  * O modal abre por esses IDs — nunca refaz filtro textual.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import {
@@ -130,11 +131,37 @@ export interface TreeNode {
   inconsistencias: Inconsistencia[];
 }
 
+/**
+ * Ordem lookup: maps each hierarchy key to its min ordem_exibicao from the plano.
+ * Keys: "macro:{name}", "grupo:{macro}|{grupo}", "centro:{macro}|{grupo}|{centro}", "sub:{subcentro}"
+ */
+export type PlanoOrdemMap = Map<string, number>;
+
+export function buildPlanoOrdemMap(
+  rows: { macro_custo: string; grupo_custo: string | null; centro_custo: string; subcentro: string | null; ordem_exibicao: number }[]
+): PlanoOrdemMap {
+  const m = new Map<string, number>();
+  const update = (key: string, val: number) => {
+    const cur = m.get(key);
+    if (cur === undefined || val < cur) m.set(key, val);
+  };
+  for (const r of rows) {
+    update(`macro:${r.macro_custo}`, r.ordem_exibicao);
+    update(`grupo:${r.macro_custo}|${r.grupo_custo || ''}`, r.ordem_exibicao);
+    update(`centro:${r.macro_custo}|${r.grupo_custo || ''}|${r.centro_custo}`, r.ordem_exibicao);
+    if (r.subcentro) update(`sub:${r.subcentro}`, r.ordem_exibicao);
+  }
+  return m;
+}
+
+const FALLBACK_ORDEM = 99999;
+
 function buildPlanoTree(
   lancamentos: FluxoLancRaw[],
   ano: number,
   mesAte: number,
   tipoFilter: 'entrada' | 'saida',
+  ordemMap: PlanoOrdemMap,
 ): TreeNode[] {
   const realizados = lancamentos.filter(l => {
     if (!isRealizado(l)) return false;
@@ -194,13 +221,10 @@ function buildPlanoTree(
     }
   }
 
-  const MACRO_ORDER_ENTRADA: string[] = ['receita operacional', 'entradas financeiras'];
-  const MACRO_ORDER_SAIDA: string[] = [
-    'dedu', 'custeio', 'investimento', 'saída', 'amortiza', 'distribuição', 'dividendo',
-  ];
-  const orderList = tipoFilter === 'entrada' ? MACRO_ORDER_ENTRADA : MACRO_ORDER_SAIDA;
-
   const emptyIdsByMonth = (): string[][] => Array.from({ length: 13 }, () => []);
+
+  // Helper: get ordem for sorting, items not in plano go to end
+  const getOrdem = (key: string) => ordemMap.get(key) ?? FALLBACK_ORDEM;
 
   const roots: TreeNode[] = [];
 
@@ -253,7 +277,10 @@ function buildPlanoTree(
           centroNode.total += subTotal;
           centroNode.inconsistencias.push(...leaf.inconsistencias);
         }
-        centroNode.children.sort((a, b) => b.total - a.total);
+        // Sort subcentros by ordem_exibicao
+        centroNode.children.sort((a, b) =>
+          getOrdem(`sub:${a.subcentro}`) - getOrdem(`sub:${b.subcentro}`)
+        );
         grupoNode.children.push(centroNode);
         for (let i = 0; i < 12; i++) {
           grupoNode.monthValues[i] += centroNode.monthValues[i];
@@ -263,7 +290,11 @@ function buildPlanoTree(
         grupoNode.total += centroNode.total;
         grupoNode.inconsistencias.push(...centroNode.inconsistencias);
       }
-      grupoNode.children.sort((a, b) => b.total - a.total);
+      // Sort centros by ordem_exibicao
+      grupoNode.children.sort((a, b) =>
+        getOrdem(`centro:${macroLabel}|${grupoLabel}|${a.centro}`) -
+        getOrdem(`centro:${macroLabel}|${grupoLabel}|${b.centro}`)
+      );
       macroNode.children.push(grupoNode);
       for (let i = 0; i < 12; i++) {
         macroNode.monthValues[i] += grupoNode.monthValues[i];
@@ -273,25 +304,18 @@ function buildPlanoTree(
       macroNode.total += grupoNode.total;
       macroNode.inconsistencias.push(...grupoNode.inconsistencias);
     }
-    macroNode.children.sort((a, b) => b.total - a.total);
+    // Sort grupos by ordem_exibicao
+    macroNode.children.sort((a, b) =>
+      getOrdem(`grupo:${macroLabel}|${a.grupo}`) -
+      getOrdem(`grupo:${macroLabel}|${b.grupo}`)
+    );
     roots.push(macroNode);
   }
 
-  roots.sort((a, b) => {
-    const aKey = a.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    const bKey = b.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    const findPos = (k: string) => {
-      const idx = orderList.findIndex(o => {
-        const oNorm = o.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        return k.startsWith(oNorm) || k.includes(oNorm);
-      });
-      return idx >= 0 ? idx : 999;
-    };
-    const aPos = findPos(aKey);
-    const bPos = findPos(bKey);
-    if (aPos !== bPos) return aPos - bPos;
-    return b.total - a.total;
-  });
+  // Sort macros by ordem_exibicao
+  roots.sort((a, b) =>
+    getOrdem(`macro:${a.label}`) - getOrdem(`macro:${b.label}`)
+  );
 
   return roots;
 }
@@ -504,6 +528,18 @@ function FluxoTable({
   onDrillDown: (payload: FluxoDrillPayload, valorClicado: number) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
+  const [ordemMap, setOrdemMap] = useState<PlanoOrdemMap>(new Map());
+
+  // Load plano ordem_exibicao once
+  useEffect(() => {
+    supabase
+      .from('financeiro_plano_contas')
+      .select('macro_custo, grupo_custo, centro_custo, subcentro, ordem_exibicao')
+      .eq('ativo', true)
+      .then(({ data }) => {
+        if (data) setOrdemMap(buildPlanoOrdemMap(data as any));
+      });
+  }, []);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {
@@ -515,12 +551,12 @@ function FluxoTable({
   }, []);
 
   const entradaTree = useMemo(() =>
-    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada'),
-    [lancamentosGlobais, ano, mesAte]);
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada', ordemMap),
+    [lancamentosGlobais, ano, mesAte, ordemMap]);
 
   const saidaTree = useMemo(() =>
-    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida'),
-    [lancamentosGlobais, ano, mesAte]);
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida', ordemMap),
+    [lancamentosGlobais, ano, mesAte, ordemMap]);
 
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
