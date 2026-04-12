@@ -64,7 +64,7 @@ const CATEGORIAS_VALIDAS: string[] = [
 
 type CampoReq = ColunaTemplate;
 
-const CAMPOS_OBRIGATORIOS: Record<TipoImportavel, CampoReq[]> = {
+export const CAMPOS_OBRIGATORIOS: Record<TipoImportavel, CampoReq[]> = {
   saldo_inicial:       ['fazenda', 'data', 'categoria', 'quantidade'],
   nascimento:          ['fazenda', 'data', 'categoria', 'quantidade'],
   compra:              ['fazenda', 'data', 'categoria', 'quantidade'],

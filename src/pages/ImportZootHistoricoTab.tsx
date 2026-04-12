@@ -243,12 +243,12 @@ export default function ImportZootHistoricoTab() {
                 </TableHeader>
                 <TableBody>
                   {linhasValidadas.slice(0, 100).map((l) => (
-                    <TableRow key={l.linha} className={l.valida ? '' : 'bg-red-50'}>
+                    <TableRow key={l.linha} className={l.valida ? '' : 'bg-destructive/10'}>
                       <TableCell className="text-xs">{l.linha}</TableCell>
                       <TableCell>
                         {l.valida
-                          ? <CheckCircle className="h-4 w-4 text-green-600" />
-                          : <XCircle className="h-4 w-4 text-red-600" />
+                          ? <CheckCircle className="h-4 w-4 text-primary" />
+                          : <XCircle className="h-4 w-4 text-destructive" />
                         }
                       </TableCell>
                       <TableCell className="text-xs font-mono">{l.tipo}</TableCell>
@@ -259,7 +259,7 @@ export default function ImportZootHistoricoTab() {
                       <TableCell className="text-xs">{l.quantidade}</TableCell>
                       <TableCell className="text-xs">{l.peso_medio_kg ?? '—'}</TableCell>
                       <TableCell className="text-xs">{l.valor_total ?? '—'}</TableCell>
-                      <TableCell className="text-xs text-red-600 max-w-[200px]">
+                      <TableCell className="text-xs text-destructive max-w-[200px]">
                         {l.erros.join('; ')}
                       </TableCell>
                     </TableRow>
