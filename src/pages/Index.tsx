@@ -682,7 +682,6 @@ const Index = () => {
           onIntensiveToggle={setFinV2Intensivo}
           drillFilters={finV2DrillFilters}
         />
-        />
       )}
       {activeTab === 'financeiro_v2_hub' && (
         <FinanceiroV2HubTab onTabChange={handleTabChange} />
