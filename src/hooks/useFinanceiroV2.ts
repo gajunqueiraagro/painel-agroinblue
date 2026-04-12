@@ -442,9 +442,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       resolvedMacro = 'Distribuição';
       resolvedGrupo = 'Dividendos';
       resolvedCentro = 'Pessoas';
-    } else if (resolvedSubcentro && classificacoesRef.current.length > 0) {
+    } else if (resolvedSubcentro && classificacoes.length > 0) {
       // Try to resolve from plano de contas
-      const match = classificacoesRef.current.find(c => c.subcentro === resolvedSubcentro);
+      const match = classificacoes.find(c => c.subcentro === resolvedSubcentro);
       if (match) {
         resolvedMacro = match.macro_custo || resolvedMacro;
         resolvedGrupo = match.grupo_custo || resolvedGrupo;
