@@ -4,7 +4,7 @@
  * Sub-abas: Dashboard | Fluxo de Caixa | Rateio ADM | Importação
  * Suporta drill-down: ao clicar numa categoria no dashboard, mostra lançamentos filtrados.
  */
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
