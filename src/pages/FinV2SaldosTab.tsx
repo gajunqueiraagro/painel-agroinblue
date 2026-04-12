@@ -145,9 +145,10 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     });
   }, [clienteAtual?.id]);
 
-  const [anoMes, setAnoMes] = useState('');
+  const [dialogAno, setDialogAno] = useState(String(new Date().getFullYear()));
+  const [dialogMes, setDialogMes] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const anoMes = `${dialogAno}-${dialogMes}`;
   const [contaId, setContaId] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
   const [saldoInicial, setSaldoInicial] = useState('0,00');
   const [saldoFinal, setSaldoFinal] = useState('0,00');
   const [origem, setOrigem] = useState('manual');
@@ -325,14 +326,13 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
       setSaldoInicial(toBRL(prevFinal));
       setOverrideInicial(false);
     }
-  }, [contaId, anoMes, dialogOpen, allSaldos]);
+  }, [contaId, dialogAno, dialogMes, dialogOpen, allSaldos]);
 
   const openNew = () => {
     setEditing(null);
-    const m = String(new Date().getMonth() + 1).padStart(2, '0');
-    setAnoMes(`${filtroAno}-${m}`);
+    setDialogAno(filtroAno);
+    setDialogMes(String(new Date().getMonth() + 1).padStart(2, '0'));
     setContaId(contas[0]?.id || '');
-    setFazendaId(fazendaAtual?.id || fazendas[0]?.id || '');
     setSaldoInicial('0,00');
     setSaldoFinal('0,00');
     setOrigem('manual');
@@ -352,9 +352,9 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     }
 
     setEditing(s);
-    setAnoMes(s.ano_mes);
+    setDialogAno(s.ano_mes.slice(0, 4));
+    setDialogMes(s.ano_mes.slice(5, 7));
     setContaId(s.conta_bancaria_id);
-    setFazendaId(s.fazenda_id);
     setSaldoInicial(toBRL(s.saldo_inicial));
     setSaldoFinal(toBRL(s.saldo_final));
     setOrigem(s.origem_saldo || 'manual');
@@ -458,9 +458,37 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   /* ── save ── */
   const save = async () => {
-    if (!clienteAtual?.id || !anoMes || !fazendaId) {
+    if (!clienteAtual?.id || !anoMes || !contaId) {
       toast.error('Preencha todos os campos');
       return;
+    }
+
+    // For new records, derive fazenda from the selected conta via a lookup
+    // For new records, derive fazenda from the selected conta via a lookup
+    const resolveFazendaId = async (): Promise<string | null> => {
+      if (editing) return editing.fazenda_id;
+      const { data } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('fazenda_id')
+        .eq('id', contaId)
+        .single();
+      return data?.fazenda_id || fazendaAtual?.id || fazendas[0]?.id || null;
+    };
+    const fazendaId = await resolveFazendaId();
+    if (!fazendaId) {
+      toast.error('Não foi possível determinar a fazenda da conta');
+      return;
+    }
+
+    // Duplicate guard for new records
+    if (!editing) {
+      const existing = allSaldos.find(s =>
+        (s.conta_bancaria_id === contaId || s.conta_bancaria_id_v2 === contaId) && s.ano_mes === anoMes
+      );
+      if (existing) {
+        toast.error(`Já existe saldo para esta conta em ${anoMes}. Edite o registro existente.`);
+        return;
+      }
     }
 
     if (editing && !hasPersistableConta(editing)) {
@@ -893,19 +921,31 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
               )}
             </DialogHeader>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label className="text-xs">Ano-Mês *</Label>
-                  <Input
-                    value={anoMes}
-                    onChange={e => setAnoMes(e.target.value)}
-                    placeholder="2026-03"
-                    className="h-9"
-                    disabled={!!editing}
-                  />
+                  <Label className="text-xs">Ano *</Label>
+                  <Select value={dialogAno} onValueChange={setDialogAno} disabled={!!editing}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() - 5 + i)).map(a => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Conta Bancária *</Label>
+                  <Label className="text-xs">Mês *</Label>
+                  <Select value={dialogMes} onValueChange={setDialogMes} disabled={!!editing}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MESES.filter(m => m.v !== '__all__').map(m => (
+                        <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Conta *</Label>
                   <Select value={contaId} onValueChange={setContaId} disabled={!!editing}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
@@ -915,17 +955,6 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs">Fazenda *</Label>
-                <Select value={fazendaId} onValueChange={setFazendaId} disabled={!!editing}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {fazendas.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Saldo Inicial — always automatic except first month (admin only) */}
