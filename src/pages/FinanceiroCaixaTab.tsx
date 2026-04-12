@@ -41,7 +41,7 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
-  onFluxoDrillDown?: (payload: FluxoDrillPayload) => void;
+  
 }
 
 const MESES_FILTRO = [
@@ -62,7 +62,7 @@ function classifySaida(l: FinanceiroLancamento): string {
   return classificarSaidaCentral(l);
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, onFluxoDrillDown }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
@@ -324,7 +324,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ano={Number(localAno)}
               mesAte={localMes}
               fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
-              onDrillDown={onFluxoDrillDown}
+              
             />
           )}
           {subTab === 'rateio' && (
