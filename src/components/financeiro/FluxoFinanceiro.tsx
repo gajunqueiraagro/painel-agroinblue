@@ -631,6 +631,24 @@ function FluxoTable({
             const indent = DEPTH_INDENT[node.depth] || 40;
             const textColor = node.depth <= 1 ? 'text-card-foreground' : 'text-muted-foreground';
 
+            const buildPayload = (mes: number | null): FluxoDrillPayload => ({
+              origem: 'fluxo_caixa_amplo',
+              ano,
+              mes,
+              tipo: node.tipo,
+              macro: node.macro,
+              grupo: node.grupo,
+              centro: node.centro,
+              subcentro: node.subcentro,
+            });
+
+            const handleCellClick = (mes: number | null, val: number) => {
+              if (!onDrillDown || val === 0) return;
+              onDrillDown(buildPayload(mes));
+            };
+
+            const cellClickable = !!onDrillDown;
+
             return (
               <tr key={node.id} className="border-b border-border/20">
                 <td
@@ -651,19 +669,22 @@ function FluxoTable({
                   const val = node.monthValues[m.mes - 1] || 0;
                   const isAfter = m.mes > mesAte;
                   const color = isAfter ? 'text-muted-foreground/30' : val === 0 ? 'text-muted-foreground/40' : getValueColor(val, node.tipo);
+                  const clickable = cellClickable && !isAfter && val !== 0;
                   return (
                     <td
                       key={m.mes}
-                      className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''}`}
+                      className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} ${color} ${QUARTER_END.has(m.mes) ? 'border-r-2 border-border' : ''} ${clickable ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
                       style={{ background: bg }}
+                      onClick={clickable ? () => handleCellClick(m.mes, val) : undefined}
                     >
                       {isAfter ? '-' : fmtVal(val, fmtMode)}
                     </td>
                   );
                 })}
                 <td
-                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)}`}
+                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)} ${cellClickable && node.total !== 0 ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
                   style={{ background: BG_MUTED }}
+                  onClick={cellClickable && node.total !== 0 ? () => handleCellClick(null, node.total) : undefined}
                 >
                   {fmtVal(node.total, fmtMode)}
                 </td>
