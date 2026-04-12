@@ -10,9 +10,10 @@
  * REGRA ESTRUTURAL: cada nó da árvore carrega lancamentoIds[].
  * O modal abre por esses IDs — nunca refaz filtro textual.
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import {
