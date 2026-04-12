@@ -1,11 +1,11 @@
 /**
  * Fluxo de Caixa Global — tabela 12 linhas, jan-dez + coluna Total.
- * Duas visualizações:
- *   Resumido — executivo, linhas fixas.
- *   Amplo   — drill-down fiel ao plano de contas oficial:
+ * Modo único: Amplo — drill-down fiel ao plano de contas oficial:
  *             Macro → Grupo → Centro → Subcentro
  * Base: data_pagamento + Realizado.
  * SEMPRE GLOBAL — independente da fazenda selecionada.
+ *
+ * Drill-down: abre modal de auditoria in-page (não navega para outra tela).
  */
 import { useState, useMemo, useCallback } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,6 +21,7 @@ import {
   type LancamentoClassificavel,
 } from '@/lib/financeiro/classificacao';
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
+import { FluxoAuditoriaModal } from './FluxoAuditoriaModal';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,10 +45,8 @@ const fmtVal = (v: number, mode: FmtMode): string =>
   mode === 'compact' ? fmtK(v) : fmtFull(v);
 
 // ---------------------------------------------------------------------------
-// Row definitions for RESUMIDO
+// Row definitions for summary rows (Saldo, Totais)
 // ---------------------------------------------------------------------------
-
-type VisaoFluxo = 'resumido' | 'amplo';
 
 interface RowDef {
   id: string;
@@ -57,20 +56,12 @@ interface RowDef {
   indent?: number;
   tipo?: 'entrada' | 'saida' | 'saldo';
   nivel?: 1 | 2 | 3;
-  parentId?: string;
 }
 
-const ROWS_RESUMIDO: RowDef[] = [
+const ROWS_SUMMARY: RowDef[] = [
   { id: 'saldoInicial', label: 'Saldo Inicial', key: 'saldoInicial', tipo: 'saldo' },
   { id: 'totalEntradas', label: 'Total Entradas', key: 'totalEntradas', bold: true, tipo: 'entrada', nivel: 1 },
-  { id: 'receitas', label: 'Receitas', key: 'receitas', indent: 1, tipo: 'entrada', nivel: 2 },
-  { id: 'outrasEntradas', label: 'Outras Entradas', key: 'outrasEntradas', indent: 1, tipo: 'entrada', nivel: 2 },
   { id: 'totalSaidas', label: 'Total Saídas', key: 'totalSaidas', bold: true, tipo: 'saida', nivel: 1 },
-  { id: 'deducaoReceitas', label: 'Dedução de Receitas', key: 'deducaoReceitas', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'desembolsoProdutivo', label: 'Desemb. Produtivo', key: 'desembolsoProdutivo', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'reposicao', label: 'Reposição Bovinos', key: 'reposicao', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'amortizacoes', label: 'Amortizações', key: 'amortizacoes', indent: 1, tipo: 'saida', nivel: 2 },
-  { id: 'dividendos', label: 'Dividendos', key: 'dividendos', indent: 1, tipo: 'saida', nivel: 2 },
   { id: 'saldoFinal', label: 'Saldo Final', key: 'saldoFinal', tipo: 'saldo', bold: true, nivel: 1 },
   { id: 'saldoAcumulado', label: 'Saldo Acumulado', key: 'saldoAcumulado', bold: true, tipo: 'saldo', nivel: 1 },
 ];
@@ -90,12 +81,11 @@ interface FluxoLancRaw extends LancamentoClassificavel {
 interface TreeNode {
   id: string;
   label: string;
-  monthValues: number[]; // 12 months
+  monthValues: number[];
   total: number;
   tipo: 'entrada' | 'saida';
-  depth: number; // 0=macro, 1=grupo, 2=centro, 3=subcentro
+  depth: number;
   children: TreeNode[];
-  // Hierarchy for drill-down
   macro: string;
   grupo?: string;
   centro?: string;
@@ -118,7 +108,6 @@ function buildPlanoTree(
     return false;
   });
 
-  // 4-level grouping: macro → grupo → centro → subcentro
   const macroMap = new Map<string, Map<string, Map<string, Map<string, number[]>>>>();
 
   for (const l of realizados) {
@@ -139,101 +128,63 @@ function buildPlanoTree(
     sMap.get(sub)![m - 1] += val;
   }
 
-  // Fixed executive order for macros
-  const MACRO_ORDER_ENTRADA: string[] = [
-    'receita operacional',
-    'entradas financeiras',
-  ];
+  const MACRO_ORDER_ENTRADA: string[] = ['receita operacional', 'entradas financeiras'];
   const MACRO_ORDER_SAIDA: string[] = [
-    'dedu',           // matches Deduções, Dedução, Deduções de Receitas, etc.
-    'custeio',        // Custeio Produção, Custeio Produtivo
-    'investimento',   // Investimentos, Investimento na Fazenda, etc.
-    'saída',          // Saídas Financeiras, Saída Financeira
-    'amortiza',       // Amortizações Financeiras
-    'distribuição',   // Distribuição
-    'dividendo',      // Dividendos
+    'dedu', 'custeio', 'investimento', 'saída', 'amortiza', 'distribuição', 'dividendo',
   ];
   const orderList = tipoFilter === 'entrada' ? MACRO_ORDER_ENTRADA : MACRO_ORDER_SAIDA;
 
-  // Build tree
   const roots: TreeNode[] = [];
 
   for (const [macroLabel, grupoMap] of macroMap) {
     const macroNode: TreeNode = {
-      id: `m_${tipoFilter}_${macroLabel}`,
-      label: macroLabel,
-      monthValues: new Array(12).fill(0),
-      total: 0,
-      tipo: tipoFilter,
-      depth: 0,
-      children: [],
-      macro: macroLabel,
+      id: `m_${tipoFilter}_${macroLabel}`, label: macroLabel,
+      monthValues: new Array(12).fill(0), total: 0,
+      tipo: tipoFilter, depth: 0, children: [], macro: macroLabel,
     };
 
     for (const [grupoLabel, centroMap] of grupoMap) {
       const grupoNode: TreeNode = {
-        id: `g_${tipoFilter}_${macroLabel}_${grupoLabel}`,
-        label: grupoLabel,
-        monthValues: new Array(12).fill(0),
-        total: 0,
-        tipo: tipoFilter,
-        depth: 1,
-        children: [],
-        macro: macroLabel,
-        grupo: grupoLabel,
+        id: `g_${tipoFilter}_${macroLabel}_${grupoLabel}`, label: grupoLabel,
+        monthValues: new Array(12).fill(0), total: 0,
+        tipo: tipoFilter, depth: 1, children: [],
+        macro: macroLabel, grupo: grupoLabel,
       };
 
       for (const [centroLabel, subMap] of centroMap) {
         const centroNode: TreeNode = {
-          id: `c_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}`,
-          label: centroLabel,
-          monthValues: new Array(12).fill(0),
-          total: 0,
-          tipo: tipoFilter,
-          depth: 2,
-          children: [],
-          macro: macroLabel,
-          grupo: grupoLabel,
-          centro: centroLabel,
+          id: `c_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}`, label: centroLabel,
+          monthValues: new Array(12).fill(0), total: 0,
+          tipo: tipoFilter, depth: 2, children: [],
+          macro: macroLabel, grupo: grupoLabel, centro: centroLabel,
         };
 
         for (const [subLabel, months] of subMap) {
           const subTotal = months.reduce((a, b) => a + b, 0);
           const subNode: TreeNode = {
             id: `s_${tipoFilter}_${macroLabel}_${grupoLabel}_${centroLabel}_${subLabel}`,
-            label: subLabel,
-            monthValues: [...months],
-            total: subTotal,
-            tipo: tipoFilter,
-            depth: 3,
-            children: [],
-            macro: macroLabel,
-            grupo: grupoLabel,
-            centro: centroLabel,
-            subcentro: subLabel,
+            label: subLabel, monthValues: [...months], total: subTotal,
+            tipo: tipoFilter, depth: 3, children: [],
+            macro: macroLabel, grupo: grupoLabel, centro: centroLabel, subcentro: subLabel,
           };
           centroNode.children.push(subNode);
           for (let i = 0; i < 12; i++) centroNode.monthValues[i] += months[i];
           centroNode.total += subTotal;
         }
-
         centroNode.children.sort((a, b) => b.total - a.total);
         grupoNode.children.push(centroNode);
         for (let i = 0; i < 12; i++) grupoNode.monthValues[i] += centroNode.monthValues[i];
         grupoNode.total += centroNode.total;
       }
-
       grupoNode.children.sort((a, b) => b.total - a.total);
       macroNode.children.push(grupoNode);
       for (let i = 0; i < 12; i++) macroNode.monthValues[i] += grupoNode.monthValues[i];
       macroNode.total += grupoNode.total;
     }
-
     macroNode.children.sort((a, b) => b.total - a.total);
     roots.push(macroNode);
   }
 
-  // Sort by fixed executive order; unknown macros go to end sorted by value
   roots.sort((a, b) => {
     const aKey = a.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     const bKey = b.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -254,13 +205,13 @@ function buildPlanoTree(
 }
 
 // ---------------------------------------------------------------------------
-// Props
+// Exported types
 // ---------------------------------------------------------------------------
 
 export interface FluxoDrillPayload {
   origem: 'fluxo_caixa_amplo';
   ano: number;
-  mes: number | null; // null = Total column
+  mes: number | null;
   tipo: 'entrada' | 'saida';
   macro?: string;
   grupo?: string;
@@ -268,23 +219,36 @@ export interface FluxoDrillPayload {
   subcentro?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   rateioADM: RateioADM[];
   ano: number;
   mesAte: number;
   fazendaAtualNome?: string;
-  onDrillDown?: (payload: FluxoDrillPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome, onDrillDown }: Props) {
+export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAtualNome }: Props) {
   const isMobile = useIsMobile();
-  const [visao, setVisao] = useState<VisaoFluxo>('resumido');
   const [fmtMode, setFmtMode] = useState<FmtMode>('compact');
+
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalPayload, setModalPayload] = useState<FluxoDrillPayload | null>(null);
+  const [modalValorClicado, setModalValorClicado] = useState(0);
+
+  const handleDrillDown = useCallback((payload: FluxoDrillPayload, valorClicado: number) => {
+    setModalPayload(payload);
+    setModalValorClicado(valorClicado);
+    setModalOpen(true);
+  }, []);
 
   const { meses, loading, saldoInicialAusente, lancamentosGlobais } =
     useFluxoCaixa(lancamentos, rateioADM, ano, mesAte);
@@ -343,28 +307,6 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
                   123
                 </button>
               </div>
-              <div className="flex rounded border border-border overflow-hidden">
-                <button
-                  onClick={() => setVisao('resumido')}
-                  className={`px-2 py-0.5 text-[9px] font-medium transition-colors ${
-                    visao === 'resumido'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Resumido
-                </button>
-                <button
-                  onClick={() => setVisao('amplo')}
-                  className={`px-2 py-0.5 text-[9px] font-medium transition-colors ${
-                    visao === 'amplo'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Amplo
-                </button>
-              </div>
             </div>
           </div>
 
@@ -372,14 +314,21 @@ export function FluxoFinanceiro({ lancamentos, rateioADM, ano, mesAte, fazendaAt
             meses={meses}
             mesAte={mesAte}
             isMobile={isMobile}
-            visao={visao}
             fmtMode={fmtMode}
             lancamentosGlobais={lancamentosGlobais as FluxoLancRaw[]}
             ano={ano}
-            onDrillDown={onDrillDown}
+            onDrillDown={handleDrillDown}
           />
         </CardContent>
       </Card>
+
+      <FluxoAuditoriaModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        payload={modalPayload}
+        lancamentos={lancamentos}
+        valorClicado={modalValorClicado}
+      />
     </div>
   );
 }
@@ -403,13 +352,12 @@ const BG_NIVEL2 = 'color-mix(in srgb, hsl(var(--muted)) 45%, hsl(var(--card)))';
 const BG_ZEBRA = 'color-mix(in srgb, hsl(var(--muted)) 18%, hsl(var(--card)))';
 const BG_DYN = 'color-mix(in srgb, hsl(var(--muted)) 10%, hsl(var(--card)))';
 
-// Depth-based indentation and styling
-const DEPTH_INDENT = [4, 16, 28, 40]; // px
+const DEPTH_INDENT = [4, 16, 28, 40];
 const DEPTH_FONT = [
-  'font-semibold text-[9px]',   // depth 0 = macro
-  'font-medium text-[9px]',     // depth 1 = grupo
-  'font-normal text-[9px]',     // depth 2 = centro
-  'font-normal text-[8px] italic', // depth 3 = subcentro
+  'font-semibold text-[9px]',
+  'font-medium text-[9px]',
+  'font-normal text-[9px]',
+  'font-normal text-[8px] italic',
 ];
 const DEPTH_BG = (depth: number, idx: number) => {
   if (depth === 0) return BG_NIVEL2;
@@ -419,16 +367,15 @@ const DEPTH_BG = (depth: number, idx: number) => {
 };
 
 function FluxoTable({
-  meses, mesAte, isMobile, visao, fmtMode, lancamentosGlobais, ano, onDrillDown,
+  meses, mesAte, isMobile, fmtMode, lancamentosGlobais, ano, onDrillDown,
 }: {
   meses: FluxoMensal[];
   mesAte: number;
   isMobile: boolean;
-  visao: VisaoFluxo;
   fmtMode: FmtMode;
   lancamentosGlobais: FluxoLancRaw[];
   ano: number;
-  onDrillDown?: (payload: FluxoDrillPayload) => void;
+  onDrillDown: (payload: FluxoDrillPayload, valorClicado: number) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
 
@@ -441,21 +388,18 @@ function FluxoTable({
     });
   }, []);
 
-  // Build dynamic trees for Amplo mode
-  const entradaTree = useMemo(() => {
-    if (visao !== 'amplo') return [];
-    return buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada');
-  }, [visao, lancamentosGlobais, ano, mesAte]);
+  const entradaTree = useMemo(() =>
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'entrada'),
+    [lancamentosGlobais, ano, mesAte]);
 
-  const saidaTree = useMemo(() => {
-    if (visao !== 'amplo') return [];
-    return buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida');
-  }, [visao, lancamentosGlobais, ano, mesAte]);
+  const saidaTree = useMemo(() =>
+    buildPlanoTree(lancamentosGlobais, ano, mesAte, 'saida'),
+    [lancamentosGlobais, ano, mesAte]);
 
   const totals = useMemo(() => {
     const upTo = meses.filter(m => m.mes <= mesAte);
     const result: Record<string, number> = {};
-    for (const row of ROWS_RESUMIDO) {
+    for (const row of ROWS_SUMMARY) {
       if (row.key === 'saldoInicial') {
         result[row.key] = meses.length > 0 ? meses[0].saldoInicial : 0;
       } else if (row.key === 'saldoFinal') {
@@ -469,7 +413,6 @@ function FluxoTable({
     return result;
   }, [meses, mesAte]);
 
-  // Flatten tree nodes respecting expansion
   const flattenTree = useCallback((nodes: TreeNode[]): TreeNode[] => {
     const result: TreeNode[] = [];
     for (const node of nodes) {
@@ -481,29 +424,18 @@ function FluxoTable({
     return result;
   }, [expanded]);
 
-  // Build final render list
   type RenderItem =
     | { type: 'static'; row: RowDef }
     | { type: 'tree'; node: TreeNode };
 
   const renderRows = useMemo((): RenderItem[] => {
-    if (visao === 'resumido') {
-      return ROWS_RESUMIDO.map(r => ({ type: 'static' as const, row: r }));
-    }
-
-    // Amplo: static summary rows + tree nodes injected after Total Entradas / Total Saídas
     const result: RenderItem[] = [];
-    const summaryRows: RowDef[] = [
-      ROWS_RESUMIDO.find(r => r.id === 'saldoInicial')!,
-      ROWS_RESUMIDO.find(r => r.id === 'totalEntradas')!,
-    ];
 
     // Saldo Inicial
-    result.push({ type: 'static', row: summaryRows[0] });
+    result.push({ type: 'static', row: ROWS_SUMMARY[0] });
 
     // Total Entradas
-    result.push({ type: 'static', row: summaryRows[1] });
-    // Inject entrada tree
+    result.push({ type: 'static', row: ROWS_SUMMARY[1] });
     if (expanded.has('totalEntradas')) {
       for (const node of flattenTree(entradaTree)) {
         result.push({ type: 'tree', node });
@@ -511,9 +443,7 @@ function FluxoTable({
     }
 
     // Total Saídas
-    const totalSaidasRow = ROWS_RESUMIDO.find(r => r.id === 'totalSaidas')!;
-    result.push({ type: 'static', row: totalSaidasRow });
-    // Inject saida tree
+    result.push({ type: 'static', row: ROWS_SUMMARY[2] });
     if (expanded.has('totalSaidas')) {
       for (const node of flattenTree(saidaTree)) {
         result.push({ type: 'tree', node });
@@ -521,17 +451,14 @@ function FluxoTable({
     }
 
     // Saldo Final + Acumulado
-    result.push({ type: 'static', row: ROWS_RESUMIDO.find(r => r.id === 'saldoFinal')! });
-    result.push({ type: 'static', row: ROWS_RESUMIDO.find(r => r.id === 'saldoAcumulado')! });
+    result.push({ type: 'static', row: ROWS_SUMMARY[3] });
+    result.push({ type: 'static', row: ROWS_SUMMARY[4] });
 
     return result;
-  }, [visao, expanded, entradaTree, saidaTree, flattenTree]);
+  }, [expanded, entradaTree, saidaTree, flattenTree]);
 
-  // Which static rows are expandable in Amplo
-  const isStaticExpandable = (rowId: string) => {
-    if (visao !== 'amplo') return false;
-    return rowId === 'totalEntradas' || rowId === 'totalSaidas';
-  };
+  const isStaticExpandable = (rowId: string) =>
+    rowId === 'totalEntradas' || rowId === 'totalSaidas';
 
   return (
     <div className="overflow-auto -mx-1 max-h-[60vh]" style={{ scrollbarGutter: 'stable' }}>
@@ -643,11 +570,9 @@ function FluxoTable({
             });
 
             const handleCellClick = (mes: number | null, val: number) => {
-              if (!onDrillDown || val === 0) return;
-              onDrillDown(buildPayload(mes));
+              if (val === 0) return;
+              onDrillDown(buildPayload(mes), val);
             };
-
-            const cellClickable = !!onDrillDown;
 
             return (
               <tr key={node.id} className="border-b border-border/20">
@@ -669,7 +594,7 @@ function FluxoTable({
                   const val = node.monthValues[m.mes - 1] || 0;
                   const isAfter = m.mes > mesAte;
                   const color = isAfter ? 'text-muted-foreground/30' : val === 0 ? 'text-muted-foreground/40' : getValueColor(val, node.tipo);
-                  const clickable = cellClickable && !isAfter && val !== 0;
+                  const clickable = !isAfter && val !== 0;
                   return (
                     <td
                       key={m.mes}
@@ -682,9 +607,9 @@ function FluxoTable({
                   );
                 })}
                 <td
-                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)} ${cellClickable && node.total !== 0 ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
+                  className={`px-1 py-[1.5px] text-right leading-tight ${fontCls} border-l-2 border-border ${getValueColor(node.total, node.tipo)} ${node.total !== 0 ? 'cursor-pointer hover:underline hover:opacity-80' : ''}`}
                   style={{ background: BG_MUTED }}
-                  onClick={cellClickable && node.total !== 0 ? () => handleCellClick(null, node.total) : undefined}
+                  onClick={node.total !== 0 ? () => handleCellClick(null, node.total) : undefined}
                 >
                   {fmtVal(node.total, fmtMode)}
                 </td>
