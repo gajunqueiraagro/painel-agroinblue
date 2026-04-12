@@ -256,13 +256,17 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   }, [allSaldos]);
 
   const getInconsistency = useCallback((s: SaldoBancario): number | null => {
-    const key = `${s.conta_bancaria_id}|${s.ano_mes}`;
+    const resolvedId = s.conta_bancaria_id_v2 || s.conta_bancaria_id;
+    const key = `${resolvedId}|${s.ano_mes}`;
     const mov = movSummary[key];
     if (!mov) return null;
-    const expected = s.saldo_inicial + mov.entradas - mov.saidas;
+    // Use chained saldo_inicial (same as Conciliação)
+    const prevFinal = allSaldos.find(x => x.conta_bancaria_id === s.conta_bancaria_id && x.ano_mes === prevAnoMes(s.ano_mes))?.saldo_final;
+    const saldoIni = prevFinal !== null && prevFinal !== undefined ? prevFinal : s.saldo_inicial;
+    const expected = saldoIni + mov.entradas - mov.saidas;
     const diff = Math.round((expected - s.saldo_final) * 100) / 100;
     return diff !== 0 ? Math.abs(diff) : null;
-  }, [movSummary]);
+  }, [movSummary, allSaldos]);
 
   /* ── permission helpers ── */
   const canEditSaldoFinal = (s: SaldoBancario): boolean => {
@@ -831,7 +835,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
                               const key = `${contaPersistId}|${s.ano_mes}`;
                               const mov = movSummary[key];
-                              const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
+                              const saldoCalculado = saldoInicialEfetivo + (mov ? mov.entradas - mov.saidas : 0);
                               const diff = Math.round((s.saldo_final - saldoCalculado) * 100) / 100;
                               const isConciliado = diff === 0;
 
