@@ -831,7 +831,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
                               const key = `${contaPersistId}|${s.ano_mes}`;
                               const mov = movSummary[key];
-                              const saldoCalculado = s.saldo_inicial + (mov ? mov.entradas - mov.saidas : 0);
+                              const saldoCalculado = saldoInicialEfetivo + (mov ? mov.entradas - mov.saidas : 0);
                               const diff = Math.round((s.saldo_final - saldoCalculado) * 100) / 100;
                               const isConciliado = diff === 0;
 
