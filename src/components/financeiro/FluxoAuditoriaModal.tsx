@@ -1,8 +1,9 @@
 /**
  * Modal de Auditoria — abre ao clicar num valor do Fluxo de Caixa (modo Amplo).
  * Mostra lançamentos reais filtrados hierarquicamente.
+ * Layout: Header fixo → Tabela com scroll → Footer fixo.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -42,34 +43,18 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
 
     return lancamentos.filter(l => {
       if (!isRealizado(l as LancamentoClassificavel)) return false;
-
-      // Tipo
       if (payload.tipo === 'entrada' && !isEntradaClass(l as LancamentoClassificavel)) return false;
       if (payload.tipo === 'saida' && !isSaidaClass(l as LancamentoClassificavel)) return false;
-
-      // Ano
       if (datePagtoAno(l as LancamentoClassificavel) !== payload.ano) return false;
-
-      // Mês (null = Total → all months up to context)
       if (payload.mes !== null) {
         if (datePagtoMes(l as LancamentoClassificavel) !== payload.mes) return false;
       }
 
-      // Hierarchical filters — only apply the levels present in the payload
       const norm = (s: string | null | undefined) => (s || '').toLowerCase().trim();
-
-      if (payload.macro) {
-        if (norm(l.macro_custo) !== norm(payload.macro)) return false;
-      }
-      if (payload.grupo) {
-        if (norm(l.grupo_custo) !== norm(payload.grupo)) return false;
-      }
-      if (payload.centro) {
-        if (norm(l.centro_custo) !== norm(payload.centro)) return false;
-      }
-      if (payload.subcentro) {
-        if (norm(l.subcentro) !== norm(payload.subcentro)) return false;
-      }
+      if (payload.macro && norm(l.macro_custo) !== norm(payload.macro)) return false;
+      if (payload.grupo && norm(l.grupo_custo) !== norm(payload.grupo)) return false;
+      if (payload.centro && norm(l.centro_custo) !== norm(payload.centro)) return false;
+      if (payload.subcentro && norm(l.subcentro) !== norm(payload.subcentro)) return false;
 
       return true;
     });
@@ -80,75 +65,91 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
     [filtered],
   );
 
-  const diff = Math.abs(totalLanc - valorClicado);
-  const hasDiff = diff > 0.01;
+  const diff = totalLanc - valorClicado;
+  const hasDiff = Math.abs(diff) > 0.01;
 
   if (!payload) return null;
 
   const mesLabel = payload.mes ? MESES_NOMES[payload.mes - 1] : 'Acumulado';
   const hierarquia = [payload.macro, payload.grupo, payload.centro, payload.subcentro].filter(Boolean).join(' › ');
   const tipoLabel = payload.tipo === 'entrada' ? 'Entrada' : 'Saída';
+  const isEntrada = payload.tipo === 'entrada';
+  const valColor = isEntrada ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0">
-        {/* Fixed header */}
-        <DialogHeader className="px-4 pt-4 pb-2 border-b border-border space-y-1 shrink-0 bg-muted/50">
-          <DialogTitle className="text-sm font-bold flex items-center gap-2">
-            🔍 Auditoria — {hierarquia}
-          </DialogTitle>
-          <DialogDescription className="text-[10px] text-muted-foreground">
-            {tipoLabel} · {mesLabel}/{payload.ano} · {filtered.length} lançamentos
-          </DialogDescription>
+      <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 gap-0">
+        {/* ── HEADER FIXO ── */}
+        <DialogHeader className="px-4 pt-4 pb-3 border-b border-border shrink-0 bg-muted/40">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <DialogTitle className="text-sm font-bold flex items-center gap-1.5 truncate">
+                🔎 Auditoria — {hierarquia}
+              </DialogTitle>
+              <DialogDescription className="text-[10px] text-muted-foreground">
+                {tipoLabel} · {mesLabel}/{payload.ano} · {filtered.length} lançamentos
+              </DialogDescription>
+            </div>
+            <div className="text-right shrink-0 space-y-0.5">
+              <div className="text-[10px] text-muted-foreground">
+                Valor clicado: <span className={`font-bold font-mono ${valColor}`}>{formatMoeda(valorClicado)}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Total encontrado: <span className={`font-bold font-mono ${valColor}`}>{formatMoeda(totalLanc)}</span>
+              </div>
+              {hasDiff && (
+                <div className="text-[10px] font-bold text-destructive">
+                  Δ Diferença: {formatMoeda(diff)}
+                </div>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
-        {/* Scrollable body */}
+        {/* ── TABELA COM SCROLL ── */}
         <ScrollArea className="flex-1 min-h-0">
-          <div className="px-2 pb-2">
+          <div className="px-2 pb-1">
             {filtered.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 text-xs">
+              <div className="text-center text-muted-foreground py-12 text-xs">
                 Nenhum lançamento encontrado para este filtro.
               </div>
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/60">
-                    <TableHead className="text-[9px] px-1.5 py-1.5 whitespace-nowrap font-bold">Data Pgto</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Fornecedor</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Produto</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Macro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Grupo</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Centro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Subcentro</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 text-right font-bold">Valor</TableHead>
-                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold">Status</TableHead>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold whitespace-nowrap w-[72px]">Data Pgto</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-[120px]">Fornecedor</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold min-w-[140px]">Produto / Histórico</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-[90px]">Centro</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-[90px]">Subcentro</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold text-right w-[85px]">Valor</TableHead>
+                    <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-[60px]">Status</TableHead>
                     {onEditLancamento && (
-                      <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-8" />
+                      <TableHead className="text-[9px] px-1.5 py-1.5 font-bold w-[36px]" />
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(l => (
-                    <TableRow key={l.id}>
+                  {filtered.map((l, idx) => (
+                    <TableRow
+                      key={l.id}
+                      className={`hover:bg-accent/40 transition-colors ${idx % 2 === 0 ? '' : 'bg-muted/15'}`}
+                    >
                       <TableCell className="text-[9px] px-1.5 py-1 whitespace-nowrap">{l.data_pagamento || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[100px] truncate">{l.fornecedor || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[100px] truncate">{l.produto || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[80px] truncate">{l.macro_custo || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[80px] truncate">{l.grupo_custo || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[80px] truncate">{l.centro_custo || '-'}</TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1 max-w-[80px] truncate">{l.subcentro || '-'}</TableCell>
-                      <TableCell className={`text-[9px] px-1.5 py-1 text-right font-mono font-bold whitespace-nowrap ${
-                        payload.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                      }`}>
+                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[120px]" title={l.fornecedor || undefined}>{l.fornecedor || '-'}</TableCell>
+                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[200px]" title={l.produto || undefined}>{l.produto || '-'}</TableCell>
+                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.centro_custo || undefined}>{l.centro_custo || '-'}</TableCell>
+                      <TableCell className="text-[9px] px-1.5 py-1 truncate max-w-[90px]" title={l.subcentro || undefined}>{l.subcentro || '-'}</TableCell>
+                      <TableCell className={`text-[9px] px-1.5 py-1 text-right font-mono font-bold whitespace-nowrap ${valColor}`}>
                         {formatMoeda(Math.abs(l.valor))}
                       </TableCell>
-                      <TableCell className="text-[9px] px-1.5 py-1">{l.status_transacao || '-'}</TableCell>
+                      <TableCell className="text-[9px] px-1.5 py-1 truncate">{l.status_transacao || '-'}</TableCell>
                       {onEditLancamento && (
                         <TableCell className="px-1 py-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-5 w-5"
+                            className="h-5 w-5 hover:bg-primary/10"
                             onClick={() => onEditLancamento(l)}
                             title="Editar lançamento"
                           >
@@ -164,18 +165,16 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
           </div>
         </ScrollArea>
 
-        {/* Fixed footer */}
-        <div className="border-t border-border px-4 py-2.5 flex items-center justify-between text-[10px] shrink-0 bg-muted/50">
+        {/* ── RODAPÉ FIXO ── */}
+        <div className="border-t border-border px-4 py-2.5 flex items-center justify-between text-[10px] shrink-0 bg-muted/40">
           <span className="text-muted-foreground font-medium">{filtered.length} lançamentos</span>
-          <div className="flex items-center gap-3">
-            <span className={`font-bold font-mono ${
-              payload.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-            }`}>
+          <div className="flex items-center gap-4">
+            <span className={`font-bold font-mono text-xs ${valColor}`}>
               Total: {formatMoeda(totalLanc)}
             </span>
             {hasDiff && (
-              <span className="text-amber-600 dark:text-amber-400 font-bold">
-                ⚠️ Δ {formatMoeda(diff)}
+              <span className="font-bold font-mono text-xs text-destructive">
+                Δ {formatMoeda(diff)}
               </span>
             )}
           </div>
