@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
-import { filtrarPorCenario } from '@/lib/statusOperacional';
+import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { ArrowLeft, DollarSign } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
-import { calcFluxoAnual, FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
+import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { parseISO, format } from 'date-fns';
 
@@ -39,7 +39,6 @@ interface Props {
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
-
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     anos.add(new Date().getFullYear());
@@ -57,20 +56,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>('realizado');
 
-  // FONTE OFICIAL: useRebanhoOficial
+  // FONTE OFICIAL: useRebanhoOficial para saldos e indicadores
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
   const zootByMes = rebanhoOf.fazendaByMes;
 
-  const lancFiltrados = useMemo(() => {
-    const cenario = statusFiltro === 'realizado' ? 'realizado' : 'meta';
-    return filtrarPorCenario(lancamentos, cenario);
-  }, [lancamentos, statusFiltro]);
-
-  const dados = useMemo(
-    () => calcFluxoAnual(saldosIniciais, lancFiltrados, Number(anoFiltro), true),
-    [lancFiltrados, saldosIniciais, anoFiltro],
-  );
+  // FONTE OFICIAL: query direta ao banco com paginação completa para movimentações
+  const { data: movData } = useMovimentacoesMensais(Number(anoFiltro), cenarioView as 'realizado' | 'meta');
+  const porMesTipo = movData?.porMesTipo ?? {};
+  const totalAno = movData?.totalAno ?? ({} as Record<string, number>);
 
   if (drilldownMonth) {
     const mesLabel = MESES_COLS.find(m => m.key === drilldownMonth)?.label || drilldownMonth;
@@ -180,31 +174,30 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </tr>
           </thead>
           <tbody>
+            {/* Saldo Início — FONTE OFICIAL: view zootécnica */}
             <tr className="bg-primary/15 border-b">
               <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
               {MESES_COLS.map(m => {
-                // Fonte oficial: view zootécnica (cabecas_inicio). Fallback: calcFluxoAnual.
                 const z = zootByMes[m.key];
-                const saldoOficial = z?.cabecas_inicio;
-                const saldoMov = dados.saldoInicioMes[m.key];
-                const valor = saldoOficial ?? saldoMov;
+                const valor = z?.cabecas_inicio;
                 return (
                   <td
                     key={m.key}
                     className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
                     onClick={() => setDrilldownMonth(m.key)}
-                    title={z ? `Fonte: ${z.fonte_oficial_mes}` : 'Fonte: movimentação'}
+                    title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}
                   >
-                    {fmtNum(valor)}
+                    {valor != null ? fmtNum(valor) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
-                {fmtNum(zootByMes['01']?.cabecas_inicio ?? dados.saldoInicialAno)}
+                {fmtNum(zootByMes['01']?.cabecas_inicio)}
               </td>
             </tr>
 
-            {FLUXO_LINHAS.map((li, i) => {
+            {/* Linhas de movimentação — FONTE: query direta ao banco */}
+            {FLUXO_LINHAS.map((li) => {
               const corPositiva = statusFiltro === 'meta' ? 'text-orange-500' : 'text-success';
               const corNegativa = statusFiltro === 'meta' ? 'text-orange-400' : 'text-destructive';
               const rowBg = li.sinal === '+' ? 'bg-emerald-50/40' : 'bg-red-50/30';
@@ -219,40 +212,38 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   <span className="text-[8px] opacity-60">{li.sinal === '+' ? '+' : '−'}</span> {li.label}
                 </td>
                 {MESES_COLS.map(m => {
-                  const val = dados.porMesTipo[m.key][li.tipo];
+                  const val = porMesTipo[m.key]?.[li.tipo] ?? 0;
                   return (
                     <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                       {val ? fmtNum(val) : '–'}
                     </td>
                   );
                 })}
-                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${dados.totalAno[li.tipo] > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
-                  {dados.totalAno[li.tipo] ? fmtNum(dados.totalAno[li.tipo]) : '–'}
+                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${(totalAno[li.tipo] ?? 0) > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                  {totalAno[li.tipo] ? fmtNum(totalAno[li.tipo]) : '–'}
                 </td>
               </tr>
               );
             })}
 
+            {/* Saldo Final — FONTE OFICIAL: view zootécnica */}
             <tr className="border-t-2 bg-primary/20">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
-              {MESES_COLS.map((m, i) => {
-                // Fonte oficial: view zootécnica. Fallback: cálculo por movimentações.
+              {MESES_COLS.map((m) => {
                 const z = zootByMes[m.key];
-                const saldoOficial = z?.cabecas_final;
-                const saldoMov = i < 11 ? dados.saldoInicioMes[MESES_COLS[i + 1].key] : dados.saldoFinalAno;
-                const saldoFim = saldoOficial ?? saldoMov;
+                const saldoFim = z?.cabecas_final;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`} title={z ? `Fonte: ${z.fonte_oficial_mes}` : 'Fonte: movimentação'}>
-                    {fmtNum(saldoFim)}
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`} title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}>
+                    {saldoFim != null ? fmtNum(saldoFim) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
-                {fmtNum(zootByMes['12']?.cabecas_final ?? dados.saldoFinalAno)}
+                {fmtNum(zootByMes['12']?.cabecas_final)}
               </td>
             </tr>
 
-            {/* ── Indicadores zootécnicos — fonte única: vw_zoot_fazenda_mensal ── */}
+            {/* Indicadores zootécnicos — fonte única: vw_zoot_fazenda_mensal */}
             {(() => {
               const now = new Date();
               const mesAtualKey = String(now.getMonth() + 1).padStart(2, '0');
