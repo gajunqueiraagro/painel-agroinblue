@@ -251,25 +251,10 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
     return Array.from(groups.entries());
   }, [gridCompleto]);
 
-  const fazendaNome = useMemo(() => {
-    const f = fazendaOptions.find(f => f.id === fazendaId);
-    return f?.nome || '';
-  }, [fazendaOptions, fazendaId]);
-
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in pb-24 space-y-4">
       {/* Header / Filtros */}
       <div className="flex flex-wrap items-center gap-2 pt-2">
-        <Select value={fazendaId} onValueChange={setFazendaId}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Fazenda..." />
-          </SelectTrigger>
-          <SelectContent>
-            {fazendaOptions.map(f => (
-              <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
           <SelectTrigger className="w-[100px]">
             <SelectValue />
