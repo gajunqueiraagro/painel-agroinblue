@@ -965,6 +965,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const uMetricas = isGlobal ? globalData.metricas : metricasSelecionado;
   const uMetricasMesAnt = isGlobal ? globalData.metricasMesAnterior : metricasMesAnterior;
   const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasInicioAno;
+  const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
   const uCanEdit = isGlobal ? false : canEdit;
