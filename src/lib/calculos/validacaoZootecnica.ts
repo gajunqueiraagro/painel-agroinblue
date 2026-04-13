@@ -145,7 +145,11 @@ export function validarEncadeamentoMensal(rows: ZootCategoriaMensal[]): Validaca
   }
 
   for (const [, catRows] of byCat) {
-    const ordered = catRows.sort((a, b) => a.mes - b.mes);
+    const ordered = catRows.sort((a, b) => {
+      const aKey = a.ano * 100 + a.mes;
+      const bKey = b.ano * 100 + b.mes;
+      return aKey - bKey;
+    });
     for (let i = 0; i < ordered.length - 1; i++) {
       const curr = ordered[i];
       const next = ordered[i + 1];
