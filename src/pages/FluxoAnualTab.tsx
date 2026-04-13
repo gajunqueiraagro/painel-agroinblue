@@ -253,7 +253,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Peso Médio Final do mês (kg)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
@@ -267,7 +267,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/40 text-[8px]">GMD (kg/cab/dia)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
@@ -276,7 +276,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/40 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => zootByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 3) : '–';
                       })()}
                     </td>
@@ -286,7 +286,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Lot. média (UA/ha)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
@@ -295,7 +295,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/50 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => zootByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : '–';
                       })()}
                     </td>
