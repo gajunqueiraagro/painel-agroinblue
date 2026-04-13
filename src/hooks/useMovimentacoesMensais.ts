@@ -2,23 +2,27 @@
  * useMovimentacoesMensais — Busca contagem de movimentações por tipo e mês
  * diretamente do banco com paginação completa.
  *
- * Substitui calcFluxoAnual(lancamentos, ...) que dependia de dados truncados.
+ * ISOLAMENTO: filtra SEMPRE por cliente_id no modo Global.
+ * Nunca busca dados sem filtro de cliente ou fazenda.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import type { FluxoTipo } from '@/lib/calculos/zootecnicos';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 
 export function useMovimentacoesMensais(ano: number, cenario: 'realizado' | 'meta') {
   const { fazendaAtual } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
+  const clienteId = clienteAtual?.id;
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
   return useQuery({
-    queryKey: ['movimentacoes-mensais', fazendaId, ano, cenario],
-    enabled: !!fazendaId,
+    queryKey: ['movimentacoes-mensais', isGlobal ? `global-${clienteId}` : fazendaId, ano, cenario],
+    enabled: isGlobal ? !!clienteId : !!fazendaId,
     queryFn: async (): Promise<{
       porMesTipo: Record<string, Record<FluxoTipo, number>>;
       totalAno: Record<FluxoTipo, number>;
@@ -26,7 +30,7 @@ export function useMovimentacoesMensais(ano: number, cenario: 'realizado' | 'met
       const startDate = `${ano}-01-01`;
       const endDate = `${ano}-12-31`;
 
-      // Paginate to get ALL records
+      // Paginate to get ALL records with stable ordering
       const allRows: { tipo: string; data: string; quantidade: number }[] = [];
       const batchSize = 1000;
       let from = 0;
@@ -46,7 +50,10 @@ export function useMovimentacoesMensais(ano: number, cenario: 'realizado' | 'met
           q = q.eq('cenario', 'meta');
         }
 
-        if (!isGlobal) {
+        // CRITICAL: Always filter by client or farm — never query without scope
+        if (isGlobal) {
+          q = q.eq('cliente_id', clienteId);
+        } else {
           q = q.eq('fazenda_id', fazendaId);
         }
 

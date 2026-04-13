@@ -5,26 +5,31 @@
  * Retorna array de strings ['2024','2023','2022',...] em ordem decrescente.
  *
  * PROIBIDO: derivar anos de listas parciais carregadas no frontend.
+ *
+ * ISOLAMENTO: filtra SEMPRE por cliente_id no modo Global.
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 
 export function useAnosDisponiveis() {
   const { fazendaAtual } = useFazenda();
+  const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
+  const clienteId = clienteAtual?.id;
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
   return useQuery({
-    queryKey: ['anos-disponiveis', fazendaId],
-    enabled: !!fazendaId,
+    queryKey: ['anos-disponiveis', isGlobal ? `global-${clienteId}` : fazendaId],
+    enabled: isGlobal ? !!clienteId : !!fazendaId,
     staleTime: 60_000,
     queryFn: async (): Promise<string[]> => {
       const anos = new Set<number>();
       anos.add(new Date().getFullYear());
 
-      // 1. Anos de lançamentos (distinct via small aggregate query)
+      // 1. Min year from lancamentos
       {
         let q = supabase
           .from('lancamentos')
@@ -33,7 +38,11 @@ export function useAnosDisponiveis() {
           .order('data', { ascending: true })
           .limit(1);
 
-        if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+        if (isGlobal) {
+          q = q.eq('cliente_id', clienteId);
+        } else {
+          q = q.eq('fazenda_id', fazendaId);
+        }
         const { data } = await q;
         if (data?.[0]?.data) {
           const minYear = Number(data[0].data.substring(0, 4));
@@ -41,6 +50,7 @@ export function useAnosDisponiveis() {
         }
       }
 
+      // 2. Max year from lancamentos
       {
         let q = supabase
           .from('lancamentos')
@@ -49,7 +59,11 @@ export function useAnosDisponiveis() {
           .order('data', { ascending: false })
           .limit(1);
 
-        if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+        if (isGlobal) {
+          q = q.eq('cliente_id', clienteId);
+        } else {
+          q = q.eq('fazenda_id', fazendaId);
+        }
         const { data } = await q;
         if (data?.[0]?.data) {
           const maxYear = Number(data[0].data.substring(0, 4));
@@ -57,10 +71,14 @@ export function useAnosDisponiveis() {
         }
       }
 
-      // 2. Anos de saldos_iniciais
+      // 3. Anos de saldos_iniciais
       {
         let q = supabase.from('saldos_iniciais').select('ano');
-        if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+        if (isGlobal) {
+          q = q.eq('cliente_id', clienteId);
+        } else {
+          q = q.eq('fazenda_id', fazendaId);
+        }
         const { data } = await q;
         (data || []).forEach((r: any) => anos.add(r.ano));
       }
