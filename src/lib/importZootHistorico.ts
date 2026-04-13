@@ -261,7 +261,7 @@ export function montarInserts(
         cliente_id: clienteId,
         fazenda_id: fazId,
         data: l.data,
-        ano_mes: anoMes(l.data),
+        
         tipo: l.tipo,
         categoria: l.categoria || null,
         categoria_destino: l.categoria_destino || null,
