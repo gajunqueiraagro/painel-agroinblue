@@ -2,7 +2,7 @@
  * Hub do Painel do Consultor — grid visual 3×2 de navegação.
  */
 import { Card } from '@/components/ui/card';
-import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight, CalendarCheck } from 'lucide-react';
+import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight, CalendarCheck, Calculator } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
 
 interface Props {
@@ -58,6 +58,14 @@ const items = [
     icon: DollarSign,
     color: 'text-blue-600',
     bg: 'bg-blue-500/10',
+  },
+  {
+    id: 'planejamento_financeiro' as TabId,
+    title: 'Planejamento Financeiro',
+    desc: 'Custos fixos e variáveis por centro de custo (META)',
+    icon: Calculator,
+    color: 'text-teal-600',
+    bg: 'bg-teal-500/10',
   },
 ];
 
