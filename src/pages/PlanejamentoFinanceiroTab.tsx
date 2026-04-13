@@ -2,10 +2,10 @@
  * PlanejamentoFinanceiroTab
  *
  * Tela operacional para planejamento financeiro anual (cenário META).
- * Grid com 12 colunas de meses + ações rápidas.
+ * Seleção baseada no plano de contas oficial — sem digitação livre.
  */
-import { useState, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,9 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS, type PlanejamentoInsert } from '@/hooks/usePlanejamentoFinanceiro';
+import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS, DRIVER_POR_SUBCENTRO } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
 import { Copy, Download, Percent, RefreshCw, Plus, Trash2 } from 'lucide-react';
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -41,37 +42,101 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     getLinhasAgrupadas, totalAnual,
   } = usePlanejamentoFinanceiro(ano);
 
+  // ─── Plano de contas ─────────────────────────────────────
+  const [planoContas, setPlanoContas] = useState<PlanoContasItem[]>([]);
+
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    loadPlanoContasCompleto(clienteAtual.id).then(setPlanoContas);
+  }, [clienteAtual?.id]);
+
+  // Filter: only 2-Saídas items with subcentro (expenditures for planning)
+  const itensSaidas = useMemo(() =>
+    planoContas.filter(p => p.tipo_operacao === '2-Saídas' && p.subcentro),
+    [planoContas]
+  );
+
+  // Group by centro_custo for cascading selector
+  const centrosUnicos = useMemo(() => {
+    const set = new Set<string>();
+    itensSaidas.forEach(p => set.add(p.centro_custo));
+    return Array.from(set).sort();
+  }, [itensSaidas]);
+
   // ─── State: dialogs ──────────────────────────────────────
   const [showNovaLinha, setShowNovaLinha] = useState(false);
   const [showAjuste, setShowAjuste] = useState(false);
   const [ajustePercent, setAjustePercent] = useState('');
 
-  // Nova linha form
+  // Nova linha form — plano de contas based
   const [nlCentro, setNlCentro] = useState('');
-  const [nlSubcentro, setNlSubcentro] = useState('');
+  const [nlSubcentroId, setNlSubcentroId] = useState('');
   const [nlTipo, setNlTipo] = useState<'fixo' | 'variavel'>('fixo');
   const [nlDriver, setNlDriver] = useState('');
+  const [nlUnidadeDriver, setNlUnidadeDriver] = useState('cab/mes');
   const [nlValorBase, setNlValorBase] = useState('');
+
+  // Subcentros filtered by selected centro
+  const subcentrosFiltrados = useMemo(() =>
+    itensSaidas.filter(p => p.centro_custo === nlCentro),
+    [itensSaidas, nlCentro]
+  );
+
+  // Selected plano item
+  const selectedPlanoItem = useMemo(() =>
+    itensSaidas.find(p => p.id === nlSubcentroId),
+    [itensSaidas, nlSubcentroId]
+  );
+
+  // Auto-detect tipo_custo and driver from plano de contas
+  useEffect(() => {
+    if (!selectedPlanoItem) return;
+    const sub = selectedPlanoItem.subcentro || '';
+    const grupo = (selectedPlanoItem.grupo_custo || '').toLowerCase();
+
+    // Auto-set tipo based on grupo_custo
+    if (grupo.includes('variável') || grupo.includes('variavel')) {
+      setNlTipo('variavel');
+    } else {
+      setNlTipo('fixo');
+    }
+
+    // Auto-set driver from canonical mapping
+    const driverInfo = DRIVER_POR_SUBCENTRO[sub];
+    if (driverInfo) {
+      setNlDriver(driverInfo.driver);
+      setNlUnidadeDriver(driverInfo.unidade);
+      setNlTipo('variavel');
+    } else {
+      setNlDriver('');
+      setNlUnidadeDriver('cab/mes');
+    }
+  }, [selectedPlanoItem]);
 
   const linhasAgrupadas = useMemo(() => getLinhasAgrupadas(), [getLinhasAgrupadas]);
 
   const handleNovaLinha = async () => {
-    if (!nlCentro) { toast.error('Centro de custo obrigatório'); return; }
+    if (!selectedPlanoItem) { toast.error('Selecione um subcentro do plano de contas'); return; }
     const valorBase = parseFloat(nlValorBase) || 0;
-    await replicarParaMeses(
-      nlCentro,
-      nlSubcentro || null,
-      nlTipo,
-      valorBase,
-      nlTipo === 'variavel' ? (nlDriver || null) : null,
-    );
+
+    await replicarParaMeses({
+      centro_custo: selectedPlanoItem.centro_custo,
+      subcentro: selectedPlanoItem.subcentro,
+      macro_custo: selectedPlanoItem.macro_custo,
+      grupo_custo: selectedPlanoItem.grupo_custo,
+      escopo_negocio: selectedPlanoItem.escopo_negocio || 'pecuaria',
+      tipo_custo: nlTipo,
+      driver: nlTipo === 'variavel' ? (nlDriver || null) : null,
+      unidade_driver: nlTipo === 'variavel' ? nlUnidadeDriver : null,
+      valor_base: valorBase,
+    });
     setShowNovaLinha(false);
     resetNovaLinha();
   };
 
   const resetNovaLinha = () => {
-    setNlCentro(''); setNlSubcentro(''); setNlTipo('fixo');
-    setNlDriver(''); setNlValorBase('');
+    setNlCentro(''); setNlSubcentroId(''); setNlTipo('fixo');
+    setNlDriver(''); setNlValorBase(''); setNlUnidadeDriver('cab/mes');
   };
 
   const handleAjuste = async () => {
@@ -83,8 +148,6 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   };
 
   const handleRecalcularVariaveis = async () => {
-    // TODO: integrar com rebanho META real
-    // Por enquanto, zera quantidade_driver para forçar o usuário a preencher
     toast.info('Recálculo de variáveis: integração com rebanho META em desenvolvimento');
   };
 
@@ -107,8 +170,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       mes,
       centro_custo: row.centro_custo,
       subcentro: row.subcentro,
+      macro_custo: row.macro_custo,
+      grupo_custo: row.grupo_custo,
       tipo_custo: row.tipo_custo,
       driver: row.driver,
+      unidade_driver: row.unidade_driver,
       valor_base: row.tipo_custo === 'fixo' ? valor : row.valor_base,
       quantidade_driver: row.tipo_custo === 'variavel' ? (valor / (row.valor_base || 1)) : 0,
       valor_planejado: valor,
@@ -234,7 +300,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         </CardContent>
       </Card>
 
-      {/* Dialog: Nova Linha */}
+      {/* Dialog: Nova Linha — Plano de Contas */}
       <Dialog open={showNovaLinha} onOpenChange={setShowNovaLinha}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -243,11 +309,33 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           <div className="space-y-3">
             <div>
               <Label>Centro de Custo *</Label>
-              <Input value={nlCentro} onChange={e => setNlCentro(e.target.value)} placeholder="ex: Nutrição" />
+              <Select value={nlCentro} onValueChange={v => { setNlCentro(v); setNlSubcentroId(''); }}>
+                <SelectTrigger><SelectValue placeholder="Selecione o centro..." /></SelectTrigger>
+                <SelectContent>
+                  {centrosUnicos.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Label>Subcentro</Label>
-              <Input value={nlSubcentro} onChange={e => setNlSubcentro(e.target.value)} placeholder="ex: Ração Confinamento" />
+              <Label>Subcentro *</Label>
+              <Select value={nlSubcentroId} onValueChange={setNlSubcentroId} disabled={!nlCentro}>
+                <SelectTrigger><SelectValue placeholder={nlCentro ? 'Selecione o subcentro...' : 'Selecione o centro primeiro'} /></SelectTrigger>
+                <SelectContent>
+                  {subcentrosFiltrados.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.subcentro}
+                      {p.grupo_custo && <span className="text-muted-foreground ml-1 text-[10px]">({p.grupo_custo})</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedPlanoItem && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {selectedPlanoItem.macro_custo} › {selectedPlanoItem.grupo_custo} › {selectedPlanoItem.centro_custo}
+                </p>
+              )}
             </div>
             <div>
               <Label>Tipo de Custo</Label>
@@ -260,26 +348,38 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
               </Select>
             </div>
             {nlTipo === 'variavel' && (
-              <div>
-                <Label>Driver Zootécnico</Label>
-                <Select value={nlDriver} onValueChange={setNlDriver}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {DRIVERS_DISPONIVEIS.map(d => (
-                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                <div>
+                  <Label>Driver Zootécnico</Label>
+                  <Select value={nlDriver} onValueChange={setNlDriver}>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                      {DRIVERS_DISPONIVEIS.map(d => (
+                        <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Unidade do Driver</Label>
+                  <Select value={nlUnidadeDriver} onValueChange={setNlUnidadeDriver}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cab/mes">Cabeça / Mês</SelectItem>
+                      <SelectItem value="cab/dia">Cabeça / Dia</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
             <div>
-              <Label>Valor Base (R$)</Label>
+              <Label>Valor Base (R${nlTipo === 'variavel' && nlDriver ? ` / ${nlUnidadeDriver}` : ''})</Label>
               <Input type="number" step="0.01" value={nlValorBase} onChange={e => setNlValorBase(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowNovaLinha(false); resetNovaLinha(); }}>Cancelar</Button>
-            <Button onClick={handleNovaLinha}>
+            <Button onClick={handleNovaLinha} disabled={!selectedPlanoItem}>
               <Copy className="h-4 w-4 mr-1" />
               Criar e Replicar 12 meses
             </Button>
