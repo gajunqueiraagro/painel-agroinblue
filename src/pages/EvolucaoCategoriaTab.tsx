@@ -133,8 +133,12 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const fmtNum = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR');
   const fmtPeso = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const fmtKgTotal = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  const fmtGmd = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const fmtGmd = (v: number | null) => {
+    if (v === null) return '–';
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  };
   const fmtProdBio = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const negClass = (v: number | null) => v !== null && v < 0 ? 'text-red-400' : '';
 
   // Value getters based on modo
   const getVal = (d: typeof dadosMes[0], field: 'saldo_inicial' | 'entradas_externas' | 'saidas_externas' | 'evol_cat_saida' | 'evol_cat_entrada' | 'saldo_final') => {
