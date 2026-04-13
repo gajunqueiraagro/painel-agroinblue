@@ -152,6 +152,22 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         />
       )}
 
+      {/* Alerta de inconsistência de cálculo */}
+      {errosEquacao.length > 0 && (
+        <div className="mx-4 mb-2 p-2 rounded-md border border-destructive/50 bg-destructive/10 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-bold text-destructive">Inconsistência de cálculo detectada</p>
+            <p className="text-muted-foreground">
+              Meses com divergência: {errosEquacao.map(e => `${e.mesLabel} (Δ${e.diferenca})`).join(', ')}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Equação: SI + Ent.Ext + Evol.E − Saí.Ext − Evol.S ≠ SF
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="p-3 pt-2 flex justify-center">
 
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto w-[70%] max-w-[1200px] min-w-[900px]">
