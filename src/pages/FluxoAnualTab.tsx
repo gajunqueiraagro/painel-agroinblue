@@ -54,6 +54,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
   const totaisPorMes = rebanhoOf.totaisPorMes;
 
+  // Validação automática da equação antes de renderizar
+  const errosEquacao = useMemo(() => {
+    if (!rebanhoOf.rawCategorias || rebanhoOf.rawCategorias.length === 0) return [];
+    return validarEquacaoTotal(rebanhoOf.rawCategorias).filter(r => !r.ok);
+  }, [rebanhoOf.rawCategorias]);
+
   // Para indicadores (GMD, lotação, peso médio), ainda usa fazendaByMes
   const fazendaByMes = rebanhoOf.fazendaByMes;
 
