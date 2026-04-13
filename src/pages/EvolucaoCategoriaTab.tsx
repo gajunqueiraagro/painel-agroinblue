@@ -396,61 +396,30 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
-      {/* Bloco explicativo — Como o GMD foi calculado */}
+      {/* Card técnico GMD — discreto, max 50% largura */}
       {!isLoading && !isFutureMonth && totais.diasMes > 0 && (
-        <div className="bg-card rounded-lg shadow-sm border p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-            <Info className="h-4 w-4 text-blue-600" />
-            Como o GMD foi calculado — {MESES_CURTOS[mesNum - 1]}/{anoFiltro}
+        <div className="max-w-[50%] bg-muted/40 rounded border border-border/50 px-3 py-2 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground">
+            <Info className="h-3 w-3" />
+            GMD — {MESES_CURTOS[mesNum - 1]}/{anoFiltro}
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
-            <div>
-              <span className="text-muted-foreground">Saldo Inicial</span>
-              <p className="font-bold text-foreground">{totais.si.toLocaleString('pt-BR')} cab</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Saldo Final</span>
-              <p className="font-bold text-foreground">{totais.sf.toLocaleString('pt-BR')} cab</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Cabeças Médias</span>
-              <p className="font-bold text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cab</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Dias do Mês</span>
-              <p className="font-bold text-foreground">{totais.diasMes}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Peso Total Inicial</span>
-              <p className="font-bold text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Peso Total Final</span>
-              <p className="font-bold text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Produção Biológica</span>
-              <p className="font-bold text-blue-700">{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">GMD Final</span>
-              <p className="font-extrabold text-blue-700 text-sm">
-                {totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/cab/dia` : '–'}
-              </p>
-            </div>
+          <div className="grid grid-cols-4 gap-x-4 gap-y-0.5 text-[9px]">
+            <div><span className="text-muted-foreground">SI:</span> <span className="font-medium text-foreground">{totais.si.toLocaleString('pt-BR')} cab</span></div>
+            <div><span className="text-muted-foreground">SF:</span> <span className="font-medium text-foreground">{totais.sf.toLocaleString('pt-BR')} cab</span></div>
+            <div><span className="text-muted-foreground">Cab. Méd.:</span> <span className="font-medium text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</span></div>
+            <div><span className="text-muted-foreground">Dias:</span> <span className="font-medium text-foreground">{totais.diasMes}</span></div>
+            <div><span className="text-muted-foreground">Peso Ini.:</span> <span className="font-medium text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div><span className="text-muted-foreground">Peso Fin.:</span> <span className="font-medium text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div><span className="text-muted-foreground">Prod. Bio:</span> <span className={`font-medium ${negClass(totais.prodBio) || 'text-foreground'}`}>{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div><span className="text-muted-foreground">GMD:</span> <span className={`font-semibold ${negClass(totais.gmd) || 'text-blue-700'}`}>{totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/d` : '–'}</span></div>
           </div>
 
-          <div className="border-t border-border pt-2 text-[10px] text-muted-foreground space-y-1">
-            <p className="font-semibold">Fórmula:</p>
-            <p>Produção Biológica = Peso Final − Peso Inicial − Peso Entradas + Peso Saídas</p>
-            <p>GMD = Produção Biológica ÷ Cabeças Médias ÷ Dias do Mês</p>
-            {totais.cabMedias > 0 && totais.gmd !== null && (
-              <p className="mt-1 font-medium text-foreground/70">
-                GMD = {totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} ÷ {totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ÷ {totais.diasMes} = <span className="font-bold text-blue-700">{totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/cab/dia</span>
-              </p>
-            )}
-          </div>
+          {totais.cabMedias > 0 && totais.gmd !== null && (
+            <div className="text-[8px] text-muted-foreground/70 border-t border-border/30 pt-1">
+              {totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} ÷ {totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ÷ {totais.diasMes} = <span className={`font-semibold ${negClass(totais.gmd) || 'text-blue-700'}`}>{totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/cab/dia</span>
+            </div>
+          )}
         </div>
       )}
     </div>
