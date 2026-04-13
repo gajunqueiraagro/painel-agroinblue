@@ -89,6 +89,8 @@ export interface Lancamento {
   createdByNome?: string;
   updatedByNome?: string;
   fazendaId?: string;
+  origemRegistro?: string;
+  loteImportacaoId?: string;
 }
 
 export interface SaldoInicial {
