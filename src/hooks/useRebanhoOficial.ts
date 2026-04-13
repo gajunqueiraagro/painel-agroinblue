@@ -249,6 +249,71 @@ function buildMetaFazendaRows(rows: ZootCategoriaMensal[], baseRows: ZootMensal[
   });
 }
 
+/**
+ * Synthesize ZootMensal rows from category-level data.
+ * Used in Global mode where useZootMensal cannot work (no single fazenda_id).
+ */
+function buildFazendaRowsFromCategories(rows: ZootCategoriaMensal[]): ZootMensal[] {
+  const byMesMap = groupByMes(rows);
+  const result: ZootMensal[] = [];
+
+  for (const [mes, cats] of Object.entries(byMesMap)) {
+    const mesNum = Number(mes);
+    const mesKey = String(mesNum).padStart(2, '0');
+    const first = cats[0];
+    if (!first) continue;
+
+    const cabecasInicio = cats.reduce((s, c) => s + c.saldo_inicial, 0);
+    const cabecasFinal = cats.reduce((s, c) => s + c.saldo_final, 0);
+    const pesoInicioKg = roundNumber(cats.reduce((s, c) => s + c.peso_total_inicial, 0), 2);
+    const pesoTotalFinalKg = roundNumber(cats.reduce((s, c) => s + c.peso_total_final, 0), 2);
+    const pesoEntradasKg = roundNumber(cats.reduce((s, c) => s + c.peso_entradas_externas, 0), 2);
+    const pesoSaidasKg = roundNumber(cats.reduce((s, c) => s + c.peso_saidas_externas, 0), 2);
+    const entradas = cats.reduce((s, c) => s + c.entradas_externas, 0);
+    const saidas = cats.reduce((s, c) => s + c.saidas_externas, 0);
+    const producaoBio = roundNumber(cats.reduce((s, c) => s + c.producao_biologica, 0), 2);
+    const diasMes = first.dias_mes;
+    const cabMedias = (cabecasInicio + cabecasFinal) / 2;
+    const pesoMedioFinalKg = cabecasFinal !== 0 ? roundNumber(pesoTotalFinalKg / cabecasFinal, 2) : null;
+    const gmdKgCabDia = cabMedias !== 0 && diasMes > 0
+      ? roundNumber(producaoBio / cabMedias / diasMes, 4) : null;
+    const uaMedia = pesoMedioFinalKg !== null
+      ? roundNumber((cabMedias * pesoMedioFinalKg) / 450, 2) : null;
+
+    const fonte = cats.some(c => c.fonte_oficial_mes === 'fechamento') ? 'fechamento'
+      : cats.some(c => c.fonte_oficial_mes === 'fallback_movimentacao') ? 'fallback_movimentacao'
+      : 'projecao';
+
+    result.push({
+      fazenda_id: first.fazenda_id,
+      cliente_id: first.cliente_id,
+      ano: first.ano,
+      mes: mesNum,
+      cenario: first.cenario as 'realizado' | 'meta',
+      mes_key: mesKey,
+      ano_mes: `${first.ano}-${mesKey}`,
+      cabecas_inicio: cabecasInicio,
+      cabecas_final: cabecasFinal,
+      peso_inicio_kg: pesoInicioKg,
+      peso_total_final_kg: pesoTotalFinalKg,
+      peso_medio_final_kg: pesoMedioFinalKg,
+      peso_entradas_kg: pesoEntradasKg,
+      peso_saidas_kg: pesoSaidasKg,
+      entradas,
+      saidas,
+      dias_mes: diasMes,
+      gmd_kg_cab_dia: gmdKgCabDia,
+      gmd_numerador_kg: cabMedias !== 0 ? producaoBio : null,
+      ua_media: uaMedia,
+      area_produtiva_ha: 0,
+      lotacao_ua_ha: null,
+      fonte_oficial_mes: fonte as any,
+    });
+  }
+
+  return result.sort((a, b) => a.mes - b.mes);
+}
+
 // ---------------------------------------------------------------------------
 // Hook principal
 // ---------------------------------------------------------------------------
