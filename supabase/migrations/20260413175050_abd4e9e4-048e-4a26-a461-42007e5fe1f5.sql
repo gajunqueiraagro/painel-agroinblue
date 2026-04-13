@@ -1,0 +1,1 @@
+ALTER TABLE public.saldos_iniciais ADD COLUMN preco_kg NUMERIC DEFAULT NULL;

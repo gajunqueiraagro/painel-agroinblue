@@ -33,7 +33,7 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; status?: string }) => void;
   onNavigateToValorRebanho?: () => void;
-  onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
+  onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 

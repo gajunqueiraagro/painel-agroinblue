@@ -6,31 +6,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, AlertTriangle, Plus, Lock, Calendar, Users } from 'lucide-react';
 
 interface Props {
   saldosIniciais: SaldoInicial[];
-  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
-  /** Current year being viewed — form only renders if this matches the earliest year */
+  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
   anoBase?: number;
-  /** Number of lancamentos that exist (for edit warning) */
   totalLancamentos?: number;
-  /** Always show, regardless of which year is being viewed */
   alwaysVisible?: boolean;
+  /** Whether the base month is officially closed (locks qty/peso editing) */
+  mesFechado?: boolean;
 }
 
-/**
- * Saldo Inicial — one per fazenda, always January.
- * Always visible as a structural card showing the base year and totals.
- */
-export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLancamentos = 0, alwaysVisible }: Props) {
+export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLancamentos = 0, alwaysVisible, mesFechado = false }: Props) {
   const anoSaldo = useMemo(() => {
     const anos = saldosIniciais.map(s => s.ano);
     if (anos.length > 0) return Math.min(...anos);
     return anoBase || new Date().getFullYear();
   }, [saldosIniciais, anoBase]);
 
-  // Only show when viewing the base year (earliest with saldo) or when no saldo exists yet
   const shouldRender = !anoBase || anoBase === anoSaldo;
 
   const hasSaldo = useMemo(() => {
@@ -43,27 +38,17 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
       .reduce((sum, s) => sum + s.quantidade, 0);
   }, [saldosIniciais, anoSaldo]);
 
-  const categoriasComSaldo = useMemo(() => {
-    return saldosIniciais
-      .filter(s => s.ano === anoSaldo && s.quantidade > 0)
-      .map(s => {
-        const cat = CATEGORIAS.find(c => c.value === s.categoria);
-        return { label: cat?.label || s.categoria, qtd: s.quantidade, peso: s.pesoMedioKg };
-      });
-  }, [saldosIniciais, anoSaldo]);
-
   const [open, setOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [valores, setValores] = useState<Record<string, string>>({});
   const [pesos, setPesos] = useState<Record<string, string>>({});
+  const [precos, setPrecos] = useState<Record<string, string>>({});
   const [anoSelecionado, setAnoSelecionado] = useState(String(anoSaldo));
 
   const anoOptions = useMemo(() => {
     const current = new Date().getFullYear();
     const anos: string[] = [];
-    for (let y = current; y >= 2010; y--) {
-      anos.push(String(y));
-    }
+    for (let y = current; y >= 2010; y--) anos.push(String(y));
     return anos;
   }, []);
 
@@ -72,16 +57,17 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     const anoForm = hasSaldo ? anoSaldo : Number(anoSelecionado);
     const v: Record<string, string> = {};
     const p: Record<string, string> = {};
+    const pr: Record<string, string> = {};
     CATEGORIAS.forEach(c => {
       const s = saldosIniciais.find(s => s.ano === anoForm && s.categoria === c.value);
       v[c.value] = s ? String(s.quantidade) : '';
       p[c.value] = s?.pesoMedioKg ? String(s.pesoMedioKg) : '';
+      pr[c.value] = s?.precoKg ? String(s.precoKg) : '';
     });
     setValores(v);
     setPesos(p);
-    if (!hasSaldo) {
-      setAnoSelecionado(String(anoSaldo));
-    }
+    setPrecos(pr);
+    if (!hasSaldo) setAnoSelecionado(String(anoSaldo));
   }, [open, saldosIniciais, anoSaldo, hasSaldo]);
 
   const handleSalvar = () => {
@@ -89,13 +75,14 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     CATEGORIAS.forEach(c => {
       const qtd = valores[c.value] ? Number(valores[c.value]) : 0;
       const peso = pesos[c.value] ? Number(pesos[c.value]) : undefined;
-      onSetSaldo(anoFinal, c.value, qtd, peso);
+      const preco = precos[c.value] ? Number(precos[c.value]) : undefined;
+      onSetSaldo(anoFinal, c.value, qtd, peso, preco);
     });
     setOpen(false);
   };
 
   const handleEditClick = () => {
-    if (totalLancamentos > 0) {
+    if (totalLancamentos > 0 && !mesFechado) {
       setShowConfirm(true);
     } else {
       setOpen(true);
@@ -128,9 +115,12 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               anoSaldo={Number(anoSelecionado)}
               valores={valores}
               pesos={pesos}
+              precos={precos}
               setValores={setValores}
               setPesos={setPesos}
+              setPrecos={setPrecos}
               onSalvar={handleSalvar}
+              mesFechado={false}
               showAnoSelector
               anoSelecionado={anoSelecionado}
               setAnoSelecionado={setAnoSelecionado}
@@ -154,6 +144,11 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               <Calendar className="h-3 w-3" />
               Jan/{anoSaldo}
             </span>
+            {mesFechado && (
+              <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">
+                Mês fechado — só preço editável
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <span className="flex items-center gap-1 text-xs font-bold text-foreground">
@@ -205,33 +200,38 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
           anoSaldo={anoSaldo}
           valores={valores}
           pesos={pesos}
+          precos={precos}
           setValores={setValores}
           setPesos={setPesos}
+          setPrecos={setPrecos}
           onSalvar={handleSalvar}
+          mesFechado={mesFechado}
         />
       </Dialog>
     </>
   );
 }
 
+// ── Helpers ──
+function fmtBrl(v: number | null): string {
+  if (v == null || isNaN(v)) return '—';
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Dialog content ──
 function SaldoInicialDialogContent({
-  anoSaldo,
-  valores,
-  pesos,
-  setValores,
-  setPesos,
-  onSalvar,
-  showAnoSelector,
-  anoSelecionado,
-  setAnoSelecionado,
-  anoOptions,
+  anoSaldo, valores, pesos, precos, setValores, setPesos, setPrecos, onSalvar,
+  mesFechado, showAnoSelector, anoSelecionado, setAnoSelecionado, anoOptions,
 }: {
   anoSaldo: number;
   valores: Record<string, string>;
   pesos: Record<string, string>;
+  precos: Record<string, string>;
   setValores: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   setPesos: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setPrecos: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSalvar: () => void;
+  mesFechado: boolean;
   showAnoSelector?: boolean;
   anoSelecionado?: string;
   setAnoSelecionado?: (v: string) => void;
@@ -240,7 +240,7 @@ function SaldoInicialDialogContent({
   const displayAno = showAnoSelector && anoSelecionado ? Number(anoSelecionado) : anoSaldo;
 
   return (
-    <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+    <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>
           {showAnoSelector ? 'Cadastrar Saldo Inicial' : `Editar Saldo Inicial — Jan/${anoSaldo}`}
@@ -267,48 +267,110 @@ function SaldoInicialDialogContent({
         ) : (
           <div className="rounded-md border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-3 py-2">
             <p className="text-[11px] text-orange-700 dark:text-orange-400 font-medium">
-              ⚠️ Alterações no saldo inicial impactam toda a base histórica.
+              {mesFechado
+                ? '🔒 Mês fechado — apenas R$/kg pode ser editado. Quantidade e peso estão bloqueados.'
+                : '⚠️ Alterações no saldo inicial impactam toda a base histórica.'}
             </p>
           </div>
         )}
 
         <p className="text-xs text-muted-foreground">
-          Quantidade de cabeças e peso médio (kg) em Janeiro/{displayAno}:
+          Rebanho em Janeiro/{displayAno}:
         </p>
 
-        <div className="space-y-2">
-          {CATEGORIAS.map((c) => {
-            const isSeparator = c.value === 'mamotes_f';
-            return (
-              <div key={c.value} className={`space-y-1 ${isSeparator ? 'border-t border-border pt-2' : ''}`}>
-                <span className="text-sm font-semibold text-foreground">{c.label}</span>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-left w-[100px]">Categoria</TableHead>
+              <TableHead className="text-center w-[70px]">Qtd</TableHead>
+              <TableHead className="text-center w-[70px]">Peso (kg)</TableHead>
+              <TableHead className="text-center w-[70px]">R$/kg</TableHead>
+              <TableHead className="text-right w-[70px]">R$/@</TableHead>
+              <TableHead className="text-right w-[70px]">R$/cab</TableHead>
+              <TableHead className="text-right w-[80px]">Valor Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {CATEGORIAS.map((c) => {
+              const qtd = Number(valores[c.value]) || 0;
+              const peso = Number(pesos[c.value]) || 0;
+              const preco = Number(precos[c.value]) || 0;
+              const arrobaKg = 15;
+              const precoArroba = preco > 0 ? preco * arrobaKg : null;
+              const precoCab = preco > 0 && peso > 0 ? preco * peso : null;
+              const valorTotal = preco > 0 && peso > 0 && qtd > 0 ? qtd * peso * preco : null;
+              const isSeparator = c.value === 'mamotes_f';
+
+              return (
+                <TableRow key={c.value} className={isSeparator ? 'border-t-2 border-border' : ''}>
+                  <TableCell className="font-semibold text-xs">{c.label}</TableCell>
+                  <TableCell className="p-0.5">
                     <Input
                       type="number"
                       value={valores[c.value] || ''}
                       onChange={e => setValores(v => ({ ...v, [c.value]: e.target.value }))}
-                      placeholder="Cab."
+                      placeholder="0"
                       min="0"
-                      className="text-center font-bold text-sm"
+                      disabled={mesFechado}
+                      className="text-center text-xs h-7 font-bold"
                     />
-                  </div>
-                  <div className="flex-1">
+                  </TableCell>
+                  <TableCell className="p-0.5">
                     <Input
                       type="number"
                       value={pesos[c.value] || ''}
                       onChange={e => setPesos(p => ({ ...p, [c.value]: e.target.value }))}
-                      placeholder="Peso kg"
+                      placeholder="0"
                       min="0"
                       step="0.1"
-                      className="text-center text-sm"
+                      disabled={mesFechado}
+                      className="text-center text-xs h-7"
                     />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                  </TableCell>
+                  <TableCell className="p-0.5">
+                    <Input
+                      type="number"
+                      value={precos[c.value] || ''}
+                      onChange={e => setPrecos(pr => ({ ...pr, [c.value]: e.target.value }))}
+                      placeholder="0,00"
+                      min="0"
+                      step="0.01"
+                      className="text-center text-xs h-7"
+                    />
+                  </TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground">{fmtBrl(precoArroba)}</TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground">{fmtBrl(precoCab)}</TableCell>
+                  <TableCell className="text-right text-xs font-semibold">
+                    {valorTotal != null ? `R$ ${fmtBrl(valorTotal)}` : '—'}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {/* Total row */}
+            <TableRow className="bg-muted/30 font-bold border-t-2">
+              <TableCell className="text-xs font-bold">TOTAL</TableCell>
+              <TableCell className="text-center text-xs font-bold">
+                {CATEGORIAS.reduce((s, c) => s + (Number(valores[c.value]) || 0), 0).toLocaleString('pt-BR')}
+              </TableCell>
+              <TableCell />
+              <TableCell />
+              <TableCell />
+              <TableCell />
+              <TableCell className="text-right text-xs font-bold">
+                {(() => {
+                  const total = CATEGORIAS.reduce((s, c) => {
+                    const q = Number(valores[c.value]) || 0;
+                    const p = Number(pesos[c.value]) || 0;
+                    const pr = Number(precos[c.value]) || 0;
+                    return s + q * p * pr;
+                  }, 0);
+                  return total > 0 ? `R$ ${fmtBrl(total)}` : '—';
+                })()}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
         <Button className="w-full touch-target font-bold" onClick={onSalvar}>
           Salvar Saldo Inicial
         </Button>

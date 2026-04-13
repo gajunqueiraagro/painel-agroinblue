@@ -98,6 +98,7 @@ export interface SaldoInicial {
   categoria: Categoria;
   quantidade: number;
   pesoMedioKg?: number;
+  precoKg?: number;
   fazendaId?: string;
 }
 

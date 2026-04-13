@@ -161,11 +161,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       })));
 
       if (saldoRes.data) {
-        setSaldosIniciais(saldoRes.data.map(s => ({
+      setSaldosIniciais(saldoRes.data.map(s => ({
           ano: s.ano,
           categoria: s.categoria as Categoria,
           quantidade: s.quantidade,
           pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
+          precoKg: (s as any).preco_kg ?? undefined,
           fazendaId: (s as any).fazenda_id ?? undefined,
         })));
       } else {
@@ -506,10 +507,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     return !error;
   };
 
-  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number) => {
+  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
-    if (quantidade > 0) {
+    if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
       const { error } = await supabase.from('saldos_iniciais').upsert({
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
@@ -517,11 +518,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         categoria,
         quantidade,
         peso_medio_kg: pesoMedioKg ?? null,
-      }, { onConflict: 'fazenda_id,ano,categoria' });
+        preco_kg: precoKg ?? null,
+      } as any, { onConflict: 'fazenda_id,ano,categoria' });
       if (!error) {
         setSaldosIniciais(prev => {
           const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
-          return [...filtered, { ano, categoria, quantidade, pesoMedioKg }];
+          return [...filtered, { ano, categoria, quantidade, pesoMedioKg, precoKg }];
         });
         await invalidateZootQueries();
       }
