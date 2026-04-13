@@ -555,6 +555,48 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
   const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
 
+  // ---------------------------------------------------------------------------
+  // Âncora patrimonial oficial: saldos_iniciais (ano inicial da fazenda)
+  // ---------------------------------------------------------------------------
+  const anoInicialFazenda = useMemo(() => {
+    if (saldosIniciais.length === 0) return null;
+    return Math.min(...saldosIniciais.map(s => s.ano));
+  }, [saldosIniciais]);
+
+  const isAnoInicial = anoInicialFazenda !== null && Number(anoFiltro) === anoInicialFazenda;
+
+  const saldosIniciaisAnoFiltro = useMemo(() => {
+    if (!isAnoInicial) return [];
+    return saldosIniciais.filter(s => s.ano === Number(anoFiltro));
+  }, [saldosIniciais, anoFiltro, isAnoInicial]);
+
+  const baseInicialIncompleta = useMemo(() => {
+    if (!isAnoInicial) return false;
+    if (saldosIniciaisAnoFiltro.length === 0) return true;
+    return saldosIniciaisAnoFiltro.some(s => (s.quantidade || 0) > 0 && (s.preco_kg == null || s.preco_kg <= 0));
+  }, [isAnoInicial, saldosIniciaisAnoFiltro]);
+
+  const metricasSaldosIniciais = useMemo((): MetricasExibicao | null => {
+    if (!isAnoInicial) return null;
+    if (baseInicialIncompleta) return null;
+    if (saldosIniciaisAnoFiltro.length === 0) return null;
+
+    let valor = 0;
+    let cabecas = 0;
+    let pesoTotalKg = 0;
+
+    saldosIniciaisAnoFiltro.forEach(s => {
+      const qty = s.quantidade || 0;
+      const peso = s.peso_medio_kg || 0;
+      const preco = s.preco_kg || 0;
+      cabecas += qty;
+      pesoTotalKg += qty * peso;
+      valor += qty * peso * preco;
+    });
+
+    return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
+  }, [isAnoInicial, baseInicialIncompleta, saldosIniciaisAnoFiltro]);
+
   const resumoMesAnterior = useMemo(() => {
     const mesAnt = mesNum > 1 ? mesNum - 1 : 12;
     const data = mesNum > 1 ? viewDataAnoAtual : viewDataAnoAnterior;
@@ -763,9 +805,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
   const metricasInicioAno = useMemo(() => {
+    // Ano inicial da fazenda: fonte oficial é saldos_iniciais
+    if (isAnoInicial) return metricasSaldosIniciais;
     if (fonteMes === 'live') return metricasDezAnteriorLive;
     return buildFrozenMetrics(anoMesDezAnterior);
-  }, [fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
+  }, [isAnoInicial, metricasSaldosIniciais, fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
