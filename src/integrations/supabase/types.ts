@@ -4016,6 +4016,7 @@ export type Database = {
           fazenda_id: string
           id: string
           peso_medio_kg: number | null
+          preco_kg: number | null
           quantidade: number
         }
         Insert: {
@@ -4026,6 +4027,7 @@ export type Database = {
           fazenda_id: string
           id?: string
           peso_medio_kg?: number | null
+          preco_kg?: number | null
           quantidade?: number
         }
         Update: {
@@ -4036,6 +4038,7 @@ export type Database = {
           fazenda_id?: string
           id?: string
           peso_medio_kg?: number | null
+          preco_kg?: number | null
           quantidade?: number
         }
         Relationships: [
