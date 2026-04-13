@@ -774,6 +774,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     const snapshotDetalhado = historicoDetalhadoPorMes[mesKey] ?? [];
     const snapshotCabecalho = historicoPorMes[mesKey] ?? null;
 
+    // Se existe snapshot fechado com itens detalhados, usar diretamente
+    // Isso garante paridade absoluta: Dez/2020 final === base de 2021
+    if (snapshotCabecalho && snapshotDetalhado.length > 0) {
+      return aggregateMetricsFromSnapshotItems(snapshotDetalhado);
+    }
+
     // Determine which view data to use based on the month's year
     const [keyAno, keyMes] = mesKey.split('-').map(Number);
     const viewData = keyAno === Number(anoFiltro) ? viewDataAnoAtual : viewDataAnoAnterior;
@@ -782,7 +788,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     // If no view data AND no snapshot, nothing to show
     if (viewRows.length === 0 && snapshotDetalhado.length === 0 && !snapshotCabecalho) return null;
 
-    // Physical herd data ALWAYS from the official view
+    // Snapshot header sem itens detalhados — usar header direto
+    if (snapshotCabecalho && snapshotDetalhado.length === 0) {
+      return buildMetricsFromTotals(
+        snapshotCabecalho.valor ?? null,
+        null,
+        snapshotCabecalho.pesoKg ?? null,
+      );
+    }
+
+    // Mês aberto (live): usar view com preços do snapshot se disponíveis
     const itensPorCategoria = new Map(snapshotDetalhado.map(item => [item.categoria, item]));
     let totalValor = 0;
     let totalCab = 0;
@@ -799,15 +814,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       return buildMetricsFromTotals(totalValor, totalCab, totalPesoKg);
     }
 
-    // Fallback: if view has no data for this month, use snapshot (legacy closed months)
-    const metricasDetalhadas = aggregateMetricsFromSnapshotItems(snapshotDetalhado);
-    if (!snapshotCabecalho && !metricasDetalhadas) return null;
-
-    return buildMetricsFromTotals(
-      snapshotCabecalho?.valor ?? metricasDetalhadas?.valor ?? null,
-      metricasDetalhadas?.cabecas ?? null,
-      snapshotCabecalho?.pesoKg ?? metricasDetalhadas?.pesoTotalKg ?? null,
-    );
+    return null;
   }, [historicoPorMes, historicoDetalhadoPorMes, anoFiltro, viewDataAnoAtual, viewDataAnoAnterior]);
 
   const metricasSelecionado = useMemo(() => {
