@@ -140,6 +140,7 @@ const TITLES: Record<TabId, string> = {
   precos_mercado_hub: 'Preços de Mercado',
   conferencia_gmd: 'Conferência de GMD',
   import_zoot_historico: 'Importação Zootécnica',
+  planejamento_financeiro: 'Planejamento Financeiro',
 };
 
 const Index = () => {
