@@ -603,10 +603,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     saldosIniciaisAnoFiltro.forEach(s => {
       const qty = s.quantidade || 0;
       const peso = s.pesoMedioKg || 0;
-      const preco = s.precoKg || 0;
       cabecas += qty;
       pesoTotalKg += qty * peso;
-      valor += qty * peso * preco;
+      if (s.precoKg != null && s.precoKg > 0) {
+        valor += qty * peso * s.precoKg;
+      }
     });
 
     return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
