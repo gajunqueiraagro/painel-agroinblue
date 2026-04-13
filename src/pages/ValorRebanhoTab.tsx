@@ -163,17 +163,24 @@ function useFechamentoOficialPastos(fazendaId: string | undefined, anoMes: strin
         }
 
         // P1 is oficial — fetch from fechamento_pasto_itens (source of truth)
+        // First get all fechamento IDs for this month
+        const { data: fechamentos } = await supabase
+          .from('fechamento_pastos')
+          .select('id')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', anoMes)
+          .eq('status', 'fechado');
+
+        const fechIds = (fechamentos || []).map(f => f.id);
+        if (fechIds.length === 0) {
+          if (!cancelled) setData({ rows: [] });
+          return;
+        }
+
         const { data: itens, error } = await supabase
           .from('fechamento_pasto_itens')
-          .select(`
-            categoria_id,
-            quantidade,
-            peso_medio_kg,
-            fechamento:fechamento_pastos!inner(fazenda_id, ano_mes, status)
-          `)
-          .eq('fechamento.fazenda_id' as any, fazendaId)
-          .eq('fechamento.ano_mes' as any, anoMes)
-          .eq('fechamento.status' as any, 'fechado');
+          .select('categoria_id, quantidade, peso_medio_kg')
+          .in('fechamento_id', fechIds);
 
         if (error) throw error;
 
