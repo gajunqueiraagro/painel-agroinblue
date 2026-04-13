@@ -268,14 +268,16 @@ export function useRebanhoOficial({ ano, cenario, global = false }: UseRebanhoOf
     error: errorCategorias,
   } = useZootCategoriaMensal({ ano, cenario, global });
 
+  // useZootMensal only works for single-fazenda (NOT global).
+  // In global mode, we synthesize farm-level totals from category data.
   const {
     data: fazendaData,
     isLoading: loadingFazenda,
     error: errorFazenda,
   } = useZootMensal({ ano, cenario });
 
-  const loading = loadingCategorias || loadingFazenda;
-  const error = errorCategorias || errorFazenda;
+  const loading = loadingCategorias || (global ? false : loadingFazenda);
+  const error = errorCategorias || (global ? null : errorFazenda);
 
   // ── Raw data accessors ──
   const baseCategorias = categoriasData ?? [];
@@ -286,8 +288,13 @@ export function useRebanhoOficial({ ano, cenario, global = false }: UseRebanhoOf
     return normalizeMetaCategorias(baseCategorias, metaGmdRows);
   }, [baseCategorias, cenario, global, metaGmdRows]);
 
+  // In global mode, synthesize farm-level rows from category aggregation
   const rawFazenda = useMemo(() => {
-    if (global || cenario !== 'meta') return baseFazenda;
+    if (global) {
+      // Build synthetic ZootMensal rows from category aggregation
+      return buildFazendaRowsFromCategories(rawCategorias);
+    }
+    if (cenario !== 'meta') return baseFazenda;
     return buildMetaFazendaRows(rawCategorias, baseFazenda);
   }, [baseFazenda, cenario, global, rawCategorias]);
 
