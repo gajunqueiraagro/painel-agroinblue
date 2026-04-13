@@ -119,29 +119,27 @@ function canonicalMacro(l: LancamentoClassificavel): string {
   return m;
 }
 
-/** Detecta se é financiamento / empréstimo / crédito de terceiros */
+/**
+ * Detecta se é financiamento / capital de terceiros.
+ * Baseado EXCLUSIVAMENTE na classificação estrutural do plano de contas:
+ *   - centro_custo = "Financiamento"
+ *   - subcentro = "Retorno de Empréstimos" (centro Capital, mas não é aporte)
+ */
 function isFinanciamento(l: LancamentoClassificavel): boolean {
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
-  const grupo = norm(l.grupo_custo);
-  return centro.includes('financiamento') || centro.includes('empréstimo') || centro.includes('emprestimo')
-    || sub.includes('financiamento') || sub.includes('empréstimo') || sub.includes('emprestimo')
-    || sub.includes('crédito rural') || sub.includes('credito rural')
-    || grupo.includes('financiamento');
+  return centro === 'financiamento'
+    || sub === 'retorno de empréstimos' || sub === 'retorno de emprestimos';
 }
 
+/**
+ * Detecta se é aporte pessoal / capital próprio.
+ * Baseado EXCLUSIVAMENTE na classificação estrutural do plano de contas:
+ *   - subcentro = "Aporte Pessoal" (centro Capital, grupo Entradas de Capital)
+ */
 function isAporte(l: LancamentoClassificavel): boolean {
-  // Financiamentos / empréstimos NUNCA são aporte pessoal
-  if (isFinanciamento(l)) return false;
-
-  const macro = normMacro(l);
-  const grupo = norm(l.grupo_custo);
-  const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
-  return macro.includes('aporte')
-    || grupo.includes('aporte') || grupo.includes('entradas de capital')
-    || centro.includes('aporte')
-    || sub.includes('aporte');
+  return sub === 'aporte pessoal';
 }
 
 // ---------------------------------------------------------------------------
