@@ -773,7 +773,10 @@ const Index = () => {
         <ImportZootHistoricoTab />
       )}
       {activeTab === 'planejamento_financeiro' && (
-        <PlanejamentoFinanceiroTab onBack={() => setActiveTab('painel_consultor_hub')} />
+        <PlanejamentoFinanceiroTab
+          onBack={() => setActiveTab('painel_consultor_hub')}
+          metaConsolidacao={metaConsolidacaoData}
+        />
       )}
       </div>
       {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
