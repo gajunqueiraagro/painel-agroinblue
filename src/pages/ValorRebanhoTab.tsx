@@ -132,6 +132,108 @@ function extractResumoFromView(
   };
 }
 
+/**
+ * Hook that fetches official closure data from fechamento_pasto_itens
+ * aggregated by category. Returns null when P1 is not closed.
+ */
+function useFechamentoOficialPastos(fazendaId: string | undefined, anoMes: string) {
+  const [data, setData] = useState<ResumoOficialLike | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!fazendaId || fazendaId === '__global__') {
+      setData(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        // Check if ALL active pastos are closed for this month
+        const { data: statusData } = await supabase.rpc(
+          'get_status_pilares_fechamento' as any,
+          { _fazenda_id: fazendaId, _ano_mes: anoMes },
+        );
+        const p1Status = (statusData as any)?.p1_mapa_pastos?.status;
+
+        if (p1Status !== 'oficial') {
+          if (!cancelled) setData(null);
+          return;
+        }
+
+        // P1 is oficial — fetch from fechamento_pasto_itens (source of truth)
+        const { data: itens, error } = await supabase
+          .from('fechamento_pasto_itens')
+          .select(`
+            categoria_id,
+            quantidade,
+            peso_medio_kg,
+            fechamento:fechamento_pastos!inner(fazenda_id, ano_mes, status)
+          `)
+          .eq('fechamento.fazenda_id' as any, fazendaId)
+          .eq('fechamento.ano_mes' as any, anoMes)
+          .eq('fechamento.status' as any, 'fechado');
+
+        if (error) throw error;
+
+        // Aggregate by category
+        const catMap = new Map<string, { qty: number; pesoTotal: number; catId: string }>();
+        (itens || []).forEach((item: any) => {
+          const catId = item.categoria_id;
+          const qty = Number(item.quantidade) || 0;
+          const pesoMedio = Number(item.peso_medio_kg) || 0;
+          const existing = catMap.get(catId) || { qty: 0, pesoTotal: 0, catId };
+          existing.qty += qty;
+          existing.pesoTotal += qty * pesoMedio;
+          catMap.set(catId, existing);
+        });
+
+        // Fetch category metadata
+        const catIds = Array.from(catMap.keys());
+        if (catIds.length === 0) {
+          if (!cancelled) setData({ rows: [] });
+          return;
+        }
+
+        const { data: cats } = await supabase
+          .from('categorias_rebanho')
+          .select('id, codigo, nome, ordem_exibicao')
+          .in('id', catIds);
+
+        const catLookup = new Map((cats || []).map(c => [c.id, c]));
+
+        const rows = Array.from(catMap.entries())
+          .map(([catId, agg]) => {
+            const cat = catLookup.get(catId);
+            const pesoMedio = agg.qty > 0 ? agg.pesoTotal / agg.qty : 0;
+            return {
+              categoriaId: catId,
+              categoriaCodigo: cat?.codigo || catId,
+              categoriaNome: cat?.nome || catId,
+              ordemExibicao: cat?.ordem_exibicao || 99,
+              quantidadeFinal: agg.qty,
+              pesoMedioFinalKg: pesoMedio,
+              origemPeso: 'pastos' as OrigemPeso,
+            };
+          })
+          .sort((a, b) => a.ordemExibicao - b.ordemExibicao);
+
+        if (!cancelled) setData({ rows });
+      } catch (e) {
+        console.error('Erro ao carregar fechamento oficial:', e);
+        if (!cancelled) setData(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [fazendaId, anoMes]);
+
+  return { fechamentoOficial: data, loadingFechamento: loading };
+}
+
 function calcVariacaoNullable(atual: number | null, anterior: number | null): number | null {
   if (atual === null || anterior === null || anterior === 0) return null;
   return ((atual - anterior) / Math.abs(anterior)) * 100;
