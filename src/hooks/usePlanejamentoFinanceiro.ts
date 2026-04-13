@@ -1,14 +1,14 @@
 /**
  * Hook: usePlanejamentoFinanceiro
  *
- * CRUD, replicação, importação do ano anterior, ajuste percentual
+ * CRUD, importação do realizado anterior, ajuste percentual
  * e recálculo de custos variáveis para a tabela planejamento_financeiro.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
+import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
@@ -27,7 +27,7 @@ export interface PlanejamentoFinanceiroRow {
   valor_base: number;
   quantidade_driver: number;
   valor_planejado: number;
-  origem: 'manual' | 'replicado' | 'calculado';
+  origem: 'manual' | 'replicado' | 'calculado' | 'importado_realizado';
   cenario: string;
   observacao: string | null;
   created_at: string;
@@ -44,20 +44,8 @@ export const DRIVERS_DISPONIVEIS = [
   { value: 'cabecas_matrizes', label: 'Cabeças Matrizes' },
 ] as const;
 
-/**
- * Mapeamento canônico: subcentros do plano de contas que usam driver zootécnico.
- * Regra: nutrição = custo variável por cabeça/mês.
- */
-export const DRIVER_POR_SUBCENTRO: Record<string, { driver: string; unidade: string }> = {
-  'Nutrição Engorda': { driver: 'cabecas_engorda', unidade: 'cab/mes' },
-  'Nutrição Recria': { driver: 'cabecas_recria', unidade: 'cab/mes' },
-  'Nutrição Cria': { driver: 'cabecas_matrizes', unidade: 'cab/mes' },
-};
-
-export function usePlanejamentoFinanceiro(ano: number) {
-  const { fazendaAtual } = useFazenda();
+export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
-  const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
 
   const [data, setData] = useState<PlanejamentoFinanceiroRow[]>([]);
@@ -180,51 +168,101 @@ export function usePlanejamentoFinanceiro(ano: number) {
     }
   }, [fazendaId, clienteId, ano, load]);
 
-  // ─── Importar base do ano anterior ────────────────────────
+  // ─── Importar REALIZADO do ano anterior ───────────────────
 
-  const importarAnoAnterior = useCallback(async () => {
+  const importarRealizadoAnoAnterior = useCallback(async () => {
     if (!fazendaId || !clienteId) return;
     const anoAnterior = ano - 1;
     try {
-      const { data: prev, error: readErr } = await (supabase
-        .from('planejamento_financeiro' as any)
-        .select('*')
+      // Buscar lançamentos realizados do ano anterior agrupados
+      const { data: lancamentos, error: readErr } = await (supabase
+        .from('financeiro_lancamentos_v2')
+        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ano_mes, valor, sinal, tipo_operacao')
         .eq('fazenda_id', fazendaId)
-        .eq('ano', anoAnterior)
-        .eq('cenario', 'meta') as any);
+        .eq('cliente_id', clienteId)
+        .gte('ano_mes', `${anoAnterior}-01`)
+        .lte('ano_mes', `${anoAnterior}-12`)
+        .eq('cancelado', false) as any);
       if (readErr) throw readErr;
-      if (!prev || prev.length === 0) {
-        toast.info(`Nenhum planejamento encontrado em ${anoAnterior}`);
+      if (!lancamentos || lancamentos.length === 0) {
+        toast.info(`Nenhum lançamento financeiro encontrado em ${anoAnterior}`);
         return;
       }
-      const rows = (prev as PlanejamentoFinanceiroRow[]).map(r => ({
-        cliente_id: clienteId,
-        fazenda_id: fazendaId,
-        ano,
-        mes: r.mes,
-        centro_custo: r.centro_custo,
-        subcentro: r.subcentro,
-        macro_custo: r.macro_custo,
-        grupo_custo: r.grupo_custo,
-        escopo_negocio: r.escopo_negocio,
-        tipo_custo: r.tipo_custo,
-        driver: r.driver,
-        unidade_driver: r.unidade_driver,
-        valor_base: r.valor_base,
-        quantidade_driver: 0,
-        valor_planejado: r.tipo_custo === 'fixo' ? r.valor_base : 0,
-        origem: 'replicado' as const,
-        cenario: 'meta',
-        observacao: `Importado de ${anoAnterior}`,
-      }));
+
+      // Agrupar por macro+grupo+centro+subcentro+mes
+      const agrupado = new Map<string, {
+        macro_custo: string | null;
+        grupo_custo: string | null;
+        centro_custo: string;
+        subcentro: string | null;
+        escopo_negocio: string | null;
+        mes: number;
+        total: number;
+      }>();
+
+      for (const l of lancamentos as any[]) {
+        if (!l.centro_custo) continue;
+        // Only 2-Saídas for expense planning
+        if (l.tipo_operacao !== '2-Saídas') continue;
+        const mes = parseInt((l.ano_mes || '').split('-')[1], 10);
+        if (!mes || mes < 1 || mes > 12) continue;
+        const key = `${l.centro_custo}||${l.subcentro || ''}||${mes}`;
+        const existing = agrupado.get(key);
+        const valor = Math.abs(l.valor || 0);
+        if (existing) {
+          existing.total += valor;
+        } else {
+          agrupado.set(key, {
+            macro_custo: l.macro_custo,
+            grupo_custo: l.grupo_custo,
+            centro_custo: l.centro_custo,
+            subcentro: l.subcentro,
+            escopo_negocio: l.escopo_negocio,
+            mes,
+            total: valor,
+          });
+        }
+      }
+
+      if (agrupado.size === 0) {
+        toast.info(`Nenhuma saída classificada encontrada em ${anoAnterior}`);
+        return;
+      }
+
+      const rows = Array.from(agrupado.values()).map(g => {
+        const sub = g.subcentro || '';
+        const driverInfo = DRIVER_POR_SUBCENTRO[sub];
+        const tipoCusto = driverInfo ? 'variavel' as const : 'fixo' as const;
+        return {
+          cliente_id: clienteId,
+          fazenda_id: fazendaId,
+          ano,
+          mes: g.mes,
+          centro_custo: g.centro_custo,
+          subcentro: g.subcentro,
+          macro_custo: g.macro_custo,
+          grupo_custo: g.grupo_custo,
+          escopo_negocio: g.escopo_negocio,
+          tipo_custo: tipoCusto,
+          driver: driverInfo?.driver || null,
+          unidade_driver: driverInfo?.unidade || null,
+          valor_base: Math.round(g.total * 100) / 100,
+          quantidade_driver: 0,
+          valor_planejado: Math.round(g.total * 100) / 100,
+          origem: 'importado_realizado' as const,
+          cenario: 'meta',
+          observacao: `Importado do realizado ${anoAnterior}`,
+        };
+      });
+
       const { error } = await (supabase
         .from('planejamento_financeiro' as any)
         .upsert(rows, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
       if (error) throw error;
-      toast.success(`${rows.length} linhas importadas de ${anoAnterior}`);
+      toast.success(`${rows.length} linhas importadas do realizado ${anoAnterior}`);
       await load();
     } catch (e: any) {
-      console.error('Erro ao importar ano anterior:', e);
+      console.error('Erro ao importar realizado:', e);
       toast.error(e.message || 'Erro ao importar');
     }
   }, [fazendaId, clienteId, ano, load]);
@@ -362,7 +400,7 @@ export function usePlanejamentoFinanceiro(ano: number) {
     upsertRow,
     deleteRow,
     replicarParaMeses,
-    importarAnoAnterior,
+    importarRealizadoAnoAnterior,
     aplicarAjustePercentual,
     recalcularVariaveis,
     getLinhasAgrupadas,
