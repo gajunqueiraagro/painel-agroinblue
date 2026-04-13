@@ -16,7 +16,6 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS } from '@/hooks/usePlanejamentoFinanceiro';
 import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
-import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
