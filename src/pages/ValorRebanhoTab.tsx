@@ -464,6 +464,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const temSugestao = categoriasComSugestao.size > 0;
 
+  // Detecta ausência de rebanho no período (fazenda individual apenas)
+  const semRebanhoNoPeriodo = useMemo(() => {
+    if (isGlobal) return false;
+    if (isMesFuturo) return false;
+    return !resumoOficial.rows.some(r => r.quantidadeFinal > 0);
+  }, [isGlobal, isMesFuturo, resumoOficial.rows]);
+
   const allRows = useMemo<LinhaTabelaValor[]>(() => {
     return resumoOficial.rows.map(row => {
       const precoKg = precosLocal[row.categoriaCodigo] ?? 0;
@@ -1202,6 +1209,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       )}
 
       <div className="relative">
+        {semRebanhoNoPeriodo && !isMesFuturo && (
+          <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center gap-1.5">
+            <AlertTriangle className="h-6 w-6 text-muted-foreground" />
+            <p className="text-sm font-semibold text-muted-foreground">Sem rebanho no período selecionado</p>
+            <p className="text-[10px] text-muted-foreground/70">Esta fazenda não possui animais neste mês/ano.</p>
+          </div>
+        )}
         {isMesFuturo && (
           <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[1px] rounded-lg flex flex-col items-center justify-center gap-1.5">
             <Lock className="h-6 w-6 text-muted-foreground" />
