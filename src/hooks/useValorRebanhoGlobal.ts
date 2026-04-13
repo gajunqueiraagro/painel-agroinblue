@@ -266,12 +266,34 @@ export function useValorRebanhoGlobal(
 
   useEffect(() => { loadAllData(); }, [loadAllData]);
 
+  // ---------------------------------------------------------------------------
+  // Filtro: fazendas com presença real de rebanho no período
+  // Fazenda sem rebanho histórico no mês não entra no consolidado.
+  // ---------------------------------------------------------------------------
+  const getFazendasComRebanho = useCallback((mes: string): string[] => {
+    const [keyAno, keyMes] = mes.split('-').map(Number);
+    return fazendaIds.filter(fid => {
+      // Tem snapshot (header ou items) para esse mês?
+      if (snapshotHeaders[fid]?.[mes]) return true;
+      if (snapshotItems[fid]?.[mes]?.length > 0) return true;
+      // Tem dados zootécnicos (saldo real) para esse mês?
+      const farmZoot = zootData.get(fid)?.get(keyMes);
+      if (farmZoot && farmZoot.some(r => r.saldo_final > 0)) return true;
+      // Tem preços lançados para esse mês?
+      if (precosAllFarms[fid]?.[mes] && Object.keys(precosAllFarms[fid][mes]).length > 0) return true;
+      return false;
+    });
+  }, [fazendaIds, snapshotHeaders, snapshotItems, zootData, precosAllFarms]);
+
   // Determine global fonteMes for a given anoMes
   const getGlobalFonteMes = useCallback((mes: string): GlobalFonteMes => {
+    const fazendasAtivas = getFazendasComRebanho(mes);
+    if (fazendasAtivas.length === 0) return 'live';
+
     let fechadas = 0;
     let comDetalhes = 0;
 
-    fazendaIds.forEach(fid => {
+    fazendasAtivas.forEach(fid => {
       const header = snapshotHeaders[fid]?.[mes];
       if (header) {
         fechadas++;
@@ -281,10 +303,10 @@ export function useValorRebanhoGlobal(
     });
 
     if (fechadas === 0) return 'live';
-    if (fechadas === fazendaIds.length && comDetalhes === fazendaIds.length) return 'snapshot';
-    if (fechadas === fazendaIds.length && comDetalhes < fazendaIds.length) return 'snapshot_incompleto';
+    if (fechadas === fazendasAtivas.length && comDetalhes === fazendasAtivas.length) return 'snapshot';
+    if (fechadas === fazendasAtivas.length && comDetalhes < fazendasAtivas.length) return 'snapshot_incompleto';
     return 'misto'; // Some farms closed, some open
-  }, [fazendaIds, snapshotHeaders, snapshotItems]);
+  }, [getFazendasComRebanho, snapshotHeaders, snapshotItems]);
 
   // Compute live rows for a farm for a given month — FONTE OFICIAL: zootData
   const computeLiveRowsForFarm = useCallback((
