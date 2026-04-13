@@ -826,10 +826,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildFrozenMetrics(anoMesDezAnterior);
   }, [isAnoInicial, metricasSaldosIniciais, buildFrozenMetrics, anoMesDezAnterior]);
 
-  const metricasInicioAno = useMemo(() => {
-    if (fonteMes === 'live' && !isAnoInicial) return metricasDezAnteriorLive;
-    return metricasDezBase;
-  }, [fonteMes, isAnoInicial, metricasDezAnteriorLive, metricasDezBase]);
+  // metricasInicioAno removido — usar metricasDezBase diretamente
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
@@ -964,7 +961,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const uRows = isGlobal ? globalData.rows : rowsExibicao;
   const uMetricas = isGlobal ? globalData.metricas : metricasSelecionado;
   const uMetricasMesAnt = isGlobal ? globalData.metricasMesAnterior : metricasMesAnterior;
-  const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasInicioAno;
+  const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasDezBase;
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
