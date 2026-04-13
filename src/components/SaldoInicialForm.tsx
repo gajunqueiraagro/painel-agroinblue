@@ -77,14 +77,14 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     return isNaN(n) ? undefined : n;
   };
 
-  const handleSalvar = () => {
+  const handleSalvar = async () => {
     const anoFinal = hasSaldo ? anoSaldo : Number(anoSelecionado);
-    CATEGORIAS.forEach(c => {
+    for (const c of CATEGORIAS) {
       const qtd = parseNumero(valores[c.value]) ?? 0;
       const peso = parseNumero(pesos[c.value]);
       const preco = parseNumero(precos[c.value]);
-      onSetSaldo(anoFinal, c.value, qtd, peso, preco);
-    });
+      await onSetSaldo(anoFinal, c.value, qtd, peso, preco);
+    }
     setOpen(false);
   };
 
