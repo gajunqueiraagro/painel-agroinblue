@@ -273,7 +273,7 @@ export function montarInserts(
         valor_total: l.valor_total,
         fazenda_destino: fazDestinoId,
         comprador_fornecedor: l.comprador_fornecedor || null,
-        nota_fiscal: l.numero_documento || null,
+        numero_documento: l.numero_documento || null,
         observacao: l.observacao || null,
         cenario: l.cenario || 'realizado',
         lote: l.lote || null,
