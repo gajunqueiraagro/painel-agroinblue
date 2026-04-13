@@ -422,6 +422,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const isSnapInvalidado = snapStatusMes === 'invalidado';
   const isSnapCadeiaQuebrada = snapStatusMes === 'cadeia_quebrada';
 
+  // FONTE OFICIAL PARA MÊS FECHADO: fechamento_pasto_itens
+  const { fechamentoOficial } = useFechamentoOficialPastos(
+    isGlobal ? undefined : fazendaId,
+    anoMes,
+  );
+
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
     Object.entries(MAPA_PRECO_MERCADO).forEach(([codigo, ref]) => {
@@ -436,7 +442,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const [precosLocal, setPrecosLocal] = useState<Record<string, number>>({});
   const [precosDisplay, setPrecosDisplay] = useState<Record<string, string>>({});
 
-  const resumoOficial = useMemo(() => extractResumoFromView(viewDataAnoAtual, Number(mesFiltro)), [viewDataAnoAtual, mesFiltro]);
+  // Para mês fechado (P1 oficial): usa fechamento_pasto_itens
+  // Para mês aberto: usa vw_zoot_categoria_mensal (view)
+  const resumoOficial = useMemo(() => {
+    if (fechamentoOficial) return fechamentoOficial;
+    return extractResumoFromView(viewDataAnoAtual, Number(mesFiltro));
+  }, [fechamentoOficial, viewDataAnoAtual, mesFiltro]);
 
   const categoriasComSugestao = useMemo(() => {
     const set = new Set<string>();
