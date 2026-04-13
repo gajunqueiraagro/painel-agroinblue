@@ -18,7 +18,9 @@ import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS, DRIVER_POR_SUBCENTRO } 
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
-import { Copy, Download, Percent, RefreshCw, Plus, Trash2 } from 'lucide-react';
+import { Copy, Download, Percent, RefreshCw, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
+import { extrairDriversMensais, validarDriversDisponiveis } from '@/lib/calculos/driverZootecnico';
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -26,9 +28,10 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2,
 
 interface Props {
   onBack?: () => void;
+  metaConsolidacao?: MetaCategoriaMes[];
 }
 
-export function PlanejamentoFinanceiroTab({ onBack }: Props) {
+export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear + 1);
   const { fazendaAtual } = useFazenda();
@@ -148,7 +151,28 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   };
 
   const handleRecalcularVariaveis = async () => {
-    toast.info('Recálculo de variáveis: integração com rebanho META em desenvolvimento');
+    if (!metaConsolidacao || metaConsolidacao.length === 0) {
+      toast.error('Sem dados do rebanho META. Lance o zootécnico META antes de recalcular.');
+      return;
+    }
+
+    const driverValues = extrairDriversMensais(metaConsolidacao);
+    const validacao = validarDriversDisponiveis(driverValues);
+    const semDados = validacao.filter(v => !v.temDados);
+
+    // Check if any variable line uses a driver without data
+    const variaveis = data.filter(r => r.tipo_custo === 'variavel' && r.driver);
+    const driversSemBase = variaveis
+      .map(r => r.driver!)
+      .filter((d, i, arr) => arr.indexOf(d) === i)
+      .filter(d => semDados.some(s => s.driver === d));
+
+    if (driversSemBase.length > 0) {
+      const labels = driversSemBase.join(', ');
+      toast.warning(`Drivers sem dados no rebanho META: ${labels}. Esses valores ficarão zerados.`);
+    }
+
+    await recalcularVariaveis(driverValues);
   };
 
   const handleExcluirLinha = async (subcentro: string | null, ids: (string | null)[]) => {
