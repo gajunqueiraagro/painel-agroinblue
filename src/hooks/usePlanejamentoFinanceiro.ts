@@ -10,7 +10,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
 
-export { DRIVERS_DISPONIVEIS } from '@/hooks/usePlanejamentoFinanceiro';
+
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
