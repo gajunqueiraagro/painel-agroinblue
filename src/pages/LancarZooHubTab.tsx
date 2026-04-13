@@ -47,6 +47,12 @@ const ACOES_PRINCIPAIS = [
     icon: Upload,
     description: 'Carga de dados desde 2020',
   },
+  {
+    label: 'Histórico de Importações',
+    tab: 'historico_importacoes_zoot' as TabId,
+    icon: Upload,
+    description: 'Auditoria e exclusão de lotes',
+  },
 ];
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {

@@ -3119,8 +3119,10 @@ export type Database = {
           fazenda_id: string
           fazenda_origem: string | null
           finalidade: string | null
+          hash_linha: string | null
           id: string
           lote: string | null
+          lote_importacao_id: string | null
           numero_documento: string | null
           observacao: string | null
           origem_registro: string
@@ -3173,8 +3175,10 @@ export type Database = {
           fazenda_id: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          hash_linha?: string | null
           id?: string
           lote?: string | null
+          lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_registro?: string
@@ -3227,8 +3231,10 @@ export type Database = {
           fazenda_id?: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          hash_linha?: string | null
           id?: string
           lote?: string | null
+          lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_registro?: string
@@ -3279,6 +3285,13 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamentos_lote_importacao_id_fkey"
+            columns: ["lote_importacao_id"]
+            isOneToOne: false
+            referencedRelation: "zoot_importacoes"
             referencedColumns: ["id"]
           },
           {
@@ -4467,6 +4480,107 @@ export type Database = {
           },
         ]
       }
+      zoot_importacoes: {
+        Row: {
+          cancelada_em: string | null
+          cancelada_por: string | null
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          hash_arquivo: string | null
+          id: string
+          linhas_erro: number | null
+          linhas_validas: number | null
+          nome_arquivo: string | null
+          status: string
+          total_linhas: number | null
+          usuario_id: string | null
+        }
+        Insert: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          hash_arquivo?: string | null
+          id?: string
+          linhas_erro?: number | null
+          linhas_validas?: number | null
+          nome_arquivo?: string | null
+          status?: string
+          total_linhas?: number | null
+          usuario_id?: string | null
+        }
+        Update: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          hash_arquivo?: string | null
+          id?: string
+          linhas_erro?: number | null
+          linhas_validas?: number | null
+          nome_arquivo?: string | null
+          status?: string
+          total_linhas?: number | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoot_importacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zoot_importacoes_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zoot_importacoes_staging: {
+        Row: {
+          created_at: string
+          erro: string | null
+          id: string
+          importacao_id: string
+          linha: Json | null
+          linha_numero: number | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          erro?: string | null
+          id?: string
+          importacao_id: string
+          linha?: Json | null
+          linha_numero?: number | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          erro?: string | null
+          id?: string
+          importacao_id?: string
+          linha?: Json | null
+          linha_numero?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoot_importacoes_staging_importacao_id_fkey"
+            columns: ["importacao_id"]
+            isOneToOne: false
+            referencedRelation: "zoot_importacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       vw_financeiro_auditoria_competencia_caixa: {
@@ -4700,6 +4814,10 @@ export type Database = {
         Returns: boolean
       }
       cancel_financeiro_importacao_v2: {
+        Args: { _importacao_id: string }
+        Returns: Json
+      }
+      cancel_zoot_importacao: {
         Args: { _importacao_id: string }
         Returns: Json
       }

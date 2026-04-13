@@ -251,17 +251,18 @@ export function montarInserts(
   linhas: LinhaValidada[],
   fazendasMap: Record<string, string>, // nome_lower → id
   clienteId: string,
+  loteImportacaoId?: string,
 ) {
   return linhas
     .filter((l) => l.valida)
     .map((l) => {
       const fazId = fazendasMap[l.fazenda.toLowerCase()];
       const fazDestinoId = l.fazenda_destino ? fazendasMap[l.fazenda_destino.toLowerCase()] : null;
+      const hashLinha = computeHashLinha(l);
       return {
         cliente_id: clienteId,
         fazenda_id: fazId,
         data: l.data,
-        
         tipo: l.tipo,
         categoria: l.categoria || null,
         categoria_destino: l.categoria_destino || null,
@@ -281,8 +282,41 @@ export function montarInserts(
         finalidade: l.finalidade || null,
         origem_registro: 'importacao_historica',
         cancelado: false,
+        lote_importacao_id: loteImportacaoId || null,
+        hash_linha: hashLinha,
       };
     });
+}
+
+// ── Hash de linha para deduplicação ───────────────────────────────────────
+
+function computeHashLinha(l: LinhaImportacao): string {
+  const raw = [
+    l.data || '',
+    l.tipo || '',
+    l.categoria || '',
+    String(l.quantidade ?? ''),
+    String(l.peso_medio_kg ?? ''),
+    l.categoria_destino || '',
+    l.fazenda_destino || '',
+    l.observacao || '',
+  ].join('|');
+  // Simple hash (same as md5 used in SQL backfill but client-side)
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    hash = ((hash << 5) - hash) + c;
+    hash |= 0;
+  }
+  return hash.toString(36);
+}
+
+// ── Hash de arquivo para detecção de reimportação ─────────────────────────
+
+export async function computeFileHash(buffer: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ── Gerar template para download ───────────────────────────────────────────

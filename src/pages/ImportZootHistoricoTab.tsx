@@ -15,6 +15,7 @@ import {
   validarLinhas,
   montarInserts,
   gerarTemplateHistorico,
+  computeFileHash,
   CAMPOS_OBRIGATORIOS,
   type LinhaValidada,
 } from '@/lib/importZootHistorico';
@@ -31,6 +32,8 @@ export default function ImportZootHistoricoTab() {
   const [inserindo, setInserindo] = useState(false);
   const [importado, setImportado] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const tabelaRef = useRef<HTMLDivElement>(null);
 
   const fazendasMap = useMemo(() => {
@@ -65,9 +68,15 @@ export default function ImportZootHistoricoTab() {
     setUploading(true);
     setImportado(false);
     setFiltro('todos');
+    setFileName(file.name);
 
     try {
       const buf = await file.arrayBuffer();
+      
+      // Compute file hash for duplicate detection
+      const hash = await computeFileHash(buf);
+      setFileHash(hash);
+
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
@@ -152,7 +161,7 @@ export default function ImportZootHistoricoTab() {
     });
   };
 
-  // ── Insert ───────────────────────────────────────────────────────────────
+  // ── Insert with governance ────────────────────────────────────────────────
 
   const handleInserir = async (piloto: boolean) => {
     if (!clienteAtual) { toast.error('Selecione um cliente.'); return; }
@@ -162,7 +171,48 @@ export default function ImportZootHistoricoTab() {
 
     setInserindo(true);
     try {
-      const inserts = montarInserts(toInsert as LinhaValidada[], fazendasMap, clienteAtual.id);
+      // 1. Check for duplicate import by file hash
+      if (fileHash) {
+        const { data: existing } = await supabase
+          .from('zoot_importacoes')
+          .select('id, nome_arquivo, created_at')
+          .eq('cliente_id', clienteAtual.id)
+          .eq('hash_arquivo', fileHash)
+          .neq('status', 'excluido')
+          .limit(1);
+        if (existing && existing.length > 0) {
+          const prev = existing[0];
+          toast.error(`Arquivo já importado em ${new Date(prev.created_at).toLocaleDateString('pt-BR')}. Exclua a importação anterior se quiser reimportar.`);
+          setInserindo(false);
+          return;
+        }
+      }
+
+      // 2. Identify the primary fazenda for this import
+      const fazendaIds = [...new Set(toInsert.map(l => fazendasMap[l.fazenda.toLowerCase()]).filter(Boolean))];
+      const primaryFazendaId = fazendaIds[0] || '';
+
+      // 3. Create import record
+      const { data: importRecord, error: impError } = await supabase
+        .from('zoot_importacoes')
+        .insert({
+          cliente_id: clienteAtual.id,
+          fazenda_id: primaryFazendaId,
+          nome_arquivo: fileName || 'arquivo_sem_nome',
+          hash_arquivo: fileHash || null,
+          total_linhas: linhasValidadas.length,
+          linhas_validas: validas.length,
+          linhas_erro: linhasValidadas.length - validas.length,
+          status: 'processado',
+        })
+        .select('id')
+        .single();
+      if (impError) throw impError;
+
+      const loteId = importRecord.id;
+
+      // 4. Insert lancamentos with lote_importacao_id
+      const inserts = montarInserts(toInsert as LinhaValidada[], fazendasMap, clienteAtual.id, loteId);
       const BATCH = 200;
       let inserted = 0;
       for (let i = 0; i < inserts.length; i += BATCH) {
@@ -171,7 +221,7 @@ export default function ImportZootHistoricoTab() {
         if (error) throw error;
         inserted += batch.length;
       }
-      toast.success(`${inserted} lançamentos importados${piloto ? ' (piloto)' : ''}.`);
+      toast.success(`${inserted} lançamentos importados${piloto ? ' (piloto)' : ''} com rastreio de lote.`);
       if (!piloto) setImportado(true);
     } catch (err: any) {
       toast.error('Erro na importação: ' + (err.message || err));
