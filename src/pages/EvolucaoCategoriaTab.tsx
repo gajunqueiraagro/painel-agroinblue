@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
-import { useLancamentos } from '@/hooks/useLancamentos';
-import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
+import { RefreshCw, Info } from 'lucide-react';
 
 interface Props {
   initialAno?: string;
@@ -14,20 +12,7 @@ interface Props {
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
-const COLUNAS_CONSOLIDADAS = [
-  { key: 'entradas_externas', label: 'Entradas Externas', entrada: true },
-  { key: 'evol_cat_entrada', label: 'Evol. Cat. Entrada', entrada: true },
-  { key: 'saidas_externas', label: 'Saídas Externas', entrada: false },
-  { key: 'evol_cat_saida', label: 'Evol. Cat. Saída', entrada: false },
-];
-
-const TIPOS_ENTRADA_EXTERNOS = new Set(['nascimento', 'compra', 'transferencia_entrada']);
-const TIPOS_SAIDA_EXTERNOS = new Set(['abate', 'venda', 'transferencia_saida', 'consumo', 'morte']);
-const FONTE_LABEL: Record<string, string> = {
-  fechamento: 'Movimentação',
-  fallback_movimentacao: 'Movimentação',
-  projecao: 'Projeção',
-};
+const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
@@ -37,200 +22,104 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1;
   const [anoFiltro, setAnoFiltro] = useState(initialAno || String(currentYear));
-  const [mesFiltro, setMesFiltro] = useState(initialMes || String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [mesFiltro, setMesFiltro] = useState(initialMes || String(currentMonth).padStart(2, '0'));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>(
     initialCenario === 'meta' ? 'meta' : 'realizado'
   );
-  const [conciliacaoStatus, setConciliacaoStatus] = useState<'aberto' | 'fechado' | 'parcial' | null>(null);
-  const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
-  const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    if (initialAno) setAnoFiltro(initialAno);
-  }, [initialAno]);
-
-  useEffect(() => {
-    if (initialMes) setMesFiltro(initialMes);
-  }, [initialMes]);
-
-  useEffect(() => {
-    if (initialCenario) setStatusFiltro(initialCenario === 'meta' ? 'meta' : 'realizado');
-  }, [initialCenario]);
+  useEffect(() => { if (initialAno) setAnoFiltro(initialAno); }, [initialAno]);
+  useEffect(() => { if (initialMes) setMesFiltro(initialMes); }, [initialMes]);
+  useEffect(() => { if (initialCenario) setStatusFiltro(initialCenario === 'meta' ? 'meta' : 'realizado'); }, [initialCenario]);
 
   const ano = Number(anoFiltro);
-  const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && Number(mesFiltro) > currentMonth));
-  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
-  const { rawCategorias: viewData, loading: isLoading } = useRebanhoOficial({ ano, cenario: statusFiltro });
-  const { lancamentos } = useLancamentos(statusFiltro === 'meta' ? 'meta' : 'realizado');
+  const mesNum = Number(mesFiltro);
+  const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && mesNum > currentMonth));
 
-  // Filter to selected month
+  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
+  const { rawCategorias: viewData, loading: isLoading, categorias: todasCategorias } = useRebanhoOficial({ ano, cenario: statusFiltro });
+  const { data: anosDisponiveis = [String(currentYear)] } = useAnosDisponiveis();
+
+  // All categories from the year to always show all rows
+  const allCatCodes = useMemo(() => {
+    return todasCategorias.map(c => ({ codigo: c.codigo, nome: c.nome, ordem: c.ordem }));
+  }, [todasCategorias]);
+
+  // Data for selected month — ensure all categories present
   const dadosMes = useMemo(() => {
-    return viewData
-      .filter(d => d.mes === Number(mesFiltro))
-      .sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
-  }, [viewData, mesFiltro]);
+    const mesData = viewData.filter(d => d.mes === mesNum);
+    const byCode = new Map(mesData.map(d => [d.categoria_codigo, d]));
+
+    // Use allCatCodes to guarantee all categories show up
+    const result = allCatCodes.map(cat => {
+      const existing = byCode.get(cat.codigo);
+      if (existing) return existing;
+      // Create empty row for missing categories
+      return {
+        fazenda_id: fazendaId || '',
+        cliente_id: '',
+        ano,
+        mes: mesNum,
+        cenario: statusFiltro,
+        ano_mes: `${ano}-${mesFiltro}`,
+        categoria_id: '',
+        categoria_codigo: cat.codigo,
+        categoria_nome: cat.nome,
+        ordem_exibicao: cat.ordem,
+        saldo_inicial: 0,
+        entradas_externas: 0,
+        saidas_externas: 0,
+        evol_cat_entrada: 0,
+        evol_cat_saida: 0,
+        saldo_final: 0,
+        peso_total_inicial: 0,
+        peso_total_final: 0,
+        peso_medio_inicial: null as number | null,
+        peso_medio_final: null as number | null,
+        peso_entradas_externas: 0,
+        peso_saidas_externas: 0,
+        peso_evol_cat_entrada: 0,
+        peso_evol_cat_saida: 0,
+        dias_mes: 0,
+        gmd: null as number | null,
+        producao_biologica: 0,
+        fonte_oficial_mes: 'projecao',
+      };
+    });
+
+    return result.sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
+  }, [viewData, mesNum, allCatCodes, fazendaId, ano, statusFiltro, mesFiltro]);
 
   // Totals
   const totais = useMemo(() => {
-    const saldoIni = dadosMes.reduce((s, d) => s + d.saldo_inicial, 0);
-    const entradasExt = dadosMes.reduce((s, d) => s + d.entradas_externas, 0);
-    const saidasExt = dadosMes.reduce((s, d) => s + d.saidas_externas, 0);
-    const evolEntrada = dadosMes.reduce((s, d) => s + d.evol_cat_entrada, 0);
-    const evolSaida = dadosMes.reduce((s, d) => s + d.evol_cat_saida, 0);
-    const saldoFin = dadosMes.reduce((s, d) => s + d.saldo_final, 0);
+    const si = dadosMes.reduce((s, d) => s + d.saldo_inicial, 0);
+    const entExt = dadosMes.reduce((s, d) => s + d.entradas_externas, 0);
+    const saiExt = dadosMes.reduce((s, d) => s + d.saidas_externas, 0);
+    const evolIn = dadosMes.reduce((s, d) => s + d.evol_cat_entrada, 0);
+    const evolOut = dadosMes.reduce((s, d) => s + d.evol_cat_saida, 0);
+    const sf = dadosMes.reduce((s, d) => s + d.saldo_final, 0);
+    const pesoTotalIni = dadosMes.reduce((s, d) => s + d.peso_total_inicial, 0);
+    const pesoTotalFin = dadosMes.reduce((s, d) => s + d.peso_total_final, 0);
+    const prodBio = dadosMes.reduce((s, d) => s + d.producao_biologica, 0);
+    const diasMes = dadosMes.length > 0 ? dadosMes[0].dias_mes : 0;
+    const cabMedias = (si + sf) / 2;
+    const pesoMedioIni = si > 0 ? pesoTotalIni / si : null;
+    const pesoMedioFin = sf > 0 ? pesoTotalFin / sf : null;
+    const gmd = cabMedias > 0 && diasMes > 0 ? prodBio / cabMedias / diasMes : null;
 
-    const somaPeso = dadosMes.reduce((s, d) => s + (d.peso_medio_final && d.saldo_final > 0 ? d.saldo_final * d.peso_medio_final : 0), 0);
-    const somaQtd = dadosMes.reduce((s, d) => s + (d.peso_medio_final && d.saldo_final > 0 ? d.saldo_final : 0), 0);
-    const pesoMedio = somaQtd > 0 ? somaPeso / somaQtd : null;
-
-    return { saldoIni, entradasExt, saidasExt, evolEntrada, evolSaida, saldoFin, pesoMedio };
+    return { si, entExt, saiExt, evolIn, evolOut, sf, pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin, prodBio, diasMes, cabMedias, gmd };
   }, [dadosMes]);
 
-  const lancamentosMes = useMemo(() => {
-    return lancamentos.filter((l) => {
-      if (!l.data?.startsWith(`${anoFiltro}-${mesFiltro}`)) return false;
-      const statusLanc = l.statusOperacional || 'realizado';
-      if (statusFiltro === 'realizado') return l.cenario === 'realizado' && statusLanc === 'realizado';
-      return l.cenario === 'meta';
-    });
-  }, [anoFiltro, lancamentos, mesFiltro, statusFiltro]);
-
-  const totaisLista = useMemo(() => {
-    return lancamentosMes.reduce((acc, lancamento) => {
-      const tipo = String(lancamento.tipo);
-      acc.registros += 1;
-
-      if (tipo === 'saldo_inicial') {
-        acc.saldoInicialImportado += lancamento.quantidade || 0;
-      } else if (TIPOS_ENTRADA_EXTERNOS.has(tipo)) {
-        acc.entradasExt += lancamento.quantidade || 0;
-      } else if (TIPOS_SAIDA_EXTERNOS.has(tipo)) {
-        acc.saidasExt += lancamento.quantidade || 0;
-      } else if (tipo === 'reclassificacao') {
-        acc.evolEntrada += lancamento.quantidade || 0;
-        acc.evolSaida += lancamento.quantidade || 0;
-      }
-
-      return acc;
-    }, {
-      registros: 0,
-      saldoInicialImportado: 0,
-      entradasExt: 0,
-      saidasExt: 0,
-      evolEntrada: 0,
-      evolSaida: 0,
-    });
-  }, [lancamentosMes]);
-
-  const deltaMes = totais.saldoFin - totais.saldoIni - totais.entradasExt - totais.evolEntrada + totais.saidasExt + totais.evolSaida;
-  const paridadeListaOk = totais.entradasExt === totaisLista.entradasExt
-    && totais.saidasExt === totaisLista.saidasExt
-    && totais.evolEntrada === totaisLista.evolEntrada
-    && totais.evolSaida === totaisLista.evolSaida;
-  const linhasInconsistentes = dadosMes.filter((d) => (
-    d.saldo_final - d.saldo_inicial - d.entradas_externas - d.evol_cat_entrada + d.saidas_externas + d.evol_cat_saida
-  ) !== 0).length;
-
-  // Fetch conciliação status
-  useEffect(() => {
-    const anoMes = `${anoFiltro}-${mesFiltro}`;
-    if (!fazendaId || fazendaId === '__global__') { setConciliacaoStatus(null); return; }
-    (async () => {
-      try {
-        const { data: pastos } = await supabase.from('pastos').select('id').eq('fazenda_id', fazendaId).eq('ativo', true).eq('entra_conciliacao', true);
-        const totalPastos = (pastos || []).length;
-        if (totalPastos === 0) { setConciliacaoStatus(null); return; }
-        const { data: fechamentos } = await supabase.from('fechamento_pastos').select('pasto_id, status').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes);
-        const fechados = (fechamentos || []).filter(f => f.status === 'fechado' || f.status === 'realizado').length;
-        if (fechados === 0) setConciliacaoStatus('aberto');
-        else if (fechados >= totalPastos) setConciliacaoStatus('fechado');
-        else setConciliacaoStatus('parcial');
-      } catch { setConciliacaoStatus(null); }
-    })();
-  }, [fazendaId, anoFiltro, mesFiltro]);
-
-  // Fetch valor rebanho status
-  useEffect(() => {
-    const anoMes = `${anoFiltro}-${mesFiltro}`;
-    if (!fazendaId || fazendaId === '__global__') { setRebanhoStatus(null); return; }
-    (async () => {
-      try {
-        const { data } = await supabase.from('valor_rebanho_fechamento').select('status').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).maybeSingle();
-        setRebanhoStatus(data?.status === 'fechado' ? 'fechado' : 'aberto');
-      } catch { setRebanhoStatus(null); }
-    })();
-  }, [fazendaId, anoFiltro, mesFiltro]);
-
-  // Fetch preços do valor do rebanho
-  useEffect(() => {
-    const anoMes = `${anoFiltro}-${mesFiltro}`;
-    if (!fazendaId || fazendaId === '__global__') { setPrecosRebanho({}); return; }
-    (async () => {
-      try {
-        const { data } = await supabase.from('valor_rebanho_mensal').select('categoria, preco_kg').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes);
-        const map: Record<string, number> = {};
-        (data || []).forEach((r: any) => { if (r.preco_kg > 0) map[r.categoria] = r.preco_kg; });
-        setPrecosRebanho(map);
-      } catch { setPrecosRebanho({}); }
-    })();
-  }, [fazendaId, anoFiltro, mesFiltro]);
-
-  const valorRebanhoTotal = useMemo(() => {
-    let total = 0;
-    dadosMes.forEach(d => {
-      const preco = precosRebanho[d.categoria_codigo];
-      if (preco && d.peso_medio_final && d.saldo_final > 0) {
-        total += d.saldo_final * d.peso_medio_final * preco;
-      }
-    });
-    return total;
-  }, [dadosMes, precosRebanho]);
-
   const isRealizado = statusFiltro === 'realizado';
-  const formatPeso = (v: number | null) => {
-    if (v === null || v === undefined || v <= 0) return '—';
-    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const fmtNum = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR');
+  const fmtPeso = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtGmd = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  const fmtProdBio = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-  const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-
-  // Available years: current ± some range
-  // FONTE OFICIAL: anos reais do banco
-  const { data: anosDisponiveis = [String(currentYear)] } = useAnosDisponiveis();
+  const themeColor = isRealizado ? 'primary' : 'orange-500';
 
   return (
-    <div className="p-3 w-full space-y-1 animate-fade-in pb-20">
-      {/* Status badges */}
-      <div className="flex items-center justify-end gap-2 -mt-7">
-        {isRealizado && conciliacaoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            conciliacaoStatus === 'fechado'
-              ? 'bg-green-50 border-green-300 text-green-800'
-              : conciliacaoStatus === 'parcial'
-                ? 'bg-orange-50 border-orange-300 text-orange-800'
-                : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {conciliacaoStatus === 'fechado' ? <CheckCircle className="h-3.5 w-3.5" /> : conciliacaoStatus === 'parcial' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-            Pasto: {conciliacaoStatus === 'fechado' ? 'Fechado' : conciliacaoStatus === 'parcial' ? 'Parcial' : 'Aberto'}
-          </div>
-        )}
-        {isRealizado && rebanhoStatus && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold ${
-            rebanhoStatus === 'fechado' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-muted border-border text-muted-foreground'
-          }`}>
-            {rebanhoStatus === 'fechado' ? <CheckCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-            Rebanho: {rebanhoStatus === 'fechado' ? 'Fechado' : 'Aberto'}
-          </div>
-        )}
-        {valorRebanhoTotal > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-blue-50 border-blue-300 text-blue-800">
-            <DollarSign className="h-3.5 w-3.5" />
-            Valor Rebanho: {valorRebanhoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-          </div>
-        )}
-      </div>
-
-      {/* Ano + régua de meses */}
+    <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
+      {/* Header: Ano + régua de meses */}
       <div className="flex items-center gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="h-7 text-xs font-bold w-20 shrink-0">
@@ -264,7 +153,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         </div>
       </div>
 
-      {/* Filtros secundários */}
+      {/* Filtros: Realizado/Meta + Reclass */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
           {([
@@ -298,138 +187,157 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
-      <div className="grid gap-2 md:grid-cols-4">
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Quadro oficial</div>
-          <div className="mt-1 text-[11px] font-bold text-foreground">SI {totais.saldoIni.toLocaleString('pt-BR')} → SF {totais.saldoFin.toLocaleString('pt-BR')}</div>
-          <div className="text-[9px] text-muted-foreground">Fonte única: vw_zoot_categoria_mensal</div>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Evolução categoria</div>
-          <div className="mt-1 text-[11px] font-bold text-foreground">+{totais.entradasExt + totais.evolEntrada} / -{totais.saidasExt + totais.evolSaida}</div>
-          <div className="text-[9px] text-muted-foreground">Linhas inconsistentes: {linhasInconsistentes}</div>
-        </div>
-        <div className="rounded-md border border-border bg-card px-3 py-2">
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Lista movimentações</div>
-          <div className="mt-1 text-[11px] font-bold text-foreground">+{totaisLista.entradasExt + totaisLista.evolEntrada} / -{totaisLista.saidasExt + totaisLista.evolSaida}</div>
-          <div className="text-[9px] text-muted-foreground">Registros: {totaisLista.registros}{totaisLista.saldoInicialImportado > 0 ? ` • SI importado ${totaisLista.saldoInicialImportado}` : ''}</div>
-        </div>
-        <div className={`rounded-md border px-3 py-2 ${deltaMes === 0 && paridadeListaOk ? 'border-border bg-card' : 'border-destructive/40 bg-destructive/10'}`}>
-          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Status do mês</div>
-          <div className={`mt-1 text-[11px] font-bold ${deltaMes === 0 ? 'text-foreground' : 'text-destructive'}`}>Equação {deltaMes === 0 ? 'OK' : `Δ ${deltaMes.toLocaleString('pt-BR')}`}</div>
-          <div className={`text-[9px] ${paridadeListaOk ? 'text-muted-foreground' : 'text-destructive'}`}>Paridade lista × quadro: {paridadeListaOk ? 'OK' : 'divergente'}</div>
-        </div>
-      </div>
-
-      {/* Tabela */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 706 }}>
+      {/* Tabela principal */}
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground text-xs">Carregando dados oficiais...</div>
         ) : (
-          <table className="text-[10px]" style={{ tableLayout: 'fixed', width: 706 }}>
-            <colgroup>
-              <col style={{ width: 85 }} />
-              <col style={{ width: 55 }} />
-              {COLUNAS_CONSOLIDADAS.map(col => (
-                <col key={col.key} style={{ width: 65 }} />
-              ))}
-              <col style={{ width: 60 }} />
-              <col style={{ width: 55 }} />
-            </colgroup>
+          <table className="w-full text-[10px]" style={{ minWidth: 900 }}>
             <thead>
-              <tr className={`border-b ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
-                <th className={`text-left px-1.5 py-1 font-bold sticky left-0 ${isRealizado ? 'bg-primary/15 text-primary' : 'bg-orange-500/15 text-orange-700'}`}>
+              <tr className={`border-b ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
+                <th className={`text-left px-2 py-1.5 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ minWidth: 100 }}>
                   Categoria
                 </th>
-                <th className={`px-1.5 py-1 font-bold text-center ${isRealizado ? 'bg-primary/15 text-foreground' : 'bg-orange-500/15 text-foreground'}`}>
-                  Saldo Ini.
-                </th>
-                {COLUNAS_CONSOLIDADAS.map(col => (
-                  <th key={col.key} className={`px-1.5 py-1 font-bold text-center ${col.entrada ? 'text-success' : 'text-destructive'}`}>
-                    {col.label}
-                  </th>
-                ))}
-                <th className={`px-1.5 py-1 font-bold text-foreground text-center ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
-                  Saldo Fin.
-                </th>
-                <th className={`px-1.5 py-1 font-bold text-foreground text-center ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
-                  Peso (kg)
-                </th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-foreground">Saldo Ini.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Kg/cab Ini.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-green-700">Entr. Ext.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-destructive">Saídas Ext.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-destructive">Evol. Saída</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-green-700">Evol. Entrada</th>
+                <th className={`px-1.5 py-1.5 font-bold text-center ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>Saldo Fin.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Kg/cab Fin.</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-blue-700">Prod. Bio</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Dias</th>
+                <th className="px-1.5 py-1.5 font-bold text-center text-blue-700">GMD</th>
               </tr>
             </thead>
             <tbody>
               {dadosMes.map((d, i) => {
                 const isFemea = d.categoria_codigo.includes('_f') || d.categoria_codigo === 'vacas';
                 const isSeparator = i > 0 && isFemea && !dadosMes[i - 1]?.categoria_codigo.includes('_f') && dadosMes[i - 1]?.categoria_codigo !== 'vacas';
-                const catBg = isRealizado
-                  ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/10')
-                  : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/10');
-
-                const vals = [d.entradas_externas, d.evol_cat_entrada, d.saidas_externas, d.evol_cat_saida];
-                const deltaLinha = d.saldo_final - d.saldo_inicial - d.entradas_externas - d.evol_cat_entrada + d.saidas_externas + d.evol_cat_saida;
-                const lancamentosLinha = lancamentosMes.filter((l) => String(l.categoria) === d.categoria_codigo || String(l.categoriaDestino) === d.categoria_codigo);
-                const saldoInicialImportadoLinha = lancamentosLinha
-                  .filter((l) => String(l.tipo) === 'saldo_inicial' && String(l.categoria) === d.categoria_codigo)
-                  .reduce((sum, l) => sum + (l.quantidade || 0), 0);
-                const detalheTooltip = deltaLinha === 0
-                  ? 'Linha fechada — equação SF = SI + movimentações OK.'
-                  : `Linha não fecha com os movimentos exibidos (Δ ${deltaLinha}).`;
+                const rowBg = i % 2 === 0 ? '' : 'bg-muted/30';
+                const stickyBg = isRealizado
+                  ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/8')
+                  : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/8');
 
                 return (
-                  <tr key={d.categoria_id} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                    <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${catBg}`}>
-                      <div className="flex items-center gap-1">
-                        <span>{d.categoria_nome}</span>
-                        {deltaLinha !== 0 && (
-                          <span title={detalheTooltip}>
-                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
-                          </span>
-                        )}
-                      </div>
-                      {saldoInicialImportadoLinha > 0 && (
-                        <div className="text-[8px] font-normal text-muted-foreground">
-                          SI imp. {saldoInicialImportadoLinha}
-                        </div>
-                      )}
+                  <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
+                    <td className={`px-2 py-1 font-bold text-foreground sticky left-0 z-10 ${stickyBg}`}>
+                      {d.categoria_nome}
                     </td>
-                    <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_inicial === 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {isFutureMonth ? '' : d.saldo_inicial}
+                    <td className={`px-1.5 py-1 text-center font-semibold ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
+                      {isFutureMonth ? '' : fmtNum(d.saldo_inicial)}
                     </td>
-                    {vals.map((val, j) => (
-                      <td key={j} className={`px-1.5 py-0.5 text-center font-semibold ${val > 0 ? (COLUNAS_CONSOLIDADAS[j].entrada ? 'text-success' : 'text-destructive') : 'text-transparent'}`}>
-                        {val || '–'}
-                      </td>
-                    ))}
-                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_final === 0 ? 'text-transparent' : 'text-foreground'}`} title={detalheTooltip}>
-                      {isFutureMonth ? '' : d.saldo_final}
-                      {deltaLinha !== 0 && <span className="ml-1 text-[8px] text-destructive">⚠</span>}
+                    <td className="px-1.5 py-1 text-center text-muted-foreground">
+                      {fmtPeso(d.peso_medio_inicial)}
                     </td>
-                    <td className={`px-1.5 py-0.5 text-center italic text-[9px] ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${!d.peso_medio_final || d.peso_medio_final <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                      {formatPeso(d.peso_medio_final)}
+                    <td className={`px-1.5 py-1 text-center font-semibold ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      {fmtNum(d.entradas_externas)}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center font-semibold ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      {fmtNum(d.saidas_externas)}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center font-semibold ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      {fmtNum(d.evol_cat_saida)}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center font-semibold ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      {fmtNum(d.evol_cat_entrada)}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center font-extrabold ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
+                      {isFutureMonth ? '' : fmtNum(d.saldo_final)}
+                    </td>
+                    <td className="px-1.5 py-1 text-center text-muted-foreground">
+                      {fmtPeso(d.peso_medio_final)}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center ${d.producao_biologica > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
+                      {fmtProdBio(d.producao_biologica)}
+                    </td>
+                    <td className="px-1.5 py-1 text-center text-muted-foreground">
+                      {d.dias_mes || '–'}
+                    </td>
+                    <td className={`px-1.5 py-1 text-center ${d.gmd && d.gmd > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
+                      {fmtGmd(d.gmd)}
                     </td>
                   </tr>
                 );
               })}
-              <tr className={`border-t-2 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>
-                <td className={`px-1.5 py-1 font-extrabold text-foreground sticky left-0 ${isRealizado ? 'bg-primary/15' : 'bg-orange-500/15'}`}>TOTAL</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{isFutureMonth ? '' : totais.saldoIni}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-success">{totais.entradasExt || '–'}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-success">{totais.evolEntrada || '–'}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-destructive">{totais.saidasExt || '–'}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-destructive">{totais.evolSaida || '–'}</td>
-                <td className="px-1.5 py-1 text-center font-extrabold text-foreground">{isFutureMonth ? '' : totais.saldoFin}</td>
-                <td className={`px-1.5 py-1 text-center italic text-[9px] font-semibold ${!totais.pesoMedio || totais.pesoMedio <= 0 ? 'text-transparent' : 'text-foreground'}`}>
-                  {formatPeso(totais.pesoMedio)}
-                </td>
+              {/* Linha TOTAL */}
+              <tr className={`border-t-2 font-extrabold ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
+                <td className={`px-2 py-1.5 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
+                <td className="px-1.5 py-1.5 text-center text-foreground">{isFutureMonth ? '' : fmtNum(totais.si)}</td>
+                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
+                <td className="px-1.5 py-1.5 text-center text-green-700">{fmtNum(totais.entExt)}</td>
+                <td className="px-1.5 py-1.5 text-center text-destructive">{fmtNum(totais.saiExt)}</td>
+                <td className="px-1.5 py-1.5 text-center text-destructive">{fmtNum(totais.evolOut)}</td>
+                <td className="px-1.5 py-1.5 text-center text-green-700">{fmtNum(totais.evolIn)}</td>
+                <td className={`px-1.5 py-1.5 text-center ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : fmtNum(totais.sf)}</td>
+                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioFin)}</td>
+                <td className="px-1.5 py-1.5 text-center text-blue-700">{fmtProdBio(totais.prodBio)}</td>
+                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{totais.diasMes || '–'}</td>
+                <td className="px-1.5 py-1.5 text-center text-blue-700">{fmtGmd(totais.gmd)}</td>
               </tr>
             </tbody>
           </table>
         )}
       </div>
 
-      <div className="text-[9px] text-muted-foreground/60 text-right pr-1">
-        Fonte: vw_zoot_categoria_mensal (oficial) — cálculo por movimentação
-      </div>
+      {/* Bloco explicativo — Como o GMD foi calculado */}
+      {!isLoading && !isFutureMonth && totais.diasMes > 0 && (
+        <div className="bg-card rounded-lg shadow-sm border p-4 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Info className="h-4 w-4 text-blue-600" />
+            Como o GMD foi calculado — {MESES_CURTOS[mesNum - 1]}/{anoFiltro}
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">Saldo Inicial</span>
+              <p className="font-bold text-foreground">{totais.si.toLocaleString('pt-BR')} cab</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Saldo Final</span>
+              <p className="font-bold text-foreground">{totais.sf.toLocaleString('pt-BR')} cab</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cabeças Médias</span>
+              <p className="font-bold text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cab</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Dias do Mês</span>
+              <p className="font-bold text-foreground">{totais.diasMes}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Peso Total Inicial</span>
+              <p className="font-bold text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Peso Total Final</span>
+              <p className="font-bold text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Produção Biológica</span>
+              <p className="font-bold text-blue-700">{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">GMD Final</span>
+              <p className="font-extrabold text-blue-700 text-sm">
+                {totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/cab/dia` : '–'}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-2 text-[10px] text-muted-foreground space-y-1">
+            <p className="font-semibold">Fórmula:</p>
+            <p>Produção Biológica = Peso Final − Peso Inicial − Peso Entradas + Peso Saídas</p>
+            <p>GMD = Produção Biológica ÷ Cabeças Médias ÷ Dias do Mês</p>
+            {totais.cabMedias > 0 && totais.gmd !== null && (
+              <p className="mt-1 font-medium text-foreground/70">
+                GMD = {totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} ÷ {totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ÷ {totais.diasMes} = <span className="font-bold text-blue-700">{totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/cab/dia</span>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
