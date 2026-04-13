@@ -328,12 +328,16 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
 }
 
 function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
+  // Strip leading null points so the chart renders from the first real value (e.g. Jan)
+  const firstRealIdx = data.findIndex(d => d.value !== null);
+  const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
+
   return (
     <div className="flex-1 min-w-0">
       <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
       <div className="h-[150px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+          <LineChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
