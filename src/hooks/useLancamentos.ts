@@ -511,7 +511,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (!fazendaId || fazendaId === '__global__') return;
 
     if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
-      const { error } = await supabase.from('saldos_iniciais').upsert({
+      const payload = {
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
         ano,
@@ -519,7 +519,13 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         quantidade,
         peso_medio_kg: pesoMedioKg ?? null,
         preco_kg: precoKg ?? null,
-      } as any, { onConflict: 'fazenda_id,ano,categoria' });
+      };
+      console.log('[SALDO-SAVE] upsert payload:', JSON.stringify(payload));
+      const { error, data } = await supabase.from('saldos_iniciais').upsert(
+        payload as any,
+        { onConflict: 'fazenda_id,ano,categoria' }
+      ).select();
+      console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data }));
       if (!error) {
         setSaldosIniciais(prev => {
           const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
