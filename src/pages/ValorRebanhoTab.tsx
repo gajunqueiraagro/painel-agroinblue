@@ -584,7 +584,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const baseInicialIncompleta = useMemo(() => {
     if (!isAnoInicial) return false;
     if (saldosIniciaisAnoFiltro.length === 0) return true;
-    return saldosIniciaisAnoFiltro.some(s => (s.quantidade || 0) > 0 && (s.precoKg == null || s.precoKg <= 0));
+    // Considerar apenas categorias com rebanho efetivo (quantidade > 0)
+    const categoriasComRebanho = saldosIniciaisAnoFiltro.filter(s => (s.quantidade || 0) > 0);
+    // Se nenhuma categoria tem rebanho, base está completa (não há o que precificar)
+    if (categoriasComRebanho.length === 0) return false;
+    return categoriasComRebanho.some(s => s.precoKg == null || s.precoKg <= 0);
   }, [isAnoInicial, saldosIniciaisAnoFiltro]);
 
   const metricasSaldosIniciais = useMemo((): MetricasExibicao | null => {
