@@ -68,9 +68,15 @@ export default function ImportZootHistoricoTab() {
     setUploading(true);
     setImportado(false);
     setFiltro('todos');
+    setFileName(file.name);
 
     try {
       const buf = await file.arrayBuffer();
+      
+      // Compute file hash for duplicate detection
+      const hash = await computeFileHash(buf);
+      setFileHash(hash);
+
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(ws);
