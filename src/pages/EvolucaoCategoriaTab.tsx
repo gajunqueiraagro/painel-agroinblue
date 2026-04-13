@@ -3,6 +3,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
 import { RefreshCw, Info, AlertCircle } from 'lucide-react';
 
 interface Props {
@@ -87,12 +90,25 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     return result.sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   }, [viewData, mesNum, allCatCodes, fazendaId, ano, statusFiltro, mesFiltro]);
 
-  // Check if pastos are closed for this month (fonte_oficial_mes === 'fechamento')
-  const pastosFechados = useMemo(() => {
-    const mesData = viewData.filter(d => d.mes === mesNum);
-    if (mesData.length === 0) return false;
-    return mesData.some(d => d.fonte_oficial_mes === 'fechamento');
-  }, [viewData, mesNum]);
+  // Check if pastos are closed for this month via fechamento_pastos table
+  const { clienteAtual } = useCliente();
+  const anoMesKey = `${ano}-${String(mesNum).padStart(2, '0')}`;
+  const { data: pastosFechadosCount = 0 } = useQuery({
+    queryKey: ['fechamento-pastos-status', fazendaId, clienteAtual?.id, anoMesKey],
+    queryFn: async () => {
+      if (!fazendaId || !clienteAtual?.id) return 0;
+      const { count } = await supabase
+        .from('fechamento_pastos')
+        .select('id', { count: 'exact', head: true })
+        .eq('fazenda_id', fazendaId)
+        .eq('cliente_id', clienteAtual.id)
+        .eq('ano_mes', anoMesKey)
+        .eq('status', 'fechado');
+      return count ?? 0;
+    },
+    enabled: !!fazendaId && !!clienteAtual?.id,
+  });
+  const pastosFechados = pastosFechadosCount > 0;
 
   const totais = useMemo(() => {
     const si = dadosMes.reduce((s, d) => s + d.saldo_inicial, 0);
