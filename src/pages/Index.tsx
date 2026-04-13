@@ -603,7 +603,7 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
           onBackToConciliacao={fechamentoFromConciliacao ? goToVisaoZooHub : undefined}
           onNavigateToReclass={goToReclassFromFechamento}
-          onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')}
+          onNavigateToValorRebanho={(filtro) => { setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes }); setActiveTab('valor_rebanho'); }}
           onNavigateToConferenciaGmd={(filtro) => { setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes }); handleTabChange('conferencia_gmd'); }}
           onNavigateToMapaPastos={(filtro) => { setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes }); handleTabChange('mapa_pastos'); }}
         />
