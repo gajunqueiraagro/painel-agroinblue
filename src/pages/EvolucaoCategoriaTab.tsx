@@ -287,112 +287,114 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
-      {/* Tabela principal */}
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground text-xs">Carregando dados oficiais...</div>
-        ) : (
-          <table className="w-full text-[10px]" style={{ minWidth: 680 }}>
-            <thead>
-              <tr className={`border-b ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
-                <th className={`text-left px-1.5 py-1.5 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ minWidth: 80, maxWidth: 110 }}>
-                  Categoria
-                </th>
-                <th className="px-1 py-1.5 font-bold text-center text-foreground bg-foreground/5" style={{ minWidth: 52 }}>Saldo Ini.</th>
-                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 48 }}>Kg/cab Ini.</th>
-                <th className="px-1 py-1.5 font-bold text-center text-green-700" style={{ minWidth: 44 }}>Entr. Ext.</th>
-                <th className="px-1 py-1.5 font-bold text-center text-destructive" style={{ minWidth: 44 }}>Saídas Ext.</th>
-                <th className="px-1 py-1.5 font-bold text-center text-destructive" style={{ minWidth: 44 }}>Evol. Saída</th>
-                <th className="px-1 py-1.5 font-bold text-center text-green-700" style={{ minWidth: 44 }}>Evol. Entrada</th>
-                <th className={`px-1 py-1.5 font-bold text-center bg-foreground/5 ${isRealizado ? 'text-primary' : 'text-orange-700'}`} style={{ minWidth: 52 }}>Saldo Fin.</th>
-                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 48 }}>
-                  Kg/cab Fin.
-                  {!pastosFechados && <span className="block text-[8px] font-normal text-orange-500">s/ fech.</span>}
-                </th>
-                <th className="px-1 py-1.5 font-bold text-center text-blue-700" style={{ minWidth: 44 }}>Prod. Bio</th>
-                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 28 }}>Dias</th>
-                <th className="px-1 py-1.5 font-bold text-center text-blue-700" style={{ minWidth: 44 }}>GMD</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dadosMes.map((d, i) => {
-                const isFemea = d.categoria_codigo.includes('_f') || d.categoria_codigo === 'vacas';
-                const isSeparator = i > 0 && isFemea && !dadosMes[i - 1]?.categoria_codigo.includes('_f') && dadosMes[i - 1]?.categoria_codigo !== 'vacas';
-                const rowBg = i % 2 === 0 ? '' : 'bg-muted/30';
-                const stickyBg = isRealizado
-                  ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/8')
-                  : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/8');
+      {/* Tabela principal — compacta, ~70% largura */}
+      <div className="max-w-[70%]">
+        <div className="bg-card rounded-md shadow-sm border overflow-x-auto">
+          {isLoading ? (
+            <div className="p-6 text-center text-muted-foreground text-xs">Carregando dados oficiais...</div>
+          ) : (
+            <table className="w-full text-[9px] border-collapse">
+              <thead>
+                <tr className={`border-b ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
+                  <th className={`text-left px-1 py-1 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ width: 90 }}>
+                    Categoria
+                  </th>
+                  <th className="px-0.5 py-1 font-bold text-right text-foreground bg-foreground/5" style={{ width: 46 }}>Saldo Ini.</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground" style={{ width: 42 }}>Kg/cab Ini.</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 38 }}>Entr. Ext.</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 38 }}>Saídas Ext.</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 38 }}>Evol. Saída</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 38 }}>Evol. Entr.</th>
+                  <th className={`px-0.5 py-1 font-bold text-right bg-foreground/5 ${isRealizado ? 'text-primary' : 'text-orange-700'}`} style={{ width: 46 }}>Saldo Fin.</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground" style={{ width: 42 }}>
+                    Kg/cab Fin.
+                    {!pastosFechados && <span className="block text-[7px] font-normal text-orange-500">s/ fech.</span>}
+                  </th>
+                  <th className="px-0.5 py-1 font-bold text-right text-blue-700" style={{ width: 42 }}>Prod. Bio</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground" style={{ width: 24 }}>Dias</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-blue-700" style={{ width: 42 }}>GMD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dadosMes.map((d, i) => {
+                  const isFemea = d.categoria_codigo.includes('_f') || d.categoria_codigo === 'vacas';
+                  const isSeparator = i > 0 && isFemea && !dadosMes[i - 1]?.categoria_codigo.includes('_f') && dadosMes[i - 1]?.categoria_codigo !== 'vacas';
+                  const rowBg = i % 2 === 0 ? '' : 'bg-muted/30';
+                  const stickyBg = isRealizado
+                    ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/8')
+                    : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/8');
 
-                const showPesoFin = pastosFechados || d.fonte_oficial_mes === 'fechamento';
+                  const showPesoFin = pastosFechados || d.fonte_oficial_mes === 'fechamento';
 
-                return (
-                  <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                    <td className={`px-1.5 py-1 font-bold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ maxWidth: 110 }}>
-                      {d.categoria_nome}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-semibold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
-                      {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
-                    </td>
-                    <td className="px-1 py-1 text-center text-muted-foreground">
-                      {fmtPeso(d.peso_medio_inicial)}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-semibold ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
-                      {getVal(d, 'entradas_externas')}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-semibold ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-                      {getVal(d, 'saidas_externas')}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-semibold ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-                      {getVal(d, 'evol_cat_saida')}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-semibold ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
-                      {getVal(d, 'evol_cat_entrada')}
-                    </td>
-                    <td className={`px-1 py-1 text-center font-extrabold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
-                      {isFutureMonth ? '' : getVal(d, 'saldo_final')}
-                    </td>
-                    <td className="px-1 py-1 text-center text-muted-foreground">
-                      {showPesoFin ? fmtPeso(d.peso_medio_final) : '–'}
-                    </td>
-                    <td className={`px-1 py-1 text-center ${d.producao_biologica > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
-                      {fmtProdBio(d.producao_biologica)}
-                    </td>
-                    <td className="px-1 py-1 text-center text-muted-foreground">
-                      {d.dias_mes || '–'}
-                    </td>
-                    <td className={`px-1 py-1 text-center ${d.gmd && d.gmd > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
-                      {fmtGmd(d.gmd)}
-                    </td>
-                  </tr>
-                );
-              })}
-              {/* Linha TOTAL */}
-              <tr className={`border-t-2 font-extrabold ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
-                <td className={`px-1.5 py-1.5 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
-                <td className="px-1 py-1.5 text-center text-foreground bg-foreground/[0.03]">{isFutureMonth ? '' : getTotalVal('si')}</td>
-                <td className="px-1 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
-                <td className="px-1 py-1.5 text-center text-green-700">{getTotalVal('entExt')}</td>
-                <td className="px-1 py-1.5 text-center text-destructive">{getTotalVal('saiExt')}</td>
-                <td className="px-1 py-1.5 text-center text-destructive">{getTotalVal('evolOut')}</td>
-                <td className="px-1 py-1.5 text-center text-green-700">{getTotalVal('evolIn')}</td>
-                <td className={`px-1 py-1.5 text-center bg-foreground/[0.03] ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : getTotalVal('sf')}</td>
-                <td className="px-1 py-1.5 text-center text-muted-foreground">{pastosFechados ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
-                <td className="px-1 py-1.5 text-center text-blue-700">{fmtProdBio(totais.prodBio)}</td>
-                <td className="px-1 py-1.5 text-center text-muted-foreground">{totais.diasMes || '–'}</td>
-                <td className="px-1 py-1.5 text-center text-blue-700">{fmtGmd(totais.gmd)}</td>
-              </tr>
-            </tbody>
-          </table>
+                  return (
+                    <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t border-border' : ''}`}>
+                      <td className={`px-1 py-0.5 font-semibold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ width: 90 }}>
+                        {d.categoria_nome}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
+                        {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
+                      </td>
+                      <td className="px-0.5 py-0.5 text-right text-muted-foreground">
+                        {fmtPeso(d.peso_medio_inicial)}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                        {getVal(d, 'entradas_externas')}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                        {getVal(d, 'saidas_externas')}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                        {getVal(d, 'evol_cat_saida')}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                        {getVal(d, 'evol_cat_entrada')}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
+                        {isFutureMonth ? '' : getVal(d, 'saldo_final')}
+                      </td>
+                      <td className="px-0.5 py-0.5 text-right text-muted-foreground">
+                        {showPesoFin ? fmtPeso(d.peso_medio_final) : '–'}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${negClass(d.producao_biologica) || (d.producao_biologica > 0 ? 'text-blue-700' : 'text-muted-foreground/30')}`}>
+                        {fmtProdBio(d.producao_biologica)}
+                      </td>
+                      <td className="px-0.5 py-0.5 text-right text-muted-foreground">
+                        {d.dias_mes || '–'}
+                      </td>
+                      <td className={`px-0.5 py-0.5 text-right font-medium ${negClass(d.gmd) || (d.gmd && d.gmd > 0 ? 'text-blue-700' : 'text-muted-foreground/30')}`}>
+                        {fmtGmd(d.gmd)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {/* Linha TOTAL */}
+                <tr className={`border-t font-bold ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'} text-[9px]`}>
+                  <td className={`px-1 py-1 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
+                  <td className="px-0.5 py-1 text-right text-foreground bg-foreground/[0.03]">{isFutureMonth ? '' : getTotalVal('si')}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
+                  <td className="px-0.5 py-1 text-right text-green-700">{getTotalVal('entExt')}</td>
+                  <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('saiExt')}</td>
+                  <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('evolOut')}</td>
+                  <td className="px-0.5 py-1 text-right text-green-700">{getTotalVal('evolIn')}</td>
+                  <td className={`px-0.5 py-1 text-right bg-foreground/[0.03] ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : getTotalVal('sf')}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground">{pastosFechados ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
+                  <td className={`px-0.5 py-1 text-right ${negClass(totais.prodBio) || 'text-blue-700'}`}>{fmtProdBio(totais.prodBio)}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground">{totais.diasMes || '–'}</td>
+                  <td className={`px-0.5 py-1 text-right ${negClass(totais.gmd) || 'text-blue-700'}`}>{fmtGmd(totais.gmd)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Aviso pastos não fechados */}
+        {!isLoading && !pastosFechados && !isFutureMonth && (
+          <div className="flex items-center gap-1.5 text-[9px] text-orange-600 bg-orange-50 dark:bg-orange-500/10 rounded px-2 py-1 border border-orange-200 dark:border-orange-500/20 mt-1.5">
+            <AlertCircle className="h-3 w-3 shrink-0" />
+            Kg/cab Fin. indisponível — pastos não fechados para {MESES_CURTOS[mesNum - 1]}/{anoFiltro}.
+          </div>
         )}
       </div>
-
-      {/* Aviso pastos não fechados */}
-      {!isLoading && !pastosFechados && !isFutureMonth && (
-        <div className="flex items-center gap-1.5 text-[10px] text-orange-600 bg-orange-50 dark:bg-orange-500/10 rounded px-2.5 py-1.5 border border-orange-200 dark:border-orange-500/20">
-          <AlertCircle className="h-3 w-3 shrink-0" />
-          Kg/cab Final indisponível — pastos ainda não fechados para {MESES_CURTOS[mesNum - 1]}/{anoFiltro}.
-        </div>
-      )}
 
       {/* Bloco explicativo — Como o GMD foi calculado */}
       {!isLoading && !isFutureMonth && totais.diasMes > 0 && (
