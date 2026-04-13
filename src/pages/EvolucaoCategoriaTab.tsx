@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface Props {
@@ -127,12 +128,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
   // Available years: current ± some range
-  const anosDisponiveis = useMemo(() => {
-    const anos = new Set<number>();
-    anos.add(currentYear);
-    viewData.forEach(d => anos.add(d.ano));
-    return Array.from(anos).sort((a, b) => b - a).map(String);
-  }, [viewData, currentYear]);
+  // FONTE OFICIAL: anos reais do banco
+  const { data: anosDisponiveis = [String(currentYear)] } = useAnosDisponiveis();
 
   return (
     <div className="p-3 w-full space-y-1 animate-fade-in pb-20">
