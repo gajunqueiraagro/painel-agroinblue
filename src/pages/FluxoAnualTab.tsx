@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, DollarSign } from 'lucide-react';
+import { ArrowLeft, DollarSign, AlertTriangle } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
+import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
