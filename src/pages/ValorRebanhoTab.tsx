@@ -855,6 +855,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.valor ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         return buildFrozenMetrics(dezKey)?.valor ?? null;
       }
@@ -864,11 +865,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       }
       return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.totalArrobas ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         const vm = getViewMetricsForMonth(dezKey);
         return vm ? vm.pesoKg / 30 : null;
@@ -880,11 +882,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const vm = getViewMetricsForMonth(key);
       return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.precoArroba ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         const metrics = buildFrozenMetrics(dezKey);
         return metrics?.precoArroba ?? null;
@@ -896,7 +899,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const metrics = buildFrozenMetrics(key);
       return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
