@@ -35,6 +35,7 @@ import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { AuditoriaZootecnicaTab } from './AuditoriaZootecnicaTab';
+import { AuditoriaTecnicaTab } from './AuditoriaTecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
@@ -712,6 +713,7 @@ const Index = () => {
       )}
       {activeTab === 'auditoria' && <AuditoriaTab />}
       {activeTab === 'auditoria_zoot' && <AuditoriaZootecnicaTab />}
+      {activeTab === 'auditoria_tecnica' && <AuditoriaTecnicaTab />}
       {activeTab === 'auditoria_duplicidade' && (
         <AuditoriaDuplicidadeTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
