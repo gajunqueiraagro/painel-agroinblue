@@ -816,12 +816,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildFrozenMetrics(anoMesAnterior);
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
-  const metricasInicioAno = useMemo(() => {
-    // Ano inicial da fazenda: fonte oficial é saldos_iniciais
+  // Base "Dez anterior" unificada: no ano inicial, saldos_iniciais substitui completamente
+  const metricasDezBase = useMemo(() => {
     if (isAnoInicial) return metricasSaldosIniciais;
-    if (fonteMes === 'live') return metricasDezAnteriorLive;
     return buildFrozenMetrics(anoMesDezAnterior);
-  }, [isAnoInicial, metricasSaldosIniciais, fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
+  }, [isAnoInicial, metricasSaldosIniciais, buildFrozenMetrics, anoMesDezAnterior]);
+
+  const metricasInicioAno = useMemo(() => {
+    if (fonteMes === 'live' && !isAnoInicial) return metricasDezAnteriorLive;
+    return metricasDezBase;
+  }, [fonteMes, isAnoInicial, metricasDezAnteriorLive, metricasDezBase]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
