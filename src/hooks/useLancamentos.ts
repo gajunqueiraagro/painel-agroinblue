@@ -510,6 +510,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
   const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
+    const registroExistente = saldosIniciais.some(
+      s => s.ano === ano && s.categoria === categoria
+    );
+
     if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
       const payload = {
         fazenda_id: fazendaId,
@@ -520,28 +524,74 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         peso_medio_kg: pesoMedioKg ?? null,
         preco_kg: precoKg ?? null,
       };
-      console.log('[SALDO-SAVE] upsert payload:', JSON.stringify(payload));
-      const { error, data } = await supabase.from('saldos_iniciais').upsert(
-        payload as any,
-        { onConflict: 'fazenda_id,ano,categoria' }
-      ).select();
-      console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data }));
-      if (!error) {
-        setSaldosIniciais(prev => {
-          const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
-          return [...filtered, { ano, categoria, quantidade, pesoMedioKg, precoKg }];
-        });
-        await invalidateZootQueries();
+
+      console.log('[SALDO-SAVE] payload:', JSON.stringify({ ...payload, registroExistente }));
+
+      const { error, data } = registroExistente
+        ? await supabase
+            .from('saldos_iniciais')
+            .update({
+              quantidade,
+              peso_medio_kg: pesoMedioKg ?? null,
+              preco_kg: precoKg ?? null,
+            } as any)
+            .eq('fazenda_id', fazendaId)
+            .eq('ano', ano)
+            .eq('categoria', categoria)
+            .select()
+            .maybeSingle()
+        : await supabase
+            .from('saldos_iniciais')
+            .insert(payload as any)
+            .select()
+            .maybeSingle();
+
+      console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data, registroExistente }));
+
+      if (error) {
+        console.error('Erro ao salvar saldo inicial:', error);
+        toast.error('Erro ao salvar saldo inicial: ' + error.message);
+        throw error;
       }
-    } else {
-      await supabase.from('saldos_iniciais')
-        .delete()
-        .eq('fazenda_id', fazendaId)
-        .eq('ano', ano)
-        .eq('categoria', categoria);
-      setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && s.categoria === categoria)));
+
+      if (!data) {
+        const saveError = new Error('Registro de saldo inicial não encontrado para atualização.');
+        console.error('Erro ao salvar saldo inicial:', saveError);
+        toast.error('Erro ao salvar saldo inicial: ' + saveError.message);
+        throw saveError;
+      }
+
+      const saldoPersistido: SaldoInicial = {
+        ano: data.ano,
+        categoria: data.categoria as Categoria,
+        quantidade: data.quantidade,
+        pesoMedioKg: (data as any).peso_medio_kg ?? undefined,
+        precoKg: (data as any).preco_kg ?? undefined,
+        fazendaId: (data as any).fazenda_id ?? undefined,
+      };
+
+      setSaldosIniciais(prev => {
+        const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
+        return [...filtered, saldoPersistido];
+      });
       await invalidateZootQueries();
+      return;
     }
+
+    const { error } = await supabase.from('saldos_iniciais')
+      .delete()
+      .eq('fazenda_id', fazendaId)
+      .eq('ano', ano)
+      .eq('categoria', categoria);
+
+    if (error) {
+      console.error('Erro ao remover saldo inicial:', error);
+      toast.error('Erro ao remover saldo inicial: ' + error.message);
+      throw error;
+    }
+
+    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && s.categoria === categoria)));
+    await invalidateZootQueries();
   };
 
   return {

@@ -79,13 +79,18 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
 
   const handleSalvar = async () => {
     const anoFinal = hasSaldo ? anoSaldo : Number(anoSelecionado);
-    for (const c of CATEGORIAS) {
-      const qtd = parseNumero(valores[c.value]) ?? 0;
-      const peso = parseNumero(pesos[c.value]);
-      const preco = parseNumero(precos[c.value]);
-      await onSetSaldo(anoFinal, c.value, qtd, peso, preco);
+
+    try {
+      for (const c of CATEGORIAS) {
+        const qtd = parseNumero(valores[c.value]) ?? 0;
+        const peso = parseNumero(pesos[c.value]);
+        const preco = parseNumero(precos[c.value]);
+        await onSetSaldo(anoFinal, c.value, qtd, peso, preco);
+      }
+      setOpen(false);
+    } catch {
+      // erro já tratado no fluxo de persistência; mantém modal aberto
     }
-    setOpen(false);
   };
 
   const handleEditClick = () => {
