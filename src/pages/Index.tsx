@@ -774,6 +774,9 @@ const Index = () => {
       {activeTab === 'import_zoot_historico' && (
         <ImportZootHistoricoTab />
       )}
+      {activeTab === 'historico_importacoes_zoot' && (
+        <HistoricoImportacoesZootTab />
+      )}
       {activeTab === 'planejamento_financeiro' && (
         <PlanejamentoFinanceiroTab
           onBack={() => setActiveTab('painel_consultor_hub')}
