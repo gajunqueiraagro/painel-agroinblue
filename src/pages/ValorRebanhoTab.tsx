@@ -593,7 +593,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const metricasSaldosIniciais = useMemo((): MetricasExibicao | null => {
     if (!isAnoInicial) return null;
-    if (baseInicialIncompleta) return null;
+    // baseInicialIncompleta não bloqueia cálculo — badge cuida do aviso
     if (saldosIniciaisAnoFiltro.length === 0) return null;
 
     let valor = 0;
