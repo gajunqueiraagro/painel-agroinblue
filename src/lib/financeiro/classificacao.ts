@@ -119,7 +119,21 @@ function canonicalMacro(l: LancamentoClassificavel): string {
   return m;
 }
 
+/** Detecta se é financiamento / empréstimo / crédito de terceiros */
+function isFinanciamento(l: LancamentoClassificavel): boolean {
+  const centro = norm(l.centro_custo);
+  const sub = norm(l.subcentro);
+  const grupo = norm(l.grupo_custo);
+  return centro.includes('financiamento') || centro.includes('empréstimo') || centro.includes('emprestimo')
+    || sub.includes('financiamento') || sub.includes('empréstimo') || sub.includes('emprestimo')
+    || sub.includes('crédito rural') || sub.includes('credito rural')
+    || grupo.includes('financiamento');
+}
+
 function isAporte(l: LancamentoClassificavel): boolean {
+  // Financiamentos / empréstimos NUNCA são aporte pessoal
+  if (isFinanciamento(l)) return false;
+
   const macro = normMacro(l);
   const grupo = norm(l.grupo_custo);
   const centro = norm(l.centro_custo);
