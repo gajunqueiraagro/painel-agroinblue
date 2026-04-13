@@ -24,7 +24,7 @@ const COLUNAS_CONSOLIDADAS = [
 const TIPOS_ENTRADA_EXTERNOS = new Set(['nascimento', 'compra', 'transferencia_entrada']);
 const TIPOS_SAIDA_EXTERNOS = new Set(['abate', 'venda', 'transferencia_saida', 'consumo', 'morte']);
 const FONTE_LABEL: Record<string, string> = {
-  fechamento: 'Fechamento',
+  fechamento: 'Movimentação',
   fallback_movimentacao: 'Movimentação',
   projecao: 'Projeção',
 };
@@ -372,22 +372,25 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   .filter((l) => String(l.tipo) === 'saldo_inicial' && String(l.categoria) === d.categoria_codigo)
                   .reduce((sum, l) => sum + (l.quantidade || 0), 0);
                 const detalheTooltip = deltaLinha === 0
-                  ? `Linha fechada. Fonte: ${FONTE_LABEL[d.fonte_oficial_mes] || d.fonte_oficial_mes}.`
-                  : d.fonte_oficial_mes === 'fechamento'
-                    ? `Linha não fecha com os movimentos exibidos. O saldo final desta linha veio do fechamento oficial do mês (${d.saldo_final}).`
-                    : `Linha não fecha com os movimentos exibidos (Δ ${deltaLinha}).`;
+                  ? 'Linha fechada — equação SF = SI + movimentações OK.'
+                  : `Linha não fecha com os movimentos exibidos (Δ ${deltaLinha}).`;
 
                 return (
                   <tr key={d.categoria_id} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
                     <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${catBg}`}>
                       <div className="flex items-center gap-1">
                         <span>{d.categoria_nome}</span>
-                        {deltaLinha !== 0 && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" title={detalheTooltip} />}
+                        {deltaLinha !== 0 && (
+                          <span title={detalheTooltip}>
+                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[8px] font-normal text-muted-foreground">
-                        {FONTE_LABEL[d.fonte_oficial_mes] || d.fonte_oficial_mes}
-                        {saldoInicialImportadoLinha > 0 ? ` • SI imp. ${saldoInicialImportadoLinha}` : ''}
-                      </div>
+                      {saldoInicialImportadoLinha > 0 && (
+                        <div className="text-[8px] font-normal text-muted-foreground">
+                          SI imp. {saldoInicialImportadoLinha}
+                        </div>
+                      )}
                     </td>
                     <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_inicial === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {isFutureMonth ? '' : d.saldo_inicial}
