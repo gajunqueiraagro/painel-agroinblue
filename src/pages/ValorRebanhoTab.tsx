@@ -803,8 +803,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const metricasSelecionado = useMemo(() => {
     if (fonteMes === 'live') return metricasLiveSelecionado;
     if (fonteMes === 'snapshot_incompleto') return buildMetricsFromTotals(null, null, null);
-    return buildFrozenMetrics(anoMes) ?? buildMetricsFromTotals(null, null, null);
-  }, [fonteMes, metricasLiveSelecionado, buildFrozenMetrics, anoMes]);
+    // Snapshot: usar mesma base da tabela (resumoOficial qty/peso + snapshot preço)
+    return aggregateMetricsFromTableRows(snapshotRowsSelecionado);
+  }, [fonteMes, metricasLiveSelecionado, snapshotRowsSelecionado]);
 
   const metricasMesAnterior = useMemo(() => {
     if (fonteMes === 'live') return metricasMesAnteriorLive;
@@ -867,12 +868,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         return buildFrozenMetrics(dezKey)?.valor ?? null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && fonteMes === 'live') {
-        return metricasLiveSelecionado.valor;
-      }
+      if (mes === mesNum) return metricasSelecionado.valor;
       return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.valor, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
@@ -883,13 +882,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         return vm ? vm.pesoKg / 30 : null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && fonteMes === 'live') {
-        return metricasLiveSelecionado.totalArrobas;
-      }
+      if (mes === mesNum) return metricasSelecionado.totalArrobas;
       const vm = getViewMetricsForMonth(key);
       return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.totalArrobas, getViewMetricsForMonth, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
@@ -900,13 +897,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         return metrics?.precoArroba ?? null;
       }
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
-      if (mes === mesNum && fonteMes === 'live') {
-        return metricasLiveSelecionado.precoArroba;
-      }
+      if (mes === mesNum) return metricasSelecionado.precoArroba;
       const metrics = buildFrozenMetrics(key);
       return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
