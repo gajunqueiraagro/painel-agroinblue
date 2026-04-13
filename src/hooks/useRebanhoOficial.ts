@@ -21,7 +21,10 @@
  */
 
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
 import {
   useZootCategoriaMensal,
   groupByMes,
@@ -32,6 +35,17 @@ import {
 } from '@/hooks/useZootCategoriaMensal';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
+
+// ---------------------------------------------------------------------------
+// Tipos internos — dados consolidados de fechamento oficial
+// ---------------------------------------------------------------------------
+interface FechamentoConsolidado {
+  ano_mes: string;
+  categoria_id: string;
+  qtd: number;
+  peso_total: number;
+  peso_medio: number | null;
+}
 
 // ---------------------------------------------------------------------------
 // Re-exports — consumers DEVEM importar daqui, nunca dos hooks internos
