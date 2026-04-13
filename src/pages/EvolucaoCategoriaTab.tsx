@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
-import { RefreshCw, Info } from 'lucide-react';
+import { RefreshCw, Info, AlertCircle } from 'lucide-react';
 
 interface Props {
   initialAno?: string;
@@ -13,6 +13,8 @@ interface Props {
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
 export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
@@ -26,6 +28,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>(
     initialCenario === 'meta' ? 'meta' : 'realizado'
   );
+  const [modo, setModo] = useState<ModoVisualizacao>('cabeca');
 
   useEffect(() => { if (initialAno) setAnoFiltro(initialAno); }, [initialAno]);
   useEffect(() => { if (initialMes) setMesFiltro(initialMes); }, [initialMes]);
@@ -35,25 +38,20 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const mesNum = Number(mesFiltro);
   const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && mesNum > currentMonth));
 
-  // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewData, loading: isLoading, categorias: todasCategorias } = useRebanhoOficial({ ano, cenario: statusFiltro });
   const { data: anosDisponiveis = [String(currentYear)] } = useAnosDisponiveis();
 
-  // All categories from the year to always show all rows
   const allCatCodes = useMemo(() => {
     return todasCategorias.map(c => ({ codigo: c.codigo, nome: c.nome, ordem: c.ordem }));
   }, [todasCategorias]);
 
-  // Data for selected month — ensure all categories present
   const dadosMes = useMemo(() => {
     const mesData = viewData.filter(d => d.mes === mesNum);
     const byCode = new Map(mesData.map(d => [d.categoria_codigo, d]));
 
-    // Use allCatCodes to guarantee all categories show up
     const result = allCatCodes.map(cat => {
       const existing = byCode.get(cat.codigo);
       if (existing) return existing;
-      // Create empty row for missing categories
       return {
         fazenda_id: fazendaId || '',
         cliente_id: '',
@@ -82,14 +80,20 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         dias_mes: 0,
         gmd: null as number | null,
         producao_biologica: 0,
-        fonte_oficial_mes: 'projecao',
+        fonte_oficial_mes: 'projecao' as const,
       };
     });
 
     return result.sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   }, [viewData, mesNum, allCatCodes, fazendaId, ano, statusFiltro, mesFiltro]);
 
-  // Totals
+  // Check if pastos are closed for this month (fonte_oficial_mes === 'fechamento')
+  const pastosFechados = useMemo(() => {
+    const mesData = viewData.filter(d => d.mes === mesNum);
+    if (mesData.length === 0) return false;
+    return mesData.some(d => d.fonte_oficial_mes === 'fechamento');
+  }, [viewData, mesNum]);
+
   const totais = useMemo(() => {
     const si = dadosMes.reduce((s, d) => s + d.saldo_inicial, 0);
     const entExt = dadosMes.reduce((s, d) => s + d.entradas_externas, 0);
@@ -112,10 +116,62 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const isRealizado = statusFiltro === 'realizado';
   const fmtNum = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR');
   const fmtPeso = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmtKgTotal = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const fmtGmd = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
   const fmtProdBio = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-  const themeColor = isRealizado ? 'primary' : 'orange-500';
+  // Value getters based on modo
+  const getVal = (d: typeof dadosMes[0], field: 'saldo_inicial' | 'entradas_externas' | 'saidas_externas' | 'evol_cat_saida' | 'evol_cat_entrada' | 'saldo_final') => {
+    if (modo === 'cabeca') return fmtNum(d[field]);
+    if (modo === 'kg_medio') {
+      const cabField = d[field];
+      if (cabField === 0) return '–';
+      // For kg_medio, we need peso / cab for each field
+      const pesoMap: Record<string, number> = {
+        saldo_inicial: d.peso_total_inicial,
+        entradas_externas: d.peso_entradas_externas,
+        saidas_externas: d.peso_saidas_externas,
+        evol_cat_saida: d.peso_evol_cat_saida,
+        evol_cat_entrada: d.peso_evol_cat_entrada,
+        saldo_final: d.peso_total_final,
+      };
+      const peso = pesoMap[field] || 0;
+      return cabField > 0 ? fmtPeso(peso / cabField) : '–';
+    }
+    // kg_total
+    const pesoMap: Record<string, number> = {
+      saldo_inicial: d.peso_total_inicial,
+      entradas_externas: d.peso_entradas_externas,
+      saidas_externas: d.peso_saidas_externas,
+      evol_cat_saida: d.peso_evol_cat_saida,
+      evol_cat_entrada: d.peso_evol_cat_entrada,
+      saldo_final: d.peso_total_final,
+    };
+    return fmtKgTotal(pesoMap[field] || 0);
+  };
+
+  const getTotalVal = (field: 'si' | 'entExt' | 'saiExt' | 'evolOut' | 'evolIn' | 'sf') => {
+    if (modo === 'cabeca') return fmtNum(totais[field]);
+    const pesoMap: Record<string, number> = {
+      si: totais.pesoTotalIni,
+      entExt: dadosMes.reduce((s, d) => s + d.peso_entradas_externas, 0),
+      saiExt: dadosMes.reduce((s, d) => s + d.peso_saidas_externas, 0),
+      evolOut: dadosMes.reduce((s, d) => s + d.peso_evol_cat_saida, 0),
+      evolIn: dadosMes.reduce((s, d) => s + d.peso_evol_cat_entrada, 0),
+      sf: totais.pesoTotalFin,
+    };
+    const cabMap: Record<string, number> = {
+      si: totais.si, entExt: totais.entExt, saiExt: totais.saiExt,
+      evolOut: totais.evolOut, evolIn: totais.evolIn, sf: totais.sf,
+    };
+    if (modo === 'kg_medio') {
+      const cab = cabMap[field];
+      return cab > 0 ? fmtPeso(pesoMap[field] / cab) : '–';
+    }
+    return fmtKgTotal(pesoMap[field]);
+  };
+
+  const modoSuffix = modo === 'cabeca' ? '' : modo === 'kg_medio' ? ' (kg/cab)' : ' (kg total)';
 
   return (
     <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
@@ -153,29 +209,53 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         </div>
       </div>
 
-      {/* Filtros: Realizado/Meta + Reclass */}
+      {/* Filtros: Realizado/Meta + Modo + Reclass */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
-          {([
-            { value: 'realizado' as const, label: 'Realizado' },
-            { value: 'meta' as const, label: 'Meta' },
-          ]).map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setStatusFiltro(opt.value)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                statusFiltro === opt.value
-                  ? opt.value === 'realizado'
-                    ? 'bg-green-700 text-white shadow-sm'
-                    : 'bg-orange-500 text-white shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+            {([
+              { value: 'realizado' as const, label: 'Realizado' },
+              { value: 'meta' as const, label: 'Meta' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatusFiltro(opt.value)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  statusFiltro === opt.value
+                    ? opt.value === 'realizado'
+                      ? 'bg-green-700 text-white shadow-sm'
+                      : 'bg-orange-500 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+            {([
+              { value: 'cabeca' as ModoVisualizacao, label: 'Cabeça' },
+              { value: 'kg_medio' as ModoVisualizacao, label: 'Kg Médio' },
+              { value: 'kg_total' as ModoVisualizacao, label: 'Kg Total' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setModo(opt.value)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                  modo === opt.value
+                    ? 'bg-foreground text-background shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
+
         {onNavigateToReclass && (
           <button
             onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
@@ -192,23 +272,26 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground text-xs">Carregando dados oficiais...</div>
         ) : (
-          <table className="w-full text-[10px]" style={{ minWidth: 900 }}>
+          <table className="w-full text-[10px]" style={{ minWidth: 680 }}>
             <thead>
               <tr className={`border-b ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
-                <th className={`text-left px-2 py-1.5 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ minWidth: 100 }}>
+                <th className={`text-left px-1.5 py-1.5 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ minWidth: 80, maxWidth: 110 }}>
                   Categoria
                 </th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-foreground">Saldo Ini.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Kg/cab Ini.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-green-700">Entr. Ext.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-destructive">Saídas Ext.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-destructive">Evol. Saída</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-green-700">Evol. Entrada</th>
-                <th className={`px-1.5 py-1.5 font-bold text-center ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>Saldo Fin.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Kg/cab Fin.</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-blue-700">Prod. Bio</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-muted-foreground">Dias</th>
-                <th className="px-1.5 py-1.5 font-bold text-center text-blue-700">GMD</th>
+                <th className="px-1 py-1.5 font-bold text-center text-foreground bg-foreground/5" style={{ minWidth: 52 }}>Saldo Ini.</th>
+                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 48 }}>Kg/cab Ini.</th>
+                <th className="px-1 py-1.5 font-bold text-center text-green-700" style={{ minWidth: 44 }}>Entr. Ext.</th>
+                <th className="px-1 py-1.5 font-bold text-center text-destructive" style={{ minWidth: 44 }}>Saídas Ext.</th>
+                <th className="px-1 py-1.5 font-bold text-center text-destructive" style={{ minWidth: 44 }}>Evol. Saída</th>
+                <th className="px-1 py-1.5 font-bold text-center text-green-700" style={{ minWidth: 44 }}>Evol. Entrada</th>
+                <th className={`px-1 py-1.5 font-bold text-center bg-foreground/5 ${isRealizado ? 'text-primary' : 'text-orange-700'}`} style={{ minWidth: 52 }}>Saldo Fin.</th>
+                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 48 }}>
+                  Kg/cab Fin.
+                  {!pastosFechados && <span className="block text-[8px] font-normal text-orange-500">s/ fech.</span>}
+                </th>
+                <th className="px-1 py-1.5 font-bold text-center text-blue-700" style={{ minWidth: 44 }}>Prod. Bio</th>
+                <th className="px-1 py-1.5 font-bold text-center text-muted-foreground" style={{ minWidth: 28 }}>Dias</th>
+                <th className="px-1 py-1.5 font-bold text-center text-blue-700" style={{ minWidth: 44 }}>GMD</th>
               </tr>
             </thead>
             <tbody>
@@ -220,42 +303,44 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/8')
                   : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/8');
 
+                const showPesoFin = pastosFechados || d.fonte_oficial_mes === 'fechamento';
+
                 return (
                   <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
-                    <td className={`px-2 py-1 font-bold text-foreground sticky left-0 z-10 ${stickyBg}`}>
+                    <td className={`px-1.5 py-1 font-bold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ maxWidth: 110 }}>
                       {d.categoria_nome}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-semibold ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
-                      {isFutureMonth ? '' : fmtNum(d.saldo_inicial)}
+                    <td className={`px-1 py-1 text-center font-semibold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
+                      {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
                     </td>
-                    <td className="px-1.5 py-1 text-center text-muted-foreground">
+                    <td className="px-1 py-1 text-center text-muted-foreground">
                       {fmtPeso(d.peso_medio_inicial)}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-semibold ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
-                      {fmtNum(d.entradas_externas)}
+                    <td className={`px-1 py-1 text-center font-semibold ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      {getVal(d, 'entradas_externas')}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-semibold ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-                      {fmtNum(d.saidas_externas)}
+                    <td className={`px-1 py-1 text-center font-semibold ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      {getVal(d, 'saidas_externas')}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-semibold ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-                      {fmtNum(d.evol_cat_saida)}
+                    <td className={`px-1 py-1 text-center font-semibold ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      {getVal(d, 'evol_cat_saida')}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-semibold ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
-                      {fmtNum(d.evol_cat_entrada)}
+                    <td className={`px-1 py-1 text-center font-semibold ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      {getVal(d, 'evol_cat_entrada')}
                     </td>
-                    <td className={`px-1.5 py-1 text-center font-extrabold ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
-                      {isFutureMonth ? '' : fmtNum(d.saldo_final)}
+                    <td className={`px-1 py-1 text-center font-extrabold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
+                      {isFutureMonth ? '' : getVal(d, 'saldo_final')}
                     </td>
-                    <td className="px-1.5 py-1 text-center text-muted-foreground">
-                      {fmtPeso(d.peso_medio_final)}
+                    <td className="px-1 py-1 text-center text-muted-foreground">
+                      {showPesoFin ? fmtPeso(d.peso_medio_final) : '–'}
                     </td>
-                    <td className={`px-1.5 py-1 text-center ${d.producao_biologica > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
+                    <td className={`px-1 py-1 text-center ${d.producao_biologica > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
                       {fmtProdBio(d.producao_biologica)}
                     </td>
-                    <td className="px-1.5 py-1 text-center text-muted-foreground">
+                    <td className="px-1 py-1 text-center text-muted-foreground">
                       {d.dias_mes || '–'}
                     </td>
-                    <td className={`px-1.5 py-1 text-center ${d.gmd && d.gmd > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
+                    <td className={`px-1 py-1 text-center ${d.gmd && d.gmd > 0 ? 'text-blue-700 font-semibold' : 'text-muted-foreground/30'}`}>
                       {fmtGmd(d.gmd)}
                     </td>
                   </tr>
@@ -263,23 +348,31 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
               })}
               {/* Linha TOTAL */}
               <tr className={`border-t-2 font-extrabold ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>
-                <td className={`px-2 py-1.5 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
-                <td className="px-1.5 py-1.5 text-center text-foreground">{isFutureMonth ? '' : fmtNum(totais.si)}</td>
-                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
-                <td className="px-1.5 py-1.5 text-center text-green-700">{fmtNum(totais.entExt)}</td>
-                <td className="px-1.5 py-1.5 text-center text-destructive">{fmtNum(totais.saiExt)}</td>
-                <td className="px-1.5 py-1.5 text-center text-destructive">{fmtNum(totais.evolOut)}</td>
-                <td className="px-1.5 py-1.5 text-center text-green-700">{fmtNum(totais.evolIn)}</td>
-                <td className={`px-1.5 py-1.5 text-center ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : fmtNum(totais.sf)}</td>
-                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioFin)}</td>
-                <td className="px-1.5 py-1.5 text-center text-blue-700">{fmtProdBio(totais.prodBio)}</td>
-                <td className="px-1.5 py-1.5 text-center text-muted-foreground">{totais.diasMes || '–'}</td>
-                <td className="px-1.5 py-1.5 text-center text-blue-700">{fmtGmd(totais.gmd)}</td>
+                <td className={`px-1.5 py-1.5 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
+                <td className="px-1 py-1.5 text-center text-foreground bg-foreground/[0.03]">{isFutureMonth ? '' : getTotalVal('si')}</td>
+                <td className="px-1 py-1.5 text-center text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
+                <td className="px-1 py-1.5 text-center text-green-700">{getTotalVal('entExt')}</td>
+                <td className="px-1 py-1.5 text-center text-destructive">{getTotalVal('saiExt')}</td>
+                <td className="px-1 py-1.5 text-center text-destructive">{getTotalVal('evolOut')}</td>
+                <td className="px-1 py-1.5 text-center text-green-700">{getTotalVal('evolIn')}</td>
+                <td className={`px-1 py-1.5 text-center bg-foreground/[0.03] ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : getTotalVal('sf')}</td>
+                <td className="px-1 py-1.5 text-center text-muted-foreground">{pastosFechados ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
+                <td className="px-1 py-1.5 text-center text-blue-700">{fmtProdBio(totais.prodBio)}</td>
+                <td className="px-1 py-1.5 text-center text-muted-foreground">{totais.diasMes || '–'}</td>
+                <td className="px-1 py-1.5 text-center text-blue-700">{fmtGmd(totais.gmd)}</td>
               </tr>
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Aviso pastos não fechados */}
+      {!isLoading && !pastosFechados && !isFutureMonth && (
+        <div className="flex items-center gap-1.5 text-[10px] text-orange-600 bg-orange-50 dark:bg-orange-500/10 rounded px-2.5 py-1.5 border border-orange-200 dark:border-orange-500/20">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          Kg/cab Final indisponível — pastos ainda não fechados para {MESES_CURTOS[mesNum - 1]}/{anoFiltro}.
+        </div>
+      )}
 
       {/* Bloco explicativo — Como o GMD foi calculado */}
       {!isLoading && !isFutureMonth && totais.diasMes > 0 && (
