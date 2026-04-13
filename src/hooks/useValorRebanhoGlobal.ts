@@ -342,12 +342,15 @@ export function useValorRebanhoGlobal(
     });
   }, [zootData, precosAllFarms]);
 
-  // Aggregate rows for a given month
+  // Aggregate rows for a given month — only fazendas with real herd presence
   const getAggregatedRowsForMonth = useCallback((mes: string, ano: number, mesNum: number): GlobalCategoriaRow[] => {
+    const fazendasAtivas = getFazendasComRebanho(mes);
+    if (fazendasAtivas.length === 0) return [];
+
     const fonte = getGlobalFonteMes(mes);
     const allItems: SnapshotDetalheCategoria[] = [];
 
-    fazendaIds.forEach(fid => {
+    fazendasAtivas.forEach(fid => {
       const hasSnapshot = snapshotItems[fid]?.[mes]?.length > 0;
 
       if (fonte === 'snapshot' && hasSnapshot) {
@@ -364,7 +367,7 @@ export function useValorRebanhoGlobal(
 
     if (fonte === 'snapshot_incompleto') return [];
     return aggregateSnapshotItems(allItems, categorias);
-  }, [fazendaIds, snapshotItems, getGlobalFonteMes, computeLiveRowsForFarm, categorias]);
+  }, [getFazendasComRebanho, snapshotItems, getGlobalFonteMes, computeLiveRowsForFarm, categorias]);
 
   // Current month data
   const fonteMes = useMemo(() => getGlobalFonteMes(anoMes), [getGlobalFonteMes, anoMes]);
@@ -390,20 +393,22 @@ export function useValorRebanhoGlobal(
     return metricsFromRows(dezRows);
   }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesDezAnterior, anoFiltro]);
 
-  // Historico for month bar + charts
+  // Historico for month bar + charts — only fazendas with real herd presence
   const historicoPorMes = useMemo(() => {
     const map: Record<string, HistoricoMesGlobal> = {};
-    // Include Dec(ano-1) for chart "I" point
     const allKeys = [
       `${Number(anoFiltro) - 1}-12`,
       ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
     ];
     for (const key of allKeys) {
+      const fazendasAtivas = getFazendasComRebanho(key);
+      if (fazendasAtivas.length === 0) continue;
+
       let totalValor = 0;
       let totalPeso = 0;
       let todasFechadas = true;
 
-      fazendaIds.forEach(fid => {
+      fazendasAtivas.forEach(fid => {
         const header = snapshotHeaders[fid]?.[key];
         if (header) {
           totalValor += header.valor;
@@ -413,12 +418,12 @@ export function useValorRebanhoGlobal(
         }
       });
 
-      if (todasFechadas && fazendaIds.length > 0) {
+      if (todasFechadas) {
         map[key] = { valor: totalValor, pesoKg: totalPeso };
       }
     }
     return map;
-  }, [anoFiltro, fazendaIds, snapshotHeaders]);
+  }, [anoFiltro, getFazendasComRebanho, snapshotHeaders]);
 
   // Historico detalhado for snapshot rows
   const historicoDetalhado = useMemo(() => {
@@ -427,8 +432,9 @@ export function useValorRebanhoGlobal(
       const key = `${anoFiltro}-${String(m).padStart(2, '0')}`;
       const fonte = getGlobalFonteMes(key);
       if (fonte === 'snapshot') {
+        const fazendasAtivas = getFazendasComRebanho(key);
         const allItems: SnapshotDetalheCategoria[] = [];
-        fazendaIds.forEach(fid => {
+        fazendasAtivas.forEach(fid => {
           const items = snapshotItems[fid]?.[key];
           if (items) allItems.push(...items);
         });
@@ -436,12 +442,13 @@ export function useValorRebanhoGlobal(
       }
     }
     return map;
-  }, [anoFiltro, fazendaIds, snapshotItems, getGlobalFonteMes]);
+  }, [anoFiltro, getFazendasComRebanho, snapshotItems, getGlobalFonteMes]);
 
-  // Count fazendas fechadas for selected month
+  // Count fazendas with herd and fechadas for selected month
+  const fazendasAtivasMesSelecionado = useMemo(() => getFazendasComRebanho(anoMes), [getFazendasComRebanho, anoMes]);
   const fazendasFechadas = useMemo(() => {
-    return fazendaIds.filter(fid => snapshotHeaders[fid]?.[anoMes]).length;
-  }, [fazendaIds, snapshotHeaders, anoMes]);
+    return fazendasAtivasMesSelecionado.filter(fid => snapshotHeaders[fid]?.[anoMes]).length;
+  }, [fazendasAtivasMesSelecionado, snapshotHeaders, anoMes]);
 
   return {
     rows,
@@ -453,6 +460,6 @@ export function useValorRebanhoGlobal(
     historicoDetalhado,
     loading,
     fazendasFechadas,
-    fazendasTotal: fazendaIds.length,
+    fazendasTotal: fazendasAtivasMesSelecionado.length,
   };
 }
