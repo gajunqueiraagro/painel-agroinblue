@@ -18,7 +18,6 @@ import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS } from '@/hooks/usePlane
 import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { supabase } from '@/integrations/supabase/client';
 import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
 import { Download, Percent, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
@@ -30,11 +29,6 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2,
 interface Props {
   onBack?: () => void;
   metaConsolidacao?: MetaCategoriaMes[];
-}
-
-interface FazendaOption {
-  id: string;
-  nome: string;
 }
 
 /** Linha da grade: pode vir do banco ou ser um placeholder do plano de contas */
@@ -55,21 +49,8 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear + 1);
   const { clienteAtual } = useCliente();
-  const { fazendas: fazCtx } = useFazenda();
-
-  // ─── Fazenda selector ─────────────────────────────────────
-  const [fazendaId, setFazendaId] = useState('');
-  const fazendaOptions = useMemo<FazendaOption[]>(() => {
-    if (!fazCtx) return [];
-    return fazCtx.map((f: any) => ({ id: f.id, nome: f.nome }));
-  }, [fazCtx]);
-
-  // Auto-select first fazenda
-  useEffect(() => {
-    if (!fazendaId && fazendaOptions.length > 0) {
-      setFazendaId(fazendaOptions[0].id);
-    }
-  }, [fazendaOptions, fazendaId]);
+  const { fazendaAtual } = useFazenda();
+  const fazendaId = fazendaAtual?.id || '';
 
   const {
     data, loading, reload,
@@ -264,25 +245,10 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
     return Array.from(groups.entries());
   }, [gridCompleto]);
 
-  const fazendaNome = useMemo(() => {
-    const f = fazendaOptions.find(f => f.id === fazendaId);
-    return f?.nome || '';
-  }, [fazendaOptions, fazendaId]);
-
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in pb-24 space-y-4">
       {/* Header / Filtros */}
       <div className="flex flex-wrap items-center gap-2 pt-2">
-        <Select value={fazendaId} onValueChange={setFazendaId}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Fazenda..." />
-          </SelectTrigger>
-          <SelectContent>
-            {fazendaOptions.map(f => (
-              <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
           <SelectTrigger className="w-[100px]">
             <SelectValue />
