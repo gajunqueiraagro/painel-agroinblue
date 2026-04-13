@@ -595,6 +595,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!isAnoInicial) return null;
     // baseInicialIncompleta não bloqueia cálculo — badge cuida do aviso
     if (saldosIniciaisAnoFiltro.length === 0) return null;
+    console.log('[VALOR-REBANHO] saldosIniciaisAnoFiltro:', JSON.stringify(saldosIniciaisAnoFiltro.map(s => ({ cat: s.categoria, qty: s.quantidade, peso: s.pesoMedioKg, preco: s.precoKg }))));
 
     let valor = 0;
     let cabecas = 0;
