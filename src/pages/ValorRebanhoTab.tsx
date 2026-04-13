@@ -816,12 +816,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     return buildFrozenMetrics(anoMesAnterior);
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
-  const metricasInicioAno = useMemo(() => {
-    // Ano inicial da fazenda: fonte oficial é saldos_iniciais
+  // Base "Dez anterior" unificada: no ano inicial, saldos_iniciais substitui completamente
+  const metricasDezBase = useMemo(() => {
     if (isAnoInicial) return metricasSaldosIniciais;
-    if (fonteMes === 'live') return metricasDezAnteriorLive;
     return buildFrozenMetrics(anoMesDezAnterior);
-  }, [isAnoInicial, metricasSaldosIniciais, fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
+  }, [isAnoInicial, metricasSaldosIniciais, buildFrozenMetrics, anoMesDezAnterior]);
+
+  const metricasInicioAno = useMemo(() => {
+    if (fonteMes === 'live' && !isAnoInicial) return metricasDezAnteriorLive;
+    return metricasDezBase;
+  }, [fonteMes, isAnoInicial, metricasDezAnteriorLive, metricasDezBase]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
@@ -866,46 +870,32 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        if (isAnoInicial) return metricasSaldosIniciais?.valor ?? null;
-        const dezKey = `${Number(anoFiltro) - 1}-12`;
-        return buildFrozenMetrics(dezKey)?.valor ?? null;
-      }
+      if (mes === 0) return metricasDezBase?.valor ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.valor;
       return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.valor, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.valor, buildFrozenMetrics, metricasDezBase]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        if (isAnoInicial) return metricasSaldosIniciais?.totalArrobas ?? null;
-        const dezKey = `${Number(anoFiltro) - 1}-12`;
-        const vm = getViewMetricsForMonth(dezKey);
-        return vm ? vm.pesoKg / 30 : null;
-      }
+      if (mes === 0) return metricasDezBase?.totalArrobas ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.totalArrobas;
       const vm = getViewMetricsForMonth(key);
       return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.totalArrobas, getViewMetricsForMonth, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.totalArrobas, getViewMetricsForMonth, metricasDezBase]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
-      if (mes === 0) {
-        if (isAnoInicial) return metricasSaldosIniciais?.precoArroba ?? null;
-        const dezKey = `${Number(anoFiltro) - 1}-12`;
-        const metrics = buildFrozenMetrics(dezKey);
-        return metrics?.precoArroba ?? null;
-      }
+      if (mes === 0) return metricasDezBase?.precoArroba ?? null;
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum) return metricasSelecionado.precoArroba;
       const metrics = buildFrozenMetrics(key);
       return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
+  }, [buildChartData, anoFiltro, mesNum, metricasSelecionado.precoArroba, buildFrozenMetrics, metricasDezBase]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
