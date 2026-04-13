@@ -146,6 +146,7 @@ const TITLES: Record<TabId, string> = {
   import_zoot_historico: 'Importação Zootécnica',
   historico_importacoes_zoot: 'Histórico Importações',
   auditoria_zoot: 'Auditoria Zootécnica',
+  auditoria_tecnica: 'Auditoria Técnica',
   planejamento_financeiro: 'Planejamento Financeiro',
 };
 
