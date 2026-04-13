@@ -1377,7 +1377,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(uMetricas.valor)}</p>
                   <div className="flex flex-col gap-0 mt-0.5">
                     <VariacaoBadge valor={uVarValorMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
+                    {uBaseInicialIncompleta
+                      ? <span className="text-[8px] font-semibold text-amber-600 dark:text-amber-400">Base incompleta</span>
+                      : <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
+                    }
                   </div>
                 </div>
 
@@ -1399,7 +1402,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
                         <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
                         <span className="text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                        <span className="text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                        <span className="text-right">
+                          {uBaseInicialIncompleta
+                            ? <span className="text-[7px] text-amber-600 dark:text-amber-400">—</span>
+                            : <VariacaoBadge valor={ind.varAno} label="" />
+                          }
+                        </span>
                       </React.Fragment>
                     ))}
                   </div>
