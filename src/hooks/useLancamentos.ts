@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -56,6 +57,7 @@ async function fetchLancamentosPaginated(params: {
 }
 
 export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
+  const queryClient = useQueryClient();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
@@ -65,6 +67,15 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
   const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id || fazendaAtual?.cliente_id;
+
+  const invalidateZootQueries = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['zoot-categoria-mensal'] }),
+      queryClient.invalidateQueries({ queryKey: ['zoot-mensal'] }),
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes-mensais'] }),
+      queryClient.invalidateQueries({ queryKey: ['anos-disponiveis'] }),
+    ]);
+  }, [queryClient]);
 
   const loadData = useCallback(async () => {
     if (!fazendaId || (isGlobal && (!clienteId || fazendas.length === 0))) {
@@ -145,6 +156,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
         updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
         fazendaId: l.fazenda_id,
+        origemRegistro: l.origem_registro ?? undefined,
+        loteImportacaoId: l.lote_importacao_id ?? undefined,
       })));
 
       if (saldoRes.data) {
@@ -330,7 +343,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         createdBy: data.created_by ?? undefined,
         updatedBy: data.updated_by ?? undefined,
         fazendaId: data.fazenda_id,
+        origemRegistro: (data as any).origem_registro ?? undefined,
+        loteImportacaoId: (data as any).lote_importacao_id ?? undefined,
       }, ...prev]);
+      await invalidateZootQueries();
       return data.id;
     }
     return undefined;
@@ -386,6 +402,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
           ? (dados.statusOperacional === null ? 'meta' : 'realizado')
           : l.cenario),
       } : l));
+      await invalidateZootQueries();
     }
   };
 
@@ -484,6 +501,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       const idsToRemove = new Set([id]);
       if (isTransfer && parId) idsToRemove.add(parId);
       setLancamentos(prev => prev.filter(l => !idsToRemove.has(l.id)));
+      await invalidateZootQueries();
     }
     return !error;
   };
@@ -505,6 +523,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
           const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
           return [...filtered, { ano, categoria, quantidade, pesoMedioKg }];
         });
+        await invalidateZootQueries();
       }
     } else {
       await supabase.from('saldos_iniciais')
@@ -513,6 +532,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         .eq('ano', ano)
         .eq('categoria', categoria);
       setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && s.categoria === categoria)));
+      await invalidateZootQueries();
     }
   };
 

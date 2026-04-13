@@ -51,7 +51,11 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsContent>
 
       <TabsContent value="categoria">
-        <EvolucaoCategoriaTab onNavigateToReclass={onNavigateToReclass} />
+        <EvolucaoCategoriaTab
+          initialAno={filtroAnoInicial}
+          initialMes={filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : undefined}
+          onNavigateToReclass={onNavigateToReclass}
+        />
       </TabsContent>
     </Tabs>
   );
