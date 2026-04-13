@@ -6,7 +6,7 @@ import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
   Lock, AlertCircle,
-  ArrowLeftRight, LayoutGrid, CloudRain, Upload,
+  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -52,6 +52,12 @@ const ACOES_PRINCIPAIS = [
     tab: 'historico_importacoes_zoot' as TabId,
     icon: Upload,
     description: 'Auditoria e exclusão de lotes',
+  },
+  {
+    label: 'Auditoria Zootécnica',
+    tab: 'auditoria_zoot' as TabId,
+    icon: ShieldAlert,
+    description: 'Identificar inconsistências na base',
   },
 ];
 
