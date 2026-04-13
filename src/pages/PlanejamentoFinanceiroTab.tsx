@@ -1,8 +1,8 @@
 /**
  * PlanejamentoFinanceiroTab
  *
- * Tela operacional para planejamento financeiro anual (cenário META).
- * Seleção baseada no plano de contas oficial — sem digitação livre.
+ * Grade completa de planejamento financeiro (META) baseada no plano de contas oficial.
+ * Todos os subcentros planejáveis aparecem automaticamente na grade.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,16 +14,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS, DRIVER_POR_SUBCENTRO } from '@/hooks/usePlanejamentoFinanceiro';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { usePlanejamentoFinanceiro, DRIVERS_DISPONIVEIS } from '@/hooks/usePlanejamentoFinanceiro';
+import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { supabase } from '@/integrations/supabase/client';
 import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
-import { Copy, Download, Percent, RefreshCw, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Download, Percent, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { extrairDriversMensais, validarDriversDisponiveis } from '@/lib/calculos/driverZootecnico';
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
 const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface Props {
@@ -31,19 +32,52 @@ interface Props {
   metaConsolidacao?: MetaCategoriaMes[];
 }
 
+interface FazendaOption {
+  id: string;
+  nome: string;
+}
+
+/** Linha da grade: pode vir do banco ou ser um placeholder do plano de contas */
+interface GridRow {
+  centro_custo: string;
+  subcentro: string | null;
+  macro_custo: string | null;
+  grupo_custo: string | null;
+  tipo_custo: 'fixo' | 'variavel';
+  driver: string | null;
+  unidade_driver: string | null;
+  meses: number[];
+  total: number;
+  ids: (string | null)[];
+}
+
 export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear + 1);
-  const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const { fazendas: fazCtx } = useFazenda();
+
+  // ─── Fazenda selector ─────────────────────────────────────
+  const [fazendaId, setFazendaId] = useState('');
+  const fazendaOptions = useMemo<FazendaOption[]>(() => {
+    if (!fazCtx) return [];
+    return fazCtx.map((f: any) => ({ id: f.id, nome: f.nome }));
+  }, [fazCtx]);
+
+  // Auto-select first fazenda
+  useEffect(() => {
+    if (!fazendaId && fazendaOptions.length > 0) {
+      setFazendaId(fazendaOptions[0].id);
+    }
+  }, [fazendaOptions, fazendaId]);
 
   const {
     data, loading, reload,
     upsertRow, deleteRow,
-    replicarParaMeses, importarAnoAnterior,
+    replicarParaMeses, importarRealizadoAnoAnterior,
     aplicarAjustePercentual, recalcularVariaveis,
     getLinhasAgrupadas, totalAnual,
-  } = usePlanejamentoFinanceiro(ano);
+  } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   // ─── Plano de contas ─────────────────────────────────────
   const [planoContas, setPlanoContas] = useState<PlanoContasItem[]>([]);
@@ -53,74 +87,91 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
     loadPlanoContasCompleto(clienteAtual.id).then(setPlanoContas);
   }, [clienteAtual?.id]);
 
-  // Filter: only 2-Saídas items with subcentro (expenditures for planning)
+  // All plannable subcentros (2-Saídas with subcentro)
   const itensSaidas = useMemo(() =>
     planoContas.filter(p => p.tipo_operacao === '2-Saídas' && p.subcentro),
     [planoContas]
   );
 
-  // Group by centro_custo for cascading selector
+  // ─── Build complete grid: plano de contas + existing data ─
+  const linhasAgrupadas = useMemo(() => getLinhasAgrupadas(), [getLinhasAgrupadas]);
+
+  const gridCompleto = useMemo<GridRow[]>(() => {
+    // Start with existing data rows
+    const existingKeys = new Set(
+      linhasAgrupadas.map(r => `${r.centro_custo}||${r.subcentro || ''}`)
+    );
+
+    const rows: GridRow[] = [...linhasAgrupadas];
+
+    // Add plano de contas items that don't have data yet
+    for (const item of itensSaidas) {
+      const key = `${item.centro_custo}||${item.subcentro || ''}`;
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key);
+
+      const sub = item.subcentro || '';
+      const driverInfo = DRIVER_POR_SUBCENTRO[sub];
+      const grupo = (item.grupo_custo || '').toLowerCase();
+      const isVariavel = !!driverInfo || grupo.includes('variável') || grupo.includes('variavel');
+
+      rows.push({
+        centro_custo: item.centro_custo,
+        subcentro: item.subcentro,
+        macro_custo: item.macro_custo,
+        grupo_custo: item.grupo_custo,
+        tipo_custo: isVariavel ? 'variavel' : 'fixo',
+        driver: driverInfo?.driver || null,
+        unidade_driver: driverInfo?.unidade || null,
+        meses: new Array(12).fill(0),
+        total: 0,
+        ids: new Array(12).fill(null),
+      });
+    }
+
+    // Sort by macro > grupo > centro > subcentro
+    rows.sort((a, b) => {
+      const cmp = (x: string | null, y: string | null) => (x || '').localeCompare(y || '');
+      return cmp(a.macro_custo, b.macro_custo)
+        || cmp(a.grupo_custo, b.grupo_custo)
+        || cmp(a.centro_custo, b.centro_custo)
+        || cmp(a.subcentro, b.subcentro);
+    });
+
+    return rows;
+  }, [linhasAgrupadas, itensSaidas]);
+
+  // ─── State: dialogs ──────────────────────────────────────
+  const [showAjuste, setShowAjuste] = useState(false);
+  const [ajustePercent, setAjustePercent] = useState('');
+  const [showNovaLinha, setShowNovaLinha] = useState(false);
+  const [nlCentro, setNlCentro] = useState('');
+  const [nlSubcentroId, setNlSubcentroId] = useState('');
+  const [nlValorBase, setNlValorBase] = useState('');
+
   const centrosUnicos = useMemo(() => {
     const set = new Set<string>();
     itensSaidas.forEach(p => set.add(p.centro_custo));
     return Array.from(set).sort();
   }, [itensSaidas]);
 
-  // ─── State: dialogs ──────────────────────────────────────
-  const [showNovaLinha, setShowNovaLinha] = useState(false);
-  const [showAjuste, setShowAjuste] = useState(false);
-  const [ajustePercent, setAjustePercent] = useState('');
-
-  // Nova linha form — plano de contas based
-  const [nlCentro, setNlCentro] = useState('');
-  const [nlSubcentroId, setNlSubcentroId] = useState('');
-  const [nlTipo, setNlTipo] = useState<'fixo' | 'variavel'>('fixo');
-  const [nlDriver, setNlDriver] = useState('');
-  const [nlUnidadeDriver, setNlUnidadeDriver] = useState('cab/mes');
-  const [nlValorBase, setNlValorBase] = useState('');
-
-  // Subcentros filtered by selected centro
   const subcentrosFiltrados = useMemo(() =>
     itensSaidas.filter(p => p.centro_custo === nlCentro),
     [itensSaidas, nlCentro]
   );
 
-  // Selected plano item
   const selectedPlanoItem = useMemo(() =>
     itensSaidas.find(p => p.id === nlSubcentroId),
     [itensSaidas, nlSubcentroId]
   );
 
-  // Auto-detect tipo_custo and driver from plano de contas
-  useEffect(() => {
-    if (!selectedPlanoItem) return;
-    const sub = selectedPlanoItem.subcentro || '';
-    const grupo = (selectedPlanoItem.grupo_custo || '').toLowerCase();
-
-    // Auto-set tipo based on grupo_custo
-    if (grupo.includes('variável') || grupo.includes('variavel')) {
-      setNlTipo('variavel');
-    } else {
-      setNlTipo('fixo');
-    }
-
-    // Auto-set driver from canonical mapping
-    const driverInfo = DRIVER_POR_SUBCENTRO[sub];
-    if (driverInfo) {
-      setNlDriver(driverInfo.driver);
-      setNlUnidadeDriver(driverInfo.unidade);
-      setNlTipo('variavel');
-    } else {
-      setNlDriver('');
-      setNlUnidadeDriver('cab/mes');
-    }
-  }, [selectedPlanoItem]);
-
-  const linhasAgrupadas = useMemo(() => getLinhasAgrupadas(), [getLinhasAgrupadas]);
-
   const handleNovaLinha = async () => {
-    if (!selectedPlanoItem) { toast.error('Selecione um subcentro do plano de contas'); return; }
+    if (!selectedPlanoItem) { toast.error('Selecione um subcentro'); return; }
     const valorBase = parseFloat(nlValorBase) || 0;
+    const sub = selectedPlanoItem.subcentro || '';
+    const driverInfo = DRIVER_POR_SUBCENTRO[sub];
+    const grupo = (selectedPlanoItem.grupo_custo || '').toLowerCase();
+    const isVariavel = !!driverInfo || grupo.includes('variável') || grupo.includes('variavel');
 
     await replicarParaMeses({
       centro_custo: selectedPlanoItem.centro_custo,
@@ -128,18 +179,13 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
       macro_custo: selectedPlanoItem.macro_custo,
       grupo_custo: selectedPlanoItem.grupo_custo,
       escopo_negocio: selectedPlanoItem.escopo_negocio || 'pecuaria',
-      tipo_custo: nlTipo,
-      driver: nlTipo === 'variavel' ? (nlDriver || null) : null,
-      unidade_driver: nlTipo === 'variavel' ? nlUnidadeDriver : null,
+      tipo_custo: isVariavel ? 'variavel' : 'fixo',
+      driver: driverInfo?.driver || null,
+      unidade_driver: driverInfo?.unidade || null,
       valor_base: valorBase,
     });
     setShowNovaLinha(false);
-    resetNovaLinha();
-  };
-
-  const resetNovaLinha = () => {
-    setNlCentro(''); setNlSubcentroId(''); setNlTipo('fixo');
-    setNlDriver(''); setNlValorBase(''); setNlUnidadeDriver('cab/mes');
+    setNlCentro(''); setNlSubcentroId(''); setNlValorBase('');
   };
 
   const handleAjuste = async () => {
@@ -155,52 +201,49 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
       toast.error('Sem dados do rebanho META. Lance o zootécnico META antes de recalcular.');
       return;
     }
-
     const driverValues = extrairDriversMensais(metaConsolidacao);
     const validacao = validarDriversDisponiveis(driverValues);
     const semDados = validacao.filter(v => !v.temDados);
-
-    // Check if any variable line uses a driver without data
     const variaveis = data.filter(r => r.tipo_custo === 'variavel' && r.driver);
     const driversSemBase = variaveis
       .map(r => r.driver!)
       .filter((d, i, arr) => arr.indexOf(d) === i)
       .filter(d => semDados.some(s => s.driver === d));
-
     if (driversSemBase.length > 0) {
-      const labels = driversSemBase.join(', ');
-      toast.warning(`Drivers sem dados no rebanho META: ${labels}. Esses valores ficarão zerados.`);
+      toast.warning(`Drivers sem dados no rebanho META: ${driversSemBase.join(', ')}.`);
     }
-
     await recalcularVariaveis(driverValues);
   };
 
-  const handleExcluirLinha = async (subcentro: string | null, ids: (string | null)[]) => {
+  const handleExcluirLinha = async (ids: (string | null)[]) => {
     const validIds = ids.filter(Boolean) as string[];
     if (validIds.length === 0) return;
-    for (const id of validIds) {
-      await deleteRow(id);
-    }
+    for (const id of validIds) await deleteRow(id);
     toast.success('Linha excluída');
   };
 
-  // ─── Edição inline de valor_planejado ─────────────────────
-  const handleCellEdit = useCallback(async (id: string | null, mes: number, valor: number, row: ReturnType<typeof getLinhasAgrupadas>[0]) => {
-    if (!clienteAtual?.id || !fazendaAtual?.id) return;
+  // ─── Edição inline ────────────────────────────────────────
+  const handleCellEdit = useCallback(async (
+    id: string | null, mes: number, valor: number, row: GridRow
+  ) => {
+    if (!clienteAtual?.id || !fazendaId) return;
+    const sub = row.subcentro || '';
+    const driverInfo = DRIVER_POR_SUBCENTRO[sub];
     const payload: any = {
       cliente_id: clienteAtual.id,
-      fazenda_id: fazendaAtual.id,
+      fazenda_id: fazendaId,
       ano,
       mes,
       centro_custo: row.centro_custo,
       subcentro: row.subcentro,
       macro_custo: row.macro_custo,
       grupo_custo: row.grupo_custo,
+      escopo_negocio: null,
       tipo_custo: row.tipo_custo,
-      driver: row.driver,
-      unidade_driver: row.unidade_driver,
-      valor_base: row.tipo_custo === 'fixo' ? valor : row.valor_base,
-      quantidade_driver: row.tipo_custo === 'variavel' ? (valor / (row.valor_base || 1)) : 0,
+      driver: driverInfo?.driver || row.driver,
+      unidade_driver: driverInfo?.unidade || row.unidade_driver,
+      valor_base: row.tipo_custo === 'fixo' ? valor : (row.meses[0] || valor),
+      quantidade_driver: 0,
       valor_planejado: valor,
       origem: 'manual',
       cenario: 'meta',
@@ -208,12 +251,38 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
     };
     if (id) payload.id = id;
     await upsertRow(payload);
-  }, [ano, clienteAtual, fazendaAtual, upsertRow]);
+  }, [ano, clienteAtual, fazendaId, upsertRow]);
+
+  // ─── Group rows by macro_custo for visual grouping ────────
+  const macroGroups = useMemo(() => {
+    const groups = new Map<string, GridRow[]>();
+    for (const row of gridCompleto) {
+      const macro = row.macro_custo || 'Outros';
+      if (!groups.has(macro)) groups.set(macro, []);
+      groups.get(macro)!.push(row);
+    }
+    return Array.from(groups.entries());
+  }, [gridCompleto]);
+
+  const fazendaNome = useMemo(() => {
+    const f = fazendaOptions.find(f => f.id === fazendaId);
+    return f?.nome || '';
+  }, [fazendaOptions, fazendaId]);
 
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in pb-24 space-y-4">
       {/* Header / Filtros */}
       <div className="flex flex-wrap items-center gap-2 pt-2">
+        <Select value={fazendaId} onValueChange={setFazendaId}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Fazenda..." />
+          </SelectTrigger>
+          <SelectContent>
+            {fazendaOptions.map(f => (
+              <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
           <SelectTrigger className="w-[100px]">
             <SelectValue />
@@ -227,9 +296,9 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
         <Badge variant="outline" className="text-xs">META</Badge>
         <div className="flex-1" />
 
-        <Button size="sm" variant="outline" onClick={() => importarAnoAnterior()} disabled={loading}>
+        <Button size="sm" variant="outline" onClick={() => importarRealizadoAnoAnterior()} disabled={loading || !fazendaId}>
           <Download className="h-4 w-4 mr-1" />
-          Importar {ano - 1}
+          Importar Realizado {ano - 1}
         </Button>
         <Button size="sm" variant="outline" onClick={() => setShowAjuste(true)} disabled={loading}>
           <Percent className="h-4 w-4 mr-1" />
@@ -239,7 +308,7 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
           <RefreshCw className="h-4 w-4 mr-1" />
           Recalcular
         </Button>
-        <Button size="sm" onClick={() => setShowNovaLinha(true)}>
+        <Button size="sm" variant="ghost" onClick={() => setShowNovaLinha(true)}>
           <Plus className="h-4 w-4 mr-1" />
           Nova Linha
         </Button>
@@ -248,9 +317,9 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
       {/* Resumo */}
       <Card>
         <CardContent className="p-3 flex items-center gap-4 text-sm">
-          <span className="text-muted-foreground">{linhasAgrupadas.length} centros de custo</span>
+          <span className="text-muted-foreground">{gridCompleto.length} subcentros</span>
           <span className="text-muted-foreground">•</span>
-          <span className="text-muted-foreground">{data.length} registros</span>
+          <span className="text-muted-foreground">{data.length} registros com valor</span>
           <span className="flex-1" />
           <span className="font-bold">Total: R$ {fmt(totalAnual)}</span>
         </CardContent>
@@ -263,60 +332,75 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10 min-w-[180px]">Centro / Subcentro</TableHead>
+                  <TableHead className="sticky left-0 bg-background z-10 min-w-[220px]">Centro / Subcentro</TableHead>
                   <TableHead className="w-[60px]">Tipo</TableHead>
-                  <TableHead className="w-[90px]">Driver</TableHead>
-                  <TableHead className="w-[80px] text-right">Base</TableHead>
                   {MESES_CURTOS.map(m => (
-                    <TableHead key={m} className="w-[80px] text-right">{m}</TableHead>
+                    <TableHead key={m} className="w-[75px] text-right">{m}</TableHead>
                   ))}
                   <TableHead className="w-[90px] text-right font-bold">Total</TableHead>
                   <TableHead className="w-[40px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linhasAgrupadas.length === 0 && (
+                {gridCompleto.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
-                      Nenhum planejamento cadastrado para {ano}. Clique em "Nova Linha" ou "Importar {ano - 1}".
+                    <TableCell colSpan={16} className="text-center text-muted-foreground py-8">
+                      Selecione uma fazenda para visualizar o planejamento.
                     </TableCell>
                   </TableRow>
                 )}
-                {linhasAgrupadas.map((row, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-xs">
-                      <div>{row.centro_custo}</div>
-                      {row.subcentro && <div className="text-muted-foreground text-[10px]">{row.subcentro}</div>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={row.tipo_custo === 'fixo' ? 'secondary' : 'outline'} className="text-[10px]">
-                        {row.tipo_custo === 'fixo' ? 'Fixo' : 'Var'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-[10px] text-muted-foreground">
-                      {row.driver ? DRIVERS_DISPONIVEIS.find(d => d.value === row.driver)?.label || row.driver : '–'}
-                    </TableCell>
-                    <TableCell className="text-right text-xs">{fmt(row.valor_base)}</TableCell>
-                    {row.meses.map((val, mesIdx) => (
-                      <TableCell key={mesIdx} className="text-right p-1">
-                        <EditableCell
-                          value={val}
-                          onSave={(v) => handleCellEdit(row.ids[mesIdx], mesIdx + 1, v, row)}
-                        />
+                {macroGroups.map(([macro, rows]) => (
+                  <>
+                    <TableRow key={`header-${macro}`}>
+                      <TableCell colSpan={16} className="bg-muted/50 font-semibold text-xs py-1.5 sticky left-0">
+                        {macro}
                       </TableCell>
-                    ))}
-                    <TableCell className="text-right font-bold text-xs">{fmt(row.total)}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleExcluirLinha(row.subcentro, row.ids)}
-                      >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                    </TableRow>
+                    {rows.map((row, idx) => {
+                      const hasData = row.total > 0 || row.ids.some(Boolean);
+                      return (
+                        <TableRow key={`${macro}-${idx}`} className={!hasData ? 'opacity-50' : ''}>
+                          <TableCell className="sticky left-0 bg-background z-10 text-xs">
+                            <div className="font-medium">{row.centro_custo}</div>
+                            {row.subcentro && (
+                              <div className="text-muted-foreground text-[10px]">{row.subcentro}</div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={row.tipo_custo === 'fixo' ? 'secondary' : 'outline'} className="text-[10px]">
+                              {row.tipo_custo === 'fixo' ? 'F' : 'V'}
+                            </Badge>
+                            {row.driver && (
+                              <span className="text-[9px] text-muted-foreground block">
+                                {DRIVERS_DISPONIVEIS.find(d => d.value === row.driver)?.label || row.driver}
+                              </span>
+                            )}
+                          </TableCell>
+                          {row.meses.map((val, mesIdx) => (
+                            <TableCell key={mesIdx} className="text-right p-1">
+                              <EditableCell
+                                value={val}
+                                onSave={(v) => handleCellEdit(row.ids[mesIdx], mesIdx + 1, v, row)}
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right font-bold text-xs">{row.total > 0 ? fmt(row.total) : '–'}</TableCell>
+                          <TableCell>
+                            {hasData && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleExcluirLinha(row.ids)}
+                              >
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </>
                 ))}
               </TableBody>
             </Table>
@@ -324,17 +408,20 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
         </CardContent>
       </Card>
 
-      {/* Dialog: Nova Linha — Plano de Contas */}
+      {/* Dialog: Nova Linha (exceção) */}
       <Dialog open={showNovaLinha} onOpenChange={setShowNovaLinha}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nova Linha de Planejamento</DialogTitle>
+            <DialogTitle>Adicionar Linha Extra</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Use apenas para subcentros que não aparecem na grade do plano de contas oficial.
+          </p>
           <div className="space-y-3">
             <div>
               <Label>Centro de Custo *</Label>
               <Select value={nlCentro} onValueChange={v => { setNlCentro(v); setNlSubcentroId(''); }}>
-                <SelectTrigger><SelectValue placeholder="Selecione o centro..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {centrosUnicos.map(c => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -345,13 +432,10 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
             <div>
               <Label>Subcentro *</Label>
               <Select value={nlSubcentroId} onValueChange={setNlSubcentroId} disabled={!nlCentro}>
-                <SelectTrigger><SelectValue placeholder={nlCentro ? 'Selecione o subcentro...' : 'Selecione o centro primeiro'} /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={nlCentro ? 'Selecione...' : 'Centro primeiro'} /></SelectTrigger>
                 <SelectContent>
                   {subcentrosFiltrados.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.subcentro}
-                      {p.grupo_custo && <span className="text-muted-foreground ml-1 text-[10px]">({p.grupo_custo})</span>}
-                    </SelectItem>
+                    <SelectItem key={p.id} value={p.id}>{p.subcentro}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -362,51 +446,13 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
               )}
             </div>
             <div>
-              <Label>Tipo de Custo</Label>
-              <Select value={nlTipo} onValueChange={v => setNlTipo(v as 'fixo' | 'variavel')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fixo">Fixo</SelectItem>
-                  <SelectItem value="variavel">Variável</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {nlTipo === 'variavel' && (
-              <>
-                <div>
-                  <Label>Driver Zootécnico</Label>
-                  <Select value={nlDriver} onValueChange={setNlDriver}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      {DRIVERS_DISPONIVEIS.map(d => (
-                        <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Unidade do Driver</Label>
-                  <Select value={nlUnidadeDriver} onValueChange={setNlUnidadeDriver}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cab/mes">Cabeça / Mês</SelectItem>
-                      <SelectItem value="cab/dia">Cabeça / Dia</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-            <div>
-              <Label>Valor Base (R${nlTipo === 'variavel' && nlDriver ? ` / ${nlUnidadeDriver}` : ''})</Label>
+              <Label>Valor Base Mensal (R$)</Label>
               <Input type="number" step="0.01" value={nlValorBase} onChange={e => setNlValorBase(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowNovaLinha(false); resetNovaLinha(); }}>Cancelar</Button>
-            <Button onClick={handleNovaLinha} disabled={!selectedPlanoItem}>
-              <Copy className="h-4 w-4 mr-1" />
-              Criar e Replicar 12 meses
-            </Button>
+            <Button variant="outline" onClick={() => setShowNovaLinha(false)}>Cancelar</Button>
+            <Button onClick={handleNovaLinha} disabled={!selectedPlanoItem}>Criar 12 meses</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -419,16 +465,14 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Aplica ajuste sobre valor_base e valor_planejado de todas as linhas do ano {ano}.
+              Aplica ajuste sobre todas as linhas do ano {ano} na fazenda selecionada.
             </p>
             <div>
               <Label>Percentual (%)</Label>
               <Input
-                type="number"
-                step="0.1"
-                value={ajustePercent}
+                type="number" step="0.1" value={ajustePercent}
                 onChange={e => setAjustePercent(e.target.value)}
-                placeholder="ex: 5 para +5%, -3 para -3%"
+                placeholder="ex: 5 para +5%"
               />
             </div>
           </div>
@@ -463,8 +507,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
     return (
       <Input
         autoFocus
-        type="number"
-        step="0.01"
+        type="number" step="0.01"
         className="h-6 text-xs text-right p-1 w-[70px]"
         value={text}
         onChange={e => setText(e.target.value)}

@@ -7,6 +7,16 @@
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import type { Categoria } from '@/types/cattle';
 
+/**
+ * Mapeamento canônico: subcentros do plano de contas que usam driver zootécnico.
+ * Regra: nutrição = custo variável por cabeça/mês.
+ */
+export const DRIVER_POR_SUBCENTRO: Record<string, { driver: string; unidade: string }> = {
+  'Nutrição Engorda': { driver: 'cabecas_engorda', unidade: 'cab/mes' },
+  'Nutrição Recria': { driver: 'cabecas_recria', unidade: 'cab/mes' },
+  'Nutrição Cria': { driver: 'cabecas_matrizes', unidade: 'cab/mes' },
+};
+
 /** Categorias que compõem cada driver */
 const DRIVER_CATEGORIAS: Record<string, Categoria[]> = {
   cabecas_total: ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros', 'mamotes_f', 'desmama_f', 'novilhas', 'vacas'],
@@ -14,7 +24,6 @@ const DRIVER_CATEGORIAS: Record<string, Categoria[]> = {
   cabecas_recria: ['desmama_m', 'desmama_f', 'novilhas'],
   cabecas_matrizes: ['vacas'],
 };
-
 /**
  * Retorna, para cada driver, um array de 12 valores (jan-dez)
  * representando as cabeças médias do mês (cabMedias = (SI + SF) / 2).
