@@ -80,7 +80,7 @@ interface Props {
   filtroMesInicial?: number;
   onBackToConciliacao?: () => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
-  onNavigateToValorRebanho?: () => void;
+  onNavigateToValorRebanho?: (filtro: { ano: string; mes: number }) => void;
   onNavigateToConferenciaGmd?: (filtro: { ano: string; mes: number }) => void;
   onNavigateToMapaPastos?: (filtro: { ano: string; mes: number }) => void;
 }
@@ -533,7 +533,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Button>
             )}
             {allClosed && onNavigateToValorRebanho && (
-              <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={onNavigateToValorRebanho}>
+              <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={() => onNavigateToValorRebanho({ ano: anoFiltro, mes: mesFiltro })}>
                 Inserir preço do rebanho →
               </Button>
             )}
