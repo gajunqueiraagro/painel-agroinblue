@@ -72,6 +72,7 @@ import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
+import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
 
 export interface FiltroGlobal {
@@ -141,6 +142,7 @@ const TITLES: Record<TabId, string> = {
   precos_mercado_hub: 'Preços de Mercado',
   conferencia_gmd: 'Conferência de GMD',
   import_zoot_historico: 'Importação Zootécnica',
+  historico_importacoes_zoot: 'Histórico Importações',
   planejamento_financeiro: 'Planejamento Financeiro',
 };
 
