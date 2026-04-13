@@ -73,9 +73,9 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   const handleSalvar = () => {
     const anoFinal = hasSaldo ? anoSaldo : Number(anoSelecionado);
     CATEGORIAS.forEach(c => {
-      const qtd = valores[c.value] ? Number(valores[c.value]) : 0;
-      const peso = pesos[c.value] ? Number(pesos[c.value]) : undefined;
-      const preco = precos[c.value] ? Number(precos[c.value]) : undefined;
+      const qtd = valores[c.value] !== '' && valores[c.value] != null ? Number(valores[c.value]) : 0;
+      const peso = pesos[c.value] !== '' && pesos[c.value] != null ? Number(pesos[c.value]) : undefined;
+      const preco = precos[c.value] !== '' && precos[c.value] != null ? Number(precos[c.value]) : undefined;
       onSetSaldo(anoFinal, c.value, qtd, peso, preco);
     });
     setOpen(false);
