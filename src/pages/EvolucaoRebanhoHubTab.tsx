@@ -10,7 +10,7 @@ import type { SubAba } from './FinanceiroTab';
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
-  onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; status?: string }) => void;
   onEditar?: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => void;
   onRemover?: (id: string) => void;
   filtroAnoInicial?: string;

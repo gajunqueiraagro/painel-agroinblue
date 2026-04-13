@@ -13,6 +13,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { fmtValor, formatMoeda, formatKg, formatArroba, formatPercent, formatCabecas } from '@/lib/calculos/formatters';
 import { MESES_OPTIONS } from '@/lib/calculos/labels';
 import { calcIndicadoresLancamento } from '@/lib/calculos/economicos';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 
 type StatusFiltro = 'todos' | 'realizado' | 'programado' | 'meta';
 type SortDir = 'asc' | 'desc' | null;
@@ -526,14 +527,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
     }
   }, [subAbaInicial]);
 
-  const anosDisponiveis = useMemo(() => {
-    const anos = new Set<string>();
-    anos.add(String(new Date().getFullYear()));
-    lancamentosNormalizados.forEach(l => {
-      try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {}
-    });
-    return Array.from(anos).sort().reverse();
-  }, [lancamentosNormalizados]);
+  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
@@ -571,7 +565,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           return true;
         } catch { return false; }
       })
-      .sort((a, b) => a.data.localeCompare(b.data));
+      .sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
   }, [lancamentosNormalizados, anoFiltro, mesFiltro, topTab, subAba, statusFiltro, categoriaFiltro]);
 
   /* Categories available in current type */
@@ -632,7 +626,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         if (categoriaFiltro !== 'todas' && l.categoria !== categoriaFiltro) return false;
         return true;
       })
-      .sort((a, b) => a.data.localeCompare(b.data));
+      .sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
 
     const reclassStats = (() => {
       let qtd = 0;

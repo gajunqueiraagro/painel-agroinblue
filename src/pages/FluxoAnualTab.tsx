@@ -30,7 +30,7 @@ const fmtDec = (v: number | null | undefined, decimals: number): string => {
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
-  onNavigateToMovimentacao?: (subAba: SubAba) => void;
+  onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; status?: string }) => void;
   onNavigateToValorRebanho?: () => void;
   onSetSaldo?: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number) => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
@@ -204,7 +204,11 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               <tr
                 key={li.tipo}
                 className={`${rowBg} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
-                onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba)}
+                onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba, {
+                  ano: anoFiltro,
+                  label: `${li.label} | ${anoFiltro}`,
+                  status: statusFiltro,
+                })}
               >
                 <td className={`px-1.5 py-0.5 font-medium text-foreground sticky left-0 ${colFirstBg}`}>
                   <span className="text-[8px] opacity-60">{li.sinal === '+' ? '+' : '−'}</span> {li.label}
@@ -212,7 +216,19 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 {MESES_COLS.map(m => {
                   const val = porMesTipo[m.key]?.[li.tipo] ?? 0;
                   return (
-                    <td key={m.key} className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                    <td
+                      key={m.key}
+                      className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onNavigateToMovimentacao?.(li.tipo as SubAba, {
+                          ano: anoFiltro,
+                          mes: m.key,
+                          label: `${li.label} | ${m.label}/${anoFiltro}`,
+                          status: statusFiltro,
+                        });
+                      }}
+                    >
                       {val ? fmtNum(val) : '–'}
                     </td>
                   );

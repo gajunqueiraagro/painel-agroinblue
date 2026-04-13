@@ -21,6 +21,7 @@
  */
 
 import { useMemo } from 'react';
+import { useFazenda } from '@/contexts/FazendaContext';
 import {
   useZootCategoriaMensal,
   groupByMes,
@@ -324,14 +325,16 @@ interface UseRebanhoOficialParams {
   global?: boolean;
 }
 
-export function useRebanhoOficial({ ano, cenario, global = false }: UseRebanhoOficialParams) {
+export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialParams) {
+  const { isGlobal: isGlobalContext } = useFazenda();
+  const resolvedGlobal = global ?? isGlobalContext;
   const { rows: metaGmdRows } = useMetaGmd(String(ano));
 
   const {
     data: categoriasData,
     isLoading: loadingCategorias,
     error: errorCategorias,
-  } = useZootCategoriaMensal({ ano, cenario, global });
+  } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal });
 
   // useZootMensal only works for single-fazenda (NOT global).
   // In global mode, we synthesize farm-level totals from category data.
@@ -341,27 +344,27 @@ export function useRebanhoOficial({ ano, cenario, global = false }: UseRebanhoOf
     error: errorFazenda,
   } = useZootMensal({ ano, cenario });
 
-  const loading = loadingCategorias || (global ? false : loadingFazenda);
-  const error = errorCategorias || (global ? null : errorFazenda);
+  const loading = loadingCategorias || (resolvedGlobal ? false : loadingFazenda);
+  const error = errorCategorias || (resolvedGlobal ? null : errorFazenda);
 
   // ── Raw data accessors ──
   const baseCategorias = categoriasData ?? [];
   const baseFazenda = fazendaData ?? [];
 
   const rawCategorias = useMemo(() => {
-    if (global || cenario !== 'meta') return baseCategorias;
+    if (resolvedGlobal || cenario !== 'meta') return baseCategorias;
     return normalizeMetaCategorias(baseCategorias, metaGmdRows);
-  }, [baseCategorias, cenario, global, metaGmdRows]);
+  }, [baseCategorias, cenario, resolvedGlobal, metaGmdRows]);
 
   // In global mode, synthesize farm-level rows from category aggregation
   const rawFazenda = useMemo(() => {
-    if (global) {
+    if (resolvedGlobal) {
       // Build synthetic ZootMensal rows from category aggregation
       return buildFazendaRowsFromCategories(rawCategorias);
     }
     if (cenario !== 'meta') return baseFazenda;
     return buildMetaFazendaRows(rawCategorias, baseFazenda);
-  }, [baseFazenda, cenario, global, rawCategorias]);
+  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias]);
 
   // ── Grouped data ──
   const byMes = useMemo(() => groupByMes(rawCategorias), [rawCategorias]);
