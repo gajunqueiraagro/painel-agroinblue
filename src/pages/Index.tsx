@@ -260,12 +260,13 @@ const Index = () => {
     return merged;
   }, [lancamentosVisiveis, metaLancamentos]);
 
-  const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => {
+  const navigateToMovimentacao = useCallback((subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId; status?: string }) => {
     setSubAbaFinanceiro(subAba);
     setMovFiltroAno(opts?.ano);
     setMovFiltroMes(opts?.mes);
     setMovDrillLabel(opts?.label);
     setMovBackTab(opts?.backTab);
+    setMovFiltroStatus(opts?.status);
     setActiveTab('financeiro');
   }, []);
 
