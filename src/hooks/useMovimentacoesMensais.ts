@@ -50,7 +50,10 @@ export function useMovimentacoesMensais(ano: number, cenario: 'realizado' | 'met
           q = q.eq('fazenda_id', fazendaId);
         }
 
-        const { data, error } = await q.range(from, from + batchSize - 1);
+        const { data, error } = await q
+          .order('data', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + batchSize - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
         allRows.push(...(data as any));

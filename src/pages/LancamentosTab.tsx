@@ -48,6 +48,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/ConsumoFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -525,12 +526,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   };
 
-  const anosDisponiveis = useMemo(() => {
-    const anos = new Set<string>();
-    anos.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => { try { anos.add(format(parseISO(l.data), 'yyyy')); } catch {} });
-    return Array.from(anos).sort().reverse();
-  }, [lancamentos]);
+  // FONTE OFICIAL: anos reais do banco
+  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
   const MESES = [
     { value: 'todos', label: 'Todos' },

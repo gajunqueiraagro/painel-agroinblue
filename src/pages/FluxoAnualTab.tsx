@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,6 @@ import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { parseISO, format } from 'date-fns';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
@@ -39,27 +39,22 @@ interface Props {
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
-  const anosDisponiveis = useMemo(() => {
-    const anos = new Set<number>();
-    anos.add(new Date().getFullYear());
-    lancamentos.forEach(l => { try { anos.add(Number(format(parseISO(l.data), 'yyyy'))); } catch {} });
-    saldosIniciais.forEach(s => anos.add(s.ano));
-    const minAno = Math.min(...Array.from(anos));
-    const maxAno = Math.max(...Array.from(anos));
-    const result: string[] = [];
-    for (let y = maxAno; y >= minAno; y--) {
-      result.push(String(y));
-    }
-    return result;
-  }, [lancamentos, saldosIniciais]);
+  // FONTE OFICIAL: anos reais do banco
+  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>('realizado');
 
-  // FONTE OFICIAL: useRebanhoOficial para saldos e indicadores
+  // FONTE OFICIAL: useRebanhoOficial — saldos agregados da vw_zoot_categoria_mensal
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
-  const zootByMes = rebanhoOf.fazendaByMes;
+
+  // UNIFICAÇÃO: saldos da fazenda = soma das categorias (totaisPorMes)
+  // Isso garante paridade absoluta entre quadro anual e visão por categoria.
+  const totaisPorMes = rebanhoOf.totaisPorMes;
+
+  // Para indicadores (GMD, lotação, peso médio), ainda usa fazendaByMes
+  const fazendaByMes = rebanhoOf.fazendaByMes;
 
   // FONTE OFICIAL: query direta ao banco com paginação completa para movimentações
   const { data: movData } = useMovimentacoesMensais(Number(anoFiltro), cenarioView as 'realizado' | 'meta');
@@ -174,25 +169,25 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </tr>
           </thead>
           <tbody>
-            {/* Saldo Início — FONTE OFICIAL: view zootécnica */}
+            {/* Saldo Início — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="bg-primary/15 border-b">
               <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
               {MESES_COLS.map(m => {
-                const z = zootByMes[m.key];
-                const valor = z?.cabecas_inicio;
+                const mes = Number(m.key);
+                const t = totaisPorMes[mes];
+                const valor = t?.saldo_inicial;
                 return (
                   <td
                     key={m.key}
                     className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
                     onClick={() => setDrilldownMonth(m.key)}
-                    title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}
                   >
                     {valor != null ? fmtNum(valor) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
-                {fmtNum(zootByMes['01']?.cabecas_inicio)}
+                {fmtNum(totaisPorMes[1]?.saldo_inicial)}
               </td>
             </tr>
 
@@ -226,20 +221,21 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               );
             })}
 
-            {/* Saldo Final — FONTE OFICIAL: view zootécnica */}
+            {/* Saldo Final — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="border-t-2 bg-primary/20">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
               {MESES_COLS.map((m) => {
-                const z = zootByMes[m.key];
-                const saldoFim = z?.cabecas_final;
+                const mes = Number(m.key);
+                const t = totaisPorMes[mes];
+                const saldoFim = t?.saldo_final;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`} title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}>
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
                     {saldoFim != null ? fmtNum(saldoFim) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
-                {fmtNum(zootByMes['12']?.cabecas_final)}
+                {fmtNum(totaisPorMes[12]?.saldo_final)}
               </td>
             </tr>
 
@@ -257,7 +253,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Peso Médio Final do mês (kg)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
@@ -271,7 +267,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/40 text-[8px]">GMD (kg/cab/dia)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
@@ -280,7 +276,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/40 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => zootByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 3) : '–';
                       })()}
                     </td>
@@ -290,7 +286,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Lot. média (UA/ha)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
-                      const z = zootByMes[m.key];
+                      const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
                           {z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
@@ -299,7 +295,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/50 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => zootByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : '–';
                       })()}
                     </td>

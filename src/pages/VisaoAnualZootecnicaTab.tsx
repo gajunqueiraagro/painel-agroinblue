@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { TabId } from '@/components/BottomNav';
@@ -59,13 +60,8 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
 
-  const anosDisp = useMemo(() => {
-    const set = new Set<string>();
-    set.add(String(new Date().getFullYear()));
-    lancamentos.forEach(l => { try { set.add(l.data.substring(0, 4)); } catch {} });
-    saldosIniciais.forEach(s => set.add(String(s.ano)));
-    return Array.from(set).sort().reverse();
-  }, [lancamentos, saldosIniciais]);
+  // FONTE OFICIAL: anos reais do banco
+  const { data: anosDisp = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [monthData, setMonthData] = useState<MonthStatus[]>(
