@@ -427,10 +427,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
-      {/* Fonte */}
       <div className="text-[9px] text-muted-foreground/60 text-right pr-1">
-        Fonte: vw_zoot_categoria_mensal (oficial)
-        {dadosMes[0]?.fonte_oficial_mes && ` — ${dadosMes[0].fonte_oficial_mes}`}
+        Fonte: vw_zoot_categoria_mensal (oficial) — cálculo por movimentação
       </div>
     </div>
   );
