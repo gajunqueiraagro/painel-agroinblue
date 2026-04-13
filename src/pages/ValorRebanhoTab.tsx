@@ -555,6 +555,48 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const anoMesAnterior = mesNum > 1 ? `${anoFiltro}-${mesAnteriorKey}` : `${Number(anoFiltro) - 1}-12`;
   const anoMesDezAnterior = `${Number(anoFiltro) - 1}-12`;
 
+  // ---------------------------------------------------------------------------
+  // Âncora patrimonial oficial: saldos_iniciais (ano inicial da fazenda)
+  // ---------------------------------------------------------------------------
+  const anoInicialFazenda = useMemo(() => {
+    if (saldosIniciais.length === 0) return null;
+    return Math.min(...saldosIniciais.map(s => s.ano));
+  }, [saldosIniciais]);
+
+  const isAnoInicial = anoInicialFazenda !== null && Number(anoFiltro) === anoInicialFazenda;
+
+  const saldosIniciaisAnoFiltro = useMemo(() => {
+    if (!isAnoInicial) return [];
+    return saldosIniciais.filter(s => s.ano === Number(anoFiltro));
+  }, [saldosIniciais, anoFiltro, isAnoInicial]);
+
+  const baseInicialIncompleta = useMemo(() => {
+    if (!isAnoInicial) return false;
+    if (saldosIniciaisAnoFiltro.length === 0) return true;
+    return saldosIniciaisAnoFiltro.some(s => (s.quantidade || 0) > 0 && (s.precoKg == null || s.precoKg <= 0));
+  }, [isAnoInicial, saldosIniciaisAnoFiltro]);
+
+  const metricasSaldosIniciais = useMemo((): MetricasExibicao | null => {
+    if (!isAnoInicial) return null;
+    if (baseInicialIncompleta) return null;
+    if (saldosIniciaisAnoFiltro.length === 0) return null;
+
+    let valor = 0;
+    let cabecas = 0;
+    let pesoTotalKg = 0;
+
+    saldosIniciaisAnoFiltro.forEach(s => {
+      const qty = s.quantidade || 0;
+      const peso = s.pesoMedioKg || 0;
+      const preco = s.precoKg || 0;
+      cabecas += qty;
+      pesoTotalKg += qty * peso;
+      valor += qty * peso * preco;
+    });
+
+    return buildMetricsFromTotals(valor, cabecas, pesoTotalKg);
+  }, [isAnoInicial, baseInicialIncompleta, saldosIniciaisAnoFiltro]);
+
   const resumoMesAnterior = useMemo(() => {
     const mesAnt = mesNum > 1 ? mesNum - 1 : 12;
     const data = mesNum > 1 ? viewDataAnoAtual : viewDataAnoAnterior;
@@ -763,9 +805,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   }, [fonteMes, metricasMesAnteriorLive, buildFrozenMetrics, anoMesAnterior]);
 
   const metricasInicioAno = useMemo(() => {
+    // Ano inicial da fazenda: fonte oficial é saldos_iniciais
+    if (isAnoInicial) return metricasSaldosIniciais;
     if (fonteMes === 'live') return metricasDezAnteriorLive;
     return buildFrozenMetrics(anoMesDezAnterior);
-  }, [fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
+  }, [isAnoInicial, metricasSaldosIniciais, fonteMes, metricasDezAnteriorLive, buildFrozenMetrics, anoMesDezAnterior]);
 
   const rowsExibicao = fonteMes === 'snapshot' ? snapshotRowsSelecionado : liveRows;
   const metricasTabela = useMemo(() => {
@@ -811,6 +855,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const chartDataValor = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.valor ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         return buildFrozenMetrics(dezKey)?.valor ?? null;
       }
@@ -820,11 +865,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       }
       return buildFrozenMetrics(key)?.valor ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.valor, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataArrobas = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.totalArrobas ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         const vm = getViewMetricsForMonth(dezKey);
         return vm ? vm.pesoKg / 30 : null;
@@ -836,11 +882,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const vm = getViewMetricsForMonth(key);
       return vm ? vm.pesoKg / 30 : null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.totalArrobas, getViewMetricsForMonth, isAnoInicial, metricasSaldosIniciais]);
 
   const chartDataPrecoArroba = useMemo(() => {
     return buildChartData((mes) => {
       if (mes === 0) {
+        if (isAnoInicial) return metricasSaldosIniciais?.precoArroba ?? null;
         const dezKey = `${Number(anoFiltro) - 1}-12`;
         const metrics = buildFrozenMetrics(dezKey);
         return metrics?.precoArroba ?? null;
@@ -852,7 +899,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
       const metrics = buildFrozenMetrics(key);
       return metrics?.precoArroba ?? null;
     });
-  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics]);
+  }, [buildChartData, anoFiltro, mesNum, fonteMes, metricasLiveSelecionado.precoArroba, buildFrozenMetrics, isAnoInicial, metricasSaldosIniciais]);
 
   const handlePrecoChange = (codigo: string, value: string) => {
     const sanitized = value.replace(/[^0-9.,]/g, '');
@@ -918,6 +965,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const uMetricas = isGlobal ? globalData.metricas : metricasSelecionado;
   const uMetricasMesAnt = isGlobal ? globalData.metricasMesAnterior : metricasMesAnterior;
   const uMetricasInicioAno = isGlobal ? globalData.metricasInicioAno : metricasInicioAno;
+  const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
   const uCanEdit = isGlobal ? false : canEdit;
@@ -1329,7 +1377,10 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                   <p className="text-xl font-extrabold text-foreground leading-tight mt-0.5">{formatMoedaNullable(uMetricas.valor)}</p>
                   <div className="flex flex-col gap-0 mt-0.5">
                     <VariacaoBadge valor={uVarValorMes} label="vs mês ant." showLabel />
-                    <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
+                    {uBaseInicialIncompleta
+                      ? <span className="text-[8px] font-semibold text-amber-600 dark:text-amber-400">Base incompleta</span>
+                      : <VariacaoBadge valor={uVarValorAno} label="vs ini. ano" showLabel />
+                    }
                   </div>
                 </div>
 
@@ -1351,7 +1402,12 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                         <span className="text-muted-foreground text-[9px] truncate">{ind.label}</span>
                         <span className="text-right font-semibold text-foreground tabular-nums">{ind.value}</span>
                         <span className="text-right"><VariacaoBadge valor={ind.varMes} label="" /></span>
-                        <span className="text-right"><VariacaoBadge valor={ind.varAno} label="" /></span>
+                        <span className="text-right">
+                          {uBaseInicialIncompleta
+                            ? <span className="text-[7px] text-amber-600 dark:text-amber-400">—</span>
+                            : <VariacaoBadge valor={ind.varAno} label="" />
+                          }
+                        </span>
                       </React.Fragment>
                     ))}
                   </div>
