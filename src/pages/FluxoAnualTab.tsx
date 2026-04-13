@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, DollarSign } from 'lucide-react';
+import { ArrowLeft, DollarSign, AlertTriangle } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
+import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
@@ -52,6 +53,12 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // UNIFICAÇÃO: saldos da fazenda = soma das categorias (totaisPorMes)
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
   const totaisPorMes = rebanhoOf.totaisPorMes;
+
+  // Validação automática da equação antes de renderizar
+  const errosEquacao = useMemo(() => {
+    if (!rebanhoOf.rawCategorias || rebanhoOf.rawCategorias.length === 0) return [];
+    return validarEquacaoTotal(rebanhoOf.rawCategorias).filter(r => !r.ok);
+  }, [rebanhoOf.rawCategorias]);
 
   // Para indicadores (GMD, lotação, peso médio), ainda usa fazendaByMes
   const fazendaByMes = rebanhoOf.fazendaByMes;
@@ -143,6 +150,22 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           anoBase={Number(anoFiltro)}
           totalLancamentos={lancamentos.length}
         />
+      )}
+
+      {/* Alerta de inconsistência de cálculo */}
+      {errosEquacao.length > 0 && (
+        <div className="mx-4 mb-2 p-2 rounded-md border border-destructive/50 bg-destructive/10 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-bold text-destructive">Inconsistência de cálculo detectada</p>
+            <p className="text-muted-foreground">
+              Meses com divergência: {errosEquacao.map(e => `${e.mesLabel} (Δ${e.diferenca})`).join(', ')}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Equação: SI + Ent.Ext + Evol.E − Saí.Ext − Evol.S ≠ SF
+            </p>
+          </div>
+        </div>
       )}
 
       <div className="p-3 pt-2 flex justify-center">

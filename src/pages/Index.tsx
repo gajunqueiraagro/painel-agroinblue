@@ -35,6 +35,7 @@ import { ValorRebanhoTab } from './ValorRebanhoTab';
 import { ChuvasTab } from './ChuvasTab';
 import { VisaoAnualZootecnicaTab } from './VisaoAnualZootecnicaTab';
 import { AuditoriaZootecnicaTab } from './AuditoriaZootecnicaTab';
+import { AuditoriaTecnicaTab } from './AuditoriaTecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
@@ -145,6 +146,7 @@ const TITLES: Record<TabId, string> = {
   import_zoot_historico: 'Importação Zootécnica',
   historico_importacoes_zoot: 'Histórico Importações',
   auditoria_zoot: 'Auditoria Zootécnica',
+  auditoria_tecnica: 'Auditoria Técnica',
   planejamento_financeiro: 'Planejamento Financeiro',
 };
 
@@ -384,6 +386,7 @@ const Index = () => {
     indicadores: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
     auditoria_zoot: () => setActiveTab('lancar_zoo_hub'),
+    auditoria_tecnica: () => setActiveTab('lancar_zoo_hub'),
     preco_mercado: () => setActiveTab('precos_mercado_hub'),
     graficos_analise: goToVisaoZooHub,
     movimentacao: goToVisaoZooHub,
@@ -712,6 +715,7 @@ const Index = () => {
       )}
       {activeTab === 'auditoria' && <AuditoriaTab />}
       {activeTab === 'auditoria_zoot' && <AuditoriaZootecnicaTab />}
+      {activeTab === 'auditoria_tecnica' && <AuditoriaTecnicaTab />}
       {activeTab === 'auditoria_duplicidade' && (
         <AuditoriaDuplicidadeTab onBack={() => setActiveTab('financeiro_v2_hub')} />
       )}
