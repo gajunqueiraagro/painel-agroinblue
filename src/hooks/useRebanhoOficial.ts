@@ -382,14 +382,13 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
       const fechamentoIds = fechamentos.map(f => f.id);
 
-      // 2. Buscar itens consolidados
+      // 2. Buscar TODOS os itens (incluindo quantidade 0)
       const { data: itens, error: itensError } = await supabase
         .from('fechamento_pasto_itens')
         .select('fechamento_id, categoria_id, quantidade, peso_medio_kg')
-        .in('fechamento_id', fechamentoIds)
-        .gt('quantidade', 0);
+        .in('fechamento_id', fechamentoIds);
 
-      if (itensError || !itens?.length) return [];
+      if (itensError) return [];
 
       // 3. Consolidar por ano_mes + categoria_id
       const fechMap = new Map<string, string>();
@@ -398,7 +397,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       }
 
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
-      for (const item of itens) {
+      for (const item of (itens ?? [])) {
         const anoMes = fechMap.get(item.fechamento_id);
         if (!anoMes) continue;
         const key = `${anoMes}|${item.categoria_id}`;
@@ -459,24 +458,53 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   const rawCategorias = useMemo(() => {
     let rows = baseCategorias;
     if (resolvedGlobal || cenario !== 'meta') {
-      // noop — use baseCategorias as-is before overlay
+      // noop — use baseCategorias as-is before fechamento replacement
     } else {
       rows = normalizeMetaCategorias(baseCategorias, metaGmdRows);
     }
 
-    // Apply fechamento overlay for closed months (realizado only)
-    if (cenario === 'realizado' && overlayMap.size > 0) {
+    // ── REGRA ABSOLUTA: mês fechado = fonte exclusiva do fechamento de pastos ──
+    // Substitui saldo_final, peso_total_final, peso_medio_final, producao_biologica, gmd
+    // Categoria ausente no fechamento → zerada (saldo=0, peso=0)
+    if (cenario === 'realizado' && mesesFechados.size > 0) {
       rows = rows.map(row => {
         const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
         if (!mesesFechados.has(anoMes)) return row;
 
+        // Mês fechado: buscar dados oficiais do fechamento
         const fc = overlayMap.get(`${anoMes}|${row.categoria_id}`);
-        if (!fc) return row;
+
+        // Categoria ausente no fechamento → zero oficial
+        const saldoFinalOficial = fc?.qtd ?? 0;
+        const pesoTotalFinalOficial = fc?.peso_total ?? 0;
+        const pesoMedioFinalOficial = saldoFinalOficial > 0
+          ? roundNumber(pesoTotalFinalOficial / saldoFinalOficial, 2)
+          : null;
+
+        // Recalcular produção biológica com peso oficial do fechamento
+        const producaoBiologicaOficial = roundNumber(
+          pesoTotalFinalOficial
+          - row.peso_total_inicial
+          - row.peso_entradas_externas
+          + row.peso_saidas_externas
+          - row.peso_evol_cat_entrada
+          + row.peso_evol_cat_saida,
+          2,
+        );
+
+        // GMD oficial recalculado
+        const cabecasMedias = (row.saldo_inicial + saldoFinalOficial) / 2;
+        const gmdOficial = cabecasMedias > 0 && row.dias_mes > 0
+          ? roundNumber(producaoBiologicaOficial / cabecasMedias / row.dias_mes, 4)
+          : null;
 
         return {
           ...row,
-          peso_total_final: fc.peso_total,
-          peso_medio_final: fc.peso_medio,
+          saldo_final: saldoFinalOficial,
+          peso_total_final: pesoTotalFinalOficial,
+          peso_medio_final: pesoMedioFinalOficial,
+          producao_biologica: producaoBiologicaOficial,
+          gmd: gmdOficial,
           fonte_oficial_mes: 'fechamento' as const,
         };
       });
@@ -487,14 +515,59 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
   const baseFazenda = fazendaData ?? [];
 
-  // In global mode, synthesize farm-level rows from category aggregation
+  // ── rawFazenda: SEMPRE recalculado a partir de rawCategorias para meses fechados ──
   const rawFazenda = useMemo(() => {
     if (resolvedGlobal) {
       return buildFazendaRowsFromCategories(rawCategorias);
     }
-    if (cenario !== 'meta') return baseFazenda;
-    return buildMetaFazendaRows(rawCategorias, baseFazenda);
-  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias]);
+
+    if (cenario === 'meta') {
+      return buildMetaFazendaRows(rawCategorias, baseFazenda);
+    }
+
+    // Realizado: se há meses fechados, reconstruir rawFazenda inteiramente
+    // a partir de rawCategorias (já corrigido com dados oficiais)
+    if (mesesFechados.size > 0) {
+      // Build from rawCategorias for closed months, keep baseFazenda for open months
+      const fromCats = buildFazendaRowsFromCategories(rawCategorias);
+      const catByMes = new Map<string, ZootMensal>();
+      for (const r of fromCats) catByMes.set(r.mes_key, r);
+
+      const baseByMesMap = indexByMes(baseFazenda);
+
+      // Merge: closed months from categories, open months from base
+      const allMeses = new Set<string>();
+      for (const r of baseFazenda) allMeses.add(r.mes_key);
+      for (const r of fromCats) allMeses.add(r.mes_key);
+
+      const result: ZootMensal[] = [];
+      for (const mesKey of Array.from(allMeses).sort()) {
+        const anoMes = `${ano}-${mesKey}`;
+        if (mesesFechados.has(anoMes)) {
+          // Mês fechado: usar dados recalculados a partir de rawCategorias
+          const catRow = catByMes.get(mesKey);
+          if (catRow) {
+            // Preserve area_produtiva from base
+            const baseRow = baseByMesMap[mesKey];
+            result.push({
+              ...catRow,
+              area_produtiva_ha: baseRow?.area_produtiva_ha ?? catRow.area_produtiva_ha,
+              lotacao_ua_ha: baseRow?.area_produtiva_ha && catRow.ua_media
+                ? roundNumber(catRow.ua_media / baseRow.area_produtiva_ha, 2)
+                : catRow.lotacao_ua_ha,
+            });
+          }
+        } else {
+          // Mês aberto: usar view diretamente
+          const baseRow = baseByMesMap[mesKey];
+          if (baseRow) result.push(baseRow);
+        }
+      }
+      return result;
+    }
+
+    return baseFazenda;
+  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, mesesFechados, ano]);
 
   // ── Grouped data ──
   const byMes = useMemo(() => groupByMes(rawCategorias), [rawCategorias]);
