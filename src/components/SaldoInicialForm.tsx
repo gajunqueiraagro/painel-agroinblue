@@ -61,8 +61,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     CATEGORIAS.forEach(c => {
       const s = saldosIniciais.find(s => s.ano === anoForm && s.categoria === c.value);
       v[c.value] = s ? String(s.quantidade) : '';
-      p[c.value] = s?.pesoMedioKg ? String(s.pesoMedioKg) : '';
-      pr[c.value] = s?.precoKg ? String(s.precoKg) : '';
+      p[c.value] = s?.pesoMedioKg != null ? String(s.pesoMedioKg) : '';
+      pr[c.value] = s?.precoKg != null ? String(s.precoKg) : '';
     });
     setValores(v);
     setPesos(p);
