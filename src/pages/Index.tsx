@@ -72,6 +72,7 @@ import { Lancamento } from '@/types/cattle';
 import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
+import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
 
 export interface FiltroGlobal {
   ano: string;
@@ -392,6 +393,7 @@ const Index = () => {
     meta_preco: () => setActiveTab('precos_mercado_hub'),
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
+    planejamento_financeiro: () => setActiveTab('painel_consultor_hub'),
     precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
     conferencia_gmd: () => setActiveTab('painel_consultor'),
     // Financeiro (analysis) sub-screens
@@ -769,6 +771,9 @@ const Index = () => {
       )}
       {activeTab === 'import_zoot_historico' && (
         <ImportZootHistoricoTab />
+      )}
+      {activeTab === 'planejamento_financeiro' && (
+        <PlanejamentoFinanceiroTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       </div>
       {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
