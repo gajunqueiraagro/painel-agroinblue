@@ -55,21 +55,8 @@ export function PlanejamentoFinanceiroTab({ onBack, metaConsolidacao }: Props) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear + 1);
   const { clienteAtual } = useCliente();
-  const { fazendas: fazCtx } = useFazenda();
-
-  // ─── Fazenda selector ─────────────────────────────────────
-  const [fazendaId, setFazendaId] = useState('');
-  const fazendaOptions = useMemo<FazendaOption[]>(() => {
-    if (!fazCtx) return [];
-    return fazCtx.map((f: any) => ({ id: f.id, nome: f.nome }));
-  }, [fazCtx]);
-
-  // Auto-select first fazenda
-  useEffect(() => {
-    if (!fazendaId && fazendaOptions.length > 0) {
-      setFazendaId(fazendaOptions[0].id);
-    }
-  }, [fazendaOptions, fazendaId]);
+  const { fazendaAtual } = useFazenda();
+  const fazendaId = fazendaAtual?.id || '';
 
   const {
     data, loading, reload,
