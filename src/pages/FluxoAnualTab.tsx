@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
