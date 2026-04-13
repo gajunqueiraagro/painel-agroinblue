@@ -466,48 +466,118 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     // ── REGRA ABSOLUTA: mês fechado = fonte exclusiva do fechamento de pastos ──
     // Substitui saldo_final, peso_total_final, peso_medio_final, producao_biologica, gmd
     // Categoria ausente no fechamento → zerada (saldo=0, peso=0)
+    // ENCADEAMENTO: peso_total_final oficial do mês N → peso_total_inicial do mês N+1
     if (cenario === 'realizado' && mesesFechados.size > 0) {
-      rows = rows.map(row => {
-        const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
-        if (!mesesFechados.has(anoMes)) return row;
+      // Agrupar por categoria para processamento sequencial
+      const byCat = new Map<string, { indices: number[]; rows: ZootCategoriaMensal[] }>();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const key = `${row.fazenda_id}|${row.categoria_id}`;
+        if (!byCat.has(key)) byCat.set(key, { indices: [], rows: [] });
+        const entry = byCat.get(key)!;
+        entry.indices.push(i);
+        entry.rows.push(row);
+      }
 
-        // Mês fechado: buscar dados oficiais do fechamento
-        const fc = overlayMap.get(`${anoMes}|${row.categoria_id}`);
+      const result = [...rows];
 
-        // Categoria ausente no fechamento → zero oficial
-        const saldoFinalOficial = fc?.qtd ?? 0;
-        const pesoTotalFinalOficial = fc?.peso_total ?? 0;
-        const pesoMedioFinalOficial = saldoFinalOficial > 0
-          ? roundNumber(pesoTotalFinalOficial / saldoFinalOficial, 2)
-          : null;
+      for (const { indices, rows: catRows } of byCat.values()) {
+        // Ordenar por mês para garantir sequência
+        const sorted = catRows.map((r, idx) => ({ row: r, origIdx: indices[idx] }))
+          .sort((a, b) => a.row.mes - b.row.mes);
 
-        // Recalcular produção biológica com peso oficial do fechamento
-        const producaoBiologicaOficial = roundNumber(
-          pesoTotalFinalOficial
-          - row.peso_total_inicial
-          - row.peso_entradas_externas
-          + row.peso_saidas_externas
-          - row.peso_evol_cat_entrada
-          + row.peso_evol_cat_saida,
-          2,
-        );
+        let prevPesoTotalFinalOficial: number | null = null;
 
-        // GMD oficial recalculado
-        const cabecasMedias = (row.saldo_inicial + saldoFinalOficial) / 2;
-        const gmdOficial = cabecasMedias > 0 && row.dias_mes > 0
-          ? roundNumber(producaoBiologicaOficial / cabecasMedias / row.dias_mes, 4)
-          : null;
+        for (const { row, origIdx } of sorted) {
+          const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
+          const isMesFechado = mesesFechados.has(anoMes);
 
-        return {
-          ...row,
-          saldo_final: saldoFinalOficial,
-          peso_total_final: pesoTotalFinalOficial,
-          peso_medio_final: pesoMedioFinalOficial,
-          producao_biologica: producaoBiologicaOficial,
-          gmd: gmdOficial,
-          fonte_oficial_mes: 'fechamento' as const,
-        };
-      });
+          // Propagar peso_total_final oficial do mês anterior como peso_total_inicial
+          let pesoTotalInicialCorrigido = row.peso_total_inicial;
+          if (prevPesoTotalFinalOficial !== null) {
+            pesoTotalInicialCorrigido = prevPesoTotalFinalOficial;
+          }
+
+          if (!isMesFechado) {
+            // Mês aberto: apenas propagar peso_total_inicial se houve fechamento anterior
+            if (prevPesoTotalFinalOficial !== null) {
+              const producaoBioCorrigida = roundNumber(
+                row.peso_total_final
+                - pesoTotalInicialCorrigido
+                - row.peso_entradas_externas
+                + row.peso_saidas_externas
+                - row.peso_evol_cat_entrada
+                + row.peso_evol_cat_saida,
+                2,
+              );
+              const cabMedias = (row.saldo_inicial + row.saldo_final) / 2;
+              const gmdCorrigido = cabMedias > 0 && row.dias_mes > 0
+                ? roundNumber(producaoBioCorrigida / cabMedias / row.dias_mes, 4)
+                : null;
+
+              result[origIdx] = {
+                ...row,
+                peso_total_inicial: pesoTotalInicialCorrigido,
+                peso_medio_inicial: row.saldo_inicial > 0
+                  ? roundNumber(pesoTotalInicialCorrigido / row.saldo_inicial, 2)
+                  : null,
+                producao_biologica: producaoBioCorrigida,
+                gmd: gmdCorrigido,
+              };
+            }
+            // Para meses abertos, não atualizar prevPesoTotalFinalOficial
+            // (a cadeia oficial para ao encontrar mês aberto)
+            prevPesoTotalFinalOficial = null;
+            continue;
+          }
+
+          // Mês fechado: buscar dados oficiais do fechamento
+          const fc = overlayMap.get(`${anoMes}|${row.categoria_id}`);
+
+          // Categoria ausente no fechamento → zero oficial
+          const saldoFinalOficial = fc?.qtd ?? 0;
+          const pesoTotalFinalOficial = fc?.peso_total ?? 0;
+          const pesoMedioFinalOficial = saldoFinalOficial > 0
+            ? roundNumber(pesoTotalFinalOficial / saldoFinalOficial, 2)
+            : null;
+
+          // Recalcular produção biológica com peso oficial + peso inicial corrigido
+          const producaoBiologicaOficial = roundNumber(
+            pesoTotalFinalOficial
+            - pesoTotalInicialCorrigido
+            - row.peso_entradas_externas
+            + row.peso_saidas_externas
+            - row.peso_evol_cat_entrada
+            + row.peso_evol_cat_saida,
+            2,
+          );
+
+          // GMD oficial recalculado
+          const cabecasMedias = (row.saldo_inicial + saldoFinalOficial) / 2;
+          const gmdOficial = cabecasMedias > 0 && row.dias_mes > 0
+            ? roundNumber(producaoBiologicaOficial / cabecasMedias / row.dias_mes, 4)
+            : null;
+
+          result[origIdx] = {
+            ...row,
+            saldo_final: saldoFinalOficial,
+            peso_total_inicial: pesoTotalInicialCorrigido,
+            peso_medio_inicial: row.saldo_inicial > 0
+              ? roundNumber(pesoTotalInicialCorrigido / row.saldo_inicial, 2)
+              : null,
+            peso_total_final: pesoTotalFinalOficial,
+            peso_medio_final: pesoMedioFinalOficial,
+            producao_biologica: producaoBiologicaOficial,
+            gmd: gmdOficial,
+            fonte_oficial_mes: 'fechamento' as const,
+          };
+
+          // Propagar para o mês seguinte
+          prevPesoTotalFinalOficial = pesoTotalFinalOficial;
+        }
+      }
+
+      rows = result;
     }
 
     return rows;
