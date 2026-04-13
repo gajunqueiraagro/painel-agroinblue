@@ -269,7 +269,7 @@ export function montarInserts(
         peso_medio_kg: l.peso_medio_kg,
         peso_carcaca_kg: l.peso_carcaca_kg,
         preco_arroba: l.preco_arroba,
-        preco_por_cabeca: l.preco_cabeca,
+        preco_medio_cabeca: l.preco_cabeca,
         valor_total: l.valor_total,
         fazenda_destino: fazDestinoId,
         comprador_fornecedor: l.comprador_fornecedor || null,
