@@ -4,6 +4,17 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+/** Check if P1 (Mapa de Pastos) is officially closed for this fazenda+month */
+async function checkP1Oficial(fazendaId: string, anoMes: string): Promise<{ oficial: boolean; totalPastos: number; totalFechados: number }> {
+  const [pastosRes, fechadosRes] = await Promise.all([
+    supabase.from('pastos').select('id', { count: 'exact', head: true }).eq('fazenda_id', fazendaId).eq('ativo', true),
+    supabase.from('fechamento_pastos').select('id', { count: 'exact', head: true }).eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).eq('status', 'fechado'),
+  ]);
+  const totalPastos = pastosRes.count ?? 0;
+  const totalFechados = fechadosRes.count ?? 0;
+  return { oficial: totalPastos > 0 && totalFechados >= totalPastos, totalPastos, totalFechados };
+}
+
 export interface PrecoCategoria {
   categoria: string;
   preco_kg: number;
