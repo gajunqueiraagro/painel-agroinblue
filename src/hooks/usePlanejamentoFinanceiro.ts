@@ -16,10 +16,14 @@ export interface PlanejamentoFinanceiroRow {
   fazenda_id: string;
   ano: number;
   mes: number;
+  macro_custo: string | null;
+  grupo_custo: string | null;
   centro_custo: string;
   subcentro: string | null;
+  escopo_negocio: string | null;
   tipo_custo: 'fixo' | 'variavel';
   driver: string | null;
+  unidade_driver: string | null;
   valor_base: number;
   quantidade_driver: number;
   valor_planejado: number;
@@ -39,6 +43,16 @@ export const DRIVERS_DISPONIVEIS = [
   { value: 'cabecas_recria', label: 'Cabeças Recria' },
   { value: 'cabecas_matrizes', label: 'Cabeças Matrizes' },
 ] as const;
+
+/**
+ * Mapeamento canônico: subcentros do plano de contas que usam driver zootécnico.
+ * Regra: nutrição = custo variável por cabeça/mês.
+ */
+export const DRIVER_POR_SUBCENTRO: Record<string, { driver: string; unidade: string }> = {
+  'Nutrição Engorda': { driver: 'cabecas_engorda', unidade: 'cab/mes' },
+  'Nutrição Recria': { driver: 'cabecas_recria', unidade: 'cab/mes' },
+  'Nutrição Cria': { driver: 'cabecas_matrizes', unidade: 'cab/mes' },
+};
 
 export function usePlanejamentoFinanceiro(ano: number) {
   const { fazendaAtual } = useFazenda();
@@ -121,26 +135,34 @@ export function usePlanejamentoFinanceiro(ano: number) {
 
   // ─── Replicar valor_base para todos os meses (Jan–Dez) ────
 
-  const replicarParaMeses = useCallback(async (
-    centroCusto: string,
-    subcentro: string | null,
-    tipoCusto: 'fixo' | 'variavel',
-    valorBase: number,
-    driver: string | null,
-  ) => {
+  const replicarParaMeses = useCallback(async (params: {
+    centro_custo: string;
+    subcentro: string | null;
+    macro_custo: string | null;
+    grupo_custo: string | null;
+    escopo_negocio: string | null;
+    tipo_custo: 'fixo' | 'variavel';
+    driver: string | null;
+    unidade_driver: string | null;
+    valor_base: number;
+  }) => {
     if (!fazendaId || !clienteId) return;
     const rows = Array.from({ length: 12 }, (_, i) => ({
       cliente_id: clienteId,
       fazenda_id: fazendaId,
       ano,
       mes: i + 1,
-      centro_custo: centroCusto,
-      subcentro,
-      tipo_custo: tipoCusto,
-      driver,
-      valor_base: valorBase,
+      centro_custo: params.centro_custo,
+      subcentro: params.subcentro,
+      macro_custo: params.macro_custo,
+      grupo_custo: params.grupo_custo,
+      escopo_negocio: params.escopo_negocio,
+      tipo_custo: params.tipo_custo,
+      driver: params.driver,
+      unidade_driver: params.unidade_driver,
+      valor_base: params.valor_base,
       quantidade_driver: 0,
-      valor_planejado: tipoCusto === 'fixo' ? valorBase : 0,
+      valor_planejado: params.tipo_custo === 'fixo' ? params.valor_base : 0,
       origem: 'replicado' as const,
       cenario: 'meta',
       observacao: null,
@@ -148,7 +170,7 @@ export function usePlanejamentoFinanceiro(ano: number) {
     try {
       const { error } = await (supabase
         .from('planejamento_financeiro' as any)
-        .upsert(rows, { onConflict: 'fazenda_id,ano,mes,subcentro,cenario' }) as any);
+        .upsert(rows, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
       if (error) throw error;
       toast.success('Replicado para 12 meses');
       await load();
@@ -182,8 +204,12 @@ export function usePlanejamentoFinanceiro(ano: number) {
         mes: r.mes,
         centro_custo: r.centro_custo,
         subcentro: r.subcentro,
+        macro_custo: r.macro_custo,
+        grupo_custo: r.grupo_custo,
+        escopo_negocio: r.escopo_negocio,
         tipo_custo: r.tipo_custo,
         driver: r.driver,
+        unidade_driver: r.unidade_driver,
         valor_base: r.valor_base,
         quantidade_driver: 0,
         valor_planejado: r.tipo_custo === 'fixo' ? r.valor_base : 0,
@@ -193,7 +219,7 @@ export function usePlanejamentoFinanceiro(ano: number) {
       }));
       const { error } = await (supabase
         .from('planejamento_financeiro' as any)
-        .upsert(rows, { onConflict: 'fazenda_id,ano,mes,subcentro,cenario' }) as any);
+        .upsert(rows, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
       if (error) throw error;
       toast.success(`${rows.length} linhas importadas de ${anoAnterior}`);
       await load();
@@ -218,12 +244,11 @@ export function usePlanejamentoFinanceiro(ano: number) {
       valor_planejado: Math.round(r.valor_planejado * fator * 100) / 100,
       origem: 'calculado' as const,
     }));
-    // Remove fields that aren't in insert/update
     const payloads = updates.map(({ id, created_at, updated_at, ...rest }) => rest);
     try {
       const { error } = await (supabase
         .from('planejamento_financeiro' as any)
-        .upsert(payloads, { onConflict: 'fazenda_id,ano,mes,subcentro,cenario' }) as any);
+        .upsert(payloads, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
       if (error) throw error;
       toast.success(`Ajuste de ${percentual > 0 ? '+' : ''}${percentual}% aplicado`);
       await load();
@@ -236,7 +261,7 @@ export function usePlanejamentoFinanceiro(ano: number) {
   // ─── Recalcular variáveis com drivers zootécnicos ─────────
 
   const recalcularVariaveis = useCallback(async (
-    driverValues: Record<string, number[]>, // driver → [12 values by month]
+    driverValues: Record<string, number[]>,
   ) => {
     if (!fazendaId) return;
     const variaveis = data.filter(r => r.tipo_custo === 'variavel' && r.driver);
@@ -255,8 +280,12 @@ export function usePlanejamentoFinanceiro(ano: number) {
         mes: r.mes,
         centro_custo: r.centro_custo,
         subcentro: r.subcentro,
+        macro_custo: r.macro_custo,
+        grupo_custo: r.grupo_custo,
+        escopo_negocio: r.escopo_negocio,
         tipo_custo: r.tipo_custo,
         driver: r.driver,
+        unidade_driver: r.unidade_driver,
         valor_base: r.valor_base,
         quantidade_driver: qtd,
         valor_planejado: Math.round(r.valor_base * qtd * 100) / 100,
@@ -268,7 +297,7 @@ export function usePlanejamentoFinanceiro(ano: number) {
     try {
       const { error } = await (supabase
         .from('planejamento_financeiro' as any)
-        .upsert(updates, { onConflict: 'fazenda_id,ano,mes,subcentro,cenario' }) as any);
+        .upsert(updates, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
       if (error) throw error;
       toast.success(`${updates.length} linhas variáveis recalculadas`);
       await load();
@@ -280,13 +309,15 @@ export function usePlanejamentoFinanceiro(ano: number) {
 
   // ─── Helpers de agregação ─────────────────────────────────
 
-  /** Agrupa linhas por subcentro, retornando array de 12 valores planejados + total */
   const getLinhasAgrupadas = useCallback(() => {
     const map = new Map<string, {
       centro_custo: string;
       subcentro: string | null;
+      macro_custo: string | null;
+      grupo_custo: string | null;
       tipo_custo: 'fixo' | 'variavel';
       driver: string | null;
+      unidade_driver: string | null;
       valor_base: number;
       meses: number[];
       total: number;
@@ -299,8 +330,11 @@ export function usePlanejamentoFinanceiro(ano: number) {
         map.set(key, {
           centro_custo: r.centro_custo,
           subcentro: r.subcentro,
+          macro_custo: r.macro_custo,
+          grupo_custo: r.grupo_custo,
           tipo_custo: r.tipo_custo,
           driver: r.driver,
+          unidade_driver: r.unidade_driver,
           valor_base: r.valor_base,
           meses: new Array(12).fill(0),
           total: 0,
@@ -311,7 +345,6 @@ export function usePlanejamentoFinanceiro(ano: number) {
       group.meses[r.mes - 1] = r.valor_planejado;
       group.ids[r.mes - 1] = r.id;
       group.total += r.valor_planejado;
-      // Take latest valor_base/tipo_custo/driver
       group.valor_base = r.valor_base;
       group.tipo_custo = r.tipo_custo;
       group.driver = r.driver;

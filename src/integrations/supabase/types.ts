@@ -3781,14 +3781,18 @@ export type Database = {
           cliente_id: string
           created_at: string
           driver: string | null
+          escopo_negocio: string | null
           fazenda_id: string
+          grupo_custo: string | null
           id: string
+          macro_custo: string | null
           mes: number
           observacao: string | null
           origem: string
           quantidade_driver: number
           subcentro: string | null
           tipo_custo: string
+          unidade_driver: string | null
           updated_at: string
           valor_base: number
           valor_planejado: number
@@ -3800,14 +3804,18 @@ export type Database = {
           cliente_id: string
           created_at?: string
           driver?: string | null
+          escopo_negocio?: string | null
           fazenda_id: string
+          grupo_custo?: string | null
           id?: string
+          macro_custo?: string | null
           mes: number
           observacao?: string | null
           origem?: string
           quantidade_driver?: number
           subcentro?: string | null
           tipo_custo?: string
+          unidade_driver?: string | null
           updated_at?: string
           valor_base?: number
           valor_planejado?: number
@@ -3819,14 +3827,18 @@ export type Database = {
           cliente_id?: string
           created_at?: string
           driver?: string | null
+          escopo_negocio?: string | null
           fazenda_id?: string
+          grupo_custo?: string | null
           id?: string
+          macro_custo?: string | null
           mes?: number
           observacao?: string | null
           origem?: string
           quantidade_driver?: number
           subcentro?: string | null
           tipo_custo?: string
+          unidade_driver?: string | null
           updated_at?: string
           valor_base?: number
           valor_planejado?: number
