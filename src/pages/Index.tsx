@@ -386,6 +386,7 @@ const Index = () => {
     indicadores: goToVisaoZooHub,
     visao_anual_zoo: goToVisaoZooHub,
     auditoria_zoot: () => setActiveTab('lancar_zoo_hub'),
+    auditoria_tecnica: () => setActiveTab('lancar_zoo_hub'),
     preco_mercado: () => setActiveTab('precos_mercado_hub'),
     graficos_analise: goToVisaoZooHub,
     movimentacao: goToVisaoZooHub,
