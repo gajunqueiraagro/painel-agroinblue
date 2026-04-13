@@ -573,7 +573,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const baseInicialIncompleta = useMemo(() => {
     if (!isAnoInicial) return false;
     if (saldosIniciaisAnoFiltro.length === 0) return true;
-    return saldosIniciaisAnoFiltro.some(s => (s.quantidade || 0) > 0 && (s.preco_kg == null || s.preco_kg <= 0));
+    return saldosIniciaisAnoFiltro.some(s => (s.quantidade || 0) > 0 && (s.precoKg == null || s.precoKg <= 0));
   }, [isAnoInicial, saldosIniciaisAnoFiltro]);
 
   const metricasSaldosIniciais = useMemo((): MetricasExibicao | null => {
@@ -587,8 +587,8 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
     saldosIniciaisAnoFiltro.forEach(s => {
       const qty = s.quantidade || 0;
-      const peso = s.peso_medio_kg || 0;
-      const preco = s.preco_kg || 0;
+      const peso = s.pesoMedioKg || 0;
+      const preco = s.precoKg || 0;
       cabecas += qty;
       pesoTotalKg += qty * peso;
       valor += qty * peso * preco;
