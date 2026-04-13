@@ -382,14 +382,13 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
       const fechamentoIds = fechamentos.map(f => f.id);
 
-      // 2. Buscar itens consolidados
+      // 2. Buscar TODOS os itens (incluindo quantidade 0)
       const { data: itens, error: itensError } = await supabase
         .from('fechamento_pasto_itens')
         .select('fechamento_id, categoria_id, quantidade, peso_medio_kg')
-        .in('fechamento_id', fechamentoIds)
-        .gt('quantidade', 0);
+        .in('fechamento_id', fechamentoIds);
 
-      if (itensError || !itens?.length) return [];
+      if (itensError) return [];
 
       // 3. Consolidar por ano_mes + categoria_id
       const fechMap = new Map<string, string>();
@@ -398,7 +397,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       }
 
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
-      for (const item of itens) {
+      for (const item of (itens ?? [])) {
         const anoMes = fechMap.get(item.fechamento_id);
         if (!anoMes) continue;
         const key = `${anoMes}|${item.categoria_id}`;
