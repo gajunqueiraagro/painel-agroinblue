@@ -15,6 +15,7 @@ import {
   validarLinhas,
   montarInserts,
   gerarTemplateHistorico,
+  computeFileHash,
   CAMPOS_OBRIGATORIOS,
   type LinhaValidada,
 } from '@/lib/importZootHistorico';
@@ -31,6 +32,8 @@ export default function ImportZootHistoricoTab() {
   const [inserindo, setInserindo] = useState(false);
   const [importado, setImportado] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const tabelaRef = useRef<HTMLDivElement>(null);
 
   const fazendasMap = useMemo(() => {
