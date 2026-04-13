@@ -19,6 +19,7 @@ import { DRIVER_POR_SUBCENTRO } from '@/lib/calculos/driverZootecnico';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { loadPlanoContasCompleto, type PlanoContasItem } from '@/lib/financeiro/planoContasBuilder';
 import { Download, Percent, RefreshCw, Plus, Trash2 } from 'lucide-react';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
