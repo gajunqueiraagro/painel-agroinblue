@@ -266,12 +266,34 @@ export function useValorRebanhoGlobal(
 
   useEffect(() => { loadAllData(); }, [loadAllData]);
 
+  // ---------------------------------------------------------------------------
+  // Filtro: fazendas com presença real de rebanho no período
+  // Fazenda sem rebanho histórico no mês não entra no consolidado.
+  // ---------------------------------------------------------------------------
+  const getFazendasComRebanho = useCallback((mes: string): string[] => {
+    const [keyAno, keyMes] = mes.split('-').map(Number);
+    return fazendaIds.filter(fid => {
+      // Tem snapshot (header ou items) para esse mês?
+      if (snapshotHeaders[fid]?.[mes]) return true;
+      if (snapshotItems[fid]?.[mes]?.length > 0) return true;
+      // Tem dados zootécnicos (saldo real) para esse mês?
+      const farmZoot = zootData.get(fid)?.get(keyMes);
+      if (farmZoot && farmZoot.some(r => r.saldo_final > 0)) return true;
+      // Tem preços lançados para esse mês?
+      if (precosAllFarms[fid]?.[mes] && Object.keys(precosAllFarms[fid][mes]).length > 0) return true;
+      return false;
+    });
+  }, [fazendaIds, snapshotHeaders, snapshotItems, zootData, precosAllFarms]);
+
   // Determine global fonteMes for a given anoMes
   const getGlobalFonteMes = useCallback((mes: string): GlobalFonteMes => {
+    const fazendasAtivas = getFazendasComRebanho(mes);
+    if (fazendasAtivas.length === 0) return 'live';
+
     let fechadas = 0;
     let comDetalhes = 0;
 
-    fazendaIds.forEach(fid => {
+    fazendasAtivas.forEach(fid => {
       const header = snapshotHeaders[fid]?.[mes];
       if (header) {
         fechadas++;
@@ -281,10 +303,10 @@ export function useValorRebanhoGlobal(
     });
 
     if (fechadas === 0) return 'live';
-    if (fechadas === fazendaIds.length && comDetalhes === fazendaIds.length) return 'snapshot';
-    if (fechadas === fazendaIds.length && comDetalhes < fazendaIds.length) return 'snapshot_incompleto';
+    if (fechadas === fazendasAtivas.length && comDetalhes === fazendasAtivas.length) return 'snapshot';
+    if (fechadas === fazendasAtivas.length && comDetalhes < fazendasAtivas.length) return 'snapshot_incompleto';
     return 'misto'; // Some farms closed, some open
-  }, [fazendaIds, snapshotHeaders, snapshotItems]);
+  }, [getFazendasComRebanho, snapshotHeaders, snapshotItems]);
 
   // Compute live rows for a farm for a given month — FONTE OFICIAL: zootData
   const computeLiveRowsForFarm = useCallback((
@@ -320,12 +342,15 @@ export function useValorRebanhoGlobal(
     });
   }, [zootData, precosAllFarms]);
 
-  // Aggregate rows for a given month
+  // Aggregate rows for a given month — only fazendas with real herd presence
   const getAggregatedRowsForMonth = useCallback((mes: string, ano: number, mesNum: number): GlobalCategoriaRow[] => {
+    const fazendasAtivas = getFazendasComRebanho(mes);
+    if (fazendasAtivas.length === 0) return [];
+
     const fonte = getGlobalFonteMes(mes);
     const allItems: SnapshotDetalheCategoria[] = [];
 
-    fazendaIds.forEach(fid => {
+    fazendasAtivas.forEach(fid => {
       const hasSnapshot = snapshotItems[fid]?.[mes]?.length > 0;
 
       if (fonte === 'snapshot' && hasSnapshot) {
@@ -342,7 +367,7 @@ export function useValorRebanhoGlobal(
 
     if (fonte === 'snapshot_incompleto') return [];
     return aggregateSnapshotItems(allItems, categorias);
-  }, [fazendaIds, snapshotItems, getGlobalFonteMes, computeLiveRowsForFarm, categorias]);
+  }, [getFazendasComRebanho, snapshotItems, getGlobalFonteMes, computeLiveRowsForFarm, categorias]);
 
   // Current month data
   const fonteMes = useMemo(() => getGlobalFonteMes(anoMes), [getGlobalFonteMes, anoMes]);
@@ -368,20 +393,22 @@ export function useValorRebanhoGlobal(
     return metricsFromRows(dezRows);
   }, [getGlobalFonteMes, getAggregatedRowsForMonth, anoMesDezAnterior, anoFiltro]);
 
-  // Historico for month bar + charts
+  // Historico for month bar + charts — only fazendas with real herd presence
   const historicoPorMes = useMemo(() => {
     const map: Record<string, HistoricoMesGlobal> = {};
-    // Include Dec(ano-1) for chart "I" point
     const allKeys = [
       `${Number(anoFiltro) - 1}-12`,
       ...Array.from({ length: 12 }, (_, i) => `${anoFiltro}-${String(i + 1).padStart(2, '0')}`),
     ];
     for (const key of allKeys) {
+      const fazendasAtivas = getFazendasComRebanho(key);
+      if (fazendasAtivas.length === 0) continue;
+
       let totalValor = 0;
       let totalPeso = 0;
       let todasFechadas = true;
 
-      fazendaIds.forEach(fid => {
+      fazendasAtivas.forEach(fid => {
         const header = snapshotHeaders[fid]?.[key];
         if (header) {
           totalValor += header.valor;
@@ -391,12 +418,12 @@ export function useValorRebanhoGlobal(
         }
       });
 
-      if (todasFechadas && fazendaIds.length > 0) {
+      if (todasFechadas) {
         map[key] = { valor: totalValor, pesoKg: totalPeso };
       }
     }
     return map;
-  }, [anoFiltro, fazendaIds, snapshotHeaders]);
+  }, [anoFiltro, getFazendasComRebanho, snapshotHeaders]);
 
   // Historico detalhado for snapshot rows
   const historicoDetalhado = useMemo(() => {
@@ -405,8 +432,9 @@ export function useValorRebanhoGlobal(
       const key = `${anoFiltro}-${String(m).padStart(2, '0')}`;
       const fonte = getGlobalFonteMes(key);
       if (fonte === 'snapshot') {
+        const fazendasAtivas = getFazendasComRebanho(key);
         const allItems: SnapshotDetalheCategoria[] = [];
-        fazendaIds.forEach(fid => {
+        fazendasAtivas.forEach(fid => {
           const items = snapshotItems[fid]?.[key];
           if (items) allItems.push(...items);
         });
@@ -414,12 +442,13 @@ export function useValorRebanhoGlobal(
       }
     }
     return map;
-  }, [anoFiltro, fazendaIds, snapshotItems, getGlobalFonteMes]);
+  }, [anoFiltro, getFazendasComRebanho, snapshotItems, getGlobalFonteMes]);
 
-  // Count fazendas fechadas for selected month
+  // Count fazendas with herd and fechadas for selected month
+  const fazendasAtivasMesSelecionado = useMemo(() => getFazendasComRebanho(anoMes), [getFazendasComRebanho, anoMes]);
   const fazendasFechadas = useMemo(() => {
-    return fazendaIds.filter(fid => snapshotHeaders[fid]?.[anoMes]).length;
-  }, [fazendaIds, snapshotHeaders, anoMes]);
+    return fazendasAtivasMesSelecionado.filter(fid => snapshotHeaders[fid]?.[anoMes]).length;
+  }, [fazendasAtivasMesSelecionado, snapshotHeaders, anoMes]);
 
   return {
     rows,
@@ -431,6 +460,6 @@ export function useValorRebanhoGlobal(
     historicoDetalhado,
     loading,
     fazendasFechadas,
-    fazendasTotal: fazendaIds.length,
+    fazendasTotal: fazendasAtivasMesSelecionado.length,
   };
 }
