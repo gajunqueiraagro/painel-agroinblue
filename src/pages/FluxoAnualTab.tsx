@@ -176,13 +176,16 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
                 const valor = t?.saldo_inicial;
+                const isNeg = valor != null && valor < 0;
                 return (
                   <td
                     key={m.key}
-                    className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
+                    className={`px-1 py-1 text-center font-extrabold tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
                     onClick={() => setDrilldownMonth(m.key)}
+                    title={isNeg ? '⚠ Saldo inicial negativo — verificar consistência' : undefined}
                   >
                     {valor != null ? fmtNum(valor) : '–'}
+                    {isNeg && <span className="text-[7px] ml-0.5">⚠</span>}
                   </td>
                 );
               })}
@@ -228,13 +231,16 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
                 const saldoFim = t?.saldo_final;
+                const isNeg = saldoFim != null && saldoFim < 0;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold tabular-nums ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
+                      title={isNeg ? '⚠ Saldo final negativo — verificar saídas vs entradas' : undefined}>
                     {saldoFim != null ? fmtNum(saldoFim) : '–'}
+                    {isNeg && <span className="text-[7px] ml-0.5">⚠</span>}
                   </td>
                 );
               })}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
+              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums bg-primary/20 border-l border-border/60 ${(totaisPorMes[12]?.saldo_final ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
                 {fmtNum(totaisPorMes[12]?.saldo_final)}
               </td>
             </tr>

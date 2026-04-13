@@ -2589,6 +2589,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
+                  {/* Rastreabilidade de origem */}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className={`text-[8px] px-1 py-0.5 rounded ${
+                      l.origemRegistro === 'importacao_historica' ? 'bg-blue-100 text-blue-700' :
+                      l.origemRegistro === 'manual' ? 'bg-muted text-muted-foreground' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {l.origemRegistro === 'importacao_historica' ? '📥 Importação' : l.origemRegistro || 'manual'}
+                    </span>
+                    {l.cenario === 'meta' && (
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-orange-100 text-orange-700">META</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
                   {l.tipo === 'abate' && (l.statusOperacional === 'programado' || l.statusOperacional === 'realizado') && (
