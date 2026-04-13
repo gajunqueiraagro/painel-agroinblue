@@ -143,6 +143,7 @@ const TITLES: Record<TabId, string> = {
   conferencia_gmd: 'Conferência de GMD',
   import_zoot_historico: 'Importação Zootécnica',
   historico_importacoes_zoot: 'Histórico Importações',
+  auditoria_zoot: 'Auditoria Zootécnica',
   planejamento_financeiro: 'Planejamento Financeiro',
 };
 
