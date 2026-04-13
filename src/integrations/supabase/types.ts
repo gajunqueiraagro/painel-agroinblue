@@ -4808,6 +4808,10 @@ export type Database = {
           valor: number
         }[]
       }
+      can_close_valor_rebanho: {
+        Args: { _ano_mes: string; _fazenda_id: string }
+        Returns: Json
+      }
       can_manage_financeiro_importacao_v2: {
         Args: { _cliente_id: string }
         Returns: boolean
