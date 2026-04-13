@@ -382,41 +382,72 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
     setBulkClosing(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Separar pastos que já têm fechamento dos que precisam ser criados
       const pastosParaFechar: string[] = [];
+      const pastosParaCriar: string[] = [];
+      const idsParaAtualizar: string[] = [];
+
       for (const pasto of pastosAtivos) {
         const fech = getFechamento(pasto.id);
-        if (!fech || fech.status !== 'fechado') pastosParaFechar.push(pasto.id);
+        if (fech && fech.status === 'fechado') continue; // já fechado
+        if (fech) {
+          pastosParaFechar.push(pasto.id);
+          idsParaAtualizar.push(fech.id);
+        } else {
+          pastosParaCriar.push(pasto.id);
+        }
       }
-      if (pastosParaFechar.length === 0) {
+
+      if (pastosParaCriar.length === 0 && idsParaAtualizar.length === 0) {
         toast.info('Todos os pastos já estão fechados.');
         setBulkClosing(false);
         setConfirmBulkOpen(false);
         return;
       }
 
-      let erros = 0;
       const errosMsgs: string[] = [];
-      for (const pastoId of pastosParaFechar) {
-        let fech = getFechamento(pastoId);
-        if (!fech) {
-          fech = await criarFechamento(pastoId, anoMes);
-          if (!fech) { erros++; errosMsgs.push(`Pasto não pôde ser criado`); continue; }
-        }
-        const { error } = await supabase
-          .from('fechamento_pastos')
-          .update({ status: 'fechado', responsavel_nome: FECHAMENTO_GLOBAL_MARKER })
-          .eq('id', fech.id);
-        if (error) {
-          erros++;
-          errosMsgs.push(error.message || 'Erro desconhecido');
+
+      // 1) Batch insert: criar fechamentos faltantes em uma única chamada
+      if (pastosParaCriar.length > 0) {
+        const rowsToInsert = pastosParaCriar.map(pastoId => ({
+          pasto_id: pastoId,
+          fazenda_id: fazendaAtual!.id,
+          cliente_id: fazendaAtual!.cliente_id!,
+          ano_mes: anoMes,
+          status: 'fechado',
+          responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
+        }));
+
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
+          const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
+          const { error } = await supabase.from('fechamento_pastos').insert(batch);
+          if (error) {
+            errosMsgs.push(`Criar: ${error.message}`);
+          }
         }
       }
 
-      if (erros > 0) {
-        toast.error(`${erros} pasto(s) falharam: ${errosMsgs[0]}${errosMsgs.length > 1 ? ` (+${errosMsgs.length - 1})` : ''}`);
+      // 2) Batch update: atualizar status dos existentes em uma única chamada
+      if (idsParaAtualizar.length > 0) {
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < idsParaAtualizar.length; i += BATCH_SIZE) {
+          const batch = idsParaAtualizar.slice(i, i + BATCH_SIZE);
+          const { error } = await supabase
+            .from('fechamento_pastos')
+            .update({ status: 'fechado', responsavel_nome: FECHAMENTO_GLOBAL_MARKER })
+            .in('id', batch);
+          if (error) {
+            errosMsgs.push(`Fechar: ${error.message}`);
+          }
+        }
+      }
+
+      const totalProcessados = pastosParaCriar.length + idsParaAtualizar.length;
+      if (errosMsgs.length > 0) {
+        toast.error(`Erro(s): ${errosMsgs[0]}${errosMsgs.length > 1 ? ` (+${errosMsgs.length - 1})` : ''}`);
       } else {
-        toast.success(`${pastosParaFechar.length} pasto(s) fechado(s) com sucesso ✓`);
+        toast.success(`${totalProcessados} pasto(s) fechado(s) com sucesso ✓`);
       }
       await loadFechamentos(anoMes);
     } catch (e: any) {
