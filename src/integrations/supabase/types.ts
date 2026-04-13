@@ -3773,6 +3773,81 @@ export type Database = {
           },
         ]
       }
+      planejamento_financeiro: {
+        Row: {
+          ano: number
+          cenario: string
+          centro_custo: string
+          cliente_id: string
+          created_at: string
+          driver: string | null
+          fazenda_id: string
+          id: string
+          mes: number
+          observacao: string | null
+          origem: string
+          quantidade_driver: number
+          subcentro: string | null
+          tipo_custo: string
+          updated_at: string
+          valor_base: number
+          valor_planejado: number
+        }
+        Insert: {
+          ano: number
+          cenario?: string
+          centro_custo: string
+          cliente_id: string
+          created_at?: string
+          driver?: string | null
+          fazenda_id: string
+          id?: string
+          mes: number
+          observacao?: string | null
+          origem?: string
+          quantidade_driver?: number
+          subcentro?: string | null
+          tipo_custo?: string
+          updated_at?: string
+          valor_base?: number
+          valor_planejado?: number
+        }
+        Update: {
+          ano?: number
+          cenario?: string
+          centro_custo?: string
+          cliente_id?: string
+          created_at?: string
+          driver?: string | null
+          fazenda_id?: string
+          id?: string
+          mes?: number
+          observacao?: string | null
+          origem?: string
+          quantidade_driver?: number
+          subcentro?: string | null
+          tipo_custo?: string
+          updated_at?: string
+          valor_base?: number
+          valor_planejado?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planejamento_financeiro_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planejamento_financeiro_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preco_mercado: {
         Row: {
           agio_perc: number
