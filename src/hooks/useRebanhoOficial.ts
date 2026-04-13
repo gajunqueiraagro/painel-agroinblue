@@ -340,8 +340,11 @@ interface UseRebanhoOficialParams {
 }
 
 export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialParams) {
-  const { isGlobal: isGlobalContext } = useFazenda();
+  const { fazendaAtual, isGlobal: isGlobalContext } = useFazenda();
+  const { clienteAtual } = useCliente();
   const resolvedGlobal = global ?? isGlobalContext;
+  const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
+  const clienteId = clienteAtual?.id;
   const { rows: metaGmdRows } = useMetaGmd(String(ano));
 
   const {
@@ -350,25 +353,137 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     error: errorCategorias,
   } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal });
 
+  // ── Fechamento oficial: dados consolidados por categoria para meses fechados ──
+  const {
+    data: fechamentoOverlay,
+    isLoading: loadingFechamento,
+  } = useQuery({
+    queryKey: ['fechamento-overlay', resolvedGlobal ? `global-${clienteId}` : fazendaId, ano],
+    queryFn: async (): Promise<FechamentoConsolidado[]> => {
+      if (!resolvedGlobal && !fazendaId) return [];
+      if (resolvedGlobal && !clienteId) return [];
+
+      // 1. Buscar fechamentos com status 'fechado' do ano
+      let fpQuery = supabase
+        .from('fechamento_pastos')
+        .select('id, ano_mes')
+        .eq('status', 'fechado')
+        .gte('ano_mes', `${ano}-01`)
+        .lte('ano_mes', `${ano}-12`);
+
+      if (resolvedGlobal) {
+        fpQuery = fpQuery.eq('cliente_id', clienteId);
+      } else {
+        fpQuery = fpQuery.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: fechamentos, error: fpError } = await fpQuery;
+      if (fpError || !fechamentos?.length) return [];
+
+      const fechamentoIds = fechamentos.map(f => f.id);
+
+      // 2. Buscar itens consolidados
+      const { data: itens, error: itensError } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('fechamento_id, categoria_id, quantidade, peso_medio_kg')
+        .in('fechamento_id', fechamentoIds)
+        .gt('quantidade', 0);
+
+      if (itensError || !itens?.length) return [];
+
+      // 3. Consolidar por ano_mes + categoria_id
+      const fechMap = new Map<string, string>();
+      for (const f of fechamentos) {
+        fechMap.set(f.id, f.ano_mes);
+      }
+
+      const agg = new Map<string, { qtd: number; pesoTotal: number }>();
+      for (const item of itens) {
+        const anoMes = fechMap.get(item.fechamento_id);
+        if (!anoMes) continue;
+        const key = `${anoMes}|${item.categoria_id}`;
+        const cur = agg.get(key) || { qtd: 0, pesoTotal: 0 };
+        cur.qtd += item.quantidade;
+        cur.pesoTotal += item.quantidade * (item.peso_medio_kg ?? 0);
+        agg.set(key, cur);
+      }
+
+      const result: FechamentoConsolidado[] = [];
+      for (const [key, val] of agg) {
+        const [anoMes, categoriaId] = key.split('|');
+        result.push({
+          ano_mes: anoMes,
+          categoria_id: categoriaId,
+          qtd: val.qtd,
+          peso_total: val.pesoTotal,
+          peso_medio: val.qtd > 0 ? val.pesoTotal / val.qtd : null,
+        });
+      }
+      return result;
+    },
+    enabled: cenario === 'realizado' && (resolvedGlobal ? !!clienteId : !!fazendaId),
+    staleTime: 30_000,
+  });
+
   // useZootMensal only works for single-fazenda (NOT global).
-  // In global mode, we synthesize farm-level totals from category data.
   const {
     data: fazendaData,
     isLoading: loadingFazenda,
     error: errorFazenda,
   } = useZootMensal({ ano, cenario });
 
-  const loading = loadingCategorias || (resolvedGlobal ? false : loadingFazenda);
+  const loading = loadingCategorias || loadingFechamento || (resolvedGlobal ? false : loadingFazenda);
   const error = errorCategorias || (resolvedGlobal ? null : errorFazenda);
 
-  // ── Raw data accessors ──
+  // ── Raw data with fechamento overlay ──
   const baseCategorias = categoriasData ?? [];
-  const baseFazenda = fazendaData ?? [];
+
+  // Build overlay lookup: Map<"YYYY-MM|categoria_id", FechamentoConsolidado>
+  const overlayMap = useMemo(() => {
+    const m = new Map<string, FechamentoConsolidado>();
+    for (const fc of (fechamentoOverlay ?? [])) {
+      m.set(`${fc.ano_mes}|${fc.categoria_id}`, fc);
+    }
+    return m;
+  }, [fechamentoOverlay]);
+
+  // Set of months that have fechamento data
+  const mesesFechados = useMemo(() => {
+    const s = new Set<string>();
+    for (const fc of (fechamentoOverlay ?? [])) {
+      s.add(fc.ano_mes);
+    }
+    return s;
+  }, [fechamentoOverlay]);
 
   const rawCategorias = useMemo(() => {
-    if (resolvedGlobal || cenario !== 'meta') return baseCategorias;
-    return normalizeMetaCategorias(baseCategorias, metaGmdRows);
-  }, [baseCategorias, cenario, resolvedGlobal, metaGmdRows]);
+    let rows = baseCategorias;
+    if (resolvedGlobal || cenario !== 'meta') {
+      // noop — use baseCategorias as-is before overlay
+    } else {
+      rows = normalizeMetaCategorias(baseCategorias, metaGmdRows);
+    }
+
+    // Apply fechamento overlay for closed months (realizado only)
+    if (cenario === 'realizado' && overlayMap.size > 0) {
+      rows = rows.map(row => {
+        const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
+        if (!mesesFechados.has(anoMes)) return row;
+
+        const fc = overlayMap.get(`${anoMes}|${row.categoria_id}`);
+        if (!fc) return row;
+
+        return {
+          ...row,
+          peso_total_final: fc.peso_total,
+          peso_medio_final: fc.peso_medio,
+          fonte_oficial_mes: 'fechamento' as const,
+        };
+      });
+    }
+
+    return rows;
+  }, [baseCategorias, cenario, resolvedGlobal, metaGmdRows, overlayMap, mesesFechados]);
 
   // In global mode, synthesize farm-level rows from category aggregation
   const rawFazenda = useMemo(() => {
