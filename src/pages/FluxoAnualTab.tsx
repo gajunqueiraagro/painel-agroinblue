@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
+import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,6 @@ import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { parseISO, format } from 'date-fns';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
@@ -39,27 +39,22 @@ interface Props {
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
-  const anosDisponiveis = useMemo(() => {
-    const anos = new Set<number>();
-    anos.add(new Date().getFullYear());
-    lancamentos.forEach(l => { try { anos.add(Number(format(parseISO(l.data), 'yyyy'))); } catch {} });
-    saldosIniciais.forEach(s => anos.add(s.ano));
-    const minAno = Math.min(...Array.from(anos));
-    const maxAno = Math.max(...Array.from(anos));
-    const result: string[] = [];
-    for (let y = maxAno; y >= minAno; y--) {
-      result.push(String(y));
-    }
-    return result;
-  }, [lancamentos, saldosIniciais]);
+  // FONTE OFICIAL: anos reais do banco
+  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
 
   const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
   const [statusFiltro, setStatusFiltro] = useState<'realizado' | 'meta'>('realizado');
 
-  // FONTE OFICIAL: useRebanhoOficial para saldos e indicadores
+  // FONTE OFICIAL: useRebanhoOficial — saldos agregados da vw_zoot_categoria_mensal
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
-  const zootByMes = rebanhoOf.fazendaByMes;
+
+  // UNIFICAÇÃO: saldos da fazenda = soma das categorias (totaisPorMes)
+  // Isso garante paridade absoluta entre quadro anual e visão por categoria.
+  const totaisPorMes = rebanhoOf.totaisPorMes;
+
+  // Para indicadores (GMD, lotação, peso médio), ainda usa fazendaByMes
+  const fazendaByMes = rebanhoOf.fazendaByMes;
 
   // FONTE OFICIAL: query direta ao banco com paginação completa para movimentações
   const { data: movData } = useMovimentacoesMensais(Number(anoFiltro), cenarioView as 'realizado' | 'meta');
