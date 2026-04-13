@@ -485,10 +485,11 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     return rows;
   }, [baseCategorias, cenario, resolvedGlobal, metaGmdRows, overlayMap, mesesFechados]);
 
+  const baseFazenda = fazendaData ?? [];
+
   // In global mode, synthesize farm-level rows from category aggregation
   const rawFazenda = useMemo(() => {
     if (resolvedGlobal) {
-      // Build synthetic ZootMensal rows from category aggregation
       return buildFazendaRowsFromCategories(rawCategorias);
     }
     if (cenario !== 'meta') return baseFazenda;
