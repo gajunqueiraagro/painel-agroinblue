@@ -70,12 +70,19 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     if (!hasSaldo) setAnoSelecionado(String(anoSaldo));
   }, [open, saldosIniciais, anoSaldo, hasSaldo]);
 
+  const parseNumero = (v: string | null | undefined): number | undefined => {
+    if (v == null || v === '') return undefined;
+    const normalized = v.replace(',', '.');
+    const n = Number(normalized);
+    return isNaN(n) ? undefined : n;
+  };
+
   const handleSalvar = () => {
     const anoFinal = hasSaldo ? anoSaldo : Number(anoSelecionado);
     CATEGORIAS.forEach(c => {
-      const qtd = valores[c.value] !== '' && valores[c.value] != null ? Number(valores[c.value]) : 0;
-      const peso = pesos[c.value] !== '' && pesos[c.value] != null ? Number(pesos[c.value]) : undefined;
-      const preco = precos[c.value] !== '' && precos[c.value] != null ? Number(precos[c.value]) : undefined;
+      const qtd = parseNumero(valores[c.value]) ?? 0;
+      const peso = parseNumero(pesos[c.value]);
+      const preco = parseNumero(precos[c.value]);
       onSetSaldo(anoFinal, c.value, qtd, peso, preco);
     });
     setOpen(false);
