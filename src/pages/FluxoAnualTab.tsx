@@ -169,25 +169,25 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
             </tr>
           </thead>
           <tbody>
-            {/* Saldo Início — FONTE OFICIAL: view zootécnica */}
+            {/* Saldo Início — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="bg-primary/15 border-b">
               <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
               {MESES_COLS.map(m => {
-                const z = zootByMes[m.key];
-                const valor = z?.cabecas_inicio;
+                const mes = Number(m.key);
+                const t = totaisPorMes[mes];
+                const valor = t?.saldo_inicial;
                 return (
                   <td
                     key={m.key}
                     className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)}`}
                     onClick={() => setDrilldownMonth(m.key)}
-                    title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}
                   >
                     {valor != null ? fmtNum(valor) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
-                {fmtNum(zootByMes['01']?.cabecas_inicio)}
+                {fmtNum(totaisPorMes[1]?.saldo_inicial)}
               </td>
             </tr>
 
@@ -221,20 +221,21 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               );
             })}
 
-            {/* Saldo Final — FONTE OFICIAL: view zootécnica */}
+            {/* Saldo Final — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="border-t-2 bg-primary/20">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
               {MESES_COLS.map((m) => {
-                const z = zootByMes[m.key];
-                const saldoFim = z?.cabecas_final;
+                const mes = Number(m.key);
+                const t = totaisPorMes[mes];
+                const saldoFim = t?.saldo_final;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`} title={z ? `Fonte: ${z.fonte_oficial_mes}` : ''}>
+                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold text-foreground tabular-nums ${qb(m.key)}`}>
                     {saldoFim != null ? fmtNum(saldoFim) : '–'}
                   </td>
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/20 border-l border-border/60">
-                {fmtNum(zootByMes['12']?.cabecas_final)}
+                {fmtNum(totaisPorMes[12]?.saldo_final)}
               </td>
             </tr>
 
