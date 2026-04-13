@@ -2759,14 +2759,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setPesoAutoFilled(false);
                 if (onReturnFromEdit) onReturnFromEdit();
               }}
-              onDelete={editingReclassId ? () => {
-                onRemover(editingReclassId);
+              onDelete={editingReclassId ? async () => {
+                await onRemover(editingReclassId);
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
                 toast.success('Reclassificação removida.');
-                if (onReturnFromEdit) onReturnFromEdit();
+                if (onReturnFromEdit) await onReturnFromEdit();
               } : undefined}
             />
           </>

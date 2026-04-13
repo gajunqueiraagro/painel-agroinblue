@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
+import { useLancamentos } from '@/hooks/useLancamentos';
 import { CheckCircle, AlertTriangle, Clock, RefreshCw, DollarSign } from 'lucide-react';
 
 interface Props {
@@ -19,6 +20,14 @@ const COLUNAS_CONSOLIDADAS = [
   { key: 'saidas_externas', label: 'Saídas Externas', entrada: false },
   { key: 'evol_cat_saida', label: 'Evol. Cat. Saída', entrada: false },
 ];
+
+const TIPOS_ENTRADA_EXTERNOS = new Set(['nascimento', 'compra', 'transferencia_entrada']);
+const TIPOS_SAIDA_EXTERNOS = new Set(['abate', 'venda', 'transferencia_saida', 'consumo', 'morte']);
+const FONTE_LABEL: Record<string, string> = {
+  fechamento: 'Fechamento',
+  fallback_movimentacao: 'Movimentação',
+  projecao: 'Projeção',
+};
 
 export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
   const { fazendaAtual } = useFazenda();
@@ -36,10 +45,23 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   const [rebanhoStatus, setRebanhoStatus] = useState<'aberto' | 'fechado' | null>(null);
   const [precosRebanho, setPrecosRebanho] = useState<Record<string, number>>({});
 
+  useEffect(() => {
+    if (initialAno) setAnoFiltro(initialAno);
+  }, [initialAno]);
+
+  useEffect(() => {
+    if (initialMes) setMesFiltro(initialMes);
+  }, [initialMes]);
+
+  useEffect(() => {
+    if (initialCenario) setStatusFiltro(initialCenario === 'meta' ? 'meta' : 'realizado');
+  }, [initialCenario]);
+
   const ano = Number(anoFiltro);
   const isFutureMonth = statusFiltro === 'realizado' && (ano > currentYear || (ano === currentYear && Number(mesFiltro) > currentMonth));
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewData, loading: isLoading } = useRebanhoOficial({ ano, cenario: statusFiltro });
+  const { lancamentos } = useLancamentos(statusFiltro === 'meta' ? 'meta' : 'realizado');
 
   // Filter to selected month
   const dadosMes = useMemo(() => {
@@ -63,6 +85,51 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
 
     return { saldoIni, entradasExt, saidasExt, evolEntrada, evolSaida, saldoFin, pesoMedio };
   }, [dadosMes]);
+
+  const lancamentosMes = useMemo(() => {
+    return lancamentos.filter((l) => {
+      if (!l.data?.startsWith(`${anoFiltro}-${mesFiltro}`)) return false;
+      const statusLanc = l.statusOperacional || 'realizado';
+      if (statusFiltro === 'realizado') return l.cenario === 'realizado' && statusLanc === 'realizado';
+      return l.cenario === 'meta';
+    });
+  }, [anoFiltro, lancamentos, mesFiltro, statusFiltro]);
+
+  const totaisLista = useMemo(() => {
+    return lancamentosMes.reduce((acc, lancamento) => {
+      const tipo = String(lancamento.tipo);
+      acc.registros += 1;
+
+      if (tipo === 'saldo_inicial') {
+        acc.saldoInicialImportado += lancamento.quantidade || 0;
+      } else if (TIPOS_ENTRADA_EXTERNOS.has(tipo)) {
+        acc.entradasExt += lancamento.quantidade || 0;
+      } else if (TIPOS_SAIDA_EXTERNOS.has(tipo)) {
+        acc.saidasExt += lancamento.quantidade || 0;
+      } else if (tipo === 'reclassificacao') {
+        acc.evolEntrada += lancamento.quantidade || 0;
+        acc.evolSaida += lancamento.quantidade || 0;
+      }
+
+      return acc;
+    }, {
+      registros: 0,
+      saldoInicialImportado: 0,
+      entradasExt: 0,
+      saidasExt: 0,
+      evolEntrada: 0,
+      evolSaida: 0,
+    });
+  }, [lancamentosMes]);
+
+  const deltaMes = totais.saldoFin - totais.saldoIni - totais.entradasExt - totais.evolEntrada + totais.saidasExt + totais.evolSaida;
+  const paridadeListaOk = totais.entradasExt === totaisLista.entradasExt
+    && totais.saidasExt === totaisLista.saidasExt
+    && totais.evolEntrada === totaisLista.evolEntrada
+    && totais.evolSaida === totaisLista.evolSaida;
+  const linhasInconsistentes = dadosMes.filter((d) => (
+    d.saldo_final - d.saldo_inicial - d.entradas_externas - d.evol_cat_entrada + d.saidas_externas + d.evol_cat_saida
+  ) !== 0).length;
 
   // Fetch conciliação status
   useEffect(() => {
@@ -231,6 +298,29 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
+      <div className="grid gap-2 md:grid-cols-4">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Quadro oficial</div>
+          <div className="mt-1 text-[11px] font-bold text-foreground">SI {totais.saldoIni.toLocaleString('pt-BR')} → SF {totais.saldoFin.toLocaleString('pt-BR')}</div>
+          <div className="text-[9px] text-muted-foreground">Fonte única: vw_zoot_categoria_mensal</div>
+        </div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Evolução categoria</div>
+          <div className="mt-1 text-[11px] font-bold text-foreground">+{totais.entradasExt + totais.evolEntrada} / -{totais.saidasExt + totais.evolSaida}</div>
+          <div className="text-[9px] text-muted-foreground">Linhas inconsistentes: {linhasInconsistentes}</div>
+        </div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Lista movimentações</div>
+          <div className="mt-1 text-[11px] font-bold text-foreground">+{totaisLista.entradasExt + totaisLista.evolEntrada} / -{totaisLista.saidasExt + totaisLista.evolSaida}</div>
+          <div className="text-[9px] text-muted-foreground">Registros: {totaisLista.registros}{totaisLista.saldoInicialImportado > 0 ? ` • SI importado ${totaisLista.saldoInicialImportado}` : ''}</div>
+        </div>
+        <div className={`rounded-md border px-3 py-2 ${deltaMes === 0 && paridadeListaOk ? 'border-border bg-card' : 'border-destructive/40 bg-destructive/10'}`}>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Status do mês</div>
+          <div className={`mt-1 text-[11px] font-bold ${deltaMes === 0 ? 'text-foreground' : 'text-destructive'}`}>Equação {deltaMes === 0 ? 'OK' : `Δ ${deltaMes.toLocaleString('pt-BR')}`}</div>
+          <div className={`text-[9px] ${paridadeListaOk ? 'text-muted-foreground' : 'text-destructive'}`}>Paridade lista × quadro: {paridadeListaOk ? 'OK' : 'divergente'}</div>
+        </div>
+      </div>
+
       {/* Tabela */}
       <div className="bg-card rounded-lg shadow-sm border overflow-x-auto" style={{ maxWidth: 706 }}>
         {isLoading ? (
@@ -276,11 +366,28 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/10');
 
                 const vals = [d.entradas_externas, d.evol_cat_entrada, d.saidas_externas, d.evol_cat_saida];
+                const deltaLinha = d.saldo_final - d.saldo_inicial - d.entradas_externas - d.evol_cat_entrada + d.saidas_externas + d.evol_cat_saida;
+                const lancamentosLinha = lancamentosMes.filter((l) => String(l.categoria) === d.categoria_codigo || String(l.categoriaDestino) === d.categoria_codigo);
+                const saldoInicialImportadoLinha = lancamentosLinha
+                  .filter((l) => String(l.tipo) === 'saldo_inicial' && String(l.categoria) === d.categoria_codigo)
+                  .reduce((sum, l) => sum + (l.quantidade || 0), 0);
+                const detalheTooltip = deltaLinha === 0
+                  ? `Linha fechada. Fonte: ${FONTE_LABEL[d.fonte_oficial_mes] || d.fonte_oficial_mes}.`
+                  : d.fonte_oficial_mes === 'fechamento'
+                    ? `Linha não fecha com os movimentos exibidos. O saldo final desta linha veio do fechamento oficial do mês (${d.saldo_final}).`
+                    : `Linha não fecha com os movimentos exibidos (Δ ${deltaLinha}).`;
 
                 return (
                   <tr key={d.categoria_id} className={`${i % 2 === 0 ? '' : 'bg-muted/30'} ${isSeparator ? 'border-t-2 border-border' : ''}`}>
                     <td className={`px-1.5 py-0.5 font-bold text-foreground sticky left-0 ${catBg}`}>
-                      {d.categoria_nome}
+                      <div className="flex items-center gap-1">
+                        <span>{d.categoria_nome}</span>
+                        {deltaLinha !== 0 && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" title={detalheTooltip} />}
+                      </div>
+                      <div className="text-[8px] font-normal text-muted-foreground">
+                        {FONTE_LABEL[d.fonte_oficial_mes] || d.fonte_oficial_mes}
+                        {saldoInicialImportadoLinha > 0 ? ` • SI imp. ${saldoInicialImportadoLinha}` : ''}
+                      </div>
                     </td>
                     <td className={`px-1.5 py-0.5 text-center font-semibold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_inicial === 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {isFutureMonth ? '' : d.saldo_inicial}
@@ -290,8 +397,9 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                         {val || '–'}
                       </td>
                     ))}
-                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_final === 0 ? 'text-transparent' : 'text-foreground'}`}>
+                    <td className={`px-1.5 py-0.5 text-center font-extrabold ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${isFutureMonth || d.saldo_final === 0 ? 'text-transparent' : 'text-foreground'}`} title={detalheTooltip}>
                       {isFutureMonth ? '' : d.saldo_final}
+                      {deltaLinha !== 0 && <span className="ml-1 text-[8px] text-destructive">⚠</span>}
                     </td>
                     <td className={`px-1.5 py-0.5 text-center italic text-[9px] ${isRealizado ? 'bg-primary/5' : 'bg-orange-500/5'} ${!d.peso_medio_final || d.peso_medio_final <= 0 ? 'text-transparent' : 'text-foreground'}`}>
                       {formatPeso(d.peso_medio_final)}
