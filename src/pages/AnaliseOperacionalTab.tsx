@@ -262,6 +262,16 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
           ))}
         </div>
       )}
+
+      {!mesSelecionadoFechado && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+          <span>⚠️</span>
+          <span>
+            Meses sem fechamento de pasto exibem dados estimados por lançamentos.
+            Para dados oficiais, feche os pastos do mês em <strong>Lanç. Zoo.</strong>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
