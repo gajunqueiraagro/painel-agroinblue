@@ -261,19 +261,14 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const prevLabel = (base: string) => usePrev ? `${base} Prev.` : base;
 
-  // Bidirectional handlers for bonus/discount
+  // Bonus/discount handlers — exclusive fields (only one filled at a time)
   const handleBonusArrobaChange = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setArr(value); markDirty();
-    const v = Number(value) || 0;
-    if (v > 0 && calc.totalArrobas > 0) {
-      setReais(String(Math.round(v * calc.totalArrobas * 100) / 100));
-    } else {
-      setReais('');
-    }
+    setReais('');
   };
 
   const handleBonusReaisChange = (
@@ -282,12 +277,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     value: string,
   ) => {
     setReais(value); markDirty();
-    const v = Number(value) || 0;
-    if (v > 0 && calc.totalArrobas > 0) {
-      setArr(String(Math.round((v / calc.totalArrobas) * 100) / 100));
-    } else {
-      setArr('');
-    }
+    setArr('');
   };
 
   // Funrural bidirectional
@@ -333,6 +323,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       </td>
     </tr>
   );
+
 
   return (
     <>
