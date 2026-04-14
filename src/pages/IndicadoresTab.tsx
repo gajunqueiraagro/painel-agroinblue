@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, Info } from 'lucide-react';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePastos } from '@/hooks/usePastos';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { formatMoeda, formatNum, formatPercent, formatArroba, formatCabecas } from '@/lib/calculos/formatters';
@@ -29,6 +30,7 @@ interface Props {
 
 export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesInicial, onNavigateSubTab }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
+  useRedirecionarPecuaria();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
 

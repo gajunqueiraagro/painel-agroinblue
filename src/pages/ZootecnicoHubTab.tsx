@@ -4,6 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import {
   BarChart2, ClipboardList, Map, GitCompare,
   ChevronRight, PlusCircle, TrendingUp, CloudRain, Layers,
@@ -59,6 +60,7 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
 
 export function ZootecnicoHubTab({ onTabChange, filtroGlobal }: Props) {
   const { fazendaAtual } = useFazenda();
+  useRedirecionarPecuaria();
   const navTo = (tab: TabId) => {
     if (filtroGlobal) {
       onTabChange(tab, filtroGlobal);
