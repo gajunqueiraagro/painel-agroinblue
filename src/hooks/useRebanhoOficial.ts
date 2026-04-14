@@ -41,6 +41,7 @@ import { useMetaGmd } from '@/hooks/useMetaGmd';
 // ---------------------------------------------------------------------------
 interface FechamentoConsolidado {
   ano_mes: string;
+  fazenda_id: string;
   categoria_id: string;
   qtd: number;
   peso_total: number;
@@ -381,13 +382,14 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       const { data: itens, error: itensError } = await query;
       if (itensError || !itens?.length) return [];
 
-      // Consolidar por ano_mes + categoria_id
+      // Consolidar por fazenda_id + ano_mes + categoria_id
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
       for (const item of itens) {
         const fp = item.fechamento_pastos as any;
         const anoMes: string = fp?.ano_mes ?? (Array.isArray(fp) ? fp[0]?.ano_mes : undefined);
-        if (!anoMes) continue;
-        const key = `${anoMes}|${item.categoria_id}`;
+        const fazId: string = fp?.fazenda_id ?? (Array.isArray(fp) ? fp[0]?.fazenda_id : undefined);
+        if (!anoMes || !fazId) continue;
+        const key = `${anoMes}|${fazId}|${item.categoria_id}`;
         const cur = agg.get(key) || { qtd: 0, pesoTotal: 0 };
         cur.qtd += item.quantidade;
         cur.pesoTotal += item.quantidade * (item.peso_medio_kg ?? 0);
@@ -396,9 +398,10 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
       const result: FechamentoConsolidado[] = [];
       for (const [key, val] of agg) {
-        const [anoMes, categoriaId] = key.split('|');
+        const [anoMes, fazId, categoriaId] = key.split('|');
         result.push({
           ano_mes: anoMes,
+          fazenda_id: fazId,
           categoria_id: categoriaId,
           qtd: val.qtd,
           peso_total: val.pesoTotal,
@@ -424,20 +427,20 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   // ── Raw data with fechamento overlay ──
   const baseCategorias = categoriasData ?? [];
 
-  // Build overlay lookup: Map<"YYYY-MM|categoria_id", FechamentoConsolidado>
+  // Build overlay lookup: Map<"YYYY-MM|fazenda_id|categoria_id", FechamentoConsolidado>
   const overlayMap = useMemo(() => {
     const m = new Map<string, FechamentoConsolidado>();
     for (const fc of (fechamentoOverlay ?? [])) {
-      m.set(`${fc.ano_mes}|${fc.categoria_id}`, fc);
+      m.set(`${fc.ano_mes}|${fc.fazenda_id}|${fc.categoria_id}`, fc);
     }
     return m;
   }, [fechamentoOverlay]);
 
-  // Set of months that have fechamento data
+  // Set of fazenda+month combos that have fechamento data
   const mesesFechados = useMemo(() => {
     const s = new Set<string>();
     for (const fc of (fechamentoOverlay ?? [])) {
-      s.add(fc.ano_mes);
+      s.add(`${fc.ano_mes}|${fc.fazenda_id}`);
     }
     return s;
   }, [fechamentoOverlay]);
@@ -480,7 +483,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
         for (const { row, origIdx } of sorted) {
           const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
-          const isMesFechado = mesesFechados.has(anoMes);
+          const isMesFechado = mesesFechados.has(`${anoMes}|${row.fazenda_id}`);
 
           // Propagar peso_total_final oficial do mês anterior como peso_total_inicial
           let pesoTotalInicialCorrigido = row.peso_total_inicial;
@@ -522,7 +525,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
           }
 
           // Mês fechado: buscar dados oficiais do fechamento
-          const fc = overlayMap.get(`${anoMes}|${row.categoria_id}`);
+          const fc = overlayMap.get(`${anoMes}|${row.fazenda_id}|${row.categoria_id}`);
 
           // Categoria ausente no fechamento → zero oficial
           const saldoFinalOficial = fc?.qtd ?? 0;
