@@ -123,7 +123,7 @@ function getCamposFazenda(tipo: TipoMovimentacao, nomeFazenda: string) {
     case 'nascimento':
       return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'compra':
-      return { origem: { show: false }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
+      return { origem: { show: true, auto: false, label: 'Fornecedor / Fazenda Origem' }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'transferencia_entrada':
       return { origem: { show: true, auto: false, label: 'Origem', useSelect: true }, destino: { show: true, auto: true, value: nomeFazenda, label: 'Fazenda Destino' } };
     case 'abate':
@@ -2616,9 +2616,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
-                  {(l.fazendaDestino || l.compradorFornecedor || l.observacao) && (
+                  {(l.fazendaOrigem || l.fazendaDestino || l.compradorFornecedor || l.observacao) && (
                     <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
-                      📝 {l.fazendaDestino || l.compradorFornecedor || l.observacao}
+                      📝 {l.tipo === 'compra' ? (l.fazendaOrigem || l.compradorFornecedor || l.observacao) : (l.fazendaDestino || l.compradorFornecedor || l.observacao)}
                     </span>
                   )}
                   {/* Rastreabilidade de origem */}
