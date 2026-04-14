@@ -591,6 +591,81 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const renderResultado = () => {
     if (calc.valorBase <= 0) return null;
+
+    // Aba Realizado: seções coloridas separadas
+    if (isRealizado) {
+      return (
+        <div className="space-y-1.5">
+          {/* ── BASE (cinza) ── */}
+          <div className="bg-muted/40 border border-border/50 rounded p-2 space-y-0.5">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Base</h4>
+            <div className="space-y-0.5 text-[10px]">
+              <div className="flex justify-between"><span className="text-muted-foreground">Peso total</span><strong className="tabular-nums">{formatKg(calc.totalKg)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total @</span><strong className="tabular-nums">{formatArroba(calc.totalArrobas)}</strong></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Preço @</span><strong className="tabular-nums">{formatMoeda(calc.precoArroba)}</strong></div>
+              <Separator className="my-0.5" />
+              <div className="flex justify-between font-bold"><span>Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBase)}</span></div>
+            </div>
+          </div>
+
+          {/* ── BÔNUS (verde) ── */}
+          {calc.totalBonus > 0 && (
+            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-0.5">
+              <h4 className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase">+ Bônus</h4>
+              <div className="space-y-0.5 text-[10px]">
+                {calc.bonusPrecoceTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Precoce</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusPrecoceTotal)}</strong></div>}
+                {calc.bonusQualidadeTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Qualidade</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusQualidadeTotal)}</strong></div>}
+                {calc.bonusListaTraceTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Lista Trace</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusListaTraceTotal)}</strong></div>}
+                <Separator className="my-0.5" />
+                <div className="flex justify-between font-bold text-green-700 dark:text-green-400"><span>Total Bônus</span><span className="tabular-nums">+{formatMoeda(calc.totalBonus)}</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* ── DESCONTOS OPERACIONAIS (vermelho) ── */}
+          {calc.totalDescontos > 0 && (
+            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded p-2 space-y-0.5">
+              <h4 className="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase">— Descontos operacionais</h4>
+              <p className="text-[8px] text-red-600/70 dark:text-red-400/70 italic">acabamento, tipo de animal</p>
+              <div className="space-y-0.5 text-[10px]">
+                {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Qualidade</span><strong className="text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(calc.descQualidadeTotal)}</strong></div>}
+                {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Outros</span><strong className="text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(calc.descOutrosTotal)}</strong></div>}
+                <Separator className="my-0.5" />
+                <div className="flex justify-between font-bold text-red-700 dark:text-red-400"><span>Total Descontos</span><span className="tabular-nums">-{formatMoeda(calc.totalDescontos)}</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* ── FUNRURAL (âmbar) ── */}
+          {calc.funruralTotal > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 space-y-0.5">
+              <h4 className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">— Funrural</h4>
+              <p className="text-[8px] text-amber-600/70 dark:text-amber-400/70 italic">encargo fiscal</p>
+              <div className="flex justify-between text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                <span>Funrural</span>
+                <span className="tabular-nums">-{formatMoeda(calc.funruralTotal)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* ── VALOR LÍQUIDO (azul) ── */}
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded p-2 space-y-0.5">
+            <h4 className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase">Valor Líquido</h4>
+            <div className="flex justify-between text-[12px] font-bold text-blue-700 dark:text-blue-400">
+              <span>= Valor Líquido</span>
+              <span className="tabular-nums">{formatMoeda(calc.valorLiquido)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-x-2 text-[10px] pt-1">
+              <div><span className="text-muted-foreground">R$/@ líq.</span><p className="font-bold">{formatMoeda(calc.liqArroba)}</p></div>
+              <div><span className="text-muted-foreground">R$/cab líq.</span><p className="font-bold">{formatMoeda(calc.liqCabeca)}</p></div>
+              <div><span className="text-muted-foreground">R$/kg líq.</span><p className="font-bold">{formatMoeda(calc.liqKg)}</p></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Abas Meta e Programado: layout consolidado original
     return (
       <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
         <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
