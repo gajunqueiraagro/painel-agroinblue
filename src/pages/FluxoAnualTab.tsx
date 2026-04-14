@@ -39,6 +39,7 @@ interface Props {
 }
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
+  const { isGlobal } = useFazenda();
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   // FONTE OFICIAL: anos reais do banco
