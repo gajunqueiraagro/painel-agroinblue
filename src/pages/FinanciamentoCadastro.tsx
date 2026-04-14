@@ -14,6 +14,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
 import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
+import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 
 export default function FinanciamentoCadastro() {
   const navigate = useNavigate();
