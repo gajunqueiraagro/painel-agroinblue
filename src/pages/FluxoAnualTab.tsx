@@ -10,6 +10,7 @@ import { ArrowLeft, DollarSign, AlertTriangle } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
@@ -52,6 +53,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
   console.log('[FLUXO DEBUG]', { anoFiltro, cenarioView, fazendaAtualId: fazendaAtual?.id, fazendaAtualNome: fazendaAtual?.nome });
+  const { mesFechado } = useFechamentoCompetencia(fazendaAtual?.id, Number(anoFiltro));
 
   // UNIFICAÇÃO: saldos da fazenda = soma das categorias (totaisPorMes)
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
@@ -304,7 +306,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
+                          {mesFechado(Number(m.key)) && z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
                         </td>
                       );
                     })}
@@ -318,13 +320,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
+                          {mesFechado(Number(m.key)) && z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
                         </td>
                       );
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/40 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && mesFechado(Number(m.key))).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 3) : '–';
                       })()}
                     </td>
@@ -337,13 +339,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
+                          {mesFechado(Number(m.key)) && z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
                         </td>
                       );
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/50 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key)).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && mesFechado(Number(m.key))).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : '–';
                       })()}
                     </td>
