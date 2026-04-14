@@ -132,11 +132,11 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
       <div className="p-4 space-y-4">
 
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto -mx-4 sm:mx-0">
+        <table className="text-sm w-max sm:w-full">
           <thead>
             <tr className="border-b bg-primary/10">
-              <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[100px]">
+              <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 z-10 bg-primary/10 min-w-[100px]">
                 Categoria
               </th>
               <th className="px-3 py-2 font-bold text-foreground text-center min-w-[70px] bg-primary/20">
@@ -152,7 +152,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
           <tbody>
             {CATEGORIAS.map((cat, i) => (
               <tr key={cat.value} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-3 py-2 font-bold text-foreground sticky left-0 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                <td className={`px-3 py-2 font-bold text-foreground sticky left-0 z-10 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
                   {cat.label}
                 </td>
                 <td className="px-3 py-2 text-center font-semibold text-foreground bg-primary/5">
@@ -167,7 +167,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
             ))}
             {/* Total row */}
             <tr className="border-t-2 bg-primary/10">
-              <td className="px-3 py-2 font-extrabold text-foreground sticky left-0 bg-primary/10">TOTAL</td>
+              <td className="px-3 py-2 font-extrabold text-foreground sticky left-0 z-10 bg-primary/10">TOTAL</td>
               <td className="px-3 py-2 text-center font-extrabold text-foreground">{totalSaldoInicial}</td>
               {meses.map(m => {
                 const total = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.meses[m] || 0), 0);
