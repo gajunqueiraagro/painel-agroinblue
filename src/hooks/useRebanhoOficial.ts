@@ -354,6 +354,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   } = useZootCategoriaMensal({ ano, cenario, global: resolvedGlobal });
 
   // ── Fechamento oficial: dados consolidados por categoria para meses fechados ──
+  // Busca itens via join direto (evita .in() com centenas de IDs que estoura URL do PostgREST)
   const {
     data: fechamentoOverlay,
     isLoading: loadingFechamento,
@@ -363,42 +364,28 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       if (!resolvedGlobal && !fazendaId) return [];
       if (resolvedGlobal && !clienteId) return [];
 
-      // 1. Buscar fechamentos com status 'fechado' do ano
-      let fpQuery = supabase
-        .from('fechamento_pastos')
-        .select('id, ano_mes')
-        .eq('status', 'fechado')
-        .gte('ano_mes', `${ano}-01`)
-        .lte('ano_mes', `${ano}-12`);
+      // Query única: itens com join no fechamento_pastos (evita .in() massivo)
+      let query = supabase
+        .from('fechamento_pasto_itens')
+        .select('categoria_id, quantidade, peso_medio_kg, fechamento_pastos!inner(ano_mes, status, fazenda_id, cliente_id)')
+        .eq('fechamento_pastos.status', 'fechado')
+        .gte('fechamento_pastos.ano_mes', `${ano}-01`)
+        .lte('fechamento_pastos.ano_mes', `${ano}-12`);
 
       if (resolvedGlobal) {
-        fpQuery = fpQuery.eq('cliente_id', clienteId);
+        query = query.eq('fechamento_pastos.cliente_id', clienteId);
       } else {
-        fpQuery = fpQuery.eq('fazenda_id', fazendaId);
+        query = query.eq('fechamento_pastos.fazenda_id', fazendaId);
       }
 
-      const { data: fechamentos, error: fpError } = await fpQuery;
-      if (fpError || !fechamentos?.length) return [];
+      const { data: itens, error: itensError } = await query;
+      if (itensError || !itens?.length) return [];
 
-      const fechamentoIds = fechamentos.map(f => f.id);
-
-      // 2. Buscar TODOS os itens (incluindo quantidade 0)
-      const { data: itens, error: itensError } = await supabase
-        .from('fechamento_pasto_itens')
-        .select('fechamento_id, categoria_id, quantidade, peso_medio_kg')
-        .in('fechamento_id', fechamentoIds);
-
-      if (itensError) return [];
-
-      // 3. Consolidar por ano_mes + categoria_id
-      const fechMap = new Map<string, string>();
-      for (const f of fechamentos) {
-        fechMap.set(f.id, f.ano_mes);
-      }
-
+      // Consolidar por ano_mes + categoria_id
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
-      for (const item of (itens ?? [])) {
-        const anoMes = fechMap.get(item.fechamento_id);
+      for (const item of itens) {
+        const fp = item.fechamento_pastos as any;
+        const anoMes: string = fp?.ano_mes ?? (Array.isArray(fp) ? fp[0]?.ano_mes : undefined);
         if (!anoMes) continue;
         const key = `${anoMes}|${item.categoria_id}`;
         const cur = agg.get(key) || { qtd: 0, pesoTotal: 0 };
