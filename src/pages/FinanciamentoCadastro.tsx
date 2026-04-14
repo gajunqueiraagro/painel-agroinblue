@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, RefreshCw, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,8 +15,12 @@ import {
 import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 
-export default function FinanciamentoCadastro() {
-  const navigate = useNavigate();
+interface FinanciamentoCadastroProps {
+  onVoltar?: () => void;
+  onSalvo?: () => void;
+}
+
+export default function FinanciamentoCadastro({ onVoltar, onSalvo }: FinanciamentoCadastroProps = {}) {
   const {
     form, setForm,
     parcelas,
@@ -48,7 +51,7 @@ export default function FinanciamentoCadastro() {
 
   const handleSalvar = async () => {
     const ok = await salvar(destinacoes);
-    if (ok) navigate('/financiamentos');
+    if (ok) onSalvo?.();
   };
 
   const fmtMoney = (v: number) =>
@@ -58,7 +61,7 @@ export default function FinanciamentoCadastro() {
     <div className="min-h-screen bg-background p-4 max-w-3xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/financiamentos')}>
+        <Button variant="ghost" size="icon" onClick={onVoltar}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-bold text-foreground">Novo Financiamento</h1>

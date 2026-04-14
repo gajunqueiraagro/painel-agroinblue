@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
@@ -7,6 +6,7 @@ import {
 
 interface Props {
   onTabChange: (tab: TabId) => void;
+  onAbrirFinanciamentos?: () => void;
 }
 
 const CADASTRO_ITEMS = [
@@ -17,8 +17,7 @@ const CADASTRO_ITEMS = [
   { label: 'Dividendos', tab: 'fin_v2_dividendos' as TabId, icon: UserCircle, description: 'Cadastro de nomes para distribuição' },
 ];
 
-export function FinanceiroV2HubTab({ onTabChange }: Props) {
-  const navigate = useNavigate();
+export function FinanceiroV2HubTab({ onTabChange, onAbrirFinanciamentos }: Props) {
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
       <div className="p-4 space-y-5">
@@ -122,7 +121,7 @@ export function FinanceiroV2HubTab({ onTabChange }: Props) {
 
           {/* RIGHT column – Financiamentos */}
           <div
-            onClick={() => navigate('/financiamentos')}
+            onClick={onAbrirFinanciamentos}
             className="cursor-pointer rounded-xl border border-border bg-card p-4 hover:bg-accent transition-colors"
           >
             <div className="flex items-center justify-between">

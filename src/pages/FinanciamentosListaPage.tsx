@@ -1,5 +1,4 @@
-import { useNavigate } from 'react-router-dom';
-import { Plus, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,8 +35,13 @@ const statusColor: Record<string, string> = {
   cancelado: 'bg-red-100 text-red-800',
 };
 
-export default function FinanciamentosListaPage() {
-  const navigate = useNavigate();
+interface FinanciamentosListaProps {
+  onNovo?: () => void;
+  onDetalhe?: (id: string) => void;
+  onVoltar?: () => void;
+}
+
+export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }: FinanciamentosListaProps = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
@@ -132,8 +136,15 @@ export default function FinanciamentosListaPage() {
     <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
-        <Button size="sm" className="gap-1" onClick={() => navigate('/financiamentos/novo')}>
+        <div className="flex items-center gap-2">
+          {onVoltar && (
+            <Button variant="ghost" size="icon" onClick={onVoltar}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
+        </div>
+        <Button size="sm" className="gap-1" onClick={onNovo}>
           <Plus className="h-4 w-4" /> Novo
         </Button>
       </div>
@@ -209,7 +220,7 @@ export default function FinanciamentosListaPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => navigate(`/financiamentos/${f.id}`)}
+                          onClick={() => onDetalhe?.(f.id)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>

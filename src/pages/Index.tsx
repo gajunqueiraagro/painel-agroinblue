@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
@@ -76,6 +76,10 @@ import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
+
+const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
+const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
+const FinanciamentoDetalhe = lazy(() => import('./FinanciamentoDetalhe'));
 
 export interface FiltroGlobal {
   ano: string;
@@ -158,6 +162,7 @@ const Index = () => {
   const setActiveTab = useCallback((tab: TabId) => {
     sessionStorage.setItem('agroinblue_active_tab', tab);
     setActiveTabRaw(tab);
+    if (tab !== 'financeiro_v2_hub') setFinView(null);
   }, []);
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const [movFiltroAno, setMovFiltroAno] = useState<string | undefined>(undefined);
@@ -169,6 +174,7 @@ const Index = () => {
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
+  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -682,8 +688,31 @@ const Index = () => {
           drillFilters={finV2DrillFilters}
         />
       )}
-      {activeTab === 'financeiro_v2_hub' && (
-        <FinanceiroV2HubTab onTabChange={handleTabChange} />
+      {activeTab === 'financeiro_v2_hub' && !finView && (
+        <FinanceiroV2HubTab onTabChange={handleTabChange} onAbrirFinanciamentos={() => setFinView({ mode: 'list' })} />
+      )}
+      {activeTab === 'financeiro_v2_hub' && finView && (
+        <Suspense fallback={<div className="flex items-center justify-center h-40"><span className="text-3xl animate-pulse">💰</span></div>}>
+          {finView.mode === 'list' && (
+            <FinanciamentosListaPage
+              onNovo={() => setFinView({ mode: 'novo' })}
+              onDetalhe={(fid: string) => setFinView({ mode: 'detalhe', id: fid })}
+              onVoltar={() => setFinView(null)}
+            />
+          )}
+          {finView.mode === 'novo' && (
+            <FinanciamentoCadastro
+              onVoltar={() => setFinView({ mode: 'list' })}
+              onSalvo={() => setFinView({ mode: 'list' })}
+            />
+          )}
+          {finView.mode === 'detalhe' && (
+            <FinanciamentoDetalhe
+              id={finView.id}
+              onVoltar={() => setFinView({ mode: 'list' })}
+            />
+          )}
+        </Suspense>
       )}
       {activeTab === 'fin_v2_contas' && <FinV2ContasTab />}
       {activeTab === 'fin_v2_fornecedores' && <FinV2FornecedoresTab />}
