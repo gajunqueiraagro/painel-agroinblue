@@ -3255,6 +3255,7 @@ export type Database = {
           fazenda_id: string | null
           gerar_lancamento_captacao: boolean
           id: string
+          numero_contrato: string | null
           observacao: string | null
           plano_conta_captacao_id: string | null
           plano_conta_parcela_id: string | null
@@ -3278,6 +3279,7 @@ export type Database = {
           fazenda_id?: string | null
           gerar_lancamento_captacao?: boolean
           id?: string
+          numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
@@ -3301,6 +3303,7 @@ export type Database = {
           fazenda_id?: string | null
           gerar_lancamento_captacao?: boolean
           id?: string
+          numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
