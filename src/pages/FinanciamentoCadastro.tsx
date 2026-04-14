@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, RefreshCw, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,8 +15,12 @@ import {
 import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 
-export default function FinanciamentoCadastro() {
-  const navigate = useNavigate();
+interface FinanciamentoCadastroProps {
+  onVoltar?: () => void;
+  onSalvo?: () => void;
+}
+
+export default function FinanciamentoCadastro({ onVoltar, onSalvo }: FinanciamentoCadastroProps = {}) {
   const {
     form, setForm,
     parcelas,
