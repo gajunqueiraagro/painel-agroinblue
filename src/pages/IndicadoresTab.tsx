@@ -16,6 +16,7 @@ import { formatMoeda, formatNum, formatPercent, formatArroba, formatCabecas } fr
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { KpiCard } from '@/components/indicadores/KpiCard';
 import { GmdDetalheSheet } from '@/components/indicadores/GmdDetalheSheet';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 
 
 interface Props {
@@ -52,6 +53,10 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
     lancamentos, saldosIniciais, pastos, categorias, globalFazendaIds,
   );
 
+  // Status de fechamento (apresentação apenas)
+  const { mesFechado, temMesAberto } = useFechamentoCompetencia(fazendaId, Number(anoFiltro));
+  const mesSelecionadoFechado = mesFechado(Number(mesFiltro));
+
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
   // Derivação simples: peso total = cab × peso médio
@@ -74,7 +79,7 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
   return (
     <div className="p-4 w-full animate-fade-in pb-20 space-y-4">
       {/* Seletores */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-24 touch-target text-base font-bold">
             <SelectValue />
@@ -91,6 +96,9 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
             {MESES_COLS.map(m => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}
           </SelectContent>
         </Select>
+        {!mesSelecionadoFechado && (
+          <span className="text-amber-500 text-xs" title="Mês não fechado — dados estimados por lançamentos">⚠️</span>
+        )}
       </div>
 
       {/* BLOCO 1 — Indicadores Zootécnicos */}
@@ -284,6 +292,17 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
               <span>{msg}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Banner de mês não fechado */}
+      {!mesSelecionadoFechado && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+          <span>⚠️</span>
+          <span>
+            Meses sem fechamento de pasto exibem dados estimados por lançamentos.
+            Para dados oficiais, feche os pastos do mês em <strong>Lanç. Zoo.</strong>
+          </span>
         </div>
       )}
 

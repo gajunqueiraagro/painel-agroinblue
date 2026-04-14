@@ -16,6 +16,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';

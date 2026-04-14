@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import type { SubAba } from './FinanceiroTab';
 import type { TabId } from '@/components/BottomNav';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 
 interface Props {
   onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => void;

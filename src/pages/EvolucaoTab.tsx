@@ -4,6 +4,9 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -11,6 +14,9 @@ interface Props {
 }
 
 export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
+  const { fazendaAtual } = useFazenda();
+  const fazendaId = fazendaAtual?.id;
+
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<number>();
     anos.add(new Date().getFullYear());
@@ -31,6 +37,9 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
   // FONTE OFICIAL: useRebanhoOficial para saldos por categoria
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
+
+  // Status de fechamento por mês (apresentação apenas)
+  const { mesFechado, temMesAberto } = useFechamentoCompetencia(fazendaId, Number(anoFiltro));
 
   const { meses, dados } = useMemo(() => {
     const lancFiltrados = lancamentos.filter(l => {
@@ -113,73 +122,114 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
   const totalSaldoInicial = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.saldoInicial || 0), 0);
 
   return (
-    <div className="w-full px-4 animate-fade-in pb-20">
-      {/* Filtro de ano - sticky */}
-      <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
-        <div className="w-40">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-            <SelectTrigger className="touch-target text-base font-bold">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent>
-              {anosDisponiveis.map(a => (
-                <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+    <TooltipProvider>
+      <div className="w-full px-4 animate-fade-in pb-20">
+        {/* Filtro de ano - sticky */}
+        <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
+          <div className="w-40">
+            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+              <SelectTrigger className="touch-target text-base font-bold">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {anosDisponiveis.map(a => (
+                  <SelectItem key={a} value={a} className="text-base">{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+
+        <div className="bg-card rounded-lg shadow-sm border overflow-x-auto -mx-4 sm:mx-0">
+          <table className="text-sm w-max sm:w-full">
+            <thead>
+              <tr className="border-b bg-primary/10">
+                <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 z-10 bg-primary/10 min-w-[100px]">
+                  Categoria
+                </th>
+                <th className="px-3 py-2 font-bold text-foreground text-center min-w-[70px] bg-primary/20">
+                  Saldo Ini.
+                </th>
+                {meses.map(m => {
+                  const mesNum = Number(m.split('-')[1]);
+                  const fechado = mesFechado(mesNum);
+                  return (
+                    <th key={m} className="px-3 py-2 font-bold text-foreground text-center whitespace-nowrap min-w-[70px]">
+                      {format(parseISO(m + '-01'), 'MMM/yy', { locale: ptBR })}
+                      {!fechado && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-amber-500 text-xs ml-1 cursor-help">⚠️</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px] text-xs">
+                            Mês não fechado — dados estimados por lançamentos
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {CATEGORIAS.map((cat, i) => (
+                <tr key={cat.value} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
+                  <td className={`px-3 py-2 font-bold text-foreground sticky left-0 z-10 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
+                    {cat.label}
+                  </td>
+                  <td className="px-3 py-2 text-center font-semibold text-foreground bg-primary/5">
+                    {dados[cat.value]?.saldoInicial || 0}
+                  </td>
+                  {meses.map(m => (
+                    <td key={m} className="px-3 py-2 text-center font-semibold text-foreground">
+                      {dados[cat.value]?.meses[m] || 0}
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </SelectContent>
-          </Select>
+              {/* Total row */}
+              <tr className="border-t-2 bg-primary/10">
+                <td className="px-3 py-2 font-extrabold text-foreground sticky left-0 z-10 bg-primary/10">TOTAL</td>
+                <td className="px-3 py-2 text-center font-extrabold text-foreground">{totalSaldoInicial}</td>
+                {meses.map(m => {
+                  const total = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.meses[m] || 0), 0);
+                  const mesNum = Number(m.split('-')[1]);
+                  const fechado = mesFechado(mesNum);
+                  return (
+                    <td key={m} className="px-3 py-2 text-center font-extrabold text-foreground">
+                      {total}
+                      {!fechado && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-amber-500 text-xs ml-1 cursor-help">⚠️</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px] text-xs">
+                            Total inclui meses estimados
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {temMesAberto && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+            <span>⚠️</span>
+            <span>
+              Meses sem fechamento de pasto exibem dados estimados por lançamentos.
+              Para dados oficiais, feche os pastos do mês em <strong>Lanç. Zoo.</strong>
+            </span>
+          </div>
+        )}
+
         </div>
       </div>
-
-      <div className="p-4 space-y-4">
-
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto -mx-4 sm:mx-0">
-        <table className="text-sm w-max sm:w-full">
-          <thead>
-            <tr className="border-b bg-primary/10">
-              <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 z-10 bg-primary/10 min-w-[100px]">
-                Categoria
-              </th>
-              <th className="px-3 py-2 font-bold text-foreground text-center min-w-[70px] bg-primary/20">
-                Saldo Ini.
-              </th>
-              {meses.map(m => (
-                <th key={m} className="px-3 py-2 font-bold text-foreground text-center whitespace-nowrap min-w-[70px]">
-                  {format(parseISO(m + '-01'), 'MMM/yy', { locale: ptBR })}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {CATEGORIAS.map((cat, i) => (
-              <tr key={cat.value} className={i % 2 === 0 ? '' : 'bg-muted/30'}>
-                <td className={`px-3 py-2 font-bold text-foreground sticky left-0 z-10 ${i % 2 === 0 ? 'bg-card' : 'bg-muted/30'}`}>
-                  {cat.label}
-                </td>
-                <td className="px-3 py-2 text-center font-semibold text-foreground bg-primary/5">
-                  {dados[cat.value]?.saldoInicial || 0}
-                </td>
-                {meses.map(m => (
-                  <td key={m} className="px-3 py-2 text-center font-semibold text-foreground">
-                    {dados[cat.value]?.meses[m] || 0}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {/* Total row */}
-            <tr className="border-t-2 bg-primary/10">
-              <td className="px-3 py-2 font-extrabold text-foreground sticky left-0 z-10 bg-primary/10">TOTAL</td>
-              <td className="px-3 py-2 text-center font-extrabold text-foreground">{totalSaldoInicial}</td>
-              {meses.map(m => {
-                const total = CATEGORIAS.reduce((s, c) => s + (dados[c.value]?.meses[m] || 0), 0);
-                return (
-                  <td key={m} className="px-3 py-2 text-center font-extrabold text-foreground">{total}</td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }
