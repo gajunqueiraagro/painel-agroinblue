@@ -16,6 +16,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
 import type { FiltroGlobal } from './Index';
@@ -197,6 +198,10 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
   const zooKpis = useZooKpis(anoNum, mesNum);
   const globalFarmKpis = useGlobalFarmKpis(anoNum, mesNum);
+
+  // Status de fechamento (apresentação apenas)
+  const { mesFechado: mesFechadoFn } = useFechamentoCompetencia(fazendaAtual?.id, anoNum);
+  const mesSelecionadoFechado = mesFechadoFn(mesNum);
 
   // Derive Zoo status from the granular useStatusZootecnico (same source as detail view)
   const zooNivel: StatusNivel = statusZoo.status as StatusNivel;
@@ -523,6 +528,16 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           <CheckCircle2 className="h-3 w-3 text-success" />
           <span className="text-[10px] font-semibold text-success">
             Nenhuma pendência — {mesLabel}/{filtroGlobal.ano}
+          </span>
+        </div>
+      )}
+
+      {!mesSelecionadoFechado && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+          <span>⚠️</span>
+          <span>
+            Meses sem fechamento de pasto exibem dados estimados por lançamentos.
+            Para dados oficiais, feche os pastos do mês em <strong>Lanç. Zoo.</strong>
           </span>
         </div>
       )}

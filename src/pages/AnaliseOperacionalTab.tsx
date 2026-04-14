@@ -19,13 +19,14 @@ import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import type { SubAba } from './FinanceiroTab';
 import type { TabId } from '@/components/BottomNav';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 
 interface Props {
   onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; backTab?: TabId }) => void;
 }
 
 export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
   const { lancamentos } = useLancamentos();
@@ -33,6 +34,10 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
 
   const [ano, mes] = anoMes.split('-').map(Number);
+
+  // Status de fechamento (apresentação apenas)
+  const { mesFechado: mesFechadoFn } = useFechamentoCompetencia(fazendaAtual?.id, ano);
+  const mesSelecionadoFechado = mesFechadoFn(mes);
 
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewData } = useRebanhoOficial({ ano, cenario: 'realizado' });
@@ -255,6 +260,16 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
               <span className="text-sm">{s.mensagem}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {!mesSelecionadoFechado && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
+          <span>⚠️</span>
+          <span>
+            Meses sem fechamento de pasto exibem dados estimados por lançamentos.
+            Para dados oficiais, feche os pastos do mês em <strong>Lanç. Zoo.</strong>
+          </span>
         </div>
       )}
     </div>
