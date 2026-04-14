@@ -2441,6 +2441,7 @@ export type Database = {
           origem_lancamento: string
           origem_tipo: string | null
           plano_conta_id: string | null
+          sem_movimentacao_caixa: boolean
           sinal: number
           status_duplicidade: string
           status_transacao: string | null
@@ -2493,6 +2494,7 @@ export type Database = {
           origem_lancamento?: string
           origem_tipo?: string | null
           plano_conta_id?: string | null
+          sem_movimentacao_caixa?: boolean
           sinal?: number
           status_duplicidade?: string
           status_transacao?: string | null
@@ -2545,6 +2547,7 @@ export type Database = {
           origem_lancamento?: string
           origem_tipo?: string | null
           plano_conta_id?: string | null
+          sem_movimentacao_caixa?: boolean
           sinal?: number
           status_duplicidade?: string
           status_transacao?: string | null
@@ -3085,6 +3088,93 @@ export type Database = {
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_destinacoes: {
+        Row: {
+          cliente_id: string
+          conta_bancaria_id: string | null
+          created_at: string
+          descricao: string
+          financiamento_id: string
+          fornecedor_id: string | null
+          gerar_lancamento: boolean
+          id: string
+          lancamento_id: string | null
+          observacao: string | null
+          plano_conta_id: string | null
+          tipo: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          cliente_id: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          descricao: string
+          financiamento_id: string
+          fornecedor_id?: string | null
+          gerar_lancamento?: boolean
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          plano_conta_id?: string | null
+          tipo: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          cliente_id?: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          descricao?: string
+          financiamento_id?: string
+          fornecedor_id?: string | null
+          gerar_lancamento?: boolean
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          plano_conta_id?: string | null
+          tipo?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_destinacoes_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
             referencedColumns: ["id"]
           },
         ]
