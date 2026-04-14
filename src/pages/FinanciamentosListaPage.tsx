@@ -35,8 +35,13 @@ const statusColor: Record<string, string> = {
   cancelado: 'bg-red-100 text-red-800',
 };
 
-export default function FinanciamentosListaPage() {
-  const navigate = useNavigate();
+interface FinanciamentosListaProps {
+  onNovo?: () => void;
+  onDetalhe?: (id: string) => void;
+  onVoltar?: () => void;
+}
+
+export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }: FinanciamentosListaProps = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
