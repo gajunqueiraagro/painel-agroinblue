@@ -271,6 +271,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     setReais('');
   };
 
+  const handleBonusReaisChange = (
+    setArr: (v: string) => void,
+    setReais: (v: string) => void,
+    value: string,
+  ) => {
+    setReais(value); markDirty();
+    setArr('');
+  };
+
   // Funrural bidirectional
   const handleFunruralPctChange = (value: string) => {
     setFunruralPct(value); markDirty();
