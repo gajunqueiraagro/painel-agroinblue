@@ -8,8 +8,18 @@ import { ClienteProvider } from "@/contexts/ClienteContext";
 import { FazendaProvider } from "@/contexts/FazendaContext";
 import AppRouter from "./AppRouter";
 import NotFound from "./pages/NotFound.tsx";
+import { lazy, Suspense } from "react";
+
+const FinanciamentoCadastro = lazy(() => import("./pages/FinanciamentoCadastro"));
+const FinanciamentosListaPage = lazy(() => import("./pages/FinanciamentosListaPage"));
 
 const queryClient = new QueryClient();
+
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <span className="text-3xl animate-pulse">💰</span>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -22,6 +32,8 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<AppRouter />} />
+                <Route path="/financiamentos" element={<Suspense fallback={<LoadingFallback />}><FinanciamentosListaPage /></Suspense>} />
+                <Route path="/financiamentos/novo" element={<Suspense fallback={<LoadingFallback />}><FinanciamentoCadastro /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
