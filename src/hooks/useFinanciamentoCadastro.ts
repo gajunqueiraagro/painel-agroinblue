@@ -274,6 +274,30 @@ export function useFinanciamentoCadastro() {
         }
       }
 
+      // 4 – Destinações (opcional)
+      if (destinacoes && destinacoes.length > 0) {
+        const destInsert = destinacoes.map(d => ({
+          financiamento_id: fin.id,
+          cliente_id: clienteId,
+          descricao: d.descricao,
+          tipo: d.tipo,
+          valor: d.valor,
+          fornecedor_id: d.fornecedor_id || null,
+          conta_bancaria_id: d.conta_bancaria_id || null,
+          plano_conta_id: d.plano_conta_id || null,
+          gerar_lancamento: d.gerar_lancamento,
+          observacao: d.observacao || null,
+        }));
+
+        const { error: errDest } = await supabase
+          .from('financiamento_destinacoes')
+          .insert(destInsert);
+
+        if (errDest) {
+          toast.warning('Financiamento salvo, mas houve erro ao salvar destinações: ' + errDest.message);
+        }
+      }
+
       toast.success('Financiamento cadastrado com sucesso!');
       return true;
     } catch (err: any) {
