@@ -14,6 +14,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
 import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
+import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 
 export default function FinanciamentoCadastro() {
   const navigate = useNavigate();
@@ -26,9 +27,11 @@ export default function FinanciamentoCadastro() {
     salvar, saving,
     fornecedores, contas,
     planosEntrada, planosSaida,
+    clienteId,
   } = useFinanciamentoCadastro();
 
   const [credorOpen, setCredorOpen] = useState(false);
+  const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
 
   const set = useCallback(
     <K extends keyof FinanciamentoForm>(k: K, v: FinanciamentoForm[K]) =>
@@ -44,7 +47,7 @@ export default function FinanciamentoCadastro() {
   }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
 
   const handleSalvar = async () => {
-    const ok = await salvar();
+    const ok = await salvar(destinacoes);
     if (ok) navigate('/financiamentos');
   };
 
@@ -283,7 +286,21 @@ export default function FinanciamentoCadastro() {
         </CardContent>
       </Card>
 
-      {/* Seção 4 – Preview de parcelas */}
+      {/* Seção 5 – Destinações do contrato */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <h3 className="font-semibold text-sm">Destinação do Contrato</h3>
+        <p className="text-xs text-muted-foreground">
+          Como o valor contratado será distribuído (opcional — pode ser preenchido depois)
+        </p>
+        <DestinacoesForm
+          clienteId={clienteId}
+          valorContrato={form.valor_total}
+          destinacoes={destinacoes}
+          onChange={setDestinacoes}
+        />
+      </div>
+
+      {/* Seção 6 – Preview de parcelas */}
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Parcelas ({parcelas.length})</CardTitle>
