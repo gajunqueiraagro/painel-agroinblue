@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
@@ -7,6 +6,7 @@ import {
 
 interface Props {
   onTabChange: (tab: TabId) => void;
+  onAbrirFinanciamentos?: () => void;
 }
 
 const CADASTRO_ITEMS = [
