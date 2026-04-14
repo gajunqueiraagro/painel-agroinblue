@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
