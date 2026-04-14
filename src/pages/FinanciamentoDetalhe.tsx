@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
-import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { ArrowLeft, Pencil, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
