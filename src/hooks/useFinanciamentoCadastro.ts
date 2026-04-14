@@ -1,0 +1,267 @@
+import { useState, useMemo, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { addMonths, format } from 'date-fns';
+
+/* ── Types ── */
+export interface ParcelaPreview {
+  numero: number;
+  data_vencimento: string;
+  valor_principal: number;
+  valor_juros: number;
+}
+
+export interface FinanciamentoForm {
+  descricao: string;
+  tipo_financiamento: 'pecuaria' | 'agricultura';
+  credor_id: string;
+  conta_bancaria_id: string;
+  valor_total: number;
+  valor_entrada: number;
+  data_contrato: string;
+  data_primeira_parcela: string;
+  total_parcelas: number;
+  taxa_juros_mensal: number;
+  observacao: string;
+  plano_conta_captacao_id: string;
+  plano_conta_parcela_id: string;
+  gerar_lancamento_captacao: boolean;
+}
+
+const INITIAL: FinanciamentoForm = {
+  descricao: '',
+  tipo_financiamento: 'pecuaria',
+  credor_id: '',
+  conta_bancaria_id: '',
+  valor_total: 0,
+  valor_entrada: 0,
+  data_contrato: '',
+  data_primeira_parcela: '',
+  total_parcelas: 12,
+  taxa_juros_mensal: 0,
+  observacao: '',
+  plano_conta_captacao_id: '',
+  plano_conta_parcela_id: '',
+  gerar_lancamento_captacao: false,
+};
+
+export function useFinanciamentoCadastro() {
+  const { clienteAtual } = useCliente();
+  const { fazendaAtual } = useFazenda();
+  const { user } = useAuth();
+  const clienteId = clienteAtual?.id ?? '';
+  const fazendaId = fazendaAtual?.id === '__global__' ? null : (fazendaAtual?.id ?? null);
+
+  const [form, setForm] = useState<FinanciamentoForm>({ ...INITIAL });
+  const [parcelas, setParcelas] = useState<ParcelaPreview[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  /* ── Lookups ── */
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ['fin-fornecedores', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .order('nome');
+      return data ?? [];
+    },
+  });
+
+  const { data: contas = [] } = useQuery({
+    queryKey: ['fin-contas-bancarias', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('id, nome_conta, nome_exibicao, banco')
+        .eq('cliente_id', clienteId)
+        .eq('ativa', true)
+        .order('ordem_exibicao');
+      return data ?? [];
+    },
+  });
+
+  const { data: planosEntrada = [] } = useQuery({
+    queryKey: ['fin-plano-captacao', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, subcentro, centro_custo, macro_custo')
+        .eq('ativo', true)
+        .eq('macro_custo', 'Entrada Financeira')
+        .or(`cliente_id.eq.${clienteId},cliente_id.is.null`)
+        .order('ordem_exibicao');
+      return data ?? [];
+    },
+  });
+
+  const { data: planosSaida = [] } = useQuery({
+    queryKey: ['fin-plano-amortizacao', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_plano_contas')
+        .select('id, subcentro, centro_custo, macro_custo')
+        .eq('ativo', true)
+        .eq('macro_custo', 'Saída Financeira')
+        .or(`cliente_id.eq.${clienteId},cliente_id.is.null`)
+        .order('ordem_exibicao');
+      return data ?? [];
+    },
+  });
+
+  /* ── Geração de parcelas ── */
+  const gerarParcelas = useCallback(() => {
+    const { valor_total, valor_entrada, total_parcelas, taxa_juros_mensal, data_primeira_parcela } = form;
+    if (!valor_total || !total_parcelas || !data_primeira_parcela) return;
+
+    const base = (valor_total - valor_entrada) / total_parcelas;
+    const juros = base * (taxa_juros_mensal / 100);
+    const baseDate = new Date(data_primeira_parcela + 'T12:00:00');
+
+    const novas: ParcelaPreview[] = Array.from({ length: total_parcelas }, (_, i) => ({
+      numero: i + 1,
+      data_vencimento: format(addMonths(baseDate, i), 'yyyy-MM-dd'),
+      valor_principal: Math.round(base * 100) / 100,
+      valor_juros: Math.round(juros * 100) / 100,
+    }));
+    setParcelas(novas);
+  }, [form]);
+
+  const updateParcela = useCallback((idx: number, field: keyof ParcelaPreview, value: any) => {
+    setParcelas(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  }, []);
+
+  const totalParcelas = useMemo(
+    () => parcelas.reduce((s, p) => s + p.valor_principal + p.valor_juros, 0),
+    [parcelas],
+  );
+
+  /* ── Salvar ── */
+  const salvar = useCallback(async (): Promise<boolean> => {
+    if (!clienteId || !user) {
+      toast.error('Sessão inválida');
+      return false;
+    }
+    if (!form.descricao.trim()) {
+      toast.error('Preencha a descrição');
+      return false;
+    }
+    if (!form.data_contrato || !form.data_primeira_parcela) {
+      toast.error('Preencha as datas');
+      return false;
+    }
+    if (parcelas.length === 0) {
+      toast.error('Gere as parcelas antes de salvar');
+      return false;
+    }
+
+    setSaving(true);
+    try {
+      // 1 – Insert financiamento
+      const { data: fin, error: errFin } = await supabase
+        .from('financiamentos')
+        .insert({
+          cliente_id: clienteId,
+          fazenda_id: fazendaId,
+          descricao: form.descricao.trim(),
+          tipo_financiamento: form.tipo_financiamento,
+          credor_id: form.credor_id || null,
+          conta_bancaria_id: form.conta_bancaria_id || null,
+          valor_total: form.valor_total,
+          valor_entrada: form.valor_entrada,
+          taxa_juros_mensal: form.taxa_juros_mensal,
+          total_parcelas: form.total_parcelas,
+          data_contrato: form.data_contrato,
+          data_primeira_parcela: form.data_primeira_parcela,
+          plano_conta_captacao_id: form.plano_conta_captacao_id || null,
+          plano_conta_parcela_id: form.plano_conta_parcela_id || null,
+          gerar_lancamento_captacao: form.gerar_lancamento_captacao,
+          observacao: form.observacao || null,
+          status: 'ativo',
+          created_by: user.id,
+        })
+        .select('id')
+        .single();
+
+      if (errFin || !fin) throw new Error(errFin?.message ?? 'Erro ao salvar financiamento');
+
+      // 2 – Insert parcelas
+      const parcelasInsert = parcelas.map(p => ({
+        financiamento_id: fin.id,
+        cliente_id: clienteId,
+        numero_parcela: p.numero,
+        data_vencimento: p.data_vencimento,
+        valor_principal: p.valor_principal,
+        valor_juros: p.valor_juros,
+        status: 'pendente' as const,
+      }));
+
+      const { error: errParcelas } = await supabase
+        .from('financiamento_parcelas')
+        .insert(parcelasInsert);
+
+      if (errParcelas) {
+        // Rollback financiamento
+        await supabase.from('financiamentos').delete().eq('id', fin.id);
+        throw new Error(errParcelas.message);
+      }
+
+      // 3 – Lançamento de captação (opcional)
+      if (form.gerar_lancamento_captacao && form.plano_conta_captacao_id) {
+        const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
+        const { error: errLanc } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .insert({
+            cliente_id: clienteId,
+            fazenda_id: fazendaId,
+            conta_bancaria_id: form.conta_bancaria_id || null,
+            tipo_operacao: '1-Entradas',
+            sinal: 1,
+            valor: form.valor_total,
+            data_competencia: form.data_contrato,
+            ano_mes: anoMes,
+            origem_lancamento: 'financiamento',
+            origem_tipo: 'financiamento_captacao',
+            plano_conta_id: form.plano_conta_captacao_id,
+            descricao: `Captação: ${form.descricao.trim()}`,
+            status_transacao: 'realizado',
+            created_by: user.id,
+          });
+
+        if (errLanc) {
+          console.error('Erro ao gerar lançamento de captação:', errLanc);
+          toast.warning('Financiamento salvo, mas o lançamento de captação falhou.');
+        }
+      }
+
+      toast.success('Financiamento cadastrado com sucesso!');
+      return true;
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [clienteId, fazendaId, user, form, parcelas]);
+
+  return {
+    form, setForm,
+    parcelas, setParcelas,
+    gerarParcelas,
+    updateParcela,
+    totalParcelas,
+    salvar, saving,
+    fornecedores, contas,
+    planosEntrada, planosSaida,
+  };
+}
