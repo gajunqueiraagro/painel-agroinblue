@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { FinanceiroTab } from './FinanceiroTab';
 import { FluxoAnualTab } from './FluxoAnualTab';
 import { ValorRebanhoTab } from './ValorRebanhoTab';
@@ -22,7 +23,18 @@ interface Props {
 }
 
 export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onEditarAbate, onEditarVenda, onEditarCompra }: Props) {
+  const { bloqueado } = useRedirecionarPecuaria();
   const [activeTab, setActiveTab] = useState('movimentacoes');
+
+  if (bloqueado) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <span className="text-4xl">🐄</span>
+        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
+        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
+      </div>
+    );
+  }
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

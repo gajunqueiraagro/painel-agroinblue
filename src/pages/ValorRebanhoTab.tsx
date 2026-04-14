@@ -357,9 +357,19 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
-  useRedirecionarPecuaria();
+  const { bloqueado } = useRedirecionarPecuaria();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+
+  if (bloqueado) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <span className="text-4xl">🐄</span>
+        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
+        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
+      </div>
+    );
+  }
   const qc = useQueryClient();
 
   // IDs de fazendas pecuárias (para Global)

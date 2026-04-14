@@ -60,7 +60,18 @@ const GROUPS: { title: string; emoji: string; items: GroupItem[] }[] = [
 
 export function ZootecnicoHubTab({ onTabChange, filtroGlobal }: Props) {
   const { fazendaAtual } = useFazenda();
-  useRedirecionarPecuaria();
+  const { bloqueado } = useRedirecionarPecuaria();
+
+  if (bloqueado) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <span className="text-4xl">🐄</span>
+        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
+        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
+      </div>
+    );
+  }
+
   const navTo = (tab: TabId) => {
     if (filtroGlobal) {
       onTabChange(tab, filtroGlobal);
