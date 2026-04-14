@@ -132,11 +132,11 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
 
       <div className="p-4 space-y-4">
 
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto -mx-4 sm:mx-0">
+        <table className="text-sm w-max sm:w-full">
           <thead>
             <tr className="border-b bg-primary/10">
-              <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 bg-primary/10 min-w-[100px]">
+              <th className="text-left px-3 py-2 font-bold text-foreground sticky left-0 z-10 bg-primary/10 min-w-[100px]">
                 Categoria
               </th>
               <th className="px-3 py-2 font-bold text-foreground text-center min-w-[70px] bg-primary/20">
