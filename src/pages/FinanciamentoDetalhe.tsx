@@ -34,7 +34,6 @@ interface FinanciamentoDetalheProps {
 
 export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDetalheProps = {}) {
   const qc = useQueryClient();
-  const qc = useQueryClient();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
@@ -184,7 +183,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
   return (
     <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4 pb-20">
       {/* Voltar */}
-      <Button variant="ghost" size="sm" onClick={() => navigate('/financiamentos')} className="gap-1">
+      <Button variant="ghost" size="sm" onClick={onVoltar} className="gap-1">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </Button>
 
