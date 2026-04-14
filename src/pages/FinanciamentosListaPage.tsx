@@ -136,8 +136,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
-        <Button size="sm" className="gap-1" onClick={() => navigate('/financiamentos/novo')}>
+        <div className="flex items-center gap-2">
+          {onVoltar && (
+            <Button variant="ghost" size="icon" onClick={onVoltar}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
+        </div>
+        <Button size="sm" className="gap-1" onClick={onNovo}>
           <Plus className="h-4 w-4" /> Novo
         </Button>
       </div>
@@ -213,7 +220,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => navigate(`/financiamentos/${f.id}`)}
+                          onClick={() => onDetalhe?.(f.id)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
