@@ -484,7 +484,10 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       for (const { indices, rows: catRows } of byCat.values()) {
         // Ordenar por mês para garantir sequência
         const sorted = catRows.map((r, idx) => ({ row: r, origIdx: indices[idx] }))
-          .sort((a, b) => a.row.mes - b.row.mes);
+          .sort((a, b) => {
+            if (a.row.ano !== b.row.ano) return a.row.ano - b.row.ano;
+            return a.row.mes - b.row.mes;
+          });
 
         let prevPesoTotalFinalOficial: number | null = null;
 
