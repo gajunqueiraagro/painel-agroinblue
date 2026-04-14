@@ -2589,6 +2589,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
+                  {l.observacao && (
+                    <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
+                      💬 {l.observacao}
+                    </span>
+                  )}
                   {/* Rastreabilidade de origem */}
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className={`text-[8px] px-1 py-0.5 rounded ${
