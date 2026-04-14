@@ -310,6 +310,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           {showTipo && <th className={`${TABLE_HEAD_CELL} text-left`}>Tipo</th>}
           <SortableHeader label="Qtd" align="text-right" sortKey="qtd" {...hp} />
           <SortableHeader label="Categoria" align="text-left" sortKey="categoria" {...hp} />
+          {isCompra && <th className={`${TABLE_HEAD_CELL} text-left`}>Fornecedor</th>}
           {showDestino && <SortableHeader label={isMorte ? 'Motivo' : 'Destino'} align="text-left" sortKey="destino" {...hp} />}
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
           <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
@@ -332,6 +333,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showTipo && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
               <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
+              {isCompra && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaOrigem || l.compradorFornecedor || '—'}</td>}
               {showDestino && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
