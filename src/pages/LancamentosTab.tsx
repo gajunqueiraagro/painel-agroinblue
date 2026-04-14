@@ -2568,6 +2568,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <p className="text-center text-muted-foreground py-8 text-[12px]">Nenhum lançamento no período</p>
         ) : (
           historicoFiltrado.slice(0, 50).map(l => {
+            if (l.tipo === 'morte') {
+              console.log('[MORTE DEBUG]', { id: l.id, obs: l.observacao, dest: l.fazendaDestino });
+            }
             const entrada = isEntrada(l.tipo);
             const reclass = isReclassificacao(l.tipo);
             const catLabel = CATEGORIAS.find(c => c.value === l.categoria)?.label;
