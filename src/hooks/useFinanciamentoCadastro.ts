@@ -169,7 +169,11 @@ export function useFinanciamentoCadastro() {
   );
 
   /* ── Salvar ── */
-  const salvar = useCallback(async (): Promise<boolean> => {
+  const salvar = useCallback(async (destinacoes?: Array<{
+    descricao: string; tipo: string; valor: number;
+    fornecedor_id: string; conta_bancaria_id: string;
+    plano_conta_id: string; gerar_lancamento: boolean; observacao: string;
+  }>): Promise<boolean> => {
     if (!clienteId || !user) {
       toast.error('Sessão inválida');
       return false;
