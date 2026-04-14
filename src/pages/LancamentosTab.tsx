@@ -911,6 +911,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
+    if (l.tipo === 'morte') {
+      const motivo = l.fazendaDestino || l.observacao || '';
+      const isPreset = MOTIVOS_MORTE.includes(motivo);
+      setMotivoMorte(isPreset ? motivo : motivo ? '__custom__' : '');
+      setMotivoMorteCustom(isPreset ? '' : motivo);
+    }
     setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
     setNotaFiscal(l.notaFiscal || '');
 
@@ -1096,6 +1102,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
+    if (l.tipo === 'morte') {
+      const motivo = l.fazendaDestino || l.observacao || '';
+      const isPreset = MOTIVOS_MORTE.includes(motivo);
+      setMotivoMorte(isPreset ? motivo : motivo ? '__custom__' : '');
+      setMotivoMorteCustom(isPreset ? '' : motivo);
+    }
     setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
     setNotaFiscal(l.notaFiscal || '');
 
@@ -1229,6 +1241,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
+    if (l.tipo === 'morte') {
+      const motivo = l.fazendaDestino || l.observacao || '';
+      const isPreset = MOTIVOS_MORTE.includes(motivo);
+      setMotivoMorte(isPreset ? motivo : motivo ? '__custom__' : '');
+      setMotivoMorteCustom(isPreset ? '' : motivo);
+    }
     setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
 
     // Hydrate from snapshot
