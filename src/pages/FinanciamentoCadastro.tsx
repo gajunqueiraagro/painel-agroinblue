@@ -285,7 +285,21 @@ export default function FinanciamentoCadastro() {
         </CardContent>
       </Card>
 
-      {/* Seção 4 – Preview de parcelas */}
+      {/* Seção 5 – Destinações do contrato */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <h3 className="font-semibold text-sm">Destinação do Contrato</h3>
+        <p className="text-xs text-muted-foreground">
+          Como o valor contratado será distribuído (opcional — pode ser preenchido depois)
+        </p>
+        <DestinacoesForm
+          clienteId={form.conta_bancaria_id ? '' : ''}
+          valorContrato={form.valor_total}
+          destinacoes={destinacoes}
+          onChange={setDestinacoes}
+        />
+      </div>
+
+      {/* Seção 6 – Preview de parcelas */}
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm">Parcelas ({parcelas.length})</CardTitle>
