@@ -289,12 +289,57 @@ export function useFinanciamentoCadastro() {
           observacao: d.observacao || null,
         }));
 
-        const { error: errDest } = await supabase
+        const { data: destSalvas, error: errDest } = await supabase
           .from('financiamento_destinacoes')
-          .insert(destInsert);
+          .insert(destInsert)
+          .select('id, tipo, valor, plano_conta_id, conta_bancaria_id, descricao, gerar_lancamento');
 
         if (errDest) {
           toast.warning('Financiamento salvo, mas houve erro ao salvar destinações: ' + errDest.message);
+        } else if (destSalvas) {
+          for (const dest of destSalvas) {
+            if (!dest.gerar_lancamento) continue;
+
+            const isEntrada = dest.tipo === 'conta_propria';
+            const tipoOperacao = isEntrada ? '1-Entradas' : '2-Saídas';
+            const sinal = isEntrada ? 1 : -1;
+            const semCaixa = dest.tipo !== 'conta_propria';
+            const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
+
+            const { data: lancDest, error: errLancDest } = await supabase
+              .from('financeiro_lancamentos_v2')
+              .insert({
+                cliente_id: clienteId,
+                fazenda_id: fazendaId,
+                conta_bancaria_id: dest.conta_bancaria_id || null,
+                tipo_operacao: tipoOperacao,
+                sinal: sinal,
+                valor: dest.valor,
+                data_competencia: form.data_contrato,
+                ano_mes: anoMes,
+                origem_lancamento: 'financiamento',
+                origem_tipo: 'financiamento_destinacao',
+                plano_conta_id: dest.plano_conta_id || null,
+                descricao: `${dest.descricao} — ${form.descricao.trim()}`,
+                status_transacao: 'realizado',
+                cancelado: false,
+                sem_movimentacao_caixa: semCaixa,
+                created_by: user.id,
+              })
+              .select('id')
+              .single();
+
+            if (errLancDest) {
+              console.error('Erro ao gerar lançamento da destinação:', errLancDest);
+              toast.warning(`Destinação "${dest.descricao}" salva, mas lançamento falhou.`);
+              continue;
+            }
+
+            await supabase
+              .from('financiamento_destinacoes')
+              .update({ lancamento_id: lancDest.id, updated_at: new Date().toISOString() })
+              .eq('id', dest.id);
+          }
         }
       }
 
