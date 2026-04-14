@@ -1,7 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, Construction, SearchCheck, UserCircle,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, SearchCheck, UserCircle,
 } from 'lucide-react';
 
 interface Props {
@@ -17,6 +18,7 @@ const CADASTRO_ITEMS = [
 ];
 
 export function FinanceiroV2HubTab({ onTabChange }: Props) {
+  const navigate = useNavigate();
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
       <div className="p-4 space-y-5">
@@ -118,18 +120,22 @@ export function FinanceiroV2HubTab({ onTabChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* RIGHT column – Financiamentos (coming soon) */}
-          <Card className="border-dashed border-muted-foreground/20 opacity-60">
-            <CardContent className="p-5 flex flex-col items-center justify-center text-center gap-3 h-full min-h-[140px]">
-              <div className="rounded-md bg-muted p-2.5">
-                <Construction className="h-5 w-5 text-muted-foreground" />
+          {/* RIGHT column – Financiamentos */}
+          <div
+            onClick={() => navigate('/financiamentos')}
+            className="cursor-pointer rounded-xl border border-border bg-card p-4 hover:bg-accent transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Landmark className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="font-medium text-sm">Financiamentos</p>
+                  <p className="text-xs text-muted-foreground">Controle de empréstimos e parcelas</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-bold text-muted-foreground">Financiamentos</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Em construção</p>
-              </div>
-            </CardContent>
-          </Card>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
         </div>
 
         {/* Bottom row */}
