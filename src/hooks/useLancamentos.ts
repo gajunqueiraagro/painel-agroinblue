@@ -129,6 +129,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
         precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
         observacao: l.observacao ?? undefined,
+        compradorFornecedor: l.comprador_fornecedor ?? undefined,
         precoArroba: l.preco_arroba ?? undefined,
         pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,
         bonusPrecoce: l.bonus_precoce ?? undefined,

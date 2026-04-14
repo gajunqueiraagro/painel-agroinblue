@@ -58,6 +58,7 @@ export interface Lancamento {
   pesoMedioArrobas?: number;
   precoMedioCabeca?: number;
   observacao?: string;
+  compradorFornecedor?: string;
   // Financial fields
   precoArroba?: number;
   pesoCarcacaKg?: number;

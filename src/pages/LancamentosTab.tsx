@@ -2592,14 +2592,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
-                  {l.tipo === 'morte' && (l.fazendaDestino || l.observacao) && (
+                  {(l.fazendaDestino || l.compradorFornecedor || l.observacao) && (
                     <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
-                      📝 {l.fazendaDestino || l.observacao}
-                    </span>
-                  )}
-                  {l.tipo !== 'morte' && l.observacao && (
-                    <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
-                      📝 {l.observacao}
+                      📝 {l.fazendaDestino || l.compradorFornecedor || l.observacao}
                     </span>
                   )}
                   {/* Rastreabilidade de origem */}
