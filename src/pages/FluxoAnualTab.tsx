@@ -51,6 +51,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // FONTE OFICIAL: useRebanhoOficial — saldos agregados da vw_zoot_categoria_mensal
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
+  console.log('[FLUXO DEBUG]', { anoFiltro, cenarioView, fazendaAtualId: fazendaAtual?.id, fazendaAtualNome: fazendaAtual?.nome });
 
   // UNIFICAÇÃO: saldos da fazenda = soma das categorias (totaisPorMes)
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
