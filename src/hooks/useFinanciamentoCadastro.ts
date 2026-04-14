@@ -15,6 +15,8 @@ export interface ParcelaPreview {
   valor_juros: number;
 }
 
+export type FrequenciaParcela = 'mensal' | 'bimestral' | 'trimestral' | 'semestral' | 'anual';
+
 export interface FinanciamentoForm {
   descricao: string;
   tipo_financiamento: 'pecuaria' | 'agricultura';
@@ -25,7 +27,8 @@ export interface FinanciamentoForm {
   data_contrato: string;
   data_primeira_parcela: string;
   total_parcelas: number;
-  taxa_juros_mensal: number;
+  taxa_juros_anual: number;
+  frequencia_parcela: FrequenciaParcela;
   observacao: string;
   plano_conta_captacao_id: string;
   plano_conta_parcela_id: string;
@@ -42,11 +45,20 @@ const INITIAL: FinanciamentoForm = {
   data_contrato: '',
   data_primeira_parcela: '',
   total_parcelas: 12,
-  taxa_juros_mensal: 0,
+  taxa_juros_anual: 0,
+  frequencia_parcela: 'mensal',
   observacao: '',
   plano_conta_captacao_id: '',
   plano_conta_parcela_id: '',
   gerar_lancamento_captacao: false,
+};
+
+const MESES_POR_FREQUENCIA: Record<FrequenciaParcela, number> = {
+  mensal: 1,
+  bimestral: 2,
+  trimestral: 3,
+  semestral: 6,
+  anual: 12,
 };
 
 export function useFinanciamentoCadastro() {
@@ -121,16 +133,26 @@ export function useFinanciamentoCadastro() {
 
   /* ── Geração de parcelas ── */
   const gerarParcelas = useCallback(() => {
-    const { valor_total, valor_entrada, total_parcelas, taxa_juros_mensal, data_primeira_parcela } = form;
+    const { valor_total, valor_entrada, total_parcelas, taxa_juros_anual, data_primeira_parcela, frequencia_parcela } = form;
     if (!valor_total || !total_parcelas || !data_primeira_parcela) return;
 
+    const mesesPorParcela = MESES_POR_FREQUENCIA[frequencia_parcela] ?? 1;
     const base = (valor_total - valor_entrada) / total_parcelas;
-    const juros = base * (taxa_juros_mensal / 100);
+
+    // Juros compostos: anual → mensal → período
+    const taxaMensal = taxa_juros_anual > 0
+      ? Math.pow(1 + taxa_juros_anual / 100, 1 / 12) - 1
+      : 0;
+    const taxaPeriodo = taxaMensal > 0
+      ? Math.pow(1 + taxaMensal, mesesPorParcela) - 1
+      : 0;
+    const juros = base * taxaPeriodo;
+
     const baseDate = new Date(data_primeira_parcela + 'T12:00:00');
 
     const novas: ParcelaPreview[] = Array.from({ length: total_parcelas }, (_, i) => ({
       numero: i + 1,
-      data_vencimento: format(addMonths(baseDate, i), 'yyyy-MM-dd'),
+      data_vencimento: format(addMonths(baseDate, i * mesesPorParcela), 'yyyy-MM-dd'),
       valor_principal: Math.round(base * 100) / 100,
       valor_juros: Math.round(juros * 100) / 100,
     }));
@@ -167,6 +189,11 @@ export function useFinanciamentoCadastro() {
 
     setSaving(true);
     try {
+      // Conversão juros compostos: anual → mensal
+      const taxaMensal = form.taxa_juros_anual > 0
+        ? (Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100
+        : 0;
+
       // 1 – Insert financiamento
       const { data: fin, error: errFin } = await supabase
         .from('financiamentos')
@@ -179,7 +206,7 @@ export function useFinanciamentoCadastro() {
           conta_bancaria_id: form.conta_bancaria_id || null,
           valor_total: form.valor_total,
           valor_entrada: form.valor_entrada,
-          taxa_juros_mensal: form.taxa_juros_mensal,
+          taxa_juros_mensal: Math.round(taxaMensal * 10000) / 10000,
           total_parcelas: form.total_parcelas,
           data_contrato: form.data_contrato,
           data_primeira_parcela: form.data_primeira_parcela,
@@ -211,7 +238,6 @@ export function useFinanciamentoCadastro() {
         .insert(parcelasInsert);
 
       if (errParcelas) {
-        // Rollback financiamento
         await supabase.from('financiamentos').delete().eq('id', fin.id);
         throw new Error(errParcelas.message);
       }

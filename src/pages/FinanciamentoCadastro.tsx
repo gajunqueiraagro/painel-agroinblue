@@ -1,7 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, RefreshCw } from 'lucide-react';
-import { format } from 'date-fns';
+import { ArrowLeft, Plus, RefreshCw, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,6 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
@@ -27,6 +28,8 @@ export default function FinanciamentoCadastro() {
     planosEntrada, planosSaida,
   } = useFinanciamentoCadastro();
 
+  const [credorOpen, setCredorOpen] = useState(false);
+
   const set = useCallback(
     <K extends keyof FinanciamentoForm>(k: K, v: FinanciamentoForm[K]) =>
       setForm(prev => ({ ...prev, [k]: v })),
@@ -38,7 +41,7 @@ export default function FinanciamentoCadastro() {
     if (form.valor_total > 0 && form.total_parcelas > 0 && form.data_primeira_parcela) {
       gerarParcelas();
     }
-  }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_mensal, form.data_primeira_parcela]);
+  }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
 
   const handleSalvar = async () => {
     const ok = await salvar();
@@ -86,14 +89,35 @@ export default function FinanciamentoCadastro() {
             </div>
             <div>
               <Label className="text-xs">Credor</Label>
-              <Select value={form.credor_id} onValueChange={v => set('credor_id', v)}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fornecedores.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={credorOpen} onOpenChange={setCredorOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+                    {form.credor_id
+                      ? fornecedores.find(f => f.id === form.credor_id)?.nome
+                      : 'Selecionar credor...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar credor..." />
+                    <CommandEmpty>Nenhum credor encontrado.</CommandEmpty>
+                    <CommandList>
+                      <CommandGroup>
+                        {fornecedores.map(f => (
+                          <CommandItem
+                            key={f.id}
+                            value={f.nome}
+                            onSelect={() => { set('credor_id', f.id); setCredorOpen(false); }}
+                          >
+                            {f.nome}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -153,7 +177,7 @@ export default function FinanciamentoCadastro() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">Nº parcelas *</Label>
               <Input
@@ -164,14 +188,32 @@ export default function FinanciamentoCadastro() {
               />
             </div>
             <div>
-              <Label className="text-xs">Juros mensal (%)</Label>
+              <Label className="text-xs">Frequência de vencimento</Label>
+              <Select value={form.frequencia_parcela} onValueChange={v => set('frequencia_parcela', v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensal">Mensal</SelectItem>
+                  <SelectItem value="bimestral">Bimestral</SelectItem>
+                  <SelectItem value="trimestral">Trimestral</SelectItem>
+                  <SelectItem value="semestral">Semestral</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Juros anual (%)</Label>
               <Input
                 type="number"
                 min={0}
                 step={0.01}
-                value={form.taxa_juros_mensal || ''}
-                onChange={e => set('taxa_juros_mensal', Number(e.target.value))}
+                value={form.taxa_juros_anual || ''}
+                onChange={e => set('taxa_juros_anual', Number(e.target.value))}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.taxa_juros_anual > 0
+                  ? `≈ ${((Math.pow(1 + form.taxa_juros_anual / 100, 1 / 12) - 1) * 100).toFixed(4)}% a.m.`
+                  : ''}
+              </p>
             </div>
           </div>
 
