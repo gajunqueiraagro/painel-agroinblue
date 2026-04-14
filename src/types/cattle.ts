@@ -80,6 +80,11 @@ export interface Lancamento {
   dataEmbarque?: string;
   dataAbate?: string;
   tipoVenda?: string;
+  // Abate realizado — identification fields
+  frigorifico?: string;
+  pedido?: string;
+  instrucao?: string;
+  docAcerto?: string;
   // Structured snapshot of financial screen
   detalhesSnapshot?: Record<string, any>;
   // Audit fields

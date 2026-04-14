@@ -693,6 +693,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         formaReceb: snap.formaReceb || 'avista',
         qtdParcelas: snap.qtdParcelas || '1',
         parcelas: snap.parcelas || [],
+        frigorifico: snap.frigorifico || l.frigorifico || '',
+        pedido: snap.pedido || l.pedido || '',
+        instrucao: snap.instrucao || l.instrucao || '',
+        docAcerto: snap.docAcerto || l.docAcerto || '',
       });
     } else {
       // FALLBACK: reconstruct from lancamento fields
@@ -763,6 +767,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         formaReceb: 'avista',
         qtdParcelas: '1',
         parcelas: [],
+        frigorifico: l.frigorifico || '',
+        pedido: l.pedido || '',
+        instrucao: l.instrucao || '',
+        docAcerto: l.docAcerto || '',
       });
     }
 
@@ -1453,6 +1461,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
       tipoVenda: tipoVendaFinal || undefined,
+      frigorifico: isAbate && abateDetalhes?.frigorifico ? abateDetalhes.frigorifico : undefined,
+      pedido: isAbate && abateDetalhes?.pedido ? abateDetalhes.pedido : undefined,
+      instrucao: isAbate && abateDetalhes?.instrucao ? abateDetalhes.instrucao : undefined,
+      docAcerto: isAbate && abateDetalhes?.docAcerto ? abateDetalhes.docAcerto : undefined,
       detalhesSnapshot: (() => {
         if (isCompra && compraDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome;

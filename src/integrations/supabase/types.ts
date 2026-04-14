@@ -3386,18 +3386,22 @@ export type Database = {
           desconto_funrural: number | null
           desconto_qualidade: number | null
           detalhes_snapshot: Json | null
+          doc_acerto: string | null
           fazenda_destino: string | null
           fazenda_id: string
           fazenda_origem: string | null
           finalidade: string | null
+          frigorifico: string | null
           hash_linha: string | null
           id: string
+          instrucao: string | null
           lote: string | null
           lote_importacao_id: string | null
           numero_documento: string | null
           observacao: string | null
           origem_registro: string
           outros_descontos: number | null
+          pedido: string | null
           peso_carcaca_kg: number | null
           peso_medio_arrobas: number | null
           peso_medio_kg: number | null
@@ -3442,18 +3446,22 @@ export type Database = {
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
           detalhes_snapshot?: Json | null
+          doc_acerto?: string | null
           fazenda_destino?: string | null
           fazenda_id: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          frigorifico?: string | null
           hash_linha?: string | null
           id?: string
+          instrucao?: string | null
           lote?: string | null
           lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_registro?: string
           outros_descontos?: number | null
+          pedido?: string | null
           peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
@@ -3498,18 +3506,22 @@ export type Database = {
           desconto_funrural?: number | null
           desconto_qualidade?: number | null
           detalhes_snapshot?: Json | null
+          doc_acerto?: string | null
           fazenda_destino?: string | null
           fazenda_id?: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          frigorifico?: string | null
           hash_linha?: string | null
           id?: string
+          instrucao?: string | null
           lote?: string | null
           lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
           origem_registro?: string
           outros_descontos?: number | null
+          pedido?: string | null
           peso_carcaca_kg?: number | null
           peso_medio_arrobas?: number | null
           peso_medio_kg?: number | null
