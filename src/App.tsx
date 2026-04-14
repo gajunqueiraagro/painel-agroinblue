@@ -12,6 +12,7 @@ import { lazy, Suspense } from "react";
 
 const FinanciamentoCadastro = lazy(() => import("./pages/FinanciamentoCadastro"));
 const FinanciamentosListaPage = lazy(() => import("./pages/FinanciamentosListaPage"));
+const FinanciamentoDetalhe = lazy(() => import("./pages/FinanciamentoDetalhe"));
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
                 <Route path="/" element={<AppRouter />} />
                 <Route path="/financiamentos" element={<Suspense fallback={<LoadingFallback />}><FinanciamentosListaPage /></Suspense>} />
                 <Route path="/financiamentos/novo" element={<Suspense fallback={<LoadingFallback />}><FinanciamentoCadastro /></Suspense>} />
+                <Route path="/financiamentos/:id" element={<Suspense fallback={<LoadingFallback />}><FinanciamentoDetalhe /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
