@@ -10,6 +10,7 @@ import { ArrowLeft, DollarSign, AlertTriangle } from 'lucide-react';
 import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
+import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
