@@ -446,6 +446,14 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     return s;
   }, [fechamentoOverlay]);
 
+  console.log('[OVERLAY DEBUG]', {
+    fechamentoOverlayLength: fechamentoOverlay?.length,
+    mesesFechadosSize: mesesFechados.size,
+    mesesFechadosValues: Array.from(mesesFechados).slice(0, 3),
+    overlayMapSize: overlayMap.size,
+    overlayMapKeys: Array.from(overlayMap.keys()).slice(0, 3),
+  });
+
   const rawCategorias = useMemo(() => {
     let rows = baseCategorias;
     if (resolvedGlobal || cenario !== 'meta') {
