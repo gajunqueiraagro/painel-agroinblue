@@ -30,6 +30,7 @@ export default function FinanciamentoCadastro() {
   } = useFinanciamentoCadastro();
 
   const [credorOpen, setCredorOpen] = useState(false);
+  const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
 
   const set = useCallback(
     <K extends keyof FinanciamentoForm>(k: K, v: FinanciamentoForm[K]) =>
