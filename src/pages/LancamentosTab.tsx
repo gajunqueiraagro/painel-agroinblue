@@ -2616,6 +2616,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
+                  {l.tipo === 'compra' && (l.compradorFornecedor || l.fazendaOrigem) && (
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[200px] block">
+                      🏪 Fornecedor: {l.compradorFornecedor || l.fazendaOrigem}
+                    </span>
+                  )}
                   {(l.fazendaOrigem || l.fazendaDestino || l.compradorFornecedor || l.observacao) && (
                     <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
                       📝 {l.tipo === 'compra' ? (l.fazendaOrigem || l.compradorFornecedor || l.observacao) : (l.fazendaDestino || l.compradorFornecedor || l.observacao)}
