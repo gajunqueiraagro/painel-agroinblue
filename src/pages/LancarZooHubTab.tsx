@@ -4,6 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import {
   Lock, AlertCircle,
   ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert,
@@ -63,6 +64,7 @@ const ACOES_PRINCIPAIS = [
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
+  useRedirecionarPecuaria();
 
   const ALLOWED_GLOBAL: TabId[] = ['fechamento_executivo'];
 

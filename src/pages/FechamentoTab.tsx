@@ -4,6 +4,7 @@ import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +105,7 @@ function gmdColor(gmd: number | null): string {
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
+  useRedirecionarPecuaria();
   const { canEdit } = usePermissions();
   const { pastos, categorias } = usePastos();
   const { lancamentos, saldosIniciais } = useLancamentos();

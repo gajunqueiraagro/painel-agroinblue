@@ -12,6 +12,7 @@ import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
@@ -181,6 +182,7 @@ function MetricRow({ label, value, accent }: { label: string; value: string; acc
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange, onSetSaldo }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
+  useRedirecionarPecuaria();
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
   const anosDisponiveis = useMemo(() => {

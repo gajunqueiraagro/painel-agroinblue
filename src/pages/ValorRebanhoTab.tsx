@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Save, Copy, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePastos } from '@/hooks/usePastos';
 import { useValorRebanho, type SnapshotDetalheCategoria } from '@/hooks/useValorRebanho';
 import { useValorRebanhoGlobal } from '@/hooks/useValorRebanhoGlobal';
@@ -356,6 +357,7 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
 
 export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
+  useRedirecionarPecuaria();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
   const qc = useQueryClient();

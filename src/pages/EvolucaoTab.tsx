@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -15,6 +16,7 @@ interface Props {
 
 export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
   const { fazendaAtual } = useFazenda();
+  useRedirecionarPecuaria();
   const fazendaId = fazendaAtual?.id;
 
   const anosDisponiveis = useMemo(() => {
