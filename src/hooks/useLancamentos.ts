@@ -150,6 +150,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         dataAbate: l.data_abate ?? undefined,
         tipoVenda: l.tipo_venda ?? undefined,
         detalhesSnapshot: l.detalhes_snapshot ?? undefined,
+        frigorifico: (l as any).frigorifico ?? undefined,
+        pedido: (l as any).pedido ?? undefined,
+        instrucao: (l as any).instrucao ?? undefined,
+        docAcerto: (l as any).doc_acerto ?? undefined,
         createdAt: l.created_at,
         updatedAt: l.updated_at,
         createdBy: l.created_by ?? undefined,
@@ -272,6 +276,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       data_abate: lancamento.dataAbate || null,
       tipo_venda: lancamento.tipoVenda || null,
       detalhes_snapshot: lancamento.detalhesSnapshot || null,
+      frigorifico: lancamento.frigorifico || null,
+      pedido: lancamento.pedido || null,
+      instrucao: lancamento.instrucao || null,
+      doc_acerto: lancamento.docAcerto || null,
     };
 
     if (!isOnline()) {
@@ -340,6 +348,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         dataAbate: (data as any).data_abate ?? undefined,
         tipoVenda: (data as any).tipo_venda ?? undefined,
         detalhesSnapshot: (data as any).detalhes_snapshot ?? undefined,
+        frigorifico: (data as any).frigorifico ?? undefined,
+        pedido: (data as any).pedido ?? undefined,
+        instrucao: (data as any).instrucao ?? undefined,
+        docAcerto: (data as any).doc_acerto ?? undefined,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         createdBy: data.created_by ?? undefined,
@@ -394,6 +406,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.dataAbate !== undefined) update.data_abate = dados.dataAbate;
     if (dados.tipoVenda !== undefined) update.tipo_venda = dados.tipoVenda;
     if (dados.detalhesSnapshot !== undefined) update.detalhes_snapshot = dados.detalhesSnapshot;
+    if (dados.frigorifico !== undefined) update.frigorifico = dados.frigorifico;
+    if (dados.pedido !== undefined) update.pedido = dados.pedido;
+    if (dados.instrucao !== undefined) update.instrucao = dados.instrucao;
+    if (dados.docAcerto !== undefined) update.doc_acerto = dados.docAcerto;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
