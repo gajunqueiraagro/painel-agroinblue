@@ -317,5 +317,6 @@ export function useFinanciamentoCadastro() {
     salvar, saving,
     fornecedores, contas,
     planosEntrada, planosSaida,
+    clienteId,
   };
 }
