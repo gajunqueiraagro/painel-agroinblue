@@ -46,7 +46,7 @@ export default function FinanciamentoCadastro() {
   }, [form.valor_total, form.valor_entrada, form.total_parcelas, form.taxa_juros_anual, form.data_primeira_parcela, form.frequencia_parcela]);
 
   const handleSalvar = async () => {
-    const ok = await salvar();
+    const ok = await salvar(destinacoes);
     if (ok) navigate('/financiamentos');
   };
 
