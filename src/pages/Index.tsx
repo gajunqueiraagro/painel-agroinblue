@@ -77,6 +77,10 @@ import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
 
+const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
+const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
+const FinanciamentoDetalhe = lazy(() => import('./FinanciamentoDetalhe'));
+
 export interface FiltroGlobal {
   ano: string;
   mes: number;
