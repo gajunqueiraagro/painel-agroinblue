@@ -472,7 +472,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
       const result = [...rows];
 
-      for (const { indices, rows: catRows } of byCat.values()) {
+      for (const [catKey, { indices, rows: catRows }] of byCat.entries()) {
         // Ordenar por mês para garantir sequência
         const sorted = catRows.map((r, idx) => ({ row: r, origIdx: indices[idx] }))
           .sort((a, b) => {
@@ -480,7 +480,12 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
             return a.row.mes - b.row.mes;
           });
 
-        let prevPesoTotalFinalOficial: number | null = null;
+        // Seed: peso oficial de dez do ano anterior para esta categoria+fazenda
+        const [seedFazId, seedCatId] = catKey.split('|');
+        const seedKey = `${ano - 1}-12|${seedFazId}|${seedCatId}`;
+        const seedFc = overlayMap.get(seedKey);
+        let prevPesoTotalFinalOficial: number | null =
+          seedFc ? (seedFc.peso_total ?? null) : null;
 
         for (const { row, origIdx } of sorted) {
           const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
