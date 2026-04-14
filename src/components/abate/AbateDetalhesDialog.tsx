@@ -271,14 +271,49 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     setReais('');
   };
 
-  const handleBonusReaisChange = (
-    setArr: (v: string) => void,
-    setReais: (v: string) => void,
-    value: string,
-  ) => {
-    setReais(value); markDirty();
-    setArr('');
+  // Funrural bidirectional
+  const handleFunruralPctChange = (value: string) => {
+    setFunruralPct(value); markDirty();
+    const v = Number(value) || 0;
+    if (v > 0 && calc.valorBase > 0) {
+      setFunruralReais(String(Math.round(calc.valorBase * v / 100 * 100) / 100));
+    } else {
+      setFunruralReais('');
+    }
   };
+
+  const handleFunruralReaisChange = (value: string) => {
+    setFunruralReais(value); markDirty();
+    const v = Number(value) || 0;
+    if (v > 0 && calc.valorBase > 0) {
+      setFunruralPct(String(Math.round((v / calc.valorBase) * 10000) / 100));
+    } else {
+      setFunruralPct('');
+    }
+  };
+
+  // Table row component for bonus/discount
+  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange }: {
+    label: string;
+    arrobaVal: string;
+    reaisVal: string;
+    totalVal: number;
+    onArrobaChange: (v: string) => void;
+    onReaisChange: (v: string) => void;
+  }) => (
+    <tr className="border-b border-border/30">
+      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">{label}</td>
+      <td className="py-1 px-1">
+        <Input type="number" value={arrobaVal} onChange={e => onArrobaChange(e.target.value)} placeholder="0,00" className="h-7 text-[10px] w-20 text-right tabular-nums" step="0.01" />
+      </td>
+      <td className="py-1 px-1">
+        <Input type="number" value={reaisVal} onChange={e => onReaisChange(e.target.value)} placeholder="0,00" className="h-7 text-[10px] w-24 text-right tabular-nums" step="0.01" />
+      </td>
+      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
+        {totalVal > 0 ? formatMoeda(totalVal) : '-'}
+      </td>
+    </tr>
+  );
 
 
   return (
