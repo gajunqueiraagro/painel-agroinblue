@@ -436,11 +436,11 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     return m;
   }, [fechamentoOverlay]);
 
-  // Set of months that have fechamento data
+  // Set of fazenda+month combos that have fechamento data
   const mesesFechados = useMemo(() => {
     const s = new Set<string>();
     for (const fc of (fechamentoOverlay ?? [])) {
-      s.add(fc.ano_mes);
+      s.add(`${fc.ano_mes}|${fc.fazenda_id}`);
     }
     return s;
   }, [fechamentoOverlay]);
@@ -483,7 +483,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
         for (const { row, origIdx } of sorted) {
           const anoMes = `${row.ano}-${String(row.mes).padStart(2, '0')}`;
-          const isMesFechado = mesesFechados.has(anoMes);
+          const isMesFechado = mesesFechados.has(`${anoMes}|${row.fazenda_id}`);
 
           // Propagar peso_total_final oficial do mês anterior como peso_total_inicial
           let pesoTotalInicialCorrigido = row.peso_total_inicial;
