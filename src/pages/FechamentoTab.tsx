@@ -108,15 +108,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { bloqueado } = useRedirecionarPecuaria();
   const { canEdit } = usePermissions();
 
-  if (bloqueado) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
-        <span className="text-4xl">🐄</span>
-        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
-        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
-      </div>
-    );
-  }
   const { pastos, categorias } = usePastos();
   const { lancamentos, saldosIniciais } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();

@@ -185,16 +185,6 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const { bloqueado } = useRedirecionarPecuaria();
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
-  if (bloqueado) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
-        <span className="text-4xl">🐄</span>
-        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
-        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
-      </div>
-    );
-  }
-
   const anosDisponiveis = useMemo(() => {
     const anos = new Set<string>();
     anos.add(String(new Date().getFullYear()));

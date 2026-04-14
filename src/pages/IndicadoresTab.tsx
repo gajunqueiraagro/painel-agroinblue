@@ -34,16 +34,6 @@ export function IndicadoresTab({ lancamentos, saldosIniciais, anoInicial, mesIni
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
 
-  if (bloqueado) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
-        <span className="text-4xl">🐄</span>
-        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
-        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
-      </div>
-    );
-  }
-
   const globalFazendaIds = useMemo(() => {
     if (fazendaId !== '__global__') return undefined;
     return fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id);
