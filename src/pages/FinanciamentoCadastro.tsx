@@ -51,7 +51,7 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
 
   const handleSalvar = async () => {
     const ok = await salvar(destinacoes);
-    if (ok) navigate('/financiamentos');
+    if (ok) onSalvo?.();
   };
 
   const fmtMoney = (v: number) =>
@@ -61,7 +61,7 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
     <div className="min-h-screen bg-background p-4 max-w-3xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/financiamentos')}>
+        <Button variant="ghost" size="icon" onClick={onVoltar}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-bold text-foreground">Novo Financiamento</h1>
