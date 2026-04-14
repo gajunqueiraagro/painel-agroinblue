@@ -358,6 +358,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+  const qc = useQueryClient();
 
   // IDs de fazendas pecuárias (para Global)
   const fazendaIdsPecuaria = useMemo(
@@ -1174,7 +1175,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           status={snapStatusMes}
           mesLabel={`${mesLabel}/${anoFiltro}`}
           onRevalidar={isSnapInvalidado ? () => {
-            const qc = useQueryClient();
             qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
             qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
           } : undefined}
