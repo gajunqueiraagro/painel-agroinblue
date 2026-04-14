@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { ArrowLeft, Pencil, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ export default function FinanciamentoDetalhe() {
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [parcelaBaixa, setParcelaBaixa] = useState<any>(null);
 
   /* ── Financiamento ── */
   const { data: fin, isLoading: loadingFin } = useQuery({
@@ -312,7 +314,9 @@ export default function FinanciamentoDetalhe() {
                             Ver lançamento
                           </Button>
                         ) : isPending ? (
-                          <Badge variant="outline" className="text-[10px] cursor-default">P5</Badge>
+                          <Button size="sm" className="text-[10px] h-6" onClick={() => setParcelaBaixa(p)}>
+                            Registrar pagamento
+                          </Button>
                         ) : null}
                       </TableCell>
                     </TableRow>
@@ -407,6 +411,13 @@ export default function FinanciamentoDetalhe() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Modal de baixa de parcela (P5) ── */}
+      <ModalBaixaParcela
+        parcela={parcelaBaixa}
+        financiamento={fin}
+        onClose={() => setParcelaBaixa(null)}
+      />
     </div>
   );
 }
