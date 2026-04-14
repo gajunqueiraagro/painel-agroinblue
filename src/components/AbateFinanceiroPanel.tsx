@@ -254,8 +254,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           });
         });
       } else {
-        // Revenue = valorLiquido + totalDescontos (gross before deductions, since deductions are separate)
-        const valorReceita = totalDescontos > 0 ? valorLiquido + totalDescontos : valorLiquido;
+        // Revenue = valorLiquido (net value that actually moves cash)
+        const valorReceita = valorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
@@ -292,6 +292,9 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           (found, sub) => found || planoDeducao.find(p => p.subcentro === sub) || null, null
         ) || planoDeducao[0];
         const frigorificoLabel = frigorifico ? ` | ${frigorifico}` : '';
+        const descDeducao = `Dedução ${abateLabel}${frigorificoLabel}`;
+        // Funrural deductions are fiscal-only (no cash movement)
+        const isFunrural = /funrural/i.test(descDeducao) || /funrural/i.test(frigorifico || '');
         inserts.push({
           cliente_id: clienteAtual.id,
           fazenda_id: fazendaAtual.id,
@@ -308,9 +311,10 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           valor: totalDescontos,
           data_competencia: data,
           data_pagamento: data,
-          descricao: `Dedução ${abateLabel}${frigorificoLabel}`,
+          descricao: descDeducao,
           historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
           origem_tipo: 'abate:deducao',
+          sem_movimentacao_caixa: isFunrural,
         });
       }
 
