@@ -297,7 +297,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               return (
                 <>
                   <tr className="border-t bg-muted/40">
-                    <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Peso Médio Final do mês (kg)</td>
+                    <td className="px-1.5 py-0.5 font-normal italic text-muted-foreground sticky left-0 bg-muted/50 text-[8px]">Peso médio (kg)</td>
                     {MESES_COLS.map(m => {
                       if (isFuturo(m.key)) return <td key={m.key} className={`px-1.5 py-0.5 text-right tabular-nums italic text-[9px] text-muted-foreground ${qb(m.key)}`}>–</td>;
                       const z = fazendaByMes[m.key];
