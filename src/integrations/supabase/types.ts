@@ -3089,6 +3089,184 @@ export type Database = {
           },
         ]
       }
+      financiamento_parcelas: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          financiamento_id: string
+          id: string
+          lancamento_id: string | null
+          numero_parcela: number
+          observacao: string | null
+          status: string
+          updated_at: string
+          valor_juros: number
+          valor_principal: number
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          financiamento_id: string
+          id?: string
+          lancamento_id?: string | null
+          numero_parcela: number
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+          valor_juros?: number
+          valor_principal?: number
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          financiamento_id?: string
+          id?: string
+          lancamento_id?: string | null
+          numero_parcela?: number
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+          valor_juros?: number
+          valor_principal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_parcelas_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcelas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamentos: {
+        Row: {
+          cliente_id: string
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          credor_id: string | null
+          data_contrato: string
+          data_primeira_parcela: string
+          descricao: string
+          fazenda_id: string | null
+          gerar_lancamento_captacao: boolean
+          id: string
+          observacao: string | null
+          plano_conta_captacao_id: string | null
+          plano_conta_parcela_id: string | null
+          status: string
+          taxa_juros_mensal: number
+          tipo_financiamento: string
+          total_parcelas: number
+          updated_at: string
+          valor_entrada: number
+          valor_total: number
+        }
+        Insert: {
+          cliente_id: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          credor_id?: string | null
+          data_contrato: string
+          data_primeira_parcela: string
+          descricao: string
+          fazenda_id?: string | null
+          gerar_lancamento_captacao?: boolean
+          id?: string
+          observacao?: string | null
+          plano_conta_captacao_id?: string | null
+          plano_conta_parcela_id?: string | null
+          status?: string
+          taxa_juros_mensal?: number
+          tipo_financiamento: string
+          total_parcelas: number
+          updated_at?: string
+          valor_entrada?: number
+          valor_total?: number
+        }
+        Update: {
+          cliente_id?: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          credor_id?: string | null
+          data_contrato?: string
+          data_primeira_parcela?: string
+          descricao?: string
+          fazenda_id?: string | null
+          gerar_lancamento_captacao?: boolean
+          id?: string
+          observacao?: string | null
+          plano_conta_captacao_id?: string | null
+          plano_conta_parcela_id?: string | null
+          status?: string
+          taxa_juros_mensal?: number
+          tipo_financiamento?: string
+          total_parcelas?: number
+          updated_at?: string
+          valor_entrada?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_credor_id_fkey"
+            columns: ["credor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_plano_conta_captacao_id_fkey"
+            columns: ["plano_conta_captacao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_plano_conta_parcela_id_fkey"
+            columns: ["plano_conta_parcela_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lancamentos: {
         Row: {
           acrescimos: number | null
