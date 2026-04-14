@@ -370,7 +370,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
         .from('fechamento_pasto_itens')
         .select('categoria_id, quantidade, peso_medio_kg, fechamento_pastos!inner(ano_mes, status, fazenda_id, cliente_id)')
         .eq('fechamento_pastos.status', 'fechado')
-        .gte('fechamento_pastos.ano_mes', `${ano}-01`)
+        .gte('fechamento_pastos.ano_mes', `${ano - 1}-12`)
         .lte('fechamento_pastos.ano_mes', `${ano}-12`);
 
       if (resolvedGlobal) {
