@@ -2591,7 +2591,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </p>
                   {l.observacao && (
                     <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px] block">
-                      💬 {l.observacao}
+                      📝 {l.observacao}
                     </span>
                   )}
                   {/* Rastreabilidade de origem */}
