@@ -386,8 +386,9 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       const agg = new Map<string, { qtd: number; pesoTotal: number }>();
       for (const item of itens) {
         const fp = item.fechamento_pastos as any;
-        const anoMes: string = fp?.ano_mes ?? (Array.isArray(fp) ? fp[0]?.ano_mes : undefined);
-        const fazId: string = fp?.fazenda_id ?? (Array.isArray(fp) ? fp[0]?.fazenda_id : undefined);
+        const fpObj = Array.isArray(fp) ? fp[0] : fp;
+        const anoMes: string = fpObj?.ano_mes;
+        const fazId: string = fpObj?.fazenda_id;
         if (!anoMes || !fazId) continue;
         const key = `${anoMes}|${fazId}|${item.categoria_id}`;
         const cur = agg.get(key) || { qtd: 0, pesoTotal: 0 };
