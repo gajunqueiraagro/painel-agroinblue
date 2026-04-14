@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { Plus, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Eye } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
