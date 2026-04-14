@@ -24,6 +24,7 @@ export const GLOBAL_FAZENDA: Fazenda = {
 
 interface FazendaContextType {
   fazendas: Fazenda[];
+  fazendasComPecuaria: Fazenda[];
   fazendaAtual: Fazenda | null;
   setFazendaAtual: (f: Fazenda) => void;
   criarFazenda: (nome: string, codigoImportacao?: string) => Promise<Fazenda | null>;
@@ -117,8 +118,13 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
 
   const isGlobal = fazendaAtual?.id === '__global__';
 
+  const fazendasComPecuaria = useMemo(
+    () => fazendas.filter(f => f.tem_pecuaria !== false),
+    [fazendas]
+  );
+
   return (
-    <FazendaContext.Provider value={{ fazendas, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas: loadFazendas, isGlobal }}>
+    <FazendaContext.Provider value={{ fazendas, fazendasComPecuaria, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas: loadFazendas, isGlobal }}>
       {children}
     </FazendaContext.Provider>
   );
