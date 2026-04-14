@@ -27,6 +27,7 @@ export default function FinanciamentoCadastro() {
     salvar, saving,
     fornecedores, contas,
     planosEntrada, planosSaida,
+    clienteId,
   } = useFinanciamentoCadastro();
 
   const [credorOpen, setCredorOpen] = useState(false);
@@ -292,7 +293,7 @@ export default function FinanciamentoCadastro() {
           Como o valor contratado será distribuído (opcional — pode ser preenchido depois)
         </p>
         <DestinacoesForm
-          clienteId={form.conta_bancaria_id ? '' : ''}
+          clienteId={clienteId}
           valorContrato={form.valor_total}
           destinacoes={destinacoes}
           onChange={setDestinacoes}
