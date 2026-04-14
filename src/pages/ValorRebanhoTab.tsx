@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -357,6 +358,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
+  const qc = useQueryClient();
 
   // IDs de fazendas pecuárias (para Global)
   const fazendaIdsPecuaria = useMemo(
@@ -1172,8 +1174,17 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         <SnapshotStatusBanner
           status={snapStatusMes}
           mesLabel={`${mesLabel}/${anoFiltro}`}
-          onRevalidar={isSnapInvalidado ? () => {} : undefined}
-          onIrMesAnterior={isSnapCadeiaQuebrada ? () => {} : undefined}
+          onRevalidar={isSnapInvalidado ? () => {
+            qc.invalidateQueries({ queryKey: ['valor-rebanho-snapshot', fazendaId, anoFiltro, mesFiltro] });
+            qc.invalidateQueries({ queryKey: ['fechamento-status', fazendaId, anoFiltro] });
+          } : undefined}
+          onIrMesAnterior={isSnapCadeiaQuebrada ? () => {
+            const mesAtualNum = Number(mesFiltro);
+            const mesAnterior = mesAtualNum === 1 ? 12 : mesAtualNum - 1;
+            const anoAnterior = mesAtualNum === 1 ? Number(anoFiltro) - 1 : Number(anoFiltro);
+            setAnoFiltro(String(anoAnterior));
+            setMesFiltro(String(mesAnterior).padStart(2, '0'));
+          } : undefined}
         />
       )}
 
