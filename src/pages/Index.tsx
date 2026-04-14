@@ -162,6 +162,7 @@ const Index = () => {
   const setActiveTab = useCallback((tab: TabId) => {
     sessionStorage.setItem('agroinblue_active_tab', tab);
     setActiveTabRaw(tab);
+    if (tab !== 'financeiro_v2_hub') setFinView(null);
   }, []);
   const [subAbaFinanceiro, setSubAbaFinanceiro] = useState<SubAba | undefined>(undefined);
   const [movFiltroAno, setMovFiltroAno] = useState<string | undefined>(undefined);
