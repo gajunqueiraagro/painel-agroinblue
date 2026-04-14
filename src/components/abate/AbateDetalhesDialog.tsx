@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield } from 'lucide-react';
+import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock, Clock, CheckCircle2 } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
@@ -42,6 +43,13 @@ export interface AbateDetalhes {
   pesoCarcacaKgManual?: string;
   /** Official calculation snapshot — single source of truth */
   calculation?: AbateCalculation;
+  // --- Novos campos Realizado ---
+  frigorifico?: string;
+  pedido?: string;
+  instrucao?: string;
+  docAcerto?: string;
+  // --- Novos campos Meta ---
+  observacoesInternas?: string;
 }
 
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
@@ -82,6 +90,13 @@ function fmtR(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Map statusOp to tab value */
+function statusToTab(s: StatusOperacional): string {
+  if ((s as string) === 'meta') return 'meta';
+  if (s === 'programado') return 'programado';
+  return 'realizado';
+}
+
 export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataAbate, statusOp }: Props) {
   const [dataVenda, setDataVenda] = useState(initialData.dataVenda);
   const [dataEmbarque, setDataEmbarque] = useState(initialData.dataEmbarque);
@@ -116,8 +131,21 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
+  // Novos campos Realizado
+  const [frigorifico, setFrigorifico] = useState(initialData.frigorifico || '');
+  const [pedido, setPedido] = useState(initialData.pedido || '');
+  const [instrucao, setInstrucao] = useState(initialData.instrucao || '');
+  const [docAcerto, setDocAcerto] = useState(initialData.docAcerto || '');
+
+  // Novos campos Meta
+  const [observacoesInternas, setObservacoesInternas] = useState(initialData.observacoesInternas || '');
+
+  // Active tab — driven by statusOp
+  const [activeTab, setActiveTab] = useState(statusToTab(statusOp));
+
   const isPrevisto = (statusOp as string) === 'meta';
   const isProgramado = statusOp === 'programado';
+  const isRealizado = statusOp === 'realizado';
   const usePrev = isPrevisto || isProgramado;
 
   useEffect(() => {
@@ -145,10 +173,16 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setFormaReceb(initialData.formaReceb);
       setQtdParcelas(initialData.qtdParcelas);
       setParcelas(initialData.parcelas);
+      setFrigorifico(initialData.frigorifico || '');
+      setPedido(initialData.pedido || '');
+      setInstrucao(initialData.instrucao || '');
+      setDocAcerto(initialData.docAcerto || '');
+      setObservacoesInternas(initialData.observacoesInternas || '');
+      setActiveTab(statusToTab(statusOp));
       setDirty(false);
       setConfirmClose(false);
     }
-  }, [open, initialData]);
+  }, [open, initialData, statusOp]);
 
   const markDirty = () => setDirty(true);
   const tryClose = () => { if (dirty) setConfirmClose(true); else onClose(); };
@@ -247,6 +281,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       descontoQualidadeReais, outrosDescontosArroba,
       pesoCarcacaKgManual: pesoCarcacaKg || undefined,
       calculation: calc,
+      frigorifico, pedido, instrucao, docAcerto,
+      observacoesInternas,
     });
   };
 
@@ -302,16 +338,20 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   };
 
   // Table row component for bonus/discount
-  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange }: {
+  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, hint }: {
     label: string;
     arrobaVal: string;
     reaisVal: string;
     totalVal: number;
     onArrobaChange: (v: string) => void;
     onReaisChange: (v: string) => void;
+    hint?: string;
   }) => (
     <tr className="border-b border-border/30">
-      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">{label}</td>
+      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+        {label}
+        {hint && <span className="block text-[8px] text-muted-foreground/70 italic">{hint}</span>}
+      </td>
       <td className="py-1 px-1">
         <Input type="number" value={arrobaVal} onChange={e => onArrobaChange(e.target.value)} placeholder="0,00" className="h-7 text-[10px] w-20 text-right tabular-nums" step="0.01" />
       </td>
@@ -324,6 +364,354 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     </tr>
   );
 
+  // ── Hint helper for Programado tab ──
+  const hintText = (text: string) => (
+    <span className="text-[8px] text-muted-foreground/70 italic ml-1">{text}</span>
+  );
+
+  // ── Tab color classes ──
+  const tabColors = {
+    meta: 'data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800 dark:data-[state=active]:bg-purple-900/40 dark:data-[state=active]:text-purple-300',
+    programado: 'data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800 dark:data-[state=active]:bg-amber-900/40 dark:data-[state=active]:text-amber-300',
+    realizado: 'data-[state=active]:bg-green-100 data-[state=active]:text-green-800 dark:data-[state=active]:bg-green-900/40 dark:data-[state=active]:text-green-300',
+  };
+
+  // ─────────────────────────────────────
+  // Shared sections (Bônus, Descontos, Funrural, Resultado, Pagamento)
+  // used across Programado and Realizado
+  // ─────────────────────────────────────
+
+  const renderComercializacao = () => (
+    <>
+      {sectionTitle(<Tag className="h-4 w-4 text-muted-foreground" />, 'Comercialização')}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-[10px]">
+            {isProgramado ? 'Preço @ base (R$)' : 'R$/@ (Preço Base)'}
+            {isProgramado && hintText('acordado — não alterar')}
+          </Label>
+          <div className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+            <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Tipo de Abate</Label>
+          <Select value={tipoPeso} onValueChange={(v) => { setTipoPeso(v); markDirty(); }}>
+            <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="vivo">Peso vivo</SelectItem>
+              <SelectItem value="morto">Peso morto</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[10px]">Comercialização</Label>
+          <Select value={tipoVenda} onValueChange={(v) => { setTipoVenda(v); markDirty(); }}>
+            <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="escala">Escala</SelectItem>
+              <SelectItem value="a_termo">A termo</SelectItem>
+              <SelectItem value="spot">Spot</SelectItem>
+              <SelectItem value="outro">Outro</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderDesempenho = () => (
+    <>
+      <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Desempenho do Abate</h4>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-[10px]">
+            {isProgramado ? 'Rend. Carcaça (%)' : usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}
+            {isProgramado && hintText('estimado')}
+          </Label>
+          <div className="relative">
+            <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Peso Carcaça (kg)</Label>
+          <div className="relative">
+            <Input type="number" value={pesoCarcacaKg || (calc.carcacaCalc > 0 ? String(Math.round(calc.carcacaCalc * 100) / 100) : '')} onChange={e => { setPesoCarcacaKg(e.target.value); const v = Number(e.target.value) || 0; if (v > 0 && peso > 0) setRendCarcaca(String(Math.round((v / peso) * 10000) / 100)); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Peso Carcaça (@)</Label>
+          <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
+        </div>
+      </div>
+
+      {calc.valorBase > 0 && (
+        <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-x-3 text-[10px]">
+          <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
+          <div><span className="text-muted-foreground">Total Arrobas</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
+          <div><span className="text-muted-foreground">Valor Base</span><p className="font-bold text-primary">{formatMoeda(calc.valorBase)}</p></div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderImpostos = () => (
+    <>
+      {sectionTitle(<Shield className="h-4 w-4 text-muted-foreground" />, 'IMPOSTOS')}
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Tipo</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">%</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border/30">
+            <td className="py-1 pr-2 text-muted-foreground font-medium">Funrural</td>
+            <td className="py-1 px-1">
+              <div className="relative">
+                <Input type="number" value={funruralPct} onChange={e => handleFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-20 text-right tabular-nums pr-6 mx-auto" />
+                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+              </div>
+            </td>
+            <td className="py-1 px-1">
+              <div className="relative">
+                <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {calc.valorBruto > 0 && calc.funruralTotal > 0 && (
+        <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
+          <span className="font-bold">Valor Bruto (desconto - Funrural)</span>
+          <span className="font-bold text-primary tabular-nums">{formatMoeda(calc.valorBruto)}</span>
+        </div>
+      )}
+    </>
+  );
+
+  const bonusHint = isProgramado ? 'a confirmar no acerto' : undefined;
+
+  const renderBonus = () => (
+    <>
+      {sectionTitle(<Award className="h-4 w-4 text-muted-foreground" />, usePrev ? 'BÔNUS Prev. (R$/@)' : 'BÔNUS (R$/@)')}
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Tipo Bônus</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
+            <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <BiRow
+            label={prevLabel('Precoce')}
+            arrobaVal={bonusPrecoce}
+            reaisVal={bonusPrecoceReais}
+            totalVal={calc.bonusPrecoceTotal}
+            onArrobaChange={v => handleBonusArrobaChange(setBonusPrecoce, setBonusPrecoceReais, v)}
+            onReaisChange={v => handleBonusReaisChange(setBonusPrecoce, setBonusPrecoceReais, v)}
+            hint={bonusHint}
+          />
+          <BiRow
+            label={prevLabel('Qualidade')}
+            arrobaVal={bonusQualidade}
+            reaisVal={bonusQualidadeReais}
+            totalVal={calc.bonusQualidadeTotal}
+            onArrobaChange={v => handleBonusArrobaChange(setBonusQualidade, setBonusQualidadeReais, v)}
+            onReaisChange={v => handleBonusReaisChange(setBonusQualidade, setBonusQualidadeReais, v)}
+            hint={bonusHint}
+          />
+          <BiRow
+            label={prevLabel('Lista Trace')}
+            arrobaVal={bonusListaTrace}
+            reaisVal={bonusListaTraceReais}
+            totalVal={calc.bonusListaTraceTotal}
+            onArrobaChange={v => handleBonusArrobaChange(setBonusListaTrace, setBonusListaTraceReais, v)}
+            onReaisChange={v => handleBonusReaisChange(setBonusListaTrace, setBonusListaTraceReais, v)}
+            hint={bonusHint}
+          />
+        </tbody>
+      </table>
+      {calc.totalBonus > 0 && (
+        <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
+          <span className="font-bold">Total Bônus</span>
+          <span className="font-bold tabular-nums">+{formatMoeda(calc.totalBonus)}</span>
+        </div>
+      )}
+    </>
+  );
+
+  const renderDescontos = () => (
+    <>
+      {sectionTitle(<TrendingDown className="h-4 w-4 text-muted-foreground" />, usePrev ? 'DESCONTOS Prev. (R$/@)' : 'DESCONTOS (R$/@)')}
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Tipo Desconto</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
+            <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
+            <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <BiRow
+            label={prevLabel('Qualidade')}
+            arrobaVal={descontoQualidade}
+            reaisVal={descontoQualidadeReais}
+            totalVal={calc.descQualidadeTotal}
+            onArrobaChange={v => handleBonusArrobaChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            onReaisChange={v => handleBonusReaisChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
+          />
+          <BiRow
+            label={prevLabel('Outros')}
+            arrobaVal={outrosDescontosArroba}
+            reaisVal={outrosDescontos}
+            totalVal={calc.descOutrosTotal}
+            onArrobaChange={v => handleBonusArrobaChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            onReaisChange={v => handleBonusReaisChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
+          />
+        </tbody>
+      </table>
+      {calc.totalDescontos > 0 && (
+        <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
+          <span className="font-bold">Total Descontos</span>
+          <span className="font-bold text-destructive tabular-nums">-{formatMoeda(calc.totalDescontos)}</span>
+        </div>
+      )}
+    </>
+  );
+
+  const renderResultado = () => {
+    if (calc.valorBase <= 0) return null;
+    return (
+      <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
+        <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
+          {usePrev ? 'Resultado Esperado' : 'Resultado Final'}
+        </h4>
+        <div className="space-y-0.5 text-[10px]">
+          <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
+          {calc.funruralTotal > 0 && (
+            <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
+          )}
+          <Separator className="my-0.5" />
+          <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBruto)}</span></div>
+
+          <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
+          {calc.totalBonus > 0 && (
+            <div className="pl-3 space-y-0 text-muted-foreground">
+              {calc.bonusPrecoceTotal > 0 && <div className="flex justify-between"><span>Precoce</span><span className="tabular-nums">{formatMoeda(calc.bonusPrecoceTotal)}</span></div>}
+              {calc.bonusQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.bonusQualidadeTotal)}</span></div>}
+              {calc.bonusListaTraceTotal > 0 && <div className="flex justify-between"><span>Lista Trace</span><span className="tabular-nums">{formatMoeda(calc.bonusListaTraceTotal)}</span></div>}
+            </div>
+          )}
+
+          <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">{calc.totalDescontos > 0 ? `-${formatMoeda(calc.totalDescontos)}` : '-'}</strong></div>
+          {calc.totalDescontos > 0 && (
+            <div className="pl-3 space-y-0 text-muted-foreground">
+              {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.descQualidadeTotal)}</span></div>}
+              {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span>Outros</span><span className="tabular-nums">{formatMoeda(calc.descOutrosTotal)}</span></div>}
+            </div>
+          )}
+
+          <Separator className="my-0.5" />
+          <div className="flex justify-between text-[12px] font-bold">
+            <span>= Valor Líquido</span>
+            <span className="text-primary tabular-nums">{formatMoeda(calc.valorLiquido)}</span>
+          </div>
+        </div>
+
+        <div className="bg-muted/30 rounded p-1.5 mt-1 grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
+          <div><span className="text-muted-foreground">Qtde</span><p className="font-bold">{qtd} cab.</p></div>
+          <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
+          <div><span className="text-muted-foreground">Rendimento</span><p className="font-bold">{calc.rendCalc > 0 ? `${fmtR(calc.rendCalc)}%` : '-'}</p></div>
+          <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
+          <div><span className="text-muted-foreground">Total @</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
+          <div><span className="text-muted-foreground">R$/@ líq.</span><p className="font-bold">{formatMoeda(calc.liqArroba)}</p></div>
+          <div><span className="text-muted-foreground">R$/cab líq.</span><p className="font-bold">{formatMoeda(calc.liqCabeca)}</p></div>
+          <div><span className="text-muted-foreground">R$/kg líq.</span><p className="font-bold">{formatMoeda(calc.liqKg)}</p></div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPagamento = () => (
+    <>
+      {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-[10px]">Nota Fiscal</Label>
+          <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº NF" className="h-7 text-[10px]" />
+        </div>
+        <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); markDirty(); }}
+          className={`h-7 rounded text-[10px] font-bold border-2 transition-all self-end ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+          À vista
+        </button>
+        <button type="button" onClick={() => { setFormaReceb('prazo'); markDirty(); if (calc.valorLiquido > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorLiquido)); }}
+          className={`h-7 rounded text-[10px] font-bold border-2 transition-all self-end ${formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
+          A prazo
+        </button>
+      </div>
+      {formaReceb === 'prazo' && (
+        <div className="space-y-1">
+          <div className="w-24">
+            <Label className="text-[10px]">Nº de parcelas</Label>
+            <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[10px]" />
+          </div>
+          {parcelas.map((p, i) => (
+            <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-1.5">
+              <div>
+                <Label className="text-[9px]">Parcela {i + 1}</Label>
+                <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
+              </div>
+              <div>
+                <Label className="text-[9px]">Valor</Label>
+                <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-7 text-[10px] text-right tabular-nums" />
+              </div>
+            </div>
+          ))}
+          {parcelas.length > 0 && (
+            <div className="text-[10px] text-muted-foreground text-right tabular-nums">
+              Soma Liq.: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  const renderDatas = () => (
+    <>
+      {sectionTitle(<Calendar className="h-4 w-4 text-muted-foreground" />, 'Datas da Operação')}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-[10px]">Data da Venda</Label>
+          <Input type="date" value={dataVendaAuto} onChange={e => { setDataVenda(e.target.value); markDirty(); }} className="h-7 text-[10px]" />
+        </div>
+        <div>
+          <Label className="text-[10px]">
+            {isProgramado ? 'Data embarque' : 'Data Embarque'}
+          </Label>
+          <Input type="date" value={dataEmbarqueAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
+        </div>
+        <div>
+          <Label className="text-[10px]">Data Abate</Label>
+          <Input type="date" value={dataAbateAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
+        </div>
+      </div>
+    </>
+  );
+
+  // ────────────────────────────────────
+  // RENDER
+  // ────────────────────────────────────
 
   return (
     <>
@@ -331,337 +719,159 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto">
         <DialogHeader className="pb-0">
          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
-             <Tag className="h-4 w-4 text-primary" />
-             Detalhes do Abate
-             {(() => {
-               const badge = getStatusBadge({ statusOperacional: statusOp } as any);
-               return (
-                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
-                   {badge.label}
-                 </span>
-               );
-             })()}
-           </DialogTitle>
+              <Tag className="h-4 w-4 text-primary" />
+              Detalhes do Abate
+            </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2 pt-1">
-          {/* Resumo operacional */}
-          <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
-            <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
-            <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
-            <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
-          </div>
+        {/* ── Tabs Meta / Programado / Realizado ── */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full grid grid-cols-3 h-9">
+            <TabsTrigger value="meta" className={`gap-1 text-[11px] ${tabColors.meta}`}>
+              <Lock className="h-3 w-3" />
+              Meta
+            </TabsTrigger>
+            <TabsTrigger value="programado" className={`gap-1 text-[11px] ${tabColors.programado}`}>
+              <Clock className="h-3 w-3" />
+              Programado
+            </TabsTrigger>
+            <TabsTrigger value="realizado" className={`gap-1 text-[11px] ${tabColors.realizado}`}>
+              <CheckCircle2 className="h-3 w-3" />
+              Realizado
+            </TabsTrigger>
+          </TabsList>
 
-          <Separator />
-
-          {/* BLOCO 1 — Datas */}
-          {sectionTitle(<Calendar className="h-4 w-4 text-muted-foreground" />, 'Datas da Operação')}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label className="text-[10px]">Data da Venda</Label>
-              <Input type="date" value={dataVendaAuto} onChange={e => { setDataVenda(e.target.value); markDirty(); }} className="h-7 text-[10px]" />
+          {/* ══════ ABA META ══════ */}
+          <TabsContent value="meta" className="space-y-2">
+            {/* Aviso de visibilidade restrita */}
+            <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded p-2 text-[10px] text-purple-700 dark:text-purple-300">
+              <Lock className="h-3.5 w-3.5 shrink-0" />
+              <span className="font-medium">Visibilidade restrita — somente o proprietário vê este card</span>
             </div>
-            <div>
-              <Label className="text-[10px]">Data Embarque</Label>
-              <Input type="date" value={dataEmbarqueAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
+
+            {/* Resumo operacional */}
+            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
+              <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
+              <div><span className="text-muted-foreground">Peso médio est.</span><p className="font-bold">{formatKg(peso)}</p></div>
+              <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
             </div>
-            <div>
-              <Label className="text-[10px]">Data Abate</Label>
-              <Input type="date" value={dataAbateAuto} readOnly className="h-7 text-[10px] bg-muted cursor-not-allowed" />
-            </div>
-          </div>
 
-          <Separator />
-
-          {/* BLOCO 2 — Preço Base & Rendimento */}
-          {sectionTitle(<Tag className="h-4 w-4 text-muted-foreground" />, 'Comercialização')}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label className="text-[10px]">R$/@ (Preço Base)</Label>
-              <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-[10px]">Tipo de Abate</Label>
-              <Select value={tipoPeso} onValueChange={(v) => { setTipoPeso(v); markDirty(); }}>
-                <SelectTrigger className="h-7 text-[10px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vivo">Peso vivo</SelectItem>
-                  <SelectItem value="morto">Peso morto</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[10px]">Comercialização</Label>
-              <Select value={tipoVenda} onValueChange={(v) => { setTipoVenda(v); markDirty(); }}>
-                <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="escala">Escala</SelectItem>
-                  <SelectItem value="a_termo">A termo</SelectItem>
-                  <SelectItem value="spot">Spot</SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Desempenho do Abate — 3 cols, bidirectional */}
-          <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Desempenho do Abate</h4>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label className="text-[10px]">{usePrev ? 'Rend. Carcaça Prev. (%)' : 'Rend. Carcaça (%)'}</Label>
-              <div className="relative">
-                <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
-              </div>
-            </div>
-            <div>
-              <Label className="text-[10px]">Peso Carcaça (kg)</Label>
-              <div className="relative">
-                <Input type="number" value={pesoCarcacaKg || (calc.carcacaCalc > 0 ? String(Math.round(calc.carcacaCalc * 100) / 100) : '')} onChange={e => { setPesoCarcacaKg(e.target.value); const v = Number(e.target.value) || 0; if (v > 0 && peso > 0) setRendCarcaca(String(Math.round((v / peso) * 10000) / 100)); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
-              </div>
-            </div>
-            <div>
-              <Label className="text-[10px]">Peso Carcaça (@)</Label>
-              <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
-            </div>
-          </div>
-
-          {/* Indicadores calculados inline */}
-          {calc.valorBase > 0 && (
-            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-x-3 text-[10px]">
-              <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
-              <div><span className="text-muted-foreground">Total Arrobas</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
-              <div><span className="text-muted-foreground">Valor Base</span><p className="font-bold text-primary">{formatMoeda(calc.valorBase)}</p></div>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* BLOCO 3 — Impostos (Funrural) */}
-          {sectionTitle(<Shield className="h-4 w-4 text-muted-foreground" />, 'IMPOSTOS')}
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left py-1 text-muted-foreground font-medium">Tipo</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">%</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-border/30">
-                <td className="py-1 pr-2 text-muted-foreground font-medium">Funrural</td>
-                <td className="py-1 px-1">
-                  <div className="relative">
-                    <Input type="number" value={funruralPct} onChange={e => handleFunruralPctChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-20 text-right tabular-nums pr-6 mx-auto" />
-                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
-                  </div>
-                </td>
-                <td className="py-1 px-1">
-                  <div className="relative">
-                    <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                    <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          {calc.valorBruto > 0 && calc.funruralTotal > 0 && (
-            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold">Valor Bruto (desconto - Funrural)</span>
-              <span className="font-bold text-primary tabular-nums">{formatMoeda(calc.valorBruto)}</span>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* BLOCO 4 — Bônus */}
-          {sectionTitle(<Award className="h-4 w-4 text-muted-foreground" />, usePrev ? 'BÔNUS Prev. (R$/@)' : 'BÔNUS (R$/@)')}
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left py-1 text-muted-foreground font-medium">Tipo Bônus</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
-                <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <BiRow
-                label={prevLabel('Precoce')}
-                arrobaVal={bonusPrecoce}
-                reaisVal={bonusPrecoceReais}
-                totalVal={calc.bonusPrecoceTotal}
-                onArrobaChange={v => handleBonusArrobaChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-                onReaisChange={v => handleBonusReaisChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-              />
-              <BiRow
-                label={prevLabel('Qualidade')}
-                arrobaVal={bonusQualidade}
-                reaisVal={bonusQualidadeReais}
-                totalVal={calc.bonusQualidadeTotal}
-                onArrobaChange={v => handleBonusArrobaChange(setBonusQualidade, setBonusQualidadeReais, v)}
-                onReaisChange={v => handleBonusReaisChange(setBonusQualidade, setBonusQualidadeReais, v)}
-              />
-              <BiRow
-                label={prevLabel('Lista Trace')}
-                arrobaVal={bonusListaTrace}
-                reaisVal={bonusListaTraceReais}
-                totalVal={calc.bonusListaTraceTotal}
-                onArrobaChange={v => handleBonusArrobaChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-                onReaisChange={v => handleBonusReaisChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-              />
-            </tbody>
-          </table>
-          {calc.totalBonus > 0 && (
-            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold">Total Bônus</span>
-              <span className="font-bold tabular-nums">+{formatMoeda(calc.totalBonus)}</span>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* BLOCO 5 — Descontos */}
-          {sectionTitle(<TrendingDown className="h-4 w-4 text-muted-foreground" />, usePrev ? 'DESCONTOS Prev. (R$/@)' : 'DESCONTOS (R$/@)')}
-          <table className="w-full text-[10px]">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left py-1 text-muted-foreground font-medium">Tipo Desconto</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$/@</th>
-                <th className="text-center py-1 text-muted-foreground font-medium px-1">R$</th>
-                <th className="text-center py-1 text-muted-foreground font-medium pl-1">R$ Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <BiRow
-                label={prevLabel('Qualidade')}
-                arrobaVal={descontoQualidade}
-                reaisVal={descontoQualidadeReais}
-                totalVal={calc.descQualidadeTotal}
-                onArrobaChange={v => handleBonusArrobaChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-                onReaisChange={v => handleBonusReaisChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-              />
-              <BiRow
-                label={prevLabel('Outros')}
-                arrobaVal={outrosDescontosArroba}
-                reaisVal={outrosDescontos}
-                totalVal={calc.descOutrosTotal}
-                onArrobaChange={v => handleBonusArrobaChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-                onReaisChange={v => handleBonusReaisChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-              />
-            </tbody>
-          </table>
-          {calc.totalDescontos > 0 && (
-            <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
-              <span className="font-bold">Total Descontos</span>
-              <span className="font-bold text-destructive tabular-nums">-{formatMoeda(calc.totalDescontos)}</span>
-            </div>
-          )}
-
-          <Separator />
-
-          {/* BLOCO 6 — Resultado Final */}
-          {calc.valorBase > 0 && (
-            <div className="bg-primary/5 border border-primary/20 rounded p-2 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-muted-foreground uppercase">
-                {usePrev ? 'Resultado Esperado' : 'Resultado Final'}
-              </h4>
-              <div className="space-y-0.5 text-[10px]">
-                <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
-                {calc.funruralTotal > 0 && (
-                  <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
-                )}
-                <Separator className="my-0.5" />
-                <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBruto)}</span></div>
-
-                {/* Bônus breakdown */}
-                <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
-                {calc.totalBonus > 0 && (
-                  <div className="pl-3 space-y-0 text-muted-foreground">
-                    {calc.bonusPrecoceTotal > 0 && <div className="flex justify-between"><span>Precoce</span><span className="tabular-nums">{formatMoeda(calc.bonusPrecoceTotal)}</span></div>}
-                    {calc.bonusQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.bonusQualidadeTotal)}</span></div>}
-                    {calc.bonusListaTraceTotal > 0 && <div className="flex justify-between"><span>Lista Trace</span><span className="tabular-nums">{formatMoeda(calc.bonusListaTraceTotal)}</span></div>}
-                  </div>
-                )}
-
-                {/* Descontos breakdown */}
-                <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">{calc.totalDescontos > 0 ? `-${formatMoeda(calc.totalDescontos)}` : '-'}</strong></div>
-                {calc.totalDescontos > 0 && (
-                  <div className="pl-3 space-y-0 text-muted-foreground">
-                    {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.descQualidadeTotal)}</span></div>}
-                    {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span>Outros</span><span className="tabular-nums">{formatMoeda(calc.descOutrosTotal)}</span></div>}
-                  </div>
-                )}
-
-                <Separator className="my-0.5" />
-                <div className="flex justify-between text-[12px] font-bold">
-                  <span>= Valor Líquido</span>
-                  <span className="text-primary tabular-nums">{formatMoeda(calc.valorLiquido)}</span>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px]">Rend. carcaça estimado (%)</Label>
+                <div className="relative">
+                  <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
                 </div>
               </div>
-
-              {/* Indicadores finais */}
-              <div className="bg-muted/30 rounded p-1.5 mt-1 grid grid-cols-4 gap-x-2 gap-y-0.5 text-[10px]">
-                <div><span className="text-muted-foreground">Qtde</span><p className="font-bold">{qtd} cab.</p></div>
-                <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
-                <div><span className="text-muted-foreground">Rendimento</span><p className="font-bold">{calc.rendCalc > 0 ? `${fmtR(calc.rendCalc)}%` : '-'}</p></div>
-                <div><span className="text-muted-foreground">@/cab</span><p className="font-bold">{formatArroba(calc.pesoArrobaCab)}</p></div>
-                <div><span className="text-muted-foreground">Total @</span><p className="font-bold">{formatArroba(calc.totalArrobas)}</p></div>
-                <div><span className="text-muted-foreground">R$/@ líq.</span><p className="font-bold">{formatMoeda(calc.liqArroba)}</p></div>
-                <div><span className="text-muted-foreground">R$/cab líq.</span><p className="font-bold">{formatMoeda(calc.liqCabeca)}</p></div>
-                <div><span className="text-muted-foreground">R$/kg líq.</span><p className="font-bold">{formatMoeda(calc.liqKg)}</p></div>
+              <div>
+                <Label className="text-[10px]">Peso médio @ calculado</Label>
+                <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
               </div>
             </div>
-          )}
 
-          <Separator />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px]">Preço @ referência (R$)</Label>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                  <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-[10px]">Receita bruta esperada</Label>
+                <Input type="text" readOnly value={calc.valorBase > 0 ? formatMoeda(calc.valorBase) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
+              </div>
+            </div>
 
-          {/* BLOCO 7 — Pagamento (last) */}
-          {sectionTitle(<CreditCard className="h-4 w-4 text-muted-foreground" />, 'Informações de Pagamento')}
-          <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label className="text-[10px]">Nota Fiscal</Label>
-              <Input value={notaFiscal} onChange={e => { setNotaFiscal(e.target.value); markDirty(); }} placeholder="Nº NF" className="h-7 text-[10px]" />
+              <Label className="text-[10px]">Receita líquida esperada</Label>
+              <Input type="text" readOnly value={calc.valorLiquido > 0 ? formatMoeda(calc.valorLiquido) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
             </div>
-            <button type="button" onClick={() => { setFormaReceb('avista'); setParcelas([]); markDirty(); }}
-              className={`h-7 rounded text-[10px] font-bold border-2 transition-all self-end ${formaReceb === 'avista' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              À vista
-            </button>
-            <button type="button" onClick={() => { setFormaReceb('prazo'); markDirty(); if (calc.valorLiquido > 0) setParcelas(gerarParcelas(Number(qtdParcelas) || 1, calc.valorLiquido)); }}
-              className={`h-7 rounded text-[10px] font-bold border-2 transition-all self-end ${formaReceb === 'prazo' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              A prazo
-            </button>
-          </div>
-          {formaReceb === 'prazo' && (
-            <div className="space-y-1">
-              <div className="w-24">
-                <Label className="text-[10px]">Nº de parcelas</Label>
-                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcChange(e.target.value)} className="h-7 text-[10px]" />
+
+            <div>
+              <Label className="text-[10px]">Observações internas</Label>
+              <textarea
+                value={observacoesInternas}
+                onChange={e => { setObservacoesInternas(e.target.value); markDirty(); }}
+                placeholder="Notas internas (visíveis apenas para o proprietário)"
+                className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-[11px] ring-offset-background placeholder:text-muted-foreground/60 placeholder:italic focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+          </TabsContent>
+
+          {/* ══════ ABA PROGRAMADO ══════ */}
+          <TabsContent value="programado" className="space-y-2">
+            {/* Resumo operacional */}
+            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
+              <div><span className="text-muted-foreground">Cabeças</span>{hintText('escalado')}<p className="font-bold">{qtd} cab.</p></div>
+              <div><span className="text-muted-foreground">Peso médio (kg)</span>{hintText('estimado')}<p className="font-bold">{formatKg(peso)}</p></div>
+              <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
+            </div>
+
+            <Separator />
+            {renderDatas()}
+            <Separator />
+            {renderComercializacao()}
+            {renderDesempenho()}
+            <Separator />
+            {renderImpostos()}
+            <Separator />
+            {renderBonus()}
+            <Separator />
+            {renderDescontos()}
+            <Separator />
+            {renderResultado()}
+            <Separator />
+            {renderPagamento()}
+          </TabsContent>
+
+          {/* ══════ ABA REALIZADO ══════ */}
+          <TabsContent value="realizado" className="space-y-2">
+            {/* Resumo operacional */}
+            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
+              <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
+              <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
+              <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
+            </div>
+
+            {/* Campos de identificação Realizado */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px]">Frigorífico</Label>
+                <Input value={frigorifico} onChange={e => { setFrigorifico(e.target.value); markDirty(); }} placeholder="Nome do frigorífico" className="h-7 text-[10px]" />
               </div>
-              {parcelas.map((p, i) => (
-                <div key={i} className="grid grid-cols-2 gap-2 bg-muted/30 rounded p-1.5">
-                  <div>
-                    <Label className="text-[9px]">Parcela {i + 1}</Label>
-                    <Input type="date" value={p.data} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], data: e.target.value }; setParcelas(np); markDirty(); }} className="h-7 text-[10px]" />
-                  </div>
-                  <div>
-                    <Label className="text-[9px]">Valor</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); markDirty(); }} className="h-7 text-[10px] text-right tabular-nums" />
-                  </div>
-                </div>
-              ))}
-              {parcelas.length > 0 && (
-                <div className="text-[10px] text-muted-foreground text-right tabular-nums">
-                  Soma Liq.: {formatMoeda(parcelas.reduce((s, p) => s + p.valor, 0))}
-                </div>
-              )}
+              <div>
+                <Label className="text-[10px]">Pedido</Label>
+                <Input value={pedido} onChange={e => { setPedido(e.target.value); markDirty(); }} placeholder="Nº do pedido" className="h-7 text-[10px]" />
+              </div>
+              <div>
+                <Label className="text-[10px]">Instrução</Label>
+                <Input value={instrucao} onChange={e => { setInstrucao(e.target.value); markDirty(); }} placeholder="Instrução" className="h-7 text-[10px]" />
+              </div>
+              <div>
+                <Label className="text-[10px]">Doc. Acerto</Label>
+                <Input value={docAcerto} onChange={e => { setDocAcerto(e.target.value); markDirty(); }} placeholder="Documento de acerto" className="h-7 text-[10px]" />
+              </div>
             </div>
-          )}
-        </div>
+
+            <Separator />
+            {renderDatas()}
+            <Separator />
+            {renderComercializacao()}
+            {renderDesempenho()}
+            <Separator />
+            {renderImpostos()}
+            <Separator />
+            {renderBonus()}
+            <Separator />
+            {renderDescontos()}
+            <Separator />
+            {renderResultado()}
+            <Separator />
+            {renderPagamento()}
+          </TabsContent>
+        </Tabs>
 
         {/* Footer */}
         <div className="flex justify-end gap-2 pt-2 border-t mt-1">
