@@ -1,0 +1,1 @@
+ALTER TABLE public.financiamentos ADD COLUMN IF NOT EXISTS numero_contrato text;

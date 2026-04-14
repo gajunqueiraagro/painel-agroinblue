@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 interface FinanciamentoRow {
   id: string;
   descricao: string;
+  numero_contrato: string | null;
   tipo_financiamento: string;
   credor_id: string | null;
   valor_total: number;
@@ -91,6 +92,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         return {
           id: f.id,
           descricao: f.descricao,
+          numero_contrato: f.numero_contrato ?? null,
           tipo_financiamento: f.tipo_financiamento,
           credor_id: f.credor_id,
           valor_total: Number(f.valor_total),
@@ -183,6 +185,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 <TableHeader>
                   <TableRow>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Contrato</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Credor</TableHead>
                     <TableHead className="text-right">Valor total</TableHead>
@@ -196,6 +199,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   {filtered.map(f => (
                     <TableRow key={f.id}>
                       <TableCell className="max-w-[180px] truncate">{f.descricao}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{f.numero_contrato || '—'}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-[10px]">
                           {f.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'}

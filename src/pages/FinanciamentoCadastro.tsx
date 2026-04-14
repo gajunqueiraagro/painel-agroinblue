@@ -81,6 +81,14 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
               placeholder="Ex: Custeio safra 2025"
             />
           </div>
+          <div>
+            <Label className="text-xs">Número do contrato</Label>
+            <Input
+              value={form.numero_contrato}
+              onChange={e => set('numero_contrato', e.target.value)}
+              placeholder="Ex: 0123456-78/2024"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>

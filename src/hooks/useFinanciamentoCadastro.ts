@@ -19,6 +19,7 @@ export type FrequenciaParcela = 'mensal' | 'bimestral' | 'trimestral' | 'semestr
 
 export interface FinanciamentoForm {
   descricao: string;
+  numero_contrato: string;
   tipo_financiamento: 'pecuaria' | 'agricultura';
   credor_id: string;
   conta_bancaria_id: string;
@@ -37,6 +38,7 @@ export interface FinanciamentoForm {
 
 const INITIAL: FinanciamentoForm = {
   descricao: '',
+  numero_contrato: '',
   tipo_financiamento: 'pecuaria',
   credor_id: '',
   conta_bancaria_id: '',
@@ -205,6 +207,7 @@ export function useFinanciamentoCadastro() {
           cliente_id: clienteId,
           fazenda_id: fazendaId,
           descricao: form.descricao.trim(),
+          numero_contrato: form.numero_contrato.trim() || null,
           tipo_financiamento: form.tipo_financiamento,
           credor_id: form.credor_id || null,
           conta_bancaria_id: form.conta_bancaria_id || null,

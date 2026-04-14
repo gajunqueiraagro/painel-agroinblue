@@ -106,6 +106,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     if (!fin) return;
     setEditForm({
       descricao: fin.descricao,
+      numero_contrato: fin.numero_contrato ?? '',
       tipo_financiamento: fin.tipo_financiamento,
       credor_id: fin.credor_id ?? '',
       conta_bancaria_id: fin.conta_bancaria_id ?? '',
@@ -124,6 +125,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
       .from('financiamentos')
       .update({
         descricao: editForm.descricao,
+        numero_contrato: editForm.numero_contrato?.trim() || null,
         tipo_financiamento: editForm.tipo_financiamento,
         credor_id: editForm.credor_id || null,
         conta_bancaria_id: editForm.conta_bancaria_id || null,
@@ -217,6 +219,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
         </CardHeader>
         <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
           <Info label="Descrição" value={fin.descricao} />
+          <Info label="Nº Contrato" value={fin.numero_contrato || '—'} />
           <Info label="Tipo" value={fin.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
           <Info label="Credor" value={fin.financeiro_fornecedores?.nome ?? '—'} />
           <Info label="Status">
@@ -340,6 +343,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
             <div>
               <Label className="text-xs">Descrição</Label>
               <Input value={editForm.descricao ?? ''} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-xs">Nº Contrato</Label>
+              <Input value={editForm.numero_contrato ?? ''} onChange={e => setEditForm(p => ({ ...p, numero_contrato: e.target.value }))} placeholder="Ex: 0123456-78/2024" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
