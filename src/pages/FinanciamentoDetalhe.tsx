@@ -27,9 +27,13 @@ const today = () => format(new Date(), 'yyyy-MM-dd');
 
 /* ================================================================ */
 
-export default function FinanciamentoDetalhe() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+interface FinanciamentoDetalheProps {
+  id?: string;
+  onVoltar?: () => void;
+}
+
+export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDetalheProps = {}) {
+  const qc = useQueryClient();
   const qc = useQueryClient();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
