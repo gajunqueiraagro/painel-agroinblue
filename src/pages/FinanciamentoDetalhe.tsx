@@ -154,9 +154,12 @@ export default function FinanciamentoDetalhe() {
       setEditingCell(null);
       return;
     }
+    const updatePayload = editingCell.field === 'valor_principal'
+      ? { valor_principal: val, updated_at: new Date().toISOString() }
+      : { valor_juros: val, updated_at: new Date().toISOString() };
     const { error } = await supabase
       .from('financiamento_parcelas')
-      .update({ [editingCell.field]: val, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', editingCell.parcelaId);
     if (error) toast.error(error.message);
     else {
