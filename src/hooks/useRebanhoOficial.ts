@@ -614,7 +614,9 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       const result: ZootMensal[] = [];
       for (const mesKey of Array.from(allMeses).sort()) {
         const anoMes = `${ano}-${mesKey}`;
-        if (mesesFechados.has(anoMes)) {
+        const fazendaIdLocal = resolvedGlobal ? undefined : fazendaId;
+        const mesesFechadoKey = fazendaIdLocal ? `${anoMes}|${fazendaIdLocal}` : anoMes;
+        if (mesesFechados.has(mesesFechadoKey) || (resolvedGlobal && Array.from(mesesFechados).some(k => k.startsWith(anoMes + '|')))) {
           // Mês fechado: usar dados recalculados a partir de rawCategorias
           const catRow = catByMes.get(mesKey);
           if (catRow) {
