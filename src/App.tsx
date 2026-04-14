@@ -12,6 +12,7 @@ import { lazy, Suspense } from "react";
 
 const FinanciamentoCadastro = lazy(() => import("./pages/FinanciamentoCadastro"));
 const FinanciamentosListaPage = lazy(() => import("./pages/FinanciamentosListaPage"));
+const FinanciamentoDetalhe = lazy(() => import("./pages/FinanciamentoDetalhe"));
 
 const queryClient = new QueryClient();
 
