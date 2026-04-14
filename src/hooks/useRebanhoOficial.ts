@@ -447,9 +447,11 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   }, [fechamentoOverlay]);
 
   console.log('[OVERLAY DEBUG]', {
+    ano,
+    fazendaId,
+    cenario,
     fechamentoOverlayLength: fechamentoOverlay?.length,
     mesesFechadosSize: mesesFechados.size,
-    mesesFechadosValues: Array.from(mesesFechados).slice(0, 3),
     overlayMapSize: overlayMap.size,
     overlayMapKeys: Array.from(overlayMap.keys()).slice(0, 3),
   });
