@@ -1071,6 +1071,16 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const mesLabel = MESES_COLS.find(m => m.key === mesFiltro)?.label || mesFiltro;
 
+  if (bloqueado) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <span className="text-4xl">🐄</span>
+        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
+        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
       <div className="flex gap-1.5 items-center flex-wrap">

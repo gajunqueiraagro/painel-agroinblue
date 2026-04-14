@@ -520,6 +520,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const showCloseButton = !hasDivergencia && !allClosed && canBulkClose;
   const showAdjustButton = hasDivergencia;
 
+  if (bloqueado) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+        <span className="text-4xl">🐄</span>
+        <p className="font-medium text-base">Esta fazenda não possui operação pecuária</p>
+        <p className="text-sm">Selecione uma fazenda com pecuária para visualizar os dados zootécnicos.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-24">
       {/* ═══ HEADER FIXO — 3 COLUNAS ═══ */}
