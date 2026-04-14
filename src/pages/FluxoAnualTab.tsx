@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
@@ -153,7 +154,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
       )}
 
       {/* Alerta de inconsistência de cálculo */}
-      {errosEquacao.length > 0 && (
+      {errosEquacao.length > 0 && !isGlobal && (
         <div className="mx-4 mb-2 p-2 rounded-md border border-destructive/50 bg-destructive/10 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <div className="text-xs">
