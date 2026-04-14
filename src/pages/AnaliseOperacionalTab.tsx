@@ -26,7 +26,7 @@ interface Props {
 }
 
 export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
   const { lancamentos } = useLancamentos();
@@ -34,6 +34,10 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
   const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
 
   const [ano, mes] = anoMes.split('-').map(Number);
+
+  // Status de fechamento (apresentação apenas)
+  const { mesFechado: mesFechadoFn } = useFechamentoCompetencia(fazendaAtual?.id, ano);
+  const mesSelecionadoFechado = mesFechadoFn(mes);
 
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewData } = useRebanhoOficial({ ano, cenario: 'realizado' });
