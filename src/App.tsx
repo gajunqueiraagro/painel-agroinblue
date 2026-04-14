@@ -35,6 +35,7 @@ const App = () => (
                 <Route path="/" element={<AppRouter />} />
                 <Route path="/financiamentos" element={<Suspense fallback={<LoadingFallback />}><FinanciamentosListaPage /></Suspense>} />
                 <Route path="/financiamentos/novo" element={<Suspense fallback={<LoadingFallback />}><FinanciamentoCadastro /></Suspense>} />
+                <Route path="/financiamentos/:id" element={<Suspense fallback={<LoadingFallback />}><FinanciamentoDetalhe /></Suspense>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
