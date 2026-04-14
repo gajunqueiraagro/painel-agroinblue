@@ -145,7 +145,8 @@ export function useFluxoCaixa(
           .from('financeiro_lancamentos_v2')
           .select('id, status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro, grupo_custo')
           .eq('cliente_id', clienteId)
-          .eq('cancelado', false)
+           .eq('cancelado', false)
+           .eq('sem_movimentacao_caixa', false)
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
           .range(from, from + PAGE_SIZE - 1);
