@@ -173,6 +173,22 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
               (calculado: {engordaDias} dias × {engordaConsumo} kg × {fmtCusto(engordaCustoKg)})
             </p>
           </div>
+
+          <Separator />
+
+          {/* DESPESAS COMERCIAIS */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-card-foreground">DESPESAS COMERCIAIS PECUÁRIA</p>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs whitespace-nowrap w-36">Taxa por cab abatida/vendida (R$)</Label>
+              <Input
+                type="number" step="0.01" min="0"
+                className="h-8 text-xs w-28"
+                value={comercialCusto || ''}
+                onChange={e => setComercialCusto(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+          </div>
         </div>
 
         <DialogFooter className="gap-2">
