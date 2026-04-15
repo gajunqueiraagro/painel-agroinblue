@@ -359,7 +359,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     console.log('[VendaFinanceiro] parcelas (state):', JSON.stringify(parcelas));
     console.log('[VendaFinanceiro] valorBruto:', valorBruto, 'valorLiquido:', valorLiquido);
 
-    const efValorLiquido = overrides?.valorLiquido ?? valorLiquido;
+    const efValorLiquido = valorLiquido;
     const efFormaRecebLocal = initialFormaReceb || formaReceb;
     const efParcelasLocal = (initialParcelas && initialParcelas.length > 0) ? initialParcelas : parcelas;
     console.log('[VendaFinanceiro] efValorLiquido:', efValorLiquido);
