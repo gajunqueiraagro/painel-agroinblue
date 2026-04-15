@@ -204,6 +204,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [parcelas, setParcelas] = useState(initialData.parcelas);
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Counter to force BiRow remount when dialog re-opens with new data
+  const [dialogKey, setDialogKey] = useState(0);
 
   // Novos campos Realizado
   const [frigorifico, setFrigorifico] = useState(initialData.frigorifico || '');
@@ -280,6 +282,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setActiveTab(statusToTab(statusOp));
       setDirty(false);
       setConfirmClose(false);
+      setDialogKey(k => k + 1);
     }
   }, [open, initialData, statusOp]);
 
@@ -366,10 +369,11 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       formaReceb,
       qtdParcelas: qtdParcelas || undefined,
       parcelas,
+      valorBaseOverride: Number(valorBrutoOverride) || undefined,
     });
-  }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas]);
+  }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas, valorBrutoOverride]);
 
-  // Item 5: when valorBrutoOverride is set, recalculate precoArroba
+  // When valorBrutoOverride changes, recalc precoArroba for display
   const valorBrutoOverrideRef = useRef(valorBrutoOverride);
   useEffect(() => {
     if (valorBrutoOverride !== valorBrutoOverrideRef.current) {
@@ -740,7 +744,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <td className="py-1 px-1">
               <div className="relative">
                 <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
+                <Input type="text" inputMode="decimal" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value.replace(/[^\d.,\-]/g, ''))} placeholder="0,00" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
               </div>
             </td>
           </tr>
@@ -771,7 +775,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
-            stableKey="bonus-precoce"
+            stableKey={`bonus-precoce-${dialogKey}`}
             label={prevLabel('Precoce')}
             arrobaVal={bonusPrecoce}
             reaisVal={bonusPrecoceReais}
@@ -781,7 +785,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             hint={bonusHint}
           />
           <BiRow
-            stableKey="bonus-qualidade"
+            stableKey={`bonus-qualidade-${dialogKey}`}
             label={prevLabel('Qualidade')}
             arrobaVal={bonusQualidade}
             reaisVal={bonusQualidadeReais}
@@ -791,7 +795,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             hint={bonusHint}
           />
           <BiRow
-            stableKey="bonus-trace"
+            stableKey={`bonus-trace-${dialogKey}`}
             label={prevLabel('Lista Trace')}
             arrobaVal={bonusListaTrace}
             reaisVal={bonusListaTraceReais}
@@ -825,7 +829,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
-            stableKey="desc-qualidade"
+            stableKey={`desc-qualidade-${dialogKey}`}
             label={prevLabel('Qualidade')}
             arrobaVal={descontoQualidade}
             reaisVal={descontoQualidadeReais}
@@ -835,7 +839,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             redTotal
           />
           <BiRow
-            stableKey="desc-outros"
+            stableKey={`desc-outros-${dialogKey}`}
             label={prevLabel('Outros')}
             arrobaVal={outrosDescontosArroba}
             reaisVal={outrosDescontos}
@@ -1296,7 +1300,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <div className="grid grid-cols-2 gap-2 items-end">
                 <div className="relative">
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                  <Input type="number" value={valorBrutoOverride} onChange={e => { setValorBrutoOverride(e.target.value); markDirty(); }} placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'} step="0.01" className="h-7 text-[10px] text-right tabular-nums pl-7" />
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={valorBrutoOverride}
+                    onChange={e => { setValorBrutoOverride(e.target.value.replace(/[^\d.,\-]/g, '')); markDirty(); }}
+                    onBlur={() => { const v = Number(valorBrutoOverride) || 0; if (v > 0) setValorBrutoOverride(String(v)); }}
+                    placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'}
+                    className="h-7 text-[10px] text-right tabular-nums pl-7"
+                  />
                 </div>
                 <div className="text-[10px] font-bold tabular-nums">
                   {formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}
