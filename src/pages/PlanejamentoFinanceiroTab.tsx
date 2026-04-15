@@ -636,7 +636,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
 
   const commit = () => {
     setEditing(false);
-    const v = parseFloat(text) || 0;
+    const v = parseFloat(text.replace(',', '.')) || 0;
     if (v !== value) onSave(v);
   };
 
@@ -644,8 +644,8 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
     return (
       <Input
         autoFocus
-        type="number"
-        step="0.01"
+        type="text"
+        inputMode="decimal"
         className="h-4 text-[8px] text-right p-0.5 w-[54px]"
         value={text}
         onChange={e => setText(e.target.value)}
