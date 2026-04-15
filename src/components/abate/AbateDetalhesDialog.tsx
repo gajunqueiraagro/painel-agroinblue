@@ -52,6 +52,9 @@ export interface AbateDetalhes {
   pesoTotalKgNF?: string;
   // Override manual do valor bruto base
   valorBrutoOverride?: string;
+  // Anexos
+  anexoNfUrl?: string;
+  anexoAcertoUrl?: string;
   // --- Novos campos Meta ---
   observacoesInternas?: string;
 }
