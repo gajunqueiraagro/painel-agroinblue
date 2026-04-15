@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info } from 'lucide-react';
+import { useCliente } from '@/contexts/ClienteContext';
+import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -40,7 +42,11 @@ const SUBCENTROS_FINANCIAMENTO = new Set([
   'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
 ]);
 
-const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO]);
+const SUBCENTROS_NUTRICAO = new Set([
+  'Nutrição Cria', 'Nutrição Recria', 'Nutrição Engorda',
+]);
+
+const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
 
 const fmt = (v: number) => {
   if (v === 0) return '–';
@@ -81,11 +87,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { clienteAtual } = useCliente();
+
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
   const [importBanner, setImportBanner] = useState(false);
+  const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
 
   useEffect(() => {
     setGrid(buildGrid());
@@ -124,8 +133,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       // For rebanho subcentros, effective meses = auto + ajuste
       const isAuto = SUBCENTROS_AUTO.has(g.subcentro);
       const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
+      const isNutricao = SUBCENTROS_NUTRICAO.has(g.subcentro);
       const autoMeses = isAuto
-        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
+        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : isNutricao ? lancamentosNutricao.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
         : null;
       const effectiveMeses = isAuto
         ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
@@ -173,7 +183,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid, lancamentosRebanho, lancamentosFinanciamento]);
+  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
@@ -334,9 +344,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                     {centroOpen && centro.subs.map((sub, subIdx) => {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
                       const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
-                      const isAuto = isRebanho || isFinanciamento;
+                      const isNutricao = SUBCENTROS_NUTRICAO.has(sub.subcentro);
+                      const isAuto = isRebanho || isFinanciamento || isNutricao;
                       const autoMeses = isAuto
-                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
+                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
                       const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
 
@@ -450,6 +461,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </span>
         )}
         <div className="flex-1" />
+        {!isGlobal && (
+          <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
+            <Settings className="h-4 w-4" />
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={handleImport} disabled={loading || isGlobal}>
           <Download className="h-4 w-4 mr-1" />Importar Realizado {ano - 1}
         </Button>
@@ -587,6 +603,17 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {!isGlobal && clienteAtual?.id && (
+        <ModalParametrosNutricao
+          open={nutricaoModalOpen}
+          onOpenChange={setNutricaoModalOpen}
+          fazendaId={fazendaId}
+          clienteId={clienteAtual.id}
+          ano={ano}
+          onSaved={reloadNutricao}
+        />
+      )}
     </div>
   );
 }
