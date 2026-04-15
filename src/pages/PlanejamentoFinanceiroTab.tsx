@@ -608,6 +608,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           onSaved={reloadNutricao}
         />
       )}
+
+      <AlertDialog open={!!importConfirm} onOpenChange={(open) => { if (!open) setImportConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">Importar realizado {ano - 1}</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Importar realizado {ano - 1} para <strong>{importConfirm?.subcentro}</strong>? Isso irá sobrepor os valores atuais.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs h-8">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="text-xs h-8" onClick={handleImportSubcentro}>Importar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
