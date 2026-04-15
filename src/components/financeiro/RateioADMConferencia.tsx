@@ -241,7 +241,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs font-bold">{f.fazendaNome}</span>
                       <span className="text-xs text-muted-foreground">
-                        {formatNum(f.rebanhoMedio, 0)} cab méd.
+                        {formatNum(f.rebanhoMedio, 1)} ha
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
