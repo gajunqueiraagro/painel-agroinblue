@@ -83,6 +83,7 @@ interface Props {
   ano: number;
   mesAte: number;
   onDrillDown?: (payload: DrillDownPayload) => void;
+  onMacroDrillDown?: (macro: string) => void;
 }
 
 // ---------------------------------------------------------------------------
