@@ -204,6 +204,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [parcelas, setParcelas] = useState(initialData.parcelas);
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Counter to force BiRow remount when dialog re-opens with new data
+  const [dialogKey, setDialogKey] = useState(0);
 
   // Novos campos Realizado
   const [frigorifico, setFrigorifico] = useState(initialData.frigorifico || '');
@@ -280,6 +282,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setActiveTab(statusToTab(statusOp));
       setDirty(false);
       setConfirmClose(false);
+      setDialogKey(k => k + 1);
     }
   }, [open, initialData, statusOp]);
 
