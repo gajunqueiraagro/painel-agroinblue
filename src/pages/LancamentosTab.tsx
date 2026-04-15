@@ -2103,7 +2103,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       return (
         <VendaFinanceiroPanel
           key={`venda-${tipo}`}
-          ref={vendaFinanceiroRef}
           quantidade={parseNumericValue(quantidade) || 0}
           pesoKg={parseNumericValue(pesoKg) || 0}
           categoria={categoria}
