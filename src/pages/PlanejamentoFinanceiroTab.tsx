@@ -35,6 +35,13 @@ const SUBCENTROS_REBANHO = new Set([
   'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
 ]);
 
+const SUBCENTROS_FINANCIAMENTO = new Set([
+  'Amortização Financiamento Pecuária', 'Amortização Financiamento Agricultura',
+  'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
+]);
+
+const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO]);
+
 const fmt = (v: number) => {
   if (v === 0) return '–';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
