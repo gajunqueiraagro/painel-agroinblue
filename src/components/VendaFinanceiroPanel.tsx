@@ -944,8 +944,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       {/* Boitel no longer shows DESCONTOS block here — handled inside BoitelPlanningDialog */}
 
-      {/* Informações de Recebimento — only for normal venda; boitel handles it inside its own dialog */}
-      {!isBoitel && (
+      {/* Informações de Recebimento — only for boitel; normal venda handles it inside VendaDetalhesDialog */}
+      {isBoitel && (
         <>
           <Separator />
           <Collapsible>
