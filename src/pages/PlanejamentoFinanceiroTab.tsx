@@ -240,26 +240,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     setDirty(true);
   }, []);
 
-  /* ── Import realizado ── */
-  const handleImport = useCallback(async () => {
-    const imported = await importarRealizado();
-    if (!imported) return;
+  /* ── Import subcentro individual ── */
+  const handleImportSubcentro = useCallback(async () => {
+    if (!importConfirm) return;
+    const { subcentro, centro_custo, gridIdx } = importConfirm;
+    setImportConfirm(null);
+    const meses = await importarSubcentro(subcentro, centro_custo);
     setGrid(prev => {
-      const next = prev.map(g => ({ ...g, meses: [...g.meses] }));
-      for (const imp of imported) {
-        const key = `${imp.centro_custo}||${imp.subcentro}`;
-        const idx = next.findIndex(g => `${g.centro_custo}||${g.subcentro}` === key);
-        if (idx >= 0) {
-          for (let m = 0; m < 12; m++) {
-            next[idx].meses[m] = Math.round(imp.meses[m] * 100) / 100;
-          }
-        }
-      }
+      const next = [...prev];
+      const row = { ...next[gridIdx], meses: [...meses] };
+      next[gridIdx] = row;
       return next;
     });
     setDirty(true);
-    setImportBanner(true);
-  }, [importarRealizado]);
+    toast.success(`Realizado ${ano - 1} importado para ${subcentro}`);
+  }, [importConfirm, importarSubcentro, ano]);
 
   /* ── Save ── */
   const handleSave = useCallback(async () => {
