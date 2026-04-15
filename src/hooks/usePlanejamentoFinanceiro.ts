@@ -85,6 +85,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const [loading, setLoading] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
   const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
+  const [lancamentosFinanciamento, setLancamentosFinanciamento] = useState<Map<string, number[]>>(new Map());
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -224,6 +225,80 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   useEffect(() => { loadDividendos(); }, [loadDividendos]);
   useEffect(() => { loadLancamentosRebanho(); }, [loadLancamentosRebanho]);
 
+  // ─── Load parcelas de financiamento (pendentes, ano META) ─
+  const loadFinanciamentos = useCallback(async () => {
+    if (!clienteId) { setLancamentosFinanciamento(new Map()); return; }
+    try {
+      let query = supabase
+        .from('financiamento_parcelas')
+        .select(`
+          data_vencimento,
+          valor_principal,
+          valor_juros,
+          financiamentos!inner (
+            tipo_financiamento,
+            plano_conta_parcela_id,
+            cliente_id,
+            fazenda_id,
+            financeiro_plano_contas_parcela:financeiro_plano_contas!financiamentos_plano_conta_parcela_id_fkey (
+              subcentro, grupo_custo, centro_custo, macro_custo
+            )
+          )
+        `)
+        .eq('status', 'pendente')
+        .eq('financiamentos.cliente_id', clienteId)
+        .gte('data_vencimento', `${ano}-01-01`)
+        .lte('data_vencimento', `${ano}-12-31`);
+
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('financiamentos.fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await (query as any);
+      if (error) throw error;
+
+      const result = new Map<string, number[]>();
+
+      const addToMap = (subcentro: string, mes: number, valor: number) => {
+        if (!subcentro || valor <= 0) return;
+        if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
+        result.get(subcentro)![mes - 1] += valor;
+      };
+
+      for (const r of (rows || [])) {
+        const fin = (r as any).financiamentos;
+        if (!fin) continue;
+        const pc = fin.financeiro_plano_contas_parcela;
+        const mes = new Date(r.data_vencimento).getMonth() + 1;
+        if (mes < 1 || mes > 12) continue;
+
+        // Principal → subcentro do plano_conta_parcela_id
+        if (pc?.subcentro) {
+          addToMap(pc.subcentro, mes, Math.abs(r.valor_principal || 0));
+        }
+
+        // Juros → subcentro de juros conforme tipo_financiamento
+        const tipo = fin.tipo_financiamento;
+        const subJuros = tipo === 'agricultura'
+          ? 'Juros de Financiamento Agricultura'
+          : 'Juros de Financiamento Pecuária';
+        addToMap(subJuros, mes, Math.abs(r.valor_juros || 0));
+      }
+
+      // Round to 2 decimals
+      for (const [, arr] of result) {
+        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
+      }
+
+      setLancamentosFinanciamento(result);
+    } catch (e: any) {
+      console.error('Erro ao carregar financiamentos para META:', e);
+      setLancamentosFinanciamento(new Map());
+    }
+  }, [clienteId, fazendaId, ano]);
+
+  useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
+
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
     const map = new Map<string, SubcentroGrid>();
@@ -323,6 +398,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
         'Venda em Boitel',
         'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
+        'Amortização Financiamento Pecuária', 'Amortização Financiamento Agricultura',
+        'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
       ];
 
       const map = new Map<string, SubcentroGrid>();
@@ -418,6 +495,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     salvarGrid,
     saldoInicial,
     lancamentosRebanho,
+    lancamentosFinanciamento,
     reload: loadSaved,
   };
 }
