@@ -39,6 +39,7 @@ export interface PlanoContasRow {
   centro_custo: string;
   subcentro: string | null;
   escopo_negocio: string | null;
+  ordem_exibicao: number;
 }
 
 /** In-memory grid value per subcentro key */
