@@ -207,20 +207,69 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const tryClose = () => { if (dirty) setConfirmClose(true); else onClose(); };
 
   const qtd = quantidade || 0;
-  // In Realizado with pesoTotalKgNF, derive per-cabeça peso
-  const pesoTotalNF = Number(pesoTotalKgNF) || 0;
-  const peso = (isRealizado && pesoTotalNF > 0 && qtd > 0) ? (pesoTotalNF / qtd) : (pesoKg || 0);
+  const peso = pesoKg || 0;
 
-  // Peso carcaça kg state for bidirectional
+  // Peso carcaça kg/cab state for bidirectional (Realizado: 4-field grid)
+  const [pesoCarcacaKgCab, setPesoCarcacaKgCab] = useState('');
+  const [pesoCarcacaKgTotal, setPesoCarcacaKgTotal] = useState('');
+  const [pesoCarcacaArrobaCab, setPesoCarcacaArrobaCab] = useState('');
+  const [pesoCarcacaArrobaTotal, setPesoCarcacaArrobaTotal] = useState('');
+
+  // Legacy single field for Programado/Meta tabs
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
+
+  // Sync Realizado carcaça fields bidirectionally
+  // Track which field the user is editing to avoid feedback loops
+  const [carcacaEditSource, setCarcacaEditSource] = useState<'kgCab' | 'kgTotal' | 'arrobaCab' | 'arrobaTotal' | null>(null);
+
+  useEffect(() => {
+    if (!carcacaEditSource) return;
+    const q = qtd || 1;
+    if (carcacaEditSource === 'kgCab') {
+      const v = Number(pesoCarcacaKgCab) || 0;
+      setPesoCarcacaKgTotal(v > 0 ? String(Math.round(v * q * 100) / 100) : '');
+      setPesoCarcacaArrobaCab(v > 0 ? String(Math.round((v / 15) * 10000) / 10000) : '');
+      setPesoCarcacaArrobaTotal(v > 0 ? String(Math.round((v / 15) * q * 10000) / 10000) : '');
+    } else if (carcacaEditSource === 'kgTotal') {
+      const v = Number(pesoCarcacaKgTotal) || 0;
+      const cab = v > 0 ? v / q : 0;
+      setPesoCarcacaKgCab(cab > 0 ? String(Math.round(cab * 100) / 100) : '');
+      setPesoCarcacaArrobaCab(cab > 0 ? String(Math.round((cab / 15) * 10000) / 10000) : '');
+      setPesoCarcacaArrobaTotal(v > 0 ? String(Math.round((v / 15) * 10000) / 10000) : '');
+    } else if (carcacaEditSource === 'arrobaCab') {
+      const v = Number(pesoCarcacaArrobaCab) || 0;
+      const kgCab = v * 15;
+      setPesoCarcacaKgCab(kgCab > 0 ? String(Math.round(kgCab * 100) / 100) : '');
+      setPesoCarcacaKgTotal(kgCab > 0 ? String(Math.round(kgCab * q * 100) / 100) : '');
+      setPesoCarcacaArrobaTotal(v > 0 ? String(Math.round(v * q * 10000) / 10000) : '');
+    } else if (carcacaEditSource === 'arrobaTotal') {
+      const v = Number(pesoCarcacaArrobaTotal) || 0;
+      const arrobaCab = v > 0 ? v / q : 0;
+      setPesoCarcacaArrobaCab(arrobaCab > 0 ? String(Math.round(arrobaCab * 10000) / 10000) : '');
+      const kgCab = arrobaCab * 15;
+      setPesoCarcacaKgCab(kgCab > 0 ? String(Math.round(kgCab * 100) / 100) : '');
+      setPesoCarcacaKgTotal(v > 0 ? String(Math.round(v * 15 * 100) / 100) : '');
+    }
+    setCarcacaEditSource(null);
+  }, [carcacaEditSource, pesoCarcacaKgCab, pesoCarcacaKgTotal, pesoCarcacaArrobaCab, pesoCarcacaArrobaTotal, qtd]);
+
+  // The effective pesoCarcacaKg per cab for calc
+  const effectivePesoCarcacaKg = isRealizado ? pesoCarcacaKgCab : pesoCarcacaKg;
+
+  // Rend. Carcaça auto-calculated (item 3)
+  const rendCarcacaAuto = useMemo(() => {
+    const carcKg = Number(effectivePesoCarcacaKg) || 0;
+    if (carcKg > 0 && peso > 0) return Math.round((carcKg / peso) * 10000) / 100;
+    return 0;
+  }, [effectivePesoCarcacaKg, peso]);
 
   // Core calculations — single source of truth via buildAbateCalculation
   const calc = useMemo(() => {
     return buildAbateCalculation({
       quantidade: qtd,
       pesoKg: peso,
-      pesoCarcacaKg: pesoCarcacaKg || undefined,
-      rendCarcaca: rendCarcaca || undefined,
+      pesoCarcacaKg: effectivePesoCarcacaKg || undefined,
+      rendCarcaca: isRealizado ? (rendCarcacaAuto > 0 ? String(rendCarcacaAuto) : undefined) : (rendCarcaca || undefined),
       precoArroba: precoArroba || undefined,
       funruralPct: funruralPct || undefined,
       funruralReais: funruralReais || undefined,
@@ -238,7 +287,20 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       qtdParcelas: qtdParcelas || undefined,
       parcelas,
     });
-  }, [peso, qtd, rendCarcaca, pesoCarcacaKg, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas]);
+  }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas]);
+
+  // Item 5: when valorBrutoOverride is set, recalculate precoArroba
+  const valorBrutoOverrideRef = useRef(valorBrutoOverride);
+  useEffect(() => {
+    if (valorBrutoOverride !== valorBrutoOverrideRef.current) {
+      valorBrutoOverrideRef.current = valorBrutoOverride;
+      const vb = Number(valorBrutoOverride) || 0;
+      if (vb > 0 && calc.totalArrobas > 0) {
+        const newPreco = Math.round((vb / calc.totalArrobas) * 100) / 100;
+        setPrecoArroba(String(newPreco));
+      }
+    }
+  }, [valorBrutoOverride, calc.totalArrobas]);
 
   // Auto-sync parcelas when valor líquido changes and formaReceb === 'prazo'
   const prevValorLiquido = useRef(calc.valorLiquido);
@@ -250,7 +312,6 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           const parcelaVal = Math.round((calc.valorLiquido / n) * 100) / 100;
           return { data: p.data, valor: parcelaVal };
         });
-        // Adjust last parcela for rounding
         if (newParcelas.length > 0) {
           const sumOthers = newParcelas.slice(0, -1).reduce((s, p) => s + p.valor, 0);
           newParcelas[newParcelas.length - 1].valor = Math.round((calc.valorLiquido - sumOthers) * 100) / 100;
@@ -294,13 +355,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       dataVenda: dataVendaAuto,
       dataEmbarque: dataEmbarqueAuto,
       dataAbate: dataAbateAuto,
-      tipoVenda, tipoPeso, rendCarcaca, precoArroba,
+      tipoVenda, tipoPeso,
+      rendCarcaca: isRealizado ? String(rendCarcacaAuto) : rendCarcaca,
+      precoArroba,
       bonusPrecoce, bonusQualidade, bonusListaTrace,
       descontoQualidade, funruralPct, funruralReais, outrosDescontos,
       notaFiscal, formaReceb, qtdParcelas, parcelas,
       bonusPrecoceReais, bonusQualidadeReais, bonusListaTraceReais,
       descontoQualidadeReais, outrosDescontosArroba,
-      pesoCarcacaKgManual: pesoCarcacaKg || undefined,
+      pesoCarcacaKgManual: effectivePesoCarcacaKg || undefined,
       calculation: calc,
       frigorifico, pedido, instrucao, docAcerto,
       pesoTotalKgNF: pesoTotalKgNF || undefined,
@@ -316,7 +379,6 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     const setUploading = tipo === 'nf' ? setUploadingNf : setUploadingAcerto;
     const setUrl = tipo === 'nf' ? setAnexoNfUrl : setAnexoAcertoUrl;
     const fileName = tipo === 'nf' ? 'nf.pdf' : 'acerto.pdf';
-    // Use a unique path based on timestamp to avoid caching issues
     const storagePath = `${Date.now()}_${fileName}`;
 
     setUploading(true);
@@ -353,14 +415,15 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const prevLabel = (base: string) => usePrev ? `${base} Prev.` : base;
 
-  // Bonus/discount handlers — exclusive fields (only one filled at a time)
+  // Item 6 fix: Use refs to prevent re-render focus loss on bidirectional fields
+  // Store local string values and only propagate on blur or with stable keys
   const handleBonusArrobaChange = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setArr(value); markDirty();
-    setReais('');
+    if (value === '' || value === '0') setReais('');
   };
 
   const handleBonusReaisChange = (
@@ -369,7 +432,24 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     value: string,
   ) => {
     setReais(value); markDirty();
-    setArr('');
+    if (value === '' || value === '0') setArr('');
+  };
+
+  // Item 6 fix: Only clear the OTHER field on blur, not on every keystroke
+  const handleBonusArrobaBlur = (
+    arrobaVal: string,
+    setReais: (v: string) => void,
+  ) => {
+    const v = Number(arrobaVal) || 0;
+    if (v > 0) setReais('');
+  };
+
+  const handleBonusReaisBlur = (
+    reaisVal: string,
+    setArr: (v: string) => void,
+  ) => {
+    const v = Number(reaisVal) || 0;
+    if (v > 0) setArr('');
   };
 
   // Funrural bidirectional
@@ -393,15 +473,18 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     }
   };
 
-  // Table row component for bonus/discount
-  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, hint }: {
+  // Table row component for bonus/discount — Item 6: use defaultValue pattern to prevent focus loss
+  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
     label: string;
     arrobaVal: string;
     reaisVal: string;
     totalVal: number;
     onArrobaChange: (v: string) => void;
     onReaisChange: (v: string) => void;
+    onArrobaBlur?: () => void;
+    onReaisBlur?: () => void;
     hint?: string;
+    stableKey: string;
   }) => (
     <tr className="border-b border-border/30">
       <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
@@ -409,10 +492,28 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         {hint && <span className="block text-[8px] text-muted-foreground/70 italic">{hint}</span>}
       </td>
       <td className="py-1 px-1">
-        <Input type="number" value={arrobaVal} onChange={e => onArrobaChange(e.target.value)} placeholder="0,00" className="h-7 text-[10px] w-20 text-right tabular-nums" step="0.01" />
+        <Input
+          key={`${stableKey}-arroba`}
+          type="number"
+          value={arrobaVal}
+          onChange={e => onArrobaChange(e.target.value)}
+          onBlur={onArrobaBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-20 text-right tabular-nums"
+          step="0.01"
+        />
       </td>
       <td className="py-1 px-1">
-        <Input type="number" value={reaisVal} onChange={e => onReaisChange(e.target.value)} placeholder="0,00" className="h-7 text-[10px] w-24 text-right tabular-nums" step="0.01" />
+        <Input
+          key={`${stableKey}-reais`}
+          type="number"
+          value={reaisVal}
+          onChange={e => onReaisChange(e.target.value)}
+          onBlur={onReaisBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-24 text-right tabular-nums"
+          step="0.01"
+        />
       </td>
       <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
         {totalVal > 0 ? formatMoeda(totalVal) : '-'}
@@ -434,7 +535,6 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   // ─────────────────────────────────────
   // Shared sections (Bônus, Descontos, Funrural, Resultado, Pagamento)
-  // used across Programado and Realizado
   // ─────────────────────────────────────
 
   const renderComercializacao = () => (
@@ -448,7 +548,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </Label>
           <div className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-            <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
+            <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); setValorBrutoOverride(''); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
           </div>
         </div>
         <div>
@@ -514,6 +614,89 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     </>
   );
 
+  // Realizado-specific desempenho with 4-field carcaça grid (Item 4)
+  const renderDesempenhoRealizado = () => (
+    <>
+      <h4 className="text-[10px] font-semibold text-muted-foreground pt-1">Peso Carcaça</h4>
+      {/* Line 1: kg/cab | kg Total */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-[10px]">Peso Carcaça kg/cab</Label>
+          <div className="relative">
+            <Input
+              type="number"
+              value={pesoCarcacaKgCab}
+              onChange={e => { setPesoCarcacaKgCab(e.target.value); setCarcacaEditSource('kgCab'); markDirty(); }}
+              placeholder="0,00"
+              step="0.01"
+              className="h-7 text-[10px] text-right tabular-nums pr-6"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Peso Carcaça kg Total</Label>
+          <div className="relative">
+            <Input
+              type="number"
+              value={pesoCarcacaKgTotal}
+              onChange={e => { setPesoCarcacaKgTotal(e.target.value); setCarcacaEditSource('kgTotal'); markDirty(); }}
+              placeholder="0,00"
+              step="0.01"
+              className="h-7 text-[10px] text-right tabular-nums pr-6"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+          </div>
+        </div>
+      </div>
+      {/* Line 2: @/cab | @ Total */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-[10px]">Peso Carcaça @/cab</Label>
+          <div className="relative">
+            <Input
+              type="number"
+              value={pesoCarcacaArrobaCab}
+              onChange={e => { setPesoCarcacaArrobaCab(e.target.value); setCarcacaEditSource('arrobaCab'); markDirty(); }}
+              placeholder="0,00"
+              step="0.0001"
+              className="h-7 text-[10px] text-right tabular-nums pr-6"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">@</span>
+          </div>
+        </div>
+        <div>
+          <Label className="text-[10px]">Peso Carcaça @ Total</Label>
+          <div className="relative">
+            <Input
+              type="number"
+              value={pesoCarcacaArrobaTotal}
+              onChange={e => { setPesoCarcacaArrobaTotal(e.target.value); setCarcacaEditSource('arrobaTotal'); markDirty(); }}
+              placeholder="0,00"
+              step="0.0001"
+              className="h-7 text-[10px] text-right tabular-nums pr-6"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">@</span>
+          </div>
+        </div>
+      </div>
+      {/* Rend. Carcaça auto (Item 3) */}
+      <div>
+        <Label className="text-[10px]">Rend. Carcaça (%)</Label>
+        <div className="relative">
+          <Input
+            type="text"
+            readOnly
+            disabled
+            value={rendCarcacaAuto > 0 ? `${fmtR(rendCarcacaAuto)}` : '-'}
+            className="h-7 text-[10px] text-right tabular-nums pr-6 bg-muted cursor-not-allowed"
+          />
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
+        </div>
+      </div>
+    </>
+  );
+
   const renderImpostos = () => (
     <>
       {sectionTitle(<Shield className="h-4 w-4 text-muted-foreground" />, 'IMPOSTOS')}
@@ -568,30 +751,39 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
+            stableKey="bonus-precoce"
             label={prevLabel('Precoce')}
             arrobaVal={bonusPrecoce}
             reaisVal={bonusPrecoceReais}
             totalVal={calc.bonusPrecoceTotal}
             onArrobaChange={v => handleBonusArrobaChange(setBonusPrecoce, setBonusPrecoceReais, v)}
             onReaisChange={v => handleBonusReaisChange(setBonusPrecoce, setBonusPrecoceReais, v)}
+            onArrobaBlur={() => handleBonusArrobaBlur(bonusPrecoce, setBonusPrecoceReais)}
+            onReaisBlur={() => handleBonusReaisBlur(bonusPrecoceReais, setBonusPrecoce)}
             hint={bonusHint}
           />
           <BiRow
+            stableKey="bonus-qualidade"
             label={prevLabel('Qualidade')}
             arrobaVal={bonusQualidade}
             reaisVal={bonusQualidadeReais}
             totalVal={calc.bonusQualidadeTotal}
             onArrobaChange={v => handleBonusArrobaChange(setBonusQualidade, setBonusQualidadeReais, v)}
             onReaisChange={v => handleBonusReaisChange(setBonusQualidade, setBonusQualidadeReais, v)}
+            onArrobaBlur={() => handleBonusArrobaBlur(bonusQualidade, setBonusQualidadeReais)}
+            onReaisBlur={() => handleBonusReaisBlur(bonusQualidadeReais, setBonusQualidade)}
             hint={bonusHint}
           />
           <BiRow
+            stableKey="bonus-trace"
             label={prevLabel('Lista Trace')}
             arrobaVal={bonusListaTrace}
             reaisVal={bonusListaTraceReais}
             totalVal={calc.bonusListaTraceTotal}
             onArrobaChange={v => handleBonusArrobaChange(setBonusListaTrace, setBonusListaTraceReais, v)}
             onReaisChange={v => handleBonusReaisChange(setBonusListaTrace, setBonusListaTraceReais, v)}
+            onArrobaBlur={() => handleBonusArrobaBlur(bonusListaTrace, setBonusListaTraceReais)}
+            onReaisBlur={() => handleBonusReaisBlur(bonusListaTraceReais, setBonusListaTrace)}
             hint={bonusHint}
           />
         </tbody>
@@ -619,20 +811,26 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
+            stableKey="desc-qualidade"
             label={prevLabel('Qualidade')}
             arrobaVal={descontoQualidade}
             reaisVal={descontoQualidadeReais}
             totalVal={calc.descQualidadeTotal}
             onArrobaChange={v => handleBonusArrobaChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
             onReaisChange={v => handleBonusReaisChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            onArrobaBlur={() => handleBonusArrobaBlur(descontoQualidade, setDescontoQualidadeReais)}
+            onReaisBlur={() => handleBonusReaisBlur(descontoQualidadeReais, setDescontoQualidade)}
           />
           <BiRow
+            stableKey="desc-outros"
             label={prevLabel('Outros')}
             arrobaVal={outrosDescontosArroba}
             reaisVal={outrosDescontos}
             totalVal={calc.descOutrosTotal}
             onArrobaChange={v => handleBonusArrobaChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
             onReaisChange={v => handleBonusReaisChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            onArrobaBlur={() => handleBonusArrobaBlur(outrosDescontosArroba, setOutrosDescontos)}
+            onReaisBlur={() => handleBonusReaisBlur(outrosDescontos, setOutrosDescontosArroba)}
           />
         </tbody>
       </table>
@@ -645,64 +843,143 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     </>
   );
 
+  // Item 7 & 8: Resumo Abate table for Realizado
+  const renderResumoAbateTable = () => {
+    const perCab = (total: number) => qtd > 0 ? total / qtd : 0;
+    return (
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Indicador</th>
+            <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
+            <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-muted-foreground font-medium">Quantidade</td>
+            <td className="py-1 px-1 text-right tabular-nums">—</td>
+            <td className="py-1 text-right font-bold tabular-nums">{qtd} cab.</td>
+          </tr>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-muted-foreground font-medium">Peso Carcaça kg</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatKg(calc.carcacaCalc)}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatKg(calc.carcacaCalc * qtd)}</td>
+          </tr>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-muted-foreground font-medium">Peso @</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatArroba(calc.pesoArrobaCab)}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatArroba(calc.totalArrobas)}</td>
+          </tr>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-muted-foreground font-medium">Preço R$</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(calc.valorBase))}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(calc.valorBase)}</td>
+          </tr>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-muted-foreground font-medium">Preço @</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(calc.precoArroba)}</td>
+            <td className="py-1 text-right tabular-nums">—</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
+
+  // Item 8: Funrural/Bonus/Descontos summary tables for Realizado
+  const renderFunruralResumo = () => {
+    if (calc.funruralTotal <= 0) return null;
+    const perCab = qtd > 0 ? calc.funruralTotal / qtd : 0;
+    return (
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Funrural</th>
+            <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
+            <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-border/30">
+            <td className="py-1 text-amber-700 dark:text-amber-400 font-medium">Funrural</td>
+            <td className="py-1 px-1 text-right text-amber-700 dark:text-amber-400 tabular-nums">-{formatMoeda(perCab)}</td>
+            <td className="py-1 text-right font-bold text-amber-700 dark:text-amber-400 tabular-nums">-{formatMoeda(calc.funruralTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderBonusResumo = () => {
+    if (calc.totalBonus <= 0) return null;
+    const items: { label: string; total: number }[] = [];
+    if (calc.bonusPrecoceTotal > 0) items.push({ label: 'Precoce', total: calc.bonusPrecoceTotal });
+    if (calc.bonusQualidadeTotal > 0) items.push({ label: 'Qualidade', total: calc.bonusQualidadeTotal });
+    if (calc.bonusListaTraceTotal > 0) items.push({ label: 'Lista Trace', total: calc.bonusListaTraceTotal });
+    return (
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Bônus</th>
+            <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
+            <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(it => (
+            <tr key={it.label} className="border-b border-border/30">
+              <td className="py-1 text-green-700 dark:text-green-400 font-medium">{it.label}</td>
+              <td className="py-1 px-1 text-right text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(qtd > 0 ? it.total / qtd : 0)}</td>
+              <td className="py-1 text-right font-bold text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(it.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderDescontosResumo = () => {
+    if (calc.totalDescontos <= 0) return null;
+    const items: { label: string; total: number }[] = [];
+    if (calc.descQualidadeTotal > 0) items.push({ label: 'Qualidade', total: calc.descQualidadeTotal });
+    if (calc.descOutrosTotal > 0) items.push({ label: 'Outros', total: calc.descOutrosTotal });
+    return (
+      <table className="w-full text-[10px] border-collapse">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="text-left py-1 text-muted-foreground font-medium">Descontos</th>
+            <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
+            <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(it => (
+            <tr key={it.label} className="border-b border-border/30">
+              <td className="py-1 text-red-700 dark:text-red-400 font-medium">{it.label}</td>
+              <td className="py-1 px-1 text-right text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(qtd > 0 ? it.total / qtd : 0)}</td>
+              <td className="py-1 text-right font-bold text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(it.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
   const renderResultado = () => {
     if (calc.valorBase <= 0) return null;
 
-    // Aba Realizado: seções coloridas separadas
+    // Aba Realizado: tabelas 3 colunas (Items 7 & 8)
     if (isRealizado) {
       return (
         <div className="space-y-1.5">
-          {/* ── BASE (cinza) ── */}
-          <div className="bg-muted/40 border border-border/50 rounded p-2 space-y-0.5">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Base</h4>
-            <div className="space-y-0.5 text-[10px]">
-              <div className="flex justify-between"><span className="text-muted-foreground">Peso total</span><strong className="tabular-nums">{formatKg(calc.totalKg)}</strong></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total @</span><strong className="tabular-nums">{formatArroba(calc.totalArrobas)}</strong></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Preço @</span><strong className="tabular-nums">{formatMoeda(calc.precoArroba)}</strong></div>
-              <Separator className="my-0.5" />
-              <div className="flex justify-between font-bold"><span>Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBase)}</span></div>
-            </div>
-          </div>
+          {/* Item 7: Resumo Abate */}
+          {sectionTitle(<Tag className="h-4 w-4 text-muted-foreground" />, 'Resumo Abate')}
+          {renderResumoAbateTable()}
 
-          {/* ── BÔNUS (verde) ── */}
-          {calc.totalBonus > 0 && (
-            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-green-700 dark:text-green-400 uppercase">+ Bônus</h4>
-              <div className="space-y-0.5 text-[10px]">
-                {calc.bonusPrecoceTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Precoce</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusPrecoceTotal)}</strong></div>}
-                {calc.bonusQualidadeTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Qualidade</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusQualidadeTotal)}</strong></div>}
-                {calc.bonusListaTraceTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Lista Trace</span><strong className="text-green-700 dark:text-green-400 tabular-nums">+{formatMoeda(calc.bonusListaTraceTotal)}</strong></div>}
-                <Separator className="my-0.5" />
-                <div className="flex justify-between font-bold text-green-700 dark:text-green-400"><span>Total Bônus</span><span className="tabular-nums">+{formatMoeda(calc.totalBonus)}</span></div>
-              </div>
-            </div>
-          )}
-
-          {/* ── DESCONTOS OPERACIONAIS (vermelho) ── */}
-          {calc.totalDescontos > 0 && (
-            <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded p-2 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-red-700 dark:text-red-400 uppercase">— Descontos operacionais</h4>
-              <p className="text-[8px] text-red-600/70 dark:text-red-400/70 italic">acabamento, tipo de animal</p>
-              <div className="space-y-0.5 text-[10px]">
-                {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Qualidade</span><strong className="text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(calc.descQualidadeTotal)}</strong></div>}
-                {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Outros</span><strong className="text-red-700 dark:text-red-400 tabular-nums">-{formatMoeda(calc.descOutrosTotal)}</strong></div>}
-                <Separator className="my-0.5" />
-                <div className="flex justify-between font-bold text-red-700 dark:text-red-400"><span>Total Descontos</span><span className="tabular-nums">-{formatMoeda(calc.totalDescontos)}</span></div>
-              </div>
-            </div>
-          )}
-
-          {/* ── FUNRURAL (âmbar) ── */}
-          {calc.funruralTotal > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 space-y-0.5">
-              <h4 className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">— Funrural</h4>
-              <p className="text-[8px] text-amber-600/70 dark:text-amber-400/70 italic">encargo fiscal</p>
-              <div className="flex justify-between text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                <span>Funrural</span>
-                <span className="tabular-nums">-{formatMoeda(calc.funruralTotal)}</span>
-              </div>
-            </div>
-          )}
+          {/* Item 8: Funrural, Bônus, Descontos */}
+          {renderFunruralResumo()}
+          {renderBonusResumo()}
+          {renderDescontosResumo()}
 
           {/* ── VALOR LÍQUIDO (azul) ── */}
           <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded p-2 space-y-0.5">
@@ -959,24 +1236,22 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           {/* ══════ ABA REALIZADO ══════ */}
           <TabsContent value="realizado" className="space-y-2">
-            {/* Resumo operacional + Peso total NF */}
+            {/* Resumo operacional — Item 1: removed pesoTotalKgNF field */}
             <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
               <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
-              <div>
-                <Label className="text-[10px]">Peso total (kg){hintText('total da NF')}</Label>
-                <div className="relative">
-                  <Input type="number" value={pesoTotalKgNF || (peso > 0 && qtd > 0 ? String(Math.round(peso * qtd * 100) / 100) : '')} onChange={e => { setPesoTotalKgNF(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
-                </div>
-              </div>
+              <div><span className="text-muted-foreground">Peso vivo (kg/cab)</span><p className="font-bold">{formatKg(peso)}</p></div>
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
             </div>
 
-            {/* Campos de identificação Realizado */}
+            {/* Campos de identificação Realizado — Item 2: Frigorífico disabled */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-[10px]">Frigorífico</Label>
-                <Input value={frigorifico} onChange={e => { setFrigorifico(e.target.value); markDirty(); }} placeholder="Nome do frigorífico" className="h-7 text-[10px]" />
+                <Input
+                  value={frigorifico}
+                  disabled
+                  className="h-7 text-[10px] bg-muted cursor-not-allowed"
+                />
               </div>
               <div>
                 <Label className="text-[10px]">Pedido</Label>
@@ -996,11 +1271,13 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderDatas()}
             <Separator />
             {renderComercializacao()}
-            {renderDesempenho()}
 
-            {/* Override manual do valor bruto */}
+            {/* Item 4: Realizado-specific carcaça grid */}
+            {renderDesempenhoRealizado()}
+
+            {/* Item 5: Override manual do valor bruto — recalcula preço @ */}
             <div className="bg-muted/20 border border-border/50 rounded p-2 space-y-1">
-              <Label className="text-[10px] font-semibold">Valor bruto base (R$){hintText('override manual — deixe vazio para calcular automaticamente')}</Label>
+              <Label className="text-[10px] font-semibold">Valor bruto base (R$){hintText('ao digitar, recalcula R$/@')}</Label>
               <div className="grid grid-cols-2 gap-2 items-end">
                 <div className="relative">
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
