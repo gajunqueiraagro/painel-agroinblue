@@ -1022,6 +1022,57 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderResultado()}
             <Separator />
             {renderPagamento()}
+
+            {/* ── Seção de Anexos ── */}
+            <Separator />
+            {sectionTitle(<Paperclip className="h-4 w-4 text-muted-foreground" />, 'Anexos')}
+            <div className="grid grid-cols-2 gap-3">
+              {/* NF Upload */}
+              <div className="space-y-1">
+                <Label className="text-[10px]">Nota Fiscal (PDF)</Label>
+                {anexoNfUrl ? (
+                  <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <a href={anexoNfUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-green-700 dark:text-green-300 underline truncate flex-1">
+                      NF anexada
+                    </a>
+                    <label className="cursor-pointer text-[9px] text-muted-foreground hover:text-foreground">
+                      <span>Substituir</span>
+                      <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'nf'); }} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className={`flex items-center justify-center gap-1.5 h-8 rounded border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors ${uploadingNf ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">{uploadingNf ? 'Enviando...' : 'Enviar NF'}</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'nf'); }} />
+                  </label>
+                )}
+              </div>
+
+              {/* Acerto Upload */}
+              <div className="space-y-1">
+                <Label className="text-[10px]">Acerto de Compra (PDF)</Label>
+                {anexoAcertoUrl ? (
+                  <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <a href={anexoAcertoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-green-700 dark:text-green-300 underline truncate flex-1">
+                      Acerto anexado
+                    </a>
+                    <label className="cursor-pointer text-[9px] text-muted-foreground hover:text-foreground">
+                      <span>Substituir</span>
+                      <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'acerto'); }} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className={`flex items-center justify-center gap-1.5 h-8 rounded border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors ${uploadingAcerto ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">{uploadingAcerto ? 'Enviando...' : 'Enviar Acerto'}</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'acerto'); }} />
+                  </label>
+                )}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
 
