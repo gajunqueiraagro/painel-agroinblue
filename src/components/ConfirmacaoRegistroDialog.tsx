@@ -285,13 +285,12 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
             )}
           </div>
         </div>
+        </div>{/* close grid */}
 
-        <Separator />
-
-        {/* Resumo Final */}
-        <div className="space-y-1.5">
+        {/* Resumo Final — full width */}
+        <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Resumo Final</h4>
-          <div className="bg-primary/10 rounded-md p-2 space-y-1">
+          <div className="bg-primary/10 rounded-md p-1.5 space-y-0.5">
             {financeiros.formaPagamento && (
               <div className="flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Pagamento</span>
