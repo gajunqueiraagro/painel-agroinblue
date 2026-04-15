@@ -27,6 +27,14 @@ const MACROS_EXCLUIDOS = new Set(['Transferências']);
 
 const ALL_MACRO_ORDER = [...MACROS_ENTRADA_ORDERED, ...MACROS_SAIDA_ORDERED];
 
+const SUBCENTROS_REBANHO = new Set([
+  'Abates de Machos', 'Abates de Fêmeas',
+  'Venda de Desmama Machos', 'Venda de Desmama Fêmeas',
+  'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
+  'Venda em Boitel',
+  'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
+]);
+
 const fmt = (v: number) => {
   if (v === 0) return '–';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -66,7 +74,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -105,7 +113,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
       const grupo = g.grupo_custo || '(Sem grupo)';
       const centro = g.centro_custo || '(Sem centro)';
-      const total = g.meses.reduce((a, b) => a + b, 0);
+
+      // For rebanho subcentros, effective meses = auto + ajuste
+      const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
+      const autoMeses = isRebanho ? (lancamentosRebanho.get(g.subcentro) || new Array(12).fill(0)) : null;
+      const effectiveMeses = isRebanho
+        ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
+        : g.meses;
+      const total = effectiveMeses.reduce((a, b) => a + b, 0);
 
       if (!macroMap.has(macro)) macroMap.set(macro, new Map());
       const grupoMap = macroMap.get(macro)!;
@@ -116,7 +131,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         key: `${centro}||${g.subcentro}`,
         subcentro: g.subcentro,
         gridIdx: idx,
-        meses: g.meses,
+        meses: effectiveMeses,
         total,
       });
     });
@@ -148,7 +163,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid]);
+  }, [grid, lancamentosRebanho]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
@@ -287,28 +302,97 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       <TableCell className="text-right text-[11px] font-medium">{fmtCompact(centro.total)}</TableCell>
                     </TableRow>
 
-                    {centroOpen && centro.subs.map((sub) => (
-                      <TableRow key={sub.key}>
-                        <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
-                          {sub.subcentro}
-                        </TableCell>
-                        {sub.meses.map((v, mesIdx) => (
-                          <TableCell key={mesIdx} className="p-0.5">
-                            {isGlobal ? (
-                              <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
-                            ) : (
-                              <EditableCell
-                                value={v}
-                                onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
-                              />
-                            )}
+                    {centroOpen && centro.subs.map((sub) => {
+                      const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
+                      const autoMeses = isRebanho ? (lancamentosRebanho.get(sub.subcentro) || new Array(12).fill(0)) : null;
+
+                      if (isRebanho) {
+                        // 3-line rendering: Auto / Ajuste / Total
+                        const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
+                        const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
+                        const autoTotal = autoMeses!.reduce((a, b) => a + b, 0);
+                        const ajusteTotal = ajusteMeses.reduce((a, b) => a + b, 0);
+                        const lineTotal = totalMeses.reduce((a, b) => a + b, 0);
+
+                        return (
+                          <React.Fragment key={sub.key}>
+                            {/* Linha 1 — Automático */}
+                            <TableRow className="bg-muted/20">
+                              <TableCell className="sticky left-0 bg-muted/20 z-10 pl-[72px] text-[10px] text-muted-foreground italic">
+                                {sub.subcentro} (auto)
+                              </TableCell>
+                              {autoMeses!.map((v, i) => (
+                                <TableCell key={i} className="text-right text-[10px] text-muted-foreground">
+                                  {v === 0 ? '–' : fmt(v)}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[10px] text-muted-foreground font-medium">
+                                {autoTotal === 0 ? '–' : fmt(autoTotal)}
+                              </TableCell>
+                            </TableRow>
+                            {/* Linha 2 — Ajuste editável */}
+                            <TableRow>
+                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] text-muted-foreground">
+                                {sub.subcentro} (ajuste)
+                              </TableCell>
+                              {ajusteMeses.map((v, mesIdx) => (
+                                <TableCell key={mesIdx} className="p-0.5">
+                                  {isGlobal ? (
+                                    <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                  ) : (
+                                    <EditableCell
+                                      value={v}
+                                      onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
+                                    />
+                                  )}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[10px] font-medium">
+                                {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
+                              </TableCell>
+                            </TableRow>
+                            {/* Linha 3 — Total (auto + ajuste) */}
+                            <TableRow className="bg-primary/5">
+                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[11px] font-semibold">
+                                {sub.subcentro}
+                              </TableCell>
+                              {totalMeses.map((v, i) => (
+                                <TableCell key={i} className="text-right text-[11px] font-semibold">
+                                  {v === 0 ? '–' : fmt(v)}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[11px] font-bold">
+                                {lineTotal === 0 ? '–' : fmt(lineTotal)}
+                              </TableCell>
+                            </TableRow>
+                          </React.Fragment>
+                        );
+                      }
+
+                      // Normal subcentro (single line)
+                      return (
+                        <TableRow key={sub.key}>
+                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
+                            {sub.subcentro}
                           </TableCell>
-                        ))}
-                        <TableCell className="text-right text-[11px] font-medium">
-                          {sub.total === 0 ? '–' : fmt(sub.total)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          {sub.meses.map((v, mesIdx) => (
+                            <TableCell key={mesIdx} className="p-0.5">
+                              {isGlobal ? (
+                                <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                              ) : (
+                                <EditableCell
+                                  value={v}
+                                  onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
+                                />
+                              )}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right text-[11px] font-medium">
+                            {sub.total === 0 ? '–' : fmt(sub.total)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}

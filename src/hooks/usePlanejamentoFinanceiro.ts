@@ -55,6 +55,26 @@ export interface SubcentroGrid {
 
 const isValidFazenda = (id?: string) => !!id && id !== '__global__';
 
+/** Map tipo+categoria from lancamentos to financial subcentro */
+function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean): string | null {
+  if (tipo === 'abate') {
+    if (['touros','bois','garrotes','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Abates de Machos';
+    if (['vacas','novilhas','bezerras_f','desmama_f','femeas','mamotes_f'].includes(categoria)) return 'Abates de Fêmeas';
+  }
+  if (tipo === 'venda') {
+    if (hasBoitel) return 'Venda em Boitel';
+    if (['desmama_m','bezerros_m'].includes(categoria)) return 'Venda de Desmama Machos';
+    if (['desmama_f','bezerras_f'].includes(categoria)) return 'Venda de Desmama Fêmeas';
+    if (['garrotes','touros','bois','machos_adultos','mamotes_m'].includes(categoria)) return 'Venda de Machos Adultos';
+    if (['novilhas','vacas','femeas_adultas','mamotes_f'].includes(categoria)) return 'Venda de Fêmeas Adultas';
+  }
+  if (tipo === 'compra') {
+    if (['garrotes','touros','bois','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Investimento Compra Bovinos Machos';
+    if (['novilhas','vacas','femeas','bezerras_f','mamotes_f','desmama_f'].includes(categoria)) return 'Investimento Compra Bovinos Fêmeas';
+  }
+  return null;
+}
+
 export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -64,6 +84,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const [dividendos, setDividendos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
+  const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -153,10 +174,55 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, [clienteId, fazendaId, ano]);
 
+  // ─── Load lancamentos rebanho (META) ──────────────────────
+  const loadLancamentosRebanho = useCallback(async () => {
+    if (!clienteId) { setLancamentosRebanho(new Map()); return; }
+    try {
+      let query = supabase
+        .from('lancamentos')
+        .select('tipo, categoria, data, valor_total, boitel_lote_id')
+        .eq('cliente_id', clienteId)
+        .eq('cenario', 'meta')
+        .eq('cancelado', false)
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`)
+        .in('tipo', ['abate', 'venda', 'compra'])
+        .not('valor_total', 'is', null);
+
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await query;
+      if (error) throw error;
+
+      const result = new Map<string, number[]>();
+      for (const r of (rows || [])) {
+        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria, !!r.boitel_lote_id);
+        if (!subcentro) continue;
+        const mes = Number((r.data as string).substring(5, 7));
+        if (mes < 1 || mes > 12) continue;
+        if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
+        result.get(subcentro)![mes - 1] += Math.abs(r.valor_total || 0);
+      }
+
+      // Round to 2 decimals
+      for (const [, arr] of result) {
+        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
+      }
+
+      setLancamentosRebanho(result);
+    } catch (e: any) {
+      console.error('Erro ao carregar lancamentos rebanho:', e);
+      setLancamentosRebanho(new Map());
+    }
+  }, [clienteId, fazendaId, ano]);
+
   useEffect(() => { loadPlano(); }, [loadPlano]);
   useEffect(() => { loadSaved(); }, [loadSaved]);
   useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
   useEffect(() => { loadDividendos(); }, [loadDividendos]);
+  useEffect(() => { loadLancamentosRebanho(); }, [loadLancamentosRebanho]);
 
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
@@ -342,6 +408,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     importarRealizado,
     salvarGrid,
     saldoInicial,
+    lancamentosRebanho,
     reload: loadSaved,
   };
 }
