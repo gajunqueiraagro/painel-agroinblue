@@ -633,7 +633,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
       className="cursor-pointer text-[8px] hover:bg-muted px-0.5 rounded block text-right leading-tight"
       onClick={start}
     >
-      {value === 0 ? '–' : fmt(value)}
+      {value === 0 ? '–' : fmtCompact(value)}
     </span>
   );
 }
