@@ -910,7 +910,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       <table className="w-full text-[10px] border-collapse">
         <thead>
           <tr className="border-b border-border/50">
-            <th className="text-left py-1 text-muted-foreground font-medium">{`Funrural${calc.funruralPct > 0 ? ` (${calc.funruralPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF)` : ''}`}</th>
+            <th className="text-left py-1 text-muted-foreground font-medium">{`Funrural${parseNumericValue(funruralPct) > 0 ? ` (${parseNumericValue(funruralPct).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF)` : ''}`}</th>
             <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
             <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
           </tr>
@@ -1041,7 +1041,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           )}
 
           {calc.funruralTotal > 0 && (
-            <div className="flex justify-between"><span className="text-muted-foreground">{`(–) Funrural (${calc.funruralPct > 0 ? `${calc.funruralPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF` : ''})`}</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{`(–) Funrural (${parseNumericValue(funruralPct) > 0 ? `${parseNumericValue(funruralPct).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF` : ''})`}</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
           )}
 
           <Separator className="my-0.5" />
