@@ -76,7 +76,7 @@ interface MacroNode { nome: string; meses: number[]; total: number; grupos: Grup
 /* ================================================================ */
 export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const currentYear = new Date().getFullYear();
-  const [ano, setAno] = useState(currentYear + 1);
+  const [ano, setAno] = useState(currentYear);
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
