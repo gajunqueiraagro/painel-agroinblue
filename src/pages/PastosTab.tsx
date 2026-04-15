@@ -101,7 +101,7 @@ function SortablePastoCard({
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
-          <span className="font-semibold text-xs truncate">{pasto.nome}</span>
+          <span className="font-semibold text-xs truncate flex-1 min-w-0">{pasto.nome}</span>
           {pasto.entra_conciliacao && (
             <Badge variant="outline" className="text-[9px] px-1 py-0 leading-tight shrink-0">Conc</Badge>
           )}
