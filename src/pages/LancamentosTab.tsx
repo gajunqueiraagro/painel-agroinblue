@@ -475,7 +475,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const totalKg = peso * qtd;
     let valorBruto = 0;
     if (isVenda) {
-      const vi = Number(vendaPrecoInput) || 0;
+      const vi = parseNumericValue(vendaPrecoInput) || 0;
       if (vendaTipoPreco === 'por_kg') { valorBruto = totalKg * vi; }
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
