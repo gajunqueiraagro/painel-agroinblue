@@ -432,6 +432,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     <div className="w-full px-2 sm:px-4 animate-fade-in pb-24 space-y-3">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 pt-2">
+        <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Evolução Financeira — META</span>
         <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
           <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
