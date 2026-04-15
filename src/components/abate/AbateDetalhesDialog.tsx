@@ -775,7 +775,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
-            stableKey="bonus-precoce"
+            stableKey={`bonus-precoce-${dialogKey}`}
             label={prevLabel('Precoce')}
             arrobaVal={bonusPrecoce}
             reaisVal={bonusPrecoceReais}
@@ -785,7 +785,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             hint={bonusHint}
           />
           <BiRow
-            stableKey="bonus-qualidade"
+            stableKey={`bonus-qualidade-${dialogKey}`}
             label={prevLabel('Qualidade')}
             arrobaVal={bonusQualidade}
             reaisVal={bonusQualidadeReais}
@@ -795,7 +795,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             hint={bonusHint}
           />
           <BiRow
-            stableKey="bonus-trace"
+            stableKey={`bonus-trace-${dialogKey}`}
             label={prevLabel('Lista Trace')}
             arrobaVal={bonusListaTrace}
             reaisVal={bonusListaTraceReais}
@@ -829,7 +829,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </thead>
         <tbody>
           <BiRow
-            stableKey="desc-qualidade"
+            stableKey={`desc-qualidade-${dialogKey}`}
             label={prevLabel('Qualidade')}
             arrobaVal={descontoQualidade}
             reaisVal={descontoQualidadeReais}
@@ -839,7 +839,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             redTotal
           />
           <BiRow
-            stableKey="desc-outros"
+            stableKey={`desc-outros-${dialogKey}`}
             label={prevLabel('Outros')}
             arrobaVal={outrosDescontosArroba}
             reaisVal={outrosDescontos}
