@@ -314,8 +314,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isCenarioMeta = statusOp === 'meta';
-  /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
-  const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
+  /** StatusOperacional efetivo — preserva 'meta' para modais financeiros */
+  const effectiveStatusOp: StatusOperacional | 'meta' = isCenarioMeta ? 'meta' : statusOp as StatusOperacional;
   const isMeta = isCenarioMeta; // Meta usa estilo laranja
 
   // ── Bloqueio META: mesma lógica do painel inteligente ──
