@@ -346,13 +346,13 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                             </TableRow>
                             {/* Linha 2 — Ajuste editável */}
                             <TableRow>
-                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] text-muted-foreground">
+                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[9px] text-muted-foreground py-0.5">
                                 {sub.subcentro} (ajuste)
                               </TableCell>
                               {ajusteMeses.map((v, mesIdx) => (
                                 <TableCell key={mesIdx} className="p-0.5">
                                   {isGlobal ? (
-                                    <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                    <span className="text-[9px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
                                   ) : (
                                     <EditableCell
                                       value={v}
@@ -361,7 +361,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   )}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[10px] font-medium">
+                              <TableCell className="text-right text-[9px] font-medium py-0.5">
                                 {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
                               </TableCell>
                             </TableRow>
