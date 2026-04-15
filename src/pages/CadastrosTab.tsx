@@ -111,7 +111,6 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
   const [saving, setSaving] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState<ModuleKey | null>(null);
-  }, []);
 
   useEffect(() => { loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null)); }, []);
 
