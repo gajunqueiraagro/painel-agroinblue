@@ -18,6 +18,10 @@ import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Setting
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+/** Trimester border after Mar(2), Jun(5), Set(8) */
+const trimBorder = (i: number) => (i === 2 || i === 5 || i === 8) ? ' border-r border-border/30' : '';
+const COL1_BORDER = 'border-r-2 border-border/40';
+
 /** Macros de entrada (na ordem de exibição) */
 const MACROS_ENTRADA_ORDERED = ['Receita Operacional', 'Entrada Financeira', 'Deduções de Receitas'];
 /** Macros de saída (na ordem de exibição) */
