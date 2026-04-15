@@ -145,6 +145,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [docAcerto, setDocAcerto] = useState(initialData.docAcerto || '');
   const [pesoTotalKgNF, setPesoTotalKgNF] = useState(initialData.pesoTotalKgNF || '');
   const [valorBrutoOverride, setValorBrutoOverride] = useState(initialData.valorBrutoOverride || '');
+  const [anexoNfUrl, setAnexoNfUrl] = useState(initialData.anexoNfUrl || '');
+  const [anexoAcertoUrl, setAnexoAcertoUrl] = useState(initialData.anexoAcertoUrl || '');
+  const [uploadingNf, setUploadingNf] = useState(false);
+  const [uploadingAcerto, setUploadingAcerto] = useState(false);
 
   // Novos campos Meta
   const [observacoesInternas, setObservacoesInternas] = useState(initialData.observacoesInternas || '');
