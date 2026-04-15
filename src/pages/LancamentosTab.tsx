@@ -2160,8 +2160,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
           submitting={submitting}
           onBoitelDataChange={setBoitelDataForResumo}
-          initialBoitelData={boitelDataForResumo}
-        />
+           initialBoitelData={boitelDataForResumo}
+           initialFormaReceb={vendaDetalhes?.formaReceb}
+           initialParcelas={vendaDetalhes?.parcelas}
+         />
       );
     }
 
@@ -3125,8 +3127,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     onRequestRegister={() => {}}
                     submitting={false}
                     onBoitelDataChange={setBoitelDataForResumo}
-                    initialBoitelData={boitelDataForResumo}
-                  />
+                     initialBoitelData={boitelDataForResumo}
+                     initialFormaReceb={vendaDetalhes?.formaReceb}
+                     initialParcelas={vendaDetalhes?.parcelas}
+                   />
                 </div>
               </>
             ) : isTransferenciaSaida ? (

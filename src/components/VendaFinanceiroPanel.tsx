@@ -73,6 +73,8 @@ interface Props {
   freteVal: number;
   onBoitelDataChange?: (data: BoitelData | null) => void;
   initialBoitelData?: Partial<BoitelData> | null;
+  initialFormaReceb?: 'avista' | 'prazo';
+  initialParcelas?: Parcela[];
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -100,6 +102,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   funruralReais, onFunruralReaisChange,
   comissaoVal, freteVal,
   onBoitelDataChange, initialBoitelData,
+  initialFormaReceb, initialParcelas,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -107,9 +110,18 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
 
-  const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>('avista');
-  const [qtdParcelas, setQtdParcelas] = useState('1');
-  const [parcelas, setParcelas] = useState<Parcela[]>([]);
+  const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>(initialFormaReceb || 'avista');
+  const [qtdParcelas, setQtdParcelas] = useState(initialParcelas?.length ? String(initialParcelas.length) : '1');
+  const [parcelas, setParcelas] = useState<Parcela[]>(initialParcelas || []);
+
+  // Sync from parent when editing existing lancamento
+  useEffect(() => {
+    if (initialFormaReceb) setFormaReceb(initialFormaReceb);
+    if (initialParcelas && initialParcelas.length > 0) {
+      setParcelas(initialParcelas);
+      setQtdParcelas(String(initialParcelas.length));
+    }
+  }, [initialFormaReceb, initialParcelas]);
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
