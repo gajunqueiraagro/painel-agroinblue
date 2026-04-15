@@ -495,6 +495,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     salvarGrid,
     saldoInicial,
     lancamentosRebanho,
+    lancamentosFinanciamento,
     reload: loadSaved,
   };
 }
