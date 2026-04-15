@@ -24,7 +24,7 @@ import {
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
 } from '@/lib/financeiro/classificacao';
-import { isDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
+
 import type { FinanceiroLancamento, RateioADM } from '@/hooks/useFinanceiro';
 import { FluxoAuditoriaModal } from './FluxoAuditoriaModal';
 
@@ -188,12 +188,6 @@ function buildPlanoTree(
     let centro = l.centro_custo || '(sem centro)';
     const sub = l.subcentro || '(sem subcentro)';
 
-    // ── Dividend normalization: force correct hierarchy ──
-    if (isDividendoSubcentro(sub)) {
-      macro = 'Distribuição';
-      grupo = 'Dividendos';
-      centro = 'Pessoas';
-    }
 
     const m = datePagtoMesClass(l)!;
     const val = Math.abs(l.valor);
