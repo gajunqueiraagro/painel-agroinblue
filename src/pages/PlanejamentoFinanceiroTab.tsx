@@ -603,6 +603,17 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {!isGlobal && clienteAtual?.id && (
+        <ModalParametrosNutricao
+          open={nutricaoModalOpen}
+          onOpenChange={setNutricaoModalOpen}
+          fazendaId={fazendaId}
+          clienteId={clienteAtual.id}
+          ano={ano}
+          onSaved={reloadNutricao}
+        />
+      )}
     </div>
   );
 }
