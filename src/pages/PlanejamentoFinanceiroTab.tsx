@@ -468,121 +468,127 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-            <Table className="w-max">
-              <TableHeader className="sticky top-0 z-20 bg-background">
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-muted/50 z-30 min-w-[220px]"></TableHead>
+          <div className="overflow-auto max-h-[70vh]" style={{ scrollbarGutter: 'stable' }}>
+            <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 180 }} />
+                {MESES.map(m => <col key={m} style={{ width: 58 }} />)}
+                <col style={{ width: 66 }} />
+              </colgroup>
+
+              <thead className="sticky top-0 z-20">
+                <tr className="border-b-2 border-border">
+                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30" style={{ background: BG_CARD }} />
                   {MESES.map(m => (
-                    <TableHead key={m} className="w-[75px] text-right bg-muted/50">{m}</TableHead>
+                    <th key={m} className="px-1 py-[3px] text-right text-[9px] font-bold text-muted-foreground uppercase tracking-wider" style={{ background: BG_CARD }}>{m}</th>
                   ))}
-                  <TableHead className="w-[90px] text-right font-bold bg-muted/50">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                  <th className="px-1 py-[3px] text-right text-[9px] font-extrabold text-foreground uppercase tracking-wider border-l-2 border-border" style={{ background: BG_MUTED }}>Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
                 {hierarchy.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                  <tr>
+                    <td colSpan={14} className="text-center text-muted-foreground py-8 text-[9px]">
                       {loading ? 'Carregando...' : 'Nenhum subcentro encontrado no plano de contas.'}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )}
 
                 {hierarchy.length > 0 && (
                   <>
-                    {/* ═══ 1. SALDO INICIAL (apenas Global) ═══ */}
+                    {/* ═══ 1. SALDO INICIAL ═══ */}
                     {isGlobal && (
                       <>
-                        <TableRow className="bg-muted/40">
-                          <TableCell className="sticky left-0 bg-muted/40 z-10 pl-2 text-xs font-bold">
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
                             Saldo Inicial (Dez/{ano - 1})
-                          </TableCell>
+                          </td>
                           {MESES.map((_, i) => (
-                            <TableCell key={i} className="text-right text-xs font-semibold">
+                            <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL1 }}>
                               {i === 0 ? fmtSaldo(saldoInicial) : ''}
-                            </TableCell>
+                            </td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(saldoInicial)}</TableCell>
-                        </TableRow>
-                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                          <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtSaldo(saldoInicial)}</td>
+                        </tr>
+                        <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
                       </>
                     )}
 
-                    {/* ═══ 2. TOTAL ENTRADAS (expansível) ═══ */}
-                    <TableRow
-                      className="cursor-pointer hover:bg-primary/10 bg-primary/5 font-semibold"
+                    {/* ═══ 2. TOTAL ENTRADAS ═══ */}
+                    <tr
+                      className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalEntradas(p => !p)}
                     >
-                      <TableCell className="sticky left-0 bg-primary/5 z-10 pl-2">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold">
-                          {expandedTotalEntradas ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                        <span className="inline-flex items-center gap-0.5">
+                          {expandedTotalEntradas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Entradas
                         </span>
-                      </TableCell>
+                      </td>
                       {totals.entradas.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtCompact(v)}</TableCell>
+                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px]" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtCompact(totals.totalEntradas)}</TableCell>
-                    </TableRow>
+                      <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalEntradas)}</td>
+                    </tr>
 
                     {expandedTotalEntradas && macrosEntrada.map(renderMacro)}
 
-                    {/* Separador */}
-                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                    <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
 
-                    {/* ═══ 3. TOTAL SAÍDAS (expansível) ═══ */}
-                    <TableRow
-                      className="cursor-pointer hover:bg-destructive/10 bg-destructive/5 font-semibold"
+                    {/* ═══ 3. TOTAL SAÍDAS ═══ */}
+                    <tr
+                      className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalSaidas(p => !p)}
                     >
-                      <TableCell className="sticky left-0 bg-destructive/5 z-10 pl-2">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold">
-                          {expandedTotalSaidas ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                        <span className="inline-flex items-center gap-0.5">
+                          {expandedTotalSaidas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Saídas
                         </span>
-                      </TableCell>
+                      </td>
                       {totals.saidas.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtCompact(v)}</TableCell>
+                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px]" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtCompact(totals.totalSaidas)}</TableCell>
-                    </TableRow>
+                      <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaidas)}</td>
+                    </tr>
 
                     {expandedTotalSaidas && macrosSaida.map(renderMacro)}
 
-                    {/* ═══ Linhas de saldo (apenas Global) ═══ */}
+                    {/* ═══ Saldos ═══ */}
                     {isGlobal && (
                       <>
-                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                        <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
 
-                        <TableRow className={totals.totalSaldoMes >= 0 ? 'bg-primary/5' : 'bg-destructive/5'}>
-                          <TableCell className="sticky left-0 z-10 pl-2 text-xs font-bold bg-inherit">Saldo do Mês</TableCell>
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL2, paddingLeft: 4 }}>Saldo do Mês</td>
                           {totals.saldoMes.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-semibold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL2 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.totalSaldoMes)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.totalSaldoMes)}</td>
+                        </tr>
 
-                        <TableRow className="bg-muted/30">
-                          <TableCell className="sticky left-0 bg-muted/30 z-10 pl-2 text-xs font-bold">Saldo Final</TableCell>
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Final</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                        </tr>
 
-                        <TableRow className="bg-muted/50">
-                          <TableCell className="sticky left-0 bg-muted/50 z-10 pl-2 text-xs font-bold">Saldo Acumulado</TableCell>
+                        <tr className="border-b-2 border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                        </tr>
                       </>
                     )}
                   </>
                 )}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
