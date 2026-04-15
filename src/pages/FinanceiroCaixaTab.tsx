@@ -9,6 +9,7 @@ import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinancei
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
+import DrillDownMacro from '@/components/financeiro/DrillDownMacro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
