@@ -187,7 +187,7 @@ export const ConsumoFinanceiroPanel = forwardRef<ConsumoFinanceiroPanelRef, Prop
       }
 
       const clasConsumo = planoContas[0];
-      const statusFin = isPrevisto ? 'previsto' : 'programado';
+      const statusFin = 'programado';
       const inserts: any[] = [];
 
       const baseRecord: Record<string, any> = {
