@@ -30,6 +30,7 @@ export interface LancamentoClassificavel {
   valor: number;
   status_transacao?: string | null;
   data_pagamento?: string | null;
+  ano_mes?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -328,8 +329,9 @@ export function isReceita(l: LancamentoClassificavel): boolean {
 // ---------------------------------------------------------------------------
 
 export function datePagtoAnoMes(l: LancamentoClassificavel): string | null {
-  if (!l.data_pagamento || l.data_pagamento.length < 7) return null;
-  return l.data_pagamento.substring(0, 7);
+  if (l.data_pagamento && l.data_pagamento.length >= 7) return l.data_pagamento.substring(0, 7);
+  if (l.ano_mes) return l.ano_mes;
+  return null;
 }
 
 export function datePagtoMes(l: LancamentoClassificavel): number | null {
