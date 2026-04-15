@@ -13,7 +13,7 @@ import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock,
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
-import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -369,7 +369,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       formaReceb,
       qtdParcelas: qtdParcelas || undefined,
       parcelas,
-      valorBaseOverride: Number(valorBrutoOverride) || undefined,
+      valorBaseOverride: parseNumericValue(valorBrutoOverride) || undefined,
     });
   }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas, valorBrutoOverride]);
 
@@ -378,7 +378,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   useEffect(() => {
     if (valorBrutoOverride !== valorBrutoOverrideRef.current) {
       valorBrutoOverrideRef.current = valorBrutoOverride;
-      const vb = Number(valorBrutoOverride) || 0;
+      const vb = parseNumericValue(valorBrutoOverride);
       if (vb > 0 && calc.totalArrobas > 0) {
         const newPreco = Math.round((vb / calc.totalArrobas) * 100) / 100;
         setPrecoArroba(String(newPreco));
@@ -889,8 +889,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço R$</td>
-            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase))}</td>
-            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(valorBrutoOverride ? parseNumericValue(valorBrutoOverride) : calc.valorBase))}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(valorBrutoOverride ? parseNumericValue(valorBrutoOverride) : calc.valorBase)}</td>
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço @</td>
@@ -1305,13 +1305,13 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
                     inputMode="decimal"
                     value={valorBrutoOverride}
                     onChange={e => { setValorBrutoOverride(e.target.value.replace(/[^\d.,\-]/g, '')); markDirty(); }}
-                    onBlur={() => { const v = Number(valorBrutoOverride) || 0; if (v > 0) setValorBrutoOverride(String(v)); }}
+                    onBlur={() => { const v = parseNumericValue(valorBrutoOverride); if (v > 0) setValorBrutoOverride(String(v)); }}
                     placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'}
                     className="h-7 text-[10px] text-right tabular-nums pl-7"
                   />
                 </div>
                 <div className="text-[10px] font-bold tabular-nums">
-                  {formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}
+                  {formatMoeda(valorBrutoOverride ? parseNumericValue(valorBrutoOverride) : calc.valorBase)}
                 </div>
               </div>
             </div>
