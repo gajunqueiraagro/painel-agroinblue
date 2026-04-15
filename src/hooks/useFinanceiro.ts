@@ -342,6 +342,9 @@ export function useFinanceiro() {
   // Status mensal de fazendas (ativa_no_mes) — chave: "fazendaId|anoMes" → boolean
   const [fazendaStatusMensal, setFazendaStatusMensal] = useState<Map<string, boolean>>(new Map());
 
+  // Área produtiva por fazenda (hectares) — chave: fazendaId → area_produtiva
+  const [areaProdutivaPorFazenda, setAreaProdutivaPorFazenda] = useState<Map<string, number>>(new Map());
+
   // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
     () => fazendas.find(f => (f.codigo_importacao || '').toUpperCase() === 'ADM'),
