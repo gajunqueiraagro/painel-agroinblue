@@ -448,9 +448,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   };
 
   return (
-    <div className="w-full px-2 sm:px-4 animate-fade-in pb-24 space-y-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-2 pt-2">
+    <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
+      {/* Header — sticky, never scrolls */}
+      <div className="sticky top-0 z-30 bg-background py-2 flex flex-wrap items-center gap-2 shrink-0">
         <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Evolução Financeira — META</span>
         <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
           <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -477,10 +477,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         </Button>
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-auto relative" style={{ height: 'calc(100vh - 180px)' }}>
+      {/* Table — scrolls independently */}
+      <Card className="flex-1 min-h-0">
+        <CardContent className="p-0 h-full">
+          <div className="overflow-auto relative h-full">
             <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 180 }} />
