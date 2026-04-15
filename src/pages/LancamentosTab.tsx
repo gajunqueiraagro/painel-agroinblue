@@ -38,7 +38,7 @@ import { AbateResumoPanel } from '@/components/abate/AbateResumoPanel';
 import { TransferenciaDetalhesDialog, TransferenciaDetalhes, EMPTY_TRANSFERENCIA_DETALHES } from '@/components/transferencia/TransferenciaDetalhesDialog';
 import { TransferenciaResumoPanel } from '@/components/transferencia/TransferenciaResumoPanel';
 import { buildTransferenciaCalculation, buildTransferenciaSnapshot } from '@/lib/calculos/transferencia';
-import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { buildVendaCalculation, buildVendaSnapshot, type VendaCalculation } from '@/lib/calculos/venda';
 import { VendaDetalhesDialog, VendaDetalhes, EMPTY_VENDA_DETALHES } from '@/components/venda/VendaDetalhesDialog';
 import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
@@ -370,6 +370,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       formaReceb: abateDetalhes.formaReceb,
       qtdParcelas: abateDetalhes.qtdParcelas || undefined,
       parcelas: abateDetalhes.parcelas,
+      valorBaseOverride: abateDetalhes.valorBrutoOverride
+        ? parseNumericValue(abateDetalhes.valorBrutoOverride) || undefined
+        : undefined,
     });
   }, [isAbate, abateDetalhes, quantidade, pesoKg]);
 
