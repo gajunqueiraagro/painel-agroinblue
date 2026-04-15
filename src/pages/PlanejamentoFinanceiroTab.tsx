@@ -298,7 +298,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             </span>
           </td>
            {macro.meses.map((v, i) => (
-            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
+            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
           ))}
           <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
         </tr>
