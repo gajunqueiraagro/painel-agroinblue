@@ -72,6 +72,9 @@ const items = [
 ];
 
 export function PainelConsultorHubTab({ onTabChange }: Props) {
+  const { canEditMeta } = usePermissions();
+  const visibleItems = canEditMeta ? items : items.filter(i => !META_TABS.includes(i.id));
+
   return (
     <div className="w-full px-4 pt-2 animate-fade-in pb-24">
       <p className="text-xs text-muted-foreground mb-4 px-1">
@@ -79,7 +82,7 @@ export function PainelConsultorHubTab({ onTabChange }: Props) {
       </p>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {items.map(item => (
+        {visibleItems.map(item => (
           <Card
             key={item.id}
             onClick={() => onTabChange(item.id)}
