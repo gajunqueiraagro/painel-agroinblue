@@ -64,13 +64,13 @@ function contaLabel(c: { nome_conta: string; nome_exibicao?: string | null; agen
 }
 
 const MACRO_ORDER = [
-  'Receitas',
-  'Dedução de Receitas',
-  'Outras Entradas Financeiras',
-  'Custeio Produtivo',
-  'Investimentos na Fazenda',
+  'Receita Operacional',
+  'Deduções de Receitas',
+  'Entrada Financeira',
+  'Custeio Produção',
+  'Investimento',
   'Investimentos em Bovinos',
-  'Amortizações Financeiras',
+  'Saída Financeira',
   'Dividendos',
 ];
 

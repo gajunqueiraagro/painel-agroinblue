@@ -240,8 +240,8 @@ export const isReceita = (l: FinanceiroLancamento) => {
 };
 
 const MACROS_RATEIO_ADM_PRODUTIVO = new Set([
-  'custeio produtivo',
-  'investimento na fazenda',
+  'custeio produção',
+  'investimento',
 ]);
 
 /** Base ADM para avaliação de rateio */
