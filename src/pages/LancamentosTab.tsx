@@ -1581,9 +1581,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setP1BloqueioMsg(null);
         onEditar(editingAbateId, lancamentoDados);
         if (isAbate && (isConciliado || isConfirmado || isMeta)) {
-          // Auto-generate/update financeiro for abate
+          // Auto-generate/update financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
-            await abateFinanceiroRef.current.generateFinanceiro(editingAbateId);
+            await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
+              valorLiquido: calc.valorLiquido,
+              totalDescontos: calc.totalDescontos,
+              formaReceb: abateDetalhes?.formaReceb || 'avista',
+              parcelas: abateDetalhes?.parcelas || [],
+            });
           }
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
