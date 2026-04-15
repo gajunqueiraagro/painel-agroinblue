@@ -90,13 +90,10 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     try {
       const { data: rows, error } = await (supabase
         .from('financeiro_plano_contas' as any)
-        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio')
+        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
         .eq('ativo', true)
         .not('subcentro', 'is', null)
-        .order('macro_custo')
-        .order('grupo_custo')
-        .order('centro_custo')
-        .order('subcentro') as any);
+        .order('ordem_exibicao') as any);
       if (error) throw error;
       setPlanoContas((rows || []) as PlanoContasRow[]);
     } catch (e: any) {
