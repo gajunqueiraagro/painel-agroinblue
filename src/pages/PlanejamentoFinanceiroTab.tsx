@@ -250,8 +250,8 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
       {/* Banner: Import reference */}
       {importBanner && (
-        <Alert className="border-blue-500/40 bg-blue-500/5">
-          <Info className="h-4 w-4 text-blue-500" />
+        <Alert className="border-primary/40 bg-primary/5">
+          <Info className="h-4 w-4 text-primary" />
           <AlertDescription className="text-xs">
             Realizado {ano - 1} carregado como referência. Edite os valores e clique em Salvar para confirmar.
           </AlertDescription>
