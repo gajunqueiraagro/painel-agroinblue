@@ -1,7 +1,7 @@
 /**
  * Hook: usePlanejamentoFinanceiro
  *
- * Simplified: load, save (bulk upsert), import realizado anterior, saldo inicial.
+ * Simplified: load, save (bulk upsert), import realizado anterior, saldo inicial, dividendos.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,34 +53,43 @@ export interface SubcentroGrid {
   meses: number[]; // [0..11] = Jan..Dez
 }
 
+const isValidFazenda = (id?: string) => !!id && id !== '__global__';
+
 export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
   const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContasRow[]>([]);
+  const [dividendos, setDividendos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
-    if (!fazendaId || !clienteId) return;
+    if (!clienteId) return;
+    // Global: load all fazendas; individual: load specific
     setLoading(true);
     try {
-      const { data: rows, error } = await (supabase
+      let query = supabase
         .from('planejamento_financeiro' as any)
         .select('*')
-        .eq('fazenda_id', fazendaId)
+        .eq('cliente_id', clienteId)
         .eq('ano', ano)
         .eq('cenario', 'meta')
         .order('centro_custo')
         .order('subcentro')
-        .order('mes') as any);
+        .order('mes');
+
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await (query as any);
       if (error) throw error;
       setSavedData((rows || []) as PlanejamentoFinanceiroRow[]);
     } catch (e: any) {
       console.error('Erro ao carregar planejamento:', e);
-      toast.error('Erro ao carregar planejamento');
     } finally {
       setLoading(false);
     }
@@ -102,6 +111,23 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, []);
 
+  // ─── Load dividendos do cliente ───────────────────────────
+  const loadDividendos = useCallback(async () => {
+    if (!clienteId) return;
+    try {
+      const { data: rows, error } = await supabase
+        .from('financeiro_dividendos')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .order('ordem_exibicao');
+      if (error) throw error;
+      setDividendos((rows || []).map(r => ({ id: r.id, nome: r.nome })));
+    } catch (e: any) {
+      console.error('Erro ao carregar dividendos:', e);
+    }
+  }, [clienteId]);
+
   // ─── Load saldo inicial (saldo bancário dez do ano anterior) ──
   const loadSaldoInicial = useCallback(async () => {
     if (!clienteId) return;
@@ -113,7 +139,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         .eq('cliente_id', clienteId)
         .eq('ano_mes', anoMesAnterior);
 
-      if (fazendaId) {
+      if (isValidFazenda(fazendaId)) {
         query = query.eq('fazenda_id', fazendaId);
       }
 
@@ -130,8 +156,9 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   useEffect(() => { loadPlano(); }, [loadPlano]);
   useEffect(() => { loadSaved(); }, [loadSaved]);
   useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
+  useEffect(() => { loadDividendos(); }, [loadDividendos]);
 
-  // ─── Build grid: plano + saved values ─────────────────────
+  // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
     const map = new Map<string, SubcentroGrid>();
 
@@ -147,6 +174,24 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           subcentro: p.subcentro,
           escopo_negocio: p.escopo_negocio,
           ordem_exibicao: p.ordem_exibicao,
+          meses: new Array(12).fill(0),
+        });
+      }
+    }
+
+    // Inject dividendos as subcentros
+    for (let i = 0; i < dividendos.length; i++) {
+      const d = dividendos[i];
+      const subcentro = `Dividendos ${d.nome}`;
+      const key = `Dividendos||${subcentro}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          macro_custo: 'Dividendos',
+          grupo_custo: 'Dividendos',
+          centro_custo: 'Dividendos',
+          subcentro,
+          escopo_negocio: 'pecuaria',
+          ordem_exibicao: 9000 + i,
           meses: new Array(12).fill(0),
         });
       }
@@ -174,11 +219,11 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
 
     return Array.from(map.values()).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
-  }, [planoContas, savedData]);
+  }, [planoContas, savedData, dividendos]);
 
   // ─── Import realizado from previous year (returns grid, does NOT save) ──
   const importarRealizado = useCallback(async (): Promise<SubcentroGrid[] | null> => {
-    if (!fazendaId || !clienteId) return null;
+    if (!isValidFazenda(fazendaId) || !clienteId) return null;
     const anoAnterior = ano - 1;
     try {
       const PAGE_SIZE = 1000;
@@ -188,7 +233,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         const { data: rows, error } = await (supabase
           .from('financeiro_lancamentos_v2')
           .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ano_mes, valor')
-          .eq('fazenda_id', fazendaId)
+          .eq('fazenda_id', fazendaId!)
           .eq('cancelado', false)
           .eq('status_transacao', 'realizado')
           .gte('ano_mes', `${anoAnterior}-01`)
@@ -206,7 +251,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         return null;
       }
 
-      // Aggregate by subcentro + mes
       const map = new Map<string, SubcentroGrid>();
       for (const l of allRows) {
         if (!l.centro_custo || !l.subcentro) continue;
@@ -238,8 +282,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   // ─── Save grid to database (bulk upsert) ──────────────────
   const salvarGrid = useCallback(async (grid: SubcentroGrid[]) => {
-    if (!fazendaId || !clienteId) return;
-    // Build rows for months with value > 0
+    if (!isValidFazenda(fazendaId) || !clienteId) return;
     const rows: any[] = [];
     for (const g of grid) {
       for (let m = 0; m < 12; m++) {
@@ -268,16 +311,14 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
 
     try {
-      // Delete existing rows for this fazenda+ano+meta first
       await (supabase
         .from('planejamento_financeiro' as any)
         .delete()
-        .eq('fazenda_id', fazendaId)
+        .eq('fazenda_id', fazendaId!)
         .eq('ano', ano)
         .eq('cenario', 'meta') as any);
 
       if (rows.length > 0) {
-        // Insert in batches of 500
         for (let i = 0; i < rows.length; i += 500) {
           const batch = rows.slice(i, i + 500);
           const { error } = await (supabase
