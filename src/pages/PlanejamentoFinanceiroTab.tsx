@@ -464,22 +464,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={handleImport} disabled={loading || isGlobal}>
-          <Download className="h-4 w-4 mr-1" />Importar Realizado {ano - 1}
-        </Button>
         <Button size="sm" onClick={handleSave} disabled={loading || isGlobal || !dirty}>
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
       </div>
-
-      {importBanner && (
-        <Alert className="border-primary/40 bg-primary/5">
-          <Info className="h-4 w-4 text-primary" />
-          <AlertDescription className="text-xs">
-            Realizado {ano - 1} carregado como referência. Edite os valores e clique em Salvar para confirmar.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Table */}
       <Card>
