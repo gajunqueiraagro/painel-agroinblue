@@ -295,28 +295,97 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       <TableCell className="text-right text-[11px] font-medium">{fmtCompact(centro.total)}</TableCell>
                     </TableRow>
 
-                    {centroOpen && centro.subs.map((sub) => (
-                      <TableRow key={sub.key}>
-                        <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
-                          {sub.subcentro}
-                        </TableCell>
-                        {sub.meses.map((v, mesIdx) => (
-                          <TableCell key={mesIdx} className="p-0.5">
-                            {isGlobal ? (
-                              <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
-                            ) : (
-                              <EditableCell
-                                value={v}
-                                onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
-                              />
-                            )}
+                    {centroOpen && centro.subs.map((sub) => {
+                      const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
+                      const autoMeses = isRebanho ? (lancamentosRebanho.get(sub.subcentro) || new Array(12).fill(0)) : null;
+
+                      if (isRebanho) {
+                        // 3-line rendering: Auto / Ajuste / Total
+                        const ajusteMeses = sub.meses;
+                        const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
+                        const autoTotal = autoMeses!.reduce((a, b) => a + b, 0);
+                        const ajusteTotal = ajusteMeses.reduce((a, b) => a + b, 0);
+                        const lineTotal = totalMeses.reduce((a, b) => a + b, 0);
+
+                        return (
+                          <React.Fragment key={sub.key}>
+                            {/* Linha 1 — Automático */}
+                            <TableRow className="bg-muted/20">
+                              <TableCell className="sticky left-0 bg-muted/20 z-10 pl-[72px] text-[10px] text-muted-foreground italic">
+                                {sub.subcentro} (auto)
+                              </TableCell>
+                              {autoMeses!.map((v, i) => (
+                                <TableCell key={i} className="text-right text-[10px] text-muted-foreground">
+                                  {v === 0 ? '–' : fmt(v)}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[10px] text-muted-foreground font-medium">
+                                {autoTotal === 0 ? '–' : fmt(autoTotal)}
+                              </TableCell>
+                            </TableRow>
+                            {/* Linha 2 — Ajuste editável */}
+                            <TableRow>
+                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] text-muted-foreground">
+                                {sub.subcentro} (ajuste)
+                              </TableCell>
+                              {ajusteMeses.map((v, mesIdx) => (
+                                <TableCell key={mesIdx} className="p-0.5">
+                                  {isGlobal ? (
+                                    <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                  ) : (
+                                    <EditableCell
+                                      value={v}
+                                      onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
+                                    />
+                                  )}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[10px] font-medium">
+                                {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
+                              </TableCell>
+                            </TableRow>
+                            {/* Linha 3 — Total (auto + ajuste) */}
+                            <TableRow className="bg-primary/5">
+                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[11px] font-semibold">
+                                {sub.subcentro}
+                              </TableCell>
+                              {totalMeses.map((v, i) => (
+                                <TableCell key={i} className="text-right text-[11px] font-semibold">
+                                  {v === 0 ? '–' : fmt(v)}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-right text-[11px] font-bold">
+                                {lineTotal === 0 ? '–' : fmt(lineTotal)}
+                              </TableCell>
+                            </TableRow>
+                          </React.Fragment>
+                        );
+                      }
+
+                      // Normal subcentro (single line)
+                      return (
+                        <TableRow key={sub.key}>
+                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
+                            {sub.subcentro}
                           </TableCell>
-                        ))}
-                        <TableCell className="text-right text-[11px] font-medium">
-                          {sub.total === 0 ? '–' : fmt(sub.total)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          {sub.meses.map((v, mesIdx) => (
+                            <TableCell key={mesIdx} className="p-0.5">
+                              {isGlobal ? (
+                                <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                              ) : (
+                                <EditableCell
+                                  value={v}
+                                  onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
+                                />
+                              )}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right text-[11px] font-medium">
+                            {sub.total === 0 ? '–' : fmt(sub.total)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}
