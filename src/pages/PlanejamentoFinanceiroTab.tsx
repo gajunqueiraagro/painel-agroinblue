@@ -488,7 +488,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                 <col style={{ width: 66 }} />
               </colgroup>
 
-              <thead className="sticky top-0 z-20">
+              <thead className="sticky top-0 z-20" style={{ position: '-webkit-sticky' as any }}>
                 <tr className="border-b-2 border-border">
                   <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30 border-r-2 border-border/40" style={{ background: BG_CARD }} />
                   {MESES.map(m => (
