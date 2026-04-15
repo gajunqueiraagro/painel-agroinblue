@@ -915,10 +915,16 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
           {/* ══════ ABA REALIZADO ══════ */}
           <TabsContent value="realizado" className="space-y-2">
-            {/* Resumo operacional */}
+            {/* Resumo operacional + Peso total NF */}
             <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
               <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
-              <div><span className="text-muted-foreground">Peso médio</span><p className="font-bold">{formatKg(peso)}</p></div>
+              <div>
+                <Label className="text-[10px]">Peso total (kg){hintText('total da NF')}</Label>
+                <div className="relative">
+                  <Input type="number" value={pesoTotalKgNF || (peso > 0 && qtd > 0 ? String(Math.round(peso * qtd * 100) / 100) : '')} onChange={e => { setPesoTotalKgNF(e.target.value); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">kg</span>
+                </div>
+              </div>
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
             </div>
 
@@ -947,6 +953,21 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <Separator />
             {renderComercializacao()}
             {renderDesempenho()}
+
+            {/* Override manual do valor bruto */}
+            <div className="bg-muted/20 border border-border/50 rounded p-2 space-y-1">
+              <Label className="text-[10px] font-semibold">Valor bruto base (R$){hintText('override manual — deixe vazio para calcular automaticamente')}</Label>
+              <div className="grid grid-cols-2 gap-2 items-end">
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
+                  <Input type="number" value={valorBrutoOverride} onChange={e => { setValorBrutoOverride(e.target.value); markDirty(); }} placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'} step="0.01" className="h-7 text-[10px] text-right tabular-nums pl-7" />
+                </div>
+                <div className="text-[10px] text-muted-foreground tabular-nums">
+                  Calculado: {formatMoeda(calc.valorBase)}
+                </div>
+              </div>
+            </div>
+
             <Separator />
             {renderImpostos()}
             <Separator />
