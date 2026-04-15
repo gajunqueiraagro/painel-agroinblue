@@ -581,6 +581,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         .eq('tipo_operacao', '1-Entradas')
         .in('subcentro', subcentroCandidates);
 
+      console.log('[VendaFinanceiro] planoReceita:', planoReceita ? 'encontrado: ' + JSON.stringify(planoReceita) : 'NULL');
       if (!planoReceita || planoReceita.length === 0) {
         toast.error(`Não foi encontrado mapeamento financeiro válido para receita de venda em pé no plano de classificação. Subcentros buscados: ${subcentroCandidates.join(', ')}`);
         setGerando(false);
