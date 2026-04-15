@@ -642,7 +642,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(l.data);
     setCategoria(l.categoria);
     setQuantidade(String(l.quantidade));
-    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    // Fallback: if pesoMedioKg is missing, try to recover from snapshot calculation
+    const snapCalc = l.detalhesSnapshot?.calculation;
+    const pesoFallback = l.pesoMedioKg || (snapCalc?.pesoKg) || 0;
+    setPesoKg(pesoFallback ? String(pesoFallback) : '');
     setFazendaOrigem(l.fazendaOrigem || '');
     setFazendaDestino(l.fazendaDestino || '');
     setObservacao(l.observacao || '');
