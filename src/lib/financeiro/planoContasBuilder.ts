@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 // ── Constantes canônicas para dividendos ──
 
 export const DIVIDENDO_TIPO = '2-Saídas';
-export const DIVIDENDO_MACRO = 'Distribuição';
+export const DIVIDENDO_MACRO = 'Dividendos';
 export const DIVIDENDO_GRUPO = 'Dividendos';
 export const DIVIDENDO_CENTRO = 'Pessoas';
 export const DIVIDENDO_ESCOPO = 'pecuaria';

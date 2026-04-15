@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { isDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
+
 
 export interface LancamentoV2 {
   id: string;
@@ -439,12 +439,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     let resolvedCentro = form.centro_custo || null;
     const resolvedSubcentro = form.subcentro || null;
 
-    // If subcentro is a dividend, force canonical hierarchy
-    if (resolvedSubcentro && isDividendoSubcentro(resolvedSubcentro)) {
-      resolvedMacro = 'Distribuição';
-      resolvedGrupo = 'Dividendos';
-      resolvedCentro = 'Pessoas';
-    } else if (resolvedSubcentro && classificacoes.length > 0) {
+    if (resolvedSubcentro && classificacoes.length > 0) {
       // Try to resolve from plano de contas
       const match = classificacoes.find(c => c.subcentro === resolvedSubcentro);
       if (match) {
