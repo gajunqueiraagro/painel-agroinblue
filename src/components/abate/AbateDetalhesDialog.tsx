@@ -1176,27 +1176,22 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
               <div><span className="text-muted-foreground">Data</span><p className="font-bold">{dataAbate || '-'}</p></div>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
-              <div className="space-y-1.5">
-                {renderDatas()}
-                <Separator />
-                {renderComercializacao()}
-                {renderDesempenho()}
+            {renderDatas()}
+            <Separator />
+            {renderComercializacao()}
+            {renderDesempenho()}
+            <Separator />
+            {renderBonus()}
+            <Separator />
+            {renderDescontos()}
+            {calc.valorBruto > 0 && (
+              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                <span>= Valor Bruto</span>
+                <span>{formatMoeda(calc.valorBruto)}</span>
               </div>
-              <div className="space-y-1.5">
-                {renderBonus()}
-                <Separator />
-                {renderDescontos()}
-                {calc.valorBruto > 0 && (
-                  <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
-                    <span>= Valor Bruto</span>
-                    <span>{formatMoeda(calc.valorBruto)}</span>
-                  </div>
-                )}
-                <Separator />
-                {renderImpostos()}
-              </div>
-            </div>
+            )}
+            <Separator />
+            {renderImpostos()}
             <Separator />
             {renderResultado()}
             <Separator />
@@ -1211,27 +1206,22 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
               <div><span className="text-muted-foreground">Data</span><p className="font-bold">{dataAbate || '-'}</p></div>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
-              <div className="space-y-1.5">
-                {renderDatas()}
-                <Separator />
-                {renderComercializacao()}
-                {renderDesempenho()}
+            {renderDatas()}
+            <Separator />
+            {renderComercializacao()}
+            {renderDesempenho()}
+            <Separator />
+            {renderBonus()}
+            <Separator />
+            {renderDescontos()}
+            {calc.valorBruto > 0 && (
+              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                <span>= Valor Bruto</span>
+                <span>{formatMoeda(calc.valorBruto)}</span>
               </div>
-              <div className="space-y-1.5">
-                {renderBonus()}
-                <Separator />
-                {renderDescontos()}
-                {calc.valorBruto > 0 && (
-                  <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
-                    <span>= Valor Bruto</span>
-                    <span>{formatMoeda(calc.valorBruto)}</span>
-                  </div>
-                )}
-                <Separator />
-                {renderImpostos()}
-              </div>
-            </div>
+            )}
+            <Separator />
+            {renderImpostos()}
             <Separator />
             {renderResultado()}
             <Separator />
