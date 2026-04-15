@@ -4,7 +4,7 @@
 import { Card } from '@/components/ui/card';
 import { DollarSign, Target, Construction, ArrowLeft } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
-
+import { usePermissions } from '@/hooks/usePermissions';
 interface Props {
   onTabChange: (tab: TabId) => void;
   onBack?: () => void;
@@ -44,6 +44,9 @@ const items = [
 ];
 
 export function PrecosMercadoHubTab({ onTabChange, onBack }: Props) {
+  const { canEditMeta } = usePermissions();
+  const visibleItems = canEditMeta ? items : items.filter(i => i.id !== ('meta_preco' as TabId));
+
   return (
     <div className="w-full px-4 pt-2 animate-fade-in pb-24">
       {onBack && (
@@ -58,7 +61,7 @@ export function PrecosMercadoHubTab({ onTabChange, onBack }: Props) {
       </p>
 
       <div className="grid grid-cols-3 gap-3">
-        {items.map(item => {
+        {visibleItems.map(item => {
           const isDisabled = item.id === ('__em_construcao__' as TabId);
           return (
             <Card

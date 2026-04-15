@@ -193,7 +193,7 @@ const Index = () => {
   const [editOriginAnoFiltro, setEditOriginAnoFiltro] = useState<string | undefined>(undefined);
   const [editOriginMesFiltro, setEditOriginMesFiltro] = useState<string | undefined>(undefined);
   const { user } = useAuth();
-  const { canViewTab, canEdit, isReadOnly } = usePermissions();
+  const { canViewTab, canEdit, isReadOnly, canEditMeta } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes, clienteAtual } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, countFinanceirosVinculados, setSaldoInicial, loadData } = useLancamentos();
@@ -754,19 +754,19 @@ const Index = () => {
       {activeTab === 'painel_consultor_hub' && (
         <PainelConsultorHubTab onTabChange={handleTabChange} onBack={goToVisaoZooHub} />
       )}
-      {activeTab === 'meta_gmd' && (
+      {canEditMeta && activeTab === 'meta_gmd' && (
         <MetaGmdTab onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
       {activeTab === 'precos_mercado_hub' && (
         <PrecosMercadoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('painel_consultor_hub')} />
       )}
-      {activeTab === 'meta_preco' && (
+      {canEditMeta && activeTab === 'meta_preco' && (
         <MetaPrecoTab onBack={() => setActiveTab('precos_mercado_hub')} />
       )}
       {activeTab === 'preco_mercado' && (
         <PrecoMercadoTab onBack={() => setActiveTab('precos_mercado_hub')} />
       )}
-      {activeTab === 'meta_movimentacoes' && (
+      {canEditMeta && activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
           lancamentos={metaLancamentosFiltrados}
           onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
@@ -784,7 +784,7 @@ const Index = () => {
           abaInicial={metaLancAbaInicial}
         />
       )}
-      {activeTab === 'meta_consolidacao' && (
+      {canEditMeta && activeTab === 'meta_consolidacao' && (
         <MetaConsolidacaoTab
           metaLancamentos={todosMeta}
           ano={Number(filtroGlobal.ano)}
@@ -814,7 +814,7 @@ const Index = () => {
       {activeTab === 'historico_importacoes_zoot' && (
         <HistoricoImportacoesZootTab />
       )}
-      {activeTab === 'planejamento_financeiro' && (
+      {canEditMeta && activeTab === 'planejamento_financeiro' && (
         <PlanejamentoFinanceiroTab
           onBack={() => setActiveTab('painel_consultor_hub')}
           metaConsolidacao={metaConsolidacaoData}
