@@ -558,7 +558,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
 
       const clasReceita = planoReceita.find(p => subcentroCandidates.indexOf(p.subcentro!) >= 0) || planoReceita[0];
-      const statusFin = isPrevisto ? 'previsto' : (statusOp === 'realizado' ? 'realizado' : 'programado');
+      const statusFin = 'programado';
 
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
