@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Save, FileText, Share2, Pencil, Trash2, MapPin, Users, Building2, ShieldCheck, Landmark, Phone, Truck, Settings, DollarSign, LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -110,6 +111,13 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
   const [saving, setSaving] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState<ModuleKey | null>(null);
+  const [ativaNoMes, setAtivaNoMes] = useState(true);
+  const [ativaLoading, setAtivaLoading] = useState(false);
+
+  const anoMesAtual = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
 
   useEffect(() => { loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null)); }, []);
 
@@ -147,6 +155,45 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
   }, [fazendaAtual]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ---- Ativa no mês ----
+  const loadAtivaMes = useCallback(async () => {
+    if (!fazendaAtual) return;
+    const { data: row } = await supabase
+      .from('fazenda_status_mensal')
+      .select('ativa_no_mes')
+      .eq('fazenda_id', fazendaAtual.id)
+      .eq('ano_mes', anoMesAtual)
+      .maybeSingle();
+    setAtivaNoMes(row ? row.ativa_no_mes : true);
+  }, [fazendaAtual, anoMesAtual]);
+
+  useEffect(() => { loadAtivaMes(); }, [loadAtivaMes]);
+
+  const toggleAtivaMes = async (checked: boolean) => {
+    if (!fazendaAtual) return;
+    setAtivaLoading(true);
+    const { data: existing } = await supabase
+      .from('fazenda_status_mensal')
+      .select('id')
+      .eq('fazenda_id', fazendaAtual.id)
+      .eq('ano_mes', anoMesAtual)
+      .maybeSingle();
+    let error;
+    if (existing) {
+      ({ error } = await supabase.from('fazenda_status_mensal').update({ ativa_no_mes: checked }).eq('id', existing.id));
+    } else {
+      ({ error } = await supabase.from('fazenda_status_mensal').insert({
+        fazenda_id: fazendaAtual.id,
+        cliente_id: fazendaAtual.cliente_id,
+        ano_mes: anoMesAtual,
+        ativa_no_mes: checked,
+      }));
+    }
+    if (error) { toast.error('Erro ao salvar status: ' + error.message); }
+    else { setAtivaNoMes(checked); toast.success(checked ? 'Fazenda ativa no mês' : 'Fazenda inativa no mês'); }
+    setAtivaLoading(false);
+  };
 
   // ---- CRUD ----
   const handleSave = async () => {
@@ -310,6 +357,19 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
           {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
           {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
           {field('Inscrição Rural (IR)', 'inscricao_rural')}
+          <div className="border-t pt-2 mt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[10px] font-semibold text-muted-foreground">Ativa no mês ({anoMesAtual})</Label>
+                <p className="text-[9px] text-muted-foreground">Fazendas inativas não entram no rateio ADM</p>
+              </div>
+              <Switch
+                checked={ativaNoMes}
+                onCheckedChange={toggleAtivaMes}
+                disabled={ativaLoading}
+              />
+            </div>
+          </div>
         </div>
       );
       case 'contato': return (
