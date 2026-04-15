@@ -183,6 +183,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setPedido(initialData.pedido || '');
       setInstrucao(initialData.instrucao || '');
       setDocAcerto(initialData.docAcerto || '');
+      setPesoTotalKgNF(initialData.pesoTotalKgNF || '');
+      setValorBrutoOverride(initialData.valorBrutoOverride || '');
       setObservacoesInternas(initialData.observacoesInternas || '');
       setActiveTab(statusToTab(statusOp));
       setDirty(false);
