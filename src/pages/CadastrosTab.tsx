@@ -156,6 +156,45 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
 
   useEffect(() => { load(); }, [load]);
 
+  // ---- Ativa no mês ----
+  const loadAtivaMes = useCallback(async () => {
+    if (!fazendaAtual) return;
+    const { data: row } = await supabase
+      .from('fazenda_status_mensal')
+      .select('ativa_no_mes')
+      .eq('fazenda_id', fazendaAtual.id)
+      .eq('ano_mes', anoMesAtual)
+      .maybeSingle();
+    setAtivaNoMes(row ? row.ativa_no_mes : true);
+  }, [fazendaAtual, anoMesAtual]);
+
+  useEffect(() => { loadAtivaMes(); }, [loadAtivaMes]);
+
+  const toggleAtivaMes = async (checked: boolean) => {
+    if (!fazendaAtual) return;
+    setAtivaLoading(true);
+    const { data: existing } = await supabase
+      .from('fazenda_status_mensal')
+      .select('id')
+      .eq('fazenda_id', fazendaAtual.id)
+      .eq('ano_mes', anoMesAtual)
+      .maybeSingle();
+    let error;
+    if (existing) {
+      ({ error } = await supabase.from('fazenda_status_mensal').update({ ativa_no_mes: checked }).eq('id', existing.id));
+    } else {
+      ({ error } = await supabase.from('fazenda_status_mensal').insert({
+        fazenda_id: fazendaAtual.id,
+        cliente_id: fazendaAtual.cliente_id,
+        ano_mes: anoMesAtual,
+        ativa_no_mes: checked,
+      }));
+    }
+    if (error) { toast.error('Erro ao salvar status: ' + error.message); }
+    else { setAtivaNoMes(checked); toast.success(checked ? 'Fazenda ativa no mês' : 'Fazenda inativa no mês'); }
+    setAtivaLoading(false);
+  };
+
   // ---- CRUD ----
   const handleSave = async () => {
     if (!fazendaAtual) return;
