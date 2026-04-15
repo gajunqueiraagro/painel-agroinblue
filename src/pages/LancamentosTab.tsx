@@ -324,8 +324,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1,
     (categoria || '') as Categoria | '',
     tipo,
-    Number(quantidade) || 0,
-    Number(pesoKg) || 0,
+    parseNumericValue(quantidade) || 0,
+    parseNumericValue(pesoKg) || 0,
     clienteAtual?.id,
   );
   const isConfirmado = statusOp === 'programado';
@@ -352,8 +352,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const abateCalc = useMemo((): AbateCalculation | null => {
     if (!isAbate || !abateDetalhes) return null;
     return buildAbateCalculation({
-      quantidade: Number(quantidade) || 0,
-      pesoKg: Number(pesoKg) || 0,
+      quantidade: parseNumericValue(quantidade) || 0,
+      pesoKg: parseNumericValue(pesoKg) || 0,
       pesoCarcacaKg: abateDetalhes.pesoCarcacaKgManual || undefined,
       rendCarcaca: abateDetalhes.rendCarcaca || undefined,
       precoArroba: abateDetalhes.precoArroba || undefined,
@@ -382,8 +382,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const transferenciaCalc = useMemo(() => {
     if (!isTransferenciaSaida) return null;
     return buildTransferenciaCalculation({
-      quantidade: Number(quantidade) || 0,
-      pesoKg: Number(pesoKg) || 0,
+      quantidade: parseNumericValue(quantidade) || 0,
+      pesoKg: parseNumericValue(pesoKg) || 0,
       categoria,
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       fazendaDestino,
@@ -403,8 +403,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       : vendaDetalhes.tipoPreco === 'por_kg' ? 'por_kg' as const
       : 'por_kg' as const;
     return buildVendaCalculation({
-      quantidade: Number(quantidade) || 0,
-      pesoKg: Number(pesoKg) || 0,
+      quantidade: parseNumericValue(quantidade) || 0,
+      pesoKg: parseNumericValue(pesoKg) || 0,
       categoria,
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
@@ -427,8 +427,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [isVenda, vendaDetalhes, quantidade, pesoKg, categoria, fazendaOrigem, data, statusOp, observacao, vendaPrecoInput, nomeFazenda, abateFornecedores, vendaDestinoFornecedorId]);
 
   const calc = useMemo(() => {
-    const qtd = Number(quantidade) || 0;
-    const peso = Number(pesoKg) || 0;
+    const qtd = parseNumericValue(quantidade) || 0;
+    const peso = parseNumericValue(pesoKg) || 0;
 
     // For abate, use the official abateCalc
     if (isAbate && abateCalc) {
@@ -1399,7 +1399,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         const estruturalChanged =
           String(orig.data) !== String(data) ||
           String(orig.tipo) !== String(tipo) ||
-          Number(orig.quantidade) !== Number(quantidade) ||
+          Number(orig.quantidade) !== parseNumericValue(quantidade) ||
           String(orig.categoria) !== String(categoria) ||
           (String(orig.fazendaOrigem || '') !== String(fazendaOrigem || '')) ||
           (String(orig.fazendaDestino || '') !== String(fazendaDestino || ''));
@@ -1410,7 +1410,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
       setP1BloqueioMsg(null);
     }
-    if (!quantidade || Number(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
+    if (!quantidade || parseNumericValue(quantidade) <= 0) { toast.error('Informe a quantidade'); return; }
     if (!categoria) { toast.error('Selecione a categoria'); return; }
     if (!data) { toast.error('Informe a data'); return; }
 
@@ -1432,15 +1432,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (aba === 'saida' && !isAbate && !isMorte) {
       if (campos.destino?.show && !campos.destino.auto && !fazendaDestino) { toast.error('Informe o Destino'); return; }
     }
-    if (!pesoKg || Number(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
+    if (!pesoKg || parseNumericValue(pesoKg) <= 0) { toast.error('Informe o Peso (kg)'); return; }
 
     if (isCompra) {
       if (!compraFornecedorId) { toast.error('Selecione o fornecedor para continuar'); return; }
       if (!compraDetalhes) { toast.error('Clique em "Completar Compra" para preencher os detalhes financeiros'); return; }
       const valorBase = (() => {
-        const totalKg = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+        const totalKg = (parseNumericValue(quantidade) || 0) * (parseNumericValue(pesoKg) || 0);
         if (compraDetalhes.tipoPreco === 'por_kg') return totalKg * (Number(compraDetalhes.precoKg) || 0);
-        if (compraDetalhes.tipoPreco === 'por_cab') return (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+        if (compraDetalhes.tipoPreco === 'por_cab') return (parseNumericValue(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
         return Number(compraDetalhes.valorTotal) || 0;
       })();
       if ((statusOp === 'programado' || statusOp === 'realizado') && valorBase <= 0) {
@@ -1496,10 +1496,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
 
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
-      data, tipo, quantidade: Number(quantidade), categoria: categoria as Categoria,
+      data, tipo, quantidade: parseNumericValue(quantidade), categoria: categoria as Categoria,
       fazendaOrigem: origemFinal, fazendaDestino: destinoFinal,
-      pesoMedioKg: pesoKg ? Number(pesoKg) : undefined,
-      pesoMedioArrobas: pesoKg ? kgToArrobas(Number(pesoKg)) : undefined,
+      pesoMedioKg: pesoKg ? parseNumericValue(pesoKg) : undefined,
+      pesoMedioArrobas: pesoKg ? kgToArrobas(parseNumericValue(pesoKg)) : undefined,
       observacao: observacao || undefined,
       pesoCarcacaKg: isAbate ? (calc.carcacaCalc > 0 ? calc.carcacaCalc : undefined) : numOrUndef(pesoCarcacaKg),
       precoArroba: vendaPrecoArrobaFinal,
@@ -1546,8 +1546,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           return {
             type: 'venda_boitel',
             tipoVenda: 'boitel',
-            quantidade: Number(quantidade) || 0,
-            pesoKg: Number(pesoKg) || 0,
+            quantidade: parseNumericValue(quantidade) || 0,
+            pesoKg: parseNumericValue(pesoKg) || 0,
             categoria,
             data,
             statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
@@ -1607,7 +1607,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           const vc = vendaCalc || vendaDetalhes.calculation;
           return {
             ...buildVendaSnapshot(vc || buildVendaCalculation({
-              quantidade: Number(quantidade) || 0, pesoKg: Number(pesoKg) || 0, categoria,
+              quantidade: parseNumericValue(quantidade) || 0, pesoKg: parseNumericValue(pesoKg) || 0, categoria,
               fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
               data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
             })),
@@ -1675,8 +1675,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             lancamentoId: editingAbateId,
             clienteId: clienteAtual.id,
             fazendaId: fazendaAtual.id,
-            quantidade: Number(quantidade) || 0,
-            pesoKg: Number(pesoKg) || 0,
+            quantidade: parseNumericValue(quantidade) || 0,
+            pesoKg: parseNumericValue(pesoKg) || 0,
             data,
             categoria,
             statusOp: effectiveStatusOp,
@@ -1714,8 +1714,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               lancamentoId: returnedId,
               clienteId: clienteAtual.id,
               fazendaId: fazendaAtual.id,
-              quantidade: Number(quantidade) || 0,
-              pesoKg: Number(pesoKg) || 0,
+              quantidade: parseNumericValue(quantidade) || 0,
+              pesoKg: parseNumericValue(pesoKg) || 0,
               data,
               categoria,
               statusOp: effectiveStatusOp,
@@ -1848,10 +1848,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         result.formaPagamento = 'À vista';
       }
     } else if (isCompra && compraDetalhes) {
-      const totalKgC = (Number(quantidade) || 0) * (Number(pesoKg) || 0);
+      const totalKgC = (parseNumericValue(quantidade) || 0) * (parseNumericValue(pesoKg) || 0);
       let valorBase = 0;
       if (compraDetalhes.tipoPreco === 'por_kg') valorBase = totalKgC * (Number(compraDetalhes.precoKg) || 0);
-      else if (compraDetalhes.tipoPreco === 'por_cab') valorBase = (Number(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
+      else if (compraDetalhes.tipoPreco === 'por_cab') valorBase = (parseNumericValue(quantidade) || 0) * (Number(compraDetalhes.precoCab) || 0);
       else valorBase = Number(compraDetalhes.valorTotal) || 0;
       const tipoPrecoLabel = compraDetalhes.tipoPreco === 'por_kg' ? 'R$/kg' : compraDetalhes.tipoPreco === 'por_cab' ? 'R$/cab' : 'Total';
       result.precoBase = valorBase;
@@ -2099,8 +2099,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <VendaFinanceiroPanel
           key={`venda-${tipo}`}
           ref={vendaFinanceiroRef}
-          quantidade={Number(quantidade) || 0}
-          pesoKg={Number(pesoKg) || 0}
+          quantidade={parseNumericValue(quantidade) || 0}
+          pesoKg={parseNumericValue(pesoKg) || 0}
           categoria={categoria}
           data={data}
           destino={fazendaDestino}
@@ -2171,8 +2171,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         <ConsumoFinanceiroPanel
           key={`consumo-${tipo}`}
           ref={consumoFinanceiroRef}
-          quantidade={Number(quantidade) || 0}
-          pesoKg={Number(pesoKg) || 0}
+          quantidade={parseNumericValue(quantidade) || 0}
+          pesoKg={parseNumericValue(pesoKg) || 0}
           categoria={categoria}
           data={data}
           notaFiscal={notaFiscal}
@@ -2900,8 +2900,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   mes={data ? Number(data.slice(5, 7)) : new Date().getMonth() + 1}
                   categoria={categoria as any}
                   tipo={tipo}
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   clienteId={clienteAtual?.id}
                   onSugestaoEvolucao={(info: EvolucaoSugestao) => {
                     setEvolucaoSugestao(info);
@@ -2914,13 +2914,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               {isCompra ? (
               <>
                 <CompraResumoPanel
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   fornecedorNome={abateFornecedores.find(f => f.id === compraFornecedorId)?.nome || ''}
                   detalhes={compraDetalhes}
                   detalhesPreenchidos={!!compraDetalhes}
-                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria)}
+                  canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria)}
                   onOpenModal={() => setCompraDialogOpen(true)}
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
@@ -2936,21 +2936,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setCompraDialogOpen(false);
                   }}
                   initialData={compraDetalhes || EMPTY_COMPRA_DETALHES}
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   dataCompra={data}
                 />
               </>
             ) : isAbate ? (
               <>
                 <AbateResumoPanel
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
                   detalhes={abateDetalhes}
                   detalhesPreenchidos={!!abateDetalhes}
-                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && abateFornecedorId)}
+                  canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && abateFornecedorId)}
                   onOpenModal={() => setAbateDialogOpen(true)}
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
@@ -2978,7 +2978,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setDataVenda(det.dataVenda);
                     // Sync pesoKg from pesoTotalKgNF (total NF weight → per head)
                     if (det.pesoTotalKgNF && Number(det.pesoTotalKgNF) > 0) {
-                      const qtd = Number(quantidade) || 1;
+                      const qtd = parseNumericValue(quantidade) || 1;
                       setPesoKg(String(Math.round((Number(det.pesoTotalKgNF) / qtd) * 100) / 100));
                     }
                     setAbateDialogOpen(false);
@@ -2987,8 +2987,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     ...(abateDetalhes || EMPTY_ABATE_DETALHES),
                     frigorifico: abateDetalhes?.frigorifico || abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '',
                   }}
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   dataAbate={data}
                   statusOp={effectiveStatusOp}
@@ -2997,7 +2997,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 <div className="hidden">
                   <AbateFinanceiroPanel
                     ref={abateFinanceiroRef}
-                    quantidade={Number(quantidade) || 0}
+                    quantidade={parseNumericValue(quantidade) || 0}
                     categoria={categoria}
                     data={data}
                     valorLiquido={calc.valorLiquido}
@@ -3032,13 +3032,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ) : isVenda ? (
               <>
                 <VendaResumoPanel
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
                   detalhes={vendaDetalhes}
                   detalhesPreenchidos={!!vendaDetalhes || (tipoPeso === 'boitel' && !!boitelDataForResumo)}
-                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
+                  canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && vendaDestinoFornecedorId)}
                   onOpenModal={() => {
                     if (tipoPeso === 'boitel') {
                       vendaFinanceiroRef.current?.openBoitelDialog();
@@ -3071,8 +3071,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setVendaDialogOpen(false);
                   }}
                   initialData={vendaDetalhes || EMPTY_VENDA_DETALHES}
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   dataVenda={data}
                   compradorNome={abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || ''}
@@ -3083,8 +3083,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <VendaFinanceiroPanel
                     key={`venda-hidden-${tipo}`}
                     ref={vendaFinanceiroRef}
-                    quantidade={Number(quantidade) || 0}
-                    pesoKg={Number(pesoKg) || 0}
+                    quantidade={parseNumericValue(quantidade) || 0}
+                    pesoKg={parseNumericValue(pesoKg) || 0}
                     categoria={categoria}
                     data={data}
                     destino={fazendaDestino}
@@ -3132,14 +3132,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ) : isTransferenciaSaida ? (
               <>
                 <TransferenciaResumoPanel
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   fazendaOrigem={nomeFazenda || fazendaOrigem}
                   fazendaDestino={fazendaDestino}
                   detalhes={transferenciaDetalhes}
                   detalhesPreenchidos={!!transferenciaDetalhes}
-                  canOpenModal={!!(data && quantidade && Number(quantidade) > 0 && pesoKg && Number(pesoKg) > 0 && categoria && fazendaDestino)}
+                  canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && fazendaDestino)}
                   onOpenModal={() => setTransferenciaDialogOpen(true)}
                   onRequestRegister={handleRequestRegister}
                   submitting={submitting}
@@ -3155,8 +3155,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setTransferenciaDialogOpen(false);
                   }}
                   initialData={transferenciaDetalhes || EMPTY_TRANSFERENCIA_DETALHES}
-                  quantidade={Number(quantidade) || 0}
-                  pesoKg={Number(pesoKg) || 0}
+                  quantidade={parseNumericValue(quantidade) || 0}
+                  pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
                   fazendaOrigem={nomeFazenda || fazendaOrigem}
                   fazendaDestino={fazendaDestino}
@@ -3198,9 +3198,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         operacionais={{
           status: isCenarioMeta ? 'meta' : effectiveStatusOp,
           data,
-          quantidade: Number(quantidade) || 0,
+          quantidade: parseNumericValue(quantidade) || 0,
           categoria,
-          pesoKg: Number(pesoKg) || 0,
+          pesoKg: parseNumericValue(pesoKg) || 0,
           fazendaOrigem: campos.origem.show ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) : undefined,
           fazendaDestino: isAbate ? (abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '') : (campos.destino?.show ? (campos.destino?.auto ? campos.destino?.value : fazendaDestino) : undefined),
           observacao,
@@ -3288,7 +3288,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onOpenChange={setEvolucaoDialogOpen}
           sugestao={evolucaoSugestao}
           dataLancamento={data}
-          quantidadeLancamento={Number(quantidade) || 0}
+          quantidadeLancamento={parseNumericValue(quantidade) || 0}
           saldoDestinoAtual={metaStepState?.saldoDestinoAtual ?? 0}
           onRegistrar={onAdicionar}
           onSucesso={() => {
