@@ -3686,6 +3686,7 @@ export type Database = {
         Row: {
           ano: number
           cliente_id: string
+          comercial_custo_cab: number | null
           created_at: string
           cria_custo_cab_mes: number | null
           engorda_consumo_kg_ms: number | null
@@ -3699,6 +3700,7 @@ export type Database = {
         Insert: {
           ano: number
           cliente_id: string
+          comercial_custo_cab?: number | null
           created_at?: string
           cria_custo_cab_mes?: number | null
           engorda_consumo_kg_ms?: number | null
@@ -3712,6 +3714,7 @@ export type Database = {
         Update: {
           ano?: number
           cliente_id?: string
+          comercial_custo_cab?: number | null
           created_at?: string
           cria_custo_cab_mes?: number | null
           engorda_consumo_kg_ms?: number | null
