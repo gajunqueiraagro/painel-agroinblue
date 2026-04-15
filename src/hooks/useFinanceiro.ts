@@ -497,9 +497,11 @@ export function useFinanceiro() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
+  // --- Área produtiva por fazenda por mês (para rateio ADM v3 — por hectare) ---
+  // Renamed internally but keeps the same Map structure for minimal downstream changes.
+  // Map<anoMes, Map<fazendaId, areaHectares>>
   const rebanhoMedioPorFazendaMes = useMemo(() => {
-    if (!fazendaADM || rawSaldos.length === 0) return new Map<string, Map<string, number>>();
+    if (!fazendaADM || areaProdutivaPorFazenda.size === 0) return new Map<string, Map<string, number>>();
 
     // Collect all YYYY-MM from ADM lancamentos conciliados
     const mesesADM = new Set<string>();
@@ -511,19 +513,18 @@ export function useFinanceiro() {
 
     const result = new Map<string, Map<string, number>>();
     for (const am of mesesADM) {
-      const ano = Number(am.substring(0, 4));
-      const mes = Number(am.substring(5, 7));
       const fazMap = new Map<string, number>();
       for (const f of fazendasOperacionais) {
         // Skip fazendas inativas no mês
         if (!isFazendaAtivaMes(fazendaStatusMensal, f.id, am)) continue;
-        const rm = calcRebanhoMedioFazenda(rawSaldos, rawLancsPec, f.id, ano, mes);
-        if (rm > 0) fazMap.set(f.id, rm);
+        // Usar area_produtiva em vez de rebanho médio
+        const area = areaProdutivaPorFazenda.get(f.id) || 0;
+        if (area > 0) fazMap.set(f.id, area);
       }
       result.set(am, fazMap);
     }
     return result;
-  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais, fazendaStatusMensal]);
+  }, [fazendaADM, lancamentosADM, areaProdutivaPorFazenda, fazendasOperacionais, fazendaStatusMensal]);
 
   // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
