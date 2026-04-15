@@ -3,6 +3,7 @@
  *
  * Hierarchical editable grid: macro → grupo → centro → subcentro (editable).
  * Import realizado, bulk save.
+ * Totals: Entradas, Saídas, Saldo Inicial, Saldo do Mês, Saldo Final, Saldo Acumulado.
  */
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,6 +19,22 @@ import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info } from '
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+/** Ordem fixa dos macros */
+const MACRO_ORDER: string[] = [
+  'Receita Operacional',
+  'Entrada Financeira',
+  'Deduções de Receitas',
+  'Custeio Produção',
+  'Investimento na Fazenda',
+  'Investimento em Bovinos',
+  'Saída Financeira',
+  'Dividendos',
+];
+
+const MACROS_ENTRADA = new Set(['Receita Operacional', 'Entrada Financeira']);
+const MACROS_SAIDA = new Set(['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos']);
+const MACROS_EXCLUIDOS = new Set(['Transferências']);
+
 const fmt = (v: number) => {
   if (v === 0) return '–';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,9 +42,13 @@ const fmt = (v: number) => {
 
 const fmtCompact = (v: number) => {
   if (v === 0) return '–';
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
   return `R$ ${v.toFixed(0)}`;
+};
+
+const fmtSaldo = (v: number) => {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 };
 
 interface Props {
@@ -41,7 +62,7 @@ interface Props {
 interface SubNode {
   key: string;
   subcentro: string;
-  gridIdx: number; // index into grid array for editing
+  gridIdx: number;
   meses: number[];
   total: number;
 }
@@ -77,7 +98,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId;
 
-  const { loading, buildGrid, importarRealizado, salvarGrid } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   // Local mutable grid
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
@@ -124,6 +145,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
     grid.forEach((g, idx) => {
       const macro = g.macro_custo || '(Sem macro)';
+      // Filter out Transferências
+      if (MACROS_EXCLUIDOS.has(macro)) return;
+
       const grupo = g.grupo_custo || '(Sem grupo)';
       const centro = g.centro_custo || '(Sem centro)';
       const total = g.meses.reduce((a, b) => a + b, 0);
@@ -148,7 +172,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       return r;
     };
 
-    const result: MacroNode[] = [];
+    const unsorted: MacroNode[] = [];
     for (const [macroNome, grupoMap] of macroMap) {
       const grupos: GrupoNode[] = [];
       for (const [grupoNome, centroMap] of grupoMap) {
@@ -161,10 +185,52 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         grupos.push({ nome: grupoNome, meses, total: meses.reduce((a, b) => a + b, 0), centros });
       }
       const meses = sumMeses(grupos);
-      result.push({ nome: macroNome, meses, total: meses.reduce((a, b) => a + b, 0), grupos });
+      unsorted.push({ nome: macroNome, meses, total: meses.reduce((a, b) => a + b, 0), grupos });
     }
-    return result;
+
+    // Sort by MACRO_ORDER
+    return unsorted.sort((a, b) => {
+      const ia = MACRO_ORDER.indexOf(a.nome);
+      const ib = MACRO_ORDER.indexOf(b.nome);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
   }, [grid]);
+
+  /* ── Totals computation ── */
+  const totals = useMemo(() => {
+    const entradas = new Array(12).fill(0);
+    const saidas = new Array(12).fill(0);
+
+    for (const macro of hierarchy) {
+      if (MACROS_ENTRADA.has(macro.nome)) {
+        for (let i = 0; i < 12; i++) entradas[i] += macro.meses[i];
+      }
+      if (MACROS_SAIDA.has(macro.nome)) {
+        for (let i = 0; i < 12; i++) saidas[i] += macro.meses[i];
+      }
+    }
+
+    const saldoMes = entradas.map((e, i) => e - saidas[i]);
+    const saldoFinal: number[] = [];
+    const saldoAcum: number[] = [];
+    let acum = saldoInicial;
+    for (let i = 0; i < 12; i++) {
+      acum += saldoMes[i];
+      saldoFinal.push(acum);
+      saldoAcum.push(acum);
+    }
+
+    return {
+      entradas,
+      totalEntradas: entradas.reduce((a, b) => a + b, 0),
+      saidas,
+      totalSaidas: saidas.reduce((a, b) => a + b, 0),
+      saldoMes,
+      totalSaldoMes: entradas.reduce((a, b) => a + b, 0) - saidas.reduce((a, b) => a + b, 0),
+      saldoFinal,
+      saldoAcum,
+    };
+  }, [hierarchy, saldoInicial]);
 
   const grandTotal = useMemo(() => hierarchy.reduce((s, m) => s + m.total, 0), [hierarchy]);
 
@@ -208,6 +274,23 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     setDirty(false);
     setImportBanner(false);
   }, [salvarGrid, grid]);
+
+  /* ── Summary row renderer ── */
+  const SummaryRow = ({ label, meses, total, className = '', isCurrency = false }: {
+    label: string; meses: number[]; total: number; className?: string; isCurrency?: boolean;
+  }) => (
+    <TableRow className={className}>
+      <TableCell className="sticky left-0 bg-muted/60 z-10 pl-2 text-xs font-bold">{label}</TableCell>
+      {meses.map((v, i) => (
+        <TableCell key={i} className="text-right text-xs font-semibold">
+          {isCurrency ? fmtSaldo(v) : fmtCompact(v)}
+        </TableCell>
+      ))}
+      <TableCell className="text-right text-xs font-bold">
+        {isCurrency ? fmtSaldo(total) : fmtCompact(total)}
+      </TableCell>
+    </TableRow>
+  );
 
   /* ── Render ── */
   return (
@@ -261,7 +344,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       {/* Summary */}
       <Card>
         <CardContent className="p-2 flex items-center gap-3 text-xs">
-          <span className="text-muted-foreground">{grid.length} subcentros</span>
+          <span className="text-muted-foreground">{grid.filter(g => !MACROS_EXCLUIDOS.has(g.macro_custo || '')).length} subcentros</span>
           <span className="flex-1" />
           <span className="font-bold">Total: R$ {fmt(grandTotal)}</span>
         </CardContent>
@@ -388,6 +471,67 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                     </React.Fragment>
                   );
                 })}
+
+                {/* ═══ Linhas de Totais e Saldo ═══ */}
+                {hierarchy.length > 0 && (
+                  <>
+                    {/* Separador */}
+                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+
+                    <SummaryRow
+                      label="Total Entradas"
+                      meses={totals.entradas}
+                      total={totals.totalEntradas}
+                      className="bg-green-500/5"
+                    />
+                    <SummaryRow
+                      label="Total Saídas"
+                      meses={totals.saidas}
+                      total={totals.totalSaidas}
+                      className="bg-red-500/5"
+                    />
+
+                    {/* Separador */}
+                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+
+                    {/* Saldo Inicial — valor fixo em todas as colunas */}
+                    <TableRow className="bg-muted/30">
+                      <TableCell className="sticky left-0 bg-muted/30 z-10 pl-2 text-xs font-bold">
+                        Saldo Inicial (Dez/{ano - 1})
+                      </TableCell>
+                      {MESES.map((_, i) => (
+                        <TableCell key={i} className="text-right text-xs font-semibold">
+                          {i === 0 ? fmtSaldo(saldoInicial) : ''}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-right text-xs font-bold">{fmtSaldo(saldoInicial)}</TableCell>
+                    </TableRow>
+
+                    <SummaryRow
+                      label="Saldo do Mês"
+                      meses={totals.saldoMes}
+                      total={totals.totalSaldoMes}
+                      className={totals.totalSaldoMes >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}
+                      isCurrency
+                    />
+
+                    <SummaryRow
+                      label="Saldo Final"
+                      meses={totals.saldoFinal}
+                      total={totals.saldoFinal[11] || 0}
+                      className="bg-muted/20 font-bold"
+                      isCurrency
+                    />
+
+                    <SummaryRow
+                      label="Saldo Acumulado"
+                      meses={totals.saldoAcum}
+                      total={totals.saldoAcum[11] || 0}
+                      className="bg-primary/5 font-bold"
+                      isCurrency
+                    />
+                  </>
+                )}
               </TableBody>
             </Table>
           </div>
