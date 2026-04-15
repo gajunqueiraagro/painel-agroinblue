@@ -346,8 +346,14 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         });
       }
 
-      const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
-      if (error) throw error;
+      console.log('[AbateFinanceiro] INSERT payload', JSON.stringify(inserts, null, 2));
+      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2').insert(inserts).select('id');
+      if (error) {
+        console.error('[AbateFinanceiro] INSERT ERROR', error, JSON.stringify(error));
+        console.error('[AbateFinanceiro] INSERT payload was', JSON.stringify(inserts));
+        throw error;
+      }
+      console.log('[AbateFinanceiro] INSERT OK', insertedData?.length, 'records');
 
       setGerado(true);
       const msg = mode === 'update'
@@ -357,6 +363,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       if (mode === 'update' && onFinanceiroUpdated) onFinanceiroUpdated();
       return true;
     } catch (err: any) {
+      console.error('[AbateFinanceiro] CATCH ERROR', err, JSON.stringify(err));
       toast.error('Erro ao gerar lançamentos: ' + (err.message || err));
       return false;
     } finally {
