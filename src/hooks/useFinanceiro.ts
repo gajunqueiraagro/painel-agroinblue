@@ -312,7 +312,13 @@ function calcRebanhoMedioFazenda(
   return (saldoInicioMes + saldoFimMes) / 2;
 }
 
-// ---------------------------------------------------------------------------
+/** Verifica se fazenda está ativa num dado mês. Default = true (sem registro = ativa) */
+function isFazendaAtivaMes(statusMap: Map<string, boolean>, fazendaId: string, anoMes: string): boolean {
+  const key = `${fazendaId}|${anoMes}`;
+  const val = statusMap.get(key);
+  return val === undefined ? true : val;
+}
+
 // Hook
 // ---------------------------------------------------------------------------
 
