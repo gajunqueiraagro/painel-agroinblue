@@ -457,19 +457,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // Non-abate path (unchanged)
     const abRendCarcaca = Number(rendCarcaca) || 0;
     const abPrecoArroba = Number(precoArroba) || 0;
-    const abBonusPrecoce = Number(bonusPrecoce) || 0;
-    const abBonusQualidade = Number(bonusQualidade) || 0;
-    const abBonusListaTrace = Number(bonusListaTrace) || 0;
-    const abDescQualidade = Number(descontoQualidade) || 0;
-    const abFunruralPct = Number(funruralPct) || 0;
-    const abFunruralReais = Number(funruralReais) || 0;
-    const abOutrosDescontos = Number(outrosDescontos) || 0;
+    const abBonusPrecoce = parseNumericValue(bonusPrecoce) || 0;
+    const abBonusQualidade = parseNumericValue(bonusQualidade) || 0;
+    const abBonusListaTrace = parseNumericValue(bonusListaTrace) || 0;
+    const abDescQualidade = parseNumericValue(descontoQualidade) || 0;
+    const abFunruralPct = parseNumericValue(funruralPct) || 0;
+    const abFunruralReais = parseNumericValue(funruralReais) || 0;
+    const abOutrosDescontos = parseNumericValue(outrosDescontos) || 0;
 
     // For venda with modal detalhes (normal venda only), source from vendaDetalhes
     const isVendaNormal = isVenda && vendaDetalhes && (vendaDetalhes.tipoVenda === 'desmama' || vendaDetalhes.tipoVenda === 'gado_adulto');
 
     const rend = abRendCarcaca;
-    const carcacaCalc = rend > 0 ? peso * rend / 100 : Number(pesoCarcacaKg) || 0;
+    const carcacaCalc = rend > 0 ? peso * rend / 100 : parseNumericValue(pesoCarcacaKg) || 0;
     let pesoArroba = peso > 0 ? peso / 30 : 0;
     const totalArrobas = pesoArroba * qtd;
     const totalKg = peso * qtd;
@@ -480,23 +480,23 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
-    else if (usaPrecoKg) { valorBruto = totalKg * (Number(precoKg) || 0); }
+    else if (usaPrecoKg) { valorBruto = totalKg * (parseNumericValue(precoKg) || 0); }
     const bonusPrecoceTotal = 0;
     const bonusQualidadeTotal = 0;
     const bonusListaTraceTotal = 0;
-    const descQualidadeTotal = Number(descontoQualidade) || 0;
+    const descQualidadeTotal = parseNumericValue(descontoQualidade) || 0;
     const funruralReaisVal = abFunruralReais;
     const descFunruralTotal = isVenda
       ? (funruralReaisVal > 0 ? funruralReaisVal : valorBruto * abFunruralPct / 100)
       : 0;
     const descOutrosTotal = isVenda ? abOutrosDescontos : 0;
-    const totalBonus = Number(bonus) || 0;
+    const totalBonus = parseNumericValue(bonus) || 0;
     const totalDescontos = isVenda
       ? descQualidadeTotal + descFunruralTotal + descOutrosTotal
-      : (Number(descontos) || 0);
-    const comissaoVal = valorBruto * (Number(comissaoPct) || 0) / 100;
-    const freteVal = Number(frete) || 0;
-    const outrasDespVal = Number(outrasDespesas) || 0;
+      : (parseNumericValue(descontos) || 0);
+    const comissaoVal = valorBruto * (parseNumericValue(comissaoPct) || 0) / 100;
+    const freteVal = parseNumericValue(frete) || 0;
+    const outrasDespVal = parseNumericValue(outrasDespesas) || 0;
     const valorLiquido = valorBruto + totalBonus - totalDescontos - comissaoVal - freteVal - outrasDespVal;
     const liqArroba = totalArrobas > 0 ? valorLiquido / totalArrobas : 0;
     const liqCabeca = qtd > 0 ? valorLiquido / qtd : 0;
@@ -1490,8 +1490,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const vendaPrecoArrobaFinal = isBoitelVenda && boitelDataForResumo
       ? (boitelDataForResumo.precoVendaArroba || undefined)
       : isVenda && vendaDetalhes
-        ? (Number(vendaPrecoInput) || undefined)
-        : (isAbate && abateDetalhes ? (Number(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
+        ? (parseNumericValue(vendaPrecoInput) || undefined)
+        : (isAbate && abateDetalhes ? (parseNumericValue(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
     const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
     const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
 
@@ -2323,10 +2323,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onChange={e => {
             const vt = parseFloat(e.target.value);
             if (!isNaN(vt)) {
-              const totalBon = (Number(bonus) || 0);
-              const totalDesc = (Number(descontos) || 0);
-              const freteVal = Number(frete) || 0;
-              const outVal = Number(outrasDespesas) || 0;
+              const totalBon = (parseNumericValue(bonus) || 0);
+              const totalDesc = (parseNumericValue(descontos) || 0);
+              const freteVal = parseNumericValue(frete) || 0;
+              const outVal = parseNumericValue(outrasDespesas) || 0;
               const brutoNecessario = vt - totalBon + totalDesc + freteVal + outVal;
               if (usaPrecoKg && calc.totalKg > 0) { setPrecoKg(String((brutoNecessario / calc.totalKg).toFixed(4))); }
             }
