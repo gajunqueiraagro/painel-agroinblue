@@ -94,26 +94,36 @@ function SortablePastoCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-md border bg-card p-2 flex items-center gap-1.5 ${!pasto.ativo ? 'opacity-40' : ''}`}
+      className={`rounded-lg border bg-card p-3 flex flex-col gap-1.5 min-w-[120px] ${!pasto.ativo ? 'opacity-40' : ''}`}
     >
-      <button {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground shrink-0">
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
-          <span className="font-semibold text-xs truncate flex-1 min-w-0">{pasto.nome}</span>
-          {pasto.entra_conciliacao && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 leading-tight shrink-0">Conc</Badge>
-          )}
+      {/* Topo: nome + switch ativo */}
+      <div className="flex justify-between items-start gap-1">
+        <div className="flex items-center gap-1 min-w-0 flex-1">
+          <button {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground shrink-0">
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+          <span className="font-bold text-sm truncate flex-1 min-w-0">{pasto.nome}</span>
         </div>
-        {pasto.area_produtiva_ha != null && (
-          <span className="text-[10px] text-muted-foreground">{pasto.area_produtiva_ha} ha</span>
+        <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-75 shrink-0" />
+      </div>
+
+      {/* Área */}
+      <span className="text-xs text-muted-foreground">
+        {pasto.area_produtiva_ha != null ? `${pasto.area_produtiva_ha} ha` : '—'}
+      </span>
+
+      {/* Rodapé: editar + badge conciliação */}
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <button onClick={onEdit} className="text-muted-foreground hover:text-foreground p-0.5">
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+        {pasto.entra_conciliacao && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 leading-tight">Conc</Badge>
+        )}
+        {pasto.observacoes && (
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 leading-tight">Obs</Badge>
         )}
       </div>
-      <button onClick={onEdit} className="text-muted-foreground hover:text-foreground shrink-0 p-0.5">
-        <Edit2 className="h-3 w-3" />
-      </button>
-      <Switch checked={pasto.ativo} onCheckedChange={onToggle} className="scale-75 shrink-0" />
     </div>
   );
 }
@@ -160,7 +170,8 @@ export function PastosTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-bold">Pastos</h2>
-          <Badge variant="secondary" className="text-xs">{filtered.length}</Badge>
+          <Badge variant="secondary" className="text-xs">{pastos.filter(p => p.ativo).length} ativos</Badge>
+          {showInativos && <Badge variant="outline" className="text-xs">{pastos.length} total</Badge>}
         </div>
         <div className="flex items-center gap-2">
           <label className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -190,7 +201,7 @@ export function PastosTab() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={filtered.map(p => p.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5">
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
               {filtered.map(p => (
                 <SortablePastoCard
                   key={p.id}
