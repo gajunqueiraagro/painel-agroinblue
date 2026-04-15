@@ -35,6 +35,13 @@ const SUBCENTROS_REBANHO = new Set([
   'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
 ]);
 
+const SUBCENTROS_FINANCIAMENTO = new Set([
+  'Amortização Financiamento Pecuária', 'Amortização Financiamento Agricultura',
+  'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
+]);
+
+const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO]);
+
 const fmt = (v: number) => {
   if (v === 0) return '–';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -74,7 +81,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -115,9 +122,12 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const centro = g.centro_custo || '(Sem centro)';
 
       // For rebanho subcentros, effective meses = auto + ajuste
+      const isAuto = SUBCENTROS_AUTO.has(g.subcentro);
       const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
-      const autoMeses = isRebanho ? (lancamentosRebanho.get(g.subcentro) || new Array(12).fill(0)) : null;
-      const effectiveMeses = isRebanho
+      const autoMeses = isAuto
+        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
+        : null;
+      const effectiveMeses = isAuto
         ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
         : g.meses;
       const total = effectiveMeses.reduce((a, b) => a + b, 0);
@@ -163,7 +173,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid, lancamentosRebanho]);
+  }, [grid, lancamentosRebanho, lancamentosFinanciamento]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
@@ -304,9 +314,13 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                     {centroOpen && centro.subs.map((sub) => {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
-                      const autoMeses = isRebanho ? (lancamentosRebanho.get(sub.subcentro) || new Array(12).fill(0)) : null;
+                      const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
+                      const isAuto = isRebanho || isFinanciamento;
+                      const autoMeses = isAuto
+                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
+                        : null;
 
-                      if (isRebanho) {
+                      if (isAuto) {
                         // 3-line rendering: Auto / Ajuste / Total
                         const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
                         const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
