@@ -77,7 +77,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
