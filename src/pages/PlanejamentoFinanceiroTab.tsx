@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info } from 'lucide-react';
+import { useCliente } from '@/contexts/ClienteContext';
+import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
