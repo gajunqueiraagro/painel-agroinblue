@@ -74,7 +74,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
