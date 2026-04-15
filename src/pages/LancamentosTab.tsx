@@ -2922,6 +2922,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setFunruralReais(det.funruralReais);
                     setOutrosDescontos(det.outrosDescontos);
                     setDataVenda(det.dataVenda);
+                    // Sync pesoKg from pesoTotalKgNF (total NF weight → per head)
+                    if (det.pesoTotalKgNF && Number(det.pesoTotalKgNF) > 0) {
+                      const qtd = Number(quantidade) || 1;
+                      setPesoKg(String(Math.round((Number(det.pesoTotalKgNF) / qtd) * 100) / 100));
+                    }
                     setAbateDialogOpen(false);
                   }}
                   initialData={abateDetalhes || EMPTY_ABATE_DETALHES}
