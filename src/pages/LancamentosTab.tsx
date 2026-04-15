@@ -697,6 +697,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         pedido: snap.pedido || l.pedido || '',
         instrucao: snap.instrucao || l.instrucao || '',
         docAcerto: snap.docAcerto || l.docAcerto || '',
+        pesoTotalKgNF: snap.pesoTotalKgNF || '',
+        valorBrutoOverride: snap.valorBrutoOverride || '',
       });
     } else {
       // FALLBACK: reconstruct from lancamento fields
