@@ -377,7 +377,7 @@ export async function gerarFinanceiroBoitel(
     });
   }
 
-  const insertsComGrupo = inserts.map(ins => ({ ...ins, grupo_geracao_id: grupoId }));
+  const insertsComGrupo = inserts.map(ins => ({ ...ins, grupo_geracao_id: grupoId, sem_movimentacao_caixa: false }));
 
   const { error } = await supabase.from('financeiro_lancamentos_v2').insert(insertsComGrupo);
   if (error) {

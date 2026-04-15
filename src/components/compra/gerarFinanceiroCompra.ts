@@ -87,6 +87,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     movimentacao_rebanho_id: lancamentoId,
     macro_custo: clasCompra.macro_custo,
     centro_custo: clasCompra.centro_custo,
+    sem_movimentacao_caixa: false,
   };
 
   if (fornecedorId) baseRecord.favorecido_id = fornecedorId;

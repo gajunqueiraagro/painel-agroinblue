@@ -1092,6 +1092,7 @@ export function useFinanceiro() {
           favorecido_id: await resolveOrCreateFornecedorId(l.fornecedor, l.fazendaId),
           hash_importacao: gerarHashImportacao(l.dataPagamento, l.valor, l.fornecedor, l.contaBancariaId, l.numeroDocumento),
           created_by: user.id,
+          sem_movimentacao_caixa: false,
         };
 
         if (ehTransf && l.contaDestinoId) {

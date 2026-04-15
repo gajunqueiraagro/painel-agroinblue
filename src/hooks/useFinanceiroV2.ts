@@ -402,6 +402,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: anoMes,
       origem_lancamento: 'manual',
       created_by: userId,
+      sem_movimentacao_caixa: false,
     };
   };
 
@@ -676,6 +677,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: lanc.ano_mes,
       origem_lancamento: 'manual',
       created_by: user.id,
+      sem_movimentacao_caixa: false,
     });
 
     if (error) {

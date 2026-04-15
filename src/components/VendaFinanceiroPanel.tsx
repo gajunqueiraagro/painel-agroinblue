@@ -561,6 +561,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
         numero_documento: notaFiscal || undefined,
+        sem_movimentacao_caixa: false,
       };
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
@@ -636,6 +637,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             descricao: `${item.descricao} ${vendaLabel}${destino ? ` | ${destino}` : ''}`,
             historico: destino ? `Comprador: ${destino}` : undefined,
             origem_tipo: item.origemTipo,
+            sem_movimentacao_caixa: item.origemTipo === 'venda:funrural',
           });
         });
       }
