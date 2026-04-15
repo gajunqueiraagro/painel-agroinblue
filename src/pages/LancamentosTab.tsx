@@ -314,8 +314,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const pesoInput = useDecimalInput(pesoKg, setPesoKg, 2);
 
   const isCenarioMeta = statusOp === 'meta';
-  /** StatusOperacional efetivo para passar a componentes que não conhecem 'meta' */
-  const effectiveStatusOp: StatusOperacional = isCenarioMeta ? 'programado' : statusOp as StatusOperacional;
+  /** StatusOperacional efetivo — preserva 'meta' para modais financeiros */
+  const effectiveStatusOp: StatusOperacional | 'meta' = isCenarioMeta ? 'meta' : statusOp as StatusOperacional;
   const isMeta = isCenarioMeta; // Meta usa estilo laranja
 
   // ── Bloqueio META: mesma lógica do painel inteligente ──
@@ -388,7 +388,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       fazendaDestino,
       data,
-      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional,
       observacao,
       precoReferenciaArroba: transferenciaDetalhes?.precoReferenciaArroba || undefined,
       precoReferenciaCabeca: transferenciaDetalhes?.precoReferenciaCabeca || undefined,
@@ -409,7 +409,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       fazendaOrigem: nomeFazenda || fazendaOrigem,
       compradorNome: abateFornecedores.find(f => f.id === vendaDestinoFornecedorId)?.nome || '',
       data,
-      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional,
       observacao,
       tipoPreco: tipoPrecoEngine,
       precoInput: vendaDetalhes.precoInput || vendaPrecoInput,
@@ -1514,7 +1514,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       valorTotal: valorTotalFinal,
       notaFiscal: abNotaFiscal || undefined,
       tipoPeso: tipoPesoFinal,
-      statusOperacional: isCenarioMeta ? null : effectiveStatusOp,
+      statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional,
       dataVenda: abateDataVenda || undefined,
       dataEmbarque: abateDataEmbarque || undefined,
       dataAbate: abateDataAbate || undefined,
@@ -1609,7 +1609,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             ...buildVendaSnapshot(vc || buildVendaCalculation({
               quantidade: parseNumericValue(quantidade) || 0, pesoKg: parseNumericValue(pesoKg) || 0, categoria,
               fazendaOrigem: nomeFazenda || fazendaOrigem, compradorNome: fornNome || '',
-              data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
+              data, statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional, tipoPreco: 'por_kg', precoInput: vendaPrecoInput,
             })),
             type: 'venda',
             ...vendaDetalhes,

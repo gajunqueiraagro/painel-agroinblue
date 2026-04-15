@@ -32,7 +32,7 @@ interface Props {
   lancamentoId?: string;
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
-  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
+  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado' | 'meta';
 }
 
 export interface AbateFinanceiroOverrides {
