@@ -356,26 +356,18 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         </Alert>
       )}
 
-      <Card>
-        <CardContent className="p-2 flex items-center gap-3 text-xs">
-          <span className="text-muted-foreground">{grid.filter(g => !MACROS_EXCLUIDOS.has(g.macro_custo || '')).length} subcentros</span>
-          <span className="flex-1" />
-          <span className="font-bold">Total: R$ {fmt(grandTotal)}</span>
-        </CardContent>
-      </Card>
-
       {/* Table */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
             <Table className="w-max">
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-20 bg-background">
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-muted/50 z-10 min-w-[220px]">Nome</TableHead>
+                  <TableHead className="sticky left-0 bg-muted/50 z-30 min-w-[220px]"></TableHead>
                   {MESES.map(m => (
-                    <TableHead key={m} className="w-[75px] text-right">{m}</TableHead>
+                    <TableHead key={m} className="w-[75px] text-right bg-muted/50">{m}</TableHead>
                   ))}
-                  <TableHead className="w-[90px] text-right font-bold">Total</TableHead>
+                  <TableHead className="w-[90px] text-right font-bold bg-muted/50">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
