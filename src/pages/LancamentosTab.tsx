@@ -226,6 +226,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
+  const [abateFinanceiroMissing, setAbateFinanceiroMissing] = useState(false);
+  const [gerandoFinanceiroFallback, setGerandoFinanceiroFallback] = useState(false);
   const [anoFiltro, setAnoFiltro] = useState(initialAnoFiltro || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMesFiltro || 'todos');
 
