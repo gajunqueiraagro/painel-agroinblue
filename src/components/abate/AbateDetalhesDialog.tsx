@@ -832,6 +832,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             totalVal={calc.descQualidadeTotal}
             onArrobaBlur={v => handleBiBlurArroba(setDescontoQualidade, setDescontoQualidadeReais, v)}
             onReaisBlur={v => handleBiBlurReais(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            redTotal
           />
           <BiRow
             stableKey="desc-outros"
@@ -841,6 +842,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             totalVal={calc.descOutrosTotal}
             onArrobaBlur={v => handleBiBlurArroba(setOutrosDescontosArroba, setOutrosDescontos, v)}
             onReaisBlur={v => handleBiBlurReais(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            redTotal
           />
         </tbody>
       </table>
@@ -883,8 +885,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço R$</td>
-            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(calc.valorBase))}</td>
-            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(calc.valorBase)}</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase))}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}</td>
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço @</td>
@@ -1296,8 +1298,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
                   <Input type="number" value={valorBrutoOverride} onChange={e => { setValorBrutoOverride(e.target.value); markDirty(); }} placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'} step="0.01" className="h-7 text-[10px] text-right tabular-nums pl-7" />
                 </div>
-                <div className="text-[10px] text-muted-foreground tabular-nums">
-                  Calculado: {formatMoeda(calc.valorBase)}
+                <div className="text-[10px] font-bold tabular-nums">
+                  {formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}
                 </div>
               </div>
             </div>
