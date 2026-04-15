@@ -3102,6 +3102,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     onNotaFiscalChange={setNotaFiscal}
                     statusOp={effectiveStatusOp}
                     lancamentoId={lastSavedLancamentoId || undefined}
+                    mode="update"
                     tipoPeso={tipoPeso}
                     onTipoPesoChange={() => {}}
                     vendaTipoPreco={vendaTipoPreco}
