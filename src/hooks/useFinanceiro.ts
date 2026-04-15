@@ -5,12 +5,12 @@
  * hash_importacao: campo técnico de apoio para rastreabilidade de dedup.
  *
  * ═══════════════════════════════════════════════════════════════════════
- * RATEIO ADM v2 — Critério: REBANHO MÉDIO do período
+ * RATEIO ADM v3 — Critério: ÁREA PRODUTIVA (hectares) de cada fazenda
  * ═══════════════════════════════════════════════════════════════════════
  * Regras:
  * - Modo global: soma todos os lançamentos originais (incluindo ADM), sem rateio.
  * - Modo por fazenda: lançamentos da fazenda + parcela rateada dos custos ADM
- *   proporcional ao rebanho médio.
+ *   proporcional à área produtiva (hectares) da fazenda.
  * - Somente lançamentos ADM com status_transacao = "realizado" entram no rateio.
  * - O período do rateio usa data_pagamento (não data_realizacao nem ano_mes).
  * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
