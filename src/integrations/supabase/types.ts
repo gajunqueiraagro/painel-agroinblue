@@ -3827,6 +3827,111 @@ export type Database = {
           },
         ]
       }
+      meta_projetos_investimento: {
+        Row: {
+          abr: number | null
+          ago: number | null
+          ano: number
+          centro_custo: string
+          cliente_id: string
+          created_at: string | null
+          dez: number | null
+          fazenda_id: string | null
+          fev: number | null
+          grupo_custo: string
+          id: string
+          jan: number | null
+          jul: number | null
+          jun: number | null
+          macro_custo: string
+          mai: number | null
+          mar: number | null
+          nome: string
+          nov: number | null
+          observacao: string | null
+          orcamento_total: number | null
+          out: number | null
+          responsavel: string | null
+          set: number | null
+          status: string
+          subcentro: string
+          updated_at: string | null
+        }
+        Insert: {
+          abr?: number | null
+          ago?: number | null
+          ano: number
+          centro_custo: string
+          cliente_id: string
+          created_at?: string | null
+          dez?: number | null
+          fazenda_id?: string | null
+          fev?: number | null
+          grupo_custo: string
+          id?: string
+          jan?: number | null
+          jul?: number | null
+          jun?: number | null
+          macro_custo?: string
+          mai?: number | null
+          mar?: number | null
+          nome: string
+          nov?: number | null
+          observacao?: string | null
+          orcamento_total?: number | null
+          out?: number | null
+          responsavel?: string | null
+          set?: number | null
+          status?: string
+          subcentro: string
+          updated_at?: string | null
+        }
+        Update: {
+          abr?: number | null
+          ago?: number | null
+          ano?: number
+          centro_custo?: string
+          cliente_id?: string
+          created_at?: string | null
+          dez?: number | null
+          fazenda_id?: string | null
+          fev?: number | null
+          grupo_custo?: string
+          id?: string
+          jan?: number | null
+          jul?: number | null
+          jun?: number | null
+          macro_custo?: string
+          mai?: number | null
+          mar?: number | null
+          nome?: string
+          nov?: number | null
+          observacao?: string | null
+          orcamento_total?: number | null
+          out?: number | null
+          responsavel?: string | null
+          set?: number | null
+          status?: string
+          subcentro?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_projetos_investimento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_projetos_investimento_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_valor_rebanho_precos: {
         Row: {
           ano_mes: string
