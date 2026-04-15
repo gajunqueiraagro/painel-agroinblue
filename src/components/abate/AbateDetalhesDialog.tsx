@@ -1168,63 +1168,36 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </TabsList>
           )}
 
-          {/* ══════ ABA META ══════ */}
+          {/* ══════ ABA META (mesmos campos do Programado) ══════ */}
           <TabsContent value="meta" className="space-y-2">
-            {/* Aviso de visibilidade restrita */}
-            <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded p-2 text-[10px] text-purple-700 dark:text-purple-300">
-              <Lock className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-medium">Visibilidade restrita — somente o proprietário vê este card</span>
-            </div>
-
             {/* Resumo operacional */}
             <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
-              <div><span className="text-muted-foreground">Quantidade</span><p className="font-bold">{qtd} cab.</p></div>
-              <div><span className="text-muted-foreground">Peso médio est.</span><p className="font-bold">{formatKg(peso)}</p></div>
+              <div><span className="text-muted-foreground">Cabeças</span>{hintText('escalado')}<p className="font-bold">{qtd} cab.</p></div>
+              <div><span className="text-muted-foreground">Peso médio (kg)</span>{hintText('estimado')}<p className="font-bold">{formatKg(peso)}</p></div>
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-[10px]">Rend. carcaça estimado (%)</Label>
-                <div className="relative">
-                  <Input type="number" value={rendCarcaca} onChange={e => { setRendCarcaca(e.target.value); setPesoCarcacaKg(''); markDirty(); }} placeholder="0,00" step="0.01" className="h-7 text-[10px] text-right tabular-nums pr-6" />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">%</span>
-                </div>
+            <Separator />
+            {renderDatas()}
+            <Separator />
+            {renderComercializacao()}
+            {renderDesempenho()}
+            <Separator />
+            {renderBonus()}
+            <Separator />
+            {renderDescontos()}
+            {calc.valorBruto > 0 && (
+              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                <span>= Valor Bruto</span>
+                <span>{formatMoeda(calc.valorBruto)}</span>
               </div>
-              <div>
-                <Label className="text-[10px]">Peso médio @ calculado</Label>
-                <Input type="text" readOnly value={calc.pesoArrobaCab > 0 ? formatArroba(calc.pesoArrobaCab) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-[10px]">Preço @ referência (R$)</Label>
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                  <Input type="number" value={precoArroba} onChange={e => { setPrecoArroba(e.target.value); markDirty(); }} placeholder="0,00" className="h-7 text-[10px] text-right tabular-nums pl-7" step="0.01" />
-                </div>
-              </div>
-              <div>
-                <Label className="text-[10px]">Receita bruta esperada</Label>
-                <Input type="text" readOnly value={calc.valorBase > 0 ? formatMoeda(calc.valorBase) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-[10px]">Receita líquida esperada</Label>
-              <Input type="text" readOnly value={calc.valorLiquido > 0 ? formatMoeda(calc.valorLiquido) : '-'} className="h-7 text-[10px] text-right tabular-nums bg-muted cursor-not-allowed" />
-            </div>
-
-            <div>
-              <Label className="text-[10px]">Observações internas</Label>
-              <textarea
-                value={observacoesInternas}
-                onChange={e => { setObservacoesInternas(e.target.value); markDirty(); }}
-                placeholder="Notas internas (visíveis apenas para o proprietário)"
-                className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-[11px] ring-offset-background placeholder:text-muted-foreground/60 placeholder:italic focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-            </div>
+            )}
+            <Separator />
+            {renderImpostos()}
+            <Separator />
+            {renderResultado()}
+            <Separator />
+            {renderPagamento()}
           </TabsContent>
 
           {/* ══════ ABA PROGRAMADO ══════ */}
