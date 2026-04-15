@@ -64,6 +64,11 @@ export interface DrillDownPayload {
   periodo: 'mes' | 'acum';
 }
 
+const MACROS_EXCLUIDOS_DRE = new Set(['Transferências', 'Entre Contas']);
+/** Lançamento elegível para DRE (exclui transferências e não classificados) */
+const isDRE = (l: FinanceiroLancamento) =>
+  l.macro_custo != null && !MACROS_EXCLUIDOS_DRE.has(l.macro_custo.trim());
+
 interface Props {
   lancamentos: FinanceiroLancamento[];
   indicadores: any;
