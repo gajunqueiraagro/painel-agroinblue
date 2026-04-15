@@ -620,7 +620,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
         autoFocus
         type="number"
         step="0.01"
-        className="h-5 text-[10px] text-right p-0.5 w-[70px]"
+        className="h-4 text-[8px] text-right p-0.5 w-[54px]"
         value={text}
         onChange={e => setText(e.target.value)}
         onBlur={commit}
@@ -631,7 +631,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
 
   return (
     <span
-      className="cursor-pointer text-[10px] hover:bg-muted px-1 py-0 rounded block text-right"
+      className="cursor-pointer text-[8px] hover:bg-muted px-0.5 rounded block text-right leading-tight"
       onClick={start}
     >
       {value === 0 ? '–' : fmt(value)}
