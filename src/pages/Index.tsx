@@ -193,7 +193,7 @@ const Index = () => {
   const [editOriginAnoFiltro, setEditOriginAnoFiltro] = useState<string | undefined>(undefined);
   const [editOriginMesFiltro, setEditOriginMesFiltro] = useState<string | undefined>(undefined);
   const { user } = useAuth();
-  const { canViewTab, canEdit, isReadOnly } = usePermissions();
+  const { canViewTab, canEdit, isReadOnly, canEditMeta } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clientes, clienteAtual } = useCliente();
   const { lancamentos, saldosIniciais, adicionarLancamento, editarLancamento, removerLancamento, countFinanceirosVinculados, setSaldoInicial, loadData } = useLancamentos();
