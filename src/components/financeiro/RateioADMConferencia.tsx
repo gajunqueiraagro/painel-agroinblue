@@ -88,10 +88,10 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
         <CardContent className="p-3 space-y-1">
           <div className="flex items-center gap-1.5 text-xs">
             <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-bold">Rateio ADM v2</span>
+            <span className="font-bold">Rateio ADM v3</span>
           </div>
           <div className="text-[10px] text-muted-foreground space-y-0.5 pl-5">
-            <p>Critério de rateio: <strong>Rebanho médio</strong> do período</p>
+            <p>Critério de rateio: <strong>Área produtiva</strong> (hectares) de cada fazenda</p>
             <p>Coluna de data: <strong>Data_Ref</strong> (data_realizacao)</p>
             <p>Filtro: Fazenda=ADM · Tipo=2-Saídas · Status=Realizado · Data_Ref preenchida</p>
             <p>Base: apenas <strong>LANCAMENTO</strong> (SALDO e RESUMO excluídos)</p>
