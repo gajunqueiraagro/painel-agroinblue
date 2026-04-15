@@ -461,6 +461,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </span>
         )}
         <div className="flex-1" />
+        {!isGlobal && (
+          <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
+            <Settings className="h-4 w-4" />
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={handleImport} disabled={loading || isGlobal}>
           <Download className="h-4 w-4 mr-1" />Importar Realizado {ano - 1}
         </Button>
