@@ -289,7 +289,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           onClick={() => toggleMacro(macroKey)}
         >
           <td
-            className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+            className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap"
             style={{ background: BG_NIVEL2, paddingLeft: 4 }}
           >
             <span className="inline-flex items-center gap-0.5">
@@ -300,7 +300,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
            {macro.meses.map((v, i) => (
             <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
           ))}
-          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
+          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
         </tr>
 
         {macroOpen && macro.grupos.map((grupo) => {
@@ -310,7 +310,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             <React.Fragment key={grupoKey}>
               <tr className="cursor-pointer border-b border-border/20" onClick={() => toggleGrupo(grupoKey)}>
                 <td
-                  className="px-1 py-[1.5px] text-left leading-tight font-medium text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+                  className="px-1 py-[1.5px] text-left leading-tight font-medium text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap"
                   style={{ background: BG_ZEBRA, paddingLeft: 16 }}
                 >
                   <span className="inline-flex items-center gap-0.5">
@@ -319,9 +319,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                   </span>
                 </td>
                 {grupo.meses.map((v, i) => (
-                  <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] ${cor}`} style={{ background: BG_ZEBRA }}>{fmtCompact(v)}</td>
+                  <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>{fmtCompact(v)}</td>
                 ))}
-                <td className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(grupo.total)}</td>
+                <td className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(grupo.total)}</td>
               </tr>
 
               {grupoOpen && grupo.centros.map((centro) => {
@@ -331,7 +331,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                   <React.Fragment key={centroKey}>
                     <tr className="cursor-pointer border-b border-border/20" onClick={() => toggleCentro(centroKey)}>
                       <td
-                        className="px-1 py-[1.5px] text-left leading-tight font-normal text-[9px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+                        className="px-1 py-[1.5px] text-left leading-tight font-normal text-[9px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap"
                         style={{ background: BG_DYN, paddingLeft: 28 }}
                       >
                         <span className="inline-flex items-center gap-0.5">
@@ -340,9 +340,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         </span>
                       </td>
                       {centro.meses.map((v, i) => (
-                        <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] ${cor}`} style={{ background: BG_DYN }}>{fmtCompact(v)}</td>
+                        <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_DYN }}>{fmtCompact(v)}</td>
                       ))}
-                      <td className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(centro.total)}</td>
+                      <td className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(centro.total)}</td>
                     </tr>
 
                     {centroOpen && centro.subs.map((sub, subIdx) => {
@@ -366,25 +366,25 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                           <React.Fragment key={sub.key}>
                             {/* Auto */}
                             <tr className="border-b border-border/10">
-                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] italic text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }}>
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] italic text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }}>
                                 {sub.subcentro} (auto)
                               </td>
                               {autoMeses!.map((v, i) => (
-                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic opacity-70 ${cor}`} style={{ background: BG_ZEBRA }}>
+                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(autoTotal)}
                               </td>
                             </tr>
                             {/* Ajuste */}
                             <tr className="border-b border-border/10">
-                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
                                 {sub.subcentro} (ajuste)
                               </td>
                               {ajusteMeses.map((v, mesIdx) => (
-                                <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
+                                <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
                                   {isGlobal ? (
                                     <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
                                   ) : (
@@ -392,21 +392,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   )}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(ajusteTotal)}
                               </td>
                             </tr>
                             {/* Total */}
                             <tr className="border-b border-border/30">
-                              <td className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: BG_NIVEL2, paddingLeft: 40 }}>
+                              <td className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_NIVEL2, paddingLeft: 40 }}>
                                 {sub.subcentro}
                               </td>
                               {totalMeses.map((v, i) => (
-                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}`} style={{ background: BG_NIVEL2 }}>
+                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(lineTotal)}
                               </td>
                             </tr>
@@ -417,11 +417,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       // Normal subcentro
                       return (
                         <tr key={sub.key} className="border-b border-border/10">
-                          <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
+                          <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
                             {sub.subcentro}
                           </td>
                           {sub.meses.map((v, mesIdx) => (
-                            <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
+                            <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
                               {isGlobal ? (
                                 <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
                               ) : (
@@ -429,7 +429,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               )}
                             </td>
                           ))}
-                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
+                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
                             {fmtCompact(sub.total)}
                           </td>
                         </tr>
@@ -500,9 +500,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
               <thead className="sticky top-0 z-20">
                 <tr className="border-b-2 border-border">
-                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30" style={{ background: BG_CARD }} />
+                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30 border-r-2 border-border/40" style={{ background: BG_CARD }} />
                   {MESES.map(m => (
-                    <th key={m} className="px-1 py-[3px] text-right text-[9px] font-bold text-muted-foreground uppercase tracking-wider" style={{ background: BG_CARD }}>{m}</th>
+                    <th key={m} className={`px-1 py-[3px] text-right text-[9px] font-bold text-muted-foreground uppercase tracking-wider${trimBorder(MESES.indexOf(m))}`} style={{ background: BG_CARD }}>{m}</th>
                   ))}
                   <th className="px-1 py-[3px] text-right text-[9px] font-extrabold text-foreground uppercase tracking-wider border-l-2 border-border" style={{ background: BG_MUTED }}>Total</th>
                 </tr>
@@ -523,11 +523,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                     {isGlobal && (
                       <>
                         <tr className="border-b border-border">
-                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
                             Saldo Inicial (Dez/{ano - 1})
                           </td>
                           {MESES.map((_, i) => (
-                            <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL1 }}>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px]${trimBorder(i)}`} style={{ background: BG_NIVEL1 }}>
                               {i === 0 ? fmtCompact(saldoInicial) : ''}
                             </td>
                           ))}
@@ -542,14 +542,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalEntradas(p => !p)}
                     >
-                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
                         <span className="inline-flex items-center gap-0.5">
                           {expandedTotalEntradas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Entradas
                         </span>
                       </td>
                       {totals.entradas.map((v, i) => (
-                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] text-emerald-600" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
+                        <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] text-emerald-600${trimBorder(i)}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
                       <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border text-emerald-600" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalEntradas)}</td>
                     </tr>
@@ -563,14 +563,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalSaidas(p => !p)}
                     >
-                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
                         <span className="inline-flex items-center gap-0.5">
                           {expandedTotalSaidas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Saídas
                         </span>
                       </td>
                       {totals.saidas.map((v, i) => (
-                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] text-destructive" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
+                        <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] text-destructive${trimBorder(i)}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
                       <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border text-destructive" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaidas)}</td>
                     </tr>
@@ -583,18 +583,18 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
 
                         <tr className="border-b border-border">
-                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL2, paddingLeft: 4 }}>Saldo do Mês</td>
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40" style={{ background: BG_NIVEL2, paddingLeft: 4 }}>Saldo do Mês</td>
                           {totals.saldoMes.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
                           ))}
                           <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaldoMes)}</td>
                         </tr>
 
 
                         <tr className="border-b-2 border-border">
-                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}${trimBorder(i)}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                           ))}
                           <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.saldoFinal[11] || 0)}</td>
                         </tr>
