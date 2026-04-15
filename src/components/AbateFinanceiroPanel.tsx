@@ -138,14 +138,20 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
     }
   };
 
-  const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+  const handleGerarFinanceiroInternal = async (targetLancamentoId: string, overrides?: AbateFinanceiroOverrides): Promise<boolean> => {
+    // Use overrides if provided (avoids race condition with stale props)
+    const efValorLiquido = overrides?.valorLiquido ?? valorLiquido;
+    const efTotalDescontos = overrides?.totalDescontos ?? totalDescontos;
+    const efFormaReceb = overrides?.formaReceb ?? formaReceb;
+    const efParcelas = overrides?.parcelas ?? parcelas;
+
     if (!targetLancamentoId) {
       toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
       return false;
     }
     if (!fazendaAtual || !clienteAtual) return false;
-    if (validationErrors.length > 0) {
-      toast.error(validationErrors[0]);
+    if (efValorLiquido <= 0) {
+      toast.error('Valor líquido do abate deve ser maior que zero.');
       return false;
     }
 
