@@ -226,6 +226,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
   const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
+  const [abateFinanceiroMissing, setAbateFinanceiroMissing] = useState(false);
+  const [gerandoFinanceiroFallback, setGerandoFinanceiroFallback] = useState(false);
   const [anoFiltro, setAnoFiltro] = useState(initialAnoFiltro || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(initialMesFiltro || 'todos');
 
@@ -598,6 +600,44 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     resetFinancialFields();
     vendaFinanceiroRef.current?.resetForm();
     consumoFinanceiroRef.current?.resetForm();
+  };
+
+  // Check if financeiro records exist for current editing abate
+  useEffect(() => {
+    if (!editingAbateId || tipo !== 'abate' || statusOp !== 'realizado') {
+      setAbateFinanceiroMissing(false);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id')
+      .eq('movimentacao_rebanho_id', editingAbateId)
+      .eq('cancelado', false)
+      .limit(1)
+      .then(({ data: rows }) => {
+        if (!cancelled) setAbateFinanceiroMissing(!rows || rows.length === 0);
+      });
+    return () => { cancelled = true; };
+  }, [editingAbateId, tipo, statusOp]);
+
+  const handleGerarFinanceiroFallback = async () => {
+    if (!editingAbateId || !abateFinanceiroRef.current) return;
+    setGerandoFinanceiroFallback(true);
+    try {
+      const ok = await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
+        valorLiquido: calc.valorLiquido,
+        totalDescontos: calc.totalDescontos,
+        formaReceb: abateDetalhes?.formaReceb || 'avista',
+        parcelas: abateDetalhes?.parcelas || [],
+      });
+      if (ok) {
+        setAbateFinanceiroMissing(false);
+        toast.success('Financeiro gerado com sucesso!');
+      }
+    } finally {
+      setGerandoFinanceiroFallback(false);
+    }
   };
 
   const handleCancelEdit = useCallback(() => {
@@ -2969,6 +3009,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     statusOperacional={effectiveStatusOp}
                   />
                 </div>
+                {/* Fallback: gerar financeiro quando não foi gerado automaticamente */}
+                {editingAbateId && isConciliado && abateFinanceiroMissing && calc.valorLiquido > 0 && (
+                  <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded text-[11px]">
+                    <AlertTriangle className="h-4 w-4 text-orange-600 shrink-0" />
+                    <span className="text-orange-700 dark:text-orange-300 flex-1">Financeiro não gerado para este abate.</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-900"
+                      disabled={gerandoFinanceiroFallback}
+                      onClick={handleGerarFinanceiroFallback}
+                    >
+                      {gerandoFinanceiroFallback ? 'Gerando...' : 'Gerar Financeiro'}
+                    </Button>
+                  </div>
+                )}
               </>
             ) : isVenda ? (
               <>
