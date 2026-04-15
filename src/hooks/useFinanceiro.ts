@@ -496,13 +496,15 @@ export function useFinanceiro() {
       const mes = Number(am.substring(5, 7));
       const fazMap = new Map<string, number>();
       for (const f of fazendasOperacionais) {
+        // Skip fazendas inativas no mês
+        if (!isFazendaAtivaMes(fazendaStatusMensal, f.id, am)) continue;
         const rm = calcRebanhoMedioFazenda(rawSaldos, rawLancsPec, f.id, ano, mes);
         if (rm > 0) fazMap.set(f.id, rm);
       }
       result.set(am, fazMap);
     }
     return result;
-  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais]);
+  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais, fazendaStatusMensal]);
 
   // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
