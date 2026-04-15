@@ -125,7 +125,6 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const funruralReais = parseNumericValue(input.funruralReais);
   const funruralPct = parseNumericValue(input.funruralPct);
   const funruralTotalRaw = funruralReais > 0 ? funruralReais : (valorBaseRaw * funruralPct) / 100;
-  const valorBrutoRaw = valorBaseRaw - funruralTotalRaw;
 
   const bonusPrecoce = parseNumericValue(input.bonusPrecoce);
   const bonusPrecoceReais = parseNumericValue(input.bonusPrecoceReais);
@@ -150,7 +149,8 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const descOutrosTotalRaw = outrosDescontosArroba > 0 ? outrosDescontosArroba * totalArrobasRaw : outrosDescontos;
 
   const totalDescontosRaw = descQualidadeTotalRaw + descOutrosTotalRaw;
-  const valorLiquidoRaw = valorBrutoRaw + totalBonusRaw - totalDescontosRaw;
+  const valorBrutoRaw = valorBaseRaw + totalBonusRaw - totalDescontosRaw;
+  const valorLiquidoRaw = valorBrutoRaw - funruralTotalRaw;
 
   const liqArrobaRaw = totalArrobasRaw > 0 ? valorLiquidoRaw / totalArrobasRaw : 0;
   const liqCabecaRaw = quantidade > 0 ? valorLiquidoRaw / quantidade : 0;
