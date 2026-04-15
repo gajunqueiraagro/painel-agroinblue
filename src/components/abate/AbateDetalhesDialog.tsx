@@ -61,6 +61,56 @@ export interface AbateDetalhes {
   observacoesInternas?: string;
 }
 
+// Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
+function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+  label: string;
+  arrobaVal: string;
+  reaisVal: string;
+  totalVal: number;
+  onArrobaChange: (v: string) => void;
+  onReaisChange: (v: string) => void;
+  onArrobaBlur?: () => void;
+  onReaisBlur?: () => void;
+  hint?: string;
+  stableKey: string;
+}) {
+  return (
+    <tr className="border-b border-border/30">
+      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+        {label}
+        {hint && <span className="block text-[8px] text-muted-foreground/70 italic">{hint}</span>}
+      </td>
+      <td className="py-1 px-1">
+        <Input
+          key={`${stableKey}-arroba`}
+          type="number"
+          value={arrobaVal}
+          onChange={e => onArrobaChange(e.target.value)}
+          onBlur={onArrobaBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-20 text-right tabular-nums"
+          step="0.01"
+        />
+      </td>
+      <td className="py-1 px-1">
+        <Input
+          key={`${stableKey}-reais`}
+          type="number"
+          value={reaisVal}
+          onChange={e => onReaisChange(e.target.value)}
+          onBlur={onReaisBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-24 text-right tabular-nums"
+          step="0.01"
+        />
+      </td>
+      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
+        {totalVal > 0 ? formatMoeda(totalVal) : '-'}
+      </td>
+    </tr>
+  );
+}
+
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
   dataVenda: '',
   dataEmbarque: '',
