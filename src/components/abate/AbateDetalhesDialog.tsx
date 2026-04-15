@@ -63,7 +63,7 @@ export interface AbateDetalhes {
 
 // Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
 // BiRow with local state: typing stays local, parent only updates on blur
-const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey, redTotal }: {
   label: string;
   arrobaVal: string;
   reaisVal: string;
@@ -72,6 +72,7 @@ const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArro
   onReaisBlur: (v: string) => void;
   hint?: string;
   stableKey: string;
+  redTotal?: boolean;
 }) {
   const [localArr, setLocalArr] = useState(arrobaVal);
   const [localReais, setLocalReais] = useState(reaisVal);
@@ -118,7 +119,7 @@ const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArro
           step="0.01"
         />
       </td>
-      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
+      <td className={`py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap ${redTotal ? 'text-destructive' : ''}`}>
         {totalVal > 0 ? formatMoeda(totalVal) : '-'}
       </td>
     </tr>
@@ -831,6 +832,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             totalVal={calc.descQualidadeTotal}
             onArrobaBlur={v => handleBiBlurArroba(setDescontoQualidade, setDescontoQualidadeReais, v)}
             onReaisBlur={v => handleBiBlurReais(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            redTotal
           />
           <BiRow
             stableKey="desc-outros"
@@ -840,6 +842,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             totalVal={calc.descOutrosTotal}
             onArrobaBlur={v => handleBiBlurArroba(setOutrosDescontosArroba, setOutrosDescontos, v)}
             onReaisBlur={v => handleBiBlurReais(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            redTotal
           />
         </tbody>
       </table>
@@ -882,8 +885,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço R$</td>
-            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(calc.valorBase))}</td>
-            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(calc.valorBase)}</td>
+            <td className="py-1 px-1 text-right tabular-nums">{formatMoeda(perCab(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase))}</td>
+            <td className="py-1 text-right font-bold tabular-nums">{formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}</td>
           </tr>
           <tr className="border-b border-border/30">
             <td className="py-1 text-muted-foreground font-medium">Preço @</td>
@@ -1295,8 +1298,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
                   <Input type="number" value={valorBrutoOverride} onChange={e => { setValorBrutoOverride(e.target.value); markDirty(); }} placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'} step="0.01" className="h-7 text-[10px] text-right tabular-nums pl-7" />
                 </div>
-                <div className="text-[10px] text-muted-foreground tabular-nums">
-                  Calculado: {formatMoeda(calc.valorBase)}
+                <div className="text-[10px] font-bold tabular-nums">
+                  {formatMoeda(valorBrutoOverride ? (Number(valorBrutoOverride) || 0) : calc.valorBase)}
                 </div>
               </div>
             </div>
