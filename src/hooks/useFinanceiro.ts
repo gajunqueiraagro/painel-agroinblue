@@ -614,19 +614,21 @@ export function useFinanceiro() {
           fazendasSemRebanho: semRebanho,
         };
       });
-  }, [fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes, fazendasOperacionais]);
+  }, [fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes, fazendasOperacionais, fazendaStatusMensal]);
 
-  // --- Fazendas sem rebanho (aviso) ---
+  // --- Fazendas sem rebanho (aviso) — apenas fazendas ATIVAS ---
   const fazendasSemRebanho = useMemo(() => {
     if (!fazendaADM || rebanhoMedioPorFazendaMes.size === 0) return [];
     const meses = Array.from(rebanhoMedioPorFazendaMes.keys()).sort();
     if (meses.length === 0) return [];
-    const fazMap = rebanhoMedioPorFazendaMes.get(meses[meses.length - 1]);
+    const ultimoMes = meses[meses.length - 1];
+    const fazMap = rebanhoMedioPorFazendaMes.get(ultimoMes);
     if (!fazMap) return [];
     return fazendasOperacionais
+      .filter(f => isFazendaAtivaMes(fazendaStatusMensal, f.id, ultimoMes))
       .filter(f => !fazMap.has(f.id) || (fazMap.get(f.id) || 0) <= 0)
       .map(f => f.nome);
-  }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
+  }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM, fazendaStatusMensal]);
 
   // --- Gerar hash robusto de deduplicação ---
   const normalizeImportText = (value: string | null | undefined) =>
