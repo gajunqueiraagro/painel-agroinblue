@@ -602,6 +602,44 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     consumoFinanceiroRef.current?.resetForm();
   };
 
+  // Check if financeiro records exist for current editing abate
+  useEffect(() => {
+    if (!editingAbateId || tipo !== 'abate' || statusOp !== 'realizado') {
+      setAbateFinanceiroMissing(false);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('financeiro_lancamentos_v2')
+      .select('id')
+      .eq('movimentacao_rebanho_id', editingAbateId)
+      .eq('cancelado', false)
+      .limit(1)
+      .then(({ data: rows }) => {
+        if (!cancelled) setAbateFinanceiroMissing(!rows || rows.length === 0);
+      });
+    return () => { cancelled = true; };
+  }, [editingAbateId, tipo, statusOp]);
+
+  const handleGerarFinanceiroFallback = async () => {
+    if (!editingAbateId || !abateFinanceiroRef.current) return;
+    setGerandoFinanceiroFallback(true);
+    try {
+      const ok = await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
+        valorLiquido: calc.valorLiquido,
+        totalDescontos: calc.totalDescontos,
+        formaReceb: abateDetalhes?.formaReceb || 'avista',
+        parcelas: abateDetalhes?.parcelas || [],
+      });
+      if (ok) {
+        setAbateFinanceiroMissing(false);
+        toast.success('Financeiro gerado com sucesso!');
+      }
+    } finally {
+      setGerandoFinanceiroFallback(false);
+    }
+  };
+
   const handleCancelEdit = useCallback(() => {
     editOriginalRef.current = null;
     setP1BloqueioMsg(null);
