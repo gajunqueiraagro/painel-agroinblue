@@ -9,11 +9,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock, Clock, CheckCircle2 } from 'lucide-react';
+import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock, Clock, CheckCircle2, Upload, Paperclip } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface AbateDetalhes {
   dataVenda: string;
@@ -52,6 +54,9 @@ export interface AbateDetalhes {
   pesoTotalKgNF?: string;
   // Override manual do valor bruto base
   valorBrutoOverride?: string;
+  // Anexos
+  anexoNfUrl?: string;
+  anexoAcertoUrl?: string;
   // --- Novos campos Meta ---
   observacoesInternas?: string;
 }
@@ -142,6 +147,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [docAcerto, setDocAcerto] = useState(initialData.docAcerto || '');
   const [pesoTotalKgNF, setPesoTotalKgNF] = useState(initialData.pesoTotalKgNF || '');
   const [valorBrutoOverride, setValorBrutoOverride] = useState(initialData.valorBrutoOverride || '');
+  const [anexoNfUrl, setAnexoNfUrl] = useState(initialData.anexoNfUrl || '');
+  const [anexoAcertoUrl, setAnexoAcertoUrl] = useState(initialData.anexoAcertoUrl || '');
+  const [uploadingNf, setUploadingNf] = useState(false);
+  const [uploadingAcerto, setUploadingAcerto] = useState(false);
 
   // Novos campos Meta
   const [observacoesInternas, setObservacoesInternas] = useState(initialData.observacoesInternas || '');
@@ -185,6 +194,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setDocAcerto(initialData.docAcerto || '');
       setPesoTotalKgNF(initialData.pesoTotalKgNF || '');
       setValorBrutoOverride(initialData.valorBrutoOverride || '');
+      setAnexoNfUrl(initialData.anexoNfUrl || '');
+      setAnexoAcertoUrl(initialData.anexoAcertoUrl || '');
       setObservacoesInternas(initialData.observacoesInternas || '');
       setActiveTab(statusToTab(statusOp));
       setDirty(false);
@@ -294,9 +305,42 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       frigorifico, pedido, instrucao, docAcerto,
       pesoTotalKgNF: pesoTotalKgNF || undefined,
       valorBrutoOverride: valorBrutoOverride || undefined,
+      anexoNfUrl: anexoNfUrl || undefined,
+      anexoAcertoUrl: anexoAcertoUrl || undefined,
       observacoesInternas,
     });
   };
+
+  // Upload handler for attachments
+  const handleUploadAnexo = useCallback(async (file: File, tipo: 'nf' | 'acerto') => {
+    const setUploading = tipo === 'nf' ? setUploadingNf : setUploadingAcerto;
+    const setUrl = tipo === 'nf' ? setAnexoNfUrl : setAnexoAcertoUrl;
+    const fileName = tipo === 'nf' ? 'nf.pdf' : 'acerto.pdf';
+    // Use a unique path based on timestamp to avoid caching issues
+    const storagePath = `${Date.now()}_${fileName}`;
+
+    setUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('abate-anexos')
+        .upload(storagePath, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('abate-anexos')
+        .getPublicUrl(storagePath);
+
+      setUrl(urlData.publicUrl);
+      markDirty();
+      toast.success(`${tipo === 'nf' ? 'Nota Fiscal' : 'Acerto'} enviado com sucesso`);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(`Erro ao enviar ${tipo === 'nf' ? 'NF' : 'Acerto'}: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }, [markDirty]);
 
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
@@ -978,6 +1022,57 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderResultado()}
             <Separator />
             {renderPagamento()}
+
+            {/* ── Seção de Anexos ── */}
+            <Separator />
+            {sectionTitle(<Paperclip className="h-4 w-4 text-muted-foreground" />, 'Anexos')}
+            <div className="grid grid-cols-2 gap-3">
+              {/* NF Upload */}
+              <div className="space-y-1">
+                <Label className="text-[10px]">Nota Fiscal (PDF)</Label>
+                {anexoNfUrl ? (
+                  <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <a href={anexoNfUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-green-700 dark:text-green-300 underline truncate flex-1">
+                      NF anexada
+                    </a>
+                    <label className="cursor-pointer text-[9px] text-muted-foreground hover:text-foreground">
+                      <span>Substituir</span>
+                      <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'nf'); }} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className={`flex items-center justify-center gap-1.5 h-8 rounded border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors ${uploadingNf ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">{uploadingNf ? 'Enviando...' : 'Enviar NF'}</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'nf'); }} />
+                  </label>
+                )}
+              </div>
+
+              {/* Acerto Upload */}
+              <div className="space-y-1">
+                <Label className="text-[10px]">Acerto de Compra (PDF)</Label>
+                {anexoAcertoUrl ? (
+                  <div className="flex items-center gap-1.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    <a href={anexoAcertoUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-green-700 dark:text-green-300 underline truncate flex-1">
+                      Acerto anexado
+                    </a>
+                    <label className="cursor-pointer text-[9px] text-muted-foreground hover:text-foreground">
+                      <span>Substituir</span>
+                      <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'acerto'); }} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className={`flex items-center justify-center gap-1.5 h-8 rounded border-2 border-dashed border-border hover:border-primary/50 cursor-pointer transition-colors ${uploadingAcerto ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground">{uploadingAcerto ? 'Enviando...' : 'Enviar Acerto'}</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadAnexo(f, 'acerto'); }} />
+                  </label>
+                )}
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
 
