@@ -344,9 +344,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                     {centroOpen && centro.subs.map((sub, subIdx) => {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
                       const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
-                      const isAuto = isRebanho || isFinanciamento;
+                      const isNutricao = SUBCENTROS_NUTRICAO.has(sub.subcentro);
+                      const isAuto = isRebanho || isFinanciamento || isNutricao;
                       const autoMeses = isAuto
-                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
+                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
                       const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
 
