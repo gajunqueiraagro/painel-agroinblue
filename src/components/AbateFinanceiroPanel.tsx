@@ -145,12 +145,27 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
     const efFormaReceb = overrides?.formaReceb ?? formaReceb;
     const efParcelas = overrides?.parcelas ?? parcelas;
 
+    console.log('[AbateFinanceiro] gerarInternal called', {
+      targetLancamentoId,
+      efValorLiquido,
+      efTotalDescontos,
+      efFormaReceb,
+      efParcelas,
+      fazendaAtual: fazendaAtual?.id,
+      clienteAtual: clienteAtual?.id,
+      overrides,
+    });
+
     if (!targetLancamentoId) {
       toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
       return false;
     }
-    if (!fazendaAtual || !clienteAtual) return false;
+    if (!fazendaAtual || !clienteAtual) {
+      console.warn('[AbateFinanceiro] ABORT: fazendaAtual or clienteAtual is null');
+      return false;
+    }
     if (efValorLiquido <= 0) {
+      console.warn('[AbateFinanceiro] ABORT: efValorLiquido <= 0', efValorLiquido);
       toast.error('Valor líquido do abate deve ser maior que zero.');
       return false;
     }
