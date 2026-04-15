@@ -4,7 +4,9 @@
 import { Card } from '@/components/ui/card';
 import { ClipboardCheck, Table2, TrendingUp, DollarSign, ArrowLeftRight, CalendarCheck, Calculator } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
+import { usePermissions } from '@/hooks/usePermissions';
 
+const META_TABS: TabId[] = ['meta_movimentacoes', 'meta_consolidacao', 'meta_gmd', 'planejamento_financeiro'];
 interface Props {
   onTabChange: (tab: TabId) => void;
   onBack?: () => void;
