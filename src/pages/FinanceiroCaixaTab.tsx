@@ -409,21 +409,31 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
         <>
           {subTab === 'dashboard' && (
             <div className="p-4">
-              <DashboardFinanceiro
-                lancamentos={lancamentos}
-                indicadores={indicadores}
-                lancamentosPecuarios={lancamentosPecuarios}
-                saldosIniciais={saldosIniciais}
-                rateioADM={rateioADM}
-                isGlobal={isGlobal}
-                fazendasSemArea={fazendasSemRebanho}
-                pastos={pastos}
-                categorias={categorias}
-                fazendaId={fazendaId}
-                ano={Number(localAno)}
-                mesAte={localMes}
-                onDrillDown={handleDrillDown}
-              />
+              {drillMacro ? (
+                <DrillDownMacro
+                  macro={drillMacro}
+                  lancamentos={lancamentos}
+                  filtros={{ ano: Number(localAno), meses: Array.from({ length: localMes }, (_, i) => i + 1), fazendaId }}
+                  onVoltar={() => setDrillMacro(null)}
+                />
+              ) : (
+                <DashboardFinanceiro
+                  lancamentos={lancamentos}
+                  indicadores={indicadores}
+                  lancamentosPecuarios={lancamentosPecuarios}
+                  saldosIniciais={saldosIniciais}
+                  rateioADM={rateioADM}
+                  isGlobal={isGlobal}
+                  fazendasSemArea={fazendasSemRebanho}
+                  pastos={pastos}
+                  categorias={categorias}
+                  fazendaId={fazendaId}
+                  ano={Number(localAno)}
+                  mesAte={localMes}
+                  onDrillDown={handleDrillDown}
+                  onMacroDrillDown={(macro) => setDrillMacro(macro)}
+                />
+              )}
             </div>
           )}
           {subTab === 'fluxo' && (
