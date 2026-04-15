@@ -331,16 +331,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         return (
                           <React.Fragment key={sub.key}>
                             {/* Linha 1 — Automático */}
-                            <TableRow className="bg-muted/20">
-                              <TableCell className="sticky left-0 bg-muted/20 z-10 pl-[72px] text-[10px] text-muted-foreground italic">
+                            <TableRow className="bg-muted/40">
+                              <TableCell className="sticky left-0 bg-muted/40 z-10 pl-[72px] text-[9px] text-muted-foreground italic py-0.5">
                                 {sub.subcentro} (auto)
                               </TableCell>
                               {autoMeses!.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[10px] text-muted-foreground">
+                                <TableCell key={i} className="text-right text-[9px] text-muted-foreground py-0.5">
                                   {v === 0 ? '–' : fmt(v)}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[10px] text-muted-foreground font-medium">
+                              <TableCell className="text-right text-[9px] text-muted-foreground font-medium py-0.5">
                                 {autoTotal === 0 ? '–' : fmt(autoTotal)}
                               </TableCell>
                             </TableRow>
