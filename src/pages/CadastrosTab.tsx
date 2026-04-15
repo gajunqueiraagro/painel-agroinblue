@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
+
 import { Save, FileText, Share2, Pencil, Trash2, MapPin, Users, Building2, ShieldCheck, Landmark, Phone, Truck, Settings, DollarSign, LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
