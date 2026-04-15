@@ -389,7 +389,7 @@ export function useFinanceiro() {
           return;
         }
 
-        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult, statusMensalResult] = await Promise.all([
+        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult, statusMensalResult, cadastrosResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
             (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
           ),
@@ -399,6 +399,7 @@ export function useFinanceiro() {
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_cadastros').select('fazenda_id, area_produtiva').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
         const allLancs = allLancsRaw.map(mapV2ToLancamento);
 
@@ -408,6 +409,13 @@ export function useFinanceiro() {
           statusMap.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
         }
         setFazendaStatusMensal(statusMap);
+
+        // Build area produtiva map
+        const areaMap = new Map<string, number>();
+        for (const row of (cadastrosResult.data || []) as { fazenda_id: string; area_produtiva: number | null }[]) {
+          if (row.area_produtiva && row.area_produtiva > 0) areaMap.set(row.fazenda_id, row.area_produtiva);
+        }
+        setAreaProdutivaPorFazenda(areaMap);
 
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
