@@ -70,6 +70,7 @@ function classifySaida(l: FinanceiroLancamento): string {
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
+  const [drillMacro, setDrillMacro] = useState<string | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
   const { pastos, categorias } = usePastos();
   const fazendaId = fazendaAtual?.id;
