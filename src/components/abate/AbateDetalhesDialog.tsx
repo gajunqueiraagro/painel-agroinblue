@@ -63,7 +63,7 @@ export interface AbateDetalhes {
 
 // Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
 // BiRow with local state: typing stays local, parent only updates on blur
-const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey, redTotal }: {
   label: string;
   arrobaVal: string;
   reaisVal: string;
@@ -72,6 +72,7 @@ const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArro
   onReaisBlur: (v: string) => void;
   hint?: string;
   stableKey: string;
+  redTotal?: boolean;
 }) {
   const [localArr, setLocalArr] = useState(arrobaVal);
   const [localReais, setLocalReais] = useState(reaisVal);
@@ -118,7 +119,7 @@ const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArro
           step="0.01"
         />
       </td>
-      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
+      <td className={`py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap ${redTotal ? 'text-destructive' : ''}`}>
         {totalVal > 0 ? formatMoeda(totalVal) : '-'}
       </td>
     </tr>
