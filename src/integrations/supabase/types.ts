@@ -3363,6 +3363,8 @@ export type Database = {
       lancamentos: {
         Row: {
           acrescimos: number | null
+          anexo_acerto_url: string | null
+          anexo_nf_url: string | null
           boitel_id: string | null
           boitel_lote_id: string | null
           bonus_lista_trace: number | null
@@ -3423,6 +3425,8 @@ export type Database = {
         }
         Insert: {
           acrescimos?: number | null
+          anexo_acerto_url?: string | null
+          anexo_nf_url?: string | null
           boitel_id?: string | null
           boitel_lote_id?: string | null
           bonus_lista_trace?: number | null
@@ -3483,6 +3487,8 @@ export type Database = {
         }
         Update: {
           acrescimos?: number | null
+          anexo_acerto_url?: string | null
+          anexo_nf_url?: string | null
           boitel_id?: string | null
           boitel_lote_id?: string | null
           bonus_lista_trace?: number | null
