@@ -13,6 +13,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
+import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelLote, salvarBoitelPlanejamento, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
