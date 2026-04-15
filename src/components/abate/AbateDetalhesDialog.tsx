@@ -535,7 +535,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const handleFunruralReaisChange = (value: string) => {
     setFunruralReais(value); markDirty();
-    const v = Number(value) || 0;
+    const v = parseNumericValue(value);
     if (v > 0 && calc.valorBase > 0) {
       setFunruralPct(String(Math.round((v / calc.valorBase) * 10000) / 100));
     } else {
@@ -744,7 +744,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <td className="py-1 px-1">
               <div className="relative">
                 <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                <Input type="text" inputMode="decimal" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value.replace(/[^\d.,\-]/g, ''))} placeholder="0,00" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
+                <Input type="text" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value.replace(/[^\d.,\-]/g, ''))} onBlur={() => { const v = parseNumericValue(funruralReais); if (v > 0) setFunruralReais(v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }} placeholder="0,00" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
               </div>
             </td>
           </tr>
@@ -1302,10 +1302,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
                   <Input
                     type="text"
-                    inputMode="decimal"
                     value={valorBrutoOverride}
                     onChange={e => { setValorBrutoOverride(e.target.value.replace(/[^\d.,\-]/g, '')); markDirty(); }}
-                    onBlur={() => { const v = parseNumericValue(valorBrutoOverride); if (v > 0) setValorBrutoOverride(String(v)); }}
+                    onBlur={() => { const v = parseNumericValue(valorBrutoOverride); if (v > 0) setValorBrutoOverride(v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
                     placeholder={calc.valorBase > 0 ? fmtR(calc.valorBase) : '0,00'}
                     className="h-7 text-[10px] text-right tabular-nums pl-7"
                   />
