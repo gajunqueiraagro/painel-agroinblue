@@ -600,6 +600,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     saldoInicial,
     lancamentosRebanho,
     lancamentosFinanciamento,
+    lancamentosNutricao,
+    reloadNutricao: loadNutricao,
     reload: loadSaved,
   };
 }
