@@ -96,97 +96,97 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">Parâmetros de Nutrição — {ano}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* CRIA */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO CRIA (Vacas)</p>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Custo R$/cab/mês</Label>
-              <Input
-                type="number" step="0.01" min="0"
-                className="h-8 text-xs w-28"
-                value={criaCusto || ''}
-                onChange={e => setCriaCusto(parseFloat(e.target.value) || 0)}
-              />
+        <div className="grid grid-cols-2 gap-4">
+          {/* COLUNA ESQUERDA: Cria + Recria */}
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO CRIA (Vacas)</p>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Custo R$/cab/mês</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={criaCusto || ''}
+                  onChange={e => setCriaCusto(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO RECRIA</p>
+              <p className="text-[10px] text-muted-foreground">(Novilhas, Garrotes, Desmama M e F)</p>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Custo R$/cab/mês</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={recriaCusto || ''}
+                  onChange={e => setRecriaCusto(parseFloat(e.target.value) || 0)}
+                />
+              </div>
             </div>
           </div>
 
-          <Separator />
-
-          {/* RECRIA */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO RECRIA</p>
-            <p className="text-[10px] text-muted-foreground">(Novilhas, Garrotes, Desmama M e F)</p>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Custo R$/cab/mês</Label>
-              <Input
-                type="number" step="0.01" min="0"
-                className="h-8 text-xs w-28"
-                value={recriaCusto || ''}
-                onChange={e => setRecriaCusto(parseFloat(e.target.value) || 0)}
-              />
+          {/* COLUNA DIREITA: Engorda + Despesas Comerciais */}
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO ENGORDA</p>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Período (dias)</Label>
+                <Input
+                  type="number" step="1" min="1"
+                  className="h-7 text-xs w-24"
+                  value={engordaDias || ''}
+                  onChange={e => setEngordaDias(parseInt(e.target.value) || 0)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Consumo kg/MS/cab</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={engordaConsumo || ''}
+                  onChange={e => setEngordaConsumo(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Custo kg/MS (R$)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={engordaCustoKg || ''}
+                  onChange={e => setEngordaCustoKg(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground w-32">= Total/cab:</span>
+                <span className="text-xs font-semibold text-card-foreground">{fmtCusto(custoTotalEngorda)}</span>
+              </div>
+              <p className="text-[9px] text-muted-foreground italic">
+                ({engordaDias}d × {engordaConsumo}kg × {fmtCusto(engordaCustoKg)})
+              </p>
             </div>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          {/* ENGORDA */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-card-foreground">NUTRIÇÃO ENGORDA</p>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Período de engorda (dias)</Label>
-              <Input
-                type="number" step="1" min="1"
-                className="h-8 text-xs w-28"
-                value={engordaDias || ''}
-                onChange={e => setEngordaDias(parseInt(e.target.value) || 0)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Consumo kg/MS por cab</Label>
-              <Input
-                type="number" step="0.01" min="0"
-                className="h-8 text-xs w-28"
-                value={engordaConsumo || ''}
-                onChange={e => setEngordaConsumo(parseFloat(e.target.value) || 0)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Custo do kg/MS (R$)</Label>
-              <Input
-                type="number" step="0.01" min="0"
-                className="h-8 text-xs w-28"
-                value={engordaCustoKg || ''}
-                onChange={e => setEngordaCustoKg(parseFloat(e.target.value) || 0)}
-              />
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <span className="text-[10px] text-muted-foreground w-36">= Custo total por cab:</span>
-              <span className="text-xs font-semibold text-card-foreground">{fmtCusto(custoTotalEngorda)}</span>
-            </div>
-            <p className="text-[9px] text-muted-foreground italic">
-              (calculado: {engordaDias} dias × {engordaConsumo} kg × {fmtCusto(engordaCustoKg)})
-            </p>
-          </div>
-
-          <Separator />
-
-          {/* DESPESAS COMERCIAIS */}
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-card-foreground">DESPESAS COMERCIAIS PECUÁRIA</p>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs whitespace-nowrap w-36">Taxa por cab abatida/vendida (R$)</Label>
-              <Input
-                type="number" step="0.01" min="0"
-                className="h-8 text-xs w-28"
-                value={comercialCusto || ''}
-                onChange={e => setComercialCusto(parseFloat(e.target.value) || 0)}
-              />
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-card-foreground">DESPESAS COMERCIAIS PECUÁRIA</p>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">Taxa/cab abatida/vendida (R$)</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={comercialCusto || ''}
+                  onChange={e => setComercialCusto(parseFloat(e.target.value) || 0)}
+                />
+              </div>
             </div>
           </div>
         </div>
