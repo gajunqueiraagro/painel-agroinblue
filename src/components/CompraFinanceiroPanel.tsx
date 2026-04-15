@@ -332,6 +332,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         movimentacao_rebanho_id: effectiveId,
         macro_custo: clasCompra.macro_custo,
         centro_custo: clasCompra.centro_custo,
+        sem_movimentacao_caixa: false,
       };
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
