@@ -432,7 +432,7 @@ export function useFinanceiro() {
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
-        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult] = await Promise.all([
+        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
@@ -444,7 +444,15 @@ export function useFinanceiro() {
           needsRateio && opIds.length > 0
             ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds)
             : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
+
+        // Build status mensal map
+        const statusMap2 = new Map<string, boolean>();
+        for (const row of (statusMensalResult2.data || []) as { fazenda_id: string; ano_mes: string; ativa_no_mes: boolean }[]) {
+          statusMap2.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
+        }
+        setFazendaStatusMensal(statusMap2);
 
         setLancamentos(lancData);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
