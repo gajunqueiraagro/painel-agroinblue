@@ -253,22 +253,22 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
       };
 
-      if (formaReceb === 'prazo' && parcelas.length > 0) {
-        parcelas.forEach((p, i) => {
+      if (efFormaReceb === 'prazo' && efParcelas.length > 0) {
+        efParcelas.forEach((p, i) => {
           inserts.push({
             ...baseRecord,
             ano_mes: p.data.slice(0, 7),
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
-            descricao: `${abateLabel} - Parcela ${i + 1}/${parcelas.length}`,
+            descricao: `${abateLabel} - Parcela ${i + 1}/${efParcelas.length}`,
             historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
             origem_tipo: 'abate:parcela',
           });
         });
       } else {
         // Revenue = valorLiquido (net value that actually moves cash)
-        const valorReceita = valorLiquido;
+        const valorReceita = efValorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
@@ -282,7 +282,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       }
 
       // Generate deduction records when there are discounts
-      if (totalDescontos > 0) {
+      if (efTotalDescontos > 0) {
         const subcentroDeducaoCandidatos = [
           'Impostos e Despesas de Abates e Vendas',
           'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
@@ -321,7 +321,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           subcentro: clasDed.subcentro,
           numero_documento: notaFiscal || undefined,
           ano_mes: anoMes,
-          valor: totalDescontos,
+          valor: efTotalDescontos,
           data_competencia: data,
           data_pagamento: data,
           descricao: descDeducao,
