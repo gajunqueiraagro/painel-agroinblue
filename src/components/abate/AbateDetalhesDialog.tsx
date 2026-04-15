@@ -165,8 +165,8 @@ function fmtR(v: number): string {
 }
 
 /** Map statusOp to tab value */
-function statusToTab(s: StatusOperacional): string {
-  if ((s as string) === 'meta') return 'meta';
+function statusToTab(s: StatusOperacional | 'meta'): string {
+  if (s === 'meta') return 'meta';
   if (s === 'programado') return 'programado';
   return 'realizado';
 }
