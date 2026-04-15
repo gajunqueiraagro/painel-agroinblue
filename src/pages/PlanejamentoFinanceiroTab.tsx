@@ -48,7 +48,7 @@ const SUBCENTROS_FINANCIAMENTO = new Set([
 ]);
 
 const SUBCENTROS_NUTRICAO = new Set([
-  'Nutrição Cria', 'Nutrição Recria', 'Nutrição Engorda',
+  'Nutrição Cria', 'Nutrição Recria', 'Nutrição Engorda', 'Despesas Comerciais Pecuária',
 ]);
 
 const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);

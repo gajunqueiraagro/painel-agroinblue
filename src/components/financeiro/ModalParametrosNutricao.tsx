@@ -26,6 +26,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
   const [engordaDias, setEngordaDias] = useState(80);
   const [engordaConsumo, setEngordaConsumo] = useState(5);
   const [engordaCustoKg, setEngordaCustoKg] = useState(0);
+  const [comercialCusto, setComercialCusto] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const custoTotalEngorda = engordaDias * engordaConsumo * engordaCustoKg;
@@ -47,12 +48,14 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
         setEngordaDias(Number(data.engorda_periodo_dias) || 80);
         setEngordaConsumo(Number(data.engorda_consumo_kg_ms) || 5);
         setEngordaCustoKg(Number(data.engorda_custo_kg_ms) || 0);
+        setComercialCusto(Number(data.comercial_custo_cab) || 0);
       } else {
         setCriaCusto(0);
         setRecriaCusto(0);
         setEngordaDias(80);
         setEngordaConsumo(5);
         setEngordaCustoKg(0);
+        setComercialCusto(0);
       }
     })();
   }, [open, fazendaId, clienteId, ano]);
@@ -69,6 +72,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
         engorda_periodo_dias: engordaDias,
         engorda_consumo_kg_ms: engordaConsumo,
         engorda_custo_kg_ms: engordaCustoKg,
+        comercial_custo_cab: comercialCusto,
       };
 
       const { error } = await (supabase
@@ -168,6 +172,22 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
             <p className="text-[9px] text-muted-foreground italic">
               (calculado: {engordaDias} dias × {engordaConsumo} kg × {fmtCusto(engordaCustoKg)})
             </p>
+          </div>
+
+          <Separator />
+
+          {/* DESPESAS COMERCIAIS */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-card-foreground">DESPESAS COMERCIAIS PECUÁRIA</p>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs whitespace-nowrap w-36">Taxa por cab abatida/vendida (R$)</Label>
+              <Input
+                type="number" step="0.01" min="0"
+                className="h-8 text-xs w-28"
+                value={comercialCusto || ''}
+                onChange={e => setComercialCusto(parseFloat(e.target.value) || 0)}
+              />
+            </div>
           </div>
         </div>
 
