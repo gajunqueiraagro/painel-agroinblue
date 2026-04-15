@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -254,74 +254,91 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     setImportBanner(false);
   }, [salvarGrid, grid]);
 
+  /* ── Style constants (matching FluxoFinanceiro) ── */
+  const BG_CARD = 'hsl(var(--card))';
+  const BG_MUTED = 'hsl(var(--muted))';
+  const BG_NIVEL1 = 'hsl(var(--muted))';
+  const BG_NIVEL2 = 'color-mix(in srgb, hsl(var(--muted)) 45%, hsl(var(--card)))';
+  const BG_ZEBRA = 'color-mix(in srgb, hsl(var(--muted)) 18%, hsl(var(--card)))';
+  const BG_DYN = 'color-mix(in srgb, hsl(var(--muted)) 10%, hsl(var(--card)))';
+
   /* ── Render macro with its children ── */
   const renderMacro = (macro: MacroNode) => {
     const macroKey = macro.nome;
     const macroOpen = expandedMacros.has(macroKey);
     return (
       <React.Fragment key={macroKey}>
-        <TableRow
-          className="cursor-pointer hover:bg-muted/30 bg-muted/20"
+        <tr
+          className="cursor-pointer border-b border-border/30"
           onClick={() => toggleMacro(macroKey)}
         >
-          <TableCell className="sticky left-0 bg-muted/20 z-10 pl-6">
-            <span className="inline-flex items-center gap-1 text-xs font-medium">
-              {macroOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <td
+            className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+            style={{ background: BG_NIVEL2, paddingLeft: 4 }}
+          >
+            <span className="inline-flex items-center gap-0.5">
+              {macroOpen ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
               {macro.nome}
             </span>
-          </TableCell>
+          </td>
           {macro.meses.map((v, i) => (
-            <TableCell key={i} className="text-right text-xs">{fmtCompact(v)}</TableCell>
+            <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
           ))}
-          <TableCell className="text-right text-xs font-bold">{fmtCompact(macro.total)}</TableCell>
-        </TableRow>
+          <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
+        </tr>
 
         {macroOpen && macro.grupos.map((grupo) => {
           const grupoKey = `${macroKey}||${grupo.nome}`;
           const grupoOpen = expandedGrupos.has(grupoKey);
           return (
             <React.Fragment key={grupoKey}>
-              <TableRow className="cursor-pointer hover:bg-muted/10" onClick={() => toggleGrupo(grupoKey)}>
-                <TableCell className="sticky left-0 bg-background z-10 pl-10">
-                  <span className="inline-flex items-center gap-1 text-xs">
-                    {grupoOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              <tr className="cursor-pointer border-b border-border/20" onClick={() => toggleGrupo(grupoKey)}>
+                <td
+                  className="px-1 py-[1.5px] text-left leading-tight font-medium text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+                  style={{ background: BG_ZEBRA, paddingLeft: 16 }}
+                >
+                  <span className="inline-flex items-center gap-0.5">
+                    {grupoOpen ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                     {grupo.nome}
                   </span>
-                </TableCell>
+                </td>
                 {grupo.meses.map((v, i) => (
-                  <TableCell key={i} className="text-right text-xs text-muted-foreground">{fmtCompact(v)}</TableCell>
+                  <td key={i} className="px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] text-muted-foreground" style={{ background: BG_ZEBRA }}>{fmtCompact(v)}</td>
                 ))}
-                <TableCell className="text-right text-xs font-medium">{fmtCompact(grupo.total)}</TableCell>
-              </TableRow>
+                <td className="px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(grupo.total)}</td>
+              </tr>
 
               {grupoOpen && grupo.centros.map((centro) => {
                 const centroKey = `${grupoKey}||${centro.nome}`;
                 const centroOpen = expandedCentros.has(centroKey);
                 return (
                   <React.Fragment key={centroKey}>
-                    <TableRow className="cursor-pointer hover:bg-muted/5" onClick={() => toggleCentro(centroKey)}>
-                      <TableCell className="sticky left-0 bg-background z-10 pl-14">
-                        <span className="inline-flex items-center gap-1 text-[11px]">
-                          {centroOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                    <tr className="cursor-pointer border-b border-border/20" onClick={() => toggleCentro(centroKey)}>
+                      <td
+                        className="px-1 py-[1.5px] text-left leading-tight font-normal text-[9px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap"
+                        style={{ background: BG_DYN, paddingLeft: 28 }}
+                      >
+                        <span className="inline-flex items-center gap-0.5">
+                          {centroOpen ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           {centro.nome}
                         </span>
-                      </TableCell>
+                      </td>
                       {centro.meses.map((v, i) => (
-                        <TableCell key={i} className="text-right text-[11px] text-muted-foreground">{fmtCompact(v)}</TableCell>
+                        <td key={i} className="px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] text-muted-foreground" style={{ background: BG_DYN }}>{fmtCompact(v)}</td>
                       ))}
-                      <TableCell className="text-right text-[11px] font-medium">{fmtCompact(centro.total)}</TableCell>
-                    </TableRow>
+                      <td className="px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(centro.total)}</td>
+                    </tr>
 
-                    {centroOpen && centro.subs.map((sub) => {
+                    {centroOpen && centro.subs.map((sub, subIdx) => {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
                       const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
                       const isAuto = isRebanho || isFinanciamento;
                       const autoMeses = isAuto
                         ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
+                      const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
 
                       if (isAuto) {
-                        // 3-line rendering: Auto / Ajuste / Total
                         const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
                         const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
                         const autoTotal = autoMeses!.reduce((a, b) => a + b, 0);
@@ -330,81 +347,75 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                         return (
                           <React.Fragment key={sub.key}>
-                            {/* Linha 1 — Automático */}
-                            <TableRow className="bg-muted/40">
-                              <TableCell className="sticky left-0 bg-muted/40 z-10 pl-[72px] text-[9px] text-muted-foreground italic py-0.5">
+                            {/* Auto */}
+                            <tr className="border-b border-border/10">
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] italic text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }}>
                                 {sub.subcentro} (auto)
-                              </TableCell>
+                              </td>
                               {autoMeses!.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[9px] text-muted-foreground py-0.5">
+                                <td key={i} className="px-1 py-[1.5px] text-right leading-tight text-[8px] italic text-muted-foreground" style={{ background: BG_ZEBRA }}>
                                   {v === 0 ? '–' : fmt(v)}
-                                </TableCell>
+                                </td>
                               ))}
-                              <TableCell className="text-right text-[9px] text-muted-foreground font-medium py-0.5">
+                              <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] italic text-muted-foreground font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
                                 {autoTotal === 0 ? '–' : fmt(autoTotal)}
-                              </TableCell>
-                            </TableRow>
-                            {/* Linha 2 — Ajuste editável */}
-                            <TableRow>
-                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[9px] text-muted-foreground py-0.5">
+                              </td>
+                            </tr>
+                            {/* Ajuste */}
+                            <tr className="border-b border-border/10">
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
                                 {sub.subcentro} (ajuste)
-                              </TableCell>
+                              </td>
                               {ajusteMeses.map((v, mesIdx) => (
-                                <TableCell key={mesIdx} className="p-0.5">
+                                <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
                                   {isGlobal ? (
-                                    <span className="text-[9px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                    <span className="text-[8px] text-right block px-0.5 leading-tight">{v === 0 ? '–' : fmt(v)}</span>
                                   ) : (
-                                    <EditableCell
-                                      value={v}
-                                      onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
-                                    />
+                                    <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                                   )}
-                                </TableCell>
+                                </td>
                               ))}
-                              <TableCell className="text-right text-[9px] font-medium py-0.5">
+                              <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
                                 {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
-                              </TableCell>
-                            </TableRow>
-                            {/* Linha 3 — Total (auto + ajuste) */}
-                            <TableRow className="bg-primary/5">
-                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[10px] font-semibold py-0.5">
+                              </td>
+                            </tr>
+                            {/* Total */}
+                            <tr className="border-b border-border/30">
+                              <td className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: BG_NIVEL2, paddingLeft: 40 }}>
                                 {sub.subcentro}
-                              </TableCell>
+                              </td>
                               {totalMeses.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[10px] font-semibold py-0.5">
+                                <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL2 }}>
                                   {v === 0 ? '–' : fmt(v)}
-                                </TableCell>
+                                </td>
                               ))}
-                              <TableCell className="text-right text-[10px] font-bold py-0.5">
+                              <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>
                                 {lineTotal === 0 ? '–' : fmt(lineTotal)}
-                              </TableCell>
-                            </TableRow>
+                              </td>
+                            </tr>
                           </React.Fragment>
                         );
                       }
 
-                      // Normal subcentro (single line)
+                      // Normal subcentro
                       return (
-                        <TableRow key={sub.key}>
-                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] py-0.5">
+                        <tr key={sub.key} className="border-b border-border/10">
+                          <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
                             {sub.subcentro}
-                          </TableCell>
+                          </td>
                           {sub.meses.map((v, mesIdx) => (
-                            <TableCell key={mesIdx} className="p-0.5">
+                            <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
                               {isGlobal ? (
-                                <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                <span className="text-[8px] text-right block px-0.5 leading-tight">{v === 0 ? '–' : fmt(v)}</span>
                               ) : (
-                                <EditableCell
-                                  value={v}
-                                  onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)}
-                                />
+                                <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                               )}
-                            </TableCell>
+                            </td>
                           ))}
-                          <TableCell className="text-right text-[10px] font-medium py-0.5">
+                          <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
                             {sub.total === 0 ? '–' : fmt(sub.total)}
-                          </TableCell>
-                        </TableRow>
+                          </td>
+                        </tr>
                       );
                     })}
                   </React.Fragment>
@@ -457,121 +468,127 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-            <Table className="w-max">
-              <TableHeader className="sticky top-0 z-20 bg-background">
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-muted/50 z-30 min-w-[220px]"></TableHead>
+          <div className="overflow-auto max-h-[70vh]" style={{ scrollbarGutter: 'stable' }}>
+            <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 180 }} />
+                {MESES.map(m => <col key={m} style={{ width: 58 }} />)}
+                <col style={{ width: 66 }} />
+              </colgroup>
+
+              <thead className="sticky top-0 z-20">
+                <tr className="border-b-2 border-border">
+                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30" style={{ background: BG_CARD }} />
                   {MESES.map(m => (
-                    <TableHead key={m} className="w-[75px] text-right bg-muted/50">{m}</TableHead>
+                    <th key={m} className="px-1 py-[3px] text-right text-[9px] font-bold text-muted-foreground uppercase tracking-wider" style={{ background: BG_CARD }}>{m}</th>
                   ))}
-                  <TableHead className="w-[90px] text-right font-bold bg-muted/50">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+                  <th className="px-1 py-[3px] text-right text-[9px] font-extrabold text-foreground uppercase tracking-wider border-l-2 border-border" style={{ background: BG_MUTED }}>Total</th>
+                </tr>
+              </thead>
+
+              <tbody>
                 {hierarchy.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                  <tr>
+                    <td colSpan={14} className="text-center text-muted-foreground py-8 text-[9px]">
                       {loading ? 'Carregando...' : 'Nenhum subcentro encontrado no plano de contas.'}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )}
 
                 {hierarchy.length > 0 && (
                   <>
-                    {/* ═══ 1. SALDO INICIAL (apenas Global) ═══ */}
+                    {/* ═══ 1. SALDO INICIAL ═══ */}
                     {isGlobal && (
                       <>
-                        <TableRow className="bg-muted/40">
-                          <TableCell className="sticky left-0 bg-muted/40 z-10 pl-2 text-xs font-bold">
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
                             Saldo Inicial (Dez/{ano - 1})
-                          </TableCell>
+                          </td>
                           {MESES.map((_, i) => (
-                            <TableCell key={i} className="text-right text-xs font-semibold">
+                            <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL1 }}>
                               {i === 0 ? fmtSaldo(saldoInicial) : ''}
-                            </TableCell>
+                            </td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(saldoInicial)}</TableCell>
-                        </TableRow>
-                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                          <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtSaldo(saldoInicial)}</td>
+                        </tr>
+                        <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
                       </>
                     )}
 
-                    {/* ═══ 2. TOTAL ENTRADAS (expansível) ═══ */}
-                    <TableRow
-                      className="cursor-pointer hover:bg-primary/10 bg-primary/5 font-semibold"
+                    {/* ═══ 2. TOTAL ENTRADAS ═══ */}
+                    <tr
+                      className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalEntradas(p => !p)}
                     >
-                      <TableCell className="sticky left-0 bg-primary/5 z-10 pl-2">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold">
-                          {expandedTotalEntradas ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                        <span className="inline-flex items-center gap-0.5">
+                          {expandedTotalEntradas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Entradas
                         </span>
-                      </TableCell>
+                      </td>
                       {totals.entradas.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtCompact(v)}</TableCell>
+                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px]" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtCompact(totals.totalEntradas)}</TableCell>
-                    </TableRow>
+                      <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalEntradas)}</td>
+                    </tr>
 
                     {expandedTotalEntradas && macrosEntrada.map(renderMacro)}
 
-                    {/* Separador */}
-                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                    <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
 
-                    {/* ═══ 3. TOTAL SAÍDAS (expansível) ═══ */}
-                    <TableRow
-                      className="cursor-pointer hover:bg-destructive/10 bg-destructive/5 font-semibold"
+                    {/* ═══ 3. TOTAL SAÍDAS ═══ */}
+                    <tr
+                      className="cursor-pointer border-b border-border"
                       onClick={() => setExpandedTotalSaidas(p => !p)}
                     >
-                      <TableCell className="sticky left-0 bg-destructive/5 z-10 pl-2">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold">
-                          {expandedTotalSaidas ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10 select-none" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>
+                        <span className="inline-flex items-center gap-0.5">
+                          {expandedTotalSaidas ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />}
                           Total Saídas
                         </span>
-                      </TableCell>
+                      </td>
                       {totals.saidas.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtCompact(v)}</TableCell>
+                        <td key={i} className="px-1 py-[2px] text-right leading-tight font-bold text-[9px]" style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                       ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtCompact(totals.totalSaidas)}</TableCell>
-                    </TableRow>
+                      <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaidas)}</td>
+                    </tr>
 
                     {expandedTotalSaidas && macrosSaida.map(renderMacro)}
 
-                    {/* ═══ Linhas de saldo (apenas Global) ═══ */}
+                    {/* ═══ Saldos ═══ */}
                     {isGlobal && (
                       <>
-                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                        <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
 
-                        <TableRow className={totals.totalSaldoMes >= 0 ? 'bg-primary/5' : 'bg-destructive/5'}>
-                          <TableCell className="sticky left-0 z-10 pl-2 text-xs font-bold bg-inherit">Saldo do Mês</TableCell>
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL2, paddingLeft: 4 }}>Saldo do Mês</td>
                           {totals.saldoMes.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-semibold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL2 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.totalSaldoMes)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.totalSaldoMes)}</td>
+                        </tr>
 
-                        <TableRow className="bg-muted/30">
-                          <TableCell className="sticky left-0 bg-muted/30 z-10 pl-2 text-xs font-bold">Saldo Final</TableCell>
+                        <tr className="border-b border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Final</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                        </tr>
 
-                        <TableRow className="bg-muted/50">
-                          <TableCell className="sticky left-0 bg-muted/50 z-10 pl-2 text-xs font-bold">Saldo Acumulado</TableCell>
+                        <tr className="border-b-2 border-border">
+                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
                           ))}
-                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                        </TableRow>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                        </tr>
                       </>
                     )}
                   </>
                 )}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
@@ -603,7 +620,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
         autoFocus
         type="number"
         step="0.01"
-        className="h-5 text-[10px] text-right p-0.5 w-[70px]"
+        className="h-4 text-[8px] text-right p-0.5 w-[54px]"
         value={text}
         onChange={e => setText(e.target.value)}
         onBlur={commit}
@@ -614,7 +631,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
 
   return (
     <span
-      className="cursor-pointer text-[10px] hover:bg-muted px-1 py-0 rounded block text-right"
+      className="cursor-pointer text-[8px] hover:bg-muted px-0.5 rounded block text-right leading-tight"
       onClick={start}
     >
       {value === 0 ? '–' : fmt(value)}
