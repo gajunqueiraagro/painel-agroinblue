@@ -358,6 +358,16 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     console.log('[VendaFinanceiro] formaReceb (state):', formaReceb);
     console.log('[VendaFinanceiro] parcelas (state):', JSON.stringify(parcelas));
     console.log('[VendaFinanceiro] valorBruto:', valorBruto, 'valorLiquido:', valorLiquido);
+
+    const efValorLiquido = valorLiquido;
+    const efFormaRecebLocal = initialFormaReceb || formaReceb;
+    const efParcelasLocal = (initialParcelas && initialParcelas.length > 0) ? initialParcelas : parcelas;
+    console.log('[VendaFinanceiro] efValorLiquido:', efValorLiquido);
+    console.log('[VendaFinanceiro] efFormaReceb:', efFormaRecebLocal);
+    console.log('[VendaFinanceiro] efParcelas.length:', efParcelasLocal.length);
+    console.log('[VendaFinanceiro] targetLancamentoId:', targetLancamentoId);
+    console.log('[VendaFinanceiro] validationErrors:', JSON.stringify(validationErrors));
+
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
     if (!fazendaAtual || !clienteAtual) {
       console.error('[Venda Financeiro] fazendaAtual ou clienteAtual ausente', { fazendaAtual: !!fazendaAtual, clienteAtual: !!clienteAtual });
@@ -571,6 +581,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         .eq('tipo_operacao', '1-Entradas')
         .in('subcentro', subcentroCandidates);
 
+      console.log('[VendaFinanceiro] planoReceita:', planoReceita ? 'encontrado: ' + JSON.stringify(planoReceita) : 'NULL');
       if (!planoReceita || planoReceita.length === 0) {
         toast.error(`Não foi encontrado mapeamento financeiro válido para receita de venda em pé no plano de classificação. Subcentros buscados: ${subcentroCandidates.join(', ')}`);
         setGerando(false);
