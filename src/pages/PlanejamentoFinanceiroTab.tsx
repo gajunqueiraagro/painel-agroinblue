@@ -354,11 +354,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               </td>
                               {autoMeses!.map((v, i) => (
                                 <td key={i} className="px-1 py-[1.5px] text-right leading-tight text-[8px] italic text-muted-foreground" style={{ background: BG_ZEBRA }}>
-                                  {v === 0 ? '–' : fmt(v)}
+                                  {fmtCompact(v)}
                                 </td>
                               ))}
                               <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] italic text-muted-foreground font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
-                                {autoTotal === 0 ? '–' : fmt(autoTotal)}
+                                {fmtCompact(autoTotal)}
                               </td>
                             </tr>
                             {/* Ajuste */}
@@ -369,14 +369,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               {ajusteMeses.map((v, mesIdx) => (
                                 <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
                                   {isGlobal ? (
-                                    <span className="text-[8px] text-right block px-0.5 leading-tight">{v === 0 ? '–' : fmt(v)}</span>
+                                    <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
                                   ) : (
                                     <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                                   )}
                                 </td>
                               ))}
                               <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
-                                {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
+                                {fmtCompact(ajusteTotal)}
                               </td>
                             </tr>
                             {/* Total */}
@@ -386,11 +386,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               </td>
                               {totalMeses.map((v, i) => (
                                 <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL2 }}>
-                                  {v === 0 ? '–' : fmt(v)}
+                                  {fmtCompact(v)}
                                 </td>
                               ))}
                               <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>
-                                {lineTotal === 0 ? '–' : fmt(lineTotal)}
+                                {fmtCompact(lineTotal)}
                               </td>
                             </tr>
                           </React.Fragment>
@@ -406,14 +406,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                           {sub.meses.map((v, mesIdx) => (
                             <td key={mesIdx} className="px-0.5 py-[1px]" style={{ background: subBg }}>
                               {isGlobal ? (
-                                <span className="text-[8px] text-right block px-0.5 leading-tight">{v === 0 ? '–' : fmt(v)}</span>
+                                <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
                               ) : (
                                 <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                               )}
                             </td>
                           ))}
                           <td className="px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border" style={{ background: BG_MUTED }}>
-                            {sub.total === 0 ? '–' : fmt(sub.total)}
+                            {fmtCompact(sub.total)}
                           </td>
                         </tr>
                       );
@@ -440,6 +440,12 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             ))}
           </SelectContent>
         </Select>
+        {isGlobal && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+            Selecione uma fazenda para editar
+          </span>
+        )}
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={handleImport} disabled={loading || isGlobal}>
           <Download className="h-4 w-4 mr-1" />Importar Realizado {ano - 1}
@@ -448,13 +454,6 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
       </div>
-
-      {isGlobal && (
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="text-xs">Selecione uma fazenda para editar o planejamento.</AlertDescription>
-        </Alert>
-      )}
 
       {importBanner && (
         <Alert className="border-primary/40 bg-primary/5">
@@ -506,10 +505,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                           </td>
                           {MESES.map((_, i) => (
                             <td key={i} className="px-1 py-[2px] text-right leading-tight font-semibold text-[9px]" style={{ background: BG_NIVEL1 }}>
-                              {i === 0 ? fmtSaldo(saldoInicial) : ''}
+                              {i === 0 ? fmtCompact(saldoInicial) : ''}
                             </td>
                           ))}
-                          <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtSaldo(saldoInicial)}</td>
+                          <td className="px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border" style={{ background: BG_MUTED }}>{fmtCompact(saldoInicial)}</td>
                         </tr>
                         <tr><td colSpan={14} className="h-px" style={{ background: 'hsl(var(--border))' }} /></tr>
                       </>
@@ -563,25 +562,25 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         <tr className="border-b border-border">
                           <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL2, paddingLeft: 4 }}>Saldo do Mês</td>
                           {totals.saldoMes.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL2 }}>{fmtSaldo(v)}</td>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
                           ))}
-                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.totalSaldoMes)}</td>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaldoMes)}</td>
                         </tr>
 
                         <tr className="border-b border-border">
                           <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Final</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                           ))}
-                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.saldoFinal[11] || 0)}</td>
                         </tr>
 
                         <tr className="border-b-2 border-border">
                           <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
                           {totals.saldoFinal.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtSaldo(v)}</td>
+                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
                           ))}
-                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtSaldo(totals.saldoFinal[11] || 0)}</td>
+                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.saldoFinal[11] || 0)}</td>
                         </tr>
                       </>
                     )}
