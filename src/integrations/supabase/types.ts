@@ -3682,6 +3682,63 @@ export type Database = {
           },
         ]
       }
+      meta_parametros_nutricao: {
+        Row: {
+          ano: number
+          cliente_id: string
+          created_at: string
+          cria_custo_cab_mes: number | null
+          engorda_consumo_kg_ms: number | null
+          engorda_custo_kg_ms: number | null
+          engorda_periodo_dias: number | null
+          fazenda_id: string
+          id: string
+          recria_custo_cab_mes: number | null
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          cliente_id: string
+          created_at?: string
+          cria_custo_cab_mes?: number | null
+          engorda_consumo_kg_ms?: number | null
+          engorda_custo_kg_ms?: number | null
+          engorda_periodo_dias?: number | null
+          fazenda_id: string
+          id?: string
+          recria_custo_cab_mes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          cliente_id?: string
+          created_at?: string
+          cria_custo_cab_mes?: number | null
+          engorda_consumo_kg_ms?: number | null
+          engorda_custo_kg_ms?: number | null
+          engorda_periodo_dias?: number | null
+          fazenda_id?: string
+          id?: string
+          recria_custo_cab_mes?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_parametros_nutricao_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_parametros_nutricao_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_preco_mercado: {
         Row: {
           agio_perc: number
