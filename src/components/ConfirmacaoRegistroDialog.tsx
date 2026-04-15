@@ -77,7 +77,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
@@ -88,10 +88,12 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </DialogDescription>
         </DialogHeader>
 
-        {/* Dados Operacionais */}
-        <div className="space-y-1.5">
+        {/* 2-column layout: Operacionais | Financeiros */}
+        <div className="grid grid-cols-2 gap-3">
+        {/* Coluna Esquerda: Dados Operacionais */}
+        <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Operacionais</h4>
-          <div className="bg-muted/30 rounded-md p-2 space-y-1 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusCfg.cls}`}>{statusCfg.label}</span>
@@ -133,12 +135,10 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </div>
         </div>
 
-        <Separator />
-
-        {/* Dados Financeiros */}
-        <div className="space-y-1.5">
+        {/* Coluna Direita: Dados Financeiros */}
+        <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Financeiros</h4>
-          <div className="bg-muted/30 rounded-md p-2 space-y-1 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tipo</span>
               <strong>{financeiros.tipoOperacao}</strong>
@@ -285,13 +285,12 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
             )}
           </div>
         </div>
+        </div>{/* close grid */}
 
-        <Separator />
-
-        {/* Resumo Final */}
-        <div className="space-y-1.5">
+        {/* Resumo Final — full width */}
+        <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Resumo Final</h4>
-          <div className="bg-primary/10 rounded-md p-2 space-y-1">
+          <div className="bg-primary/10 rounded-md p-1.5 space-y-0.5">
             {financeiros.formaPagamento && (
               <div className="flex justify-between text-[11px]">
                 <span className="text-muted-foreground">Pagamento</span>
