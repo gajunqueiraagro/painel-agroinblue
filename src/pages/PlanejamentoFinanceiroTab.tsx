@@ -480,7 +480,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
             <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 180 }} />
