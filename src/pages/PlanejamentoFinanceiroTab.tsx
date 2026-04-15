@@ -410,9 +410,17 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                       // Normal subcentro
                       return (
-                        <tr key={sub.key} className="border-b border-border/10">
+                        <tr key={sub.key} className="group/subrow border-b border-border/10">
                           <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
-                            {sub.subcentro}
+                            <span className="inline-flex items-center gap-0.5">
+                              {sub.subcentro}
+                              {!isGlobal && (
+                                <Download
+                                  className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer opacity-0 group-hover/subrow:opacity-100 transition-opacity"
+                                  onClick={(e) => { e.stopPropagation(); setImportConfirm({ subcentro: sub.subcentro, centro_custo: grid[sub.gridIdx]?.centro_custo || '', gridIdx: sub.gridIdx }); }}
+                                />
+                              )}
+                            </span>
                           </td>
                           {sub.meses.map((v, mesIdx) => (
                             <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
