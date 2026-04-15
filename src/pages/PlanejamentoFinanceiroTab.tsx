@@ -300,7 +300,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
            {macro.meses.map((v, i) => (
             <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>{fmtCompact(v)}</td>
           ))}
-          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
+          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(macro.total)}</td>
         </tr>
 
         {macroOpen && macro.grupos.map((grupo) => {
@@ -321,7 +321,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                 {grupo.meses.map((v, i) => (
                   <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>{fmtCompact(v)}</td>
                 ))}
-                <td className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(grupo.total)}</td>
+                <td className={`px-1 py-[1.5px] text-right leading-tight font-medium text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(grupo.total)}</td>
               </tr>
 
               {grupoOpen && grupo.centros.map((centro) => {
@@ -342,7 +342,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       {centro.meses.map((v, i) => (
                         <td key={i} className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_DYN }}>{fmtCompact(v)}</td>
                       ))}
-                      <td className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>{fmtCompact(centro.total)}</td>
+                      <td className={`px-1 py-[1.5px] text-right leading-tight font-normal text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>{fmtCompact(centro.total)}</td>
                     </tr>
 
                     {centroOpen && centro.subs.map((sub, subIdx) => {
@@ -374,7 +374,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(autoTotal)}
                               </td>
                             </tr>
@@ -392,7 +392,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   )}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(ajusteTotal)}
                               </td>
                             </tr>
@@ -406,7 +406,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(lineTotal)}
                               </td>
                             </tr>
@@ -429,7 +429,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               )}
                             </td>
                           ))}
-                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}${trimBorder(i)}`} style={{ background: BG_MUTED }}>
+                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
                             {fmtCompact(sub.total)}
                           </td>
                         </tr>
@@ -636,7 +636,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
 
   const commit = () => {
     setEditing(false);
-    const v = parseFloat(text) || 0;
+    const v = parseFloat(text.replace(',', '.')) || 0;
     if (v !== value) onSave(v);
   };
 
@@ -644,8 +644,8 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
     return (
       <Input
         autoFocus
-        type="number"
-        step="0.01"
+        type="text"
+        inputMode="decimal"
         className="h-4 text-[8px] text-right p-0.5 w-[54px]"
         value={text}
         onChange={e => setText(e.target.value)}
