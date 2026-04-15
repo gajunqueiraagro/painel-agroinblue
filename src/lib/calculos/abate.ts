@@ -24,6 +24,7 @@ export interface AbateCalculationInput {
   formaReceb?: 'avista' | 'prazo';
   qtdParcelas?: string | number | null;
   parcelas?: AbateParcela[];
+  valorBaseOverride?: number;
 }
 
 export interface AbateCalculation {
@@ -118,7 +119,8 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const totalArrobasRaw = pesoArrobaCabRaw * quantidade;
   const totalKgRaw = pesoKg * quantidade;
 
-  const valorBaseRaw = totalArrobasRaw * precoArroba;
+  const valorBaseOverride = input.valorBaseOverride;
+  const valorBaseRaw = (valorBaseOverride && valorBaseOverride > 0) ? valorBaseOverride : totalArrobasRaw * precoArroba;
 
   const funruralReais = parseNumericValue(input.funruralReais);
   const funruralPct = parseNumericValue(input.funruralPct);
