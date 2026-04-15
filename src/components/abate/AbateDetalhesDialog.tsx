@@ -61,6 +61,56 @@ export interface AbateDetalhes {
   observacoesInternas?: string;
 }
 
+// Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
+function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+  label: string;
+  arrobaVal: string;
+  reaisVal: string;
+  totalVal: number;
+  onArrobaChange: (v: string) => void;
+  onReaisChange: (v: string) => void;
+  onArrobaBlur?: () => void;
+  onReaisBlur?: () => void;
+  hint?: string;
+  stableKey: string;
+}) {
+  return (
+    <tr className="border-b border-border/30">
+      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+        {label}
+        {hint && <span className="block text-[8px] text-muted-foreground/70 italic">{hint}</span>}
+      </td>
+      <td className="py-1 px-1">
+        <Input
+          key={`${stableKey}-arroba`}
+          type="number"
+          value={arrobaVal}
+          onChange={e => onArrobaChange(e.target.value)}
+          onBlur={onArrobaBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-20 text-right tabular-nums"
+          step="0.01"
+        />
+      </td>
+      <td className="py-1 px-1">
+        <Input
+          key={`${stableKey}-reais`}
+          type="number"
+          value={reaisVal}
+          onChange={e => onReaisChange(e.target.value)}
+          onBlur={onReaisBlur}
+          placeholder="0,00"
+          className="h-7 text-[10px] w-24 text-right tabular-nums"
+          step="0.01"
+        />
+      </td>
+      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
+        {totalVal > 0 ? formatMoeda(totalVal) : '-'}
+      </td>
+    </tr>
+  );
+}
+
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
   dataVenda: '',
   dataEmbarque: '',
@@ -197,6 +247,21 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       setAnexoNfUrl(initialData.anexoNfUrl || '');
       setAnexoAcertoUrl(initialData.anexoAcertoUrl || '');
       setObservacoesInternas(initialData.observacoesInternas || '');
+      // Initialize Realizado 4-field carcaça grid from saved pesoCarcacaKgManual
+      const savedCarcKgCab = Number(initialData.pesoCarcacaKgManual) || 0;
+      if (savedCarcKgCab > 0) {
+        const q = quantidade || 1;
+        setPesoCarcacaKgCab(String(savedCarcKgCab));
+        setPesoCarcacaKgTotal(String(Math.round(savedCarcKgCab * q * 100) / 100));
+        setPesoCarcacaArrobaCab(String(Math.round((savedCarcKgCab / 15) * 10000) / 10000));
+        setPesoCarcacaArrobaTotal(String(Math.round((savedCarcKgCab / 15) * q * 10000) / 10000));
+      } else {
+        setPesoCarcacaKgCab('');
+        setPesoCarcacaKgTotal('');
+        setPesoCarcacaArrobaCab('');
+        setPesoCarcacaArrobaTotal('');
+      }
+      setPesoCarcacaKg(initialData.pesoCarcacaKgManual || '');
       setActiveTab(statusToTab(statusOp));
       setDirty(false);
       setConfirmClose(false);
@@ -473,53 +538,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     }
   };
 
-  // Table row component for bonus/discount — Item 6: use defaultValue pattern to prevent focus loss
-  const BiRow = ({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
-    label: string;
-    arrobaVal: string;
-    reaisVal: string;
-    totalVal: number;
-    onArrobaChange: (v: string) => void;
-    onReaisChange: (v: string) => void;
-    onArrobaBlur?: () => void;
-    onReaisBlur?: () => void;
-    hint?: string;
-    stableKey: string;
-  }) => (
-    <tr className="border-b border-border/30">
-      <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
-        {label}
-        {hint && <span className="block text-[8px] text-muted-foreground/70 italic">{hint}</span>}
-      </td>
-      <td className="py-1 px-1">
-        <Input
-          key={`${stableKey}-arroba`}
-          type="number"
-          value={arrobaVal}
-          onChange={e => onArrobaChange(e.target.value)}
-          onBlur={onArrobaBlur}
-          placeholder="0,00"
-          className="h-7 text-[10px] w-20 text-right tabular-nums"
-          step="0.01"
-        />
-      </td>
-      <td className="py-1 px-1">
-        <Input
-          key={`${stableKey}-reais`}
-          type="number"
-          value={reaisVal}
-          onChange={e => onReaisChange(e.target.value)}
-          onBlur={onReaisBlur}
-          placeholder="0,00"
-          className="h-7 text-[10px] w-24 text-right tabular-nums"
-          step="0.01"
-        />
-      </td>
-      <td className="py-1 pl-1 text-[10px] font-bold text-right tabular-nums whitespace-nowrap">
-        {totalVal > 0 ? formatMoeda(totalVal) : '-'}
-      </td>
-    </tr>
-  );
+  // BiRow extracted to top-level to prevent remount/focus loss
 
   // ── Hint helper for Programado tab ──
   const hintText = (text: string) => (
@@ -1270,10 +1289,13 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <Separator />
             {renderDatas()}
             <Separator />
-            {renderComercializacao()}
 
-            {/* Item 4: Realizado-specific carcaça grid */}
+            {/* Item 4: Realizado-specific carcaça grid — before comercialização */}
             {renderDesempenhoRealizado()}
+
+            <Separator />
+            {/* Item 4: Comercialização + Valor bruto agrupados */}
+            {renderComercializacao()}
 
             {/* Item 5: Override manual do valor bruto — recalcula preço @ */}
             <div className="bg-muted/20 border border-border/50 rounded p-2 space-y-1">
