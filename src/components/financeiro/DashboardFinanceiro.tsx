@@ -19,12 +19,28 @@ import {
   isEntrada as isEntradaCentral,
   isSaida as isSaidaCentral,
   datePagtoAnoMes as datePagtoAnoMesCentral,
-  classificarEntrada as classificarEntradaCentral,
-  classificarSaida as classificarSaidaCentral,
   isDesembolsoProdutivo as isDesembolsoProdutivoCentral,
-  CATEGORIAS_ENTRADA,
-  CATEGORIAS_SAIDA,
 } from '@/lib/financeiro/classificacao';
+
+// ---------------------------------------------------------------------------
+// Agrupamento por macro_custo oficial (plano de contas)
+// ---------------------------------------------------------------------------
+const MACROS_ENTRADA = ['Receita Operacional', 'Entrada Financeira'];
+const MACROS_SAIDA = ['Custeio Produção', 'Investimento', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos'];
+
+/** Normaliza macro_custo bruto → nome oficial de exibição */
+function normMacroDisplay(macro: string | null | undefined): string {
+  const m = (macro || '').toLowerCase().trim();
+  if (m === 'receita operacional' || m === 'receitas') return 'Receita Operacional';
+  if (m === 'entrada financeira' || m === 'outras entradas financeiras') return 'Entrada Financeira';
+  if (m === 'custeio produção' || m === 'custeio produtivo') return 'Custeio Produção';
+  if (m === 'investimento' || m === 'investimento na fazenda' || m === 'investimentos na fazenda') return 'Investimento';
+  if (m === 'investimento em bovinos' || m === 'investimentos em bovinos') return 'Investimento em Bovinos';
+  if (m.includes('dedu') && m.includes('receita')) return 'Deduções de Receitas';
+  if (m === 'saída financeira' || m === 'saida financeira' || m.includes('amortiza')) return 'Saída Financeira';
+  if (m === 'dividendos' || m === 'distribuição' || m === 'distribuicao') return 'Dividendos';
+  return macro || 'Não classificado';
+}
 import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
 
@@ -154,27 +170,27 @@ export function DashboardFinanceiro({
     const entradasAcum = lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
     const saidasAcum = lancamentos.filter(l => filtroAcum(l) && isSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
-    // Decomposição entradas
+    // Decomposição entradas — agrupamento por macro_custo oficial
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
-    for (const cat of CATEGORIAS_ENTRADA) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
+    for (const cat of MACROS_ENTRADA) { entradaDecomp.mes.set(cat, 0); entradaDecomp.acum.set(cat, 0); }
     for (const l of entradasListMes) {
-      const cat = classificarEntradaCentral(l);
+      const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
     lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).forEach(l => {
-      const cat = classificarEntradaCentral(l);
+      const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.acum.set(cat, (entradaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
 
-    // Decomposição saídas
+    // Decomposição saídas — agrupamento por macro_custo oficial
     const saidaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
-    for (const cat of CATEGORIAS_SAIDA) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
+    for (const cat of MACROS_SAIDA) { saidaDecomp.mes.set(cat, 0); saidaDecomp.acum.set(cat, 0); }
     for (const l of saidasListMes) {
-      const cat = classificarSaidaCentral(l);
+      const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
     lancamentos.filter(l => filtroAcum(l) && isSaida(l)).forEach(l => {
-      const cat = classificarSaidaCentral(l);
+      const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
 
@@ -215,8 +231,8 @@ export function DashboardFinanceiro({
       entradasAcum, saidasAcum,
       rateioMes: totalRateioMes, rateioAcumVal,
       entradaDecomp, saidaDecomp,
-      categoriasEntrada: [...CATEGORIAS_ENTRADA],
-      categoriasSaida: [...CATEGORIAS_SAIDA],
+      categoriasEntrada: [...MACROS_ENTRADA],
+      categoriasSaida: [...MACROS_SAIDA],
       ccMes, ccAcum,
       topFornecedoresMes, topFornecedoresAcum,
       desembolsoMes, desembolsoAcum,
