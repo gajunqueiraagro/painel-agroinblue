@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { ShoppingCart, Truck, TrendingDown, CreditCard, FileText, Users, DollarSign } from 'lucide-react';
+import { ShoppingCart, Truck, TrendingDown, CreditCard, FileText, DollarSign } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda as EngineTipoPreco } from '@/lib/calculos/venda';
 
