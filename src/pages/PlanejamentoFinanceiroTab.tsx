@@ -87,11 +87,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const fazendaId = fazendaAtual?.id || '';
   const isGlobal = !fazendaId || fazendaId === '__global__';
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { clienteAtual } = useCliente();
+
+  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
   const [importBanner, setImportBanner] = useState(false);
+  const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
 
   useEffect(() => {
     setGrid(buildGrid());
