@@ -548,7 +548,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
 
       const clasReceita = planoReceita.find(p => subcentroCandidates.indexOf(p.subcentro!) >= 0) || planoReceita[0];
-      const statusFin = isPrevisto ? 'previsto' : 'programado';
+      const statusFin = isPrevisto ? 'previsto' : (statusOp === 'realizado' ? 'realizado' : 'programado');
 
       const baseRecord: Record<string, any> = {
         cliente_id: clienteAtual.id,
@@ -649,11 +649,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         setGerando(false);
         return false;
       }
-      const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
+      const { error, data: insertedData } = await supabase.from('financeiro_lancamentos_v2').insert(inserts).select();
       if (error) {
-        console.error('[VendaFinanceiro] INSERT ERROR', error);
-        throw error;
+        console.error('[VendaFinanceiro] INSERT ERROR', JSON.stringify(error));
+        console.error('[VendaFinanceiro] payload', JSON.stringify(inserts));
+        toast.error('Erro ao gravar financeiro: ' + error.message);
+        setGerando(false);
+        return false;
       }
+      console.log('[VendaFinanceiro] SUCCESS', insertedData);
 
       setGerado(true);
       toast.success(`${inserts.length} lançamento(s) financeiro(s) de venda gerado(s)!`);
