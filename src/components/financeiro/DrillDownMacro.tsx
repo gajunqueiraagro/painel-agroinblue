@@ -73,7 +73,7 @@ export default function DrillDownMacro({
       map.set(s, (map.get(s) || 0) + Math.abs(l.valor));
     }
     return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1))
+      .sort((a, b) => b[1] - a[1])
       .map(([nome, total]) => ({ nome, total }));
   }, [lancFiltrados, grupoSel, centroSel]);
 
