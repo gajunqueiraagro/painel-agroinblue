@@ -26,6 +26,8 @@ const MACROS_SAIDA_SET = new Set(['Custeio Produção', 'Investimento na Fazenda
 const MACROS_EXCLUIDOS = new Set(['Transferências']);
 
 const ALL_MACRO_ORDER = [...MACROS_ENTRADA_ORDERED, ...MACROS_SAIDA_ORDERED];
+
+const SUBCENTROS_REBANHO = new Set([
   'Abates de Machos', 'Abates de Fêmeas',
   'Venda de Desmama Machos', 'Venda de Desmama Fêmeas',
   'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
