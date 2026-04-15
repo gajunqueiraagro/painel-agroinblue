@@ -381,21 +381,23 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                 {hierarchy.length > 0 && (
                   <>
-                    {/* ═══ 1. SALDO INICIAL ═══ */}
-                    <TableRow className="bg-muted/40">
-                      <TableCell className="sticky left-0 bg-muted/40 z-10 pl-2 text-xs font-bold">
-                        Saldo Inicial (Dez/{ano - 1})
-                      </TableCell>
-                      {MESES.map((_, i) => (
-                        <TableCell key={i} className="text-right text-xs font-semibold">
-                          {i === 0 ? fmtSaldo(saldoInicial) : ''}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtSaldo(saldoInicial)}</TableCell>
-                    </TableRow>
-
-                    {/* Separador */}
-                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                    {/* ═══ 1. SALDO INICIAL (apenas Global) ═══ */}
+                    {isGlobal && (
+                      <>
+                        <TableRow className="bg-muted/40">
+                          <TableCell className="sticky left-0 bg-muted/40 z-10 pl-2 text-xs font-bold">
+                            Saldo Inicial (Dez/{ano - 1})
+                          </TableCell>
+                          {MESES.map((_, i) => (
+                            <TableCell key={i} className="text-right text-xs font-semibold">
+                              {i === 0 ? fmtSaldo(saldoInicial) : ''}
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(saldoInicial)}</TableCell>
+                        </TableRow>
+                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                      </>
+                    )}
 
                     {/* ═══ 2. TOTAL ENTRADAS (expansível) ═══ */}
                     <TableRow
@@ -438,35 +440,36 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                     {expandedTotalSaidas && macrosSaida.map(renderMacro)}
 
-                    {/* Separador */}
-                    <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
+                    {/* ═══ Linhas de saldo (apenas Global) ═══ */}
+                    {isGlobal && (
+                      <>
+                        <TableRow><TableCell colSpan={14} className="h-1 bg-border/50 p-0" /></TableRow>
 
-                    {/* ═══ 4. SALDO DO MÊS ═══ */}
-                    <TableRow className={totals.totalSaldoMes >= 0 ? 'bg-primary/5' : 'bg-destructive/5'}>
-                      <TableCell className="sticky left-0 z-10 pl-2 text-xs font-bold bg-inherit">Saldo do Mês</TableCell>
-                      {totals.saldoMes.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-semibold">{fmtSaldo(v)}</TableCell>
-                      ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.totalSaldoMes)}</TableCell>
-                    </TableRow>
+                        <TableRow className={totals.totalSaldoMes >= 0 ? 'bg-primary/5' : 'bg-destructive/5'}>
+                          <TableCell className="sticky left-0 z-10 pl-2 text-xs font-bold bg-inherit">Saldo do Mês</TableCell>
+                          {totals.saldoMes.map((v, i) => (
+                            <TableCell key={i} className="text-right text-xs font-semibold">{fmtSaldo(v)}</TableCell>
+                          ))}
+                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.totalSaldoMes)}</TableCell>
+                        </TableRow>
 
-                    {/* ═══ 5. SALDO FINAL ═══ */}
-                    <TableRow className="bg-muted/30">
-                      <TableCell className="sticky left-0 bg-muted/30 z-10 pl-2 text-xs font-bold">Saldo Final</TableCell>
-                      {totals.saldoFinal.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
-                      ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                    </TableRow>
+                        <TableRow className="bg-muted/30">
+                          <TableCell className="sticky left-0 bg-muted/30 z-10 pl-2 text-xs font-bold">Saldo Final</TableCell>
+                          {totals.saldoFinal.map((v, i) => (
+                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                          ))}
+                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
+                        </TableRow>
 
-                    {/* ═══ 6. SALDO ACUMULADO ═══ */}
-                    <TableRow className="bg-muted/50">
-                      <TableCell className="sticky left-0 bg-muted/50 z-10 pl-2 text-xs font-bold">Saldo Acumulado</TableCell>
-                      {totals.saldoFinal.map((v, i) => (
-                        <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
-                      ))}
-                      <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
-                    </TableRow>
+                        <TableRow className="bg-muted/50">
+                          <TableCell className="sticky left-0 bg-muted/50 z-10 pl-2 text-xs font-bold">Saldo Acumulado</TableCell>
+                          {totals.saldoFinal.map((v, i) => (
+                            <TableCell key={i} className="text-right text-xs font-bold">{fmtSaldo(v)}</TableCell>
+                          ))}
+                          <TableCell className="text-right text-xs font-bold">{fmtSaldo(totals.saldoFinal[11] || 0)}</TableCell>
+                        </TableRow>
+                      </>
+                    )}
                   </>
                 )}
               </TableBody>
