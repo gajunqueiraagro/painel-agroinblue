@@ -320,7 +320,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
 
-                      if (isRebanho) {
+                      if (isAuto) {
                         // 3-line rendering: Auto / Ajuste / Total
                         const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
                         const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
