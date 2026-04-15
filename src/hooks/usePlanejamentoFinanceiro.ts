@@ -55,6 +55,26 @@ export interface SubcentroGrid {
 
 const isValidFazenda = (id?: string) => !!id && id !== '__global__';
 
+/** Map tipo+categoria from lancamentos to financial subcentro */
+function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean): string | null {
+  if (tipo === 'abate') {
+    if (['touros','bois','garrotes','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Abates de Machos';
+    if (['vacas','novilhas','bezerras_f','desmama_f','femeas','mamotes_f'].includes(categoria)) return 'Abates de Fêmeas';
+  }
+  if (tipo === 'venda') {
+    if (hasBoitel) return 'Venda em Boitel';
+    if (['desmama_m','bezerros_m'].includes(categoria)) return 'Venda de Desmama Machos';
+    if (['desmama_f','bezerras_f'].includes(categoria)) return 'Venda de Desmama Fêmeas';
+    if (['garrotes','touros','bois','machos_adultos','mamotes_m'].includes(categoria)) return 'Venda de Machos Adultos';
+    if (['novilhas','vacas','femeas_adultas','mamotes_f'].includes(categoria)) return 'Venda de Fêmeas Adultas';
+  }
+  if (tipo === 'compra') {
+    if (['garrotes','touros','bois','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Investimento Compra Bovinos Machos';
+    if (['novilhas','vacas','femeas','bezerras_f','mamotes_f','desmama_f'].includes(categoria)) return 'Investimento Compra Bovinos Fêmeas';
+  }
+  return null;
+}
+
 export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -64,6 +84,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const [dividendos, setDividendos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
+  const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
