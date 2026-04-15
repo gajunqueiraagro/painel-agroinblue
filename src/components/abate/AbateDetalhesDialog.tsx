@@ -1240,11 +1240,11 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderComercializacao()}
             {renderDesempenho()}
             <Separator />
-            {renderImpostos()}
-            <Separator />
             {renderBonus()}
             <Separator />
             {renderDescontos()}
+            <Separator />
+            {renderImpostos()}
             <Separator />
             {renderResultado()}
             <Separator />
@@ -1317,11 +1317,11 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </div>
 
             <Separator />
-            {renderImpostos()}
-            <Separator />
             {renderBonus()}
             <Separator />
             {renderDescontos()}
+            <Separator />
+            {renderImpostos()}
             <Separator />
             {renderResultado()}
             <Separator />
