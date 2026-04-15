@@ -113,7 +113,14 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
       const grupo = g.grupo_custo || '(Sem grupo)';
       const centro = g.centro_custo || '(Sem centro)';
-      const total = g.meses.reduce((a, b) => a + b, 0);
+
+      // For rebanho subcentros, effective meses = auto + ajuste
+      const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
+      const autoMeses = isRebanho ? (lancamentosRebanho.get(g.subcentro) || new Array(12).fill(0)) : null;
+      const effectiveMeses = isRebanho
+        ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
+        : g.meses;
+      const total = effectiveMeses.reduce((a, b) => a + b, 0);
 
       if (!macroMap.has(macro)) macroMap.set(macro, new Map());
       const grupoMap = macroMap.get(macro)!;
@@ -124,7 +131,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         key: `${centro}||${g.subcentro}`,
         subcentro: g.subcentro,
         gridIdx: idx,
-        meses: g.meses,
+        meses: effectiveMeses,
         total,
       });
     });
