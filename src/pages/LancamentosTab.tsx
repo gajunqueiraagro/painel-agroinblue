@@ -2095,6 +2095,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // Venda: use dedicated VendaFinanceiroPanel
     if (isVenda) {
+      console.log('[VendaDetalhes]', {
+        formaReceb: vendaDetalhes?.formaReceb,
+        parcelas: vendaDetalhes?.parcelas,
+        vendaDetalhesCompleto: vendaDetalhes,
+      });
       return (
         <VendaFinanceiroPanel
           key={`venda-${tipo}`}
