@@ -314,7 +314,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                     {centroOpen && centro.subs.map((sub) => {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
-                      const autoMeses = isRebanho ? (lancamentosRebanho.get(sub.subcentro) || new Array(12).fill(0)) : null;
+                      const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
+                      const isAuto = isRebanho || isFinanciamento;
+                      const autoMeses = isAuto
+                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
+                        : null;
 
                       if (isRebanho) {
                         // 3-line rendering: Auto / Ajuste / Total
