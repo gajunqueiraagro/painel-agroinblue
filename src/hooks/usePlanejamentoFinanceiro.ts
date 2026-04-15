@@ -398,6 +398,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
         'Venda em Boitel',
         'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
+        'Amortização Financiamento Pecuária', 'Amortização Financiamento Agricultura',
+        'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
       ];
 
       const map = new Map<string, SubcentroGrid>();
