@@ -235,6 +235,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       data_pagamento: novoData,
       descricao: desc,
       origem_tipo: origemTipo,
+      sem_movimentacao_caixa: false,
     });
 
     if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
