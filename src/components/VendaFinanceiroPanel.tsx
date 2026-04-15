@@ -517,11 +517,17 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
     }
 
     // ── VENDA NORMAL FLOW ──
-    if (validationErrors.length > 0) { toast.error(validationErrors[0]); return false; }
+    console.log('[VendaFinanceiro] passo1: chegou ao fluxo NORMAL, tipoPeso:', tipoPeso);
+    if (validationErrors.length > 0) {
+      console.error('[VendaFinanceiro] ABORT: validationErrors', validationErrors);
+      toast.error(validationErrors[0]); return false;
+    }
+    console.log('[VendaFinanceiro] passo2: validationErrors OK, mode:', mode);
 
     setGerando(true);
     try {
       if (mode === 'update') {
+        console.log('[VendaFinanceiro] passo3: mode=update, cancelando antigos');
         const { data: old } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
@@ -539,20 +545,25 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             financeiro_ids: oldIds, detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro da venda' },
           });
         }
+        console.log('[VendaFinanceiro] passo3b: antigos cancelados:', oldIds.length);
       } else {
+        console.log('[VendaFinanceiro] passo3: mode=create, checando duplicados');
         const { data: existing } = await supabase
           .from('financeiro_lancamentos_v2')
           .select('id')
           .eq('movimentacao_rebanho_id', targetLancamentoId)
           .eq('cancelado', false)
           .limit(1);
+        console.log('[VendaFinanceiro] passo3b: existing encontrados:', existing?.length);
         if (existing && existing.length > 0) {
+          console.error('[VendaFinanceiro] ABORT: já existem financeiros para esta venda');
           toast.error('Lançamentos financeiros já foram gerados para esta venda.');
           setGerado(true);
           return false;
         }
       }
 
+      console.log('[VendaFinanceiro] passo4: preparando insert, categoria:', categoria);
       const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
       const vendaLabel = `Venda ${quantidade} ${catLabel}`;
       const anoMes = data.slice(0, 7);
@@ -573,6 +584,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           ? ['Venda de Fêmeas Adultas', 'Venda de Desmama Fêmeas']
           : ['Venda de Machos Adultos', 'Venda de Desmama Machos'];
       }
+      console.log('[VendaFinanceiro] passo5: buscando planoReceita, subcentroCandidates:', subcentroCandidates);
 
       const { data: planoReceita } = await supabase
         .from('financeiro_plano_contas')
