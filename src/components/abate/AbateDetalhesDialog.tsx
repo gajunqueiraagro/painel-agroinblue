@@ -292,6 +292,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       pesoCarcacaKgManual: pesoCarcacaKg || undefined,
       calculation: calc,
       frigorifico, pedido, instrucao, docAcerto,
+      pesoTotalKgNF: pesoTotalKgNF || undefined,
+      valorBrutoOverride: valorBrutoOverride || undefined,
       observacoesInternas,
     });
   };
