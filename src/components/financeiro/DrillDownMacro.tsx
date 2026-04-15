@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { isRealizado, datePagtoAnoMes } from '@/lib/financeiro/classificacao';
 
 interface DrillDownMacroProps {
   macro: string;
@@ -27,14 +28,30 @@ export default function DrillDownMacro({
   const [grupoSel, setGrupoSel] = useState<string | null>(null);
   const [centroSel, setCentroSel] = useState<string | null>(null);
 
+  // Base filter: macro + realized + period
+  const lancBase = useMemo(() => {
+    const anoStr = String(filtros.ano);
+    const mesesSet = new Set(filtros.meses);
+    return lancamentos.filter((l) => {
+      if ((l.macro_custo || '').trim() !== macro) return false;
+      if (!isRealizado(l)) return false;
+      const am = datePagtoAnoMes(l);
+      if (!am || !am.startsWith(anoStr)) return false;
+      const m = Number(am.substring(5, 7));
+      if (!mesesSet.has(m)) return false;
+      if (filtros.fazendaId && filtros.fazendaId !== '__global__' && l.fazenda_id !== filtros.fazendaId) return false;
+      return true;
+    });
+  }, [lancamentos, macro, filtros]);
+
   // Filter by tab (escopo) only for Custeio Produção
   const lancFiltrados = useMemo(() => {
-    if (!isCusteio) return lancamentos;
+    if (!isCusteio) return lancBase;
     const escopo = tab === 'pecuaria' ? 'pecuária' : 'agricultura';
-    return lancamentos.filter(
+    return lancBase.filter(
       (l) => (l.escopo_negocio || '').toLowerCase().trim() === escopo,
     );
-  }, [lancamentos, isCusteio, tab]);
+  }, [lancBase, isCusteio, tab]);
 
   // grupo_custo aggregation
   const grupos = useMemo(() => {
