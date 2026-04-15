@@ -13,6 +13,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
+import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelLote, salvarBoitelPlanejamento, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
@@ -597,7 +598,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         { descricao: 'Comissão', origemTipo: 'venda:comissao', valor: comissaoVal },
         { descricao: 'Funrural', origemTipo: 'venda:funrural', valor: descFunruralTotal },
         { descricao: 'Desconto Qualidade', origemTipo: 'venda:desconto_qualidade', valor: descQualidadeTotal },
-        { descricao: 'Outros Custos', origemTipo: 'venda:outros_custos', valor: Number(outrosDescontos) || 0 },
+        { descricao: 'Outros Custos', origemTipo: 'venda:outros_custos', valor: parseNumericValue(outrosDescontos) || 0 },
       ].filter(item => item.valor > 0);
 
       if (saidasSeparadas.length > 0) {
@@ -642,8 +643,17 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         });
       }
 
+      console.log('[VendaFinanceiro] inserts count:', inserts.length, 'inserts:', JSON.stringify(inserts, null, 2));
+      if (inserts.length === 0) {
+        toast.error('Nenhum lançamento financeiro a inserir — verifique valores.');
+        setGerando(false);
+        return false;
+      }
       const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
-      if (error) throw error;
+      if (error) {
+        console.error('[VendaFinanceiro] INSERT ERROR', error);
+        throw error;
+      }
 
       setGerado(true);
       toast.success(`${inserts.length} lançamento(s) financeiro(s) de venda gerado(s)!`);
