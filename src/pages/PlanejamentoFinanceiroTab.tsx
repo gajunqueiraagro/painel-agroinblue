@@ -570,13 +570,6 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                           <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${totals.totalSaldoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.totalSaldoMes)}</td>
                         </tr>
 
-                        <tr className="border-b border-border">
-                          <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Final</td>
-                          {totals.saldoFinal.map((v, i) => (
-                            <td key={i} className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] ${v >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_NIVEL1 }}>{fmtCompact(v)}</td>
-                          ))}
-                          <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${(totals.saldoFinal[11] || 0) >= 0 ? 'text-emerald-600' : 'text-destructive'}`} style={{ background: BG_MUTED }}>{fmtCompact(totals.saldoFinal[11] || 0)}</td>
-                        </tr>
 
                         <tr className="border-b-2 border-border">
                           <td className="px-1 py-[2px] text-left leading-tight font-bold text-[9px] text-card-foreground sticky left-0 z-10" style={{ background: BG_NIVEL1, paddingLeft: 4 }}>Saldo Acumulado</td>
