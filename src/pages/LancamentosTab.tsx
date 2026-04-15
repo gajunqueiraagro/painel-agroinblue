@@ -1678,9 +1678,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
         } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
-          // Auto-generate financeiro for abate (like Compras)
+          // Auto-generate financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
-            await abateFinanceiroRef.current.generateFinanceiro(returnedId);
+            await abateFinanceiroRef.current.generateFinanceiro(returnedId, {
+              valorLiquido: calc.valorLiquido,
+              totalDescontos: calc.totalDescontos,
+              formaReceb: abateDetalhes?.formaReceb || 'avista',
+              parcelas: abateDetalhes?.parcelas || [],
+            });
           }
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
