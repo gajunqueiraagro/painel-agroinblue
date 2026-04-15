@@ -119,6 +119,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           centro_custo: p.centro_custo,
           subcentro: p.subcentro,
           escopo_negocio: p.escopo_negocio,
+          ordem_exibicao: p.ordem_exibicao,
           meses: new Array(12).fill(0),
         });
       }
@@ -135,6 +136,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           centro_custo: r.centro_custo,
           subcentro: r.subcentro,
           escopo_negocio: r.escopo_negocio,
+          ordem_exibicao: 9999,
           meses: new Array(12).fill(0),
         });
       }
@@ -144,13 +146,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => {
-      const cmp = (x: string | null, y: string | null) => (x || '').localeCompare(y || '');
-      return cmp(a.macro_custo, b.macro_custo)
-        || cmp(a.grupo_custo, b.grupo_custo)
-        || cmp(a.centro_custo, b.centro_custo)
-        || cmp(a.subcentro, b.subcentro);
-    });
+    return Array.from(map.values()).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   }, [planoContas, savedData]);
 
   // ─── Import realizado from previous year (returns grid, does NOT save) ──
@@ -195,6 +191,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
             centro_custo: l.centro_custo,
             subcentro: l.subcentro,
             escopo_negocio: l.escopo_negocio,
+            ordem_exibicao: 9999,
             meses: new Array(12).fill(0),
           });
         }
