@@ -192,7 +192,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pb-0">
           <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-primary" />
