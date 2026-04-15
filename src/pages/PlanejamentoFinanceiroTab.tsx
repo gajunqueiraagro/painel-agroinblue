@@ -104,7 +104,6 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   useEffect(() => {
     setGrid(buildGrid());
     setDirty(false);
-    setImportBanner(false);
   }, [buildGrid]);
 
   // Expand state
