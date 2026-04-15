@@ -39,6 +39,7 @@ export interface PlanoContasRow {
   centro_custo: string;
   subcentro: string | null;
   escopo_negocio: string | null;
+  ordem_exibicao: number;
 }
 
 /** In-memory grid value per subcentro key */
@@ -48,6 +49,7 @@ export interface SubcentroGrid {
   centro_custo: string;
   subcentro: string;
   escopo_negocio: string | null;
+  ordem_exibicao: number;
   meses: number[]; // [0..11] = Jan..Dez
 }
 
@@ -88,13 +90,10 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     try {
       const { data: rows, error } = await (supabase
         .from('financeiro_plano_contas' as any)
-        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio')
+        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
         .eq('ativo', true)
         .not('subcentro', 'is', null)
-        .order('macro_custo')
-        .order('grupo_custo')
-        .order('centro_custo')
-        .order('subcentro') as any);
+        .order('ordem_exibicao') as any);
       if (error) throw error;
       setPlanoContas((rows || []) as PlanoContasRow[]);
     } catch (e: any) {
@@ -120,6 +119,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           centro_custo: p.centro_custo,
           subcentro: p.subcentro,
           escopo_negocio: p.escopo_negocio,
+          ordem_exibicao: p.ordem_exibicao,
           meses: new Array(12).fill(0),
         });
       }
@@ -136,6 +136,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           centro_custo: r.centro_custo,
           subcentro: r.subcentro,
           escopo_negocio: r.escopo_negocio,
+          ordem_exibicao: 9999,
           meses: new Array(12).fill(0),
         });
       }
@@ -145,13 +146,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => {
-      const cmp = (x: string | null, y: string | null) => (x || '').localeCompare(y || '');
-      return cmp(a.macro_custo, b.macro_custo)
-        || cmp(a.grupo_custo, b.grupo_custo)
-        || cmp(a.centro_custo, b.centro_custo)
-        || cmp(a.subcentro, b.subcentro);
-    });
+    return Array.from(map.values()).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   }, [planoContas, savedData]);
 
   // ─── Import realizado from previous year (returns grid, does NOT save) ──
@@ -196,6 +191,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
             centro_custo: l.centro_custo,
             subcentro: l.subcentro,
             escopo_negocio: l.escopo_negocio,
+            ordem_exibicao: 9999,
             meses: new Array(12).fill(0),
           });
         }
