@@ -750,12 +750,6 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           </tr>
         </tbody>
       </table>
-      {calc.valorBruto > 0 && (
-        <div className="bg-muted/40 border border-border/50 rounded px-2 py-1 flex justify-between text-[10px]">
-          <span className="font-bold">Valor Bruto (Base + Bônus − Descontos)</span>
-          <span className="font-bold text-primary tabular-nums">{formatMoeda(calc.valorBruto)}</span>
-        </div>
-      )}
     </>
   );
 
@@ -1243,6 +1237,12 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderBonus()}
             <Separator />
             {renderDescontos()}
+            {calc.valorBruto > 0 && (
+              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                <span>= Valor Bruto</span>
+                <span>{formatMoeda(calc.valorBruto)}</span>
+              </div>
+            )}
             <Separator />
             {renderImpostos()}
             <Separator />
@@ -1320,6 +1320,12 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             {renderBonus()}
             <Separator />
             {renderDescontos()}
+            {calc.valorBruto > 0 && (
+              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                <span>= Valor Bruto</span>
+                <span>{formatMoeda(calc.valorBruto)}</span>
+              </div>
+            )}
             <Separator />
             {renderImpostos()}
             <Separator />
