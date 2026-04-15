@@ -35,8 +35,15 @@ interface Props {
   statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
 }
 
+export interface AbateFinanceiroOverrides {
+  valorLiquido?: number;
+  totalDescontos?: number;
+  formaReceb?: 'avista' | 'prazo';
+  parcelas?: Parcela[];
+}
+
 export interface AbateFinanceiroPanelRef {
-  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  generateFinanceiro: (lancamentoId: string, overrides?: AbateFinanceiroOverrides) => Promise<boolean>;
   getValidationErrors: () => string[];
 }
 
