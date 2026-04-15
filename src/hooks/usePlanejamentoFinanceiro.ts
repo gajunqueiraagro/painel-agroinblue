@@ -174,10 +174,55 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, [clienteId, fazendaId, ano]);
 
+  // ─── Load lancamentos rebanho (META) ──────────────────────
+  const loadLancamentosRebanho = useCallback(async () => {
+    if (!clienteId) { setLancamentosRebanho(new Map()); return; }
+    try {
+      let query = supabase
+        .from('lancamentos')
+        .select('tipo, categoria, data, valor_total, boitel_lote_id')
+        .eq('cliente_id', clienteId)
+        .eq('cenario', 'meta')
+        .eq('cancelado', false)
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`)
+        .in('tipo', ['abate', 'venda', 'compra'])
+        .not('valor_total', 'is', null);
+
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await query;
+      if (error) throw error;
+
+      const result = new Map<string, number[]>();
+      for (const r of (rows || [])) {
+        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria, !!r.boitel_lote_id);
+        if (!subcentro) continue;
+        const mes = Number((r.data as string).substring(5, 7));
+        if (mes < 1 || mes > 12) continue;
+        if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
+        result.get(subcentro)![mes - 1] += Math.abs(r.valor_total || 0);
+      }
+
+      // Round to 2 decimals
+      for (const [, arr] of result) {
+        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
+      }
+
+      setLancamentosRebanho(result);
+    } catch (e: any) {
+      console.error('Erro ao carregar lancamentos rebanho:', e);
+      setLancamentosRebanho(new Map());
+    }
+  }, [clienteId, fazendaId, ano]);
+
   useEffect(() => { loadPlano(); }, [loadPlano]);
   useEffect(() => { loadSaved(); }, [loadSaved]);
   useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
   useEffect(() => { loadDividendos(); }, [loadDividendos]);
+  useEffect(() => { loadLancamentosRebanho(); }, [loadLancamentosRebanho]);
 
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
