@@ -308,7 +308,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                       if (isRebanho) {
                         // 3-line rendering: Auto / Ajuste / Total
-                        const ajusteMeses = sub.meses;
+                        const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
                         const totalMeses = autoMeses!.map((a, i) => a + ajusteMeses[i]);
                         const autoTotal = autoMeses!.reduce((a, b) => a + b, 0);
                         const ajusteTotal = ajusteMeses.reduce((a, b) => a + b, 0);
