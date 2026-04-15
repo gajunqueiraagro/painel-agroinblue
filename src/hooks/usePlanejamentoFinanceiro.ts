@@ -49,6 +49,7 @@ export interface SubcentroGrid {
   centro_custo: string;
   subcentro: string;
   escopo_negocio: string | null;
+  ordem_exibicao: number;
   meses: number[]; // [0..11] = Jan..Dez
 }
 
