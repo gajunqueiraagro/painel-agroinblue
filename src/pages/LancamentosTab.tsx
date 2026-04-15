@@ -1467,6 +1467,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       pedido: isAbate && abateDetalhes?.pedido ? abateDetalhes.pedido : undefined,
       instrucao: isAbate && abateDetalhes?.instrucao ? abateDetalhes.instrucao : undefined,
       docAcerto: isAbate && abateDetalhes?.docAcerto ? abateDetalhes.docAcerto : undefined,
+      anexoNfUrl: isAbate && abateDetalhes?.anexoNfUrl ? abateDetalhes.anexoNfUrl : undefined,
+      anexoAcertoUrl: isAbate && abateDetalhes?.anexoAcertoUrl ? abateDetalhes.anexoAcertoUrl : undefined,
       detalhesSnapshot: (() => {
         if (isCompra && compraDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome;
