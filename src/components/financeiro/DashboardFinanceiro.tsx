@@ -361,7 +361,7 @@ export function DashboardFinanceiro({
                 if (val === 0) return null;
                 return (
                   <div key={cat} className="flex justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
-                    onClick={() => onDrillDown?.({ categoria: cat, tipo: 'entrada', periodo: entradaTab })}>
+                    onClick={() => onMacroDrillDown?.(cat)}>
                     <span className="text-muted-foreground truncate mr-1">{cat}</span>
                     <span className="font-mono font-semibold italic whitespace-nowrap" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(val)}</span>
                   </div>
@@ -389,7 +389,7 @@ export function DashboardFinanceiro({
                 if (val === 0) return null;
                 return (
                   <div key={cat} className="flex justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
-                    onClick={() => onDrillDown?.({ categoria: cat, tipo: 'saida', periodo: saidaTab })}>
+                    onClick={() => onMacroDrillDown?.(cat)}>
                     <span className="text-muted-foreground truncate mr-1">{cat}</span>
                     <span className="font-mono font-semibold italic whitespace-nowrap text-destructive">{formatMoeda(val)}</span>
                   </div>
