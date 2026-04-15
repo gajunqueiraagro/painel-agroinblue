@@ -87,6 +87,9 @@ export interface Lancamento {
   docAcerto?: string;
   // Structured snapshot of financial screen
   detalhesSnapshot?: Record<string, any>;
+  // Anexos de abate
+  anexoNfUrl?: string;
+  anexoAcertoUrl?: string;
   // Audit fields
   createdAt?: string;
   updatedAt?: string;

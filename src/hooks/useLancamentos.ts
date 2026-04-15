@@ -154,6 +154,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         pedido: (l as any).pedido ?? undefined,
         instrucao: (l as any).instrucao ?? undefined,
         docAcerto: (l as any).doc_acerto ?? undefined,
+        anexoNfUrl: (l as any).anexo_nf_url ?? undefined,
+        anexoAcertoUrl: (l as any).anexo_acerto_url ?? undefined,
         createdAt: l.created_at,
         updatedAt: l.updated_at,
         createdBy: l.created_by ?? undefined,
@@ -280,6 +282,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       pedido: lancamento.pedido || null,
       instrucao: lancamento.instrucao || null,
       doc_acerto: lancamento.docAcerto || null,
+      anexo_nf_url: lancamento.anexoNfUrl || null,
+      anexo_acerto_url: lancamento.anexoAcertoUrl || null,
     };
 
     if (!isOnline()) {
@@ -352,6 +356,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         pedido: (data as any).pedido ?? undefined,
         instrucao: (data as any).instrucao ?? undefined,
         docAcerto: (data as any).doc_acerto ?? undefined,
+        anexoNfUrl: (data as any).anexo_nf_url ?? undefined,
+        anexoAcertoUrl: (data as any).anexo_acerto_url ?? undefined,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         createdBy: data.created_by ?? undefined,
@@ -410,6 +416,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.pedido !== undefined) update.pedido = dados.pedido;
     if (dados.instrucao !== undefined) update.instrucao = dados.instrucao;
     if (dados.docAcerto !== undefined) update.doc_acerto = dados.docAcerto;
+    if (dados.anexoNfUrl !== undefined) update.anexo_nf_url = dados.anexoNfUrl;
+    if (dados.anexoAcertoUrl !== undefined) update.anexo_acerto_url = dados.anexoAcertoUrl;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
