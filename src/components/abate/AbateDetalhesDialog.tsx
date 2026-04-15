@@ -775,10 +775,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusPrecoce}
             reaisVal={bonusPrecoceReais}
             totalVal={calc.bonusPrecoceTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusPrecoce, setBonusPrecoceReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusPrecoceReais, setBonusPrecoce)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusPrecoce, setBonusPrecoceReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusPrecoce, setBonusPrecoceReais, v)}
             hint={bonusHint}
           />
           <BiRow
@@ -787,10 +785,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusQualidade}
             reaisVal={bonusQualidadeReais}
             totalVal={calc.bonusQualidadeTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusQualidade, setBonusQualidadeReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusQualidade, setBonusQualidadeReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusQualidade, setBonusQualidadeReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusQualidadeReais, setBonusQualidade)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusQualidade, setBonusQualidadeReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusQualidade, setBonusQualidadeReais, v)}
             hint={bonusHint}
           />
           <BiRow
@@ -799,10 +795,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusListaTrace}
             reaisVal={bonusListaTraceReais}
             totalVal={calc.bonusListaTraceTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusListaTrace, setBonusListaTraceReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusListaTraceReais, setBonusListaTrace)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusListaTrace, setBonusListaTraceReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusListaTrace, setBonusListaTraceReais, v)}
             hint={bonusHint}
           />
         </tbody>
@@ -835,10 +829,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={descontoQualidade}
             reaisVal={descontoQualidadeReais}
             totalVal={calc.descQualidadeTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(descontoQualidade, setDescontoQualidadeReais)}
-            onReaisBlur={() => handleBonusReaisBlur(descontoQualidadeReais, setDescontoQualidade)}
+            onArrobaBlur={v => handleBiBlurArroba(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setDescontoQualidade, setDescontoQualidadeReais, v)}
           />
           <BiRow
             stableKey="desc-outros"
@@ -846,10 +838,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={outrosDescontosArroba}
             reaisVal={outrosDescontos}
             totalVal={calc.descOutrosTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-            onReaisChange={v => handleBonusReaisChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(outrosDescontosArroba, setOutrosDescontos)}
-            onReaisBlur={() => handleBonusReaisBlur(outrosDescontos, setOutrosDescontosArroba)}
+            onArrobaBlur={v => handleBiBlurArroba(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            onReaisBlur={v => handleBiBlurReais(setOutrosDescontosArroba, setOutrosDescontos, v)}
           />
         </tbody>
       </table>
