@@ -88,10 +88,12 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </DialogDescription>
         </DialogHeader>
 
-        {/* Dados Operacionais */}
-        <div className="space-y-1.5">
+        {/* 2-column layout: Operacionais | Financeiros */}
+        <div className="grid grid-cols-2 gap-3">
+        {/* Coluna Esquerda: Dados Operacionais */}
+        <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Operacionais</h4>
-          <div className="bg-muted/30 rounded-md p-2 space-y-1 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusCfg.cls}`}>{statusCfg.label}</span>
