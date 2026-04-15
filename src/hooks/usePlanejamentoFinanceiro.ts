@@ -592,10 +592,53 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, [fazendaId, clienteId, ano, loadSaved]);
 
+  /** Import realizado (ano-1) for a single subcentro */
+  const importarSubcentro = useCallback(async (subcentro: string, centro_custo: string): Promise<number[]> => {
+    if (!clienteId || !isValidFazenda(fazendaId)) return new Array(12).fill(0);
+    const anoAnterior = ano - 1;
+    const meses = new Array(12).fill(0);
+    try {
+      let allRows: any[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await (supabase
+          .from('financeiro_lancamentos_v2')
+          .select('ano_mes, valor')
+          .eq('cliente_id', clienteId)
+          .eq('fazenda_id', fazendaId)
+          .eq('subcentro', subcentro)
+          .eq('centro_custo', centro_custo)
+          .eq('cancelado', false)
+          .eq('status_transacao', 'realizado')
+          .like('ano_mes', `${anoAnterior}-%`)
+          .range(from, from + PAGE - 1) as any);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allRows = allRows.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      for (const r of allRows) {
+        const mesStr = (r as any).ano_mes?.split('-')[1];
+        const mesIdx = parseInt(mesStr, 10) - 1;
+        if (mesIdx >= 0 && mesIdx < 12) {
+          meses[mesIdx] += Math.abs(Number((r as any).valor) || 0);
+        }
+      }
+      for (let i = 0; i < 12; i++) meses[i] = Math.round(meses[i] * 100) / 100;
+    } catch (e: any) {
+      console.error('Erro ao importar subcentro:', e);
+      toast.error('Erro ao importar realizado');
+    }
+    return meses;
+  }, [fazendaId, clienteId, ano]);
+
   return {
     loading,
     buildGrid,
     importarRealizado,
+    importarSubcentro,
     salvarGrid,
     saldoInicial,
     lancamentosRebanho,
