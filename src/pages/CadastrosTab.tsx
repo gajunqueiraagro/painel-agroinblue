@@ -111,6 +111,13 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
   const [saving, setSaving] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState<ModuleKey | null>(null);
+  const [ativaNoMes, setAtivaNoMes] = useState(true);
+  const [ativaLoading, setAtivaLoading] = useState(false);
+
+  const anoMesAtual = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
 
   useEffect(() => { loadLogoBase64().then(setLogoBase64).catch(() => setLogoBase64(null)); }, []);
 
