@@ -367,15 +367,15 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                             </TableRow>
                             {/* Linha 3 — Total (auto + ajuste) */}
                             <TableRow className="bg-primary/5">
-                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[11px] font-semibold">
+                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[10px] font-semibold py-0.5">
                                 {sub.subcentro}
                               </TableCell>
                               {totalMeses.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[11px] font-semibold">
+                                <TableCell key={i} className="text-right text-[10px] font-semibold py-0.5">
                                   {v === 0 ? '–' : fmt(v)}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[11px] font-bold">
+                              <TableCell className="text-right text-[10px] font-bold py-0.5">
                                 {lineTotal === 0 ? '–' : fmt(lineTotal)}
                               </TableCell>
                             </TableRow>
