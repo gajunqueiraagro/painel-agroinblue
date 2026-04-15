@@ -125,6 +125,7 @@ export function DashboardFinanceiro({
   ano,
   mesAte,
   onDrillDown,
+  onMacroDrillDown,
 }: Props) {
   const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
   const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
