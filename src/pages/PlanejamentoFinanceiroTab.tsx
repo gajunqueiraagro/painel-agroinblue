@@ -478,9 +478,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       </div>
 
       {/* Table — scrolls independently */}
-      <Card className="flex-1 min-h-0">
-        <CardContent className="p-0 h-full">
-          <div className="overflow-auto relative h-full">
+      <Card className="min-h-0">
+        <CardContent className="p-0">
+          <div className="overflow-auto relative" style={{ height: 'calc(100vh - 120px)' }}>
             <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 180 }} />
