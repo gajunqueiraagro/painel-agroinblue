@@ -73,6 +73,8 @@ interface Props {
   freteVal: number;
   onBoitelDataChange?: (data: BoitelData | null) => void;
   initialBoitelData?: Partial<BoitelData> | null;
+  initialFormaReceb?: 'avista' | 'prazo';
+  initialParcelas?: Parcela[];
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -100,6 +102,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   funruralReais, onFunruralReaisChange,
   comissaoVal, freteVal,
   onBoitelDataChange, initialBoitelData,
+  initialFormaReceb, initialParcelas,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
