@@ -494,41 +494,27 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const prevLabel = (base: string) => usePrev ? `${base} Prev.` : base;
 
-  // Item 6 fix: Use refs to prevent re-render focus loss on bidirectional fields
-  // Store local string values and only propagate on blur or with stable keys
-  const handleBonusArrobaChange = (
+  // Unified blur handler: set the typed field, clear the opposite if typed > 0
+  const handleBiBlurArroba = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setArr(value); markDirty();
-    if (value === '' || value === '0') setReais('');
+    const v = Number(value) || 0;
+    if (v > 0) setReais('');
+    else if (value === '' || value === '0') setReais('');
   };
 
-  const handleBonusReaisChange = (
+  const handleBiBlurReais = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setReais(value); markDirty();
-    if (value === '' || value === '0') setArr('');
-  };
-
-  // Item 6 fix: Only clear the OTHER field on blur, not on every keystroke
-  const handleBonusArrobaBlur = (
-    arrobaVal: string,
-    setReais: (v: string) => void,
-  ) => {
-    const v = Number(arrobaVal) || 0;
-    if (v > 0) setReais('');
-  };
-
-  const handleBonusReaisBlur = (
-    reaisVal: string,
-    setArr: (v: string) => void,
-  ) => {
-    const v = Number(reaisVal) || 0;
+    const v = Number(value) || 0;
     if (v > 0) setArr('');
+    else if (value === '' || value === '0') setArr('');
   };
 
   // Funrural bidirectional
