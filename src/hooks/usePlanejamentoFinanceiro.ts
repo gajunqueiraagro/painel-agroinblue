@@ -408,6 +408,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     importarRealizado,
     salvarGrid,
     saldoInicial,
+    lancamentosRebanho,
     reload: loadSaved,
   };
 }
