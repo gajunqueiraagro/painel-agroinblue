@@ -2640,7 +2640,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
+                    {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {l.data ? format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
