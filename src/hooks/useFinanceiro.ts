@@ -573,7 +573,10 @@ export function useFinanceiro() {
         const fazMap = rebanhoMedioPorFazendaMes.get(anoMes);
         const rebanhoTotal = fazMap ? Array.from(fazMap.values()).reduce((s, v) => s + v, 0) : 0;
 
-        const fazendasComRebanho = fazendasOperacionais
+        // Apenas fazendas ativas no mês participam
+        const fazendasAtivasMes = fazendasOperacionais.filter(f => isFazendaAtivaMes(fazendaStatusMensal, f.id, anoMes));
+
+        const fazendasComRebanho = fazendasAtivasMes
           .filter(f => fazMap?.has(f.id) && (fazMap.get(f.id) || 0) > 0)
           .map(f => {
             const rm = fazMap!.get(f.id) || 0;
@@ -581,7 +584,8 @@ export function useFinanceiro() {
             return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADMElegivel * (pct / 100) };
           });
 
-        const semRebanho = fazendasOperacionais
+        // Alerta apenas para fazendas ATIVAS sem rebanho (inativas não geram alerta)
+        const semRebanho = fazendasAtivasMes
           .filter(f => !fazMap?.has(f.id) || (fazMap.get(f.id) || 0) <= 0)
           .map(f => f.nome);
 
