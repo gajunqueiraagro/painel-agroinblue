@@ -701,6 +701,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         valorBrutoOverride: snap.valorBrutoOverride || '',
         anexoNfUrl: snap.anexoNfUrl || l.anexoNfUrl || '',
         anexoAcertoUrl: snap.anexoAcertoUrl || l.anexoAcertoUrl || '',
+        // Restore missing bidirectional fields
+        pesoCarcacaKgManual: snap.pesoCarcacaKgManual || '',
+        bonusPrecoceReais: snap.bonusPrecoceReais || '',
+        bonusQualidadeReais: snap.bonusQualidadeReais || '',
+        bonusListaTraceReais: snap.bonusListaTraceReais || '',
+        descontoQualidadeReais: snap.descontoQualidadeReais || '',
+        outrosDescontosArroba: snap.outrosDescontosArroba || '',
+        observacoesInternas: snap.observacoesInternas || '',
       });
     } else {
       // FALLBACK: reconstruct from lancamento fields

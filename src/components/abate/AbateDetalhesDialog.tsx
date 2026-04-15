@@ -744,7 +744,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <td className="py-1 px-1">
               <div className="relative">
                 <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground pointer-events-none">R$</span>
-                <Input type="number" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value)} placeholder="0,00" step="0.01" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
+                <Input type="text" inputMode="decimal" value={funruralReais} onChange={e => handleFunruralReaisChange(e.target.value.replace(/[^\d.,\-]/g, ''))} placeholder="0,00" className="h-7 text-[10px] w-28 text-right tabular-nums pl-7 mx-auto" />
               </div>
             </td>
           </tr>
