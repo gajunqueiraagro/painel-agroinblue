@@ -48,6 +48,10 @@ export interface AbateDetalhes {
   pedido?: string;
   instrucao?: string;
   docAcerto?: string;
+  // Peso total NF (Realizado) — overrides pesoKg per cabeça
+  pesoTotalKgNF?: string;
+  // Override manual do valor bruto base
+  valorBrutoOverride?: string;
   // --- Novos campos Meta ---
   observacoesInternas?: string;
 }
@@ -136,6 +140,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const [pedido, setPedido] = useState(initialData.pedido || '');
   const [instrucao, setInstrucao] = useState(initialData.instrucao || '');
   const [docAcerto, setDocAcerto] = useState(initialData.docAcerto || '');
+  const [pesoTotalKgNF, setPesoTotalKgNF] = useState(initialData.pesoTotalKgNF || '');
+  const [valorBrutoOverride, setValorBrutoOverride] = useState(initialData.valorBrutoOverride || '');
 
   // Novos campos Meta
   const [observacoesInternas, setObservacoesInternas] = useState(initialData.observacoesInternas || '');
