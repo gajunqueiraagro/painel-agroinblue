@@ -27,7 +27,13 @@ interface DrillDownMacroProps {
 /* ------------------------------------------------------------------ */
 const MONTH_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-const fmt = (v: number) =>
+const fmtCompact = (v: number) => {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+  return `R$ ${v.toFixed(0)}`;
+};
+
+const fmtCurrency = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const BAR_PALETTE = [
@@ -58,10 +64,15 @@ export default function DrillDownMacro({
   const [expandedGrupo, setExpandedGrupo] = useState<string | null>(null);
   const [expandedCentro, setExpandedCentro] = useState<string | null>(null);
 
+  const mesesSet = useMemo(() => new Set(filtros.meses), [filtros.meses]);
+  const mesesOrdenados = useMemo(
+    () => filtros.meses.slice().sort((a, b) => a - b),
+    [filtros.meses],
+  );
+
   /* ---------- base filter ---------- */
   const lancBase = useMemo(() => {
     const anoStr = String(filtros.ano);
-    const mesesSet = new Set(filtros.meses);
     return lancamentos.filter((l) => {
       if ((l.macro_custo || '').trim() !== macro) return false;
       if ((l.status_transacao || '').toLowerCase().trim() !== 'realizado') return false;
@@ -72,28 +83,21 @@ export default function DrillDownMacro({
       if (filtros.fazendaId && filtros.fazendaId !== '__global__' && l.fazenda_id !== filtros.fazendaId) return false;
       return true;
     });
-  }, [lancamentos, macro, filtros]);
+  }, [lancamentos, macro, filtros, mesesSet]);
 
-  /* ---------- escopo filter ---------- */
+  /* ---------- escopo filter (sem acento) ---------- */
   const lancFiltrados = useMemo(() => {
     if (!isCusteio) return lancBase;
-    const escopo = tab === 'pecuaria' ? 'pecuária' : 'agricultura';
+    const escopo = tab === 'pecuaria' ? 'pecuaria' : 'agricultura';
     return lancBase.filter(
       (l) => (l.escopo_negocio || '').toLowerCase().trim() === escopo,
     );
   }, [lancBase, isCusteio, tab]);
 
-  /* ---------- último mês ---------- */
-  const ultimoMes = useMemo(
-    () => Math.max(...filtros.meses),
-    [filtros.meses],
-  );
-
   /* ================================================================ */
-  /*  CHART DATA                                                       */
+  /*  CHART DATA — always Jan–Dec, zero for months without data        */
   /* ================================================================ */
   const chartData = useMemo(() => {
-    // group by month and by series key (grupo or centro)
     const useGrupo = !expandedGrupo;
     const serieKey = useGrupo ? 'grupo_custo' : 'centro_custo';
     const subset = useGrupo
@@ -113,76 +117,91 @@ export default function DrillDownMacro({
     }
 
     const series = Array.from(seriesSet).sort();
-    const rows = filtros.meses
-      .slice()
-      .sort((a, b) => a - b)
-      .map((m) => {
-        const row: Record<string, string | number> = { mes: MONTH_LABELS[m - 1] };
-        const mMap = byMonth.get(m);
-        for (const s of series) row[s] = mMap?.get(s) || 0;
-        return row;
-      });
+    // Always 12 months
+    const rows = Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      const row: Record<string, string | number> = { mes: MONTH_LABELS[i] };
+      const mMap = byMonth.get(m);
+      for (const s of series) row[s] = mMap?.get(s) || 0;
+      return row;
+    });
 
     return { rows, series };
-  }, [lancFiltrados, filtros.meses, expandedGrupo]);
+  }, [lancFiltrados, expandedGrupo]);
 
   /* ================================================================ */
-  /*  TABLE DATA — hierarchical aggregation                            */
+  /*  TABLE DATA — monthly columns                                     */
   /* ================================================================ */
-  type HierNode = { nome: string; mes: number; acum: number; children?: HierNode[] };
+  type MonthlyNode = {
+    nome: string;
+    meses: Record<number, number>;
+    total: number;
+    children?: MonthlyNode[];
+  };
 
   const tableData = useMemo(() => {
-    const ultimoMesStr = `${filtros.ano}-${String(ultimoMes).padStart(2, '0')}`;
-
-    // grupo level
-    const gMap = new Map<string, { acum: number; mes: number; centros: Map<string, { acum: number; mes: number; subs: Map<string, { acum: number; mes: number }> }> }>();
+    const gMap = new Map<string, {
+      meses: Record<number, number>;
+      centros: Map<string, {
+        meses: Record<number, number>;
+        subs: Map<string, Record<number, number>>;
+      }>;
+    }>();
 
     for (const l of lancFiltrados) {
       const g = l.grupo_custo || '(Sem grupo)';
       const c = l.centro_custo || '(Sem centro)';
       const s = l.subcentro || '(Sem subcentro)';
       const v = Math.abs(l.valor);
-      const isMes = l.ano_mes === ultimoMesStr;
+      const m = Number(l.ano_mes.substring(5, 7));
 
-      if (!gMap.has(g)) gMap.set(g, { acum: 0, mes: 0, centros: new Map() });
+      if (!gMap.has(g)) gMap.set(g, { meses: {}, centros: new Map() });
       const gNode = gMap.get(g)!;
-      gNode.acum += v;
-      if (isMes) gNode.mes += v;
+      gNode.meses[m] = (gNode.meses[m] || 0) + v;
 
-      if (!gNode.centros.has(c)) gNode.centros.set(c, { acum: 0, mes: 0, subs: new Map() });
+      if (!gNode.centros.has(c)) gNode.centros.set(c, { meses: {}, subs: new Map() });
       const cNode = gNode.centros.get(c)!;
-      cNode.acum += v;
-      if (isMes) cNode.mes += v;
+      cNode.meses[m] = (cNode.meses[m] || 0) + v;
 
-      if (!cNode.subs.has(s)) cNode.subs.set(s, { acum: 0, mes: 0 });
+      if (!cNode.subs.has(s)) cNode.subs.set(s, {});
       const sNode = cNode.subs.get(s)!;
-      sNode.acum += v;
-      if (isMes) sNode.mes += v;
+      sNode[m] = (sNode[m] || 0) + v;
     }
 
-    const sortDesc = (a: HierNode, b: HierNode) => b.acum - a.acum;
+    const buildNode = (nome: string, meses: Record<number, number>, children?: MonthlyNode[]): MonthlyNode => {
+      const total = Object.values(meses).reduce((a, b) => a + b, 0);
+      return { nome, meses, total, children };
+    };
 
-    const result: HierNode[] = [];
+    const sortDesc = (a: MonthlyNode, b: MonthlyNode) => b.total - a.total;
+
+    const result: MonthlyNode[] = [];
     for (const [gNome, gData] of gMap) {
-      const centros: HierNode[] = [];
+      const centros: MonthlyNode[] = [];
       for (const [cNome, cData] of gData.centros) {
-        const subs: HierNode[] = [];
-        for (const [sNome, sData] of cData.subs) {
-          subs.push({ nome: sNome, mes: sData.mes, acum: sData.acum });
+        const subs: MonthlyNode[] = [];
+        for (const [sNome, sMeses] of cData.subs) {
+          subs.push(buildNode(sNome, sMeses));
         }
         subs.sort(sortDesc);
-        centros.push({ nome: cNome, mes: cData.mes, acum: cData.acum, children: subs });
+        centros.push(buildNode(cNome, cData.meses, subs));
       }
       centros.sort(sortDesc);
-      result.push({ nome: gNome, mes: gData.mes, acum: gData.acum, children: centros });
+      result.push(buildNode(gNome, gData.meses, centros));
     }
     result.sort(sortDesc);
     return result;
-  }, [lancFiltrados, filtros.ano, ultimoMes]);
+  }, [lancFiltrados]);
 
-  /* totals */
-  const totalMes = useMemo(() => tableData.reduce((s, g) => s + g.mes, 0), [tableData]);
-  const totalAcum = useMemo(() => tableData.reduce((s, g) => s + g.acum, 0), [tableData]);
+  /* totals per month */
+  const totalMeses = useMemo(() => {
+    const t: Record<number, number> = {};
+    for (const g of tableData) {
+      for (const m of mesesOrdenados) t[m] = (t[m] || 0) + (g.meses[m] || 0);
+    }
+    return t;
+  }, [tableData, mesesOrdenados]);
+  const grandTotal = useMemo(() => Object.values(totalMeses).reduce((a, b) => a + b, 0), [totalMeses]);
 
   /* handlers */
   const toggleGrupo = useCallback((nome: string) => {
@@ -192,6 +211,16 @@ export default function DrillDownMacro({
   const toggleCentro = useCallback((nome: string) => {
     setExpandedCentro((prev) => (prev === nome ? null : nome));
   }, []);
+
+  /* render monthly cells */
+  const renderMesesCells = (meses: Record<number, number>) =>
+    mesesOrdenados.map((m) => (
+      <TableCell key={m} className="text-right whitespace-nowrap">
+        {meses[m] ? fmtCompact(meses[m]) : '–'}
+      </TableCell>
+    ));
+
+  const isEmpty = lancFiltrados.length === 0;
 
   /* ================================================================ */
   /*  RENDER                                                           */
@@ -215,116 +244,111 @@ export default function DrillDownMacro({
         </Tabs>
       )}
 
-      {/* ── Chart ── */}
-      {chartData.series.length > 0 && (
-        <div className="h-[220px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData.rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid {...GRID_PROPS} />
-              <XAxis dataKey="mes" tick={AXIS_TICK_STYLE} />
-              <YAxis
-                tick={AXIS_TICK_STYLE}
-                tickFormatter={(v: number) =>
-                  v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
-                }
-              />
-              <Tooltip
-                content={<StandardTooltip isCurrency />}
-              />
-              <Legend wrapperStyle={LEGEND_STYLE} />
-              {chartData.series.map((s, i) => (
-                <Bar
-                  key={s}
-                  dataKey={s}
-                  stackId="a"
-                  fill={BAR_PALETTE[i % BAR_PALETTE.length]}
-                  radius={i === chartData.series.length - 1 ? [2, 2, 0, 0] : undefined}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {isEmpty ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">Sem lançamentos no período.</p>
+      ) : (
+        <>
+          {/* ── Chart — 200px, Jan–Dec ── */}
+          {chartData.series.length > 0 && (
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData.rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid {...GRID_PROPS} />
+                  <XAxis dataKey="mes" tick={AXIS_TICK_STYLE} />
+                  <YAxis
+                    tick={AXIS_TICK_STYLE}
+                    tickFormatter={(v: number) =>
+                      v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v / 1_000).toFixed(0)}k` : String(v)
+                    }
+                  />
+                  <Tooltip content={<StandardTooltip isCurrency />} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
+                  {chartData.series.map((s, i) => (
+                    <Bar
+                      key={s}
+                      dataKey={s}
+                      stackId="a"
+                      fill={BAR_PALETTE[i % BAR_PALETTE.length]}
+                      radius={i === chartData.series.length - 1 ? [2, 2, 0, 0] : undefined}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-      {/* ── Table ── */}
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[180px]">Nome</TableHead>
-              <TableHead className="text-right w-[110px]">{MONTH_LABELS[ultimoMes - 1]}</TableHead>
-              <TableHead className="text-right w-[110px]">Acum</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {/* total row */}
-            <TableRow className="bg-muted/40 font-semibold">
-              <TableCell>Total {macro}</TableCell>
-              <TableCell className="text-right">{fmt(totalMes)}</TableCell>
-              <TableCell className="text-right">{fmt(totalAcum)}</TableCell>
-            </TableRow>
-
-            {tableData.map((grupo) => (
-              <React.Fragment key={grupo.nome}>
-                {/* Nível 1 — Grupo */}
-                <TableRow
-                  className="cursor-pointer hover:bg-muted/30"
-                  onClick={() => toggleGrupo(grupo.nome)}
-                >
-                  <TableCell className="pl-3">
-                    <span className="inline-flex items-center gap-1">
-                      {expandedGrupo === grupo.nome
-                        ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                        : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                      <span className="font-medium">{grupo.nome}</span>
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">{fmt(grupo.mes)}</TableCell>
-                  <TableCell className="text-right">{fmt(grupo.acum)}</TableCell>
+          {/* ── Table — monthly columns ── */}
+          <div className="overflow-x-auto">
+            <Table className="w-max">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[160px] sticky left-0 bg-muted/50 z-10">Nome</TableHead>
+                  {mesesOrdenados.map((m) => (
+                    <TableHead key={m} className="text-right w-[70px]">{MONTH_LABELS[m - 1]}</TableHead>
+                  ))}
+                  <TableHead className="text-right w-[80px]">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* total row */}
+                <TableRow className="bg-muted/40 font-semibold">
+                  <TableCell className="sticky left-0 bg-muted/40 z-10">Total {macro}</TableCell>
+                  {mesesOrdenados.map((m) => (
+                    <TableCell key={m} className="text-right whitespace-nowrap">
+                      {totalMeses[m] ? fmtCompact(totalMeses[m]) : '–'}
+                    </TableCell>
+                  ))}
+                  <TableCell className="text-right whitespace-nowrap">{fmtCompact(grandTotal)}</TableCell>
                 </TableRow>
 
-                {expandedGrupo === grupo.nome && grupo.children?.map((centro) => (
-                  <React.Fragment key={centro.nome}>
-                    {/* Nível 2 — Centro */}
-                    <TableRow
-                      className="cursor-pointer hover:bg-muted/20"
-                      onClick={() => toggleCentro(centro.nome)}
-                    >
-                      <TableCell className="pl-8">
+                {tableData.map((grupo) => (
+                  <React.Fragment key={grupo.nome}>
+                    {/* Nível 1 — Grupo */}
+                    <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => toggleGrupo(grupo.nome)}>
+                      <TableCell className="pl-3 sticky left-0 bg-background z-10">
                         <span className="inline-flex items-center gap-1">
-                          {expandedCentro === centro.nome
+                          {expandedGrupo === grupo.nome
                             ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
                             : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                          <span>{centro.nome}</span>
+                          <span className="font-medium">{grupo.nome}</span>
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">{fmt(centro.mes)}</TableCell>
-                      <TableCell className="text-right">{fmt(centro.acum)}</TableCell>
+                      {renderMesesCells(grupo.meses)}
+                      <TableCell className="text-right whitespace-nowrap font-medium">{fmtCompact(grupo.total)}</TableCell>
                     </TableRow>
 
-                    {expandedCentro === centro.nome && centro.children?.map((sub) => (
-                      /* Nível 3 — Subcentro */
-                      <TableRow key={sub.nome} className="text-muted-foreground">
-                        <TableCell className="pl-14">{sub.nome}</TableCell>
-                        <TableCell className="text-right">{fmt(sub.mes)}</TableCell>
-                        <TableCell className="text-right">{fmt(sub.acum)}</TableCell>
-                      </TableRow>
+                    {expandedGrupo === grupo.nome && grupo.children?.map((centro) => (
+                      <React.Fragment key={centro.nome}>
+                        {/* Nível 2 — Centro */}
+                        <TableRow className="cursor-pointer hover:bg-muted/20" onClick={() => toggleCentro(centro.nome)}>
+                          <TableCell className="pl-8 sticky left-0 bg-background z-10">
+                            <span className="inline-flex items-center gap-1">
+                              {expandedCentro === centro.nome
+                                ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                              <span>{centro.nome}</span>
+                            </span>
+                          </TableCell>
+                          {renderMesesCells(centro.meses)}
+                          <TableCell className="text-right whitespace-nowrap">{fmtCompact(centro.total)}</TableCell>
+                        </TableRow>
+
+                        {expandedCentro === centro.nome && centro.children?.map((sub) => (
+                          <TableRow key={sub.nome} className="text-muted-foreground">
+                            <TableCell className="pl-14 sticky left-0 bg-background z-10">{sub.nome}</TableCell>
+                            {renderMesesCells(sub.meses)}
+                            <TableCell className="text-right whitespace-nowrap">{fmtCompact(sub.total)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </React.Fragment>
                 ))}
-              </React.Fragment>
-            ))}
-
-            {tableData.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
-                  Nenhum lançamento encontrado.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
