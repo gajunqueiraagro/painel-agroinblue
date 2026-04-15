@@ -2983,7 +2983,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     }
                     setAbateDialogOpen(false);
                   }}
-                  initialData={abateDetalhes || EMPTY_ABATE_DETALHES}
+                  initialData={{
+                    ...(abateDetalhes || EMPTY_ABATE_DETALHES),
+                    frigorifico: abateDetalhes?.frigorifico || abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || '',
+                  }}
                   quantidade={Number(quantidade) || 0}
                   pesoKg={Number(pesoKg) || 0}
                   categoria={categoria}
