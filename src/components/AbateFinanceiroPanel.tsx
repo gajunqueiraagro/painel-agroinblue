@@ -124,8 +124,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
 
   // Expose methods via ref for parent to call
   useImperativeHandle(ref, () => ({
-    generateFinanceiro: async (extLancamentoId: string) => {
-      return handleGerarFinanceiroInternal(extLancamentoId);
+    generateFinanceiro: async (extLancamentoId: string, overrides?: AbateFinanceiroOverrides) => {
+      return handleGerarFinanceiroInternal(extLancamentoId, overrides);
     },
     getValidationErrors: () => validationErrors,
   }));
