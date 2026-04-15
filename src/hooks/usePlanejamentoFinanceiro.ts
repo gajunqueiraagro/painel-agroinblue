@@ -317,9 +317,18 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         return null;
       }
 
+      const SUBCENTROS_REBANHO_EXCLUIR = [
+        'Abates de Machos', 'Abates de Fêmeas',
+        'Venda de Desmama Machos', 'Venda de Desmama Fêmeas',
+        'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
+        'Venda em Boitel',
+        'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
+      ];
+
       const map = new Map<string, SubcentroGrid>();
       for (const l of allRows) {
         if (!l.centro_custo || !l.subcentro) continue;
+        if (SUBCENTROS_REBANHO_EXCLUIR.includes(l.subcentro)) continue;
         const key = `${l.centro_custo}||${l.subcentro}`;
         if (!map.has(key)) {
           map.set(key, {
