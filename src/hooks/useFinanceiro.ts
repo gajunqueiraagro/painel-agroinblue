@@ -443,7 +443,7 @@ export function useFinanceiro() {
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
-        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2] = await Promise.all([
+        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2, cadastrosResult2] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
@@ -456,6 +456,7 @@ export function useFinanceiro() {
             ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds)
             : Promise.resolve({ data: [] }),
           clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_cadastros').select('fazenda_id, area_produtiva').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
 
         // Build status mensal map
@@ -464,6 +465,13 @@ export function useFinanceiro() {
           statusMap2.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
         }
         setFazendaStatusMensal(statusMap2);
+
+        // Build area produtiva map
+        const areaMap2 = new Map<string, number>();
+        for (const row of (cadastrosResult2.data || []) as { fazenda_id: string; area_produtiva: number | null }[]) {
+          if (row.area_produtiva && row.area_produtiva > 0) areaMap2.set(row.fazenda_id, row.area_produtiva);
+        }
+        setAreaProdutivaPorFazenda(areaMap2);
 
         setLancamentos(lancData);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
