@@ -351,6 +351,13 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
     console.log('[Venda Financeiro] generateFinanceiro chamado', { targetLancamentoId, tipoPeso, temBoitelData: !!boitelData });
+    console.log('[VendaFinanceiro] fazendaAtual:', fazendaAtual?.id);
+    console.log('[VendaFinanceiro] clienteAtual:', clienteAtual?.id);
+    console.log('[VendaFinanceiro] initialFormaReceb (direto):', initialFormaReceb);
+    console.log('[VendaFinanceiro] initialParcelas (direto):', JSON.stringify(initialParcelas));
+    console.log('[VendaFinanceiro] formaReceb (state):', formaReceb);
+    console.log('[VendaFinanceiro] parcelas (state):', JSON.stringify(parcelas));
+    console.log('[VendaFinanceiro] valorBruto:', valorBruto, 'valorLiquido:', valorLiquido);
     if (!targetLancamentoId) { toast.error('Salve o lançamento zootécnico primeiro.'); return false; }
     if (!fazendaAtual || !clienteAtual) {
       console.error('[Venda Financeiro] fazendaAtual ou clienteAtual ausente', { fazendaAtual: !!fazendaAtual, clienteAtual: !!clienteAtual });
