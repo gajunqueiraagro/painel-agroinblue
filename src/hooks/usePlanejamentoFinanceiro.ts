@@ -86,6 +86,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
   const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
   const [lancamentosFinanciamento, setLancamentosFinanciamento] = useState<Map<string, number[]>>(new Map());
+  const [lancamentosNutricao, setLancamentosNutricao] = useState<Map<string, number[]>>(new Map());
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
