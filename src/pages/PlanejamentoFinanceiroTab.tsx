@@ -331,28 +331,28 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         return (
                           <React.Fragment key={sub.key}>
                             {/* Linha 1 — Automático */}
-                            <TableRow className="bg-muted/20">
-                              <TableCell className="sticky left-0 bg-muted/20 z-10 pl-[72px] text-[10px] text-muted-foreground italic">
+                            <TableRow className="bg-muted/40">
+                              <TableCell className="sticky left-0 bg-muted/40 z-10 pl-[72px] text-[9px] text-muted-foreground italic py-0.5">
                                 {sub.subcentro} (auto)
                               </TableCell>
                               {autoMeses!.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[10px] text-muted-foreground">
+                                <TableCell key={i} className="text-right text-[9px] text-muted-foreground py-0.5">
                                   {v === 0 ? '–' : fmt(v)}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[10px] text-muted-foreground font-medium">
+                              <TableCell className="text-right text-[9px] text-muted-foreground font-medium py-0.5">
                                 {autoTotal === 0 ? '–' : fmt(autoTotal)}
                               </TableCell>
                             </TableRow>
                             {/* Linha 2 — Ajuste editável */}
                             <TableRow>
-                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] text-muted-foreground">
+                              <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[9px] text-muted-foreground py-0.5">
                                 {sub.subcentro} (ajuste)
                               </TableCell>
                               {ajusteMeses.map((v, mesIdx) => (
                                 <TableCell key={mesIdx} className="p-0.5">
                                   {isGlobal ? (
-                                    <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                    <span className="text-[9px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
                                   ) : (
                                     <EditableCell
                                       value={v}
@@ -361,21 +361,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   )}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[10px] font-medium">
+                              <TableCell className="text-right text-[9px] font-medium py-0.5">
                                 {ajusteTotal === 0 ? '–' : fmt(ajusteTotal)}
                               </TableCell>
                             </TableRow>
                             {/* Linha 3 — Total (auto + ajuste) */}
                             <TableRow className="bg-primary/5">
-                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[11px] font-semibold">
+                              <TableCell className="sticky left-0 bg-primary/5 z-10 pl-[72px] text-[10px] font-semibold py-0.5">
                                 {sub.subcentro}
                               </TableCell>
                               {totalMeses.map((v, i) => (
-                                <TableCell key={i} className="text-right text-[11px] font-semibold">
+                                <TableCell key={i} className="text-right text-[10px] font-semibold py-0.5">
                                   {v === 0 ? '–' : fmt(v)}
                                 </TableCell>
                               ))}
-                              <TableCell className="text-right text-[11px] font-bold">
+                              <TableCell className="text-right text-[10px] font-bold py-0.5">
                                 {lineTotal === 0 ? '–' : fmt(lineTotal)}
                               </TableCell>
                             </TableRow>
@@ -386,13 +386,13 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       // Normal subcentro (single line)
                       return (
                         <TableRow key={sub.key}>
-                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
+                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] py-0.5">
                             {sub.subcentro}
                           </TableCell>
                           {sub.meses.map((v, mesIdx) => (
                             <TableCell key={mesIdx} className="p-0.5">
                               {isGlobal ? (
-                                <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
                               ) : (
                                 <EditableCell
                                   value={v}
@@ -401,7 +401,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               )}
                             </TableCell>
                           ))}
-                          <TableCell className="text-right text-[11px] font-medium">
+                          <TableCell className="text-right text-[10px] font-medium py-0.5">
                             {sub.total === 0 ? '–' : fmt(sub.total)}
                           </TableCell>
                         </TableRow>
@@ -603,7 +603,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
         autoFocus
         type="number"
         step="0.01"
-        className="h-6 text-[11px] text-right p-1 w-[70px]"
+        className="h-5 text-[10px] text-right p-0.5 w-[70px]"
         value={text}
         onChange={e => setText(e.target.value)}
         onBlur={commit}
@@ -614,7 +614,7 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
 
   return (
     <span
-      className="cursor-pointer text-[11px] hover:bg-muted px-1 py-0.5 rounded block text-right"
+      className="cursor-pointer text-[10px] hover:bg-muted px-1 py-0 rounded block text-right"
       onClick={start}
     >
       {value === 0 ? '–' : fmt(value)}
