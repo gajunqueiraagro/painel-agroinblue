@@ -142,8 +142,8 @@ export function DashboardFinanceiro({
       return datePagtoAnoMes(l) === periodoMes;
     }), [lancamentos, periodoMes]);
 
-  const entradasListMes = useMemo(() => filtradosMes.filter(isEntrada), [filtradosMes]);
-  const saidasListMes = useMemo(() => filtradosMes.filter(isSaida), [filtradosMes]);
+  const entradasListMes = useMemo(() => filtradosMes.filter(l => isEntrada(l) && isDRE(l)), [filtradosMes]);
+  const saidasListMes = useMemo(() => filtradosMes.filter(l => isSaida(l) && isDRE(l)), [filtradosMes]);
 
   // Rateio
   const rateioFiltradoMes = useMemo(() => rateioADM.filter(r => r.anoMes === periodoMes), [rateioADM, periodoMes]);
