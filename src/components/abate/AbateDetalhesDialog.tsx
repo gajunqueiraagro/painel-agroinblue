@@ -366,8 +366,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       formaReceb,
       qtdParcelas: qtdParcelas || undefined,
       parcelas,
+      valorBaseOverride: Number(valorBrutoOverride) || undefined,
     });
-  }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas]);
+  }, [peso, qtd, rendCarcaca, rendCarcacaAuto, effectivePesoCarcacaKg, isRealizado, precoArroba, bonusPrecoce, bonusPrecoceReais, bonusQualidade, bonusQualidadeReais, bonusListaTrace, bonusListaTraceReais, descontoQualidade, descontoQualidadeReais, outrosDescontos, outrosDescontosArroba, funruralPct, funruralReais, formaReceb, qtdParcelas, parcelas, valorBrutoOverride]);
 
   // Item 5: when valorBrutoOverride is set, recalculate precoArroba
   const valorBrutoOverrideRef = useRef(valorBrutoOverride);
