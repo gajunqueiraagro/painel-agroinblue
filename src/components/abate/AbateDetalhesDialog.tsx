@@ -303,6 +303,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       frigorifico, pedido, instrucao, docAcerto,
       pesoTotalKgNF: pesoTotalKgNF || undefined,
       valorBrutoOverride: valorBrutoOverride || undefined,
+      anexoNfUrl: anexoNfUrl || undefined,
+      anexoAcertoUrl: anexoAcertoUrl || undefined,
       observacoesInternas,
     });
   };
