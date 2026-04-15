@@ -35,8 +35,15 @@ interface Props {
   statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
 }
 
+export interface AbateFinanceiroOverrides {
+  valorLiquido?: number;
+  totalDescontos?: number;
+  formaReceb?: 'avista' | 'prazo';
+  parcelas?: Parcela[];
+}
+
 export interface AbateFinanceiroPanelRef {
-  generateFinanceiro: (lancamentoId: string) => Promise<boolean>;
+  generateFinanceiro: (lancamentoId: string, overrides?: AbateFinanceiroOverrides) => Promise<boolean>;
   getValidationErrors: () => string[];
 }
 
@@ -117,8 +124,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
 
   // Expose methods via ref for parent to call
   useImperativeHandle(ref, () => ({
-    generateFinanceiro: async (extLancamentoId: string) => {
-      return handleGerarFinanceiroInternal(extLancamentoId);
+    generateFinanceiro: async (extLancamentoId: string, overrides?: AbateFinanceiroOverrides) => {
+      return handleGerarFinanceiroInternal(extLancamentoId, overrides);
     },
     getValidationErrors: () => validationErrors,
   }));
@@ -131,14 +138,20 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
     }
   };
 
-  const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+  const handleGerarFinanceiroInternal = async (targetLancamentoId: string, overrides?: AbateFinanceiroOverrides): Promise<boolean> => {
+    // Use overrides if provided (avoids race condition with stale props)
+    const efValorLiquido = overrides?.valorLiquido ?? valorLiquido;
+    const efTotalDescontos = overrides?.totalDescontos ?? totalDescontos;
+    const efFormaReceb = overrides?.formaReceb ?? formaReceb;
+    const efParcelas = overrides?.parcelas ?? parcelas;
+
     if (!targetLancamentoId) {
       toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.');
       return false;
     }
     if (!fazendaAtual || !clienteAtual) return false;
-    if (validationErrors.length > 0) {
-      toast.error(validationErrors[0]);
+    if (efValorLiquido <= 0) {
+      toast.error('Valor líquido do abate deve ser maior que zero.');
       return false;
     }
 
@@ -240,22 +253,22 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
       };
 
-      if (formaReceb === 'prazo' && parcelas.length > 0) {
-        parcelas.forEach((p, i) => {
+      if (efFormaReceb === 'prazo' && efParcelas.length > 0) {
+        efParcelas.forEach((p, i) => {
           inserts.push({
             ...baseRecord,
             ano_mes: p.data.slice(0, 7),
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
-            descricao: `${abateLabel} - Parcela ${i + 1}/${parcelas.length}`,
+            descricao: `${abateLabel} - Parcela ${i + 1}/${efParcelas.length}`,
             historico: frigorifico ? `Frigorífico: ${frigorifico}` : undefined,
             origem_tipo: 'abate:parcela',
           });
         });
       } else {
         // Revenue = valorLiquido (net value that actually moves cash)
-        const valorReceita = valorLiquido;
+        const valorReceita = efValorLiquido;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
@@ -269,7 +282,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       }
 
       // Generate deduction records when there are discounts
-      if (totalDescontos > 0) {
+      if (efTotalDescontos > 0) {
         const subcentroDeducaoCandidatos = [
           'Impostos e Despesas de Abates e Vendas',
           'PEC/NOTAS COM ABATES E VENDAS EM PÉ',
@@ -308,7 +321,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           subcentro: clasDed.subcentro,
           numero_documento: notaFiscal || undefined,
           ano_mes: anoMes,
-          valor: totalDescontos,
+          valor: efTotalDescontos,
           data_competencia: data,
           data_pagamento: data,
           descricao: descDeducao,

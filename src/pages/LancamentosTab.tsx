@@ -1581,9 +1581,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setP1BloqueioMsg(null);
         onEditar(editingAbateId, lancamentoDados);
         if (isAbate && (isConciliado || isConfirmado || isMeta)) {
-          // Auto-generate/update financeiro for abate
+          // Auto-generate/update financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
-            await abateFinanceiroRef.current.generateFinanceiro(editingAbateId);
+            await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
+              valorLiquido: calc.valorLiquido,
+              totalDescontos: calc.totalDescontos,
+              formaReceb: abateDetalhes?.formaReceb || 'avista',
+              parcelas: abateDetalhes?.parcelas || [],
+            });
           }
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -1673,9 +1678,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
         } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
-          // Auto-generate financeiro for abate (like Compras)
+          // Auto-generate financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
-            await abateFinanceiroRef.current.generateFinanceiro(returnedId);
+            await abateFinanceiroRef.current.generateFinanceiro(returnedId, {
+              valorLiquido: calc.valorLiquido,
+              totalDescontos: calc.totalDescontos,
+              formaReceb: abateDetalhes?.formaReceb || 'avista',
+              parcelas: abateDetalhes?.parcelas || [],
+            });
           }
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
@@ -2630,7 +2640,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     <span className="text-[12px] font-bold text-foreground truncate">{tipoLabel?.label}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR })}
+                    {catLabel}{catDestinoLabel ? ` → ${catDestinoLabel}` : ''} • {l.data ? format(parseISO(l.data), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
                     {l.pesoMedioKg ? ` • ${l.pesoMedioKg}kg` : ''}
                     {l.valorTotal ? ` • ${formatMoeda(l.valorTotal)}` : ''}
                   </p>
@@ -2912,6 +2922,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     setFunruralReais(det.funruralReais);
                     setOutrosDescontos(det.outrosDescontos);
                     setDataVenda(det.dataVenda);
+                    // Sync pesoKg from pesoTotalKgNF (total NF weight → per head)
+                    if (det.pesoTotalKgNF && Number(det.pesoTotalKgNF) > 0) {
+                      const qtd = Number(quantidade) || 1;
+                      setPesoKg(String(Math.round((Number(det.pesoTotalKgNF) / qtd) * 100) / 100));
+                    }
                     setAbateDialogOpen(false);
                   }}
                   initialData={abateDetalhes || EMPTY_ABATE_DETALHES}
