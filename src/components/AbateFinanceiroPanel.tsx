@@ -279,6 +279,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
             descricao: `${abateLabel} - Parcela ${i + 1}/${efParcelas.length}`,
             historico: frigorifico ? `Frigorífico: ${frigorifico}` : null,
             origem_tipo: 'abate:parcela',
+            sem_movimentacao_caixa: false,
           });
         });
       } else {
@@ -293,6 +294,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           descricao: abateLabel,
           historico: frigorifico ? `Frigorífico: ${frigorifico}` : null,
           origem_tipo: 'abate:parcela',
+          sem_movimentacao_caixa: false,
         });
       }
 
