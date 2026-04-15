@@ -8,12 +8,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
+import { toast } from 'sonner';
 import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -93,17 +94,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, importarRealizado, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
-  const [importBanner, setImportBanner] = useState(false);
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
+  const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
 
   useEffect(() => {
     setGrid(buildGrid());
     setDirty(false);
-    setImportBanner(false);
   }, [buildGrid]);
 
   // Expand state
@@ -240,32 +240,26 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     setDirty(true);
   }, []);
 
-  /* ── Import realizado ── */
-  const handleImport = useCallback(async () => {
-    const imported = await importarRealizado();
-    if (!imported) return;
+  /* ── Import subcentro individual ── */
+  const handleImportSubcentro = useCallback(async () => {
+    if (!importConfirm) return;
+    const { subcentro, centro_custo, gridIdx } = importConfirm;
+    setImportConfirm(null);
+    const meses = await importarSubcentro(subcentro, centro_custo);
     setGrid(prev => {
-      const next = prev.map(g => ({ ...g, meses: [...g.meses] }));
-      for (const imp of imported) {
-        const key = `${imp.centro_custo}||${imp.subcentro}`;
-        const idx = next.findIndex(g => `${g.centro_custo}||${g.subcentro}` === key);
-        if (idx >= 0) {
-          for (let m = 0; m < 12; m++) {
-            next[idx].meses[m] = Math.round(imp.meses[m] * 100) / 100;
-          }
-        }
-      }
+      const next = [...prev];
+      const row = { ...next[gridIdx], meses: [...meses] };
+      next[gridIdx] = row;
       return next;
     });
     setDirty(true);
-    setImportBanner(true);
-  }, [importarRealizado]);
+    toast.success(`Realizado ${ano - 1} importado para ${subcentro}`);
+  }, [importConfirm, importarSubcentro, ano]);
 
   /* ── Save ── */
   const handleSave = useCallback(async () => {
     await salvarGrid(grid);
     setDirty(false);
-    setImportBanner(false);
   }, [salvarGrid, grid]);
 
   /* ── Style constants (matching FluxoFinanceiro) ── */
@@ -416,9 +410,17 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
                       // Normal subcentro
                       return (
-                        <tr key={sub.key} className="border-b border-border/10">
+                        <tr key={sub.key} className="group/subrow border-b border-border/10">
                           <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
-                            {sub.subcentro}
+                            <span className="inline-flex items-center gap-0.5">
+                              {sub.subcentro}
+                              {!isGlobal && (
+                                <Download
+                                  className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer opacity-0 group-hover/subrow:opacity-100 transition-opacity"
+                                  onClick={(e) => { e.stopPropagation(); setImportConfirm({ subcentro: sub.subcentro, centro_custo: grid[sub.gridIdx]?.centro_custo || '', gridIdx: sub.gridIdx }); }}
+                                />
+                              )}
+                            </span>
                           </td>
                           {sub.meses.map((v, mesIdx) => (
                             <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
@@ -470,22 +472,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={handleImport} disabled={loading || isGlobal}>
-          <Download className="h-4 w-4 mr-1" />Importar Realizado {ano - 1}
-        </Button>
         <Button size="sm" onClick={handleSave} disabled={loading || isGlobal || !dirty}>
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
       </div>
-
-      {importBanner && (
-        <Alert className="border-primary/40 bg-primary/5">
-          <Info className="h-4 w-4 text-primary" />
-          <AlertDescription className="text-xs">
-            Realizado {ano - 1} carregado como referência. Edite os valores e clique em Salvar para confirmar.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Table */}
       <Card>
@@ -618,6 +608,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           onSaved={reloadNutricao}
         />
       )}
+
+      <AlertDialog open={!!importConfirm} onOpenChange={(open) => { if (!open) setImportConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">Importar realizado {ano - 1}</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Importar realizado {ano - 1} para <strong>{importConfirm?.subcentro}</strong>? Isso irá sobrepor os valores atuais.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs h-8">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="text-xs h-8" onClick={handleImportSubcentro}>Importar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
