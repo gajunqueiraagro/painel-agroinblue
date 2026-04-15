@@ -386,7 +386,7 @@ export function useFinanceiro() {
 
         const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
-            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
+            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).neq('status_transacao', 'conciliado').order('data_competencia', { ascending: false }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -413,12 +413,12 @@ export function useFinanceiro() {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<any>((from, to) =>
-          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
+          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false).neq('status_transacao', 'conciliado').order('data_competencia', { ascending: false }).range(from, to),
         ).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) =>
-              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
+              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false).neq('status_transacao', 'conciliado').order('data_competencia', { ascending: false }).range(from, to),
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
