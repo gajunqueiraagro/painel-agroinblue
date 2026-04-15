@@ -590,15 +590,21 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
 
-      if (formaReceb === 'prazo' && parcelas.length > 0) {
-        parcelas.forEach((p, i) => {
+      // For normal venda, prefer parent props over internal state (avoids stale state issues)
+      const efFormaReceb = isNormalVenda ? (initialFormaReceb || formaReceb) : formaReceb;
+      const efParcelas = isNormalVenda ? (initialParcelas?.length ? initialParcelas : parcelas) : parcelas;
+
+      console.log('[VendaFinanceiro] insert decision', { isNormalVenda, efFormaReceb, efParcelas, initialFormaReceb, initialParcelas, formaReceb, parcelas });
+
+      if (efFormaReceb === 'prazo' && efParcelas.length > 0) {
+        efParcelas.forEach((p, i) => {
           inserts.push({
             ...baseRecord,
             ano_mes: p.data.slice(0, 7),
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
-            descricao: `${vendaLabel} - Parcela ${i + 1}/${parcelas.length}`,
+            descricao: `${vendaLabel} - Parcela ${i + 1}/${efParcelas.length}`,
             historico: destino ? `Comprador: ${destino}` : undefined,
             origem_tipo: 'venda:parcela',
           });
@@ -938,8 +944,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       {/* Boitel no longer shows DESCONTOS block here — handled inside BoitelPlanningDialog */}
 
-      {/* Informações de Recebimento — only for normal venda; boitel handles it inside its own dialog */}
-      {!isBoitel && (
+      {/* Informações de Recebimento — only for boitel; normal venda handles it inside VendaDetalhesDialog */}
+      {isBoitel && (
         <>
           <Separator />
           <Collapsible>
