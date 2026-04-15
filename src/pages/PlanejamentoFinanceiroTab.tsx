@@ -355,11 +355,11 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                 {sub.subcentro} (auto)
                               </td>
                               {autoMeses!.map((v, i) => (
-                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic ${cor}/70`} style={{ background: BG_ZEBRA }}>
+                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic opacity-70 ${cor}`} style={{ background: BG_ZEBRA }}>
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border ${cor}/70`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(autoTotal)}
                               </td>
                             </tr>
