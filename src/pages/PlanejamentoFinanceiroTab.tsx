@@ -42,7 +42,11 @@ const SUBCENTROS_FINANCIAMENTO = new Set([
   'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
 ]);
 
-const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO]);
+const SUBCENTROS_NUTRICAO = new Set([
+  'Nutrição Cria', 'Nutrição Recria', 'Nutrição Engorda',
+]);
+
+const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
 
 const fmt = (v: number) => {
   if (v === 0) return '–';
