@@ -530,9 +530,19 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
-      const subcentroCandidates = isFemea
-        ? ['PEC/RECEITA/VENDAS EM PÉ/FEMEAS', 'PEC/RECEITA/VENDAS/FEMEAS', 'PEC/RECEITA/ABATES/FEMEAS']
-        : ['PEC/RECEITA/VENDAS EM PÉ/MACHOS', 'PEC/RECEITA/VENDAS/MACHOS', 'PEC/RECEITA/ABATES/MACHOS'];
+      const isDesmama = tipoPeso === 'desmama';
+
+      // Build subcentro candidates matching actual DB values
+      let subcentroCandidates: string[];
+      if (isDesmama) {
+        subcentroCandidates = isFemea
+          ? ['Venda de Desmama Fêmeas', 'Venda de Fêmeas Adultas']
+          : ['Venda de Desmama Machos', 'Venda de Machos Adultos'];
+      } else {
+        subcentroCandidates = isFemea
+          ? ['Venda de Fêmeas Adultas', 'Venda de Desmama Fêmeas']
+          : ['Venda de Machos Adultos', 'Venda de Desmama Machos'];
+      }
 
       const { data: planoReceita } = await supabase
         .from('financeiro_plano_contas')
@@ -602,7 +612,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       ].filter(item => item.valor > 0);
 
       if (saidasSeparadas.length > 0) {
-        const subcentroDeducao = 'PEC/NOTAS COM ABATES E VENDAS EM PÉ';
+        const subcentroDeducao = 'Impostos e Despesas de Abates e Vendas';
         const { data: planoDeducao } = await supabase
           .from('financeiro_plano_contas')
           .select('id, macro_custo, centro_custo, subcentro')
