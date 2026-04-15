@@ -1135,7 +1135,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
-      <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pb-0">
          <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
               <Tag className="h-4 w-4 text-primary" />
@@ -1168,64 +1168,70 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </TabsList>
           )}
 
-          {/* ══════ ABA META (mesmos campos do Programado) ══════ */}
-          <TabsContent value="meta" className="space-y-2">
-            {/* Resumo operacional */}
-            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
+          {/* ══════ ABA META (mesmos campos do Programado, 2 colunas) ══════ */}
+          <TabsContent value="meta" className="space-y-1.5">
+            <div className="bg-muted/30 rounded p-1.5 grid grid-cols-4 gap-2 text-[11px]">
               <div><span className="text-muted-foreground">Cabeças</span>{hintText('escalado')}<p className="font-bold">{qtd} cab.</p></div>
               <div><span className="text-muted-foreground">Peso médio (kg)</span>{hintText('estimado')}<p className="font-bold">{formatKg(peso)}</p></div>
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
+              <div><span className="text-muted-foreground">Data</span><p className="font-bold">{dataAbate || '-'}</p></div>
             </div>
-
-            <Separator />
-            {renderDatas()}
-            <Separator />
-            {renderComercializacao()}
-            {renderDesempenho()}
-            <Separator />
-            {renderBonus()}
-            <Separator />
-            {renderDescontos()}
-            {calc.valorBruto > 0 && (
-              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
-                <span>= Valor Bruto</span>
-                <span>{formatMoeda(calc.valorBruto)}</span>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+              <div className="space-y-1.5">
+                {renderDatas()}
+                <Separator />
+                {renderComercializacao()}
+                {renderDesempenho()}
               </div>
-            )}
-            <Separator />
-            {renderImpostos()}
+              <div className="space-y-1.5">
+                {renderBonus()}
+                <Separator />
+                {renderDescontos()}
+                {calc.valorBruto > 0 && (
+                  <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                    <span>= Valor Bruto</span>
+                    <span>{formatMoeda(calc.valorBruto)}</span>
+                  </div>
+                )}
+                <Separator />
+                {renderImpostos()}
+              </div>
+            </div>
             <Separator />
             {renderResultado()}
             <Separator />
             {renderPagamento()}
           </TabsContent>
 
-          {/* ══════ ABA PROGRAMADO ══════ */}
-          <TabsContent value="programado" className="space-y-2">
-            {/* Resumo operacional */}
-            <div className="bg-muted/30 rounded p-2 grid grid-cols-3 gap-2 text-[11px]">
+          {/* ══════ ABA PROGRAMADO (2 colunas) ══════ */}
+          <TabsContent value="programado" className="space-y-1.5">
+            <div className="bg-muted/30 rounded p-1.5 grid grid-cols-4 gap-2 text-[11px]">
               <div><span className="text-muted-foreground">Cabeças</span>{hintText('escalado')}<p className="font-bold">{qtd} cab.</p></div>
               <div><span className="text-muted-foreground">Peso médio (kg)</span>{hintText('estimado')}<p className="font-bold">{formatKg(peso)}</p></div>
               <div><span className="text-muted-foreground">Categoria</span><p className="font-bold">{catLabel}</p></div>
+              <div><span className="text-muted-foreground">Data</span><p className="font-bold">{dataAbate || '-'}</p></div>
             </div>
-
-            <Separator />
-            {renderDatas()}
-            <Separator />
-            {renderComercializacao()}
-            {renderDesempenho()}
-            <Separator />
-            {renderBonus()}
-            <Separator />
-            {renderDescontos()}
-            {calc.valorBruto > 0 && (
-              <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
-                <span>= Valor Bruto</span>
-                <span>{formatMoeda(calc.valorBruto)}</span>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+              <div className="space-y-1.5">
+                {renderDatas()}
+                <Separator />
+                {renderComercializacao()}
+                {renderDesempenho()}
               </div>
-            )}
-            <Separator />
-            {renderImpostos()}
+              <div className="space-y-1.5">
+                {renderBonus()}
+                <Separator />
+                {renderDescontos()}
+                {calc.valorBruto > 0 && (
+                  <div className="flex justify-between py-1 px-1 text-[11px] font-medium border-t border-border mt-1">
+                    <span>= Valor Bruto</span>
+                    <span>{formatMoeda(calc.valorBruto)}</span>
+                  </div>
+                )}
+                <Separator />
+                {renderImpostos()}
+              </div>
+            </div>
             <Separator />
             {renderResultado()}
             <Separator />
