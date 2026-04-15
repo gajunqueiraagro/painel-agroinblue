@@ -81,13 +81,12 @@ export function AbateResumoPanel({
           <div className="space-y-0 text-[10px] leading-[1.4]">
             {calc && calc.valorBase > 0 && (
               <>
-                <div className="flex justify-between py-px"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
-                {calc.funruralTotal > 0 && (
-                  <div className="flex justify-between py-px"><span className="text-muted-foreground">– Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
-                )}
-                <div className="flex justify-between py-px font-bold"><span>= Valor Bruto</span><strong className="tabular-nums">{formatMoeda(calc.valorBruto)}</strong></div>
+                <div className="flex justify-between py-px"><span className="text-muted-foreground">Base (NF)</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
                 <div className="flex justify-between py-px"><span className="text-muted-foreground">+ Bônus</span><strong className="text-green-600 dark:text-green-400 tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
                 <div className="flex justify-between py-px"><span className="text-muted-foreground">– Despesas</span><strong className="text-destructive tabular-nums">{calc.totalDescontos > 0 ? `-${formatMoeda(calc.totalDescontos)}` : '-'}</strong></div>
+                {calc.funruralTotal > 0 && (
+                  <div className="flex justify-between py-px"><span className="text-muted-foreground">{`– Funrural (${calc.funruralPct > 0 ? `${calc.funruralPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF` : ''})`}</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
+                )}
                 <Separator className="my-0.5" />
                 <div className="flex justify-between text-[11px] font-bold py-px">
                   <span>= Valor Líquido</span>

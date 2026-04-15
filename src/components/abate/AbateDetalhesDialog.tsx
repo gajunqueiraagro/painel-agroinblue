@@ -910,7 +910,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
       <table className="w-full text-[10px] border-collapse">
         <thead>
           <tr className="border-b border-border/50">
-            <th className="text-left py-1 text-muted-foreground font-medium">Funrural</th>
+            <th className="text-left py-1 text-muted-foreground font-medium">{`Funrural${calc.funruralPct > 0 ? ` (${calc.funruralPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF)` : ''}`}</th>
             <th className="text-right py-1 text-muted-foreground font-medium px-1">Por cab.</th>
             <th className="text-right py-1 text-muted-foreground font-medium">Total</th>
           </tr>
@@ -992,10 +992,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           {sectionTitle(<Tag className="h-4 w-4 text-muted-foreground" />, 'Resumo Abate')}
           {renderResumoAbateTable()}
 
-          {/* Item 8: Funrural, Bônus, Descontos */}
-          {renderFunruralResumo()}
+          {/* Item 8: Bônus, Descontos, Funrural */}
           {renderBonusResumo()}
           {renderDescontosResumo()}
+          {renderFunruralResumo()}
 
           {/* ── VALOR LÍQUIDO (azul) ── */}
           <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded p-2 space-y-0.5">
@@ -1021,12 +1021,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
           {usePrev ? 'Resultado Esperado' : 'Resultado Final'}
         </h4>
         <div className="space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
-          {calc.funruralTotal > 0 && (
-            <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
-          )}
-          <Separator className="my-0.5" />
-          <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(calc.valorBruto)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Valor Base (NF)</span><strong className="tabular-nums">{formatMoeda(calc.valorBase)}</strong></div>
 
           <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="tabular-nums">{calc.totalBonus > 0 ? `+${formatMoeda(calc.totalBonus)}` : '-'}</strong></div>
           {calc.totalBonus > 0 && (
@@ -1043,6 +1038,10 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
               {calc.descQualidadeTotal > 0 && <div className="flex justify-between"><span>Qualidade</span><span className="tabular-nums">{formatMoeda(calc.descQualidadeTotal)}</span></div>}
               {calc.descOutrosTotal > 0 && <div className="flex justify-between"><span>Outros</span><span className="tabular-nums">{formatMoeda(calc.descOutrosTotal)}</span></div>}
             </div>
+          )}
+
+          {calc.funruralTotal > 0 && (
+            <div className="flex justify-between"><span className="text-muted-foreground">{`(–) Funrural (${calc.funruralPct > 0 ? `${calc.funruralPct.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% da NF` : ''})`}</span><strong className="text-destructive tabular-nums">-{formatMoeda(calc.funruralTotal)}</strong></div>
           )}
 
           <Separator className="my-0.5" />
