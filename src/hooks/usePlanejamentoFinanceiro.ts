@@ -1,7 +1,7 @@
 /**
  * Hook: usePlanejamentoFinanceiro
  *
- * Simplified: load, save (bulk upsert), import realizado anterior.
+ * Simplified: load, save (bulk upsert), import realizado anterior, saldo inicial.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,6 +60,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContasRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saldoInicial, setSaldoInicial] = useState<number>(0);
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -101,8 +102,34 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, []);
 
+  // ─── Load saldo inicial (saldo bancário dez do ano anterior) ──
+  const loadSaldoInicial = useCallback(async () => {
+    if (!clienteId) return;
+    const anoMesAnterior = `${ano - 1}-12`;
+    try {
+      let query = supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final')
+        .eq('cliente_id', clienteId)
+        .eq('ano_mes', anoMesAnterior);
+
+      if (fazendaId) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await query;
+      if (error) throw error;
+      const total = (rows || []).reduce((s: number, r: any) => s + (r.saldo_final || 0), 0);
+      setSaldoInicial(Math.round(total * 100) / 100);
+    } catch (e: any) {
+      console.error('Erro ao carregar saldo inicial:', e);
+      setSaldoInicial(0);
+    }
+  }, [clienteId, fazendaId, ano]);
+
   useEffect(() => { loadPlano(); }, [loadPlano]);
   useEffect(() => { loadSaved(); }, [loadSaved]);
+  useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
 
   // ─── Build grid: plano + saved values ─────────────────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
@@ -273,6 +300,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     buildGrid,
     importarRealizado,
     salvarGrid,
+    saldoInicial,
     reload: loadSaved,
   };
 }
