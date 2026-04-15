@@ -386,13 +386,13 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       // Normal subcentro (single line)
                       return (
                         <TableRow key={sub.key}>
-                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[11px]">
+                          <TableCell className="sticky left-0 bg-background z-10 pl-[72px] text-[10px] py-0.5">
                             {sub.subcentro}
                           </TableCell>
                           {sub.meses.map((v, mesIdx) => (
                             <TableCell key={mesIdx} className="p-0.5">
                               {isGlobal ? (
-                                <span className="text-[11px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
+                                <span className="text-[10px] text-right block px-1">{v === 0 ? '–' : fmt(v)}</span>
                               ) : (
                                 <EditableCell
                                   value={v}
@@ -401,7 +401,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               )}
                             </TableCell>
                           ))}
-                          <TableCell className="text-right text-[11px] font-medium">
+                          <TableCell className="text-right text-[10px] font-medium py-0.5">
                             {sub.total === 0 ? '–' : fmt(sub.total)}
                           </TableCell>
                         </TableRow>
