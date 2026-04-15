@@ -312,7 +312,13 @@ function calcRebanhoMedioFazenda(
   return (saldoInicioMes + saldoFimMes) / 2;
 }
 
-// ---------------------------------------------------------------------------
+/** Verifica se fazenda está ativa num dado mês. Default = true (sem registro = ativa) */
+function isFazendaAtivaMes(statusMap: Map<string, boolean>, fazendaId: string, anoMes: string): boolean {
+  const key = `${fazendaId}|${anoMes}`;
+  const val = statusMap.get(key);
+  return val === undefined ? true : val;
+}
+
 // Hook
 // ---------------------------------------------------------------------------
 
@@ -332,6 +338,9 @@ export function useFinanceiro() {
   const [rawSaldos, setRawSaldos] = useState<RawSaldo[]>([]);
   const [rawLancsPec, setRawLancsPec] = useState<RawLancPec[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Status mensal de fazendas (ativa_no_mes) — chave: "fazendaId|anoMes" → boolean
+  const [fazendaStatusMensal, setFazendaStatusMensal] = useState<Map<string, boolean>>(new Map());
 
   // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
@@ -377,7 +386,7 @@ export function useFinanceiro() {
           return;
         }
 
-        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
+        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult, statusMensalResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
             (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
           ),
@@ -386,8 +395,16 @@ export function useFinanceiro() {
           supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId!).eq('ativa', true),
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
         const allLancs = allLancsRaw.map(mapV2ToLancamento);
+
+        // Build status mensal map
+        const statusMap = new Map<string, boolean>();
+        for (const row of (statusMensalResult.data || []) as { fazenda_id: string; ano_mes: string; ativa_no_mes: boolean }[]) {
+          statusMap.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
+        }
+        setFazendaStatusMensal(statusMap);
 
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
@@ -415,7 +432,7 @@ export function useFinanceiro() {
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
-        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult] = await Promise.all([
+        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
@@ -427,7 +444,15 @@ export function useFinanceiro() {
           needsRateio && opIds.length > 0
             ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds)
             : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
+
+        // Build status mensal map
+        const statusMap2 = new Map<string, boolean>();
+        for (const row of (statusMensalResult2.data || []) as { fazenda_id: string; ano_mes: string; ativa_no_mes: boolean }[]) {
+          statusMap2.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
+        }
+        setFazendaStatusMensal(statusMap2);
 
         setLancamentos(lancData);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
@@ -471,13 +496,15 @@ export function useFinanceiro() {
       const mes = Number(am.substring(5, 7));
       const fazMap = new Map<string, number>();
       for (const f of fazendasOperacionais) {
+        // Skip fazendas inativas no mês
+        if (!isFazendaAtivaMes(fazendaStatusMensal, f.id, am)) continue;
         const rm = calcRebanhoMedioFazenda(rawSaldos, rawLancsPec, f.id, ano, mes);
         if (rm > 0) fazMap.set(f.id, rm);
       }
       result.set(am, fazMap);
     }
     return result;
-  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais]);
+  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais, fazendaStatusMensal]);
 
   // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
@@ -546,7 +573,10 @@ export function useFinanceiro() {
         const fazMap = rebanhoMedioPorFazendaMes.get(anoMes);
         const rebanhoTotal = fazMap ? Array.from(fazMap.values()).reduce((s, v) => s + v, 0) : 0;
 
-        const fazendasComRebanho = fazendasOperacionais
+        // Apenas fazendas ativas no mês participam
+        const fazendasAtivasMes = fazendasOperacionais.filter(f => isFazendaAtivaMes(fazendaStatusMensal, f.id, anoMes));
+
+        const fazendasComRebanho = fazendasAtivasMes
           .filter(f => fazMap?.has(f.id) && (fazMap.get(f.id) || 0) > 0)
           .map(f => {
             const rm = fazMap!.get(f.id) || 0;
@@ -554,7 +584,8 @@ export function useFinanceiro() {
             return { fazendaId: f.id, fazendaNome: f.nome, rebanhoMedio: rm, percentual: pct, valorRateado: totalADMElegivel * (pct / 100) };
           });
 
-        const semRebanho = fazendasOperacionais
+        // Alerta apenas para fazendas ATIVAS sem rebanho (inativas não geram alerta)
+        const semRebanho = fazendasAtivasMes
           .filter(f => !fazMap?.has(f.id) || (fazMap.get(f.id) || 0) <= 0)
           .map(f => f.nome);
 
@@ -583,19 +614,21 @@ export function useFinanceiro() {
           fazendasSemRebanho: semRebanho,
         };
       });
-  }, [fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes, fazendasOperacionais]);
+  }, [fazendaADM, lancamentosADM, rebanhoMedioPorFazendaMes, fazendasOperacionais, fazendaStatusMensal]);
 
-  // --- Fazendas sem rebanho (aviso) ---
+  // --- Fazendas sem rebanho (aviso) — apenas fazendas ATIVAS ---
   const fazendasSemRebanho = useMemo(() => {
     if (!fazendaADM || rebanhoMedioPorFazendaMes.size === 0) return [];
     const meses = Array.from(rebanhoMedioPorFazendaMes.keys()).sort();
     if (meses.length === 0) return [];
-    const fazMap = rebanhoMedioPorFazendaMes.get(meses[meses.length - 1]);
+    const ultimoMes = meses[meses.length - 1];
+    const fazMap = rebanhoMedioPorFazendaMes.get(ultimoMes);
     if (!fazMap) return [];
     return fazendasOperacionais
+      .filter(f => isFazendaAtivaMes(fazendaStatusMensal, f.id, ultimoMes))
       .filter(f => !fazMap.has(f.id) || (fazMap.get(f.id) || 0) <= 0)
       .map(f => f.nome);
-  }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM]);
+  }, [fazendasOperacionais, rebanhoMedioPorFazendaMes, fazendaADM, fazendaStatusMensal]);
 
   // --- Gerar hash robusto de deduplicação ---
   const normalizeImportText = (value: string | null | undefined) =>
