@@ -133,8 +133,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       // For rebanho subcentros, effective meses = auto + ajuste
       const isAuto = SUBCENTROS_AUTO.has(g.subcentro);
       const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
+      const isNutricao = SUBCENTROS_NUTRICAO.has(g.subcentro);
       const autoMeses = isAuto
-        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
+        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : isNutricao ? lancamentosNutricao.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
         : null;
       const effectiveMeses = isAuto
         ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
