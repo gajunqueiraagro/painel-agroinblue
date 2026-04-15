@@ -196,7 +196,9 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const tryClose = () => { if (dirty) setConfirmClose(true); else onClose(); };
 
   const qtd = quantidade || 0;
-  const peso = pesoKg || 0;
+  // In Realizado with pesoTotalKgNF, derive per-cabeça peso
+  const pesoTotalNF = Number(pesoTotalKgNF) || 0;
+  const peso = (isRealizado && pesoTotalNF > 0 && qtd > 0) ? (pesoTotalNF / qtd) : (pesoKg || 0);
 
   // Peso carcaça kg state for bidirectional
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
