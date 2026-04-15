@@ -26,20 +26,18 @@ import {
 // Agrupamento por macro_custo oficial (plano de contas)
 // ---------------------------------------------------------------------------
 const MACROS_ENTRADA = ['Receita Operacional', 'Entrada Financeira'];
-const MACROS_SAIDA = ['Custeio Produção', 'Investimento', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos'];
+const MACROS_SAIDA = ['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos'];
 
-/** Normaliza macro_custo bruto → nome oficial de exibição */
+const NOMES_OFICIAIS = new Set([
+  ...MACROS_ENTRADA,
+  ...MACROS_SAIDA,
+]);
+
+/** Retorna macro_custo se é nome oficial, senão 'Não classificado' */
 function normMacroDisplay(macro: string | null | undefined): string {
-  const m = (macro || '').toLowerCase().trim();
-  if (m === 'receita operacional' || m === 'receitas') return 'Receita Operacional';
-  if (m === 'entrada financeira' || m === 'outras entradas financeiras') return 'Entrada Financeira';
-  if (m === 'custeio produção' || m === 'custeio produtivo') return 'Custeio Produção';
-  if (m === 'investimento' || m === 'investimento na fazenda' || m === 'investimentos na fazenda') return 'Investimento';
-  if (m === 'investimento em bovinos' || m === 'investimentos em bovinos') return 'Investimento em Bovinos';
-  if (m.includes('dedu') && m.includes('receita')) return 'Deduções de Receitas';
-  if (m === 'saída financeira' || m === 'saida financeira' || m.includes('amortiza')) return 'Saída Financeira';
-  if (m === 'dividendos' || m === 'distribuição' || m === 'distribuicao') return 'Dividendos';
-  return macro || 'Não classificado';
+  const trimmed = (macro || '').trim();
+  if (NOMES_OFICIAIS.has(trimmed)) return trimmed;
+  return 'Não classificado';
 }
 import { useFazenda } from '@/contexts/FazendaContext';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
