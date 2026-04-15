@@ -116,6 +116,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
   // Sync from parent when editing existing lancamento
   useEffect(() => {
+    console.log('[VendaFinanceiro] sync props', { initialFormaReceb, initialParcelas });
     if (initialFormaReceb) setFormaReceb(initialFormaReceb);
     if (initialParcelas && initialParcelas.length > 0) {
       setParcelas(initialParcelas);
