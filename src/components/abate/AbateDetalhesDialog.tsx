@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -62,18 +62,34 @@ export interface AbateDetalhes {
 }
 
 // Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
-function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+// BiRow with local state: typing stays local, parent only updates on blur
+const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey }: {
   label: string;
   arrobaVal: string;
   reaisVal: string;
   totalVal: number;
-  onArrobaChange: (v: string) => void;
-  onReaisChange: (v: string) => void;
-  onArrobaBlur?: () => void;
-  onReaisBlur?: () => void;
+  onArrobaBlur: (v: string) => void;
+  onReaisBlur: (v: string) => void;
   hint?: string;
   stableKey: string;
 }) {
+  const [localArr, setLocalArr] = useState(arrobaVal);
+  const [localReais, setLocalReais] = useState(reaisVal);
+
+  // Sync from parent when dialog re-opens (stableKey changes) or parent clears the field
+  const prevKey = useRef(stableKey);
+  useEffect(() => {
+    if (prevKey.current !== stableKey) {
+      prevKey.current = stableKey;
+      setLocalArr(arrobaVal);
+      setLocalReais(reaisVal);
+    }
+  }, [stableKey, arrobaVal, reaisVal]);
+
+  // Sync when parent clears the opposite field
+  useEffect(() => { if (arrobaVal === '' && localArr !== '') setLocalArr(''); }, [arrobaVal]);
+  useEffect(() => { if (reaisVal === '' && localReais !== '') setLocalReais(''); }, [reaisVal]);
+
   return (
     <tr className="border-b border-border/30">
       <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
@@ -82,11 +98,10 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
       <td className="py-1 px-1">
         <Input
-          key={`${stableKey}-arroba`}
           type="number"
-          value={arrobaVal}
-          onChange={e => onArrobaChange(e.target.value)}
-          onBlur={onArrobaBlur}
+          value={localArr}
+          onChange={e => setLocalArr(e.target.value)}
+          onBlur={() => onArrobaBlur(localArr)}
           placeholder="0,00"
           className="h-7 text-[10px] w-20 text-right tabular-nums"
           step="0.01"
@@ -94,11 +109,10 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
       <td className="py-1 px-1">
         <Input
-          key={`${stableKey}-reais`}
           type="number"
-          value={reaisVal}
-          onChange={e => onReaisChange(e.target.value)}
-          onBlur={onReaisBlur}
+          value={localReais}
+          onChange={e => setLocalReais(e.target.value)}
+          onBlur={() => onReaisBlur(localReais)}
           placeholder="0,00"
           className="h-7 text-[10px] w-24 text-right tabular-nums"
           step="0.01"
@@ -109,7 +123,7 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
     </tr>
   );
-}
+});
 
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
   dataVenda: '',
@@ -480,41 +494,27 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
 
   const prevLabel = (base: string) => usePrev ? `${base} Prev.` : base;
 
-  // Item 6 fix: Use refs to prevent re-render focus loss on bidirectional fields
-  // Store local string values and only propagate on blur or with stable keys
-  const handleBonusArrobaChange = (
+  // Unified blur handler: set the typed field, clear the opposite if typed > 0
+  const handleBiBlurArroba = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setArr(value); markDirty();
-    if (value === '' || value === '0') setReais('');
+    const v = Number(value) || 0;
+    if (v > 0) setReais('');
+    else if (value === '' || value === '0') setReais('');
   };
 
-  const handleBonusReaisChange = (
+  const handleBiBlurReais = (
     setArr: (v: string) => void,
     setReais: (v: string) => void,
     value: string,
   ) => {
     setReais(value); markDirty();
-    if (value === '' || value === '0') setArr('');
-  };
-
-  // Item 6 fix: Only clear the OTHER field on blur, not on every keystroke
-  const handleBonusArrobaBlur = (
-    arrobaVal: string,
-    setReais: (v: string) => void,
-  ) => {
-    const v = Number(arrobaVal) || 0;
-    if (v > 0) setReais('');
-  };
-
-  const handleBonusReaisBlur = (
-    reaisVal: string,
-    setArr: (v: string) => void,
-  ) => {
-    const v = Number(reaisVal) || 0;
+    const v = Number(value) || 0;
     if (v > 0) setArr('');
+    else if (value === '' || value === '0') setArr('');
   };
 
   // Funrural bidirectional
@@ -775,10 +775,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusPrecoce}
             reaisVal={bonusPrecoceReais}
             totalVal={calc.bonusPrecoceTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusPrecoce, setBonusPrecoceReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusPrecoce, setBonusPrecoceReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusPrecoceReais, setBonusPrecoce)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusPrecoce, setBonusPrecoceReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusPrecoce, setBonusPrecoceReais, v)}
             hint={bonusHint}
           />
           <BiRow
@@ -787,10 +785,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusQualidade}
             reaisVal={bonusQualidadeReais}
             totalVal={calc.bonusQualidadeTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusQualidade, setBonusQualidadeReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusQualidade, setBonusQualidadeReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusQualidade, setBonusQualidadeReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusQualidadeReais, setBonusQualidade)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusQualidade, setBonusQualidadeReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusQualidade, setBonusQualidadeReais, v)}
             hint={bonusHint}
           />
           <BiRow
@@ -799,10 +795,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={bonusListaTrace}
             reaisVal={bonusListaTraceReais}
             totalVal={calc.bonusListaTraceTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setBonusListaTrace, setBonusListaTraceReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(bonusListaTrace, setBonusListaTraceReais)}
-            onReaisBlur={() => handleBonusReaisBlur(bonusListaTraceReais, setBonusListaTrace)}
+            onArrobaBlur={v => handleBiBlurArroba(setBonusListaTrace, setBonusListaTraceReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setBonusListaTrace, setBonusListaTraceReais, v)}
             hint={bonusHint}
           />
         </tbody>
@@ -835,10 +829,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={descontoQualidade}
             reaisVal={descontoQualidadeReais}
             totalVal={calc.descQualidadeTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-            onReaisChange={v => handleBonusReaisChange(setDescontoQualidade, setDescontoQualidadeReais, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(descontoQualidade, setDescontoQualidadeReais)}
-            onReaisBlur={() => handleBonusReaisBlur(descontoQualidadeReais, setDescontoQualidade)}
+            onArrobaBlur={v => handleBiBlurArroba(setDescontoQualidade, setDescontoQualidadeReais, v)}
+            onReaisBlur={v => handleBiBlurReais(setDescontoQualidade, setDescontoQualidadeReais, v)}
           />
           <BiRow
             stableKey="desc-outros"
@@ -846,10 +838,8 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             arrobaVal={outrosDescontosArroba}
             reaisVal={outrosDescontos}
             totalVal={calc.descOutrosTotal}
-            onArrobaChange={v => handleBonusArrobaChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-            onReaisChange={v => handleBonusReaisChange(setOutrosDescontosArroba, setOutrosDescontos, v)}
-            onArrobaBlur={() => handleBonusArrobaBlur(outrosDescontosArroba, setOutrosDescontos)}
-            onReaisBlur={() => handleBonusReaisBlur(outrosDescontos, setOutrosDescontosArroba)}
+            onArrobaBlur={v => handleBiBlurArroba(setOutrosDescontosArroba, setOutrosDescontos, v)}
+            onReaisBlur={v => handleBiBlurReais(setOutrosDescontosArroba, setOutrosDescontos, v)}
           />
         </tbody>
       </table>
