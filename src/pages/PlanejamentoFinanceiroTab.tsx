@@ -262,8 +262,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const BG_ZEBRA = 'color-mix(in srgb, hsl(var(--muted)) 18%, hsl(var(--card)))';
   const BG_DYN = 'color-mix(in srgb, hsl(var(--muted)) 10%, hsl(var(--card)))';
 
-  /* ── Render macro with its children ── */
-  const renderMacro = (macro: MacroNode) => {
+  const corTipo = (tipo: 'entrada' | 'saida') => tipo === 'entrada' ? 'text-emerald-600' : 'text-destructive';
+
+  const renderMacro = (macro: MacroNode, tipo: 'entrada' | 'saida') => {
+    const cor = corTipo(tipo);
     const macroKey = macro.nome;
     const macroOpen = expandedMacros.has(macroKey);
     return (
