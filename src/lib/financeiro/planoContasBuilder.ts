@@ -18,7 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 export const DIVIDENDO_TIPO = '2-Saídas';
 export const DIVIDENDO_MACRO = 'Dividendos';
 export const DIVIDENDO_GRUPO = 'Dividendos';
-export const DIVIDENDO_CENTRO = 'Pessoas';
+export const DIVIDENDO_CENTRO = 'Dividendos';
 export const DIVIDENDO_ESCOPO = 'pecuaria';
 
 /** Prefixo NOVO (padrão oficial) */
