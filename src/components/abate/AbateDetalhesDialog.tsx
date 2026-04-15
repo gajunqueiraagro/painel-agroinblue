@@ -986,7 +986,7 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <h4 className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase">Valor Líquido</h4>
             <div className="flex justify-between text-[12px] font-bold text-blue-700 dark:text-blue-400">
               <span>= Valor Líquido</span>
-              <span className="tabular-nums">{formatMoeda(calc.valorLiquido)}</span>
+              <span className="tabular-nums">{formatMoeda(calc.somaLiquida > 0 ? calc.somaLiquida : calc.valorLiquido)}</span>
             </div>
             <div className="grid grid-cols-3 gap-x-2 text-[10px] pt-1">
               <div><span className="text-muted-foreground">R$/@ líq.</span><p className="font-bold">{formatMoeda(calc.liqArroba)}</p></div>
