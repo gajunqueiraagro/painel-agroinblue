@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -62,18 +62,34 @@ export interface AbateDetalhes {
 }
 
 // Item 3 fix: BiRow extracted outside component to prevent remount/focus loss
-function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisChange, onArrobaBlur, onReaisBlur, hint, stableKey }: {
+// BiRow with local state: typing stays local, parent only updates on blur
+const BiRow = memo(function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaBlur, onReaisBlur, hint, stableKey }: {
   label: string;
   arrobaVal: string;
   reaisVal: string;
   totalVal: number;
-  onArrobaChange: (v: string) => void;
-  onReaisChange: (v: string) => void;
-  onArrobaBlur?: () => void;
-  onReaisBlur?: () => void;
+  onArrobaBlur: (v: string) => void;
+  onReaisBlur: (v: string) => void;
   hint?: string;
   stableKey: string;
 }) {
+  const [localArr, setLocalArr] = useState(arrobaVal);
+  const [localReais, setLocalReais] = useState(reaisVal);
+
+  // Sync from parent when dialog re-opens (stableKey changes) or parent clears the field
+  const prevKey = useRef(stableKey);
+  useEffect(() => {
+    if (prevKey.current !== stableKey) {
+      prevKey.current = stableKey;
+      setLocalArr(arrobaVal);
+      setLocalReais(reaisVal);
+    }
+  }, [stableKey, arrobaVal, reaisVal]);
+
+  // Sync when parent clears the opposite field
+  useEffect(() => { if (arrobaVal === '' && localArr !== '') setLocalArr(''); }, [arrobaVal]);
+  useEffect(() => { if (reaisVal === '' && localReais !== '') setLocalReais(''); }, [reaisVal]);
+
   return (
     <tr className="border-b border-border/30">
       <td className="py-1 pr-2 text-[10px] text-muted-foreground font-medium whitespace-nowrap">
@@ -82,11 +98,10 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
       <td className="py-1 px-1">
         <Input
-          key={`${stableKey}-arroba`}
           type="number"
-          value={arrobaVal}
-          onChange={e => onArrobaChange(e.target.value)}
-          onBlur={onArrobaBlur}
+          value={localArr}
+          onChange={e => setLocalArr(e.target.value)}
+          onBlur={() => onArrobaBlur(localArr)}
           placeholder="0,00"
           className="h-7 text-[10px] w-20 text-right tabular-nums"
           step="0.01"
@@ -94,11 +109,10 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
       <td className="py-1 px-1">
         <Input
-          key={`${stableKey}-reais`}
           type="number"
-          value={reaisVal}
-          onChange={e => onReaisChange(e.target.value)}
-          onBlur={onReaisBlur}
+          value={localReais}
+          onChange={e => setLocalReais(e.target.value)}
+          onBlur={() => onReaisBlur(localReais)}
           placeholder="0,00"
           className="h-7 text-[10px] w-24 text-right tabular-nums"
           step="0.01"
@@ -109,7 +123,7 @@ function BiRow({ label, arrobaVal, reaisVal, totalVal, onArrobaChange, onReaisCh
       </td>
     </tr>
   );
-}
+});
 
 export const EMPTY_ABATE_DETALHES: AbateDetalhes = {
   dataVenda: '',
