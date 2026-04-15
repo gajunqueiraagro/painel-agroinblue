@@ -357,6 +357,19 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
           {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
           {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
           {field('Inscrição Rural (IR)', 'inscricao_rural')}
+          <div className="border-t pt-2 mt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[10px] font-semibold text-muted-foreground">Ativa no mês ({anoMesAtual})</Label>
+                <p className="text-[9px] text-muted-foreground">Fazendas inativas não entram no rateio ADM</p>
+              </div>
+              <Switch
+                checked={ativaNoMes}
+                onCheckedChange={toggleAtivaMes}
+                disabled={ativaLoading}
+              />
+            </div>
+          </div>
         </div>
       );
       case 'contato': return (
