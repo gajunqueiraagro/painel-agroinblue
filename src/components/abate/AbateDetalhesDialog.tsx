@@ -156,7 +156,7 @@ interface Props {
   pesoKg: number;
   categoria: string;
   dataAbate: string;
-  statusOp: StatusOperacional;
+  statusOp: StatusOperacional | 'meta';
 }
 
 /** Format a number for display in R$ format inline */
@@ -1144,21 +1144,29 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
         </DialogHeader>
 
         {/* ── Tabs Meta / Programado / Realizado ── */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 h-9">
-            <TabsTrigger value="meta" className={`gap-1 text-[11px] ${tabColors.meta}`}>
-              <Lock className="h-3 w-3" />
-              Meta
-            </TabsTrigger>
-            <TabsTrigger value="programado" className={`gap-1 text-[11px] ${tabColors.programado}`}>
-              <Clock className="h-3 w-3" />
-              Programado
-            </TabsTrigger>
-            <TabsTrigger value="realizado" className={`gap-1 text-[11px] ${tabColors.realizado}`}>
-              <CheckCircle2 className="h-3 w-3" />
-              Realizado
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={isPrevisto ? undefined : setActiveTab} className="w-full">
+          {isPrevisto ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 mb-2">
+              <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">Cenário Meta</span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-500 ml-auto">Planejamento — sem impacto operacional</span>
+            </div>
+          ) : (
+            <TabsList className="w-full grid grid-cols-3 h-9">
+              <TabsTrigger value="meta" className={`gap-1 text-[11px] ${tabColors.meta}`}>
+                <Lock className="h-3 w-3" />
+                Meta
+              </TabsTrigger>
+              <TabsTrigger value="programado" className={`gap-1 text-[11px] ${tabColors.programado}`}>
+                <Clock className="h-3 w-3" />
+                Programado
+              </TabsTrigger>
+              <TabsTrigger value="realizado" className={`gap-1 text-[11px] ${tabColors.realizado}`}>
+                <CheckCircle2 className="h-3 w-3" />
+                Realizado
+              </TabsTrigger>
+            </TabsList>
+          )}
 
           {/* ══════ ABA META ══════ */}
           <TabsContent value="meta" className="space-y-2">

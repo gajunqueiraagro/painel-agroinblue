@@ -65,7 +65,7 @@ interface Props {
   categoria: string;
   dataVenda: string;
   compradorNome: string;
-  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado';
+  statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado' | 'meta';
 }
 
 export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quantidade, pesoKg, categoria, dataVenda, compradorNome, statusOperacional = 'realizado' }: Props) {
@@ -110,8 +110,9 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
   const peso = pesoKg || 0;
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
-  const isPrevisto = statusOperacional === 'previsto' || statusOperacional === 'programado';
-  const labelSuffix = isPrevisto ? ' Prev.' : '';
+  const isMeta = statusOperacional === 'meta';
+  const isPrevisto = isMeta || statusOperacional === 'previsto' || statusOperacional === 'programado';
+  const labelSuffix = isMeta ? ' Meta' : isPrevisto ? ' Prev.' : '';
 
   // ── Use engine as single source of truth ──
   const calc = useMemo(() => {
@@ -122,7 +123,7 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
       fazendaOrigem: '',
       compradorNome,
       data: dataVenda,
-      statusOperacional: statusOperacional === 'previsto' ? 'programado' : statusOperacional as 'programado' | 'agendado' | 'realizado',
+      statusOperacional: (statusOperacional === 'previsto' || statusOperacional === 'meta') ? 'programado' : statusOperacional as 'programado' | 'agendado' | 'realizado',
       tipoPreco: toEngineTipoPreco(tipoPreco),
       precoInput,
       tipoVenda,
@@ -197,8 +198,8 @@ export function VendaDetalhesDialog({ open, onClose, onSave, initialData, quanti
             <DollarSign className="h-4 w-4 text-primary" />
             Detalhes da Venda em Pé
             {isPrevisto && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                {statusOperacional === 'previsto' ? 'Previsto' : 'Programado'}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isMeta ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                {isMeta ? 'Meta' : statusOperacional === 'previsto' ? 'Previsto' : 'Programado'}
               </span>
             )}
           </DialogTitle>
