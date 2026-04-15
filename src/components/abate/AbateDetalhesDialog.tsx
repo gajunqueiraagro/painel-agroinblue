@@ -9,11 +9,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock, Clock, CheckCircle2 } from 'lucide-react';
+import { Calendar, Tag, Award, TrendingDown, CreditCard, FileText, Shield, Lock, Clock, CheckCircle2, Upload, Paperclip } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
 import type { StatusOperacional } from '@/lib/statusOperacional';
 import { getStatusBadge } from '@/lib/statusOperacional';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface AbateDetalhes {
   dataVenda: string;
