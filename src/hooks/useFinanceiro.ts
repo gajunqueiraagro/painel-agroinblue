@@ -333,6 +333,9 @@ export function useFinanceiro() {
   const [rawLancsPec, setRawLancsPec] = useState<RawLancPec[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Status mensal de fazendas (ativa_no_mes) — chave: "fazendaId|anoMes" → boolean
+  const [fazendaStatusMensal, setFazendaStatusMensal] = useState<Map<string, boolean>>(new Map());
+
   // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
     () => fazendas.find(f => (f.codigo_importacao || '').toUpperCase() === 'ADM'),
