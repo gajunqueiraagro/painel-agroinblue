@@ -170,8 +170,8 @@ export function DashboardFinanceiro({
       return Number(am.substring(5, 7)) <= mesLimite;
     };
 
-    const entradasAcum = lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
-    const saidasAcum = lancamentos.filter(l => filtroAcum(l) && isSaida(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const entradasAcum = lancamentos.filter(l => filtroAcum(l) && isEntrada(l) && isDRE(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+    const saidasAcum = lancamentos.filter(l => filtroAcum(l) && isSaida(l) && isDRE(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
     // Decomposição entradas — agrupamento por macro_custo oficial
     const entradaDecomp = { mes: new Map<string, number>(), acum: new Map<string, number>() };
@@ -180,7 +180,7 @@ export function DashboardFinanceiro({
       const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.mes.set(cat, (entradaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
-    lancamentos.filter(l => filtroAcum(l) && isEntrada(l)).forEach(l => {
+    lancamentos.filter(l => filtroAcum(l) && isEntrada(l) && isDRE(l)).forEach(l => {
       const cat = normMacroDisplay(l.macro_custo);
       entradaDecomp.acum.set(cat, (entradaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
@@ -192,7 +192,7 @@ export function DashboardFinanceiro({
       const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.mes.set(cat, (saidaDecomp.mes.get(cat) || 0) + Math.abs(l.valor));
     }
-    lancamentos.filter(l => filtroAcum(l) && isSaida(l)).forEach(l => {
+    lancamentos.filter(l => filtroAcum(l) && isSaida(l) && isDRE(l)).forEach(l => {
       const cat = normMacroDisplay(l.macro_custo);
       saidaDecomp.acum.set(cat, (saidaDecomp.acum.get(cat) || 0) + Math.abs(l.valor));
     });
