@@ -5,12 +5,12 @@
  * hash_importacao: campo técnico de apoio para rastreabilidade de dedup.
  *
  * ═══════════════════════════════════════════════════════════════════════
- * RATEIO ADM v2 — Critério: REBANHO MÉDIO do período
+ * RATEIO ADM v3 — Critério: ÁREA PRODUTIVA (hectares) de cada fazenda
  * ═══════════════════════════════════════════════════════════════════════
  * Regras:
  * - Modo global: soma todos os lançamentos originais (incluindo ADM), sem rateio.
  * - Modo por fazenda: lançamentos da fazenda + parcela rateada dos custos ADM
- *   proporcional ao rebanho médio.
+ *   proporcional à área produtiva (hectares) da fazenda.
  * - Somente lançamentos ADM com status_transacao = "realizado" entram no rateio.
  * - O período do rateio usa data_pagamento (não data_realizacao nem ano_mes).
  * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
@@ -342,6 +342,9 @@ export function useFinanceiro() {
   // Status mensal de fazendas (ativa_no_mes) — chave: "fazendaId|anoMes" → boolean
   const [fazendaStatusMensal, setFazendaStatusMensal] = useState<Map<string, boolean>>(new Map());
 
+  // Área produtiva por fazenda (hectares) — chave: fazendaId → area_produtiva
+  const [areaProdutivaPorFazenda, setAreaProdutivaPorFazenda] = useState<Map<string, number>>(new Map());
+
   // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
     () => fazendas.find(f => (f.codigo_importacao || '').toUpperCase() === 'ADM'),
@@ -386,7 +389,7 @@ export function useFinanceiro() {
           return;
         }
 
-        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult, statusMensalResult] = await Promise.all([
+        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult, statusMensalResult, cadastrosResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
             (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false).order('data_competencia', { ascending: false }).range(from, to),
           ),
@@ -396,6 +399,7 @@ export function useFinanceiro() {
           opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
           clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_cadastros').select('fazenda_id, area_produtiva').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
         const allLancs = allLancsRaw.map(mapV2ToLancamento);
 
@@ -405,6 +409,13 @@ export function useFinanceiro() {
           statusMap.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
         }
         setFazendaStatusMensal(statusMap);
+
+        // Build area produtiva map
+        const areaMap = new Map<string, number>();
+        for (const row of (cadastrosResult.data || []) as { fazenda_id: string; area_produtiva: number | null }[]) {
+          if (row.area_produtiva && row.area_produtiva > 0) areaMap.set(row.fazenda_id, row.area_produtiva);
+        }
+        setAreaProdutivaPorFazenda(areaMap);
 
         setLancamentos(allLancs);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
@@ -432,7 +443,7 @@ export function useFinanceiro() {
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
-        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2] = await Promise.all([
+        const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult, statusMensalResult2, cadastrosResult2] = await Promise.all([
           lancPromise,
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').eq('fazenda_id', fazendaId).eq('ativo', true),
           clienteId ? supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId).neq('status', 'cancelada').order('data_importacao', { ascending: false }) : Promise.resolve({ data: [] }),
@@ -445,6 +456,7 @@ export function useFinanceiro() {
             ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds)
             : Promise.resolve({ data: [] }),
           clienteId ? supabase.from('fazenda_status_mensal').select('fazenda_id, ano_mes, ativa_no_mes').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
+          clienteId ? supabase.from('fazenda_cadastros').select('fazenda_id, area_produtiva').eq('cliente_id', clienteId) : Promise.resolve({ data: [] }),
         ]);
 
         // Build status mensal map
@@ -453,6 +465,13 @@ export function useFinanceiro() {
           statusMap2.set(`${row.fazenda_id}|${row.ano_mes}`, row.ativa_no_mes);
         }
         setFazendaStatusMensal(statusMap2);
+
+        // Build area produtiva map
+        const areaMap2 = new Map<string, number>();
+        for (const row of (cadastrosResult2.data || []) as { fazenda_id: string; area_produtiva: number | null }[]) {
+          if (row.area_produtiva && row.area_produtiva > 0) areaMap2.set(row.fazenda_id, row.area_produtiva);
+        }
+        setAreaProdutivaPorFazenda(areaMap2);
 
         setLancamentos(lancData);
         setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
@@ -478,9 +497,11 @@ export function useFinanceiro() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
+  // --- Área produtiva por fazenda por mês (para rateio ADM v3 — por hectare) ---
+  // Renamed internally but keeps the same Map structure for minimal downstream changes.
+  // Map<anoMes, Map<fazendaId, areaHectares>>
   const rebanhoMedioPorFazendaMes = useMemo(() => {
-    if (!fazendaADM || rawSaldos.length === 0) return new Map<string, Map<string, number>>();
+    if (!fazendaADM || areaProdutivaPorFazenda.size === 0) return new Map<string, Map<string, number>>();
 
     // Collect all YYYY-MM from ADM lancamentos conciliados
     const mesesADM = new Set<string>();
@@ -492,19 +513,18 @@ export function useFinanceiro() {
 
     const result = new Map<string, Map<string, number>>();
     for (const am of mesesADM) {
-      const ano = Number(am.substring(0, 4));
-      const mes = Number(am.substring(5, 7));
       const fazMap = new Map<string, number>();
       for (const f of fazendasOperacionais) {
         // Skip fazendas inativas no mês
         if (!isFazendaAtivaMes(fazendaStatusMensal, f.id, am)) continue;
-        const rm = calcRebanhoMedioFazenda(rawSaldos, rawLancsPec, f.id, ano, mes);
-        if (rm > 0) fazMap.set(f.id, rm);
+        // Usar area_produtiva em vez de rebanho médio
+        const area = areaProdutivaPorFazenda.get(f.id) || 0;
+        if (area > 0) fazMap.set(f.id, area);
       }
       result.set(am, fazMap);
     }
     return result;
-  }, [fazendaADM, lancamentosADM, rawSaldos, rawLancsPec, fazendasOperacionais, fazendaStatusMensal]);
+  }, [fazendaADM, lancamentosADM, areaProdutivaPorFazenda, fazendasOperacionais, fazendaStatusMensal]);
 
   // --- Rateio ADM (for current fazenda) ---
   const rateioADM = useMemo((): RateioADM[] => {
