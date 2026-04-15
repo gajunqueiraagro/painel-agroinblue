@@ -938,6 +938,48 @@ export type Database = {
           },
         ]
       }
+      fazenda_status_mensal: {
+        Row: {
+          ano_mes: string
+          ativa_no_mes: boolean
+          cliente_id: string
+          created_at: string
+          fazenda_id: string
+          id: string
+        }
+        Insert: {
+          ano_mes: string
+          ativa_no_mes?: boolean
+          cliente_id: string
+          created_at?: string
+          fazenda_id: string
+          id?: string
+        }
+        Update: {
+          ano_mes?: string
+          ativa_no_mes?: boolean
+          cliente_id?: string
+          created_at?: string
+          fazenda_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fazenda_status_mensal_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fazenda_status_mensal_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fazendas: {
         Row: {
           cliente_id: string
