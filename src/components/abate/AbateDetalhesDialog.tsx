@@ -311,6 +311,37 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
     });
   };
 
+  // Upload handler for attachments
+  const handleUploadAnexo = useCallback(async (file: File, tipo: 'nf' | 'acerto') => {
+    const setUploading = tipo === 'nf' ? setUploadingNf : setUploadingAcerto;
+    const setUrl = tipo === 'nf' ? setAnexoNfUrl : setAnexoAcertoUrl;
+    const fileName = tipo === 'nf' ? 'nf.pdf' : 'acerto.pdf';
+    // Use a unique path based on timestamp to avoid caching issues
+    const storagePath = `${Date.now()}_${fileName}`;
+
+    setUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('abate-anexos')
+        .upload(storagePath, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('abate-anexos')
+        .getPublicUrl(storagePath);
+
+      setUrl(urlData.publicUrl);
+      markDirty();
+      toast.success(`${tipo === 'nf' ? 'Nota Fiscal' : 'Acerto'} enviado com sucesso`);
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(`Erro ao enviar ${tipo === 'nf' ? 'NF' : 'Acerto'}: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }, [markDirty]);
+
   const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria || '-';
 
   const sectionTitle = (icon: React.ReactNode, title: string) => (
