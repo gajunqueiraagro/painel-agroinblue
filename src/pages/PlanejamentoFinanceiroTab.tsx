@@ -55,6 +55,33 @@ const SUBCENTROS_NUTRICAO = new Set([
 const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
 // Investment subcentros are added dynamically from lancamentosProjetos keys
 
+/** Subcentros exclusivos da fazenda Administrativo */
+const SUBCENTROS_ADM_ONLY = new Set([
+  'Aporte Pessoal',
+  'Retorno de Empréstimos',
+  'Entrada de Financiamento Pecuária',
+  'Entrada de Financiamento Agricultura',
+  'Amortização Financiamento Pecuária',
+  'Amortização Financiamento Agricultura',
+  'Juros de Financiamento Pecuária',
+  'Juros de Financiamento Agricultura',
+]);
+
+/** Macros exclusivos de fazenda operacional */
+const MACROS_FAZENDA_ONLY = new Set([
+  'Receita Operacional',
+  'Investimento em Bovinos',
+]);
+
+/** Grupos exclusivos de fazenda operacional */
+const GRUPOS_FAZENDA_ONLY = new Set([
+  'Custo Variável Pecuária',
+  'Custo Variável Agricultura',
+  'Receita Pecuária',
+  'Receita Agrícola',
+  'Compra de Bovinos',
+]);
+
 const fmt = (v: number) => {
   if (v === 0) return '–';
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
