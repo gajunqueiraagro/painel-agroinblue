@@ -91,7 +91,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
-    if (!clienteId) return;
+    if (!clienteId) { setLoading(false); return; }
     // Global: load all fazendas; individual: load specific
     setLoading(true);
     try {
