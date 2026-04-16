@@ -65,7 +65,7 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-bold text-foreground">Novo Financiamento</h1>
-      </div>
+        <span className="text-[10px] text-muted-foreground ml-auto">Vinculado automaticamente à fazenda Administrativo</span>
 
       {/* Seção 1 – Dados do contrato */}
       <Card>
