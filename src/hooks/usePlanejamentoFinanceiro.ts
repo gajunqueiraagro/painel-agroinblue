@@ -719,7 +719,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 }
 
   // ─── Autosave: salvar célula individual ──────────────────
-  const salvarCelula = useCallback(async (
+    const salvarCelula = useCallback(async (
     subcentro: string,
     centro_custo: string,
     grupo_custo: string,
