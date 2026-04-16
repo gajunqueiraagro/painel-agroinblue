@@ -554,25 +554,27 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
       console.log('[SALDO-SAVE] payload:', JSON.stringify({ ...payload, registroExistente }));
 
-      const { error, data } = registroExistente
-        ? await supabase
-            .from('saldos_iniciais')
-            .update({
-              quantidade,
-              peso_medio_kg: pesoMedioKg ?? null,
-              preco_kg: precoKg ?? null,
-            } as any)
-            .eq('fazenda_id', fazendaId)
-            .eq('ano', ano)
-            .eq('mes' as any, mes)
-            .eq('categoria', categoria)
-            .select()
-            .maybeSingle()
-        : await supabase
-            .from('saldos_iniciais')
-            .insert(payload as any)
-            .select()
-            .maybeSingle();
+      let result;
+      if (registroExistente) {
+        const q = supabase
+          .from('saldos_iniciais')
+          .update({
+            quantidade,
+            peso_medio_kg: pesoMedioKg ?? null,
+            preco_kg: precoKg ?? null,
+          } as any)
+          .eq('fazenda_id', fazendaId)
+          .eq('ano', ano)
+          .eq('categoria', categoria) as any;
+        result = await q.eq('mes', mes).select().maybeSingle();
+      } else {
+        result = await supabase
+          .from('saldos_iniciais')
+          .insert(payload as any)
+          .select()
+          .maybeSingle();
+      }
+      const { error, data } = result;
 
       console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data, registroExistente }));
 
