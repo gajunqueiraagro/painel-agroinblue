@@ -68,7 +68,23 @@ export function useFinanciamentoCadastro() {
   const { fazendaAtual } = useFazenda();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id ?? '';
-  const fazendaId = fazendaAtual?.id === '__global__' ? null : (fazendaAtual?.id ?? null);
+
+  // Financiamentos sempre pertencem à fazenda Administrativo
+  const { data: fazendaAdmId } = useQuery({
+    queryKey: ['fazenda-adm', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('fazendas')
+        .select('id')
+        .eq('cliente_id', clienteId)
+        .ilike('nome', '%admin%')
+        .limit(1)
+        .single();
+      return data?.id ?? null;
+    },
+  });
+  const fazendaId = fazendaAdmId ?? null;
 
   const [form, setForm] = useState<FinanciamentoForm>({ ...INITIAL });
   const [parcelas, setParcelas] = useState<ParcelaPreview[]>([]);
