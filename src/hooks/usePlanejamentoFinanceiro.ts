@@ -312,7 +312,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       console.error('Erro ao carregar financiamentos para META:', e);
       setLancamentosFinanciamento(new Map());
     }
-  }, [clienteId, ano]);
+  }, [clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
 
