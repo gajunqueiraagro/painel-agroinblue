@@ -141,6 +141,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
+  const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
   const [projetosOpen, setProjetosOpen] = useState(false);
@@ -307,8 +308,13 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   /* ── Save ── */
   const handleSave = useCallback(async () => {
-    const ok = await salvarGrid(grid);
-    if (ok) setDirty(false);
+    setSaving(true);
+    try {
+      const ok = await salvarGrid(grid);
+      if (ok) setDirty(false);
+    } finally {
+      setSaving(false);
+    }
   }, [salvarGrid, grid]);
 
   /* ── Style constants (matching FluxoFinanceiro) ── */
@@ -536,7 +542,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        <Button size="sm" onClick={handleSave} disabled={loading || isGlobal || !dirty}>
+        <Button size="sm" onClick={handleSave} disabled={saving || isGlobal || !dirty}>
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
       </div>
