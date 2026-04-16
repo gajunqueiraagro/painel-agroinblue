@@ -609,12 +609,12 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       return;
     }
 
-    const { error } = await supabase.from('saldos_iniciais')
+    const delQ = supabase.from('saldos_iniciais')
       .delete()
       .eq('fazenda_id', fazendaId)
       .eq('ano', ano)
-      .eq('mes' as any, mes)
-      .eq('categoria', categoria);
+      .eq('categoria', categoria) as any;
+    const { error } = await delQ.eq('mes', mes);
 
     if (error) {
       console.error('Erro ao remover saldo inicial:', error);
