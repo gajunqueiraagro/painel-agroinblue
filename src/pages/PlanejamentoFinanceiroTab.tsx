@@ -14,8 +14,9 @@ import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanej
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
+import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings } from 'lucide-react';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -52,6 +53,7 @@ const SUBCENTROS_NUTRICAO = new Set([
 ]);
 
 const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
+// Investment subcentros are added dynamically from lancamentosProjetos keys
 
 const fmt = (v: number) => {
   if (v === 0) return '–';
@@ -94,11 +96,12 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
+  const [projetosOpen, setProjetosOpen] = useState(false);
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
 
   useEffect(() => {
@@ -134,12 +137,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const grupo = g.grupo_custo || '(Sem grupo)';
       const centro = g.centro_custo || '(Sem centro)';
 
-      // For rebanho subcentros, effective meses = auto + ajuste
-      const isAuto = SUBCENTROS_AUTO.has(g.subcentro);
+      // For auto subcentros, effective meses = auto + ajuste
+      const isProjeto = lancamentosProjetos.has(g.subcentro);
+      const isAuto = SUBCENTROS_AUTO.has(g.subcentro) || isProjeto;
       const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
       const isNutricao = SUBCENTROS_NUTRICAO.has(g.subcentro);
       const autoMeses = isAuto
-        ? (isRebanho ? lancamentosRebanho.get(g.subcentro) : isNutricao ? lancamentosNutricao.get(g.subcentro) : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
+        ? (isRebanho ? lancamentosRebanho.get(g.subcentro)
+          : isNutricao ? lancamentosNutricao.get(g.subcentro)
+          : isProjeto ? lancamentosProjetos.get(g.subcentro)
+          : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
         : null;
       const effectiveMeses = isAuto
         ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
@@ -187,7 +194,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao]);
+  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
@@ -447,6 +454,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     );
   };
 
+  if (projetosOpen) {
+    return (
+      <ProjetosInvestimento
+        ano={ano}
+        onBack={() => setProjetosOpen(false)}
+        onDataChanged={() => reloadProjetos()}
+      />
+    );
+  }
+
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
       {/* Header — sticky, never scrolls */}
@@ -467,6 +484,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </span>
         )}
         <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={() => setProjetosOpen(true)} title="Projetos de Investimento">
+          <ClipboardList className="h-4 w-4 mr-1" />Projetos
+        </Button>
         {!isGlobal && (
           <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
             <Settings className="h-4 w-4" />
