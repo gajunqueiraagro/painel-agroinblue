@@ -307,8 +307,8 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   /* ── Save ── */
   const handleSave = useCallback(async () => {
-    await salvarGrid(grid);
-    setDirty(false);
+    const ok = await salvarGrid(grid);
+    if (ok) setDirty(false);
   }, [salvarGrid, grid]);
 
   /* ── Style constants (matching FluxoFinanceiro) ── */
