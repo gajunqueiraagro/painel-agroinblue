@@ -507,6 +507,8 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     );
   }
 
+  console.log('[META debug] fazendaId:', fazendaId, 'isGlobal:', isGlobal, 'dirty:', dirty, 'loading:', loading);
+
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
       {/* Header — sticky, never scrolls */}
