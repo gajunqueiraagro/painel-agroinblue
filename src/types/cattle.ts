@@ -104,6 +104,7 @@ export interface Lancamento {
 
 export interface SaldoInicial {
   ano: number;
+  mes: number;
   categoria: Categoria;
   quantidade: number;
   pesoMedioKg?: number;

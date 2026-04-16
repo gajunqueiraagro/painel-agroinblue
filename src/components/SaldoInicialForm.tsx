@@ -9,41 +9,44 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pencil, AlertTriangle, Plus, Lock, Calendar, Users } from 'lucide-react';
 
+const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 interface Props {
   saldosIniciais: SaldoInicial[];
-  onSetSaldo: (ano: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
+  onSetSaldo: (ano: number, mes: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
   anoBase?: number;
   totalLancamentos?: number;
   alwaysVisible?: boolean;
-  /** Whether the base month is officially closed (locks qty/peso editing) */
   mesFechado?: boolean;
 }
 
 export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLancamentos = 0, alwaysVisible, mesFechado = false }: Props) {
-  const anoSaldo = useMemo(() => {
-    const anos = saldosIniciais.map(s => s.ano);
-    if (anos.length > 0) return Math.min(...anos);
-    return anoBase || new Date().getFullYear();
+  const saldoBase = useMemo(() => {
+    if (saldosIniciais.length === 0) return { ano: anoBase || new Date().getFullYear(), mes: 1 };
+    // Find the earliest (ano, mes) combination
+    const sorted = [...saldosIniciais].sort((a, b) => a.ano !== b.ano ? a.ano - b.ano : (a.mes || 1) - (b.mes || 1));
+    return { ano: sorted[0].ano, mes: sorted[0].mes || 1 };
   }, [saldosIniciais, anoBase]);
 
-  const shouldRender = !anoBase || anoBase === anoSaldo;
+  const shouldRender = !anoBase || anoBase === saldoBase.ano;
 
   const hasSaldo = useMemo(() => {
-    return saldosIniciais.some(s => s.ano === anoSaldo && s.quantidade > 0);
-  }, [saldosIniciais, anoSaldo]);
+    return saldosIniciais.some(s => s.ano === saldoBase.ano && (s.mes || 1) === saldoBase.mes && s.quantidade > 0);
+  }, [saldosIniciais, saldoBase]);
 
   const totalCabecas = useMemo(() => {
     return saldosIniciais
-      .filter(s => s.ano === anoSaldo)
+      .filter(s => s.ano === saldoBase.ano && (s.mes || 1) === saldoBase.mes)
       .reduce((sum, s) => sum + s.quantidade, 0);
-  }, [saldosIniciais, anoSaldo]);
+  }, [saldosIniciais, saldoBase]);
 
   const [open, setOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [valores, setValores] = useState<Record<string, string>>({});
   const [pesos, setPesos] = useState<Record<string, string>>({});
   const [precos, setPrecos] = useState<Record<string, string>>({});
-  const [anoSelecionado, setAnoSelecionado] = useState(String(anoSaldo));
+  const [anoSelecionado, setAnoSelecionado] = useState(String(saldoBase.ano));
+  const [mesSelecionado, setMesSelecionado] = useState(String(saldoBase.mes));
 
   const anoOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -52,14 +55,17 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     return anos;
   }, []);
 
+  const mesOptions = useMemo(() => MESES_CURTOS.map((label, i) => ({ value: String(i + 1), label })), []);
+
   useEffect(() => {
     if (!open) return;
-    const anoForm = hasSaldo ? anoSaldo : Number(anoSelecionado);
+    const anoForm = hasSaldo ? saldoBase.ano : Number(anoSelecionado);
+    const mesForm = hasSaldo ? saldoBase.mes : Number(mesSelecionado);
     const v: Record<string, string> = {};
     const p: Record<string, string> = {};
     const pr: Record<string, string> = {};
     CATEGORIAS.forEach(c => {
-      const s = saldosIniciais.find(s => s.ano === anoForm && s.categoria === c.value);
+      const s = saldosIniciais.find(s => s.ano === anoForm && (s.mes || 1) === mesForm && s.categoria === c.value);
       v[c.value] = s ? String(s.quantidade) : '';
       p[c.value] = s?.pesoMedioKg != null ? String(s.pesoMedioKg) : '';
       pr[c.value] = s?.precoKg != null ? String(s.precoKg) : '';
@@ -67,8 +73,11 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     setValores(v);
     setPesos(p);
     setPrecos(pr);
-    if (!hasSaldo) setAnoSelecionado(String(anoSaldo));
-  }, [open, saldosIniciais, anoSaldo, hasSaldo]);
+    if (!hasSaldo) {
+      setAnoSelecionado(String(saldoBase.ano));
+      setMesSelecionado(String(saldoBase.mes));
+    }
+  }, [open, saldosIniciais, saldoBase, hasSaldo]);
 
   const parseNumero = (v: string | null | undefined): number | undefined => {
     if (v == null || v === '') return undefined;
@@ -78,18 +87,19 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   };
 
   const handleSalvar = async () => {
-    const anoFinal = hasSaldo ? anoSaldo : Number(anoSelecionado);
+    const anoFinal = hasSaldo ? saldoBase.ano : Number(anoSelecionado);
+    const mesFinal = hasSaldo ? saldoBase.mes : Number(mesSelecionado);
 
     try {
       for (const c of CATEGORIAS) {
         const qtd = parseNumero(valores[c.value]) ?? 0;
         const peso = parseNumero(pesos[c.value]);
         const preco = parseNumero(precos[c.value]);
-        await onSetSaldo(anoFinal, c.value, qtd, peso, preco);
+        await onSetSaldo(anoFinal, mesFinal, c.value, qtd, peso, preco);
       }
       setOpen(false);
     } catch {
-      // erro já tratado no fluxo de persistência; mantém modal aberto
+      // erro já tratado no fluxo de persistência
     }
   };
 
@@ -102,6 +112,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   };
 
   if (!shouldRender) return null;
+
+  const mesLabel = MESES_CURTOS[(saldoBase.mes || 1) - 1];
 
   // ── No saldo exists: warning banner ──
   if (!hasSaldo) {
@@ -125,6 +137,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
             </DialogTrigger>
             <SaldoInicialDialogContent
               anoSaldo={Number(anoSelecionado)}
+              mesSaldo={Number(mesSelecionado)}
               valores={valores}
               pesos={pesos}
               precos={precos}
@@ -133,10 +146,13 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               setPrecos={setPrecos}
               onSalvar={handleSalvar}
               mesFechado={false}
-              showAnoSelector
+              showSelector
               anoSelecionado={anoSelecionado}
               setAnoSelecionado={setAnoSelecionado}
+              mesSelecionado={mesSelecionado}
+              setMesSelecionado={setMesSelecionado}
               anoOptions={anoOptions}
+              mesOptions={mesOptions}
             />
           </Dialog>
         </div>
@@ -154,7 +170,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
             <span className="text-xs font-bold text-foreground">Saldo Inicial</span>
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Calendar className="h-3 w-3" />
-              Jan/{anoSaldo}
+              {mesLabel}/{saldoBase.ano}
             </span>
             {mesFechado && (
               <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">
@@ -209,7 +225,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
       {/* Edit dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <SaldoInicialDialogContent
-          anoSaldo={anoSaldo}
+          anoSaldo={saldoBase.ano}
+          mesSaldo={saldoBase.mes}
           valores={valores}
           pesos={pesos}
           precos={precos}
@@ -230,12 +247,15 @@ function fmtBrl(v: number | null): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const MESES_CURTOS_DIALOG = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 // ── Dialog content ──
 function SaldoInicialDialogContent({
-  anoSaldo, valores, pesos, precos, setValores, setPesos, setPrecos, onSalvar,
-  mesFechado, showAnoSelector, anoSelecionado, setAnoSelecionado, anoOptions,
+  anoSaldo, mesSaldo, valores, pesos, precos, setValores, setPesos, setPrecos, onSalvar,
+  mesFechado, showSelector, anoSelecionado, setAnoSelecionado, mesSelecionado, setMesSelecionado, anoOptions, mesOptions,
 }: {
   anoSaldo: number;
+  mesSaldo: number;
   valores: Record<string, string>;
   pesos: Record<string, string>;
   precos: Record<string, string>;
@@ -244,36 +264,53 @@ function SaldoInicialDialogContent({
   setPrecos: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onSalvar: () => void;
   mesFechado: boolean;
-  showAnoSelector?: boolean;
+  showSelector?: boolean;
   anoSelecionado?: string;
   setAnoSelecionado?: (v: string) => void;
+  mesSelecionado?: string;
+  setMesSelecionado?: (v: string) => void;
   anoOptions?: string[];
+  mesOptions?: { value: string; label: string }[];
 }) {
-  const displayAno = showAnoSelector && anoSelecionado ? Number(anoSelecionado) : anoSaldo;
+  const displayAno = showSelector && anoSelecionado ? Number(anoSelecionado) : anoSaldo;
+  const displayMes = showSelector && mesSelecionado ? Number(mesSelecionado) : mesSaldo;
+  const mesLabel = MESES_CURTOS_DIALOG[displayMes - 1];
 
   return (
     <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>
-          {showAnoSelector ? 'Cadastrar Saldo Inicial' : `Editar Saldo Inicial — Jan/${anoSaldo}`}
+          {showSelector ? 'Cadastrar Saldo Inicial' : `Editar Saldo Inicial — ${mesLabel}/${anoSaldo}`}
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-3">
-        {showAnoSelector && anoOptions && setAnoSelecionado && anoSelecionado ? (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-bold">Ano Base (início do histórico)</Label>
-            <Select value={anoSelecionado} onValueChange={setAnoSelecionado}>
-              <SelectTrigger className="h-9 text-sm font-bold">
-                <SelectValue placeholder="Selecione o ano" />
-              </SelectTrigger>
-              <SelectContent>
-                {anoOptions.map(a => (
-                  <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {showSelector && anoOptions && setAnoSelecionado && anoSelecionado && mesOptions && setMesSelecionado && mesSelecionado ? (
+          <div className="space-y-2">
+            <Label className="text-xs font-bold">Mês e Ano Base (início do histórico)</Label>
+            <div className="flex gap-2">
+              <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
+                <SelectTrigger className="h-9 text-sm font-bold w-[120px]">
+                  <SelectValue placeholder="Mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mesOptions.map(m => (
+                    <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={anoSelecionado} onValueChange={setAnoSelecionado}>
+                <SelectTrigger className="h-9 text-sm font-bold flex-1">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {anoOptions.map(a => (
+                    <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <p className="text-[10px] text-muted-foreground">
-              Este será o ponto zero do histórico do rebanho (Janeiro/{anoSelecionado}).
+              Este será o ponto zero do histórico do rebanho ({mesLabel}/{anoSelecionado}).
             </p>
           </div>
         ) : (
@@ -287,7 +324,7 @@ function SaldoInicialDialogContent({
         )}
 
         <p className="text-xs text-muted-foreground">
-          Rebanho em Janeiro/{displayAno}:
+          Rebanho em {mesLabel}/{displayAno}:
         </p>
 
         <Table>
