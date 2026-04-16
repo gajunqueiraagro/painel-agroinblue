@@ -600,8 +600,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }, [fazendaId, clienteId, ano]);
 
   // ─── Save grid to database (bulk upsert) ──────────────────
-  const salvarGrid = useCallback(async (grid: SubcentroGrid[]) => {
-    if (!isValidFazenda(fazendaId) || !clienteId) return;
+  const salvarGrid = useCallback(async (grid: SubcentroGrid[]): Promise<boolean> => {
+    if (!isValidFazenda(fazendaId) || !clienteId) return false;
     const rows: any[] = [];
     for (const g of grid) {
       for (let m = 0; m < 12; m++) {
@@ -648,10 +648,22 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
 
       toast.success(`Planejamento salvo — ${rows.length} registros`);
-      await loadSaved();
+
+      // Reload com timeout de segurança — dados já salvos
+      try {
+        await Promise.race([
+          loadSaved(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+        ]);
+      } catch {
+        // ignore — dados foram salvos, apenas reload falhou
+      }
+
+      return true;
     } catch (e: any) {
       console.error('Erro ao salvar planejamento:', e);
       toast.error(e.message || 'Erro ao salvar');
+      return false;
     }
   }, [fazendaId, clienteId, ano, loadSaved]);
 
