@@ -709,7 +709,9 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     lancamentosRebanho,
     lancamentosFinanciamento,
     lancamentosNutricao,
+    lancamentosProjetos,
     reloadNutricao: loadNutricao,
+    reloadProjetos: loadProjetos,
     reload: loadSaved,
   };
 }
