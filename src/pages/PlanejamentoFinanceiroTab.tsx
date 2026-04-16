@@ -14,8 +14,9 @@ import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanej
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
+import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings } from 'lucide-react';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
