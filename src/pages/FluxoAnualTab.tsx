@@ -300,6 +300,9 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               const isFuturo = (mKey: string) =>
                 statusFiltro === 'realizado' && (Number(anoFiltro) > anoAtual || (Number(anoFiltro) === anoAtual && mKey > mesAtualKey));
 
+              const isCenarioMeta = statusFiltro === 'meta';
+              const temDado = (mKey: string) => temFechamento(mKey) || isCenarioMeta;
+
               return (
                 <>
                   <tr className="border-t bg-muted/40">
@@ -309,7 +312,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {temFechamento(m.key) && z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
+                          {temDado(m.key) && z?.peso_medio_final_kg != null ? fmtDec(z.peso_medio_final_kg, 2) : '–'}
                         </td>
                       );
                     })}
@@ -323,13 +326,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {temFechamento(m.key) && z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
+                          {temDado(m.key) && z?.gmd_kg_cab_dia != null ? fmtDec(z.gmd_kg_cab_dia, 3) : '–'}
                         </td>
                       );
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/40 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && temFechamento(m.key)).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && temDado(m.key)).map(m => fazendaByMes[m.key]?.gmd_kg_cab_dia).filter((v): v is number => v != null && v !== 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 3) : '–';
                       })()}
                     </td>
@@ -342,13 +345,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       const z = fazendaByMes[m.key];
                       return (
                         <td key={m.key} className={`px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground ${qb(m.key)}`}>
-                          {temFechamento(m.key) && z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
+                          {temDado(m.key) && z?.lotacao_ua_ha != null ? fmtDec(z.lotacao_ua_ha, 2) : '–'}
                         </td>
                       );
                     })}
                     <td className="px-1.5 py-0.5 text-right font-normal italic tabular-nums text-[9px] text-muted-foreground bg-muted/50 border-l border-border/60">
                       {(() => {
-                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && temFechamento(m.key)).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
+                        const vals = MESES_COLS.filter(m => !isFuturo(m.key) && temDado(m.key)).map(m => fazendaByMes[m.key]?.lotacao_ua_ha).filter((v): v is number => v != null && v > 0);
                         return vals.length > 0 ? fmtDec(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : '–';
                       })()}
                     </td>
