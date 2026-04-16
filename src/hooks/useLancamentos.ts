@@ -170,6 +170,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       if (saldoRes.data) {
       setSaldosIniciais(saldoRes.data.map(s => ({
           ano: s.ano,
+          mes: (s as any).mes ?? 1,
           categoria: s.categoria as Categoria,
           quantidade: s.quantidade,
           pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
@@ -532,11 +533,11 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     return !error;
   };
 
-  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
+  const setSaldoInicial = async (ano: number, mes: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
     const registroExistente = saldosIniciais.some(
-      s => s.ano === ano && s.categoria === categoria
+      s => s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria
     );
 
     if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
@@ -544,6 +545,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
         ano,
+        mes,
         categoria,
         quantidade,
         peso_medio_kg: pesoMedioKg ?? null,
@@ -552,24 +554,27 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
       console.log('[SALDO-SAVE] payload:', JSON.stringify({ ...payload, registroExistente }));
 
-      const { error, data } = registroExistente
-        ? await supabase
-            .from('saldos_iniciais')
-            .update({
-              quantidade,
-              peso_medio_kg: pesoMedioKg ?? null,
-              preco_kg: precoKg ?? null,
-            } as any)
-            .eq('fazenda_id', fazendaId)
-            .eq('ano', ano)
-            .eq('categoria', categoria)
-            .select()
-            .maybeSingle()
-        : await supabase
-            .from('saldos_iniciais')
-            .insert(payload as any)
-            .select()
-            .maybeSingle();
+      let result;
+      if (registroExistente) {
+        const q = supabase
+          .from('saldos_iniciais')
+          .update({
+            quantidade,
+            peso_medio_kg: pesoMedioKg ?? null,
+            preco_kg: precoKg ?? null,
+          } as any)
+          .eq('fazenda_id', fazendaId)
+          .eq('ano', ano)
+          .eq('categoria', categoria) as any;
+        result = await q.eq('mes', mes).select().maybeSingle();
+      } else {
+        result = await supabase
+          .from('saldos_iniciais')
+          .insert(payload as any)
+          .select()
+          .maybeSingle();
+      }
+      const { error, data } = result;
 
       console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data, registroExistente }));
 
@@ -588,6 +593,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
       const saldoPersistido: SaldoInicial = {
         ano: data.ano,
+        mes: (data as any).mes ?? 1,
         categoria: data.categoria as Categoria,
         quantidade: data.quantidade,
         pesoMedioKg: (data as any).peso_medio_kg ?? undefined,
@@ -596,18 +602,19 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       };
 
       setSaldosIniciais(prev => {
-        const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
+        const filtered = prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria));
         return [...filtered, saldoPersistido];
       });
       await invalidateZootQueries();
       return;
     }
 
-    const { error } = await supabase.from('saldos_iniciais')
+    const delQ = supabase.from('saldos_iniciais')
       .delete()
       .eq('fazenda_id', fazendaId)
       .eq('ano', ano)
-      .eq('categoria', categoria);
+      .eq('categoria', categoria) as any;
+    const { error } = await delQ.eq('mes', mes);
 
     if (error) {
       console.error('Erro ao remover saldo inicial:', error);
@@ -615,7 +622,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       throw error;
     }
 
-    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && s.categoria === categoria)));
+    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria)));
     await invalidateZootQueries();
   };
 
