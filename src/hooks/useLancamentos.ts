@@ -170,6 +170,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       if (saldoRes.data) {
       setSaldosIniciais(saldoRes.data.map(s => ({
           ano: s.ano,
+          mes: (s as any).mes ?? 1,
           categoria: s.categoria as Categoria,
           quantidade: s.quantidade,
           pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
@@ -532,11 +533,11 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     return !error;
   };
 
-  const setSaldoInicial = async (ano: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
+  const setSaldoInicial = async (ano: number, mes: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
     const registroExistente = saldosIniciais.some(
-      s => s.ano === ano && s.categoria === categoria
+      s => s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria
     );
 
     if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
@@ -544,6 +545,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
         ano,
+        mes,
         categoria,
         quantidade,
         peso_medio_kg: pesoMedioKg ?? null,
@@ -562,6 +564,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
             } as any)
             .eq('fazenda_id', fazendaId)
             .eq('ano', ano)
+            .eq('mes' as any, mes)
             .eq('categoria', categoria)
             .select()
             .maybeSingle()
@@ -588,6 +591,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
 
       const saldoPersistido: SaldoInicial = {
         ano: data.ano,
+        mes: (data as any).mes ?? 1,
         categoria: data.categoria as Categoria,
         quantidade: data.quantidade,
         pesoMedioKg: (data as any).peso_medio_kg ?? undefined,
@@ -596,7 +600,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       };
 
       setSaldosIniciais(prev => {
-        const filtered = prev.filter(s => !(s.ano === ano && s.categoria === categoria));
+        const filtered = prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria));
         return [...filtered, saldoPersistido];
       });
       await invalidateZootQueries();
@@ -607,6 +611,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       .delete()
       .eq('fazenda_id', fazendaId)
       .eq('ano', ano)
+      .eq('mes' as any, mes)
       .eq('categoria', categoria);
 
     if (error) {
@@ -615,7 +620,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       throw error;
     }
 
-    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && s.categoria === categoria)));
+    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria)));
     await invalidateZootQueries();
   };
 
