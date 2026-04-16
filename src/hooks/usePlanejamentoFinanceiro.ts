@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 
 export interface PlanejamentoFinanceiroRow {
@@ -78,6 +79,17 @@ function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean
 export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
+  const { fazendas } = useFazenda();
+
+  // Identifica se a fazenda selecionada é ADM (nome contém "admin")
+  const isAdmFazenda = (id?: string) => {
+    if (!id || id === '__global__') return false;
+    const f = fazendas.find(fz => fz.id === id);
+    return f ? /admin/i.test(f.nome) : false;
+  };
+
+  // Lista de fazendas operacionais (não-ADM) do cliente
+  const fazendasOperacionais = fazendas.filter(f => !/admin/i.test(f.nome));
 
   const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContasRow[]>([]);
@@ -230,6 +242,11 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   // ─── Load parcelas de financiamento (pendentes, ano META) ─
   const loadFinanciamentos = useCallback(async () => {
     if (!clienteId) { setLancamentosFinanciamento(new Map()); return; }
+    // Financiamentos são exclusivos do ADM — não mostrar em fazendas operacionais
+    if (isValidFazenda(fazendaId) && !isAdmFazenda(fazendaId)) {
+      setLancamentosFinanciamento(new Map());
+      return;
+    }
     try {
       let query = supabase
         .from('financiamento_parcelas')
@@ -295,134 +312,168 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       console.error('Erro ao carregar financiamentos para META:', e);
       setLancamentosFinanciamento(new Map());
     }
-  }, [clienteId, ano]);
+  }, [clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
 
-  // ─── Load parametros de nutrição + rebanho META → calcular linhas ──
-  const loadNutricao = useCallback(async () => {
-    if (!clienteId || !isValidFazenda(fazendaId)) { setLancamentosNutricao(new Map()); return; }
-    try {
-      // 1. Load params
-      const { data: params } = await (supabase
-        .from('meta_parametros_nutricao' as any)
-        .select('*')
-        .eq('fazenda_id', fazendaId)
-        .eq('ano', ano)
-        .maybeSingle() as any);
+  // ─── Calcula nutrição para UMA fazenda (helper interno) ──
+  const calcNutricaoFazenda = async (fId: string): Promise<Map<string, number[]>> => {
+    const result = new Map<string, number[]>();
 
-      if (!params) { setLancamentosNutricao(new Map()); return; }
+    // 1. Load params
+    const { data: params } = await (supabase
+      .from('meta_parametros_nutricao' as any)
+      .select('*')
+      .eq('fazenda_id', fId)
+      .eq('ano', ano)
+      .maybeSingle() as any);
 
-      const criaCusto = Number(params.cria_custo_cab_mes) || 0;
-      const recriaCusto = Number(params.recria_custo_cab_mes) || 0;
-      const engordaDias = Number(params.engorda_periodo_dias) || 0;
-      const engordaConsumo = Number(params.engorda_consumo_kg_ms) || 0;
-      const engordaCustoKg = Number(params.engorda_custo_kg_ms) || 0;
-      const comercialCustoCab = Number(params.comercial_custo_cab) || 0;
-      const custoPorCabEngorda = engordaDias * engordaConsumo * engordaCustoKg;
+    if (!params) return result;
 
-      // 2. Load rebanho META (saldo_final por categoria/mês)
-      const { data: rebanhoRows } = await (supabase
-        .from('vw_zoot_categoria_mensal' as any)
-        .select('categoria_codigo, mes, saldo_final')
-        .eq('fazenda_id', fazendaId)
+    const criaCusto = Number(params.cria_custo_cab_mes) || 0;
+    const recriaCusto = Number(params.recria_custo_cab_mes) || 0;
+    const engordaDias = Number(params.engorda_periodo_dias) || 0;
+    const engordaConsumo = Number(params.engorda_consumo_kg_ms) || 0;
+    const engordaCustoKg = Number(params.engorda_custo_kg_ms) || 0;
+    const comercialCustoCab = Number(params.comercial_custo_cab) || 0;
+    const custoPorCabEngorda = engordaDias * engordaConsumo * engordaCustoKg;
+
+    // 2. Load rebanho META (saldo_final por categoria/mês)
+    const { data: rebanhoRows } = await (supabase
+      .from('vw_zoot_categoria_mensal' as any)
+      .select('categoria_codigo, mes, saldo_final')
+      .eq('fazenda_id', fId)
+      .eq('cenario', 'meta')
+      .eq('ano', ano)
+      .in('categoria_codigo', ['vacas', 'novilhas', 'garrotes', 'desmama_m', 'desmama_f']) as any);
+
+    // Build lookup: Map<categoria, number[12]>
+    const sfMap = new Map<string, number[]>();
+    for (const r of (rebanhoRows || [])) {
+      if (!sfMap.has(r.categoria_codigo)) sfMap.set(r.categoria_codigo, new Array(12).fill(0));
+      const m = Number(r.mes);
+      if (m >= 1 && m <= 12) sfMap.get(r.categoria_codigo)![m - 1] = Number(r.saldo_final) || 0;
+    }
+
+    // CRIA: vacas × custo
+    if (criaCusto > 0) {
+      const cria = new Array(12).fill(0);
+      const vacas = sfMap.get('vacas') || new Array(12).fill(0);
+      for (let i = 0; i < 12; i++) cria[i] = Math.round(vacas[i] * criaCusto * 100) / 100;
+      result.set('Nutrição Cria', cria);
+    }
+
+    // RECRIA: (novilhas + garrotes + desmama_m + desmama_f) × custo
+    if (recriaCusto > 0) {
+      const recria = new Array(12).fill(0);
+      const cats = ['novilhas', 'garrotes', 'desmama_m', 'desmama_f'];
+      for (let i = 0; i < 12; i++) {
+        let soma = 0;
+        for (const c of cats) soma += (sfMap.get(c)?.[i] || 0);
+        recria[i] = Math.round(soma * recriaCusto * 100) / 100;
+      }
+      result.set('Nutrição Recria', recria);
+    }
+
+    // ENGORDA: distribuir custo em 4 meses antes de cada abate
+    if (custoPorCabEngorda > 0) {
+      const { data: abates } = await supabase
+        .from('lancamentos')
+        .select('data, quantidade')
+        .eq('cliente_id', clienteId!)
+        .eq('fazenda_id', fId)
         .eq('cenario', 'meta')
-        .eq('ano', ano)
-        .in('categoria_codigo', ['vacas', 'novilhas', 'garrotes', 'desmama_m', 'desmama_f']) as any);
+        .eq('tipo', 'abate')
+        .eq('cancelado', false)
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`);
 
-      // Build lookup: Map<categoria, number[12]>
-      const sfMap = new Map<string, number[]>();
-      for (const r of (rebanhoRows || [])) {
-        if (!sfMap.has(r.categoria_codigo)) sfMap.set(r.categoria_codigo, new Array(12).fill(0));
-        const m = Number(r.mes);
-        if (m >= 1 && m <= 12) sfMap.get(r.categoria_codigo)![m - 1] = Number(r.saldo_final) || 0;
-      }
-
-      const result = new Map<string, number[]>();
-
-      // CRIA: vacas × custo
-      if (criaCusto > 0) {
-        const cria = new Array(12).fill(0);
-        const vacas = sfMap.get('vacas') || new Array(12).fill(0);
-        for (let i = 0; i < 12; i++) cria[i] = Math.round(vacas[i] * criaCusto * 100) / 100;
-        result.set('Nutrição Cria', cria);
-      }
-
-      // RECRIA: (novilhas + garrotes + desmama_m + desmama_f) × custo
-      if (recriaCusto > 0) {
-        const recria = new Array(12).fill(0);
-        const cats = ['novilhas', 'garrotes', 'desmama_m', 'desmama_f'];
-        for (let i = 0; i < 12; i++) {
-          let soma = 0;
-          for (const c of cats) soma += (sfMap.get(c)?.[i] || 0);
-          recria[i] = Math.round(soma * recriaCusto * 100) / 100;
-        }
-        result.set('Nutrição Recria', recria);
-      }
-
-      // ENGORDA: distribuir custo em 4 meses antes de cada abate
-      if (custoPorCabEngorda > 0) {
-        // Load abates META
-        const { data: abates } = await supabase
-          .from('lancamentos')
-          .select('data, quantidade')
-          .eq('cliente_id', clienteId)
-          .eq('fazenda_id', fazendaId!)
-          .eq('cenario', 'meta')
-          .eq('tipo', 'abate')
-          .eq('cancelado', false)
-          .gte('data', `${ano}-01-01`)
-          .lte('data', `${ano}-12-31`);
-
-        const engorda = new Array(12).fill(0);
-        for (const ab of (abates || [])) {
-          const mesAbate = Number((ab.data as string).substring(5, 7));
-          if (mesAbate < 1 || mesAbate > 12) continue;
-          const qtd = Math.abs(Number(ab.quantidade) || 0);
-          const custoTotal = qtd * custoPorCabEngorda;
-          const custoMensal = custoTotal / 4;
-          // Distribute in 4 months BEFORE abate (mes-4 to mes-1)
-          for (let offset = 4; offset >= 1; offset--) {
-            const m = mesAbate - offset;
-            if (m >= 1 && m <= 12) {
-              engorda[m - 1] += custoMensal;
-            }
+      const engorda = new Array(12).fill(0);
+      for (const ab of (abates || [])) {
+        const mesAbate = Number((ab.data as string).substring(5, 7));
+        if (mesAbate < 1 || mesAbate > 12) continue;
+        const qtd = Math.abs(Number(ab.quantidade) || 0);
+        const custoTotal = qtd * custoPorCabEngorda;
+        const custoMensal = custoTotal / 4;
+        for (let offset = 4; offset >= 1; offset--) {
+          const m = mesAbate - offset;
+          if (m >= 1 && m <= 12) {
+            engorda[m - 1] += custoMensal;
           }
         }
-        // Round
-        for (let i = 0; i < 12; i++) engorda[i] = Math.round(engorda[i] * 100) / 100;
-        result.set('Nutrição Engorda', engorda);
       }
+      for (let i = 0; i < 12; i++) engorda[i] = Math.round(engorda[i] * 100) / 100;
+      result.set('Nutrição Engorda', engorda);
+    }
 
-      // DESPESAS COMERCIAIS: quantidade × comercial_custo_cab para abates + vendas META
-      if (comercialCustoCab > 0) {
-        const { data: movComerciais } = await supabase
-          .from('lancamentos')
-          .select('data, quantidade')
-          .eq('cliente_id', clienteId)
-          .eq('fazenda_id', fazendaId!)
-          .eq('cenario', 'meta')
-          .eq('cancelado', false)
-          .in('tipo', ['abate', 'venda', 'venda_pe'])
-          .gte('data', `${ano}-01-01`)
-          .lte('data', `${ano}-12-31`);
+    // DESPESAS COMERCIAIS
+    if (comercialCustoCab > 0) {
+      const { data: movComerciais } = await supabase
+        .from('lancamentos')
+        .select('data, quantidade')
+        .eq('cliente_id', clienteId!)
+        .eq('fazenda_id', fId)
+        .eq('cenario', 'meta')
+        .eq('cancelado', false)
+        .in('tipo', ['abate', 'venda', 'venda_pe'])
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`);
 
-        const comercial = new Array(12).fill(0);
-        for (const r of (movComerciais || [])) {
-          const mes = Number((r.data as string).substring(5, 7));
-          if (mes < 1 || mes > 12) continue;
-          comercial[mes - 1] += Math.abs(Number(r.quantidade) || 0) * comercialCustoCab;
-        }
-        for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i] * 100) / 100;
-        result.set('Despesas Comerciais Pecuária', comercial);
+      const comercial = new Array(12).fill(0);
+      for (const r of (movComerciais || [])) {
+        const mes = Number((r.data as string).substring(5, 7));
+        if (mes < 1 || mes > 12) continue;
+        comercial[mes - 1] += Math.abs(Number(r.quantidade) || 0) * comercialCustoCab;
       }
+      for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i] * 100) / 100;
+      result.set('Despesas Comerciais Pecuária', comercial);
+    }
 
+    return result;
+  };
+
+  // ─── Soma dois Maps de nutrição ──
+  const mergeNutricaoMaps = (target: Map<string, number[]>, source: Map<string, number[]>) => {
+    for (const [key, arr] of source) {
+      if (!target.has(key)) {
+        target.set(key, [...arr]);
+      } else {
+        const existing = target.get(key)!;
+        for (let i = 0; i < 12; i++) existing[i] = Math.round((existing[i] + arr[i]) * 100) / 100;
+      }
+    }
+  };
+
+  // ─── Load parametros de nutrição + rebanho META → calcular linhas ──
+  const loadNutricao = useCallback(async () => {
+    if (!clienteId) { setLancamentosNutricao(new Map()); return; }
+
+    // Global: consolidar todas as fazendas operacionais
+    if (!isValidFazenda(fazendaId)) {
+      if (fazendasOperacionais.length === 0) { setLancamentosNutricao(new Map()); return; }
+      try {
+        const consolidated = new Map<string, number[]>();
+        const results = await Promise.all(
+          fazendasOperacionais.map(f => calcNutricaoFazenda(f.id))
+        );
+        for (const r of results) mergeNutricaoMaps(consolidated, r);
+        setLancamentosNutricao(consolidated);
+      } catch (e: any) {
+        console.error('Erro ao calcular nutrição global:', e);
+        setLancamentosNutricao(new Map());
+      }
+      return;
+    }
+
+    // Fazenda individual
+    try {
+      const result = await calcNutricaoFazenda(fazendaId!);
       setLancamentosNutricao(result);
     } catch (e: any) {
       console.error('Erro ao calcular nutrição:', e);
       setLancamentosNutricao(new Map());
     }
-  }, [clienteId, fazendaId, ano]);
+  }, [clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadNutricao(); }, [loadNutricao]);
 
