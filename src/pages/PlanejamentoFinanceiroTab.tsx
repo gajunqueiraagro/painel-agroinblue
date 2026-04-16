@@ -16,7 +16,8 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
 import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -138,7 +139,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarSubcentro, salvarGrid, salvarCelula, salvarVersao, listarVersoes, restaurarVersao, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [saving, setSaving] = useState(false);
@@ -146,6 +147,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
   const [projetosOpen, setProjetosOpen] = useState(false);
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
+  const [versoesOpen, setVersoesOpen] = useState(false);
+  const [versaoNome, setVersaoNome] = useState('');
+  const [versoes, setVersoes] = useState<{ id: string; nome: string; created_at: string }[]>([]);
+  const [versaoSaving, setVersaoSaving] = useState(false);
 
   useEffect(() => {
     setGrid(buildGrid());
@@ -289,6 +294,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     });
     setDirty(true);
   }, []);
+
+  /* ── Autosave single cell ── */
+  const handleAutoSave = useCallback((gridIdx: number, mesIdx: number, value: number) => {
+    const g = grid[gridIdx];
+    if (!g) return;
+    salvarCelula(
+      g.subcentro,
+      g.centro_custo,
+      g.grupo_custo || '',
+      g.macro_custo || '',
+      g.escopo_negocio,
+      mesIdx + 1,
+      value,
+    );
+  }, [grid, salvarCelula]);
 
   /* ── Import subcentro individual ── */
   const handleImportSubcentro = useCallback(async () => {
@@ -438,7 +458,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                   {isGlobal || bloqueio.bloqueado ? (
                                     <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
                                   ) : (
-                                    <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
+                                    <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
                                   )}
                                 </td>
                               ))}
@@ -483,7 +503,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                               {isGlobal || bloqueio.bloqueado ? (
                                 <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
                               ) : (
-                                <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
+                                <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
                               )}
                             </td>
                           ))}
@@ -536,6 +556,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={() => setProjetosOpen(true)} title="Projetos de Investimento">
           <ClipboardList className="h-4 w-4 mr-1" />Projetos
+        </Button>
+        <Button size="sm" variant="outline" onClick={async () => { setVersoesOpen(true); setVersoes(await listarVersoes()); }} title="Gerenciar Versões">
+          <Bookmark className="h-4 w-4 mr-1" />Versão
         </Button>
         {!isGlobal && (
           <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
@@ -693,6 +716,69 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Modal Versões ── */}
+      <Dialog open={versoesOpen} onOpenChange={setVersoesOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">📌 Gerenciar Versões — {ano}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nome da versão (ex: V1 Aprovada)"
+                className="text-xs h-8"
+                value={versaoNome}
+                onChange={e => setVersaoNome(e.target.value)}
+              />
+              <Button
+                size="sm"
+                disabled={!versaoNome.trim() || versaoSaving}
+                onClick={async () => {
+                  setVersaoSaving(true);
+                  try {
+                    await salvarVersao(versaoNome.trim());
+                    setVersaoNome('');
+                    setVersoes(await listarVersoes());
+                  } finally {
+                    setVersaoSaving(false);
+                  }
+                }}
+              >
+                Salvar
+              </Button>
+            </div>
+            {versoes.length > 0 && (
+              <div className="border rounded-md divide-y max-h-48 overflow-auto">
+                {versoes.map(v => (
+                  <div key={v.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <div>
+                      <span className="font-medium">{v.nome}</span>
+                      <span className="text-muted-foreground ml-2">
+                        {new Date(v.created_at).toLocaleDateString('pt-BR')} {new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[10px]"
+                      onClick={async () => {
+                        await restaurarVersao(v.id);
+                        setVersoesOpen(false);
+                      }}
+                    >
+                      Restaurar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {versoes.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma versão salva para {ano}.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -700,7 +786,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 /* ================================================================ */
 /*  Editable Cell                                                    */
 /* ================================================================ */
-function EditableCell({ value, onSave }: { value: number; onSave: (v: number) => void }) {
+function EditableCell({ value, onSave, onAutoSave }: { value: number; onSave: (v: number) => void; onAutoSave?: (v: number) => void }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
 
@@ -712,7 +798,10 @@ function EditableCell({ value, onSave }: { value: number; onSave: (v: number) =>
   const commit = () => {
     setEditing(false);
     const v = parseFloat(text.replace(',', '.')) || 0;
-    if (v !== value) onSave(v);
+    if (v !== value) {
+      onSave(v);
+      onAutoSave?.(v);
+    }
   };
 
   if (editing) {
