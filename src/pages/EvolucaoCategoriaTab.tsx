@@ -324,7 +324,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                     ? (i % 2 === 0 ? 'bg-primary/5' : 'bg-primary/8')
                     : (i % 2 === 0 ? 'bg-orange-500/5' : 'bg-orange-500/8');
 
-                  const showPesoFin = pastosFechados || d.fonte_oficial_mes === 'fechamento';
+                  const isCenarioMeta = statusFiltro === 'meta';
+                  const showPesoFin = pastosFechados || isCenarioMeta || d.fonte_oficial_mes === 'fechamento';
 
                   return (
                     <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t border-border' : ''}`}>
@@ -377,7 +378,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('evolOut')}</td>
                   <td className="px-0.5 py-1 text-right text-green-700">{getTotalVal('evolIn')}</td>
                   <td className={`px-0.5 py-1 text-right bg-foreground/[0.03] ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : getTotalVal('sf')}</td>
-                  <td className="px-0.5 py-1 text-right text-muted-foreground">{pastosFechados ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground">{(pastosFechados || !isRealizado) ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
                   <td className={`px-0.5 py-1 text-right ${negClass(totais.prodBio) || 'text-blue-700'}`}>{fmtProdBio(totais.prodBio)}</td>
                   <td className="px-0.5 py-1 text-right text-muted-foreground">{totais.diasMes || '–'}</td>
                   <td className={`px-0.5 py-1 text-right ${negClass(totais.gmd) || 'text-blue-700'}`}>{fmtGmd(totais.gmd)}</td>
@@ -388,7 +389,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         </div>
 
         {/* Aviso pastos não fechados */}
-        {!isLoading && !pastosFechados && !isFutureMonth && (
+        {!isLoading && !pastosFechados && !isFutureMonth && isRealizado && (
           <div className="flex items-center gap-1.5 text-[9px] text-orange-600 bg-orange-50 dark:bg-orange-500/10 rounded px-2 py-1 border border-orange-200 dark:border-orange-500/20 mt-1.5">
             <AlertCircle className="h-3 w-3 shrink-0" />
             Kg/cab Fin. indisponível — pastos não fechados para {MESES_CURTOS[mesNum - 1]}/{anoFiltro}.
