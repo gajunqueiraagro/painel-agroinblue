@@ -358,7 +358,7 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
               <label className="text-xs font-medium">Subcentro *</label>
               <Select value={form.subcentro || ''} onValueChange={handleSubcentroChange}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
+                <SelectContent side="bottom" className="max-h-[200px] overflow-y-auto">
                   {subcentroOptions.map(o => (
                     <SelectItem key={o.subcentro} value={o.subcentro}>{o.subcentro}</SelectItem>
                   ))}
