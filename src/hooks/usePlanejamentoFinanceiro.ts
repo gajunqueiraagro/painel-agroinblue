@@ -701,25 +701,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     return meses;
   }, [fazendaId, clienteId, ano]);
 
-  return {
-    loading,
-    buildGrid,
-    importarRealizado,
-    importarSubcentro,
-    salvarGrid,
-    saldoInicial,
-    lancamentosRebanho,
-    lancamentosFinanciamento,
-    lancamentosNutricao,
-    lancamentosProjetos,
-    reloadNutricao: loadNutricao,
-    reloadProjetos: loadProjetos,
-    reload: loadSaved,
-  };
-}
-
   // ─── Autosave: salvar célula individual ──────────────────
-    const salvarCelula = useCallback(async (
+  const salvarCelula = useCallback(async (
     subcentro: string,
     centro_custo: string,
     grupo_custo: string,
