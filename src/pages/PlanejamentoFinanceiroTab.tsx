@@ -53,6 +53,7 @@ const SUBCENTROS_NUTRICAO = new Set([
 ]);
 
 const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
+// Investment subcentros are added dynamically from lancamentosProjetos keys
 
 const fmt = (v: number) => {
   if (v === 0) return '–';
