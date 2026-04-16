@@ -118,8 +118,8 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear);
   const { fazendaAtual } = useFazenda();
-  const fazendaId = fazendaAtual?.id || '';
-  const isGlobal = !fazendaId || fazendaId === '__global__';
+  const fazendaId = fazendaAtual?.id ?? '';
+  const isGlobal = !fazendaId || fazendaId === '__global__' || fazendaId === '';
   const isAdminFazenda = fazendaAtual?.nome?.toLowerCase().includes('admin') ?? false;
   const isFazendaOp = !isGlobal && !isAdminFazenda;
 
@@ -506,6 +506,8 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       />
     );
   }
+
+  console.log('[META debug] fazendaId:', fazendaId, 'isGlobal:', isGlobal, 'dirty:', dirty, 'loading:', loading);
 
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
