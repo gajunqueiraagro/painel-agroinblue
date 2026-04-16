@@ -52,6 +52,13 @@ const STATUS_OPTIONS = [
 ];
 
 const fmt = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtCompact = (v: number) => {
+  if (v === 0) return '–';
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}M`;
+  if (abs >= 1_000) return `R$ ${(v / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}k`;
+  return `R$ ${Math.round(v)}`;
+};
 
 const emptyForm = (): Omit<Projeto, 'id' | 'cliente_id'> => ({
   fazenda_id: null,
@@ -261,19 +268,19 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
 
       {/* Table */}
       <div className="overflow-auto relative flex-1 min-h-0" style={{ height: 'calc(100vh - 120px)' }}>
-        <Table className="min-w-[900px] text-[9px] tabular-nums">
+        <Table className="min-w-[900px] text-[10px] tabular-nums">
           <TableHeader>
             <TableRow className="border-b-2 border-border">
-              <TableHead className="sticky left-0 z-20 bg-card w-[140px]">Nome</TableHead>
-              <TableHead className="w-[80px]">Fazenda</TableHead>
-              <TableHead className="w-[120px]">Subcentro</TableHead>
-              <TableHead className="w-[70px]">Responsável</TableHead>
+              <TableHead className="sticky left-0 z-20 bg-card max-w-[140px] w-[140px] py-1 px-1">Nome</TableHead>
+              <TableHead className="max-w-[90px] w-[90px] py-1 px-1">Fazenda</TableHead>
+              <TableHead className="max-w-[160px] w-[160px] py-1 px-1">Subcentro</TableHead>
+              <TableHead className="max-w-[80px] w-[80px] py-1 px-1">Responsável</TableHead>
               {MESES_LABELS.map(m => (
-                <TableHead key={m} className="text-right w-[56px]">{m}</TableHead>
+                <TableHead key={m} className="text-right w-[52px] py-1 px-1">{m}</TableHead>
               ))}
-              <TableHead className="text-right w-[66px] font-extrabold border-l-2 border-border">Total</TableHead>
-              <TableHead className="w-[60px]">Status</TableHead>
-              <TableHead className="w-[50px] text-center">Ações</TableHead>
+              <TableHead className="text-right w-[66px] font-extrabold border-l-2 border-border py-1 px-1">Total</TableHead>
+              <TableHead className="w-[60px] py-1 px-1">Status</TableHead>
+              <TableHead className="w-[50px] text-center py-1 px-1">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -287,18 +294,18 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
               const pTotal = MESES_KEYS.reduce((s, k) => s + (Number((p as any)[k]) || 0), 0);
               return (
                 <TableRow key={p.id} className="border-b border-border/30">
-                  <TableCell className="sticky left-0 z-10 bg-card font-medium truncate">{p.nome}</TableCell>
-                  <TableCell className="truncate">{fazendaNome(p.fazenda_id)}</TableCell>
-                  <TableCell className="truncate text-muted-foreground">{p.subcentro}</TableCell>
-                  <TableCell className="truncate">{p.responsavel || '–'}</TableCell>
+                  <TableCell className="sticky left-0 z-10 bg-card font-medium truncate max-w-[140px] py-1 px-1">{p.nome}</TableCell>
+                  <TableCell className="truncate max-w-[90px] py-1 px-1">{fazendaNome(p.fazenda_id)}</TableCell>
+                  <TableCell className="truncate max-w-[160px] text-muted-foreground py-1 px-1">{p.subcentro}</TableCell>
+                  <TableCell className="truncate max-w-[80px] py-1 px-1">{p.responsavel || '–'}</TableCell>
                   {MESES_KEYS.map((k, i) => (
-                    <TableCell key={k} className={`text-right${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>
-                      {fmt(Number((p as any)[k]) || 0)}
+                    <TableCell key={k} className={`text-right w-[52px] py-1 px-1${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>
+                      {fmtCompact(Number((p as any)[k]) || 0)}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right font-bold border-l-2 border-border">{fmt(pTotal)}</TableCell>
-                  <TableCell>{statusBadge(p.status)}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-right font-bold border-l-2 border-border py-1 px-1">{fmtCompact(pTotal)}</TableCell>
+                  <TableCell className="py-1 px-1">{statusBadge(p.status)}</TableCell>
+                  <TableCell className="text-center py-1 px-1">
                     <div className="flex items-center justify-center gap-0.5">
                       <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => openEdit(p)}>
                         <Pencil className="h-3 w-3" />
@@ -315,16 +322,16 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
             {/* Rodapé Total */}
             {projetos.length > 0 && (
               <TableRow className="border-t-2 border-border bg-muted/50 font-bold">
-                <TableCell className="sticky left-0 z-10 bg-muted/50 text-[9px] font-bold">TOTAL</TableCell>
-                <TableCell />
-                <TableCell />
-                <TableCell />
+                <TableCell className="sticky left-0 z-10 bg-muted/50 font-bold py-1 px-1">TOTAL</TableCell>
+                <TableCell className="py-1 px-1" />
+                <TableCell className="py-1 px-1" />
+                <TableCell className="py-1 px-1" />
                 {totais.map((v, i) => (
-                  <TableCell key={i} className={`text-right text-[9px] font-bold${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>{fmt(v)}</TableCell>
+                  <TableCell key={i} className={`text-right font-bold py-1 px-1${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>{fmtCompact(v)}</TableCell>
                 ))}
-                <TableCell className="text-right text-[9px] font-extrabold border-l-2 border-border">{fmt(totalGeral)}</TableCell>
-                <TableCell />
-                <TableCell />
+                <TableCell className="text-right font-extrabold border-l-2 border-border py-1 px-1">{fmtCompact(totalGeral)}</TableCell>
+                <TableCell className="py-1 px-1" />
+                <TableCell className="py-1 px-1" />
               </TableRow>
             )}
           </TableBody>
