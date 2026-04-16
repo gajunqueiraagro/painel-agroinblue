@@ -454,6 +454,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     );
   };
 
+  if (projetosOpen) {
+    return (
+      <ProjetosInvestimento
+        ano={ano}
+        onBack={() => setProjetosOpen(false)}
+        onDataChanged={() => reloadProjetos()}
+      />
+    );
+  }
+
   return (
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
       {/* Header — sticky, never scrolls */}
@@ -474,6 +484,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
           </span>
         )}
         <div className="flex-1" />
+        <Button size="sm" variant="outline" onClick={() => setProjetosOpen(true)} title="Projetos de Investimento">
+          <ClipboardList className="h-4 w-4 mr-1" />Projetos
+        </Button>
         {!isGlobal && (
           <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
             <Settings className="h-4 w-4" />
