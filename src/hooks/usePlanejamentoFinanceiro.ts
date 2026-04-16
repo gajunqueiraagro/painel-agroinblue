@@ -252,9 +252,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         .gte('data_vencimento', `${ano}-01-01`)
         .lte('data_vencimento', `${ano}-12-31`);
 
-      if (isValidFazenda(fazendaId)) {
-        query = query.eq('financiamentos.fazenda_id', fazendaId);
-      }
+      // Financiamentos sempre vêm do ADM (empresa inteira), sem filtro de fazenda
 
       const { data: rows, error } = await (query as any);
       if (error) throw error;
@@ -297,7 +295,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       console.error('Erro ao carregar financiamentos para META:', e);
       setLancamentosFinanciamento(new Map());
     }
-  }, [clienteId, fazendaId, ano]);
+  }, [clienteId, ano]);
 
   useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
 
