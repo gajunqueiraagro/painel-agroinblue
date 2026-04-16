@@ -428,6 +428,46 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   useEffect(() => { loadNutricao(); }, [loadNutricao]);
 
+  // ─── Load projetos de investimento (META) ─────────────────
+  const loadProjetos = useCallback(async () => {
+    if (!clienteId) { setLancamentosProjetos(new Map()); return; }
+    try {
+      let query = supabase
+        .from('meta_projetos_investimento' as any)
+        .select('subcentro, jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez')
+        .eq('cliente_id', clienteId)
+        .eq('ano', ano)
+        .neq('status', 'cancelado');
+
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+
+      const { data: rows, error } = await (query as any);
+      if (error) throw error;
+
+      const result = new Map<string, number[]>();
+      const mesKeys = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      for (const r of (rows || [])) {
+        const sub = (r as any).subcentro as string;
+        if (!sub) continue;
+        if (!result.has(sub)) result.set(sub, new Array(12).fill(0));
+        const arr = result.get(sub)!;
+        mesKeys.forEach((k, i) => { arr[i] += Math.abs(Number((r as any)[k]) || 0); });
+      }
+      // Round
+      for (const [, arr] of result) {
+        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
+      }
+      setLancamentosProjetos(result);
+    } catch (e: any) {
+      console.error('Erro ao carregar projetos investimento:', e);
+      setLancamentosProjetos(new Map());
+    }
+  }, [clienteId, fazendaId, ano]);
+
+  useEffect(() => { loadProjetos(); }, [loadProjetos]);
+
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
     const map = new Map<string, SubcentroGrid>();
