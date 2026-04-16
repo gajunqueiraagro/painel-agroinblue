@@ -4552,6 +4552,7 @@ export type Database = {
           created_at: string
           fazenda_id: string
           id: string
+          mes: number
           peso_medio_kg: number | null
           preco_kg: number | null
           quantidade: number
@@ -4563,6 +4564,7 @@ export type Database = {
           created_at?: string
           fazenda_id: string
           id?: string
+          mes?: number
           peso_medio_kg?: number | null
           preco_kg?: number | null
           quantidade?: number
@@ -4574,6 +4576,7 @@ export type Database = {
           created_at?: string
           fazenda_id?: string
           id?: string
+          mes?: number
           peso_medio_kg?: number | null
           preco_kg?: number | null
           quantidade?: number
