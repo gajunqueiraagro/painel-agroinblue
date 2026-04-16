@@ -119,7 +119,21 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const [ano, setAno] = useState(currentYear);
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id || '';
-  const isGlobal = !fazendaId || fazendaId === '__global__';
+  const isAdminFazenda = fazendaAtual?.nome?.toLowerCase().includes('admin') ?? false;
+  const isFazendaOp = !isGlobal && !isAdminFazenda;
+
+  const isSubcentroBloqueado = useCallback((subcentro: string, macroNome: string, grupoNome: string): { bloqueado: boolean; motivo: string } => {
+    const isAdmOnly = SUBCENTROS_ADM_ONLY.has(subcentro) || subcentro.startsWith('Dividendos');
+    if (isAdmOnly && isFazendaOp) {
+      return { bloqueado: true, motivo: 'Exclusivo da fazenda Administrativo' };
+    }
+    const isFazOnly = MACROS_FAZENDA_ONLY.has(macroNome) || GRUPOS_FAZENDA_ONLY.has(grupoNome);
+    if (isFazOnly && (isAdminFazenda || isGlobal)) {
+      return { bloqueado: true, motivo: 'Exclusivo de fazenda operacional' };
+    }
+    return { bloqueado: false, motivo: '' };
+  }, [isFazendaOp, isAdminFazenda, isGlobal]);
+
 
   const { clienteAtual } = useCliente();
 
