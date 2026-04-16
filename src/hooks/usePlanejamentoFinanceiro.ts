@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 
 export interface PlanejamentoFinanceiroRow {
@@ -78,6 +79,17 @@ function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean
 export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
+  const { fazendas } = useFazenda();
+
+  // Identifica se a fazenda selecionada é ADM (nome contém "admin")
+  const isAdmFazenda = (id?: string) => {
+    if (!id || id === '__global__') return false;
+    const f = fazendas.find(fz => fz.id === id);
+    return f ? /admin/i.test(f.nome) : false;
+  };
+
+  // Lista de fazendas operacionais (não-ADM) do cliente
+  const fazendasOperacionais = fazendas.filter(f => !/admin/i.test(f.nome));
 
   const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
   const [planoContas, setPlanoContas] = useState<PlanoContasRow[]>([]);
