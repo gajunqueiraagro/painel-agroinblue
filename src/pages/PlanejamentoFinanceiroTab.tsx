@@ -119,6 +119,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const [ano, setAno] = useState(currentYear);
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id || '';
+  const isGlobal = !fazendaId || fazendaId === '__global__';
   const isAdminFazenda = fazendaAtual?.nome?.toLowerCase().includes('admin') ?? false;
   const isFazendaOp = !isGlobal && !isAdminFazenda;
 
