@@ -96,11 +96,12 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, reloadNutricao } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, importarSubcentro, salvarGrid, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
   const [dirty, setDirty] = useState(false);
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
+  const [projetosOpen, setProjetosOpen] = useState(false);
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
 
   useEffect(() => {
