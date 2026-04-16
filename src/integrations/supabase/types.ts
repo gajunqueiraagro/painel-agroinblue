@@ -4005,6 +4005,47 @@ export type Database = {
           },
         ]
       }
+      meta_versoes: {
+        Row: {
+          ano: number
+          cliente_id: string
+          created_at: string | null
+          criado_por: string | null
+          dados: Json
+          descricao: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          ano: number
+          cliente_id: string
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json
+          descricao?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          ano?: number
+          cliente_id?: string
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json
+          descricao?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_versoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pasto_condicoes: {
         Row: {
           altura_pasto_cm: number | null
