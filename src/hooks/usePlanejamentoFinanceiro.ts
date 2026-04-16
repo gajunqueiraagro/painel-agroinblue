@@ -649,15 +649,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
       toast.success(`Planejamento salvo — ${rows.length} registros`);
 
-      // Reload com timeout de segurança — dados já salvos
-      try {
-        await Promise.race([
-          loadSaved(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
-        ]);
-      } catch {
-        // ignore — dados foram salvos, apenas reload falhou
-      }
+      await loadSaved();
 
       return true;
     } catch (e: any) {
