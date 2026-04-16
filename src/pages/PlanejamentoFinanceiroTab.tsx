@@ -397,6 +397,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                         ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
                       const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
+                      const bloqueio = isSubcentroBloqueado(sub.subcentro, macro.nome, grupo.nome);
 
                       if (isAuto) {
                         const ajusteMeses = grid[sub.gridIdx]?.meses || new Array(12).fill(0);
@@ -409,48 +410,48 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                           <React.Fragment key={sub.key}>
                             {/* Auto */}
                             <tr className="border-b border-border/10">
-                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] italic text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }}>
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] italic text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                                 {sub.subcentro} (auto)
                               </td>
                               {autoMeses!.map((v, i) => (
-                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>
-                                  {fmtCompact(v)}
+                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic ${bloqueio.bloqueado ? 'opacity-30' : 'opacity-70'} ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
+                                  {bloqueio.bloqueado ? '–' : fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
-                                {fmtCompact(autoTotal)}
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border ${bloqueio.bloqueado ? 'opacity-30' : 'opacity-70'} ${cor}`} style={{ background: BG_MUTED }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
+                                {bloqueio.bloqueado ? '–' : fmtCompact(autoTotal)}
                               </td>
                             </tr>
                             {/* Ajuste */}
                             <tr className="border-b border-border/10">
-                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
+                              <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                                 {sub.subcentro} (ajuste)
                               </td>
                               {ajusteMeses.map((v, mesIdx) => (
-                                <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
-                                  {isGlobal ? (
-                                    <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
+                                <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
+                                  {isGlobal || bloqueio.bloqueado ? (
+                                    <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
                                   ) : (
                                     <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                                   )}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
-                                {fmtCompact(ajusteTotal)}
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
+                                {bloqueio.bloqueado ? '–' : fmtCompact(ajusteTotal)}
                               </td>
                             </tr>
                             {/* Total */}
                             <tr className="border-b border-border/30">
-                              <td className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_NIVEL2, paddingLeft: 40 }}>
+                              <td className="px-1 py-[2px] text-left leading-tight font-semibold text-[9px] text-card-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_NIVEL2, paddingLeft: 40 }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                                 {sub.subcentro}
                               </td>
                               {totalMeses.map((v, i) => (
-                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)}`} style={{ background: BG_NIVEL2 }}>
-                                  {fmtCompact(v)}
+                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_NIVEL2 }}>
+                                  {bloqueio.bloqueado ? '–' : fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
-                                {fmtCompact(lineTotal)}
+                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
+                                {bloqueio.bloqueado ? '–' : fmtCompact(lineTotal)}
                               </td>
                             </tr>
                           </React.Fragment>
@@ -460,10 +461,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       // Normal subcentro
                       return (
                         <tr key={sub.key} className="group/subrow border-b border-border/10">
-                          <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40 }}>
+                          <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                             <span className="inline-flex items-center gap-0.5">
                               {sub.subcentro}
-                              {!isGlobal && (
+                              {!isGlobal && !bloqueio.bloqueado && (
                                 <Download
                                   className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer opacity-0 group-hover/subrow:opacity-100 transition-opacity"
                                   onClick={(e) => { e.stopPropagation(); setImportConfirm({ subcentro: sub.subcentro, centro_custo: grid[sub.gridIdx]?.centro_custo || '', gridIdx: sub.gridIdx }); }}
@@ -472,16 +473,16 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                             </span>
                           </td>
                           {sub.meses.map((v, mesIdx) => (
-                            <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg }}>
-                              {isGlobal ? (
-                                <span className="text-[8px] text-right block px-0.5 leading-tight">{fmtCompact(v)}</span>
+                            <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
+                              {isGlobal || bloqueio.bloqueado ? (
+                                <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
                               ) : (
                                 <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} />
                               )}
                             </td>
                           ))}
-                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor}`} style={{ background: BG_MUTED }}>
-                            {fmtCompact(sub.total)}
+                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
+                            {bloqueio.bloqueado ? '–' : fmtCompact(sub.total)}
                           </td>
                         </tr>
                       );
