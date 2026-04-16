@@ -194,7 +194,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao]);
+  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
