@@ -717,3 +717,173 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     reload: loadSaved,
   };
 }
+
+  // ─── Autosave: salvar célula individual ──────────────────
+  const salvarCelula = useCallback(async (
+    subcentro: string,
+    centro_custo: string,
+    grupo_custo: string,
+    macro_custo: string,
+    escopo_negocio: string | null,
+    mes: number,
+    valor: number,
+  ) => {
+    if (!isValidFazenda(fazendaId) || !clienteId) return;
+    try {
+      if (valor === 0) {
+        await (supabase
+          .from('planejamento_financeiro' as any)
+          .delete()
+          .eq('cliente_id', clienteId)
+          .eq('fazenda_id', fazendaId!)
+          .eq('ano', ano)
+          .eq('mes', mes)
+          .eq('subcentro', subcentro)
+          .eq('cenario', 'meta') as any);
+      } else {
+        const row = {
+          cliente_id: clienteId,
+          fazenda_id: fazendaId!,
+          ano,
+          mes,
+          centro_custo,
+          subcentro,
+          macro_custo,
+          grupo_custo,
+          escopo_negocio,
+          tipo_custo: 'fixo',
+          driver: null,
+          unidade_driver: null,
+          valor_base: Math.round(valor * 100) / 100,
+          quantidade_driver: 0,
+          valor_planejado: Math.round(valor * 100) / 100,
+          origem: 'manual',
+          cenario: 'meta',
+          observacao: null,
+        };
+        const { error } = await (supabase
+          .from('planejamento_financeiro' as any)
+          .upsert(row, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      console.error('Erro ao salvar célula:', e);
+    }
+  }, [fazendaId, clienteId, ano]);
+
+  // ─── Salvar versão (snapshot consolidado) ─────────────────
+  const salvarVersao = useCallback(async (nome: string) => {
+    if (!clienteId) return;
+    try {
+      let allRows: any[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await (supabase
+          .from('planejamento_financeiro' as any)
+          .select('*')
+          .eq('cliente_id', clienteId)
+          .eq('ano', ano)
+          .eq('cenario', 'meta')
+          .range(from, from + PAGE - 1) as any);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allRows = allRows.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      const { error } = await (supabase
+        .from('meta_versoes' as any)
+        .insert({
+          cliente_id: clienteId,
+          ano,
+          nome,
+          dados: allRows,
+        }) as any);
+      if (error) throw error;
+      toast.success(`Versão salva: ${nome}`);
+    } catch (e: any) {
+      console.error('Erro ao salvar versão:', e);
+      toast.error('Erro ao salvar versão');
+    }
+  }, [clienteId, ano]);
+
+  // ─── Listar versões ───────────────────────────────────────
+  const listarVersoes = useCallback(async () => {
+    if (!clienteId) return [];
+    try {
+      const { data, error } = await (supabase
+        .from('meta_versoes' as any)
+        .select('id, nome, created_at')
+        .eq('cliente_id', clienteId)
+        .eq('ano', ano)
+        .order('created_at', { ascending: false }) as any);
+      if (error) throw error;
+      return (data || []) as { id: string; nome: string; created_at: string }[];
+    } catch (e: any) {
+      console.error('Erro ao listar versões:', e);
+      return [];
+    }
+  }, [clienteId, ano]);
+
+  // ─── Restaurar versão ─────────────────────────────────────
+  const restaurarVersao = useCallback(async (versaoId: string) => {
+    if (!clienteId) return;
+    try {
+      const { data: versao, error: fetchErr } = await (supabase
+        .from('meta_versoes' as any)
+        .select('dados')
+        .eq('id', versaoId)
+        .single() as any);
+      if (fetchErr) throw fetchErr;
+      const rows = (versao?.dados || []) as any[];
+
+      // Delete current meta data for this client+ano
+      await (supabase
+        .from('planejamento_financeiro' as any)
+        .delete()
+        .eq('cliente_id', clienteId)
+        .eq('ano', ano)
+        .eq('cenario', 'meta') as any);
+
+      // Insert snapshot rows in batches
+      if (rows.length > 0) {
+        // Strip ids so new ones are generated
+        const clean = rows.map(({ id, created_at, updated_at, ...rest }: any) => rest);
+        for (let i = 0; i < clean.length; i += 500) {
+          const batch = clean.slice(i, i + 500);
+          const { error } = await (supabase
+            .from('planejamento_financeiro' as any)
+            .insert(batch) as any);
+          if (error) throw error;
+        }
+      }
+
+      await loadSaved();
+      toast.success('Versão restaurada');
+    } catch (e: any) {
+      console.error('Erro ao restaurar versão:', e);
+      toast.error('Erro ao restaurar versão');
+    }
+  }, [clienteId, ano, loadSaved]);
+
+  return {
+    loading,
+    buildGrid,
+    importarRealizado,
+    importarSubcentro,
+    salvarGrid,
+    salvarCelula,
+    salvarVersao,
+    listarVersoes,
+    restaurarVersao,
+    saldoInicial,
+    lancamentosRebanho,
+    lancamentosFinanciamento,
+    lancamentosNutricao,
+    lancamentosProjetos,
+    reloadNutricao: loadNutricao,
+    reloadProjetos: loadProjetos,
+    reload: loadSaved,
+  };
+}
