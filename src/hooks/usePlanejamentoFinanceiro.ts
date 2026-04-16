@@ -242,6 +242,11 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   // ─── Load parcelas de financiamento (pendentes, ano META) ─
   const loadFinanciamentos = useCallback(async () => {
     if (!clienteId) { setLancamentosFinanciamento(new Map()); return; }
+    // Financiamentos são exclusivos do ADM — não mostrar em fazendas operacionais
+    if (isValidFazenda(fazendaId) && !isAdmFazenda(fazendaId)) {
+      setLancamentosFinanciamento(new Map());
+      return;
+    }
     try {
       let query = supabase
         .from('financiamento_parcelas')
