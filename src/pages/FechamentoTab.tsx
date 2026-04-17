@@ -991,6 +991,36 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Pré-checagem: pastos vazios sem Tipo de Uso */}
+      <AlertDialog open={vazioCheckOpen} onOpenChange={(o) => { if (!marcandoVedado) setVazioCheckOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Pastos sem Tipo de Uso
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              <strong>{pastosVaziosIds.length} pasto(s)</strong> estão vazios e sem Tipo de Uso definido.
+              <br /><br />
+              Deseja marcá-los automaticamente como <strong>"Vedado"</strong> antes de fechar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={marcandoVedado}>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={pularVedadoEContinuar}
+              disabled={marcandoVedado}
+            >
+              Não, continuar sem alterar
+            </Button>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); aplicarVedadoEContinuar(); }} disabled={marcandoVedado}>
+              {marcandoVedado ? 'Marcando…' : 'Sim, marcar como Vedado e continuar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Reabrir Mês */}
       <AlertDialog open={confirmBulkReopenOpen} onOpenChange={setConfirmBulkReopenOpen}>
         <AlertDialogContent>
