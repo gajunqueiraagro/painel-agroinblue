@@ -111,8 +111,8 @@ export function useStatusFechamentosAno(
         itensData = itens || [];
       }
 
-      const activePastoIds = new Set((pastosRes.data || []).map((p) => p.id));
-      const totalPastos = activePastoIds.size;
+      // Pastos com data_inicio para filtragem por mês
+      const pastosComData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
       const idToCodigo = new Map((catsRes.data || []).map((c) => [c.id, c.codigo]));
 
       // Build saldo map from official view per month
