@@ -175,13 +175,20 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const pastosAtivos = useMemo(
     () => {
-      const filtrados = pastos.filter(p => p.ativo && p.entra_conciliacao);
+      // Primeiro dia do mês selecionado (ex.: '2026-02' -> '2026-02-01')
+      const primeiroDiaMes = `${anoMes}-01`;
+      const filtrados = pastos.filter(p => {
+        if (!p.ativo || !p.entra_conciliacao) return false;
+        // Filtro por data_inicio: pasto só aparece se sem restrição OU iniciado até o mês atual
+        if (p.data_inicio && p.data_inicio > primeiroDiaMes) return false;
+        return true;
+      });
       // Pastos de divergência sempre no FINAL da lista
       const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
       const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
       return [...normais, ...divergencia];
     },
-    [pastos]
+    [pastos, anoMes]
   );
 
   const getFechamento = useCallback(

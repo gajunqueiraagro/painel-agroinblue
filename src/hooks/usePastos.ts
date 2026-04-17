@@ -15,6 +15,7 @@ export interface Pasto {
   ativo: boolean;
   observacoes: string | null;
   ordem_exibicao: number;
+  data_inicio: string | null;
   created_at: string;
   updated_at: string;
 }
