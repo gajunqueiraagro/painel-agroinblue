@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { AlertTriangle, Lock, Copy, Save, LockOpen } from 'lucide-react';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
+import { useMasterLock } from '@/hooks/useMasterLock';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 const TIPOS_USO_OPTIONS = [
   { value: 'cria', label: 'Cria' },
