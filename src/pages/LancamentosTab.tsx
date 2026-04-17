@@ -1356,6 +1356,67 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [transferenciaParaEditar]);
 
+  // ── Morte: load into form for editing ──
+  const loadMorteForEdit = useCallback((l: Lancamento) => {
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
+    setAba('saida');
+    setTipo('morte');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    const motivo = l.fazendaDestino || l.observacao || '';
+    const isPreset = MOTIVOS_MORTE.includes(motivo);
+    setMotivoMorte(isPreset ? motivo : motivo ? '__custom__' : '');
+    setMotivoMorteCustom(isPreset ? '' : motivo);
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+
+  useEffect(() => {
+    if (morteParaEditar) {
+      loadMorteForEdit(morteParaEditar);
+    }
+  }, [morteParaEditar]);
+
+  // ── Consumo: load into form for editing ──
+  const loadConsumoForEdit = useCallback((l: Lancamento) => {
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
+    setAba('saida');
+    setTipo('consumo');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setNotaFiscal(l.notaFiscal || '');
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+
+  useEffect(() => {
+    if (consumoParaEditar) {
+      loadConsumoForEdit(consumoParaEditar);
+    }
+  }, [consumoParaEditar]);
+
   useEffect(() => {
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
