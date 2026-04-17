@@ -859,12 +859,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="font-bold text-foreground">Peso (kg)</Label>
-                <Input type="number" value={form.pesoMedioKg || ''} onChange={e => setForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
+                <Input type="number" value={isNascimento ? (form.pesoMedioKg && Number(form.pesoMedioKg) > 0 ? form.pesoMedioKg : 30) : (form.pesoMedioKg || '')} onChange={e => setForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
               </div>
-              <div>
-                <Label className="font-bold text-foreground">Preço/Cab (R$)</Label>
-                <Input type="number" value={form.precoMedioCabeca || ''} onChange={e => setForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
-              </div>
+              {!isNascimento && (
+                <div>
+                  <Label className="font-bold text-foreground">Preço/Cab (R$)</Label>
+                  <Input type="number" value={form.precoMedioCabeca || ''} onChange={e => setForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -906,39 +908,41 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             </div>
 
             {/* Status Operacional */}
-            <div>
-              <Label className="font-bold text-foreground">Status</Label>
-              <div className="flex gap-1 mt-1">
-                {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
-                  const disabled = (s.value === 'meta' && !canEditMeta) || p1Oficial;
-                  return (
-                  <button
-                    key={s.value}
-                    type="button"
-                    onClick={() => {
-                      if (disabled) return;
-                      setFormStatusMode(s.value as any);
-                      setForm(f => ({
-                        ...f,
-                        statusOperacional: s.value === 'meta' ? null : s.value,
-                        cenario: s.value === 'meta' ? 'meta' : 'realizado',
-                      }));
-                    }}
-                    disabled={disabled}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
-                      disabled ? 'opacity-50 cursor-not-allowed' : ''
-                    } ${
-                      formStatusMode === s.value
-                        ? `${s.bg} text-white border-transparent shadow-md`
-                        : 'border-border text-muted-foreground bg-muted/30'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                  );
-                })}
+            {!isNascimento && (
+              <div>
+                <Label className="font-bold text-foreground">Status</Label>
+                <div className="flex gap-1 mt-1">
+                  {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
+                    const disabled = (s.value === 'meta' && !canEditMeta) || p1Oficial;
+                    return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => {
+                        if (disabled) return;
+                        setFormStatusMode(s.value as any);
+                        setForm(f => ({
+                          ...f,
+                          statusOperacional: s.value === 'meta' ? null : s.value,
+                          cenario: s.value === 'meta' ? 'meta' : 'realizado',
+                        }));
+                      }}
+                      disabled={disabled}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold border-2 transition-all ${
+                        disabled ? 'opacity-50 cursor-not-allowed' : ''
+                      } ${
+                        formStatusMode === s.value
+                          ? `${s.bg} text-white border-transparent shadow-md`
+                          : 'border-border text-muted-foreground bg-muted/30'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Bloqueio seletivo P1 - mensagem inline */}
             {p1BloqueioMsg && (
