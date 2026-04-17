@@ -195,6 +195,8 @@ const Index = () => {
   const [editOriginStatusFiltro, setEditOriginStatusFiltro] = useState<string | undefined>(undefined);
   const [editOriginAnoFiltro, setEditOriginAnoFiltro] = useState<string | undefined>(undefined);
   const [editOriginMesFiltro, setEditOriginMesFiltro] = useState<string | undefined>(undefined);
+  // Origem da navegação para a tela "GMD Meta" a partir da Evolução de Categorias.
+  const [metaGmdOrigin, setMetaGmdOrigin] = useState<{ tab: TabId; ano: string; mes: number; cenario: 'realizado' | 'meta' } | null>(null);
   const { user } = useAuth();
   const { canViewTab, canEdit, isReadOnly, canEditMeta } = usePermissions();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -586,6 +588,10 @@ const Index = () => {
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
           onNavigateToReclass={goToReclassFromEvolCategoria}
+          onNavigateToMetaGmd={(filtro) => {
+            setMetaGmdOrigin({ tab: 'evolucao_rebanho_hub', ano: filtro.ano, mes: filtro.mes, cenario: filtro.cenario });
+            setActiveTab('meta_gmd');
+          }}
           onEditarAbate={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setAbateParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarVenda={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setVendaParaEditar(l); setActiveTab('lancamentos'); }}
           onEditarCompra={(l, ctx) => { setEditOriginTab('evolucao_rebanho_hub'); if (ctx) { setEditOriginSubAba(ctx.subAba); setEditOriginStatusFiltro(ctx.statusFiltro); setEditOriginAnoFiltro(ctx.anoFiltro); setEditOriginMesFiltro(ctx.mesFiltro); } setCompraParaEditar(l); setActiveTab('lancamentos'); }}
@@ -774,7 +780,20 @@ const Index = () => {
         <PainelConsultorHubTab onTabChange={handleTabChange} onBack={goToVisaoZooHub} />
       )}
       {canEditMeta && activeTab === 'meta_gmd' && (
-        <MetaGmdTab onBack={() => setActiveTab('painel_consultor_hub')} />
+        <MetaGmdTab
+          initialAno={metaGmdOrigin?.ano}
+          backLabel={metaGmdOrigin?.tab === 'evolucao_rebanho_hub' ? 'Voltar para Evolução de Categorias' : 'Voltar'}
+          onBack={() => {
+            const origin = metaGmdOrigin;
+            setMetaGmdOrigin(null);
+            if (origin?.tab === 'evolucao_rebanho_hub') {
+              setFiltroGlobal({ ano: origin.ano, mes: origin.mes });
+              setActiveTab('evolucao_rebanho_hub');
+            } else {
+              setActiveTab('painel_consultor_hub');
+            }
+          }}
+        />
       )}
       {activeTab === 'precos_mercado_hub' && (
         <PrecosMercadoHubTab onTabChange={handleTabChange} onBack={() => setActiveTab('painel_consultor_hub')} />
