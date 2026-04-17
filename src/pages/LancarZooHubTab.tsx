@@ -72,6 +72,7 @@ const ACOES_PRINCIPAIS = [
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
+  const navigate = useNavigate();
 
   if (bloqueado) {
     return (
@@ -85,7 +86,16 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
 
   const ALLOWED_GLOBAL: TabId[] = ['fechamento_executivo'];
 
-  const navTo = (tab: TabId) => {
+  const navTo = (item: { tab?: TabId; route?: string }) => {
+    if (item.route) {
+      if (isGlobal) {
+        toast.info('Selecione uma fazenda para realizar lançamentos');
+        return;
+      }
+      navigate(item.route);
+      return;
+    }
+    const tab = item.tab!;
     if (isGlobal && !ALLOWED_GLOBAL.includes(tab)) {
       toast.info('Selecione uma fazenda para realizar lançamentos');
       return;
@@ -97,7 +107,10 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
     }
   };
 
-  const isBlocked = (tab: TabId) => isGlobal && !ALLOWED_GLOBAL.includes(tab);
+  const isBlocked = (item: { tab?: TabId; route?: string }) => {
+    if (item.route) return isGlobal;
+    return isGlobal && !ALLOWED_GLOBAL.includes(item.tab!);
+  };
 
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
@@ -114,11 +127,12 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
         {/* ── AÇÕES PRINCIPAIS ── */}
         <div className="grid grid-cols-3 gap-2">
           {ACOES_PRINCIPAIS.map(item => {
-            const blocked = isBlocked(item.tab);
+            const blocked = isBlocked(item);
+            const key = item.tab ?? item.route!;
             return (
               <button
-                key={item.tab}
-                onClick={() => navTo(item.tab)}
+                key={key}
+                onClick={() => navTo(item)}
                 className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 bg-card px-2 py-4 min-h-[130px] transition-all ${
                   blocked
                     ? 'border-border opacity-50 cursor-not-allowed'
