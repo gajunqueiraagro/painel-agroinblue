@@ -569,7 +569,35 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // FAZENDA_ORIGEM / FAZENDA_DESTINO: largura mínima
+                              // FAZENDA_DESTINO em Saídas/Transferência: dropdown com fazendas do cliente
+                              if (c === 'fazenda_destino' && aba === 'saidas') {
+                                const tipoOp = stripUncertain(l.tipo_op as string).toLowerCase();
+                                const isTransferencia = tipoOp.includes('transfer');
+                                if (isTransferencia) {
+                                  // Sugere match automático por nome quando IA extraiu texto
+                                  const opcoesFazendas = fazendasList.filter((f) => f.id !== fazendaId);
+                                  const matchPorNome = opcoesFazendas.find(
+                                    (f) => f.nome.toLowerCase().trim() === valorLimpo.toLowerCase().trim()
+                                  );
+                                  const selectedNome = matchPorNome?.nome || (opcoesFazendas.some((f) => f.nome === valorLimpo) ? valorLimpo : '');
+                                  return (
+                                    <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                      <Select value={selectedNome} onValueChange={(val) => updateCell(idx, c, val)}>
+                                        <SelectTrigger className="h-7 text-xs">
+                                          <SelectValue placeholder="Selecione fazenda destino" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {opcoesFazendas.map((f) => (
+                                            <SelectItem key={f.id} value={f.nome} className="text-xs">{f.nome}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                  );
+                                }
+                              }
+
+                              // FAZENDA_ORIGEM / FAZENDA_DESTINO: largura mínima (input livre)
                               if (c === 'fazenda_origem' || c === 'fazenda_destino') {
                                 return (
                                   <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
