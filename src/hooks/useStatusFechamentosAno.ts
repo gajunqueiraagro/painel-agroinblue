@@ -53,7 +53,7 @@ export function useStatusFechamentosAno(
       const [pastosRes, fpRes, vrRes, finFechRes, finLancRes, catsRes, zootViewRes] = await Promise.all([
         supabase
           .from('pastos')
-          .select('id')
+          .select('id, data_inicio')
           .eq('fazenda_id', fazendaId)
           .eq('ativo', true)
           .eq('entra_conciliacao', true),
