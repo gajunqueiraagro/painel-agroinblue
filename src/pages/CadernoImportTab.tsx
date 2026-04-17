@@ -512,6 +512,7 @@ export default function CadernoImportTab() {
                                   <Input
                                     value={raw}
                                     onChange={(e) => updateCell(idx, c, e.target.value)}
+                                    onFocus={(e) => e.target.select()}
                                     className="h-7 text-xs"
                                   />
                                 </TableCell>
