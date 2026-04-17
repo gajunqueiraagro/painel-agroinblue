@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { FinanceiroTab } from './FinanceiroTab';
@@ -28,6 +28,20 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
   const { bloqueado } = useRedirecionarPecuaria();
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
+  // Filtros injetados na aba "Movimentações" (FinanceiroTab) ao clicar numa célula da Evol. Cat.
+  const [movSubAba, setMovSubAba] = useState<SubAba | undefined>(undefined);
+  const [movAno, setMovAno] = useState<string | undefined>(undefined);
+  const [movMes, setMovMes] = useState<string | undefined>(undefined);
+  const [movStatus, setMovStatus] = useState<string | undefined>(undefined);
+
+  const handleNavigateToEvolCatLista = useCallback((filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => {
+    setMovSubAba('historico');
+    setMovAno(filtro.ano);
+    setMovMes(String(filtro.mes).padStart(2, '0'));
+    setMovStatus(filtro.cenario);
+    setActiveTab('movimentacoes');
+  }, []);
+
   if (bloqueado) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
@@ -48,7 +62,21 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
       </TabsList>
 
       <TabsContent value="movimentacoes">
-        <FinanceiroTab lancamentos={lancamentos} onEditar={onEditar || (() => {})} onRemover={onRemover || (() => {})} modoMovimentacao onEditarAbate={onEditarAbate} onEditarVenda={onEditarVenda} onEditarCompra={onEditarCompra} onEditarMorte={onEditarMorte} onEditarConsumo={onEditarConsumo} />
+        <FinanceiroTab
+          lancamentos={lancamentos}
+          onEditar={onEditar || (() => {})}
+          onRemover={onRemover || (() => {})}
+          modoMovimentacao
+          subAbaInicial={movSubAba}
+          filtroAnoInicial={movAno}
+          filtroMesInicial={movMes}
+          filtroStatusInicial={movStatus}
+          onEditarAbate={onEditarAbate}
+          onEditarVenda={onEditarVenda}
+          onEditarCompra={onEditarCompra}
+          onEditarMorte={onEditarMorte}
+          onEditarConsumo={onEditarConsumo}
+        />
       </TabsContent>
 
       <TabsContent value="evolucao">
@@ -69,6 +97,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
           initialAno={filtroAnoInicial}
           initialMes={filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : undefined}
           onNavigateToReclass={onNavigateToReclass}
+          onNavigateToEvolCatLista={handleNavigateToEvolCatLista}
         />
       </TabsContent>
     </Tabs>
