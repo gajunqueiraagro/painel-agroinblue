@@ -458,12 +458,12 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo
+                              // CATEGORIA: dropdown fixo (largura mínima 160px)
                               if (c === 'categoria') {
                                 return (
-                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[160px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
-                                      <SelectTrigger className="h-7 text-xs">
+                                      <SelectTrigger className="h-7 text-xs min-w-[150px]">
                                         <SelectValue placeholder="Selecione" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -472,6 +472,34 @@ export default function CadernoImportTab() {
                                         ))}
                                       </SelectContent>
                                     </Select>
+                                  </TableCell>
+                                );
+                              }
+
+                              // QUANTIDADE: inteiro BR (1.250)
+                              if (c === 'quantidade') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={formatIntBR(valorLimpo)}
+                                      onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
+                                      className="h-7 text-xs text-right"
+                                      inputMode="numeric"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // PESO: decimal BR (1.250,50)
+                              if (c === 'peso_medio_kg' || c === 'peso_carcaca_kg') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={formatDecBR(valorLimpo, 2)}
+                                      onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      className="h-7 text-xs text-right"
+                                      inputMode="decimal"
+                                    />
                                   </TableCell>
                                 );
                               }
