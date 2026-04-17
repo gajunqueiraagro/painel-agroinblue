@@ -129,6 +129,12 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     if (isAdmOnly && isFazendaOp) {
       return { bloqueado: true, motivo: 'Exclusivo da fazenda Administrativo' };
     }
+    // Liberar Rendimentos Financeiros e Outras Receitas no Administrativo
+    // (mesmo estando em "Receita Operacional", são receitas financeiras/genéricas)
+    const isReceitaAdmPermitida = subcentro === 'Rendimentos Financeiros' || subcentro === 'Outras Receitas';
+    if (isReceitaAdmPermitida && (isAdminFazenda || isGlobal)) {
+      return { bloqueado: false, motivo: '' };
+    }
     const isFazOnly = MACROS_FAZENDA_ONLY.has(macroNome) || GRUPOS_FAZENDA_ONLY.has(grupoNome);
     if (isFazOnly && (isAdminFazenda || isGlobal)) {
       return { bloqueado: true, motivo: 'Exclusivo de fazenda operacional' };
