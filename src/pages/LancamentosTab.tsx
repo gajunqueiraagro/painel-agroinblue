@@ -76,6 +76,10 @@ interface Props {
   transferenciaParaEditar?: Lancamento | null;
   /** Reclassificação para abrir em modo edição automaticamente */
   reclassParaEditar?: Lancamento | null;
+  /** Morte para abrir em modo edição automaticamente */
+  morteParaEditar?: Lancamento | null;
+  /** Consumo para abrir em modo edição automaticamente */
+  consumoParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => Promise<void> | void;
   /** Initial year filter for historico view */
@@ -191,7 +195,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
@@ -1352,6 +1356,67 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
   }, [transferenciaParaEditar]);
 
+  // ── Morte: load into form for editing ──
+  const loadMorteForEdit = useCallback((l: Lancamento) => {
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
+    setAba('saida');
+    setTipo('morte');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    const motivo = l.fazendaDestino || l.observacao || '';
+    const isPreset = MOTIVOS_MORTE.includes(motivo);
+    setMotivoMorte(isPreset ? motivo : motivo ? '__custom__' : '');
+    setMotivoMorteCustom(isPreset ? '' : motivo);
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+
+  useEffect(() => {
+    if (morteParaEditar) {
+      loadMorteForEdit(morteParaEditar);
+    }
+  }, [morteParaEditar]);
+
+  // ── Consumo: load into form for editing ──
+  const loadConsumoForEdit = useCallback((l: Lancamento) => {
+    if (!onReturnFromEdit) {
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+    }
+    setAba('saida');
+    setTipo('consumo');
+    setData(l.data);
+    setCategoria(l.categoria);
+    setQuantidade(String(l.quantidade));
+    setPesoKg(l.pesoMedioKg ? String(l.pesoMedioKg) : '');
+    setFazendaOrigem(l.fazendaOrigem || '');
+    setFazendaDestino(l.fazendaDestino || '');
+    setObservacao(l.observacao || '');
+    setNotaFiscal(l.notaFiscal || '');
+    setStatusOp(l.cenario === 'meta' ? 'meta' : ((l.statusOperacional as StatusOperacional) || 'realizado'));
+    editOriginalRef.current = l;
+    setP1BloqueioMsg(null);
+    setEditingAbateId(l.id);
+    setDetalheId(null);
+    setLastSavedLancamentoId(null);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
+
+  useEffect(() => {
+    if (consumoParaEditar) {
+      loadConsumoForEdit(consumoParaEditar);
+    }
+  }, [consumoParaEditar]);
+
   useEffect(() => {
     if (!clienteAtual?.id) {
       setAbateFornecedores([]);
@@ -2091,7 +2156,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </div>
           <Separator />
           <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
-            Registrar Morte
+            {editingAbateId ? 'Salvar Alterações da Morte' : 'Registrar Morte'}
           </Button>
         </div>
       );
@@ -2192,7 +2257,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           valorBruto={calc.valorBruto}
           valorLiquido={calc.valorLiquido}
           onRequestRegister={handleRequestRegister}
-          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Consumo'}
+          registerLabel={editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
           submitting={submitting}
         />
       );
@@ -3258,6 +3323,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarVenda={loadVendaForEdit}
           onEditarCompra={loadCompraForEdit}
           onEditarTransferencia={loadTransferenciaForEdit}
+          onEditarMorte={loadMorteForEdit}
+          onEditarConsumo={loadConsumoForEdit}
           fazendaId={fazendaAtual?.id}
         />
       )}
