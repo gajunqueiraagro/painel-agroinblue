@@ -27,7 +27,7 @@ const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
   entradas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
   saidas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
   nascimentos: ['data', 'categoria', 'quantidade', 'observacao'],
-  mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'numero_id', 'peso_medio_kg', 'observacao'],
+  mortes_consumo: ['data', 'evento', 'quantidade', 'categoria', 'numero_id', 'peso_medio_kg', 'observacao'],
   chuvas: ['data', 'mm', 'observacao'],
 };
 
