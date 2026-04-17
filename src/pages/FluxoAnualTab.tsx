@@ -373,7 +373,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </table>
       </div>
       </div>
-      </div>
 
       {/* Footer de atalhos do fluxo de fechamento */}
       {(onNavigateToFechamentoPastos || onNavigateToValorRebanho) && (
@@ -383,5 +382,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         />
       )}
     </div>
+  );
+}
   );
 }
