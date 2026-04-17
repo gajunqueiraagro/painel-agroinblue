@@ -55,6 +55,9 @@ export function MesAnteriorAvisoIcon({ fazendaId, anoMes, size = 14, className =
   const [p1Oficial, setP1Oficial] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
 
+  // Exibir apenas a partir de Jan/2026
+  if (!anoMes || anoMes < '2026-01') return null;
+
   const anoMesAnterior = useMemo(
     () => (anoMes ? calcMesAnterior(anoMes) : null),
     [anoMes],
