@@ -309,6 +309,7 @@ const Index = () => {
       setLancamentosFromFechamento(false);
       setLancamentosFromEvolCategoria(false);
       setLancamentosFromFluxoAnual(false);
+      setLancamentosReclassCenario(undefined);
       setAbateParaEditar(null);
       setVendaParaEditar(null);
       setCompraParaEditar(null);
@@ -542,6 +543,7 @@ const Index = () => {
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
+          initialReclassCenario={lancamentosReclassCenario}
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}
