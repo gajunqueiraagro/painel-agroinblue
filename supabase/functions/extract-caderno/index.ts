@@ -88,6 +88,16 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    // Diagnóstico seguro: nunca logar o valor completo
+    const trimmed = ANTHROPIC_API_KEY.trim();
+    console.log('[extract-caderno] key meta:', {
+      len_raw: ANTHROPIC_API_KEY.length,
+      len_trim: trimmed.length,
+      had_whitespace: ANTHROPIC_API_KEY !== trimmed,
+      prefix: trimmed.slice(0, 10),
+      suffix: trimmed.slice(-4),
+      starts_ok: trimmed.startsWith('sk-ant-'),
+    });
 
     const fullPrompt = `${prompt}
 
