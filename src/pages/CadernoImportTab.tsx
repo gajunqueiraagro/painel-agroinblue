@@ -35,6 +35,7 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Abate', 'Venda em Pé', 'Transferência'];
+const EVENTO_MORTES_CONSUMO_OPCOES = ['Morte', 'Consumo'];
 // Motivos de morte EXATOS (mesmos do cadastro manual em LancamentosTab)
 const MOTIVOS_MORTE_OPCOES = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
@@ -305,9 +306,7 @@ export default function CadernoImportTab() {
     if (aba === 'nascimentos') return { ...base, tipo: 'nascimento' };
     if (aba === 'mortes_consumo') {
       const evento = stripUncertain(l.evento).toLowerCase();
-      let tipo = 'morte';
-      if (evento.includes('consumo')) tipo = 'consumo';
-      else if (evento.includes('doa')) tipo = 'venda'; // doação como saída sem valor
+      const tipo = evento.includes('consumo') ? 'consumo' : 'morte';
       // Para morte, o motivo selecionado no dropdown é gravado em fazenda_destino
       // (mesmo campo usado pelo cadastro manual em LancamentosTab)
       if (tipo === 'morte') {
@@ -515,7 +514,24 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo (largura mínima 130px)
+                              // EVENTO (Mortes/Consumo): dropdown Morte | Consumo
+                              if (c === 'evento' && aba === 'mortes_consumo') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {EVENTO_MORTES_CONSUMO_OPCOES.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
                               if (c === 'categoria') {
                                 return (
                                   <TableCell key={c} className={cn('min-w-[130px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
