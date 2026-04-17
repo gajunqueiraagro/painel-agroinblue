@@ -57,6 +57,7 @@ import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/use
 import { toast } from 'sonner';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
+import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -250,6 +251,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>('realizado');
+  const [morteLoteOpen, setMorteLoteOpen] = useState(false);
   const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -2183,6 +2185,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
             {editingAbateId ? 'Salvar Alterações da Morte' : 'Registrar Morte'}
           </Button>
+          {isCenarioMeta && !editingAbateId && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-9 text-[12px] font-semibold border-orange-300 text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+              onClick={() => setMorteLoteOpen(true)}
+            >
+              📋 Lançar em lote (META)
+            </Button>
+          )}
         </div>
       );
     }
