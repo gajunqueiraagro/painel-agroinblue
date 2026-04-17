@@ -346,7 +346,7 @@ export function FechamentoPastoDialog({
                 quantidade={item?.quantidade || 0}
                 pesoMedioKg={item?.peso_medio_kg ?? null}
                 origemDado={item?.origem_dado || 'manual'}
-                disabled={isFechado}
+                disabled={inputsDisabled}
                 onUpdateQtd={onUpdateQtd}
                 onUpdatePeso={onUpdatePeso}
               />
@@ -368,7 +368,7 @@ export function FechamentoPastoDialog({
             {pasto.area_produtiva_ha && <span className="text-base font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
-            {!isFechado && (
+            {!isFechado && !masterReadOnly && (
               <Button variant="ghost" size="sm" onClick={handleCopiar} className="h-6 text-[10px] text-white/70 hover:text-white hover:bg-white/10 px-2 gap-1">
                 <Copy className="h-3 w-3" />Copiar anterior
               </Button>
@@ -379,11 +379,11 @@ export function FechamentoPastoDialog({
           <div className="flex gap-2 items-end">
             <div className="flex-1 min-w-0 max-w-[200px]">
               <Label className="text-[10px] text-white/50 leading-none">Lote</Label>
-              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={isFechado} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
+              <Input value={loteMes} onChange={e => setLoteMes(e.target.value)} disabled={inputsDisabled} placeholder="Lote..." className="h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30" />
             </div>
             <div className="w-12 shrink-0">
               <Label className="text-[10px] text-white/50 leading-none">Qual.</Label>
-              <Select value={qualidadeMes?.toString() || 'none'} onValueChange={v => setQualidadeMes(v === 'none' ? null : Number(v))} disabled={isFechado}>
+              <Select value={qualidadeMes?.toString() || 'none'} onValueChange={v => setQualidadeMes(v === 'none' ? null : Number(v))} disabled={inputsDisabled}>
                 <SelectTrigger className="h-7 text-xs px-1.5 bg-white/10 border-white/15 text-white"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>
@@ -393,7 +393,7 @@ export function FechamentoPastoDialog({
             </div>
             <div className="w-[130px] shrink-0">
               <Label className="text-[10px] text-white/50 leading-none">Tipo Uso</Label>
-              <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={isFechado}>
+              <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={inputsDisabled}>
                 <SelectTrigger className="h-7 text-xs px-1.5 bg-white/10 border-white/15 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -404,6 +404,7 @@ export function FechamentoPastoDialog({
               <Label className="text-[10px] text-white/50 leading-none">
                 {isDivergencia ? 'Obs. da divergência *' : 'Obs.'}
               </Label>
+              {/* Observação permanece editável mesmo em mês locked (regra: exceto observacao_mes) */}
               <Input
                 value={observacaoMes}
                 onChange={e => setObservacaoMes(e.target.value)}
