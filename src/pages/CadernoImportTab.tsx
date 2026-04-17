@@ -27,7 +27,7 @@ const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
   entradas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
   saidas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
   nascimentos: ['data', 'categoria', 'quantidade', 'observacao'],
-  mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'numero_id', 'observacao'],
+  mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'numero_id', 'peso_medio_kg', 'observacao'],
   chuvas: ['data', 'mm', 'observacao'],
 };
 
@@ -307,13 +307,17 @@ export default function CadernoImportTab() {
     if (aba === 'mortes_consumo') {
       const evento = stripUncertain(l.evento).toLowerCase();
       const tipo = evento.includes('consumo') ? 'consumo' : 'morte';
+      // numero_id (identificação do animal) é gravado em numero_documento
+      // (mesmo campo textual usado pelo sistema para nota fiscal/identificação)
+      const numeroId = l.numero_id ? stripUncertain(l.numero_id) : '';
+      const comNumero = numeroId ? { numero_documento: numeroId } : {};
       // Para morte, o motivo selecionado no dropdown é gravado em fazenda_destino
       // (mesmo campo usado pelo cadastro manual em LancamentosTab)
       if (tipo === 'morte') {
         const motivo = l.observacao ? stripUncertain(l.observacao) : '';
-        return { ...base, tipo, observacao: null, fazenda_destino: motivo || null };
+        return { ...base, tipo, observacao: null, fazenda_destino: motivo || null, ...comNumero };
       }
-      return { ...base, tipo };
+      return { ...base, tipo, ...comNumero };
     }
     return null;
   };

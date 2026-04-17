@@ -58,6 +58,8 @@ Campos:
 - evento (retornar SOMENTE "Morte" ou "Consumo" — exato, sem variações como "óbito", "morreu", "abate consumo", etc.)
 - categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade
+- numero_id (número/código de identificação do animal manuscrito no caderno, ex: "736009", "F1412", "738211" — texto exato como aparece, opcional)
+- peso_medio_kg (peso vivo em kg, número, ex: 450, 90, 100 — opcional)
 - observacao (texto literal do caderno, opcional — para mortes, este campo deve conter o motivo da morte mapeado conforme regra abaixo)
 
 Para mortes, mapeie o motivo para o valor mais próximo desta lista EXATA: Raio, Picada de cobra, Doença respiratória, Tristeza parasitária, Clostridiose, Intoxicação por planta, Acidente, Desidratação, Parto distócico, Ataque de animal, Causa desconhecida, Outro (digitar). Se não conseguir mapear com certeza, use "Causa desconhecida". Coloque o valor mapeado no campo "observacao".
