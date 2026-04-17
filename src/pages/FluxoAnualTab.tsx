@@ -200,6 +200,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                       fazendaId={fazendaAtual?.id}
                       anoMes={`${anoFiltro}-${m.key}`}
                       size={11}
+                      cenario={statusFiltro}
                     />
                   </div>
                 </th>

@@ -234,6 +234,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       fazendaId={fazendaId}
                       anoMes={`${anoFiltro}-${mesVal}`}
                       size={12}
+                      cenario={statusFiltro}
                     />
                   </span>
                 )}
