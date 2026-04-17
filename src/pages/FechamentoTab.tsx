@@ -43,11 +43,17 @@ const CAT_COLS = [
 /* ── Status de conciliação por pasto ── */
 type PastoStatusConcil = 'nao_iniciado' | 'em_edicao' | 'inconsistente' | 'conciliado' | 'fechado';
 
+// Cor regra:
+//   - fechado     → verde (oficial, único caso de verde)
+//   - conciliado  → amarelo (rascunho com itens batendo, NÃO fechado oficialmente)
+//   - inconsistente → laranja (rascunho com divergência)
+//   - em_edicao   → azul (em edição)
+//   - nao_iniciado → cinza/neutro
 const STATUS_CARD_CLASSES: Record<PastoStatusConcil, string> = {
   nao_iniciado: 'bg-muted/50 border-border',
   em_edicao: 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700',
-  inconsistente: 'bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-600',
-  conciliado: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700',
+  inconsistente: 'bg-orange-50 dark:bg-orange-950/30 border-orange-400 dark:border-orange-600',
+  conciliado: 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700',
   fechado: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-500 dark:border-emerald-500',
 };
 
@@ -55,15 +61,15 @@ const STATUS_ICON: Record<PastoStatusConcil, string> = {
   nao_iniciado: '○',
   em_edicao: '…',
   inconsistente: '!',
-  conciliado: '●',
+  conciliado: '⏳',
   fechado: '✓',
 };
 
 const STATUS_ICON_COLOR: Record<PastoStatusConcil, string> = {
   nao_iniciado: 'text-muted-foreground',
   em_edicao: 'text-blue-600 dark:text-blue-400',
-  inconsistente: 'text-amber-600 dark:text-amber-400',
-  conciliado: 'text-emerald-600 dark:text-emerald-400',
+  inconsistente: 'text-orange-600 dark:text-orange-400',
+  conciliado: 'text-amber-700 dark:text-amber-400',
   fechado: 'text-emerald-700 dark:text-emerald-300',
 };
 
