@@ -4260,6 +4260,7 @@ export type Database = {
           ativo: boolean
           cliente_id: string
           created_at: string
+          data_inicio: string | null
           entra_conciliacao: boolean
           fazenda_id: string
           id: string
@@ -4278,6 +4279,7 @@ export type Database = {
           ativo?: boolean
           cliente_id: string
           created_at?: string
+          data_inicio?: string | null
           entra_conciliacao?: boolean
           fazenda_id: string
           id?: string
@@ -4296,6 +4298,7 @@ export type Database = {
           ativo?: boolean
           cliente_id?: string
           created_at?: string
+          data_inicio?: string | null
           entra_conciliacao?: boolean
           fazenda_id?: string
           id?: string
