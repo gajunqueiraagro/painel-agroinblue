@@ -1,9 +1,11 @@
+import { Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import AuthPage from '@/pages/AuthPage';
 import FazendaSetup from '@/pages/FazendaSetup';
 import Index from '@/pages/Index';
+import CadernoImportTab from '@/pages/CadernoImportTab';
 
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
@@ -36,5 +38,11 @@ export default function AppRouter() {
 
   if (!fazendaAtual) return <FazendaSetup />;
 
-  return <Index />;
+  return (
+    <Routes>
+      <Route path="/caderno-importacao" element={<CadernoImportTab />} />
+      <Route path="/" element={<Index />} />
+      <Route path="*" element={<Index />} />
+    </Routes>
+  );
 }
