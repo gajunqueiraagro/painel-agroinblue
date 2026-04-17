@@ -22,6 +22,7 @@ const TIPOS_USO_OPTIONS = [
   { value: 'app', label: 'APP' },
   { value: 'reserva_legal', label: 'Reserva Legal' },
   { value: 'benfeitorias', label: 'Benfeitorias' },
+  { value: 'divergencia', label: '⚠️ Divergência do Campeiro' },
 ];
 
 const TIPOS_USO_EXIGEM_REBANHO = ['cria', 'recria', 'engorda'];
@@ -299,15 +300,19 @@ export function FechamentoPastoDialog({
   const totalFemeas = catsFemeas.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
 
   const exigeRebanho = TIPOS_USO_EXIGEM_REBANHO.includes(tipoUsoMes);
+  const isDivergencia = pasto.tipo_uso === 'divergencia' || tipoUsoMes === 'divergencia';
   const itensComQtd = itens.filter(i => i.quantidade > 0).map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }));
 
   const avisos: string[] = [];
   if (total === 0 && exigeRebanho) avisos.push('Nenhum animal informado');
-  if (total === 0 && !exigeRebanho) avisos.push('Pasto sem rebanho (conforme tipo de uso selecionado)');
+  if (total === 0 && !exigeRebanho && !isDivergencia) avisos.push('Pasto sem rebanho (conforme tipo de uso selecionado)');
   if (itensComQtd.length > 0 && itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
-  if (!qualidadeMes) avisos.push('Qualidade do pasto não preenchida');
+  if (!qualidadeMes && !isDivergencia) avisos.push('Qualidade do pasto não preenchida');
+  if (isDivergencia && !observacaoMes.trim()) avisos.push('Observação da divergência é obrigatória');
 
-  const podeFechar = exigeRebanho
+  const podeFechar = isDivergencia
+    ? observacaoMes.trim().length > 0
+    : exigeRebanho
     ? total > 0 && itensComQtd.some(i => i.peso_medio_kg)
     : true;
   const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
