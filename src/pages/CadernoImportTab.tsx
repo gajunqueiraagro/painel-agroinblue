@@ -599,6 +599,41 @@ export default function CadernoImportTab() {
                                 );
                               }
 
+                              // OBSERVACAO em Mortes/Consumo: para evento=Morte, dropdown de motivos
+                              if (aba === 'mortes_consumo' && c === 'observacao') {
+                                const evento = stripUncertain(l.evento as string).toLowerCase();
+                                const isMorte = evento.includes('morte');
+                                if (isMorte) {
+                                  const isPreset = MOTIVOS_MORTE_OPCOES.includes(valorLimpo) && valorLimpo !== 'Outro (digitar)';
+                                  const selectVal = valorLimpo === '' ? '' : (isPreset ? valorLimpo : 'Outro (digitar)');
+                                  return (
+                                    <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                      <Select
+                                        value={selectVal}
+                                        onValueChange={(val) => updateCell(idx, c, val === 'Outro (digitar)' ? (isPreset || valorLimpo === '' ? '' : valorLimpo) : val)}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs">
+                                          <SelectValue placeholder="Selecione o motivo" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {MOTIVOS_MORTE_OPCOES.map((o) => (
+                                            <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {(selectVal === 'Outro (digitar)' || (!isPreset && valorLimpo !== '')) && (
+                                        <Input
+                                          value={isPreset ? '' : valorLimpo}
+                                          onChange={(e) => updateCell(idx, c, e.target.value)}
+                                          placeholder="Digite o motivo"
+                                          className="h-7 text-xs mt-1"
+                                        />
+                                      )}
+                                    </TableCell>
+                                  );
+                                }
+                              }
+
                               return (
                                 <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                   <Input
