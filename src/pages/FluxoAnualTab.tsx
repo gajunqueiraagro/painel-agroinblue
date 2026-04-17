@@ -194,7 +194,14 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   className={`px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
-                  {m.label}
+                  <div className="flex items-center justify-center gap-0.5">
+                    <span>{m.label}</span>
+                    <MesAnteriorAvisoIcon
+                      fazendaId={fazendaAtual?.id}
+                      anoMes={`${anoFiltro}-${m.key}`}
+                      size={11}
+                    />
+                  </div>
                 </th>
               ))}
               <th className="px-1.5 py-1.5 font-bold text-primary-foreground text-center w-[60px] bg-primary/25 border-l border-border/60">
@@ -366,6 +373,15 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </table>
       </div>
       </div>
+      </div>
+
+      {/* Footer de atalhos do fluxo de fechamento */}
+      {(onNavigateToFechamentoPastos || onNavigateToValorRebanho) && (
+        <FluxoFechamentoFooter
+          current="movimentacoes"
+          onNext={onNavigateToFechamentoPastos}
+        />
+      )}
     </div>
   );
 }
