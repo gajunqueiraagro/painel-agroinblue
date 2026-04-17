@@ -516,7 +516,24 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo (largura mínima 130px)
+                              // EVENTO (Mortes/Consumo): dropdown Morte | Consumo
+                              if (c === 'evento' && aba === 'mortes_consumo') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {EVENTO_MORTES_CONSUMO_OPCOES.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
                               if (c === 'categoria') {
                                 return (
                                   <TableCell key={c} className={cn('min-w-[130px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
