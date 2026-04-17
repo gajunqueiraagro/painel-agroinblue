@@ -3443,6 +3443,7 @@ export type Database = {
           lote_importacao_id: string | null
           numero_documento: string | null
           observacao: string | null
+          origem: string | null
           origem_registro: string
           outros_descontos: number | null
           pedido: string | null
@@ -3505,6 +3506,7 @@ export type Database = {
           lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
+          origem?: string | null
           origem_registro?: string
           outros_descontos?: number | null
           pedido?: string | null
@@ -3567,6 +3569,7 @@ export type Database = {
           lote_importacao_id?: string | null
           numero_documento?: string | null
           observacao?: string | null
+          origem?: string | null
           origem_registro?: string
           outros_descontos?: number | null
           pedido?: string | null
