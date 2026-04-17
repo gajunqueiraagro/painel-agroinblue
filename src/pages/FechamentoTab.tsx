@@ -149,6 +149,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
+  // Pré-checagem: pastos vazios sem tipo_uso_mes definido
+  const [vazioCheckOpen, setVazioCheckOpen] = useState(false);
+  const [pastosVaziosIds, setPastosVaziosIds] = useState<string[]>([]);
+  const [marcandoVedado, setMarcandoVedado] = useState(false);
+  const [verificandoVazios, setVerificandoVazios] = useState(false);
   const [bulkReopening, setBulkReopening] = useState(false);
   const [showSugestoes, setShowSugestoes] = useState(false);
 
@@ -368,6 +373,88 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     setActiveFechamento(fech);
     setSelectedPasto(pasto);
     setDialogOpen(true);
+  };
+
+  // Pré-checagem antes de abrir o dialog de fechamento:
+  // identifica pastos sem tipo_uso_mes e sem itens (quantidade > 0).
+  const handleCloseClick = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setVerificandoVazios(true);
+    try {
+      // 1) fechamentos da fazenda/mês com tipo_uso_mes IS NULL
+      const { data: fechs, error: fErr } = await supabase
+        .from('fechamento_pastos')
+        .select('id')
+        .eq('fazenda_id', fazendaAtual.id)
+        .eq('ano_mes', anoMes)
+        .is('tipo_uso_mes', null);
+      if (fErr) {
+        console.error(fErr);
+        toast.error('Erro ao verificar pastos vazios');
+        setConfirmBulkOpen(true);
+        return;
+      }
+      const candidatos = (fechs || []).map(f => f.id);
+      if (candidatos.length === 0) {
+        setConfirmBulkOpen(true);
+        return;
+      }
+      // 2) entre os candidatos, manter apenas os que NÃO têm itens com quantidade > 0
+      const { data: itens, error: iErr } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('fechamento_id')
+        .in('fechamento_id', candidatos)
+        .gt('quantidade', 0);
+      if (iErr) {
+        console.error(iErr);
+        toast.error('Erro ao verificar itens dos pastos');
+        setConfirmBulkOpen(true);
+        return;
+      }
+      const comItens = new Set((itens || []).map(i => i.fechamento_id));
+      const vazios = candidatos.filter(id => !comItens.has(id));
+      if (vazios.length === 0) {
+        setConfirmBulkOpen(true);
+        return;
+      }
+      setPastosVaziosIds(vazios);
+      setVazioCheckOpen(true);
+    } finally {
+      setVerificandoVazios(false);
+    }
+  };
+
+  const aplicarVedadoEContinuar = async () => {
+    if (pastosVaziosIds.length === 0) {
+      setVazioCheckOpen(false);
+      setConfirmBulkOpen(true);
+      return;
+    }
+    setMarcandoVedado(true);
+    try {
+      const { error } = await supabase
+        .from('fechamento_pastos')
+        .update({ tipo_uso_mes: 'vedado' })
+        .in('id', pastosVaziosIds);
+      if (error) {
+        console.error(error);
+        toast.error(`Erro ao marcar pastos como Vedado: ${error.message}`);
+        return;
+      }
+      toast.success(`${pastosVaziosIds.length} pasto(s) marcado(s) como Vedado.`);
+      await loadFechamentos(anoMes);
+      setVazioCheckOpen(false);
+      setPastosVaziosIds([]);
+      setConfirmBulkOpen(true);
+    } finally {
+      setMarcandoVedado(false);
+    }
+  };
+
+  const pularVedadoEContinuar = () => {
+    setVazioCheckOpen(false);
+    setPastosVaziosIds([]);
+    setConfirmBulkOpen(true);
   };
 
   const handleBulkClose = async () => {
@@ -703,9 +790,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 className="w-full h-8 text-xs font-bold gap-1"
-                onClick={() => setConfirmBulkOpen(true)}
+                onClick={handleCloseClick}
+                disabled={verificandoVazios}
               >
-                <Lock className="h-3.5 w-3.5" /> Fechar Mês
+                <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
               </Button>
             )}
 
@@ -898,6 +986,36 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             <AlertDialogCancel disabled={bulkClosing}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBulkClose} disabled={bulkClosing}>
               {bulkClosing ? 'Fechando...' : `Fechar ${pendentesCount} pasto(s)`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Pré-checagem: pastos vazios sem Tipo de Uso */}
+      <AlertDialog open={vazioCheckOpen} onOpenChange={(o) => { if (!marcandoVedado) setVazioCheckOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Pastos sem Tipo de Uso
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              <strong>{pastosVaziosIds.length} pasto(s)</strong> estão vazios e sem Tipo de Uso definido.
+              <br /><br />
+              Deseja marcá-los automaticamente como <strong>"Vedado"</strong> antes de fechar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={marcandoVedado}>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={pularVedadoEContinuar}
+              disabled={marcandoVedado}
+            >
+              Não, continuar sem alterar
+            </Button>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); aplicarVedadoEContinuar(); }} disabled={marcandoVedado}>
+              {marcandoVedado ? 'Marcando…' : 'Sim, marcar como Vedado e continuar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
