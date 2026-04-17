@@ -384,5 +384,3 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
     </div>
   );
 }
-  );
-}
