@@ -26,10 +26,16 @@ interface GroupItem {
 
 const ACOES_PRINCIPAIS = [
   {
-    label: 'Lançar Movimentações',
+    label: 'Lançar Movimentações manuais',
     tab: 'lancamentos' as TabId,
     icon: ArrowLeftRight,
     description: 'Entradas, saídas e transferências',
+  },
+  {
+    label: 'Lançar Movimentações por Foto (IA)',
+    route: '/caderno-importacao',
+    icon: Camera,
+    description: 'Extração automática via foto do caderno',
   },
   {
     label: 'Lançar Rebanho em Pastos',
@@ -61,7 +67,7 @@ const ACOES_PRINCIPAIS = [
     icon: ShieldAlert,
     description: 'Identificar inconsistências na base',
   },
-];
+] as Array<{ label: string; description: string; icon: React.ComponentType<{ className?: string }>; tab?: TabId; route?: string }>;
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
