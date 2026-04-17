@@ -155,12 +155,12 @@ export default function CadernoImportTab() {
   useEffect(() => {
     supabase
       .from('categorias_rebanho')
-      .select('id, nome')
+      .select('codigo, nome')
       .then(({ data }) => {
         if (data) {
           const map: Record<string, string> = {};
           data.forEach((c: any) => {
-            if (c?.nome && c?.id) map[String(c.nome).toLowerCase().trim()] = c.id;
+            if (c?.nome && c?.codigo) map[String(c.nome).toLowerCase().trim()] = c.codigo;
           });
           setCategoriasMap(map);
         }
@@ -333,14 +333,14 @@ export default function CadernoImportTab() {
           if (error) throw error;
           toast.success(`${registros.length} chuva(s) salvas`);
       } else {
-        // Busca mapa nome → id de categorias_rebanho (case-insensitive)
+        // Busca mapa nome → codigo de categorias_rebanho (case-insensitive)
         const { data: cats, error: catsErr } = await supabase
           .from('categorias_rebanho')
-          .select('id, nome');
+          .select('codigo, nome');
         if (catsErr) throw catsErr;
         const categoriaIdMap: Record<string, string> = { ...categoriasMap };
         (cats ?? []).forEach((c: any) => {
-          if (c?.nome && c?.id) categoriaIdMap[String(c.nome).toLowerCase().trim()] = c.id;
+          if (c?.nome && c?.codigo) categoriaIdMap[String(c.nome).toLowerCase().trim()] = c.codigo;
         });
 
         const registros = linhas.map((l) => mapLinhaToLancamento(l, categoriaIdMap)).filter(Boolean) as any[];
