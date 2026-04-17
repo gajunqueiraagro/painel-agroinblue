@@ -460,9 +460,15 @@ export default function CadernoImportTab() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {colunas.map((c) => (
-                            <TableHead key={c} className="capitalize">{c.replace(/_/g, ' ')}</TableHead>
-                          ))}
+                          {colunas.map((c) => {
+                            const label =
+                              aba === 'mortes_consumo' && c === 'observacao'
+                                ? 'Motivo da Morte / Observação'
+                                : c.replace(/_/g, ' ');
+                            return (
+                              <TableHead key={c} className="capitalize">{label}</TableHead>
+                            );
+                          })}
                           <TableHead className="w-12"></TableHead>
                         </TableRow>
                       </TableHeader>
