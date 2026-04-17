@@ -367,6 +367,13 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const result: MonthStatus[] = [];
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
+        // Pastos visíveis no mês (data_inicio <= primeiro dia do mês ou null)
+        const primeiroDiaMes = `${am}-01`;
+        const pastosDoMes = pastosAtivosData.filter(
+          p => !p.data_inicio || p.data_inicio <= primeiroDiaMes,
+        );
+        const activePastoIds = new Set(pastosDoMes.map(p => p.id));
+        const totalPastos = activePastoIds.size;
         const fps = fpByMonth.get(am) || [];
 
         // Base oficial da linha Dif. do Fechamento de Pastos:
