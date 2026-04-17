@@ -288,12 +288,26 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     [operationalFechamentos]
   );
 
-  // Pasto data by category
+  // IDs de fechamentos que entram na RECONCILIAÇÃO (linha "Pasto"):
+  // inclui todos os pastos com entra_conciliacao = true, INDEPENDENTE de tipo_uso.
+  // Isso garante que o pasto "⚠️ Divergência do Campeiro" (tipo_uso = 'divergencia')
+  // contribua para a soma de cabeças da reconciliação Sistema × Pasto.
+  const reconciliacaoFechIds = useMemo(
+    () => new Set(
+      pastosAtivos
+        .map(pasto => getFechamento(pasto.id))
+        .filter((fech): fech is FechamentoPasto => Boolean(fech))
+        .map(f => f.id)
+    ),
+    [pastosAtivos, getFechamento]
+  );
+
+  // Pasto data by category — usa reconciliacaoFechIds (inclui pastos de divergência)
   const pastoDataByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const map = new Map<string, number>();
     itensMap.forEach((items, fechId) => {
-      if (!operationalFechIds.has(fechId)) return;
+      if (!reconciliacaoFechIds.has(fechId)) return;
       items.forEach(i => {
         if (i.quantidade > 0) {
           const codigo = catIdToCodigo.get(i.categoria_id);
@@ -302,14 +316,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       });
     });
     return map;
-  }, [itensMap, categorias, operationalFechIds]);
+  }, [itensMap, categorias, reconciliacaoFechIds]);
 
-  // Peso médio ponderado por categoria
+  // Peso médio ponderado por categoria — usa reconciliacaoFechIds (inclui pastos de divergência)
   const pesoMedioByCat = useMemo(() => {
     const catIdToCodigo = new Map((categorias || []).map(c => [c.id, c.codigo]));
     const acc = new Map<string, { totalPeso: number; totalCab: number }>();
     itensMap.forEach((items, fechId) => {
-      if (!operationalFechIds.has(fechId)) return;
+      if (!reconciliacaoFechIds.has(fechId)) return;
       items.forEach(i => {
         if (i.quantidade > 0 && i.peso_medio_kg) {
           const codigo = catIdToCodigo.get(i.categoria_id);
@@ -325,7 +339,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     const result = new Map<string, number>();
     acc.forEach((v, k) => { if (v.totalCab > 0) result.set(k, v.totalPeso / v.totalCab); });
     return result;
-  }, [itensMap, categorias, operationalFechIds]);
+  }, [itensMap, categorias, reconciliacaoFechIds]);
 
   const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
   const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
