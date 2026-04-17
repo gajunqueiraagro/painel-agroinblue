@@ -219,18 +219,12 @@ const Index = () => {
     return result;
   }) : noOp;
 
-  // Wrap editarLancamento to also reload meta data when status changes
+  // Wrap editarLancamento to reload BOTH caches (realizado + meta) after any successful edit
+  // This guarantees that META reclassifications reflect immediately in the list, regardless of which cache holds them.
   const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
-    // Detecta se a edição envolve o cenário META (criação, atualização ou existente META)
-    const isMetaEdit =
-      dados.statusOperacional === null ||
-      dados.statusOperacional === 'previsto' ||
-      dados.cenario === 'meta' ||
-      metaLancamentos.some(l => l.id === id);
     await editarLancamento(id, dados);
-    if (isMetaEdit) {
-      metaLoadData();
-    }
+    // Always reload both caches to avoid stale UI on cross-cenario edits
+    await Promise.all([loadData(), metaLoadData()]);
   }) : noOp;
 
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;
