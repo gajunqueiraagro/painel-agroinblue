@@ -55,6 +55,8 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
+import { useMasterLock } from '@/hooks/useMasterLock';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 interface Props {
   lancamentos: Lancamento[];
