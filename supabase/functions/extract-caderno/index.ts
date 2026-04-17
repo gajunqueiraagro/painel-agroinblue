@@ -1,4 +1,7 @@
-import { corsHeaders } from '@supabase/supabase-js/cors';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 const PROMPTS: Record<string, string> = {
   entradas: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém ENTRADAS de animais (compras ou transferências recebidas). Extraia uma linha por lançamento.
