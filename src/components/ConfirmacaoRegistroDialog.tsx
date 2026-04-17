@@ -277,17 +277,17 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
         {/* Resumo Final — full width */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Resumo Final</h4>
-          <div className="bg-primary/10 rounded-md p-1.5 space-y-0.5">
+          <div className="bg-primary/10 rounded-md p-1.5 space-y-0">
             {financeiros.formaPagamento && (
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[11px] py-0.5">
                 <span className="text-muted-foreground">Pagamento</span>
                 <strong>{financeiros.formaPagamento}</strong>
               </div>
             )}
             {financeiros.parcelas && financeiros.parcelas.length > 1 && (
-              <div className="space-y-0.5">
+              <div className="space-y-0">
                 {financeiros.parcelas.map((p, i) => (
-                  <div key={i} className="flex justify-between text-[10px]">
+                  <div key={i} className="flex justify-between text-[10px] py-0.5">
                     <span className="text-muted-foreground">Parcela {i + 1}/{financeiros.parcelas!.length} — {fmtDate(p.data)}</span>
                     <span className="font-semibold">{formatMoeda(p.valor)}</span>
                   </div>
