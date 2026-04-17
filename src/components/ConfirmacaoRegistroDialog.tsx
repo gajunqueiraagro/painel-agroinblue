@@ -77,8 +77,8 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto gap-2 p-4">
+        <DialogHeader className="space-y-0.5">
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
             Confirmar {financeiros.tipoOperacao}
@@ -89,11 +89,11 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
         </DialogHeader>
 
         {/* 2-column layout: Operacionais | Financeiros */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
         {/* Coluna Esquerda: Dados Operacionais */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Operacionais</h4>
-          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0 text-[11px] [&>div]:py-0.5">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusCfg.cls}`}>{statusCfg.label}</span>
@@ -138,7 +138,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
         {/* Coluna Direita: Dados Financeiros */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Financeiros</h4>
-          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0 text-[11px] [&>div]:py-0.5">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tipo</span>
               <strong>{financeiros.tipoOperacao}</strong>
@@ -223,20 +223,19 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                     <strong>{formatMoeda(financeiros.precoBase)}</strong>
                   </div>
                 )}
-                {/* Full Abate financial hierarchy */}
+                {/* Full Abate financial hierarchy — versão enxuta para o modal de confirmação */}
                 {financeiros.valorBase != null && financeiros.valorBase > 0 ? (
-                  <div className="space-y-0.5 pt-1">
+                  <div className="space-y-0 pt-0.5">
                     <Separator className="my-0.5" />
-                    <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(financeiros.valorBase)}</strong></div>
                     {financeiros.funruralTotal != null && financeiros.funruralTotal > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
                     )}
                     <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(financeiros.totalBruto || 0)}</span></div>
                     {financeiros.totalBonus != null && financeiros.totalBonus > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
                     )}
                     {financeiros.totalDescontos != null && financeiros.totalDescontos > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
                     )}
                     <Separator className="my-0.5" />
                     <div className="flex justify-between text-[12px] font-bold">
@@ -244,13 +243,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                       <span className="text-primary tabular-nums">{formatMoeda(financeiros.valorLiquido || 0)}</span>
                     </div>
                     {financeiros.liqArroba != null && financeiros.liqArroba > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqArroba)}</strong></div>
-                    )}
-                    {financeiros.liqCabeca != null && financeiros.liqCabeca > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/cab líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqCabeca)}</strong></div>
-                    )}
-                    {financeiros.liqKg != null && financeiros.liqKg > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/kg líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqKg)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqArroba)}</strong></div>
                     )}
                   </div>
                 ) : (
@@ -275,12 +268,6 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                     )}
                   </>
                 )}
-                {financeiros.dataVenda && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Data da Venda</span>
-                    <strong>{fmtDate(financeiros.dataVenda)}</strong>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -290,17 +277,17 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
         {/* Resumo Final — full width */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Resumo Final</h4>
-          <div className="bg-primary/10 rounded-md p-1.5 space-y-0.5">
+          <div className="bg-primary/10 rounded-md p-1.5 space-y-0">
             {financeiros.formaPagamento && (
-              <div className="flex justify-between text-[11px]">
+              <div className="flex justify-between text-[11px] py-0.5">
                 <span className="text-muted-foreground">Pagamento</span>
                 <strong>{financeiros.formaPagamento}</strong>
               </div>
             )}
             {financeiros.parcelas && financeiros.parcelas.length > 1 && (
-              <div className="space-y-0.5">
+              <div className="space-y-0">
                 {financeiros.parcelas.map((p, i) => (
-                  <div key={i} className="flex justify-between text-[10px]">
+                  <div key={i} className="flex justify-between text-[10px] py-0.5">
                     <span className="text-muted-foreground">Parcela {i + 1}/{financeiros.parcelas!.length} — {fmtDate(p.data)}</span>
                     <span className="font-semibold">{formatMoeda(p.valor)}</span>
                   </div>
