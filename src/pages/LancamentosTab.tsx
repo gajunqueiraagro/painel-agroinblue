@@ -294,6 +294,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [abateFornecedorId, setAbateFornecedorId] = useState('');
   const [abateFornecedores, setAbateFornecedores] = useState<FornecedorOption[]>([]);
   const [novoFornecedorAbateOpen, setNovoFornecedorAbateOpen] = useState(false);
+  const [abateFrigorificoNome, setAbateFrigorificoNome] = useState('');
 
   // Ref to store pending fornecedor match params — survives across renders
   const pendingFornecedorMatch = useRef<{ tipo: 'abate' | 'venda' | 'compra'; id?: string | null; nome?: string | null; lancamentoId?: string } | null>(null);
@@ -569,6 +570,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setVendaTipoPreco('por_kg'); setVendaPrecoInput('');
     setDataVenda(''); setDataEmbarque(''); setDataAbate(''); setTipoVenda('');
     setAbateFornecedorId('');
+    setAbateFrigorificoNome('');
     setCompraFornecedorId('');
     setVendaDestinoFornecedorId('');
     setFormaPagamento('avista'); setParcelas([]); setQtdParcelas('1');
@@ -703,6 +705,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
     // 3. Check for snapshot first (PRIORITY 1)
     const snap = l.detalhesSnapshot;
+    const abateFrigorifico = l.frigorifico ?? '';
+    setAbateFrigorificoNome(abateFrigorifico);
     if (snap && snap.type === 'abate') {
       // Direct restore from snapshot
       setTipoPeso(snap.tipoPeso || 'vivo');
@@ -2565,10 +2569,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              {fazendaOrigem && (!abateFornecedorId || !abateFornecedores.find(f => f.id === abateFornecedorId)) && (
+              {abateFrigorificoNome && (!abateFornecedorId || !abateFornecedores.find(f => f.id === abateFornecedorId)) && (
                 <div className="mt-1 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/20">
                   <p className="text-[10px] italic text-muted-foreground leading-tight">
-                    Nome importado do caderno: <span className="font-medium">"{fazendaOrigem}"</span> — não vinculado ao cadastro.
+                    Nome importado do caderno: <span className="font-medium">"{abateFrigorificoNome}"</span> — não vinculado ao cadastro.
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     <Button
@@ -3281,6 +3285,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <NovoFornecedorDialog
         open={novoFornecedorAbateOpen}
         onClose={() => setNovoFornecedorAbateOpen(false)}
+        defaultNome={!abateFornecedorId && abateFrigorificoNome ? abateFrigorificoNome : undefined}
         onSave={async (nome, cpfCnpj) => {
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
