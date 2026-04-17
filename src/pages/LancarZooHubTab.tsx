@@ -7,8 +7,9 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import {
   Lock, AlertCircle,
-  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert,
+  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert, Camera,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 interface Props {
