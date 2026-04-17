@@ -33,7 +33,7 @@ const ACOES_PRINCIPAIS = [
   },
   {
     label: 'Lançar Movimentações por Foto (IA)',
-    route: '/caderno-importacao',
+    tab: 'caderno_import' as TabId,
     icon: Camera,
     description: 'Extração automática via foto do caderno',
   },
