@@ -2156,7 +2156,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </div>
           <Separator />
           <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
-            Registrar Morte
+            {editingAbateId ? 'Salvar Alterações da Morte' : 'Registrar Morte'}
           </Button>
         </div>
       );
@@ -2257,7 +2257,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           valorBruto={calc.valorBruto}
           valorLiquido={calc.valorLiquido}
           onRequestRegister={handleRequestRegister}
-          registerLabel={editingAbateId ? 'Salvar Alterações' : 'Registrar Consumo'}
+          registerLabel={editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
           submitting={submitting}
         />
       );
@@ -3323,6 +3323,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onEditarVenda={loadVendaForEdit}
           onEditarCompra={loadCompraForEdit}
           onEditarTransferencia={loadTransferenciaForEdit}
+          onEditarMorte={loadMorteForEdit}
+          onEditarConsumo={loadConsumoForEdit}
           fazendaId={fazendaAtual?.id}
         />
       )}
