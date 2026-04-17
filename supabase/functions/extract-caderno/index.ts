@@ -106,7 +106,7 @@ Retorne APENAS um array JSON válido, sem texto antes ou depois, sem markdown. E
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
+        'x-api-key': trimmed,
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
