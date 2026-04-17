@@ -53,7 +53,7 @@ function formatMesLabel(anoMes: string): string {
   return `${MES_LABEL[mesIdx] ?? m[2]}/${m[1]}`;
 }
 
-export function MesAnteriorAvisoIcon({ fazendaId, anoMes, size = 14, className = '' }: Props) {
+export function MesAnteriorAvisoIcon({ fazendaId, anoMes, size = 14, className = '', cenario }: Props) {
   const [p1Oficial, setP1Oficial] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -84,6 +84,8 @@ export function MesAnteriorAvisoIcon({ fazendaId, anoMes, size = 14, className =
     return () => { cancelled = true; };
   }, [fazendaId, anoMesAnterior]);
 
+  // Cenário META não exige fechamento de pastos → não exibir ícone
+  if (cenario && String(cenario).toLowerCase() === 'meta') return null;
   // Exibir apenas a partir de Jan/2026
   if (!anoMes || anoMes < '2026-01') return null;
   // Não renderiza nada se: ainda carregando, sem fazenda, ou mês anterior já oficial
