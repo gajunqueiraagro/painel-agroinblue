@@ -171,6 +171,10 @@ export function FechamentoPastoDialog({
 
   const isFechado = status === 'fechado';
   const { loadItens, atualizarCamposMensais } = useFechamento();
+  const { isReadOnly: isMesReadOnly } = useMasterLock(fechamento.ano_mes);
+  const masterReadOnly = isMesReadOnly(fechamento.ano_mes);
+  // Inputs ficam disabled se já fechado OU se mês está bloqueado pelo master lock
+  const inputsDisabled = isFechado || masterReadOnly;
 
   useEffect(() => {
     setStatus(fechamento.status);
