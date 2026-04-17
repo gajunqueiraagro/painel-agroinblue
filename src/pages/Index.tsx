@@ -179,6 +179,7 @@ const Index = () => {
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
   const [lancamentosFromFluxoAnual, setLancamentosFromFluxoAnual] = useState(false);
+  const [lancamentosReclassCenario, setLancamentosReclassCenario] = useState<'realizado' | 'meta' | undefined>(undefined);
   const [metaLancAnoFiltro, setMetaLancAnoFiltro] = useState<string | undefined>(undefined);
   const [metaLancMesFiltro, setMetaLancMesFiltro] = useState<string | undefined>(undefined);
   const [metaLancAbaInicial, setMetaLancAbaInicial] = useState<'reclassificacao' | undefined>(undefined);
@@ -308,6 +309,7 @@ const Index = () => {
       setLancamentosFromFechamento(false);
       setLancamentosFromEvolCategoria(false);
       setLancamentosFromFluxoAnual(false);
+      setLancamentosReclassCenario(undefined);
       setAbateParaEditar(null);
       setVendaParaEditar(null);
       setCompraParaEditar(null);
@@ -353,14 +355,16 @@ const Index = () => {
   }, []);
   const goToFechamentoTab = useCallback(() => setActiveTab('fechamento'), []);
   const goToEvolucaoRebanhoHub = useCallback(() => setActiveTab('evolucao_rebanho_hub'), []);
-  const goToReclassFromEvolCategoria = useCallback((filtro?: { ano: string; mes: number }) => {
+  const goToReclassFromEvolCategoria = useCallback((filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosReclassCenario(filtro?.cenario);
     setLancamentosFromEvolCategoria(true);
     setActiveTab('lancamentos');
   }, []);
   const goToFluxoAnual = useCallback(() => setActiveTab('fluxo_anual'), []);
-  const goToReclassFromFluxoAnual = useCallback((filtro?: { ano: string; mes: number }) => {
+  const goToReclassFromFluxoAnual = useCallback((filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => {
     if (filtro) setFiltroGlobal({ ano: filtro.ano, mes: filtro.mes });
+    setLancamentosReclassCenario(filtro?.cenario);
     setLancamentosFromFluxoAnual(true);
     setActiveTab('lancamentos');
   }, []);
@@ -539,6 +543,7 @@ const Index = () => {
           onBackToConciliacao={lancamentosFromConciliacao ? goToFechamentoTab : lancamentosFromFechamento ? goToFechamentoTab : lancamentosFromEvolCategoria ? goToEvolucaoRebanhoHub : lancamentosFromFluxoAnual ? goToFluxoAnual : undefined}
           dataInicial={(lancamentosFromConciliacao || lancamentosFromFechamento || lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? `${filtroGlobal.ano}-${String(filtroGlobal.mes).padStart(2, '0')}-15` : undefined}
           backLabel={lancamentosFromFechamento ? 'Voltar para Lançamento de Pasto' : (lancamentosFromEvolCategoria || lancamentosFromFluxoAnual) ? 'Voltar para Evolução por Categoria' : undefined}
+          initialReclassCenario={lancamentosReclassCenario}
           abateParaEditar={abateParaEditar}
           vendaParaEditar={vendaParaEditar}
           compraParaEditar={compraParaEditar}

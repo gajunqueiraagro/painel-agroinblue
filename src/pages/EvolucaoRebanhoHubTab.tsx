@@ -16,7 +16,7 @@ interface Props {
   onRemover?: (id: string) => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
-  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
   onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;

@@ -88,6 +88,8 @@ interface Props {
   initialAnoFiltro?: string;
   /** Initial month filter for historico view */
   initialMesFiltro?: string;
+  /** Cenário inicial para reclassificação quando navegado da Evolução por Categoria */
+  initialReclassCenario?: 'realizado' | 'meta';
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
@@ -197,7 +199,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
@@ -252,6 +254,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
+  // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
+  useEffect(() => {
+    if (initialReclassCenario && abaInicial === 'reclassificacao') {
+      reclassState.setStatusOp(initialReclassCenario);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReclassCenario, abaInicial]);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
