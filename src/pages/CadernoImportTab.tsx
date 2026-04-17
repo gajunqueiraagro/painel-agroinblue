@@ -380,10 +380,64 @@ export default function CadernoImportTab() {
                             {colunas.map((c) => {
                               const v = l[c];
                               const uncertain = isUncertain(v);
+                              const raw = v == null ? '' : String(v);
+                              const valorLimpo = stripUncertain(raw);
+
+                              // DATA: exibe DD/MM/AAAA, salva YYYY-MM-DD
+                              if (c === 'data') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={isoToBr(valorLimpo)}
+                                      placeholder="DD/MM/AAAA"
+                                      onChange={(e) => updateCell(idx, c, brToIso(e.target.value))}
+                                      className="h-7 text-xs"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // TIPO_OP: dropdown fixo
+                              if (c === 'tipo_op') {
+                                const opcoes = aba === 'entradas' ? TIPO_OP_OPCOES_ENTRADAS : TIPO_OP_OPCOES_SAIDAS;
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {opcoes.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
+                              // CATEGORIA: dropdown fixo
+                              if (c === 'categoria') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {CATEGORIA_OPCOES.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
                               return (
                                 <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                   <Input
-                                    value={v == null ? '' : String(v)}
+                                    value={raw}
                                     onChange={(e) => updateCell(idx, c, e.target.value)}
                                     className="h-7 text-xs"
                                   />
