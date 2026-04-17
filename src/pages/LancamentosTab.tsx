@@ -1525,6 +1525,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
+    // ─── Gate de master lock: bloqueia se o mês da data está fechado ───
+    if (data && !masterLock.isMaster) {
+      const anoMesData = data.slice(0, 7); // 'YYYY-MM'
+      if (!masterLock.isUnlocked(anoMesData)) {
+        const locked = await masterLock.checkLockNow(anoMesData);
+        if (locked) {
+          toast.error(
+            `🔒 Mês ${anoMesData} fechado — alterações zootécnicas exigem autorização master.`
+          );
+          return;
+        }
+      }
+    }
+
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
       : undefined;
