@@ -41,10 +41,12 @@ interface Props {
   onEditarCompra?: (lancamento: Lancamento) => void;
   onEditarTransferencia?: (lancamento: Lancamento) => void;
   onEditarReclass?: (lancamento: Lancamento) => void;
+  onEditarMorte?: (lancamento: Lancamento) => void;
+  onEditarConsumo?: (lancamento: Lancamento) => void;
   fazendaId?: string;
 }
 
-export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, fazendaId }: Props) {
+export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, fazendaId }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
   const { canEditMeta } = usePermissions();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -153,6 +155,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (isReclassificacao(lancamento.tipo) && onEditarReclass) {
       onClose();
       onEditarReclass(lancamento);
+    } else if (lancamento.tipo === 'morte' && onEditarMorte) {
+      onClose();
+      onEditarMorte(lancamento);
+    } else if (lancamento.tipo === 'consumo' && onEditarConsumo) {
+      onClose();
+      onEditarConsumo(lancamento);
     } else if (isCompra) {
       // Fallback: Open unified purchase edit sheet
       setCompraForm({ ...lancamento });
