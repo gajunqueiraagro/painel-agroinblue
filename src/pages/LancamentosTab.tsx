@@ -3272,6 +3272,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <NovoFornecedorDialog
         open={novoFornecedorCompraOpen}
         onClose={() => setNovoFornecedorCompraOpen(false)}
+        defaultNome={!compraFornecedorId && fazendaOrigem ? fazendaOrigem : undefined}
         onSave={async (nome, cpfCnpj) => {
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
