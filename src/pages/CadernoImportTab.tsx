@@ -433,6 +433,7 @@ export default function CadernoImportTab() {
                                       value={isoToBr(valorLimpo)}
                                       placeholder="DD/MM/AAAA"
                                       onChange={(e) => updateCell(idx, c, brToIso(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs"
                                     />
                                   </TableCell>
