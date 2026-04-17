@@ -77,8 +77,8 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto gap-2 p-4">
-        <DialogHeader className="space-y-0.5">
+      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col gap-2 p-4">
+        <DialogHeader className="space-y-0.5 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
             Confirmar {financeiros.tipoOperacao}
