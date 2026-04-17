@@ -30,6 +30,8 @@ interface Props {
   /** Tamanho do ícone em px (default 14) */
   size?: number;
   className?: string;
+  /** Cenário ativo. No cenário 'meta' não há obrigação de fechamento → ícone não aparece. */
+  cenario?: 'realizado' | 'meta' | string;
 }
 
 const MES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
