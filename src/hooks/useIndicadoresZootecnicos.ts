@@ -405,7 +405,7 @@ export function useIndicadoresZootecnicos(
 
     // Área / UA
     const areaProdutiva = calcAreaProdutivaPecuaria(pastos);
-    const areaProdutivaEstimativa = pastos.filter(p => p.ativo && p.entra_conciliacao).length === 0;
+    const areaProdutivaEstimativa = pastos.filter(p => p.ativo && p.entra_conciliacao && (!p.data_inicio || p.data_inicio <= `${anoMes}-01`)).length === 0;
     const uaTotal = calcUA(saldoFinalMes, pesoMedioRebanhoKg);
     const uaHa = calcUAHa(uaTotal, areaProdutiva);
 
