@@ -2587,7 +2587,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              {!compraFornecedorId && fazendaOrigem && (
+              {fazendaOrigem && (!compraFornecedorId || !abateFornecedores.find(f => f.id === compraFornecedorId)) && (
                 <div className="mt-1 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/20">
                   <p className="text-[10px] italic text-muted-foreground leading-tight">
                     Nome importado do caderno: <span className="font-medium">"{fazendaOrigem}"</span> — não vinculado ao cadastro.
