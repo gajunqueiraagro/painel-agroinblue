@@ -205,9 +205,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
 
-  // ─── Governança P1: bloquear mês fechado ───
-  // We'll compute anoMes from the form's current `data` field (set on line ~195)
-  // But we need the state first, so the hook call uses a derived value below.
+  // ─── Master lock: bloqueia submit em meses completamente fechados ───
+  // Hook chamado com anoMes derivado do campo `data` (efetivado mais abaixo via useMemo).
+  const { isReadOnly: isMesReadOnlyLanc } = useMasterLock();
 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
