@@ -25,6 +25,8 @@ import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
+import { useMasterLock } from '@/hooks/useMasterLock';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
 
@@ -983,7 +985,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const uBaseInicialIncompleta = isGlobal ? false : (isAnoInicial && baseInicialIncompleta);
   const uFonteMes = isGlobal ? globalData.fonteMes : fonteMes;
   const uHistoricoPorMes = isGlobal ? globalData.historicoPorMes : historicoPorMes;
-  const uCanEdit = isGlobal ? false : canEdit;
+  const { isReadOnly: isMesReadOnlyVR } = useMasterLock(anoMes);
+  const masterReadOnlyVR = isMesReadOnlyVR(anoMes);
+  const uCanEdit = isGlobal ? false : (canEdit && !masterReadOnlyVR);
   const uTabelaUsaSnapshot = isGlobal
     ? (globalData.fonteMes === 'snapshot')
     : tabelaUsaSnapshot;
