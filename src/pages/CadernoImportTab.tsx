@@ -35,14 +35,48 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Venda', 'Transferência', 'Abate', 'Abate+Venda'];
+// Categorias EXATAS do sistema (plural conforme banco)
 const CATEGORIA_OPCOES = [
-  'Touro', 'Vaca',
-  'Mamote M', 'Mamote F',
-  'Desmama M', 'Desmama F',
-  'Novilha 1', 'Novilha 2',
-  'Garrote 1', 'Garrote 2',
-  'Boi',
+  'Mamotes M',
+  'Mamotes F',
+  'Desmama M',
+  'Desmama F',
+  'Garrotes',
+  'Novilhas',
+  'Vacas',
+  'Bois',
+  'Touros',
 ];
+
+// Formatação numérica BR
+function formatIntBR(v: unknown): string {
+  if (v == null || v === '') return '';
+  const s = stripUncertain(String(v)).replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  if (!Number.isFinite(n)) return String(v);
+  return Math.trunc(n).toLocaleString('pt-BR');
+}
+function formatDecBR(v: unknown, decimals = 2): string {
+  if (v == null || v === '') return '';
+  const s = stripUncertain(String(v)).replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  if (!Number.isFinite(n)) return String(v);
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function parseIntBR(v: string): string {
+  const digits = v.replace(/\D/g, '');
+  if (!digits) return '';
+  return String(parseInt(digits, 10));
+}
+function parseDecBR(v: string): string {
+  // mantém digitação livre; normaliza vírgula -> ponto para storage
+  const cleaned = v.replace(/[^\d.,-]/g, '');
+  if (!cleaned) return '';
+  const norm = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned;
+  return norm;
+}
 
 // Converte YYYY-MM-DD <-> DD/MM/AAAA
 function isoToBr(iso: string): string {
