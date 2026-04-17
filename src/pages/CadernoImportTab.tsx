@@ -484,6 +484,7 @@ export default function CadernoImportTab() {
                                     <Input
                                       value={formatIntBR(valorLimpo)}
                                       onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="numeric"
                                     />
