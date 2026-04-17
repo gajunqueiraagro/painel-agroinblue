@@ -158,6 +158,9 @@ const TITLES: Record<TabId, string> = {
 
 const Index = () => {
   const [activeTab, setActiveTabRaw] = useState<TabId>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/caderno-importacao') {
+      return 'caderno_import';
+    }
     const saved = sessionStorage.getItem('agroinblue_active_tab');
     return (saved && saved in TITLES) ? saved as TabId : 'resumo';
   });
