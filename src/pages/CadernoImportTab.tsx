@@ -25,7 +25,7 @@ const ABAS: { id: AbaTipo; label: string }[] = [
 
 const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
   entradas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
-  saidas: ['data', 'tipo_op', 'categoria', 'quantidade', 'peso_medio_kg', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
+  saidas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
   nascimentos: ['data', 'categoria', 'quantidade', 'observacao'],
   mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'observacao'],
   chuvas: ['data', 'mm', 'observacao'],
@@ -34,7 +34,7 @@ const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
 type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
-const TIPO_OP_OPCOES_SAIDAS = ['Venda', 'Transferência', 'Abate', 'Abate+Venda'];
+const TIPO_OP_OPCOES_SAIDAS = ['Abate', 'Venda em Pé', 'Transferência'];
 // Categorias EXATAS do sistema (plural conforme banco)
 const CATEGORIA_OPCOES = [
   'Mamotes M',
