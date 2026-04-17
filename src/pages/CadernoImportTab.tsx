@@ -499,6 +499,7 @@ export default function CadernoImportTab() {
                                     <Input
                                       value={formatDecBR(valorLimpo, 2)}
                                       onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="decimal"
                                     />
