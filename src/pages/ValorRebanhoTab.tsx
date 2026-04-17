@@ -359,7 +359,7 @@ function MiniChart({ data, color, title }: { data: { label: string; value: numbe
   );
 }
 
-export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial }: Props) {
+export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAnoInicial, filtroMesInicial, onNavigateToFechamentoPastos, onNavigateToMovimentacoes }: Props) {
   const { fazendaAtual, isGlobal, fazendas } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
   const { categorias } = usePastos();
@@ -1181,6 +1181,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
                 }`}
             >
               {isComprometido ? '⚠' : ''}{m.label}
+              {isSelected && (
+                <span className="absolute -top-1 -right-1 inline-block">
+                  <MesAnteriorAvisoIcon
+                    fazendaId={fazendaId}
+                    anoMes={mesKey}
+                    size={12}
+                  />
+                </span>
+              )}
             </button>
           );
         })}
@@ -1467,6 +1476,14 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
         </div>
       </div>
       </div>
+
+      {/* Footer de atalhos do fluxo de fechamento */}
+      {(onNavigateToFechamentoPastos || onNavigateToMovimentacoes) && (
+        <FluxoFechamentoFooter
+          current="valor_rebanho"
+          onPrev={onNavigateToFechamentoPastos}
+        />
+      )}
     </div>
   );
 }
