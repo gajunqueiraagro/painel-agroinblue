@@ -34,7 +34,7 @@ Para cada linha retorne os campos:
 - peso_medio_kg
 - peso_carcaca_kg (opcional, para abates)
 - preco_medio_cabeca (opcional)
-- fazenda_destino (opcional, para transferências)
+- fazenda_destino (opcional, para transferências — quando o tipo_op for "Transferência", extraia o NOME da fazenda destino exatamente como manuscrito no caderno, ex: "Fazenda São João", "Retiro", "Sede". Para outros tipos de saída, deixe vazio ou use o destino livre.)
 - observacao (texto literal do caderno, opcional)
 
 ${REGRA_OBSERVACAO}
