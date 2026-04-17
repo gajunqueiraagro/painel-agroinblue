@@ -20,7 +20,8 @@ export type TipoUsoArea =
   | 'agricultura'
   | 'app'
   | 'reserva_legal'
-  | 'benfeitorias';
+  | 'benfeitorias'
+  | 'divergencia';
 
 export type NaturezaArea = 'pecuaria' | 'agricultura' | 'estrutural_ambiental';
 
@@ -28,13 +29,18 @@ export type NaturezaArea = 'pecuaria' | 'agricultura' | 'estrutural_ambiental';
 
 /** Tipos que NÃO pertencem à pecuária */
 export const TIPOS_USO_NAO_PECUARIO = new Set<string>([
-  'agricultura', 'app', 'reserva_legal', 'benfeitorias',
+  'agricultura', 'app', 'reserva_legal', 'benfeitorias', 'divergencia',
 ]);
 
 /** Tipos pecuários que NÃO possuem lotação operacional no mês */
 export const TIPOS_PECUARIO_SEM_LOTACAO = new Set<string>([
   'reforma_pecuaria', 'vedado',
 ]);
+
+/** Pasto especial de divergência do campeiro (não conta área/UA/lotação, mas entra na conciliação) */
+export function isPastoDivergencia(tipo: string | null | undefined): boolean {
+  return tipo === 'divergencia';
+}
 
 /** Todos os tipos de uso disponíveis com label para UI */
 export const TIPOS_USO_AREA: { value: TipoUsoArea; label: string; natureza: NaturezaArea }[] = [
@@ -47,6 +53,7 @@ export const TIPOS_USO_AREA: { value: TipoUsoArea; label: string; natureza: Natu
   { value: 'app',               label: 'APP',               natureza: 'estrutural_ambiental' },
   { value: 'reserva_legal',     label: 'Reserva Legal',     natureza: 'estrutural_ambiental' },
   { value: 'benfeitorias',      label: 'Benfeitorias',      natureza: 'estrutural_ambiental' },
+  { value: 'divergencia',       label: '⚠️ Divergência do Campeiro', natureza: 'estrutural_ambiental' },
 ];
 
 // ── Funções de classificação ─────────────────────────────────────────

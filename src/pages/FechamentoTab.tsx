@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo } from '@/lib/classificacaoArea';
+import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
@@ -174,7 +174,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [fechamentos, loadItens]);
 
   const pastosAtivos = useMemo(
-    () => pastos.filter(p => p.ativo && p.entra_conciliacao),
+    () => {
+      const filtrados = pastos.filter(p => p.ativo && p.entra_conciliacao);
+      // Pastos de divergência sempre no FINAL da lista
+      const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
+      const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
+      return [...normais, ...divergencia];
+    },
     [pastos]
   );
 
