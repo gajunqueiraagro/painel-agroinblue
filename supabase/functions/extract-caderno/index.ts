@@ -3,41 +3,52 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// IMPORTANTE: Categorias EXATAS do sistema (plural conforme banco). NUNCA inventar variações.
+const CATEGORIAS_OFICIAIS = '"Mamotes M", "Mamotes F", "Desmama M", "Desmama F", "Garrotes", "Novilhas", "Vacas", "Bois", "Touros"';
+
+const REGRA_OBSERVACAO = `REGRA CRÍTICA observacao: o campo "observacao" deve conter SOMENTE texto literalmente escrito no caderno. NUNCA injete "Sexo M", "Sexo F", o nome da categoria, ou qualquer rótulo derivado. Se não houver observação manuscrita, retorne string vazia "" ou omita o campo.`;
+
 const PROMPTS: Record<string, string> = {
   entradas: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém ENTRADAS de animais (compras ou transferências recebidas). Extraia uma linha por lançamento.
 
 Para cada linha retorne os campos:
 - data (YYYY-MM-DD)
 - tipo_op ("Compra" ou "Transferência")
-- categoria (ex: "Bezerros", "Garrotes", "Novilhas", "Vacas", "Touros", "Bois")
+- categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade (número de cabeças)
 - peso_medio_kg (peso médio por animal em kg, número)
 - preco_medio_cabeca (R$ por cabeça, número, opcional)
 - fazenda_origem (texto livre, opcional)
-- observacao (texto livre, opcional)
+- observacao (texto literal do caderno, opcional)
 
-REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?" (ex: "?Bezerros", "?45"). Se um campo não existe na foto, omita-o.`,
+${REGRA_OBSERVACAO}
+
+REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?" (ex: "?Garrotes", "?45"). Se um campo não existe na foto, omita-o.`,
   saidas: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém SAÍDAS de animais (vendas, abates, transferências). Extraia uma linha por lançamento.
 
 Para cada linha retorne os campos:
 - data (YYYY-MM-DD)
 - tipo_op ("Venda", "Abate", "Abate+Venda" ou "Transferência")
-- categoria
+- categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade
 - peso_medio_kg
 - peso_carcaca_kg (opcional, para abates)
 - preco_medio_cabeca (opcional)
 - fazenda_destino (opcional, para transferências)
-- observacao (opcional)
+- observacao (texto literal do caderno, opcional)
+
+${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
   nascimentos: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém NASCIMENTOS. Extraia uma linha por lançamento.
 
 Campos:
 - data (YYYY-MM-DD)
-- categoria (geralmente "Bezerros" ou "Bezerras")
+- categoria (use APENAS: "Mamotes M" ou "Mamotes F")
 - quantidade
-- observacao (opcional)
+- observacao (texto literal do caderno, opcional)
+
+${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
   mortes_consumo: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém MORTES, CONSUMO ou DOAÇÕES. Extraia uma linha por evento.
@@ -45,9 +56,11 @@ REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe
 Campos:
 - data (YYYY-MM-DD)
 - evento ("Morte", "Consumo" ou "Doação")
-- categoria
+- categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade
-- observacao (opcional, ex: causa da morte)
+- observacao (texto literal do caderno, opcional — ex: causa da morte se manuscrita)
+
+${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
   chuvas: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém medições de CHUVA. Extraia uma linha por dia.
@@ -55,7 +68,9 @@ REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe
 Campos:
 - data (YYYY-MM-DD)
 - mm (milímetros de chuva, número)
-- observacao (opcional)
+- observacao (texto literal do caderno, opcional)
+
+${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
 };

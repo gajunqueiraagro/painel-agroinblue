@@ -35,14 +35,48 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Venda', 'Transferência', 'Abate', 'Abate+Venda'];
+// Categorias EXATAS do sistema (plural conforme banco)
 const CATEGORIA_OPCOES = [
-  'Touro', 'Vaca',
-  'Mamote M', 'Mamote F',
-  'Desmama M', 'Desmama F',
-  'Novilha 1', 'Novilha 2',
-  'Garrote 1', 'Garrote 2',
-  'Boi',
+  'Mamotes M',
+  'Mamotes F',
+  'Desmama M',
+  'Desmama F',
+  'Garrotes',
+  'Novilhas',
+  'Vacas',
+  'Bois',
+  'Touros',
 ];
+
+// Formatação numérica BR
+function formatIntBR(v: unknown): string {
+  if (v == null || v === '') return '';
+  const s = stripUncertain(String(v)).replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  if (!Number.isFinite(n)) return String(v);
+  return Math.trunc(n).toLocaleString('pt-BR');
+}
+function formatDecBR(v: unknown, decimals = 2): string {
+  if (v == null || v === '') return '';
+  const s = stripUncertain(String(v)).replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  if (!Number.isFinite(n)) return String(v);
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function parseIntBR(v: string): string {
+  const digits = v.replace(/\D/g, '');
+  if (!digits) return '';
+  return String(parseInt(digits, 10));
+}
+function parseDecBR(v: string): string {
+  // mantém digitação livre; normaliza vírgula -> ponto para storage
+  const cleaned = v.replace(/[^\d.,-]/g, '');
+  if (!cleaned) return '';
+  const norm = cleaned.includes(',')
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned;
+  return norm;
+}
 
 // Converte YYYY-MM-DD <-> DD/MM/AAAA
 function isoToBr(iso: string): string {
@@ -57,12 +91,19 @@ function brToIso(br: string): string {
   if (!m) return s; // mantém entrada para usuário corrigir
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
-// Limpa "Sexo M/F" e prefixos similares de observações
+// Remove conteúdo auto-injetado da observação ("Sexo M", "Sexo: F", categoria entre parênteses, etc.)
+// Mantém somente o que vier escrito no caderno.
 function limparObservacao(v: unknown): string {
   if (v == null) return '';
   let s = String(v).trim();
-  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '').trim();
-  s = s.replace(/^[\s,;.\-/|]+|[\s,;.\-/|]+$/g, '').trim();
+  // remove "Sexo M/F" e variações
+  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '');
+  // remove rótulos "categoria: X"
+  s = s.replace(/categoria\s*[:\-]\s*[^,;.|]+/gi, '');
+  // remove parênteses isolados deixados após limpeza
+  s = s.replace(/\(\s*\)/g, '');
+  // limpa pontuação solta nas pontas
+  s = s.replace(/^[\s,;.\-/|()]+|[\s,;.\-/|()]+$/g, '').trim();
   return s;
 }
 
@@ -158,10 +199,11 @@ export default function CadernoImportTab() {
         return;
       }
       const arr = (data?.data ?? []) as Linha[];
-      // Sanitiza: remove "Sexo M/F" da observação que algumas IAs injetam
+      // Sanitiza observação: remove qualquer texto auto-injetado (Sexo M/F, categoria, etc.)
+      // Mantém apenas conteúdo real do caderno; vazio se não houver.
       const limpas = arr.map((l) => ({
         ...l,
-        observacao: l.observacao ? limparObservacao(l.observacao) : l.observacao ?? '',
+        observacao: limparObservacao(l.observacao),
       }));
       setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...limpas] }));
       toast.success(`${limpas.length} linha(s) extraída(s)`);
@@ -416,12 +458,12 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo
+                              // CATEGORIA: dropdown fixo (largura mínima 160px)
                               if (c === 'categoria') {
                                 return (
-                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[160px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
-                                      <SelectTrigger className="h-7 text-xs">
+                                      <SelectTrigger className="h-7 text-xs min-w-[150px]">
                                         <SelectValue placeholder="Selecione" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -430,6 +472,34 @@ export default function CadernoImportTab() {
                                         ))}
                                       </SelectContent>
                                     </Select>
+                                  </TableCell>
+                                );
+                              }
+
+                              // QUANTIDADE: inteiro BR (1.250)
+                              if (c === 'quantidade') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={formatIntBR(valorLimpo)}
+                                      onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
+                                      className="h-7 text-xs text-right"
+                                      inputMode="numeric"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // PESO: decimal BR (1.250,50)
+                              if (c === 'peso_medio_kg' || c === 'peso_carcaca_kg') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={formatDecBR(valorLimpo, 2)}
+                                      onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      className="h-7 text-xs text-right"
+                                      inputMode="decimal"
+                                    />
                                   </TableCell>
                                 );
                               }
