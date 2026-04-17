@@ -24,7 +24,7 @@ const ABAS: { id: AbaTipo; label: string }[] = [
 ];
 
 const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
-  entradas: ['data', 'tipo_op', 'categoria', 'quantidade', 'peso_medio_kg', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
+  entradas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
   saidas: ['data', 'tipo_op', 'categoria', 'quantidade', 'peso_medio_kg', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
   nascimentos: ['data', 'categoria', 'quantidade', 'observacao'],
   mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'observacao'],
@@ -227,18 +227,23 @@ export default function CadernoImportTab() {
     setLinhasPorAba((prev) => ({ ...prev, [aba]: prev[aba].filter((_, i) => i !== idx) }));
   };
 
-  const mapLinhaToLancamento = (l: Linha): any | null => {
+  const mapLinhaToLancamento = (l: Linha, categoriaIdMap: Record<string, string>): any | null => {
     if (!fazendaId || !clienteAtual) return null;
     const data = stripUncertain(l.data);
-    const categoria = stripUncertain(l.categoria);
+    const categoriaNome = stripUncertain(l.categoria);
     const quantidade = Number(stripUncertain(l.quantidade)) || 0;
     if (!data || quantidade <= 0) return null;
+
+    // Resolve nome → id (case-insensitive)
+    const categoriaId = categoriaNome
+      ? categoriaIdMap[categoriaNome.toLowerCase().trim()] ?? null
+      : null;
 
     const base = {
       fazenda_id: fazendaId,
       cliente_id: clienteAtual.id,
       data,
-      categoria,
+      categoria: categoriaId,
       quantidade,
       peso_medio_kg: l.peso_medio_kg ? Number(stripUncertain(l.peso_medio_kg)) : null,
       observacao: l.observacao ? stripUncertain(l.observacao) : null,
@@ -312,8 +317,20 @@ export default function CadernoImportTab() {
           if (error) throw error;
           toast.success(`${registros.length} chuva(s) salvas`);
       } else {
-        const registros = linhas.map(mapLinhaToLancamento).filter(Boolean) as any[];
+        // Busca mapa nome → id de categorias_rebanho (case-insensitive)
+        const { data: cats, error: catsErr } = await supabase
+          .from('categorias_rebanho')
+          .select('id, nome');
+        if (catsErr) throw catsErr;
+        const categoriaIdMap: Record<string, string> = {};
+        (cats ?? []).forEach((c: any) => {
+          if (c?.nome && c?.id) categoriaIdMap[String(c.nome).toLowerCase().trim()] = c.id;
+        });
+
+        const registros = linhas.map((l) => mapLinhaToLancamento(l, categoriaIdMap)).filter(Boolean) as any[];
         if (registros.length === 0) throw new Error('Nenhuma linha válida (verifique data, categoria e quantidade)');
+        const semCategoria = registros.filter((r) => !r.categoria).length;
+        if (semCategoria > 0) throw new Error(`${semCategoria} linha(s) com categoria não reconhecida`);
         const { error } = await supabase.from('lancamentos').insert(registros);
         if (error) throw error;
         toast.success(`${registros.length} lançamento(s) salvos`);
@@ -459,12 +476,12 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo (largura mínima 160px)
+                              // CATEGORIA: dropdown fixo (largura mínima 130px)
                               if (c === 'categoria') {
                                 return (
-                                  <TableCell key={c} className={cn('min-w-[160px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[130px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
-                                      <SelectTrigger className="h-7 text-xs min-w-[150px]">
+                                      <SelectTrigger className="h-7 text-xs min-w-[120px]">
                                         <SelectValue placeholder="Selecione" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -480,7 +497,7 @@ export default function CadernoImportTab() {
                               // QUANTIDADE: inteiro BR (1.250)
                               if (c === 'quantidade') {
                                 return (
-                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[80px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
                                       type="text"
                                       value={formatIntBR(valorLimpo)}
@@ -488,6 +505,20 @@ export default function CadernoImportTab() {
                                       onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="numeric"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // FAZENDA_ORIGEM / FAZENDA_DESTINO: largura mínima
+                              if (c === 'fazenda_origem' || c === 'fazenda_destino') {
+                                return (
+                                  <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={raw}
+                                      onChange={(e) => updateCell(idx, c, e.target.value)}
+                                      onFocus={(e) => e.target.select()}
+                                      className="h-7 text-xs"
                                     />
                                   </TableCell>
                                 );
