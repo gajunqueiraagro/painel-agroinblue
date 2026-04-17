@@ -8,7 +8,6 @@ import { ClienteProvider } from "@/contexts/ClienteContext";
 import { FazendaProvider } from "@/contexts/FazendaContext";
 import AppRouter from "./AppRouter";
 import NotFound from "./pages/NotFound.tsx";
-import CadernoImportTab from "./pages/CadernoImportTab";
 
 const queryClient = new QueryClient();
 
@@ -22,8 +21,7 @@ const App = () => (
           <FazendaProvider>
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<AppRouter />} />
-                <Route path="/caderno-importacao" element={<CadernoImportTab />} />
+                <Route path="/*" element={<AppRouter />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
