@@ -161,18 +161,18 @@ export function useMasterLock(anoMes?: string) {
     async (mes: string, senha: string): Promise<boolean> => {
       if (!fazendaId) return false;
       if (senha !== MASTER_PASSWORD) return false;
-      unlock(`${fazendaId}|${mes}`);
+      unlockKey(`${fazendaId}|${mes}`);
       return true;
     },
-    [fazendaId, unlock]
+    [fazendaId]
   );
 
   const lockMes = useCallback(
     (mes: string) => {
       if (!fazendaId) return;
-      lock(`${fazendaId}|${mes}`);
+      lockKey(`${fazendaId}|${mes}`);
     },
-    [fazendaId, lock]
+    [fazendaId]
   );
 
   return {
