@@ -499,9 +499,13 @@ export default function CadernoImportTab() {
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
                                       type="text"
-                                      value={formatDecBR(valorLimpo, 2)}
-                                      onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      value={valorLimpo}
+                                      onChange={(e) => updateCell(idx, c, e.target.value.replace(',', '.'))}
                                       onFocus={(e) => e.target.select()}
+                                      onBlur={(e) => {
+                                        const n = parseFloat(e.target.value.replace(',', '.'));
+                                        if (!isNaN(n)) updateCell(idx, c, String(n));
+                                      }}
                                       className="h-7 text-xs text-right"
                                       inputMode="decimal"
                                     />
