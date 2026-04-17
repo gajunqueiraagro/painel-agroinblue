@@ -327,9 +327,9 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
                 <TableCell className="py-1 px-1" />
                 <TableCell className="py-1 px-1" />
                 {totais.map((v, i) => (
-                  <TableCell key={i} className={`text-right font-bold py-1 px-1${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>{fmtCompact(v)}</TableCell>
+                  <TableCell key={i} className={`text-right font-bold py-1 px-0.5 whitespace-nowrap${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>{fmtCompact(v)}</TableCell>
                 ))}
-                <TableCell className="text-right font-extrabold border-l-2 border-border py-1 px-1">{fmtCompact(totalGeral)}</TableCell>
+                <TableCell className="text-right font-extrabold border-l-2 border-border py-1 px-0.5 whitespace-nowrap">{fmtCompact(totalGeral)}</TableCell>
                 <TableCell className="py-1 px-1" />
                 <TableCell className="py-1 px-1" />
               </TableRow>
