@@ -1091,6 +1091,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   return (
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
+      {!isGlobal && <MasterLockBanner anoMes={anoMes} />}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
