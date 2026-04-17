@@ -164,6 +164,13 @@ export function useStatusFechamentosAno(
         const mesNumero = index + 1;
         const mes = String(mesNumero).padStart(2, '0');
         const anoMes = `${ano}-${mes}`;
+        // Pastos visíveis no mês (data_inicio <= primeiro dia do mês ou null)
+        const primeiroDiaMes = `${anoMes}-01`;
+        const pastosDoMes = pastosComData.filter(
+          (p) => !p.data_inicio || p.data_inicio <= primeiroDiaMes,
+        );
+        const activePastoIds = new Set(pastosDoMes.map((p) => p.id));
+        const totalPastos = activePastoIds.size;
         const fechamentosMes = fechamentosByMes.get(anoMes) || [];
 
         // Deduplicate: most recent fechamento per active pasto (same as useStatusZootecnico)
