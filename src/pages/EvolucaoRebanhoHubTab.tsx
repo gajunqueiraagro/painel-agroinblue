@@ -17,6 +17,7 @@ interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
+  onNavigateToMetaGmd?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
   onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarVenda?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
   onEditarCompra?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
@@ -24,7 +25,7 @@ interface Props {
   onEditarConsumo?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
 }
 
-export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onEditarAbate, onEditarVenda, onEditarCompra, onEditarMorte, onEditarConsumo }: Props) {
+export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onEditar, onRemover, filtroAnoInicial, filtroMesInicial, onNavigateToReclass, onNavigateToMetaGmd, onEditarAbate, onEditarVenda, onEditarCompra, onEditarMorte, onEditarConsumo }: Props) {
   const { bloqueado } = useRedirecionarPecuaria();
   const [activeTab, setActiveTab] = useState('movimentacoes');
 
@@ -98,6 +99,7 @@ export function EvolucaoRebanhoHubTab({ lancamentos, saldosIniciais, onNavigateT
           initialMes={filtroMesInicial ? String(filtroMesInicial).padStart(2, '0') : undefined}
           onNavigateToReclass={onNavigateToReclass}
           onNavigateToEvolCatLista={handleNavigateToEvolCatLista}
+          onNavigateToMetaGmd={onNavigateToMetaGmd}
         />
       </TabsContent>
     </Tabs>

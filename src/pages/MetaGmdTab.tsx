@@ -12,13 +12,15 @@ import { toast } from 'sonner';
 
 interface Props {
   onBack?: () => void;
+  initialAno?: string;
+  backLabel?: string;
 }
 
 const MESES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function MetaGmdTab({ onBack }: Props) {
+export function MetaGmdTab({ onBack, initialAno, backLabel }: Props) {
   const now = new Date();
-  const [ano, setAno] = useState(String(now.getFullYear()));
+  const [ano, setAno] = useState(initialAno || String(now.getFullYear()));
   const { rows, loading, saving, updateCell, salvar } = useMetaGmd(ano);
 
   const anos = useMemo(() => {
@@ -46,7 +48,7 @@ export function MetaGmdTab({ onBack }: Props) {
           {onBack && (
             <button onClick={onBack} className="flex items-center gap-1 text-xs text-primary hover:underline">
               <ArrowLeft className="h-3.5 w-3.5" />
-              Voltar
+              {backLabel || 'Voltar'}
             </button>
           )}
           <h2 className="text-sm font-semibold text-orange-600">GMD Meta</h2>
