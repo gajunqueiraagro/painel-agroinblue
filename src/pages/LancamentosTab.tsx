@@ -1829,7 +1829,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          // Preserva STATUS = Meta após salvar abate em cenário Meta (não força volta para 'realizado')
+          setObservacao(''); setStatusOp(isMeta ? 'meta' : 'realizado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
         } else if (isVenda && returnedId) {

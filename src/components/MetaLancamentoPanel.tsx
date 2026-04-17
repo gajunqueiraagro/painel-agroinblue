@@ -313,7 +313,15 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const loading = loadingRebanho || loadingParams;
 
   // ── Stepper state ──
-  const [expandedStep, setExpandedStep] = useState<number | null>(null);
+  // Etapas 1, 2 e 3 abertas por padrão (recolhíveis); etapa 4 (Financeiro) foi removida do painel.
+  const [openSteps, setOpenSteps] = useState<Set<number>>(() => new Set([1, 2, 3]));
+  const handleToggleOpen = useCallback((step: number) => {
+    setOpenSteps(prev => {
+      const next = new Set(prev);
+      if (next.has(step)) next.delete(step); else next.add(step);
+      return next;
+    });
+  }, []);
 
   // ── Dados da base oficial META ──
   const saldoMap = useMemo(() => getSaldoMap(mes), [getSaldoMap, mes]);
@@ -458,14 +466,12 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const step2Status: StepStatus = simulacao ? (hasBloqueio ? 'pending' : 'done') : 'active';
   const step3Status: StepStatus = evolucaoObrigatoria ? 'pending' : 'done';
   const step4Status: StepStatus = etapaFinanceiroHabilitado ? 'active' : 'disabled';
-
-  const handleToggleStep = useCallback((step: number) => {
-    setExpandedStep(prev => prev === step ? null : step);
-  }, []);
+  // Etapa 4 (Financeiro) suprimida — botão "Completar Abate" assume essa função.
+  void step4Status;
 
   if (!categoria) {
     return (
-      <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+      <div className="bg-card rounded-md border shadow-sm p-2 space-y-1.5 self-start">
         <h3 className="text-[13px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
           <TrendingUp className="h-4 w-4" /> Painel Inteligente META
         </h3>
@@ -477,7 +483,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 
   if (loading) {
     return (
-      <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start animate-pulse">
+      <div className="bg-card rounded-md border shadow-sm p-2 space-y-1.5 self-start animate-pulse">
         <div className="h-4 bg-muted rounded w-3/4" />
         <div className="h-3 bg-muted rounded w-1/2" />
         <div className="h-3 bg-muted rounded w-2/3" />
@@ -485,14 +491,16 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
     );
   }
 
+  const isOpen = (n: number) => openSteps.has(n);
+
   return (
     <div className="bg-card rounded-md border border-orange-200 dark:border-orange-800 shadow-sm self-start flex flex-col max-h-[80vh]">
       {/* Header */}
-      <div className="p-3 pb-1.5">
-        <h3 className="text-[13px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
-          <TrendingUp className="h-4 w-4" /> Painel Inteligente META
+      <div className="px-2.5 pt-2 pb-1">
+        <h3 className="text-[12px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5" /> Painel Inteligente META
         </h3>
-        <div className="flex flex-wrap gap-1 mt-1.5">
+        <div className="flex flex-wrap gap-1 mt-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="text-[9px] bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded font-medium cursor-help">
@@ -512,140 +520,156 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
       <Separator />
 
       {/* Scrollable stepper area */}
-      <div className="flex-1 overflow-y-auto p-3 pt-1.5 space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2.5 py-1 space-y-0">
 
-        {/* ═══ ETAPA 1: Situação do Lote (always visible) ═══ */}
+        {/* ═══ ETAPA 1: Situação do Lote (recolhível, aberta por padrão) ═══ */}
         <div>
-          <StepHeader step={1} label="Situação do Lote" status={step1Status} expanded alwaysOpen onToggle={() => {}} />
-          <div className="pl-7 pb-2">
-            <div className="space-y-0.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Categoria</span>
-                <span className="font-semibold">{getCategoriaLabel(categoria)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Saldo atual</span>
-                <span className="font-semibold">{saldoAtual} cab</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Peso médio</span>
-                <span className="font-semibold">{pesoMedioAtual != null ? `${fmt(pesoMedioAtual, 1)} kg` : '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Peso total</span>
-                <span className="font-semibold">{pesoTotalAtual > 0 ? `${fmt(pesoTotalAtual, 0)} kg` : '-'}</span>
-              </div>
-              {catParams && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Faixa válida</span>
-                  <span className="font-medium text-[10px]">{fmt(catParams.pesoMinKg, 0)} – {fmt(catParams.pesoMaxKg, 0)} kg</span>
+          <StepHeader
+            step={1}
+            label="Situação do Lote"
+            status={step1Status}
+            expanded={isOpen(1)}
+            onToggle={() => handleToggleOpen(1)}
+          />
+          {isOpen(1) && (
+            <div className="pl-7 pb-1">
+              <div className="space-y-0 text-[10px]">
+                <div className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">Categoria</span>
+                  <span className="font-semibold">{getCategoriaLabel(categoria)}</span>
                 </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">Saldo atual</span>
+                  <span className="font-semibold">{saldoAtual} cab</span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">Peso médio</span>
+                  <span className="font-semibold">{pesoMedioAtual != null ? `${fmt(pesoMedioAtual, 1)} kg` : '-'}</span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">Peso total</span>
+                  <span className="font-semibold">{pesoTotalAtual > 0 ? `${fmt(pesoTotalAtual, 0)} kg` : '-'}</span>
+                </div>
+                {catParams && (
+                  <div className="flex justify-between py-0.5">
+                    <span className="text-muted-foreground">Faixa válida</span>
+                    <span className="font-medium text-[10px]">{fmt(catParams.pesoMinKg, 0)} – {fmt(catParams.pesoMaxKg, 0)} kg</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-0.5" />
+
+        {/* ═══ ETAPA 2: Simulação (recolhível, aberta por padrão) ═══ */}
+        <div>
+          <StepHeader
+            step={2}
+            label="Simulação"
+            status={step2Status}
+            expanded={isOpen(2)}
+            onToggle={() => handleToggleOpen(2)}
+          />
+          {isOpen(2) && (
+            <div className="pl-7 pb-1">
+              {simulacao && quantidade > 0 ? (
+                <div className="space-y-1">
+                  <div className="space-y-0 text-[10px]">
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-muted-foreground">Saldo final projetado</span>
+                      <span className={cn('font-semibold', simulacao.saldoFinalProjetado < 0 && 'text-destructive')}>
+                        {simulacao.saldoFinalProjetado} cab
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-muted-foreground">Peso total remanescente</span>
+                      <span className="font-semibold">{fmt(simulacao.pesoTotalFinalProjetado, 0)} kg</span>
+                    </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-muted-foreground">Peso médio final</span>
+                      <span className={cn('font-semibold', simulacao.pesoMedioFinalProjetado != null && simulacao.pesoMedioFinalProjetado <= 0 && 'text-destructive')}>
+                        {simulacao.pesoMedioFinalProjetado != null ? `${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg` : '-'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Validações inline */}
+                  {allValidacoes.length > 0 && (
+                    <div className="space-y-1">
+                      {bloqueios.map((v, i) => (
+                        <div key={`b-${i}`} className="flex items-start gap-1.5 bg-destructive/10 text-destructive rounded p-1">
+                          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                          <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
+                        </div>
+                      ))}
+                      {alertas.map((v, i) => (
+                        <div key={`a-${i}`} className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded p-1">
+                          <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                          <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {allValidacoes.length === 0 && pesoKg > 0 && (
+                    <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span className="text-[10px] font-medium">Lançamento válido</span>
+                    </div>
+                  )}
+
+                  {/* GMD inline */}
+                  {gmdInfo && (gmdInfo.gmdPlanejado != null || gmdInfo.gmdImplicito != null) && (
+                    <div className="space-y-0 text-[10px] pt-1 border-t border-border/50">
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">GMD planejado</span>
+                        <span className="font-semibold">{gmdInfo.gmdPlanejado != null ? `${fmt(gmdInfo.gmdPlanejado, 3)} kg` : '-'}</span>
+                      </div>
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-muted-foreground">GMD implícito</span>
+                        <span className="font-semibold">{gmdInfo.gmdImplicito != null ? `${fmt(gmdInfo.gmdImplicito, 3)} kg` : '-'}</span>
+                      </div>
+                      {gmdInfo.desvio != null && (
+                        <div className="flex justify-between py-0.5">
+                          <span className="text-muted-foreground">Desvio</span>
+                          <span className={cn('font-semibold', Math.abs(gmdInfo.desvio) > ALERTA_GMD_DESVIO_PCT && 'text-amber-600 dark:text-amber-400')}>
+                            {gmdInfo.desvio > 0 ? '+' : ''}{(gmdInfo.desvio * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground italic">Preencha quantidade e peso para simular.</p>
               )}
             </div>
-          </div>
+          )}
         </div>
 
         <Separator className="my-0.5" />
 
-        {/* ═══ ETAPA 2: Simulação (always visible when active) ═══ */}
-        <div>
-          <StepHeader step={2} label="Simulação" status={step2Status} expanded alwaysOpen onToggle={() => {}} />
-          <div className="pl-7 pb-2">
-            {simulacao && quantidade > 0 ? (
-              <div className="space-y-1.5">
-                <div className="space-y-0.5 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Saldo final projetado</span>
-                    <span className={cn('font-semibold', simulacao.saldoFinalProjetado < 0 && 'text-destructive')}>
-                      {simulacao.saldoFinalProjetado} cab
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Peso total remanescente</span>
-                    <span className="font-semibold">{fmt(simulacao.pesoTotalFinalProjetado, 0)} kg</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Peso médio final</span>
-                    <span className={cn('font-semibold', simulacao.pesoMedioFinalProjetado != null && simulacao.pesoMedioFinalProjetado <= 0 && 'text-destructive')}>
-                      {simulacao.pesoMedioFinalProjetado != null ? `${fmt(simulacao.pesoMedioFinalProjetado, 1)} kg` : '-'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Validações inline */}
-                {allValidacoes.length > 0 && (
-                  <div className="space-y-1">
-                    {bloqueios.map((v, i) => (
-                      <div key={`b-${i}`} className="flex items-start gap-1.5 bg-destructive/10 text-destructive rounded p-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
-                      </div>
-                    ))}
-                    {alertas.map((v, i) => (
-                      <div key={`a-${i}`} className="flex items-start gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded p-1.5">
-                        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        <span className="text-[10px] font-medium leading-tight">{v.mensagem}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {allValidacoes.length === 0 && pesoKg > 0 && (
-                  <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-medium">Lançamento válido</span>
-                  </div>
-                )}
-
-                {/* GMD inline */}
-                {gmdInfo && (gmdInfo.gmdPlanejado != null || gmdInfo.gmdImplicito != null) && (
-                  <div className="space-y-0.5 text-[11px] pt-1 border-t border-border/50">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">GMD planejado</span>
-                      <span className="font-semibold">{gmdInfo.gmdPlanejado != null ? `${fmt(gmdInfo.gmdPlanejado, 3)} kg` : '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">GMD implícito</span>
-                      <span className="font-semibold">{gmdInfo.gmdImplicito != null ? `${fmt(gmdInfo.gmdImplicito, 3)} kg` : '-'}</span>
-                    </div>
-                    {gmdInfo.desvio != null && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Desvio</span>
-                        <span className={cn('font-semibold', Math.abs(gmdInfo.desvio) > ALERTA_GMD_DESVIO_PCT && 'text-amber-600 dark:text-amber-400')}>
-                          {gmdInfo.desvio > 0 ? '+' : ''}{(gmdInfo.desvio * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-[10px] text-muted-foreground italic">Preencha quantidade e peso para simular.</p>
-            )}
-          </div>
-        </div>
-
-        <Separator className="my-0.5" />
-
-        {/* ═══ ETAPA 3: Evolução de Categoria ═══ */}
+        {/* ═══ ETAPA 3: Evolução de Categoria (recolhível, aberta por padrão) ═══ */}
         <div>
           <StepHeader
             step={3}
             label="Evolução de Categoria"
             status={step3Status}
-            expanded={expandedStep === 3}
-            onToggle={() => handleToggleStep(3)}
+            expanded={isOpen(3)}
+            onToggle={() => handleToggleOpen(3)}
           />
-          {expandedStep === 3 && (
-            <div className="pl-7 pb-2">
+          {isOpen(3) && (
+            <div className="pl-7 pb-1">
               {!hasEvolucao ? (
                 <p className="text-[10px] text-muted-foreground italic">
                   Sem categoria anterior configurada para alimentar {getCategoriaLabel(categoria)}.
                 </p>
               ) : evolucaoObrigatoria ? (
                 /* ── Estado B: Evolução OBRIGATÓRIA (saldo insuficiente + anterior elegível) ── */
-                <div className="space-y-1.5">
-                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2 space-y-1">
+                <div className="space-y-1">
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-1.5 space-y-1">
                     <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                       ⚠ Evolução necessária para este lançamento
                     </p>
@@ -666,8 +690,8 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                 </div>
               ) : evolucaoInfo.elegivel ? (
                 /* ── Estado A: Sugestão consultiva (elegível, mas saldo suporta) ── */
-                <div className="space-y-1.5">
-                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                <div className="space-y-1">
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1.5 space-y-1">
                     <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">
                       💡 {getCategoriaLabel(evolucaoInfo.categoriaAnterior)} elegível para evoluir para {getCategoriaLabel(evolucaoInfo.categoriaAtual)}
                     </p>
@@ -690,7 +714,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
                 </div>
               ) : (
                 /* ── Categoria anterior não elegível ainda ── */
-                <div className="text-[10px] text-muted-foreground space-y-0.5">
+                <div className="text-[10px] text-muted-foreground space-y-0">
                   <div className="flex items-center gap-1">
                     <span>{getCategoriaLabel(evolucaoInfo.categoriaAnterior)}</span>
                     <ArrowRight className="h-3 w-3" />
@@ -705,7 +729,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
             </div>
           )}
           {/* Compact info when collapsed */}
-          {expandedStep !== 3 && hasEvolucao && (
+          {!isOpen(3) && hasEvolucao && (
             <div className="pl-7 pb-1">
               <span className={cn(
                 'text-[9px]',
@@ -726,45 +750,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
           )}
         </div>
 
-        <Separator className="my-0.5" />
-
-        {/* ═══ ETAPA 4: Financeiro ═══ */}
-        <div>
-          <StepHeader
-            step={4}
-            label="Financeiro"
-            status={step4Status}
-            expanded={expandedStep === 4}
-            onToggle={() => handleToggleStep(4)}
-            tooltip={!etapaFinanceiroHabilitado
-              ? (evolucaoObrigatoria
-                ? 'Finalize a evolução necessária para liberar o financeiro e concluir o lançamento.'
-                : 'Resolva os bloqueios técnicos para liberar o financeiro.')
-              : undefined
-            }
-          />
-          {expandedStep === 4 && etapaFinanceiroHabilitado && (
-            <div className="pl-7 pb-2">
-              <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-medium">Etapa financeira habilitada</span>
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Configure os detalhes financeiros no painel abaixo para concluir.
-              </p>
-            </div>
-          )}
-          {expandedStep !== 4 && !etapaFinanceiroHabilitado && (
-            <div className="pl-7 pb-1">
-              <span className="text-[9px] text-muted-foreground/60">
-                🔒 {evolucaoObrigatoria
-                  ? 'Finalize a evolução necessária para liberar o financeiro'
-                  : 'Bloqueado — resolva pendências anteriores'
-                }
-              </span>
-            </div>
-          )}
-        </div>
+        {/* ═══ ETAPA 4 (Financeiro) removida — substituída pelo botão "Completar Abate" abaixo do painel. ═══ */}
       </div>
     </div>
   );
