@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatNum } from '@/lib/calculos/formatters';
 import { calcUA } from '@/lib/calculos/zootecnicos';
-import { TIPOS_USO, type Pasto } from '@/hooks/usePastos';
+import { TIPOS_USO, isPastoAtivoNoMes, type Pasto } from '@/hooks/usePastos';
 import type { FechamentoPasto, FechamentoItem } from '@/hooks/useFechamento';
 import type { CategoriaRebanho } from '@/hooks/usePastos';
 
@@ -53,7 +53,7 @@ interface Props {
 
 export function ResumoAtividadesView({ pastos, fechamentos, itensMap, categorias, anoMes, onBack, onVerPastos }: Props) {
   const resumos = useMemo(() => {
-    const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
+    const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes));
     const fechMap = new Map(fechamentos.map(f => [f.pasto_id, f]));
 
     // Group by tipo_uso

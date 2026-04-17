@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { usePastos, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -110,7 +110,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
 
   useEffect(() => {
     const build = async () => {
-      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
+      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes));
       if (pastosAtivos.length === 0) { setRows([]); return; }
       setLoading(true);
 

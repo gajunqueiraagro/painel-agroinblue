@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { usePastos, TIPOS_USO } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes, TIPOS_USO } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -79,7 +79,7 @@ export function ResumoPastosTab({ onTabChange }: Props) {
 
   useEffect(() => {
     const calc = async () => {
-      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao);
+      const pastosAtivos = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes));
       if (pastosAtivos.length === 0 || fechamentos.length === 0) {
         setResumos(pastosAtivos.map(p => ({
           pasto: p, totalCabecas: 0, categorias: [], tipoUsoMes: null,
