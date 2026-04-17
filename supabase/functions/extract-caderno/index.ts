@@ -58,7 +58,9 @@ Campos:
 - evento ("Morte", "Consumo" ou "Doação")
 - categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade
-- observacao (texto literal do caderno, opcional — ex: causa da morte se manuscrita)
+- observacao (texto literal do caderno, opcional — para mortes, este campo deve conter o motivo da morte mapeado conforme regra abaixo)
+
+Para mortes, tente mapear o motivo para um dos seguintes valores EXATOS: Raio, Picada de cobra, Doença respiratória, Tristeza parasitária, Clostridiose, Intoxicação por planta, Acidente, Desidratação, Parto distócico, Ataque de animal, Causa desconhecida, Outro (digitar). Se não conseguir mapear com confiança, use "Causa desconhecida". Coloque o valor mapeado no campo "observacao".
 
 ${REGRA_OBSERVACAO}
 

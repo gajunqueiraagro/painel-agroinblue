@@ -35,6 +35,12 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Abate', 'Venda em Pé', 'Transferência'];
+// Motivos de morte EXATOS (mesmos do cadastro manual em LancamentosTab)
+const MOTIVOS_MORTE_OPCOES = [
+  'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
+  'Clostridiose', 'Intoxicação por planta', 'Acidente', 'Desidratação',
+  'Parto distócico', 'Ataque de animal', 'Causa desconhecida', 'Outro (digitar)',
+];
 // Categorias EXATAS do sistema (plural conforme banco)
 const CATEGORIA_OPCOES = [
   'Mamotes M',
@@ -302,6 +308,12 @@ export default function CadernoImportTab() {
       let tipo = 'morte';
       if (evento.includes('consumo')) tipo = 'consumo';
       else if (evento.includes('doa')) tipo = 'venda'; // doação como saída sem valor
+      // Para morte, o motivo selecionado no dropdown é gravado em fazenda_destino
+      // (mesmo campo usado pelo cadastro manual em LancamentosTab)
+      if (tipo === 'morte') {
+        const motivo = l.observacao ? stripUncertain(l.observacao) : '';
+        return { ...base, tipo, observacao: null, fazenda_destino: motivo || null };
+      }
       return { ...base, tipo };
     }
     return null;
@@ -448,9 +460,15 @@ export default function CadernoImportTab() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          {colunas.map((c) => (
-                            <TableHead key={c} className="capitalize">{c.replace(/_/g, ' ')}</TableHead>
-                          ))}
+                          {colunas.map((c) => {
+                            const label =
+                              aba === 'mortes_consumo' && c === 'observacao'
+                                ? 'Motivo da Morte / Observação'
+                                : c.replace(/_/g, ' ');
+                            return (
+                              <TableHead key={c} className="capitalize">{label}</TableHead>
+                            );
+                          })}
                           <TableHead className="w-12"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -579,6 +597,41 @@ export default function CadernoImportTab() {
                                     />
                                   </TableCell>
                                 );
+                              }
+
+                              // OBSERVACAO em Mortes/Consumo: para evento=Morte, dropdown de motivos
+                              if (aba === 'mortes_consumo' && c === 'observacao') {
+                                const evento = stripUncertain(l.evento as string).toLowerCase();
+                                const isMorte = evento.includes('morte');
+                                if (isMorte) {
+                                  const isPreset = MOTIVOS_MORTE_OPCOES.includes(valorLimpo) && valorLimpo !== 'Outro (digitar)';
+                                  const selectVal = valorLimpo === '' ? '' : (isPreset ? valorLimpo : 'Outro (digitar)');
+                                  return (
+                                    <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                      <Select
+                                        value={selectVal}
+                                        onValueChange={(val) => updateCell(idx, c, val === 'Outro (digitar)' ? (isPreset || valorLimpo === '' ? '' : valorLimpo) : val)}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs">
+                                          <SelectValue placeholder="Selecione o motivo" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {MOTIVOS_MORTE_OPCOES.map((o) => (
+                                            <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      {(selectVal === 'Outro (digitar)' || (!isPreset && valorLimpo !== '')) && (
+                                        <Input
+                                          value={isPreset ? '' : valorLimpo}
+                                          onChange={(e) => updateCell(idx, c, e.target.value)}
+                                          placeholder="Digite o motivo"
+                                          className="h-7 text-xs mt-1"
+                                        />
+                                      )}
+                                    </TableCell>
+                                  );
+                                }
                               }
 
                               return (
