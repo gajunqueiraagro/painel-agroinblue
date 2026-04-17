@@ -57,7 +57,7 @@ export function useMasterLock(anoMes?: string) {
   const { user } = useAuth();
   const { clienteAtual } = useCliente();
   const { fazendaAtual } = useFazenda();
-  const { unlocked, unlock, lock } = useUnlockStore();
+  const unlocked = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   const isMaster = useMemo(() => {
     const masterId = (clienteAtual?.config as Record<string, unknown> | null)?.master_user_id;
