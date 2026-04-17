@@ -305,7 +305,10 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </div>
         </div>
 
-        <DialogFooter className="gap-2 pt-2">
+        </div>
+        {/* end scrollable body */}
+
+        <DialogFooter className="gap-2 pt-2 shrink-0 border-t mt-1">
           <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             <ArrowLeft className="h-3.5 w-3.5 mr-1" />
             Voltar e editar
