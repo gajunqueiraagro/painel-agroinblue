@@ -106,7 +106,24 @@ export default function CadernoImportTab() {
       const { data, error } = await supabase.functions.invoke('extract-caderno', {
         body: { imageB64: b64, imageMime: mime, tipo: aba },
       });
-      if (error) throw error;
+      if (error) {
+        // Tenta extrair detalhe do corpo da resposta da edge function
+        let detalhe = '';
+        try {
+          const ctx = (error as any).context;
+          if (ctx?.body) {
+            const txt = typeof ctx.body === 'string' ? ctx.body : await new Response(ctx.body).text();
+            const j = JSON.parse(txt);
+            detalhe = j?.detalhe || j?.error || '';
+          }
+        } catch { /* ignore */ }
+        if (detalhe.includes('credit balance is too low')) {
+          toast.error('Sem créditos na conta Anthropic. Adicione créditos em console.anthropic.com → Plans & Billing.');
+        } else {
+          toast.error(detalhe || (error as Error).message || 'Erro ao extrair');
+        }
+        return;
+      }
       const arr = (data?.data ?? []) as Linha[];
       setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...arr] }));
       toast.success(`${arr.length} linha(s) extraída(s)`);
