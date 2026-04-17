@@ -2572,7 +2572,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <div className="min-w-0">
               <Label className="font-bold text-[11px]">Fornecedor *</Label>
               <div className="flex items-center gap-1 mt-0.5">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1" id="compra-fornecedor-select">
                   <SearchableSelect
                     value={compraFornecedorId || '__all__'}
                     onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
@@ -2608,7 +2608,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                       size="sm"
                       className="h-6 text-[10px] px-2"
                       onClick={() => {
-                        const trigger = document.querySelector<HTMLButtonElement>('[data-compra-fornecedor-trigger] button');
+                        const trigger = document.querySelector<HTMLButtonElement>('#compra-fornecedor-select button');
                         trigger?.click();
                       }}
                     >
