@@ -51,16 +51,16 @@ Campos:
 ${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
-  mortes_consumo: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém MORTES, CONSUMO ou DOAÇÕES. Extraia uma linha por evento.
+  mortes_consumo: `Você é um assistente que extrai dados de cadernos pecuários manuscritos. Esta foto contém MORTES ou CONSUMO. Extraia uma linha por evento.
 
 Campos:
 - data (YYYY-MM-DD)
-- evento ("Morte", "Consumo" ou "Doação")
+- evento (retornar SOMENTE "Morte" ou "Consumo" — exato, sem variações como "óbito", "morreu", "abate consumo", etc.)
 - categoria (use APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS})
 - quantidade
 - observacao (texto literal do caderno, opcional — para mortes, este campo deve conter o motivo da morte mapeado conforme regra abaixo)
 
-Para mortes, tente mapear o motivo para um dos seguintes valores EXATOS: Raio, Picada de cobra, Doença respiratória, Tristeza parasitária, Clostridiose, Intoxicação por planta, Acidente, Desidratação, Parto distócico, Ataque de animal, Causa desconhecida, Outro (digitar). Se não conseguir mapear com confiança, use "Causa desconhecida". Coloque o valor mapeado no campo "observacao".
+Para mortes, mapeie o motivo para o valor mais próximo desta lista EXATA: Raio, Picada de cobra, Doença respiratória, Tristeza parasitária, Clostridiose, Intoxicação por planta, Acidente, Desidratação, Parto distócico, Ataque de animal, Causa desconhecida, Outro (digitar). Se não conseguir mapear com certeza, use "Causa desconhecida". Coloque o valor mapeado no campo "observacao".
 
 ${REGRA_OBSERVACAO}
 
