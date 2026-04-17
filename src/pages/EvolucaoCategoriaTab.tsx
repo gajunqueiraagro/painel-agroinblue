@@ -342,30 +342,37 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   const isCenarioMeta = statusFiltro === 'meta';
                   const showPesoFin = pastosFechados || isCenarioMeta || d.fonte_oficial_mes === 'fechamento';
 
+                  const handleCellClick = onNavigateToReclass
+                    ? () => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })
+                    : undefined;
+                  const cellClickable = handleCellClick
+                    ? 'cursor-pointer hover:bg-primary/10 transition-colors'
+                    : '';
+
                   return (
                     <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t border-border' : ''}`}>
                       <td className={`px-1 py-0.5 font-semibold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ width: 90 }}>
                         {d.categoria_nome}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
                         {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
                       </td>
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground">
                         {fmtPeso(d.peso_medio_inicial)}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'entradas_externas')}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'saidas_externas')}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'evol_cat_saida')}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-medium ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'evol_cat_entrada')}
                       </td>
-                      <td className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
+                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
                         {isFutureMonth ? '' : getVal(d, 'saldo_final')}
                       </td>
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground">
