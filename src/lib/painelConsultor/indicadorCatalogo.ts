@@ -235,7 +235,16 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'var_valor_reb': { id: 'var_valor_reb', nome: 'Var. valor reb.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
 
   // ─── Média do Período ───
-  'gmd_medio': { id: 'gmd_medio', nome: 'GMD médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'reb_medio_periodo': {
+    id: 'reb_medio_periodo', nome: 'Rebanho médio período (cab)', aba: 'media_periodo', bloco: 'Desempenho Médio',
+    realizado: { ...FONTE_ZOOT_VIEW_REAL, regra_calculo: 'Média aritmética do rebanho médio mensal acumulado: para cada mês cab_média = (Reb. inicial + Reb. final) ÷ 2; depois média de Janeiro até o mês selecionado.', observacao: 'Média do rebanho de cada mês no período (Reb. inicial + Reb. final ÷ 2 por mês, média acumulada de Jan até o mês selecionado).' },
+    previsto: { ...FONTE_ZOOT_VIEW_PREVISTO, regra_calculo: 'Mesma fórmula com cabIni/cabFin do cenário Meta.', observacao: 'Média do rebanho de cada mês no período (cenário META).' },
+  },
+  'gmd_medio': {
+    id: 'gmd_medio', nome: 'GMD médio período', aba: 'media_periodo', bloco: 'Desempenho Médio',
+    realizado: { ...FONTE_ZOOT_VIEW_REAL, regra_calculo: 'GMD acumulado = Σ produção biológica (Jan→N) ÷ rebanho médio período (Jan→N) ÷ Σ dias (Jan→N).', observacao: 'Soma das produções biológicas em kg dividida pelo rebanho médio do período e pelo total de dias do período.' },
+    previsto: { ...FONTE_ZOOT_VIEW_PREVISTO, regra_calculo: 'Mesma fórmula no cenário Meta.', observacao: 'GMD período no cenário META — mesma fórmula da realizado.' },
+  },
   'peso_medio_periodo': { id: 'peso_medio_periodo', nome: 'Peso médio período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'ua_media_periodo': { id: 'ua_media_periodo', nome: 'UA média período', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'lotacao_media': { id: 'lotacao_media', nome: 'Lotação média', aba: 'media_periodo', bloco: 'Desempenho Médio', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },

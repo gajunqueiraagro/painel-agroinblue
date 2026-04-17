@@ -286,6 +286,36 @@ function rollingAvg(arr: number[]): number[] {
   return r;
 }
 
+/**
+ * GMD médio do período acumulado (Jan → N).
+ * Fórmula oficial:
+ *   GMD período(N) = Σ producao_biologica(1..N)
+ *                  ÷ média(cabMedia(1..N))
+ *                  ÷ Σ dias(1..N)
+ *
+ * Retorna array de 12 posições, posição i = GMD acumulado de Jan até mês i+1.
+ * Usa NaN quando não há rebanho médio ou dias acumulados (sem dado válido).
+ */
+function computePeriodGmd(prodBio: number[], cabMedia: number[], dias: number[]): number[] {
+  const out: number[] = [];
+  let prodAcc = 0;
+  let cabSum = 0;
+  let cabCount = 0;
+  let diasAcc = 0;
+  for (let i = 0; i < 12; i++) {
+    const pb = Number(prodBio[i]);
+    const cm = Number(cabMedia[i]);
+    const d = Number(dias[i]) || 0;
+    if (!isNaN(pb)) prodAcc += pb;
+    if (!isNaN(cm) && cm > 0) { cabSum += cm; cabCount++; }
+    diasAcc += d;
+    const cabMediaPeriodo = cabCount > 0 ? cabSum / cabCount : 0;
+    if (cabMediaPeriodo <= 0 || diasAcc <= 0) { out.push(NaN); continue; }
+    out.push(prodAcc / cabMediaPeriodo / diasAcc);
+  }
+  return out;
+}
+
 function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -442,13 +472,18 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           ],
         },
       ];
-    case 'media_periodo':
+    case 'media_periodo': {
+      // Período acumulado: rebanho médio (média das cabMedia mensais) e GMD período correto.
+      const diasMes = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i + 1, 0).getDate());
+      const gmdPeriodo = computePeriodGmd(d.prodKg, cabMedia, diasMes);
+      const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', d.gmd, 'gmd_medio', true),
-            r('Peso médio período', 'med2', d.pesoMedioFin, 'peso_medio_periodo', true),
+            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
+            r('Peso médio período', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
             r('Lotação média', 'med2', lotUaHa, 'lotacao_media', true),
           ],
@@ -471,6 +506,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           ],
         },
       ];
+    }
 }
 }
 
@@ -667,12 +703,19 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
           ],
         },
       ];
-    case 'media_periodo':
+    case 'media_periodo': {
+      const diasMes = Array.from({ length: 12 }, (_, i) => {
+        const m = byMes[String(i + 1).padStart(2, '0')];
+        return m ? (Number(m.dias_mes) || new Date(new Date().getFullYear(), i + 1, 0).getDate()) : new Date(new Date().getFullYear(), i + 1, 0).getDate();
+      });
+      const gmdPeriodo = computePeriodGmd(prodKg, cabMedia, diasMes);
+      const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', gmd, 'gmd_medio'),
+            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
             r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
             r('Lotação média', 'med2', lotacao, 'lotacao_media'),
@@ -697,6 +740,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
           ],
         },
       ];
+    }
   }
 }
 
@@ -904,12 +948,19 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
           ],
         },
       ];
-    case 'media_periodo':
+    case 'media_periodo': {
+      const diasMes = Array.from({ length: 12 }, (_, i) => {
+        const row = consolidacao.find(c => c.mes === String(i + 1).padStart(2, '0'));
+        return Number(row?.dias) || new Date(new Date().getFullYear(), i + 1, 0).getDate();
+      });
+      const gmdPeriodo = computePeriodGmd(prodBio, cabMedia, diasMes);
+      const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', gmd, 'gmd_medio'),
+            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
             r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
             r('Lotação média', 'med2', lotacao, 'lotacao_media'),
@@ -934,6 +985,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
           ],
         },
       ];
+    }
   }
 }
 
