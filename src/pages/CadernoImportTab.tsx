@@ -433,6 +433,7 @@ export default function CadernoImportTab() {
                                       value={isoToBr(valorLimpo)}
                                       placeholder="DD/MM/AAAA"
                                       onChange={(e) => updateCell(idx, c, brToIso(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs"
                                     />
                                   </TableCell>
@@ -483,6 +484,7 @@ export default function CadernoImportTab() {
                                     <Input
                                       value={formatIntBR(valorLimpo)}
                                       onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="numeric"
                                     />
@@ -497,6 +499,7 @@ export default function CadernoImportTab() {
                                     <Input
                                       value={formatDecBR(valorLimpo, 2)}
                                       onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="decimal"
                                     />
@@ -509,6 +512,7 @@ export default function CadernoImportTab() {
                                   <Input
                                     value={raw}
                                     onChange={(e) => updateCell(idx, c, e.target.value)}
+                                    onFocus={(e) => e.target.select()}
                                     className="h-7 text-xs"
                                   />
                                 </TableCell>
