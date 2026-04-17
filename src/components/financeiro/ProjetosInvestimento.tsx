@@ -299,11 +299,11 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
                   <TableCell className="truncate max-w-[160px] text-muted-foreground py-1 px-1">{p.subcentro}</TableCell>
                   <TableCell className="truncate max-w-[80px] py-1 px-1">{p.responsavel || '–'}</TableCell>
                   {MESES_KEYS.map((k, i) => (
-                    <TableCell key={k} className={`text-right w-[52px] py-1 px-1${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>
+                    <TableCell key={k} className={`text-right w-[52px] py-1 px-0.5 whitespace-nowrap${i === 2 || i === 5 || i === 8 ? ' border-r border-border/30' : ''}`}>
                       {fmtCompact(Number((p as any)[k]) || 0)}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right font-bold border-l-2 border-border py-1 px-1">{fmtCompact(pTotal)}</TableCell>
+                  <TableCell className="text-right font-bold border-l-2 border-border py-1 px-0.5 whitespace-nowrap">{fmtCompact(pTotal)}</TableCell>
                   <TableCell className="py-1 px-1">{statusBadge(p.status)}</TableCell>
                   <TableCell className="text-center py-1 px-1">
                     <div className="flex items-center justify-center gap-0.5">
