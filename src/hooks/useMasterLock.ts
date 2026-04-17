@@ -175,6 +175,45 @@ export function useMasterLock(anoMes?: string) {
     [fazendaId]
   );
 
+  // Verifica lock direto no banco (não usa cache). Útil em handlers de submit
+  // onde a anoMes é dinâmica (ex: campo `data` do form).
+  const checkLockNow = useCallback(
+    async (mes: string): Promise<boolean> => {
+      if (!fazendaId || !mes) return false;
+      const primeiroDiaMes = `${mes}-01`;
+      const [pastosRes, fpRes, vrRes] = await Promise.all([
+        supabase
+          .from('pastos')
+          .select('id, data_inicio')
+          .eq('fazenda_id', fazendaId)
+          .eq('ativo', true)
+          .eq('entra_conciliacao', true)
+          .or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`),
+        supabase
+          .from('fechamento_pastos')
+          .select('pasto_id, status')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', mes),
+        supabase
+          .from('valor_rebanho_mensal')
+          .select('categoria')
+          .eq('fazenda_id', fazendaId)
+          .eq('ano_mes', mes)
+          .limit(1),
+      ]);
+      const pastos = pastosRes.data ?? [];
+      const fps = fpRes.data ?? [];
+      const vrs = vrRes.data ?? [];
+      const fechadosIds = new Set(
+        fps.filter((f) => f.status === 'fechado').map((f) => f.pasto_id)
+      );
+      const todosPastosFechados =
+        pastos.length > 0 && pastos.every((p) => fechadosIds.has(p.id));
+      return todosPastosFechados && vrs.length > 0;
+    },
+    [fazendaId]
+  );
+
   return {
     isMaster,
     isMesLocked,
@@ -184,5 +223,6 @@ export function useMasterLock(anoMes?: string) {
     lockMes,
     loadingLock,
     refreshLock: fetchLockStatus,
+    checkLockNow,
   };
 }
