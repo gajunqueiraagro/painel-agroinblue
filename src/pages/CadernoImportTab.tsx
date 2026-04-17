@@ -158,8 +158,13 @@ export default function CadernoImportTab() {
         return;
       }
       const arr = (data?.data ?? []) as Linha[];
-      setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...arr] }));
-      toast.success(`${arr.length} linha(s) extraída(s)`);
+      // Sanitiza: remove "Sexo M/F" da observação que algumas IAs injetam
+      const limpas = arr.map((l) => ({
+        ...l,
+        observacao: l.observacao ? limparObservacao(l.observacao) : l.observacao ?? '',
+      }));
+      setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...limpas] }));
+      toast.success(`${limpas.length} linha(s) extraída(s)`);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Erro ao extrair');
