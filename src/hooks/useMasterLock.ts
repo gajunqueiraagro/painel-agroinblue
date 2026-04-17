@@ -10,8 +10,7 @@
  *
  * NÃO altera RLS no banco. Bloqueio é frontend-only.
  */
-import { create } from 'zustand';
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -20,28 +19,36 @@ import { useFazenda } from '@/contexts/FazendaContext';
 // Senha master temporária (frontend-only). Migrar para campo no banco futuramente.
 export const MASTER_PASSWORD = 'MASTER2026';
 
-interface UnlockStore {
-  unlocked: Set<string>;
-  unlock: (key: string) => void;
-  lock: (key: string) => void;
+// ── Store de sessão (não persiste) ──────────────────────────────────────
+let unlockedSet = new Set<string>();
+const listeners = new Set<() => void>();
+
+function emit() {
+  // Recriar referência para useSyncExternalStore notar mudança
+  unlockedSet = new Set(unlockedSet);
+  listeners.forEach((l) => l());
 }
 
-// Store global por sessão (não persiste).
-const useUnlockStore = create<UnlockStore>((set) => ({
-  unlocked: new Set<string>(),
-  unlock: (key) =>
-    set((state) => {
-      const next = new Set(state.unlocked);
-      next.add(key);
-      return { unlocked: next };
-    }),
-  lock: (key) =>
-    set((state) => {
-      const next = new Set(state.unlocked);
-      next.delete(key);
-      return { unlocked: next };
-    }),
-}));
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+function getSnapshot() {
+  return unlockedSet;
+}
+
+function unlockKey(key: string) {
+  if (unlockedSet.has(key)) return;
+  unlockedSet.add(key);
+  emit();
+}
+
+function lockKey(key: string) {
+  if (!unlockedSet.has(key)) return;
+  unlockedSet.delete(key);
+  emit();
+}
 
 // Cache de status de fechamento por chave (fazendaId|anoMes).
 type LockedMap = Map<string, boolean>;
