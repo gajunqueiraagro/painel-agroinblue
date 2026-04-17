@@ -82,6 +82,8 @@ export function MesAnteriorAvisoIcon({ fazendaId, anoMes, size = 14, className =
     return () => { cancelled = true; };
   }, [fazendaId, anoMesAnterior]);
 
+  // Exibir apenas a partir de Jan/2026
+  if (!anoMes || anoMes < '2026-01') return null;
   // Não renderiza nada se: ainda carregando, sem fazenda, ou mês anterior já oficial
   if (!fazendaId || fazendaId === '__global__' || !anoMesAnterior) return null;
   if (p1Oficial !== false) return null;
