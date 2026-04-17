@@ -88,6 +88,8 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
           </DialogDescription>
         </DialogHeader>
 
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1">
         {/* 2-column layout: Operacionais | Financeiros */}
         <div className="grid grid-cols-2 gap-2">
         {/* Coluna Esquerda: Dados Operacionais */}
