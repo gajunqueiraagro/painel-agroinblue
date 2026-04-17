@@ -35,6 +35,7 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Abate', 'Venda em Pé', 'Transferência'];
+const EVENTO_MORTES_CONSUMO_OPCOES = ['Morte', 'Consumo'];
 // Motivos de morte EXATOS (mesmos do cadastro manual em LancamentosTab)
 const MOTIVOS_MORTE_OPCOES = [
   'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
