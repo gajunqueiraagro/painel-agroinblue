@@ -223,20 +223,19 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                     <strong>{formatMoeda(financeiros.precoBase)}</strong>
                   </div>
                 )}
-                {/* Full Abate financial hierarchy */}
+                {/* Full Abate financial hierarchy — versão enxuta para o modal de confirmação */}
                 {financeiros.valorBase != null && financeiros.valorBase > 0 ? (
-                  <div className="space-y-0.5 pt-1">
+                  <div className="space-y-0 pt-0.5">
                     <Separator className="my-0.5" />
-                    <div className="flex justify-between"><span className="text-muted-foreground">Valor Base</span><strong className="tabular-nums">{formatMoeda(financeiros.valorBase)}</strong></div>
                     {financeiros.funruralTotal != null && financeiros.funruralTotal > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Funrural</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.funruralTotal)}</strong></div>
                     )}
                     <div className="flex justify-between font-bold"><span>= Valor Bruto</span><span className="tabular-nums">{formatMoeda(financeiros.totalBruto || 0)}</span></div>
                     {financeiros.totalBonus != null && financeiros.totalBonus > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(+) Bônus</span><strong className="text-green-600 tabular-nums">+{formatMoeda(financeiros.totalBonus)}</strong></div>
                     )}
                     {financeiros.totalDescontos != null && financeiros.totalDescontos > 0 && (
-                      <div className="flex justify-between"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">(–) Descontos</span><strong className="text-destructive tabular-nums">-{formatMoeda(financeiros.totalDescontos)}</strong></div>
                     )}
                     <Separator className="my-0.5" />
                     <div className="flex justify-between text-[12px] font-bold">
@@ -244,13 +243,7 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                       <span className="text-primary tabular-nums">{formatMoeda(financeiros.valorLiquido || 0)}</span>
                     </div>
                     {financeiros.liqArroba != null && financeiros.liqArroba > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqArroba)}</strong></div>
-                    )}
-                    {financeiros.liqCabeca != null && financeiros.liqCabeca > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/cab líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqCabeca)}</strong></div>
-                    )}
-                    {financeiros.liqKg != null && financeiros.liqKg > 0 && (
-                      <div className="flex justify-between text-[10px]"><span className="text-muted-foreground">R$/kg líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqKg)}</strong></div>
+                      <div className="flex justify-between text-xs"><span className="text-muted-foreground">R$/@ líq.</span><strong className="tabular-nums">{formatMoeda(financeiros.liqArroba)}</strong></div>
                     )}
                   </div>
                 ) : (
@@ -274,12 +267,6 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
                       </div>
                     )}
                   </>
-                )}
-                {financeiros.dataVenda && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Data da Venda</span>
-                    <strong>{fmtDate(financeiros.dataVenda)}</strong>
-                  </div>
                 )}
               </>
             )}
