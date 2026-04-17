@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload, Sparkles, Save, Trash2, Loader2 } from 'lucide-react';
@@ -149,7 +149,23 @@ export default function CadernoImportTab() {
   const [imagem, setImagem] = useState<{ file: File; preview: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [categoriasMap, setCategoriasMap] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    supabase
+      .from('categorias_rebanho')
+      .select('id, nome')
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((c: any) => {
+            if (c?.nome && c?.id) map[String(c.nome).toLowerCase().trim()] = c.id;
+          });
+          setCategoriasMap(map);
+        }
+      });
+  }, []);
 
   const linhas = linhasPorAba[aba];
   const colunas = COLUNAS_POR_ABA[aba];
@@ -322,7 +338,7 @@ export default function CadernoImportTab() {
           .from('categorias_rebanho')
           .select('id, nome');
         if (catsErr) throw catsErr;
-        const categoriaIdMap: Record<string, string> = {};
+        const categoriaIdMap: Record<string, string> = { ...categoriasMap };
         (cats ?? []).forEach((c: any) => {
           if (c?.nome && c?.id) categoriaIdMap[String(c.nome).toLowerCase().trim()] = c.id;
         });
