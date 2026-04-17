@@ -326,7 +326,7 @@ export default function CadernoImportTab() {
                               const v = l[c];
                               const uncertain = isUncertain(v);
                               return (
-                                <TableCell key={c} className={cn(uncertain && 'bg-yellow-100 dark:bg-yellow-900/40')}>
+                                <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                   <Input
                                     value={v == null ? '' : String(v)}
                                     onChange={(e) => updateCell(idx, c, e.target.value)}
