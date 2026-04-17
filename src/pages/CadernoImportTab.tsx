@@ -425,14 +425,14 @@ export default function CadernoImportTab() {
                               const raw = v == null ? '' : String(v);
                               const valorLimpo = stripUncertain(raw);
 
-                              // DATA: exibe DD/MM/AAAA, salva YYYY-MM-DD
+                              // DATA: input nativo type="date" (igual LancamentosTab); salva YYYY-MM-DD
                               if (c === 'data') {
                                 return (
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
-                                      value={isoToBr(valorLimpo)}
-                                      placeholder="DD/MM/AAAA"
-                                      onChange={(e) => updateCell(idx, c, brToIso(e.target.value))}
+                                      type="date"
+                                      value={valorLimpo}
+                                      onChange={(e) => updateCell(idx, c, e.target.value)}
                                       onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs"
                                     />
@@ -482,6 +482,7 @@ export default function CadernoImportTab() {
                                 return (
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
+                                      type="text"
                                       value={formatIntBR(valorLimpo)}
                                       onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
                                       onFocus={(e) => e.target.select()}
@@ -497,7 +498,24 @@ export default function CadernoImportTab() {
                                 return (
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
+                                      type="text"
                                       value={formatDecBR(valorLimpo, 2)}
+                                      onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
+                                      onFocus={(e) => e.target.select()}
+                                      className="h-7 text-xs text-right"
+                                      inputMode="decimal"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // PRECO MEDIO CABECA / MM (chuva): decimal aceita vírgula, salva com ponto
+                              if (c === 'preco_medio_cabeca' || c === 'mm') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      type="text"
+                                      value={raw}
                                       onChange={(e) => updateCell(idx, c, parseDecBR(e.target.value))}
                                       onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
