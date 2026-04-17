@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Edit2, MapPin, GripVertical } from 'lucide-react';
+import { Plus, Edit2, MapPin, GripVertical, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   DndContext,
   closestCenter,
@@ -130,10 +131,11 @@ function SortablePastoCard({
 
 export function PastosTab() {
   const { pastos, loading, criarPasto, editarPasto, toggleAtivo, reorderPastos } = usePastos();
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual } = useFazenda();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPasto, setEditingPasto] = useState<Pasto | undefined>();
   const [showInativos, setShowInativos] = useState(false);
+  const [criandoDivergencia, setCriandoDivergencia] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -145,6 +147,11 @@ export function PastosTab() {
     [pastos, showInativos],
   );
 
+  const jaTemDivergencia = useMemo(
+    () => pastos.some(p => p.tipo_uso === 'divergencia'),
+    [pastos],
+  );
+
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para gerenciar pastos.</div>;
 
   const handleSave = async (data: any) => {
@@ -152,6 +159,25 @@ export function PastosTab() {
       ? await editarPasto(editingPasto.id, data)
       : await criarPasto(data);
     if (ok) { setDialogOpen(false); setEditingPasto(undefined); }
+  };
+
+  const handleCriarDivergencia = async () => {
+    if (!fazendaAtual) return;
+    setCriandoDivergencia(true);
+    const ok = await criarPasto({
+      fazenda_id: fazendaAtual.id,
+      nome: '⚠️ Divergência do Campeiro',
+      lote_padrao: null,
+      area_produtiva_ha: 0,
+      tipo_uso: 'divergencia',
+      qualidade: null,
+      entra_conciliacao: true,
+      ativo: true,
+      observacoes: 'Pasto especial para registrar divergências de contagem do campeiro.',
+      ordem_exibicao: 0,
+    } as any);
+    setCriandoDivergencia(false);
+    if (ok) toast.success('Pasto de divergência criado');
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
