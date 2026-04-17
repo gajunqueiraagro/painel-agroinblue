@@ -23,6 +23,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
+import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
 type OrigemPeso = 'pastos' | 'lancamento' | 'saldo_inicial' | 'sem_base';
 
@@ -32,6 +34,8 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
+  onNavigateToFechamentoPastos?: () => void;
+  onNavigateToMovimentacoes?: () => void;
 }
 
 interface LinhaTabelaValor {
