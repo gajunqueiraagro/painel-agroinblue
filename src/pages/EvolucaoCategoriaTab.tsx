@@ -6,7 +6,7 @@ import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { RefreshCw, Info, AlertCircle } from 'lucide-react';
+import { RefreshCw, Info, AlertCircle, BarChart3 } from 'lucide-react';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
 import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
@@ -20,13 +20,15 @@ interface Props {
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToMovimentacoes?: () => void;
+  /** Navega para a tela de GMD Meta com o ano atual selecionado. */
+  onNavigateToMetaGmd?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
-export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes }: Props) {
+export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes, onNavigateToMetaGmd }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -293,15 +295,27 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
           </div>
         </div>
 
-        {onNavigateToReclass && (
-          <button
-            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors ml-auto"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Reclass.
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {onNavigateToMetaGmd && (
+            <button
+              onClick={() => onNavigateToMetaGmd({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-orange-500/10 border-orange-500/30 text-orange-700 hover:bg-orange-500/20 transition-colors"
+              title="Abrir GMD Meta para o ano selecionado"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              GMD Meta
+            </button>
+          )}
+          {onNavigateToReclass && (
+            <button
+              onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Reclass.
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabela principal — compacta, ~70% largura */}
