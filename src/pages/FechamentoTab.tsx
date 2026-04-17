@@ -375,6 +375,88 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     setDialogOpen(true);
   };
 
+  // Pré-checagem antes de abrir o dialog de fechamento:
+  // identifica pastos sem tipo_uso_mes e sem itens (quantidade > 0).
+  const handleCloseClick = async () => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    setVerificandoVazios(true);
+    try {
+      // 1) fechamentos da fazenda/mês com tipo_uso_mes IS NULL
+      const { data: fechs, error: fErr } = await supabase
+        .from('fechamento_pastos')
+        .select('id')
+        .eq('fazenda_id', fazendaAtual.id)
+        .eq('ano_mes', anoMes)
+        .is('tipo_uso_mes', null);
+      if (fErr) {
+        console.error(fErr);
+        toast.error('Erro ao verificar pastos vazios');
+        setConfirmBulkOpen(true);
+        return;
+      }
+      const candidatos = (fechs || []).map(f => f.id);
+      if (candidatos.length === 0) {
+        setConfirmBulkOpen(true);
+        return;
+      }
+      // 2) entre os candidatos, manter apenas os que NÃO têm itens com quantidade > 0
+      const { data: itens, error: iErr } = await supabase
+        .from('fechamento_pasto_itens')
+        .select('fechamento_id')
+        .in('fechamento_id', candidatos)
+        .gt('quantidade', 0);
+      if (iErr) {
+        console.error(iErr);
+        toast.error('Erro ao verificar itens dos pastos');
+        setConfirmBulkOpen(true);
+        return;
+      }
+      const comItens = new Set((itens || []).map(i => i.fechamento_id));
+      const vazios = candidatos.filter(id => !comItens.has(id));
+      if (vazios.length === 0) {
+        setConfirmBulkOpen(true);
+        return;
+      }
+      setPastosVaziosIds(vazios);
+      setVazioCheckOpen(true);
+    } finally {
+      setVerificandoVazios(false);
+    }
+  };
+
+  const aplicarVedadoEContinuar = async () => {
+    if (pastosVaziosIds.length === 0) {
+      setVazioCheckOpen(false);
+      setConfirmBulkOpen(true);
+      return;
+    }
+    setMarcandoVedado(true);
+    try {
+      const { error } = await supabase
+        .from('fechamento_pastos')
+        .update({ tipo_uso_mes: 'vedado' })
+        .in('id', pastosVaziosIds);
+      if (error) {
+        console.error(error);
+        toast.error(`Erro ao marcar pastos como Vedado: ${error.message}`);
+        return;
+      }
+      toast.success(`${pastosVaziosIds.length} pasto(s) marcado(s) como Vedado.`);
+      await loadFechamentos(anoMes);
+      setVazioCheckOpen(false);
+      setPastosVaziosIds([]);
+      setConfirmBulkOpen(true);
+    } finally {
+      setMarcandoVedado(false);
+    }
+  };
+
+  const pularVedadoEContinuar = () => {
+    setVazioCheckOpen(false);
+    setPastosVaziosIds([]);
+    setConfirmBulkOpen(true);
+  };
+
   const handleBulkClose = async () => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
     if (hasDivergencia) {
