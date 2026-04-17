@@ -289,6 +289,11 @@ export default function CadernoImportTab() {
         peso_carcaca_kg: l.peso_carcaca_kg ? Number(stripUncertain(l.peso_carcaca_kg)) : null,
         preco_medio_cabeca: l.preco_medio_cabeca ? Number(stripUncertain(l.preco_medio_cabeca)) : null,
         fazenda_destino: l.fazenda_destino ? stripUncertain(l.fazenda_destino) : null,
+        // Para abate, o frigorífico (informado em fazenda_destino no caderno) também é salvo em fazenda_origem
+        // para manter o mesmo padrão de "fornecedor texto livre" usado em compras
+        ...(tipo === 'abate' && l.fazenda_destino
+          ? { fazenda_origem: stripUncertain(l.fazenda_destino) }
+          : {}),
       };
     }
     if (aba === 'nascimentos') return { ...base, tipo: 'nascimento' };
