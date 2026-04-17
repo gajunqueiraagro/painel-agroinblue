@@ -437,6 +437,14 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
           )}
         </div>
       )}
+
+      {/* Footer de atalhos do fluxo de fechamento */}
+      {(onNavigateToFechamentoPastos || onNavigateToValorRebanho || onNavigateToMovimentacoes) && (
+        <FluxoFechamentoFooter
+          current="movimentacoes"
+          onNext={onNavigateToFechamentoPastos}
+        />
+      )}
     </div>
   );
 }

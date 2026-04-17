@@ -562,7 +562,7 @@ const Index = () => {
           } : undefined}
         />
       )}
-      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosTodosCenarios} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
+      {activeTab === 'fluxo_anual' && <FluxoAnualTab lancamentos={lancamentosTodosCenarios} saldosIniciais={saldosIniciais} onNavigateToMovimentacao={navigateToMovimentacao} onNavigateToValorRebanho={() => setActiveTab('valor_rebanho')} onNavigateToFechamentoPastos={() => setActiveTab('fechamento')} onSetSaldo={canEditZoo ? setSaldoInicial : undefined} onNavigateToReclass={goToReclassFromFluxoAnual} />}
       {activeTab === 'evolucao_rebanho_hub' && (
         <EvolucaoRebanhoHubTab
           lancamentos={lancamentosTodosCenarios}
@@ -641,6 +641,8 @@ const Index = () => {
           onBack={goToZootecnico}
           filtroAnoInicial={filtroGlobal.ano}
           filtroMesInicial={filtroGlobal.mes}
+          onNavigateToFechamentoPastos={() => setActiveTab('fechamento')}
+          onNavigateToMovimentacoes={() => setActiveTab('fluxo_anual')}
         />
       )}
       {activeTab === 'fin_caixa' && (
