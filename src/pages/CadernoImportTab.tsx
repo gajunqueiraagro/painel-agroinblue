@@ -35,6 +35,12 @@ type Linha = Record<string, string | number | null>;
 
 const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
 const TIPO_OP_OPCOES_SAIDAS = ['Abate', 'Venda em Pé', 'Transferência'];
+// Motivos de morte EXATOS (mesmos do cadastro manual em LancamentosTab)
+const MOTIVOS_MORTE_OPCOES = [
+  'Raio', 'Picada de cobra', 'Doença respiratória', 'Tristeza parasitária',
+  'Clostridiose', 'Intoxicação por planta', 'Acidente', 'Desidratação',
+  'Parto distócico', 'Ataque de animal', 'Causa desconhecida', 'Outro (digitar)',
+];
 // Categorias EXATAS do sistema (plural conforme banco)
 const CATEGORIA_OPCOES = [
   'Mamotes M',
