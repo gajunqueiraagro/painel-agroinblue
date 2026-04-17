@@ -472,13 +472,18 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           ],
         },
       ];
-    case 'media_periodo':
+    case 'media_periodo': {
+      // Período acumulado: rebanho médio (média das cabMedia mensais) e GMD período correto.
+      const diasMes = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i + 1, 0).getDate());
+      const gmdPeriodo = computePeriodGmd(d.prodKg, cabMedia, diasMes);
+      const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', d.gmd, 'gmd_medio', true),
-            r('Peso médio período', 'med2', d.pesoMedioFin, 'peso_medio_periodo', true),
+            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
+            r('Peso médio período', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
             r('Lotação média', 'med2', lotUaHa, 'lotacao_media', true),
           ],
@@ -501,6 +506,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           ],
         },
       ];
+    }
 }
 }
 
