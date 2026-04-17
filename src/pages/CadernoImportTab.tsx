@@ -227,18 +227,23 @@ export default function CadernoImportTab() {
     setLinhasPorAba((prev) => ({ ...prev, [aba]: prev[aba].filter((_, i) => i !== idx) }));
   };
 
-  const mapLinhaToLancamento = (l: Linha): any | null => {
+  const mapLinhaToLancamento = (l: Linha, categoriaIdMap: Record<string, string>): any | null => {
     if (!fazendaId || !clienteAtual) return null;
     const data = stripUncertain(l.data);
-    const categoria = stripUncertain(l.categoria);
+    const categoriaNome = stripUncertain(l.categoria);
     const quantidade = Number(stripUncertain(l.quantidade)) || 0;
     if (!data || quantidade <= 0) return null;
+
+    // Resolve nome → id (case-insensitive)
+    const categoriaId = categoriaNome
+      ? categoriaIdMap[categoriaNome.toLowerCase().trim()] ?? null
+      : null;
 
     const base = {
       fazenda_id: fazendaId,
       cliente_id: clienteAtual.id,
       data,
-      categoria,
+      categoria: categoriaId,
       quantidade,
       peso_medio_kg: l.peso_medio_kg ? Number(stripUncertain(l.peso_medio_kg)) : null,
       observacao: l.observacao ? stripUncertain(l.observacao) : null,
@@ -312,8 +317,20 @@ export default function CadernoImportTab() {
           if (error) throw error;
           toast.success(`${registros.length} chuva(s) salvas`);
       } else {
-        const registros = linhas.map(mapLinhaToLancamento).filter(Boolean) as any[];
+        // Busca mapa nome → id de categorias_rebanho (case-insensitive)
+        const { data: cats, error: catsErr } = await supabase
+          .from('categorias_rebanho')
+          .select('id, nome');
+        if (catsErr) throw catsErr;
+        const categoriaIdMap: Record<string, string> = {};
+        (cats ?? []).forEach((c: any) => {
+          if (c?.nome && c?.id) categoriaIdMap[String(c.nome).toLowerCase().trim()] = c.id;
+        });
+
+        const registros = linhas.map((l) => mapLinhaToLancamento(l, categoriaIdMap)).filter(Boolean) as any[];
         if (registros.length === 0) throw new Error('Nenhuma linha válida (verifique data, categoria e quantidade)');
+        const semCategoria = registros.filter((r) => !r.categoria).length;
+        if (semCategoria > 0) throw new Error(`${semCategoria} linha(s) com categoria não reconhecida`);
         const { error } = await supabase.from('lancamentos').insert(registros);
         if (error) throw error;
         toast.success(`${registros.length} lançamento(s) salvos`);
