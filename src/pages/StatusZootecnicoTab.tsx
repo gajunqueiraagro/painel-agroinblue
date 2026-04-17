@@ -320,9 +320,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           .eq('cenario', 'realizado')),
       ]);
 
-      const pastosAtivosData = pastosRes.data || [];
-      const totalPastos = pastosAtivosData.length;
-      const activePastoIds = new Set(pastosAtivosData.map(p => p.id));
+      const pastosAtivosData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
       const fpAll = fpRes.data || [];
       const vrAll = vrRes.data || [];
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
