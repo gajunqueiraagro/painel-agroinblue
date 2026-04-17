@@ -2898,6 +2898,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </button>
       )}
 
+      {/* Master lock banner — derivado da data atual do form */}
+      {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
+
       {/* ── P1 governance banner ── */}
       {p1Oficial && !isCenarioMeta && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 mb-2 flex items-center justify-between">
