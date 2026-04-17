@@ -221,13 +221,22 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
               <button
                 key={mesVal}
                 onClick={() => setMesFiltro(mesVal)}
-                className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+                className={`relative flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {label}
+                {isActive && (
+                  <span className="absolute -top-1 -right-1">
+                    <MesAnteriorAvisoIcon
+                      fazendaId={fazendaId}
+                      anoMes={`${anoFiltro}-${mesVal}`}
+                      size={12}
+                    />
+                  </span>
+                )}
               </button>
             );
           })}
