@@ -76,6 +76,10 @@ interface Props {
   transferenciaParaEditar?: Lancamento | null;
   /** Reclassificação para abrir em modo edição automaticamente */
   reclassParaEditar?: Lancamento | null;
+  /** Morte para abrir em modo edição automaticamente */
+  morteParaEditar?: Lancamento | null;
+  /** Consumo para abrir em modo edição automaticamente */
+  consumoParaEditar?: Lancamento | null;
   /** Callback to return to the origin tab after edit cancel/save */
   onReturnFromEdit?: () => Promise<void> | void;
   /** Initial year filter for historico view */
@@ -191,7 +195,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
