@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,12 +8,20 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (nome: string, cpfCnpj?: string) => Promise<void>;
+  defaultNome?: string;
 }
 
-export function NovoFornecedorDialog({ open, onClose, onSave }: Props) {
+export function NovoFornecedorDialog({ open, onClose, onSave, defaultNome }: Props) {
   const [nome, setNome] = useState('');
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setNome(defaultNome || '');
+      setCpfCnpj('');
+    }
+  }, [open, defaultNome]);
 
   const handleSubmit = async () => {
     if (!nome.trim()) return;

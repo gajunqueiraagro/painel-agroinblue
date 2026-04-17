@@ -2587,6 +2587,36 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
+              {!compraFornecedorId && fazendaOrigem && (
+                <div className="mt-1 p-1.5 rounded border border-dashed border-muted-foreground/30 bg-muted/20">
+                  <p className="text-[10px] italic text-muted-foreground leading-tight">
+                    Nome importado do caderno: <span className="font-medium">"{fazendaOrigem}"</span> — não vinculado ao cadastro.
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => setNovoFornecedorCompraOpen(true)}
+                    >
+                      📋 Registrar como novo fornecedor
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => {
+                        const trigger = document.querySelector<HTMLButtonElement>('[data-compra-fornecedor-trigger] button');
+                        trigger?.click();
+                      }}
+                    >
+                      🔍 Buscar fornecedor cadastrado
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {/* Venda: Destino (Comprador) — campo principal */}
