@@ -254,6 +254,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, lancamentos, ano: Number(anoFiltro) });
+  // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
+  useEffect(() => {
+    if (initialReclassCenario && abaInicial === 'reclassificacao') {
+      reclassState.setStatusOp(initialReclassCenario);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReclassCenario, abaInicial]);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
