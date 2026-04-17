@@ -859,12 +859,14 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="font-bold text-foreground">Peso (kg)</Label>
-                <Input type="number" value={form.pesoMedioKg || ''} onChange={e => setForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
+                <Input type="number" value={isNascimento ? (form.pesoMedioKg && Number(form.pesoMedioKg) > 0 ? form.pesoMedioKg : 30) : (form.pesoMedioKg || '')} onChange={e => setForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
               </div>
-              <div>
-                <Label className="font-bold text-foreground">Preço/Cab (R$)</Label>
-                <Input type="number" value={form.precoMedioCabeca || ''} onChange={e => setForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
-              </div>
+              {!isNascimento && (
+                <div>
+                  <Label className="font-bold text-foreground">Preço/Cab (R$)</Label>
+                  <Input type="number" value={form.precoMedioCabeca || ''} onChange={e => setForm(f => ({ ...f, precoMedioCabeca: e.target.value ? Number(e.target.value) : undefined }))} className="mt-1" />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
