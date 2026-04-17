@@ -76,6 +76,7 @@ import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
+import CadernoImportTab from './CadernoImportTab';
 
 const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
 const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
@@ -152,6 +153,7 @@ const TITLES: Record<TabId, string> = {
   auditoria_zoot: 'Auditoria Zootécnica',
   auditoria_tecnica: 'Auditoria Técnica',
   planejamento_financeiro: 'Planejamento Financeiro',
+  caderno_import: 'Lançar por Foto (IA)',
 };
 
 const Index = () => {
@@ -815,6 +817,9 @@ const Index = () => {
       )}
       {activeTab === 'historico_importacoes_zoot' && (
         <HistoricoImportacoesZootTab />
+      )}
+      {activeTab === 'caderno_import' && (
+        <CadernoImportTab />
       )}
       {canEditMeta && activeTab === 'planejamento_financeiro' && (
         <PlanejamentoFinanceiroTab
