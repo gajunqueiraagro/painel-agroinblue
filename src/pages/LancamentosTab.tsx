@@ -206,8 +206,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const bloqueado = isGlobal || isAdministrativo;
 
   // ─── Master lock: bloqueia submit em meses completamente fechados ───
-  // Hook chamado com anoMes derivado do campo `data` (efetivado mais abaixo via useMemo).
-  const { isReadOnly: isMesReadOnlyLanc } = useMasterLock();
+  const masterLock = useMasterLock();
 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
