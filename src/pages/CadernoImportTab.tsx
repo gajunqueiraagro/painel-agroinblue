@@ -308,6 +308,12 @@ export default function CadernoImportTab() {
       let tipo = 'morte';
       if (evento.includes('consumo')) tipo = 'consumo';
       else if (evento.includes('doa')) tipo = 'venda'; // doação como saída sem valor
+      // Para morte, o motivo selecionado no dropdown é gravado em fazenda_destino
+      // (mesmo campo usado pelo cadastro manual em LancamentosTab)
+      if (tipo === 'morte') {
+        const motivo = l.observacao ? stripUncertain(l.observacao) : '';
+        return { ...base, tipo, observacao: null, fazenda_destino: motivo || null };
+      }
       return { ...base, tipo };
     }
     return null;
