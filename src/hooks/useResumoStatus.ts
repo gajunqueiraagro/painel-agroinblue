@@ -15,6 +15,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { calcSaldoMensalAcumulado, isEntrada, isSaida } from '@/lib/calculos';
 import { isRealizado as isLancRealizado } from '@/lib/statusOperacional';
+import { isPastoAtivoNoMes } from '@/hooks/usePastos';
 import {
   calcFinanceiroFromLancamentos,
   isRealizado as isRealizadoFin,
@@ -134,7 +135,7 @@ export function useResumoStatus(
       const anoStr = String(ano);
       const mesesRange = Array.from({ length: mesAte }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
-      const [vrfResult, fpResult, flResult, saldoResult] = await Promise.all([
+      const [vrfResult, fpResult, flResult, saldoResult, pastosListResult] = await Promise.all([
         // Fechamento rebanho — only pecuária farms
         idsZoo.length > 0
           ? supabase
@@ -143,11 +144,11 @@ export function useResumoStatus(
               .in('fazenda_id', idsZoo)
               .in('ano_mes', mesesRange)
           : Promise.resolve({ data: [] }),
-        // Fechamento pastos — only pecuária farms
+        // Fechamento pastos — only pecuária farms (inclui pasto_id para filtragem por data_inicio)
         idsZoo.length > 0
           ? supabase
               .from('fechamento_pastos')
-              .select('ano_mes, status, fazenda_id')
+              .select('ano_mes, status, fazenda_id, pasto_id')
               .in('fazenda_id', idsZoo)
               .in('ano_mes', mesesRange)
           : Promise.resolve({ data: [] }),
