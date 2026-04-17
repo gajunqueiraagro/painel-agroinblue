@@ -204,6 +204,18 @@ export function PastosTab() {
             <Switch checked={showInativos} onCheckedChange={setShowInativos} className="scale-75" />
             Inativos
           </label>
+          {!jaTemDivergencia && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+              onClick={handleCriarDivergencia}
+              disabled={criandoDivergencia}
+            >
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {criandoDivergencia ? 'Criando...' : 'Criar pasto de divergência'}
+            </Button>
+          )}
           <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingPasto(undefined); }}>
             <DialogTrigger asChild>
               <Button size="sm" className="h-7 text-xs"><Plus className="h-3 w-3 mr-1" />Novo</Button>
