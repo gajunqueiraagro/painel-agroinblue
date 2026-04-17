@@ -3369,6 +3369,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         />
       )}
 
+      {/* Lançamento em lote de Mortes META */}
+      <MorteLoteMetaDialog
+        open={morteLoteOpen}
+        onClose={() => setMorteLoteOpen(false)}
+        onAdicionar={onAdicionar}
+        dataInicial={data}
+      />
+
       {/* Confirmation dialog */}
       <ConfirmacaoRegistroDialog
         open={confirmDialogOpen}
