@@ -77,8 +77,8 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto gap-2 p-4">
+        <DialogHeader className="space-y-0.5">
           <DialogTitle className="flex items-center gap-2 text-[14px]">
             <CheckCircle className="h-5 w-5 text-primary" />
             Confirmar {financeiros.tipoOperacao}
@@ -89,11 +89,11 @@ export function ConfirmacaoRegistroDialog({ open, onClose, onConfirm, operaciona
         </DialogHeader>
 
         {/* 2-column layout: Operacionais | Financeiros */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
         {/* Coluna Esquerda: Dados Operacionais */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Dados Operacionais</h4>
-          <div className="bg-muted/30 rounded-md p-1.5 space-y-0.5 text-[11px]">
+          <div className="bg-muted/30 rounded-md p-1.5 space-y-0 text-[11px] [&>div]:py-0.5">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Status</span>
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusCfg.cls}`}>{statusCfg.label}</span>
