@@ -359,25 +359,25 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       <td className={`px-1 py-0.5 font-semibold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ width: 90 }}>
                         {d.categoria_nome}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
                         {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
                       </td>
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground">
                         {fmtPeso(d.peso_medio_inicial)}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'entradas_externas')}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'saidas_externas')}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'evol_cat_saida')}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'evol_cat_entrada')}
                       </td>
-                      <td onClick={handleCellClick} title={handleCellClick ? 'Abrir Reclassificação deste mês' : undefined} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
                         {isFutureMonth ? '' : getVal(d, 'saldo_final')}
                       </td>
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground">
