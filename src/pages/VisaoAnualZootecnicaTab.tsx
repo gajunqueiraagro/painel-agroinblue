@@ -95,7 +95,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       // Parallel fetches
       const [pastosRes, fpRes, vrRes, itensRes, catsRes, finFechRes, zootViewRes] = await Promise.all([
         // Pastos ativos
-        fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
+        fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
         // Fechamento pastos — mesma base operacional da tela Fechamento de Pastos
         fq(
           supabase

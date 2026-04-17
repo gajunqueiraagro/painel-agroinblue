@@ -294,7 +294,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewYearRes] = await Promise.all([
-        fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
+        fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
         fq(
           supabase
             .from('fechamento_pastos')
