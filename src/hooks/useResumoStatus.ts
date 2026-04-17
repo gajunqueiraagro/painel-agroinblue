@@ -171,6 +171,15 @@ export function useResumoStatus(
               .eq('cliente_id', clienteAtual.id)
               .eq('ano_mes', `${ano - 1}-12`)
           : Promise.resolve({ data: [] }),
+        // Lista de pastos com data_inicio para filtrar fechamentos por mês
+        idsZoo.length > 0
+          ? supabase
+              .from('pastos')
+              .select('id, data_inicio')
+              .in('fazenda_id', idsZoo)
+              .eq('ativo', true)
+              .eq('entra_conciliacao', true)
+          : Promise.resolve({ data: [] }),
       ]);
 
       // Process fechamento rebanho — per fazenda per month for accurate global consolidation
@@ -199,10 +208,17 @@ export function useResumoStatus(
       }
       setFechamentoRebanho(vrfMap);
 
-      // Process fechamento pastos
+      // Process fechamento pastos — filtra por data_inicio do pasto vs anoMes
+      const pastoDataInicio = new Map<string, string | null>();
+      ((pastosListResult as any).data || []).forEach((p: any) => {
+        pastoDataInicio.set(p.id, p.data_inicio ?? null);
+      });
       const fpMap: Record<string, { total: number; fechados: number }> = {};
       (fpResult.data || []).forEach((r: any) => {
         const key = r.ano_mes;
+        // Pula fechamentos de pastos que não estavam ativos no mês (data_inicio > primeiro dia do mês)
+        const dataInicio = pastoDataInicio.get(r.pasto_id);
+        if (!isPastoAtivoNoMes({ data_inicio: dataInicio ?? null }, key)) return;
         if (!fpMap[key]) fpMap[key] = { total: 0, fechados: 0 };
         fpMap[key].total++;
         if (r.status === 'fechado') fpMap[key].fechados++;
