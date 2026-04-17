@@ -452,6 +452,7 @@ export function FechamentoPastoDialog({
 
         {/* ── GRADE PRINCIPAL ── */}
         <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4 bg-background">
+          <MasterLockBanner anoMes={fechamento.ano_mes} />
           {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400', 100)}
           {renderGrupo('FÊMEAS', catsFemeas, 'text-pink-600 dark:text-pink-400', 200)}
         </div>
@@ -474,12 +475,12 @@ export function FechamentoPastoDialog({
               <Button variant="outline" size="sm" className="h-7 text-[11px] px-4" onClick={handleCancel}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={saving} size="sm" className="h-7 text-[11px] px-4">
+              <Button onClick={handleSave} disabled={saving || masterReadOnly} size="sm" className="h-7 text-[11px] px-4">
                 <Save className="h-3 w-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
           ) : (
-            <Button variant="outline" onClick={handleReabrir} size="sm" className="h-7 text-[11px] px-4">
+            <Button variant="outline" onClick={handleReabrir} disabled={masterReadOnly} size="sm" className="h-7 text-[11px] px-4">
               <LockOpen className="h-3 w-3 mr-1" />Reabrir
             </Button>
           )}
