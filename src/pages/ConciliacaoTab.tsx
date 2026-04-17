@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { usePastos } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useZootCategoriaMensal, groupByMes, categoriasUnicas } from '@/hooks/useZootCategoriaMensal';
@@ -146,7 +146,7 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para conciliação.</div>;
 
-  const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao).length;
+  const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes)).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
   const isLoading = loadingItens || loadingView;
 

@@ -6,7 +6,7 @@
  * Conciliação: sistema (view) × pastos (fechamento_pasto_itens)
  */
 import { useState, useEffect, useMemo } from 'react';
-import { usePastos } from '@/hooks/usePastos';
+import { usePastos, isPastoAtivoNoMes } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -67,7 +67,7 @@ export function AnaliseOperacionalTab({ onNavigateToMovimentacao }: Props) {
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para análise.</div>;
 
-  const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao).length;
+  const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes)).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
 
   const LABEL_TO_SUBABA: Record<string, SubAba> = {

@@ -27,6 +27,23 @@ export interface CategoriaRebanho {
   ordem_exibicao: number;
 }
 
+/**
+ * Verifica se um pasto está visível/ativo em um determinado mês,
+ * considerando o campo `data_inicio` (data a partir da qual o pasto entra no sistema).
+ *
+ * Regra: incluir pasto APENAS se:
+ *   - data_inicio IS NULL (sem restrição), OU
+ *   - data_inicio <= primeiro dia do anoMes selecionado
+ *
+ * @param pasto Objeto de pasto (precisa ter `data_inicio`)
+ * @param anoMes String no formato 'YYYY-MM'
+ */
+export function isPastoAtivoNoMes(pasto: { data_inicio?: string | null }, anoMes: string): boolean {
+  if (!pasto.data_inicio) return true;
+  const primeiroDiaMes = `${anoMes}-01`;
+  return pasto.data_inicio <= primeiroDiaMes;
+}
+
 export const TIPOS_USO = [
   { value: 'cria', label: 'Cria' },
   { value: 'recria', label: 'Recria' },

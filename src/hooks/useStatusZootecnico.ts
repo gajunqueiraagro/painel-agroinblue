@@ -136,9 +136,10 @@ export function useStatusZootecnico(
       const fazendaIdsFin = isGlobal ? todasFazendas.map(f => f.id) : [fazendaId!];
 
       // Parallel fetches
+      const primeiroDiaMes = `${anoMes}-01`;
       const [pastosResult, fpResult, vrResult, finFechResult, finLancResult] = await Promise.all([
-        // 1. Pastos ativos com conciliação
-        fqPec(supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true)),
+        // 1. Pastos ativos com conciliação (filtra por data_inicio: só inclui pastos que existiam no mês)
+        fqPec(supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`)),
         // 2. Fechamento de pastos no período
         fqPec(supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes)),
         // 3. Valor rebanho

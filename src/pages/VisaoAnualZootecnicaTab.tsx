@@ -95,7 +95,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       // Parallel fetches
       const [pastosRes, fpRes, vrRes, itensRes, catsRes, finFechRes, zootViewRes] = await Promise.all([
         // Pastos ativos
-        fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
+        fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
         // Fechamento pastos — mesma base operacional da tela Fechamento de Pastos
         fq(
           supabase
@@ -142,9 +142,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const vrAll = vrRes.data || [];
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
       const finFechAll = finFechRes.data || [];
-      const pastosAtivosData = pastosRes.data || [];
-      const totalPastos = pastosAtivosData.length;
-      const activePastoIds = new Set(pastosAtivosData.map((p: any) => p.id));
+      const pastosAtivosData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
 
       // Build saldo map from official view per month
       const zootRows = ((zootViewRes.data || []) as unknown as Array<{ mes: number; categoria_codigo: string; saldo_final: number }>);
@@ -195,6 +193,13 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
 
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
+        // Pastos visíveis no mês (data_inicio <= primeiro dia do mês ou null)
+        const primeiroDiaMes = `${am}-01`;
+        const pastosDoMes = pastosAtivosData.filter(
+          p => !p.data_inicio || p.data_inicio <= primeiroDiaMes,
+        );
+        const activePastoIds = new Set(pastosDoMes.map(p => p.id));
+        const totalPastos = activePastoIds.size;
         const fps = fpByMonth.get(am) || [];
 
         // Fonte OPERACIONAL: mesma regra da linha Pasto no Fechamento de Pastos

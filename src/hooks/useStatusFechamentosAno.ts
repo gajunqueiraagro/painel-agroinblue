@@ -53,7 +53,7 @@ export function useStatusFechamentosAno(
       const [pastosRes, fpRes, vrRes, finFechRes, finLancRes, catsRes, zootViewRes] = await Promise.all([
         supabase
           .from('pastos')
-          .select('id')
+          .select('id, data_inicio')
           .eq('fazenda_id', fazendaId)
           .eq('ativo', true)
           .eq('entra_conciliacao', true),
@@ -111,8 +111,8 @@ export function useStatusFechamentosAno(
         itensData = itens || [];
       }
 
-      const activePastoIds = new Set((pastosRes.data || []).map((p) => p.id));
-      const totalPastos = activePastoIds.size;
+      // Pastos com data_inicio para filtragem por mês
+      const pastosComData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
       const idToCodigo = new Map((catsRes.data || []).map((c) => [c.id, c.codigo]));
 
       // Build saldo map from official view per month
@@ -164,6 +164,13 @@ export function useStatusFechamentosAno(
         const mesNumero = index + 1;
         const mes = String(mesNumero).padStart(2, '0');
         const anoMes = `${ano}-${mes}`;
+        // Pastos visíveis no mês (data_inicio <= primeiro dia do mês ou null)
+        const primeiroDiaMes = `${anoMes}-01`;
+        const pastosDoMes = pastosComData.filter(
+          (p) => !p.data_inicio || p.data_inicio <= primeiroDiaMes,
+        );
+        const activePastoIds = new Set(pastosDoMes.map((p) => p.id));
+        const totalPastos = activePastoIds.size;
         const fechamentosMes = fechamentosByMes.get(anoMes) || [];
 
         // Deduplicate: most recent fechamento per active pasto (same as useStatusZootecnico)

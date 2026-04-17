@@ -113,8 +113,9 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const allFIds = allFazendas.map(f => f.id);
 
       // Fetch all data in bulk (including financeiro)
+      const primeiroDiaMes = `${anoMes}-01`;
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewRes] = await Promise.all([
-        supabase.from('pastos').select('id, fazenda_id').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds),
+        supabase.from('pastos').select('id, fazenda_id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true).in('fazenda_id', fIds).or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`),
         supabase.from('fechamento_pastos').select('id, status, pasto_id, fazenda_id, updated_at').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('valor_rebanho_mensal').select('categoria, fazenda_id').eq('ano_mes', anoMes).in('fazenda_id', fIds),
         supabase.from('categorias_rebanho').select('id, codigo'),
@@ -293,7 +294,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const anoMeses = Array.from({ length: 12 }, (_, i) => `${anoStr}-${String(i + 1).padStart(2, '0')}`);
 
       const [pastosRes, fpRes, vrRes, catsRes, finFechRes, viewYearRes] = await Promise.all([
-        fq(supabase.from('pastos').select('id').eq('ativo', true).eq('entra_conciliacao', true)),
+        fq(supabase.from('pastos').select('id, data_inicio').eq('ativo', true).eq('entra_conciliacao', true)),
         fq(
           supabase
             .from('fechamento_pastos')
@@ -319,9 +320,7 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
           .eq('cenario', 'realizado')),
       ]);
 
-      const pastosAtivosData = pastosRes.data || [];
-      const totalPastos = pastosAtivosData.length;
-      const activePastoIds = new Set(pastosAtivosData.map(p => p.id));
+      const pastosAtivosData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
       const fpAll = fpRes.data || [];
       const vrAll = vrRes.data || [];
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
@@ -368,6 +367,13 @@ export function StatusZootecnicoTab({ lancamentos, saldosIniciais, onBack, onTab
       const result: MonthStatus[] = [];
       for (let m = 1; m <= 12; m++) {
         const am = anoMeses[m - 1];
+        // Pastos visíveis no mês (data_inicio <= primeiro dia do mês ou null)
+        const primeiroDiaMes = `${am}-01`;
+        const pastosDoMes = pastosAtivosData.filter(
+          p => !p.data_inicio || p.data_inicio <= primeiroDiaMes,
+        );
+        const activePastoIds = new Set(pastosDoMes.map(p => p.id));
+        const totalPastos = activePastoIds.size;
         const fps = fpByMonth.get(am) || [];
 
         // Base oficial da linha Dif. do Fechamento de Pastos:
