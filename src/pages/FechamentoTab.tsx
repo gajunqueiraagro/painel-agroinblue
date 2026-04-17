@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
-import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo } from '@/lib/classificacaoArea';
+import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
@@ -174,7 +174,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [fechamentos, loadItens]);
 
   const pastosAtivos = useMemo(
-    () => pastos.filter(p => p.ativo && p.entra_conciliacao),
+    () => {
+      const filtrados = pastos.filter(p => p.ativo && p.entra_conciliacao);
+      // Pastos de divergência sempre no FINAL da lista
+      const normais = filtrados.filter(p => !isPastoDivergencia(p.tipo_uso));
+      const divergencia = filtrados.filter(p => isPastoDivergencia(p.tipo_uso));
+      return [...normais, ...divergencia];
+    },
     [pastos]
   );
 
@@ -845,12 +851,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 const tipoUsoEfetivo = fech?.tipo_uso_mes || p.tipo_uso;
                 const tipoNorm = normalizeTipoUso(tipoUsoEfetivo);
 
+                const isDivergencia = isPastoDivergencia(tipoUsoEfetivo);
+
                 return (
                   <Tooltip key={p.id}>
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => handleOpenPasto(p)}
-                        className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${STATUS_CARD_CLASSES[pastoStatus]}`}
+                        className={`w-full rounded-lg border px-2 py-1.5 text-left hover:ring-1 hover:ring-primary/40 transition-all ${
+                          isDivergencia
+                            ? 'bg-amber-100 dark:bg-amber-950/40 border-amber-500 dark:border-amber-600 border-2'
+                            : STATUS_CARD_CLASSES[pastoStatus]
+                        }`}
                       >
                         {/* Nome + status icon */}
                         <div className="flex items-center justify-between gap-0.5">
@@ -869,12 +881,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                             {formatNum(resumo.pesoMedio, 1)} kg
                           </div>
                         )}
-                        {/* Área + Tipo uso */}
+                        {/* Área + Tipo uso (área omitida em pastos de divergência) */}
                         <div className="flex items-center justify-between mt-0.5">
-                          {p.area_produtiva_ha ? (
+                          {isDivergencia ? (
+                            <span className="text-[7px] font-bold uppercase tracking-wider leading-none text-amber-800 dark:text-amber-300">⚠️ Divergência</span>
+                          ) : p.area_produtiva_ha ? (
                             <span className="text-[8px] text-muted-foreground leading-none">{formatNum(p.area_produtiva_ha, 1)} ha</span>
                           ) : <span />}
-                          {tipoUsoEfetivo && (
+                          {!isDivergencia && tipoUsoEfetivo && (
                             <span className={`text-[7px] font-bold uppercase tracking-wider leading-none ${
                               tipoNorm === 'recria' ? 'text-emerald-700 dark:text-emerald-400'
                               : tipoNorm === 'engorda' ? 'text-blue-700 dark:text-blue-400'
