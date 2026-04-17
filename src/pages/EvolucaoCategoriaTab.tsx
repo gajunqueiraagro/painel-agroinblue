@@ -14,7 +14,7 @@ interface Props {
   initialAno?: string;
   initialMes?: string;
   initialCenario?: 'realizado' | 'meta';
-  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToMovimentacoes?: () => void;
@@ -293,7 +293,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
 
         {onNavigateToReclass && (
           <button
-            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro) })}
+            onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-semibold bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-colors ml-auto"
           >
             <RefreshCw className="h-3.5 w-3.5" />
