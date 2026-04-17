@@ -15,6 +15,8 @@ interface Props {
   initialMes?: string;
   initialCenario?: 'realizado' | 'meta';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
+  /** Abre a LISTA de movimentações (aba "Evol. Cat.") com filtros pré-aplicados — usado no clique das células numéricas. */
+  onNavigateToEvolCatLista?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToMovimentacoes?: () => void;
@@ -24,7 +26,7 @@ const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 
 type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
-export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes }: Props) {
+export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -342,12 +344,15 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   const isCenarioMeta = statusFiltro === 'meta';
                   const showPesoFin = pastosFechados || isCenarioMeta || d.fonte_oficial_mes === 'fechamento';
 
-                  const handleCellClick = onNavigateToReclass
-                    ? () => onNavigateToReclass({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })
+                  // Clique nas células abre a LISTA de movimentações (aba "Evol. Cat.") — não o formulário de cadastro.
+                  // O botão "Reclass." (acima) mantém a abertura do formulário via onNavigateToReclass.
+                  const handleCellClick = onNavigateToEvolCatLista
+                    ? () => onNavigateToEvolCatLista({ ano: anoFiltro, mes: Number(mesFiltro), cenario: statusFiltro })
                     : undefined;
                   const cellClickable = handleCellClick
                     ? 'cursor-pointer hover:bg-primary/10 transition-colors'
                     : '';
+                  const cellTitle = handleCellClick ? 'Abrir lista de movimentações deste mês (Evol. Cat.)' : undefined;
 
                   return (
                     <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t border-border' : ''}`}>
