@@ -76,7 +76,6 @@ import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
-import CadernoImportTab from './CadernoImportTab';
 
 const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
 const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
@@ -153,14 +152,10 @@ const TITLES: Record<TabId, string> = {
   auditoria_zoot: 'Auditoria Zootécnica',
   auditoria_tecnica: 'Auditoria Técnica',
   planejamento_financeiro: 'Planejamento Financeiro',
-  caderno_import: 'Lançar por Foto (IA)',
 };
 
 const Index = () => {
   const [activeTab, setActiveTabRaw] = useState<TabId>(() => {
-    if (typeof window !== 'undefined' && window.location.pathname === '/caderno-importacao') {
-      return 'caderno_import';
-    }
     const saved = sessionStorage.getItem('agroinblue_active_tab');
     return (saved && saved in TITLES) ? saved as TabId : 'resumo';
   });
@@ -820,9 +815,6 @@ const Index = () => {
       )}
       {activeTab === 'historico_importacoes_zoot' && (
         <HistoricoImportacoesZootTab />
-      )}
-      {activeTab === 'caderno_import' && (
-        <CadernoImportTab />
       )}
       {canEditMeta && activeTab === 'planejamento_financeiro' && (
         <PlanejamentoFinanceiroTab
