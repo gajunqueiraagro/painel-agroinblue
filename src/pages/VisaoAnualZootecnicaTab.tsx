@@ -142,9 +142,7 @@ export function VisaoAnualZootecnicaTab({ lancamentos, saldosIniciais, onBack, o
       const vrAll = vrRes.data || [];
       const idToCodigo = new Map((catsRes.data || []).map(c => [c.id, c.codigo]));
       const finFechAll = finFechRes.data || [];
-      const pastosAtivosData = pastosRes.data || [];
-      const totalPastos = pastosAtivosData.length;
-      const activePastoIds = new Set(pastosAtivosData.map((p: any) => p.id));
+      const pastosAtivosData = (pastosRes.data || []) as Array<{ id: string; data_inicio: string | null }>;
 
       // Build saldo map from official view per month
       const zootRows = ((zootViewRes.data || []) as unknown as Array<{ mes: number; categoria_codigo: string; saldo_final: number }>);
