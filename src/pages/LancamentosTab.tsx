@@ -55,6 +55,8 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 import { toast } from 'sonner';
+import { useMasterLock } from '@/hooks/useMasterLock';
+import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 interface Props {
   lancamentos: Lancamento[];
@@ -203,9 +205,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
   const bloqueado = isGlobal || isAdministrativo;
 
-  // ─── Governança P1: bloquear mês fechado ───
-  // We'll compute anoMes from the form's current `data` field (set on line ~195)
-  // But we need the state first, so the hook call uses a derived value below.
+  // ─── Master lock: bloqueia submit em meses completamente fechados ───
+  const masterLock = useMasterLock();
 
   const outrasFazendas = useMemo(() => {
     return fazendas.filter(f => f.id !== fazendaAtual?.id && f.id !== '__global__' && f.tem_pecuaria !== false);
@@ -1523,6 +1524,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    // ─── Gate de master lock: bloqueia se o mês da data está fechado ───
+    if (data && !masterLock.isMaster) {
+      const anoMesData = data.slice(0, 7); // 'YYYY-MM'
+      if (!masterLock.isUnlocked(anoMesData)) {
+        const locked = await masterLock.checkLockNow(anoMesData);
+        if (locked) {
+          toast.error(
+            `🔒 Mês ${anoMesData} fechado — alterações zootécnicas exigem autorização master.`
+          );
+          return;
+        }
+      }
+    }
 
     const origemFinal = campos.origem.show
       ? (campos.origem.auto ? campos.origem.value : fazendaOrigem) || undefined
@@ -2882,6 +2897,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
+
+      {/* Master lock banner — derivado da data atual do form */}
+      {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
 
       {/* ── P1 governance banner ── */}
       {p1Oficial && !isCenarioMeta && (
