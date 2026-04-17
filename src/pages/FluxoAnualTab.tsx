@@ -13,6 +13,8 @@ import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
+import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
+import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
@@ -34,11 +36,12 @@ interface Props {
   saldosIniciais: SaldoInicial[];
   onNavigateToMovimentacao?: (subAba: SubAba, opts?: { ano?: string; mes?: string; label?: string; status?: string }) => void;
   onNavigateToValorRebanho?: () => void;
+  onNavigateToFechamentoPastos?: () => void;
   onSetSaldo?: (ano: number, mes: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onSetSaldo, onNavigateToReclass }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onNavigateToFechamentoPastos, onSetSaldo, onNavigateToReclass }: Props) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
@@ -191,7 +194,14 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   className={`px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
-                  {m.label}
+                  <div className="flex items-center justify-center gap-0.5">
+                    <span>{m.label}</span>
+                    <MesAnteriorAvisoIcon
+                      fazendaId={fazendaAtual?.id}
+                      anoMes={`${anoFiltro}-${m.key}`}
+                      size={11}
+                    />
+                  </div>
                 </th>
               ))}
               <th className="px-1.5 py-1.5 font-bold text-primary-foreground text-center w-[60px] bg-primary/25 border-l border-border/60">
@@ -363,6 +373,14 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </table>
       </div>
       </div>
+
+      {/* Footer de atalhos do fluxo de fechamento */}
+      {(onNavigateToFechamentoPastos || onNavigateToValorRebanho) && (
+        <FluxoFechamentoFooter
+          current="movimentacoes"
+          onNext={onNavigateToFechamentoPastos}
+        />
+      )}
     </div>
   );
 }

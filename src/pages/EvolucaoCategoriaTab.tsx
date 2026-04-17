@@ -7,19 +7,24 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { RefreshCw, Info, AlertCircle } from 'lucide-react';
+import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
+import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
 interface Props {
   initialAno?: string;
   initialMes?: string;
   initialCenario?: 'realizado' | 'meta';
   onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
+  onNavigateToFechamentoPastos?: () => void;
+  onNavigateToValorRebanho?: () => void;
+  onNavigateToMovimentacoes?: () => void;
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
-export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass }: Props) {
+export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -216,13 +221,22 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
               <button
                 key={mesVal}
                 onClick={() => setMesFiltro(mesVal)}
-                className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
+                className={`relative flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all ${
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {label}
+                {isActive && (
+                  <span className="absolute -top-1 -right-1">
+                    <MesAnteriorAvisoIcon
+                      fazendaId={fazendaId}
+                      anoMes={`${anoFiltro}-${mesVal}`}
+                      size={12}
+                    />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -422,6 +436,14 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
             </div>
           )}
         </div>
+      )}
+
+      {/* Footer de atalhos do fluxo de fechamento */}
+      {(onNavigateToFechamentoPastos || onNavigateToValorRebanho || onNavigateToMovimentacoes) && (
+        <FluxoFechamentoFooter
+          current="movimentacoes"
+          onNext={onNavigateToFechamentoPastos}
+        />
       )}
     </div>
   );
