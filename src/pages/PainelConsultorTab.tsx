@@ -985,6 +985,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
           ],
         },
       ];
+    }
   }
 }
 
