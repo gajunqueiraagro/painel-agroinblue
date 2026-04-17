@@ -149,6 +149,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [bulkClosing, setBulkClosing] = useState(false);
   const [showResumoAtividades, setShowResumoAtividades] = useState(false);
   const [confirmBulkReopenOpen, setConfirmBulkReopenOpen] = useState(false);
+  // Pré-checagem: pastos vazios sem tipo_uso_mes definido
+  const [vazioCheckOpen, setVazioCheckOpen] = useState(false);
+  const [pastosVaziosIds, setPastosVaziosIds] = useState<string[]>([]);
+  const [marcandoVedado, setMarcandoVedado] = useState(false);
+  const [verificandoVazios, setVerificandoVazios] = useState(false);
   const [bulkReopening, setBulkReopening] = useState(false);
   const [showSugestoes, setShowSugestoes] = useState(false);
 
