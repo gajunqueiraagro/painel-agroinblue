@@ -221,8 +221,14 @@ const Index = () => {
 
   // Wrap editarLancamento to also reload meta data when status changes
   const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
+    // Detecta se a edição envolve o cenário META (criação, atualização ou existente META)
+    const isMetaEdit =
+      dados.statusOperacional === null ||
+      dados.statusOperacional === 'previsto' ||
+      dados.cenario === 'meta' ||
+      metaLancamentos.some(l => l.id === id);
     await editarLancamento(id, dados);
-    if (dados.statusOperacional === null) {
+    if (isMetaEdit) {
       metaLoadData();
     }
   }) : noOp;
