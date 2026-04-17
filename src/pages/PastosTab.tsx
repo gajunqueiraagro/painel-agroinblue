@@ -34,6 +34,10 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
   const [area, setArea] = useState(pasto?.area_produtiva_ha?.toString() || '');
   const [entraConciliacao, setEntraConciliacao] = useState(pasto?.entra_conciliacao ?? true);
   const [observacoes, setObservacoes] = useState(pasto?.observacoes || '');
+  // data_inicio armazenada como 'YYYY-MM-DD'; input month usa 'YYYY-MM'
+  const [dataInicioMes, setDataInicioMes] = useState(
+    pasto?.data_inicio ? pasto.data_inicio.slice(0, 7) : ''
+  );
 
   const handleSubmit = () => {
     if (!nome.trim()) return;
@@ -44,6 +48,7 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
       entra_conciliacao: entraConciliacao,
       observacoes: observacoes || null,
       ativo: pasto?.ativo ?? true,
+      data_inicio: dataInicioMes ? `${dataInicioMes}-01` : null,
     });
   };
 
@@ -56,6 +61,18 @@ function PastoForm({ pasto, onSave, onCancel }: { pasto?: Pasto; onSave: (data: 
       <div>
         <Label>Área Produtiva (ha)</Label>
         <Input type="number" value={area} onChange={e => setArea(e.target.value)} placeholder="0" className="h-10" />
+      </div>
+      <div>
+        <Label>Data de início (opcional)</Label>
+        <Input
+          type="month"
+          value={dataInicioMes}
+          onChange={e => setDataInicioMes(e.target.value)}
+          className="h-10"
+        />
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Deixe vazio para incluir em todos os meses. Se preenchido, o pasto aparecerá apenas a partir do mês escolhido.
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Switch checked={entraConciliacao} onCheckedChange={setEntraConciliacao} />
