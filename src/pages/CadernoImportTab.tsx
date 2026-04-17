@@ -24,7 +24,7 @@ const ABAS: { id: AbaTipo; label: string }[] = [
 ];
 
 const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
-  entradas: ['data', 'tipo_op', 'categoria', 'quantidade', 'peso_medio_kg', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
+  entradas: ['data', 'tipo_op', 'quantidade', 'peso_medio_kg', 'categoria', 'preco_medio_cabeca', 'fazenda_origem', 'observacao'],
   saidas: ['data', 'tipo_op', 'categoria', 'quantidade', 'peso_medio_kg', 'peso_carcaca_kg', 'preco_medio_cabeca', 'fazenda_destino', 'observacao'],
   nascimentos: ['data', 'categoria', 'quantidade', 'observacao'],
   mortes_consumo: ['data', 'evento', 'categoria', 'quantidade', 'observacao'],
@@ -459,12 +459,12 @@ export default function CadernoImportTab() {
                                 );
                               }
 
-                              // CATEGORIA: dropdown fixo (largura mínima 160px)
+                              // CATEGORIA: dropdown fixo (largura mínima 130px)
                               if (c === 'categoria') {
                                 return (
-                                  <TableCell key={c} className={cn('min-w-[160px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[130px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
-                                      <SelectTrigger className="h-7 text-xs min-w-[150px]">
+                                      <SelectTrigger className="h-7 text-xs min-w-[120px]">
                                         <SelectValue placeholder="Selecione" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -480,7 +480,7 @@ export default function CadernoImportTab() {
                               // QUANTIDADE: inteiro BR (1.250)
                               if (c === 'quantidade') {
                                 return (
-                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                  <TableCell key={c} className={cn('min-w-[80px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
                                       type="text"
                                       value={formatIntBR(valorLimpo)}
@@ -488,6 +488,20 @@ export default function CadernoImportTab() {
                                       onFocus={(e) => e.target.select()}
                                       className="h-7 text-xs text-right"
                                       inputMode="numeric"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // FAZENDA_ORIGEM / FAZENDA_DESTINO: largura mínima
+                              if (c === 'fazenda_origem' || c === 'fazenda_destino') {
+                                return (
+                                  <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={raw}
+                                      onChange={(e) => updateCell(idx, c, e.target.value)}
+                                      onFocus={(e) => e.target.select()}
+                                      className="h-7 text-xs"
                                     />
                                   </TableCell>
                                 );
