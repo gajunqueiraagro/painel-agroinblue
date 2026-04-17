@@ -192,10 +192,11 @@ export default function CadernoImportTab() {
         return;
       }
       const arr = (data?.data ?? []) as Linha[];
-      // Sanitiza: remove "Sexo M/F" da observação que algumas IAs injetam
+      // Sanitiza observação: remove qualquer texto auto-injetado (Sexo M/F, categoria, etc.)
+      // Mantém apenas conteúdo real do caderno; vazio se não houver.
       const limpas = arr.map((l) => ({
         ...l,
-        observacao: l.observacao ? limparObservacao(l.observacao) : l.observacao ?? '',
+        observacao: limparObservacao(l.observacao),
       }));
       setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...limpas] }));
       toast.success(`${limpas.length} linha(s) extraída(s)`);
