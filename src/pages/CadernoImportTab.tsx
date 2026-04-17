@@ -33,6 +33,39 @@ const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
 
 type Linha = Record<string, string | number | null>;
 
+const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
+const TIPO_OP_OPCOES_SAIDAS = ['Venda', 'Transferência', 'Abate', 'Abate+Venda'];
+const CATEGORIA_OPCOES = [
+  'Touro', 'Vaca',
+  'Mamote M', 'Mamote F',
+  'Desmama M', 'Desmama F',
+  'Novilha 1', 'Novilha 2',
+  'Garrote 1', 'Garrote 2',
+  'Boi',
+];
+
+// Converte YYYY-MM-DD <-> DD/MM/AAAA
+function isoToBr(iso: string): string {
+  const s = (iso ?? '').toString().trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return s;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+function brToIso(br: string): string {
+  const s = (br ?? '').toString().trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return s; // mantém entrada para usuário corrigir
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+// Limpa "Sexo M/F" e prefixos similares de observações
+function limparObservacao(v: unknown): string {
+  if (v == null) return '';
+  let s = String(v).trim();
+  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '').trim();
+  s = s.replace(/^[\s,;.\-/|]+|[\s,;.\-/|]+$/g, '').trim();
+  return s;
+}
+
 function fileToBase64(file: File): Promise<{ b64: string; mime: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -125,8 +158,13 @@ export default function CadernoImportTab() {
         return;
       }
       const arr = (data?.data ?? []) as Linha[];
-      setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...arr] }));
-      toast.success(`${arr.length} linha(s) extraída(s)`);
+      // Sanitiza: remove "Sexo M/F" da observação que algumas IAs injetam
+      const limpas = arr.map((l) => ({
+        ...l,
+        observacao: l.observacao ? limparObservacao(l.observacao) : l.observacao ?? '',
+      }));
+      setLinhasPorAba((prev) => ({ ...prev, [aba]: [...prev[aba], ...limpas] }));
+      toast.success(`${limpas.length} linha(s) extraída(s)`);
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Erro ao extrair');
@@ -342,10 +380,64 @@ export default function CadernoImportTab() {
                             {colunas.map((c) => {
                               const v = l[c];
                               const uncertain = isUncertain(v);
+                              const raw = v == null ? '' : String(v);
+                              const valorLimpo = stripUncertain(raw);
+
+                              // DATA: exibe DD/MM/AAAA, salva YYYY-MM-DD
+                              if (c === 'data') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Input
+                                      value={isoToBr(valorLimpo)}
+                                      placeholder="DD/MM/AAAA"
+                                      onChange={(e) => updateCell(idx, c, brToIso(e.target.value))}
+                                      className="h-7 text-xs"
+                                    />
+                                  </TableCell>
+                                );
+                              }
+
+                              // TIPO_OP: dropdown fixo
+                              if (c === 'tipo_op') {
+                                const opcoes = aba === 'entradas' ? TIPO_OP_OPCOES_ENTRADAS : TIPO_OP_OPCOES_SAIDAS;
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {opcoes.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
+                              // CATEGORIA: dropdown fixo
+                              if (c === 'categoria') {
+                                return (
+                                  <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
+                                    <Select value={valorLimpo} onValueChange={(val) => updateCell(idx, c, val)}>
+                                      <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="Selecione" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {CATEGORIA_OPCOES.map((o) => (
+                                          <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                );
+                              }
+
                               return (
                                 <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                   <Input
-                                    value={v == null ? '' : String(v)}
+                                    value={raw}
                                     onChange={(e) => updateCell(idx, c, e.target.value)}
                                     className="h-7 text-xs"
                                   />
