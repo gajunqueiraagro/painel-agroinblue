@@ -38,7 +38,7 @@ interface Props {
   onNavigateToValorRebanho?: () => void;
   onNavigateToFechamentoPastos?: () => void;
   onSetSaldo?: (ano: number, mes: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
-  onNavigateToReclass?: (filtro?: { ano: string; mes: number }) => void;
+  onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
 }
 
 export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onNavigateToFechamentoPastos, onSetSaldo, onNavigateToReclass }: Props) {
