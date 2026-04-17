@@ -91,12 +91,19 @@ function brToIso(br: string): string {
   if (!m) return s; // mantém entrada para usuário corrigir
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
-// Limpa "Sexo M/F" e prefixos similares de observações
+// Remove conteúdo auto-injetado da observação ("Sexo M", "Sexo: F", categoria entre parênteses, etc.)
+// Mantém somente o que vier escrito no caderno.
 function limparObservacao(v: unknown): string {
   if (v == null) return '';
   let s = String(v).trim();
-  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '').trim();
-  s = s.replace(/^[\s,;.\-/|]+|[\s,;.\-/|]+$/g, '').trim();
+  // remove "Sexo M/F" e variações
+  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '');
+  // remove rótulos "categoria: X"
+  s = s.replace(/categoria\s*[:\-]\s*[^,;.|]+/gi, '');
+  // remove parênteses isolados deixados após limpeza
+  s = s.replace(/\(\s*\)/g, '');
+  // limpa pontuação solta nas pontas
+  s = s.replace(/^[\s,;.\-/|()]+|[\s,;.\-/|()]+$/g, '').trim();
   return s;
 }
 
