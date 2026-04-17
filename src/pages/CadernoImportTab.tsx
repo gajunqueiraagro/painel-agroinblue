@@ -482,6 +482,7 @@ export default function CadernoImportTab() {
                                 return (
                                   <TableCell key={c} className={cn(uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
                                     <Input
+                                      type="text"
                                       value={formatIntBR(valorLimpo)}
                                       onChange={(e) => updateCell(idx, c, parseIntBR(e.target.value))}
                                       onFocus={(e) => e.target.select()}
