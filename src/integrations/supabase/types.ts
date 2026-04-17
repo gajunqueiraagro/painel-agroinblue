@@ -5420,6 +5420,18 @@ export type Database = {
           mes: number
         }[]
       }
+      fn_saldo_inicial_pasto: {
+        Args: {
+          p_ano: number
+          p_categoria_codigo: string
+          p_fazenda_id: string
+          p_mes: number
+        }
+        Returns: {
+          peso_medio_kg: number
+          quantidade: number
+        }[]
+      }
       get_anos_financeiro_v2: {
         Args: { p_cliente_id: string }
         Returns: {
