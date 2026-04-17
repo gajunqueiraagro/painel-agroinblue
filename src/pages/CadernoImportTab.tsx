@@ -33,6 +33,39 @@ const COLUNAS_POR_ABA: Record<AbaTipo, string[]> = {
 
 type Linha = Record<string, string | number | null>;
 
+const TIPO_OP_OPCOES_ENTRADAS = ['Compra', 'Transferência'];
+const TIPO_OP_OPCOES_SAIDAS = ['Venda', 'Transferência', 'Abate', 'Abate+Venda'];
+const CATEGORIA_OPCOES = [
+  'Touro', 'Vaca',
+  'Mamote M', 'Mamote F',
+  'Desmama M', 'Desmama F',
+  'Novilha 1', 'Novilha 2',
+  'Garrote 1', 'Garrote 2',
+  'Boi',
+];
+
+// Converte YYYY-MM-DD <-> DD/MM/AAAA
+function isoToBr(iso: string): string {
+  const s = (iso ?? '').toString().trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return s;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+function brToIso(br: string): string {
+  const s = (br ?? '').toString().trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return s; // mantém entrada para usuário corrigir
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+// Limpa "Sexo M/F" e prefixos similares de observações
+function limparObservacao(v: unknown): string {
+  if (v == null) return '';
+  let s = String(v).trim();
+  s = s.replace(/sexo\s*[:\-]?\s*[mf]\b\.?/gi, '').trim();
+  s = s.replace(/^[\s,;.\-/|]+|[\s,;.\-/|]+$/g, '').trim();
+  return s;
+}
+
 function fileToBase64(file: File): Promise<{ b64: string; mime: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
