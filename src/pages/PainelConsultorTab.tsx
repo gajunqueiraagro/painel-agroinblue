@@ -703,12 +703,19 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
           ],
         },
       ];
-    case 'media_periodo':
+    case 'media_periodo': {
+      const diasMes = Array.from({ length: 12 }, (_, i) => {
+        const m = byMes[String(i + 1).padStart(2, '0')];
+        return m ? (Number(m.dias_mes) || new Date(new Date().getFullYear(), i + 1, 0).getDate()) : new Date(new Date().getFullYear(), i + 1, 0).getDate();
+      });
+      const gmdPeriodo = computePeriodGmd(prodKg, cabMedia, diasMes);
+      const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
           nome: 'Desempenho Médio',
           rows: [
-            r('GMD médio período', 'gmd', gmd, 'gmd_medio'),
+            { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
             r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
             r('Lotação média', 'med2', lotacao, 'lotacao_media'),
@@ -733,6 +740,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
           ],
         },
       ];
+    }
   }
 }
 
