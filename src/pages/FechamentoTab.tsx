@@ -708,9 +708,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               <Button
                 size="sm"
                 className="w-full h-8 text-xs font-bold gap-1"
-                onClick={() => setConfirmBulkOpen(true)}
+                onClick={handleCloseClick}
+                disabled={verificandoVazios}
               >
-                <Lock className="h-3.5 w-3.5" /> Fechar Mês
+                <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
               </Button>
             )}
 
