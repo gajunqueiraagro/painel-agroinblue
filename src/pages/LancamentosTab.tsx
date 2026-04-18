@@ -1557,10 +1557,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       ? (campos.destino.auto ? campos.destino.value : fazendaDestino) || undefined
       : undefined;
 
-    // For abate, use fornecedor name as destino
-    if (isAbate && abateFornecedorId) {
-      const forn = abateFornecedores.find(f => f.id === abateFornecedorId);
-      if (forn) destinoFinal = forn.nome;
+    // For abate, use fornecedor name as destino. Fallback to frigorifico free-text
+    // name (abateDetalhes.frigorifico or abateFrigorificoNome) when no fornecedor matched,
+    // so fazendaDestino never becomes undefined and the list/detail keeps the name visible.
+    if (isAbate) {
+      const forn = abateFornecedorId ? abateFornecedores.find(f => f.id === abateFornecedorId) : null;
+      destinoFinal = forn?.nome
+        || abateDetalhes?.frigorifico
+        || abateFrigorificoNome
+        || destinoFinal;
     }
 
     if (isMorte) {
@@ -3122,7 +3127,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={parseNumericValue(quantidade) || 0}
                   pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
-                  frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || abateDetalhes?.frigorifico || abateFrigorificoNome || ''}
+                  frigorificoNome={abateDetalhes?.frigorifico || abateFrigorificoNome || abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
                   detalhes={abateDetalhes}
                   detalhesPreenchidos={!!abateDetalhes}
                   canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && abateFornecedorId)}
