@@ -3122,7 +3122,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={parseNumericValue(quantidade) || 0}
                   pesoKg={parseNumericValue(pesoKg) || 0}
                   categoria={categoria}
-                  frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || ''}
+                  frigorificoNome={abateFornecedores.find(f => f.id === abateFornecedorId)?.nome || abateDetalhes?.frigorifico || abateFrigorificoNome || ''}
                   detalhes={abateDetalhes}
                   detalhesPreenchidos={!!abateDetalhes}
                   canOpenModal={!!(data && quantidade && parseNumericValue(quantidade) > 0 && pesoKg && parseNumericValue(pesoKg) > 0 && categoria && abateFornecedorId)}
