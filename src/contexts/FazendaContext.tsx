@@ -51,19 +51,26 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      const { data: membros } = await supabase
-        .from('fazenda_membros')
-        .select('fazenda_id, papel, fazendas(id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria)')
-        .eq('user_id', user.id);
+      const { data: fazendasCliente } = await supabase
+        .from('fazendas')
+        .select('id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
+        .eq('cliente_id', clienteAtual.id);
 
-      if (membros && membros.length > 0) {
-        // Filter fazendas belonging to the current client
-        const list = membros
-          .map(m => ({
-            ...(m.fazendas as any),
-            papel: m.papel,
-          }))
-          .filter((f: Fazenda) => f.cliente_id === clienteAtual.id);
+      if (fazendasCliente && fazendasCliente.length > 0) {
+        const { data: membros } = await supabase
+          .from('fazenda_membros')
+          .select('fazenda_id, papel')
+          .eq('user_id', user.id)
+          .in('fazenda_id', fazendasCliente.map(f => f.id));
+
+        const papelPorFazenda = new Map<string, string>(
+          (membros || []).map(m => [m.fazenda_id, m.papel])
+        );
+
+        const list: Fazenda[] = fazendasCliente.map(f => ({
+          ...f,
+          papel: papelPorFazenda.get(f.id) ?? (f.owner_id === user.id ? 'dono' : 'membro'),
+        }));
 
         setFazendas(list);
         const savedKey = `fazenda-ativa-${clienteAtual?.id}`;
@@ -72,7 +79,6 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
           const saved = list.find((f: Fazenda) => f.id === savedId);
           setFazendaAtualState(saved || (list.length > 1 ? GLOBAL_FAZENDA : list[0] || null));
         } else {
-          // Default: Global if multiple fazendas, otherwise the single one
           setFazendaAtualState(list.length > 1 ? GLOBAL_FAZENDA : list[0] || null);
         }
       } else {
