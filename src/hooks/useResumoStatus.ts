@@ -159,6 +159,7 @@ export function useResumoStatus(
               .select('status_transacao, data_pagamento, valor, tipo_operacao, descricao')
               .eq('cliente_id', clienteAtual?.id || '')
               .eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false)
               .gte('data_pagamento', `${anoStr}-01-01`)
               .lte('data_pagamento', `${anoStr}-12-31`)
               .limit(10000)
