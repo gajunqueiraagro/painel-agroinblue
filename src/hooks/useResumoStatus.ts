@@ -3,7 +3,7 @@
  * Calcula o semáforo 🔴🟡🟢 para cada camada: Zootécnico, Financeiro, Econômico.
  *
  * Ajustes obrigatórios implementados:
- * 1. Saldo financeiro = saldo de caixa real (com saldo inicial), não apenas E-S.
+ * 1. Saldo financeiro = saldo de caixa real(com saldo inicial), não apenas E-S.
  * 2. Status financeiro diferencia mês atual vs meses passados.
  * 3. Status zootécnico considera fechamento rebanho + peso + alocação pastos.
  * 4. Estrutura extensível para futuras exclusões operacionais no financeiro.
