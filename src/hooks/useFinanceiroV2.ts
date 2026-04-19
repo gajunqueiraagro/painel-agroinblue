@@ -702,16 +702,67 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  /** Fetch distinct years from financeiro_lancamentos_v2 for the current client */
+  /** Fetch distinct years from financeiro_lancamentos_v2 for the current client.
+   * Fallback: range estático de 2019 até o ano atual. */
   const loadAnosDisponiveis = useCallback(async (): Promise<string[]> => {
-    if (!clienteId) return [String(new Date().getFullYear())];
-    const { data, error } = await supabase.rpc('get_anos_financeiro_v2' as any, { p_cliente_id: clienteId });
+    const currentYear = new Date().getFullYear();
+    const fallback = (): string[] => {
+      const arr: string[] = [];
+      for (let y = currentYear; y >= 2019; y--) arr.push(String(y));
+      return arr;
+    };
+    if (!clienteId) return fallback();
+
     const anos = new Set<string>();
-    anos.add(String(new Date().getFullYear()));
-    if (!error && data) {
-      (data as any[]).forEach((r: any) => anos.add(String(r.ano)));
+    anos.add(String(currentYear));
+
+    try {
+      // 1) Tenta RPC oficial
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        'get_anos_financeiro_v2' as any,
+        { p_cliente_id: clienteId },
+      );
+      if (!rpcError && Array.isArray(rpcData)) {
+        (rpcData as any[]).forEach((r: any) => {
+          const a = Number(r?.ano);
+          if (a && !isNaN(a)) anos.add(String(a));
+        });
+      }
+
+      // 2) Garantia adicional: varre data_competencia direto da tabela
+      //    (paginado para evitar limite de 1000 do Supabase)
+      const PAGE = 1000;
+      let from = 0;
+      // Pega só min/max para evitar varrer tudo
+      const { data: minRow } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('data_competencia')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .order('data_competencia', { ascending: true })
+        .limit(1);
+      const { data: maxRow } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('data_competencia')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .order('data_competencia', { ascending: false })
+        .limit(1);
+      const minY = minRow?.[0]?.data_competencia ? Number(String(minRow[0].data_competencia).substring(0, 4)) : null;
+      const maxY = maxRow?.[0]?.data_competencia ? Number(String(maxRow[0].data_competencia).substring(0, 4)) : null;
+      if (minY && maxY && !isNaN(minY) && !isNaN(maxY)) {
+        for (let y = minY; y <= maxY; y++) anos.add(String(y));
+      }
+
+      if (anos.size <= 1) {
+        // Nada relevante encontrado → fallback estático
+        return fallback();
+      }
+      return Array.from(anos).sort((a, b) => Number(b) - Number(a));
+    } catch (e) {
+      console.warn('[loadAnosDisponiveis] erro, usando fallback estático', e);
+      return fallback();
     }
-    return Array.from(anos).sort().reverse();
   }, [clienteId]);
 
   return {
