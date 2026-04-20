@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -163,27 +163,6 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [origem, setOrigem] = useState('manual');
   const [overrideInicial, setOverrideInicial] = useState(false);
   const [autoSaldoInicial, setAutoSaldoInicial] = useState<number | null>(null);
-
-  const allSaldosRef = useRef(allSaldos);
-  useEffect(() => { allSaldosRef.current = allSaldos; });
-
-  useEffect(() => {
-    if (editing || !contaId || !anoMes || overrideInicial) return;
-    const [ano, mes] = anoMes.split('-').map(Number);
-    const prevDate = new Date(ano, mes - 2, 1);
-    const prevAm = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-    const prevSaldo = allSaldosRef.current.find(s =>
-      (s.conta_bancaria_id === contaId || s.conta_bancaria_id_v2 === contaId) &&
-      s.ano_mes === prevAm
-    );
-    if (prevSaldo) {
-      const val = Number(prevSaldo.saldo_final);
-      setAutoSaldoInicial(val);
-      setSaldoInicial(val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-    } else {
-      setAutoSaldoInicial(null);
-    }
-  }, [contaId, anoMes, editing, overrideInicial]);
 
   // Status management
   const [statusAction, setStatusAction] = useState<{ saldo: SaldoBancario; newStatus: string } | null>(null);
@@ -379,8 +358,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const orderedTypes = Object.keys(byTipo).sort((a, b) => (TIPO_ORDER[a] ?? 99) - (TIPO_ORDER[b] ?? 99));
     for (const tipo of orderedTypes) {
       const items = byTipo[tipo].sort((a, b) => {
-        const na = contaNome(a) ?? '';
-        const nb = contaNome(b) ?? '';
+        const na = contaNome(a);
+        const nb = contaNome(b);
         return na.localeCompare(nb) || a.ano_mes.localeCompare(b.ano_mes);
       });
       groups.push({
