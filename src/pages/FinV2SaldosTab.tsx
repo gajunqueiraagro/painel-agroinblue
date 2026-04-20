@@ -267,7 +267,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   const contaNome = (saldo: Pick<SaldoBancario, 'conta_bancaria_id' | 'conta_label'>) => {
     const conta = contaMap.get(saldo.conta_bancaria_id);
-    return saldo.conta_label || conta?.nome_exibicao || conta?.nome_conta || '-';
+    return saldo.conta_label || conta?.nome_exibicao || conta?.nome_conta || null;
   };
 
   const contaTipo = (saldo: Pick<SaldoBancario, 'conta_bancaria_id' | 'tipo_conta'>): string => {
@@ -358,8 +358,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const orderedTypes = Object.keys(byTipo).sort((a, b) => (TIPO_ORDER[a] ?? 99) - (TIPO_ORDER[b] ?? 99));
     for (const tipo of orderedTypes) {
       const items = byTipo[tipo].sort((a, b) => {
-        const na = contaNome(a) ?? '';
-        const nb = contaNome(b) ?? '';
+        const na = (contaNome(a) ?? '-');
+        const nb = (contaNome(b) ?? '-');
         return na.localeCompare(nb) || (a.ano_mes ?? '').localeCompare(b.ano_mes ?? '');
       });
       groups.push({
