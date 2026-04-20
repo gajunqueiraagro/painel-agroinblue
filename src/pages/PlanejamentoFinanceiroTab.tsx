@@ -424,9 +424,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                       const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
                       const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
                       const isNutricao = SUBCENTROS_NUTRICAO.has(sub.subcentro);
-                      const isAuto = isRebanho || isFinanciamento || isNutricao;
+                      const isProjeto = lancamentosProjetos.has(sub.subcentro);
+                      const isAuto = isRebanho || isFinanciamento || isNutricao || isProjeto;
                       const autoMeses = isAuto
-                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
+                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : isProjeto ? lancamentosProjetos.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
                         : null;
                       const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
                       const bloqueio = isSubcentroBloqueado(sub.subcentro, macro.nome, grupo.nome);
@@ -460,9 +461,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
                                 {sub.subcentro} (ajuste)
                               </td>
                               {ajusteMeses.map((v, mesIdx) => (
-                                <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
-                                  {isGlobal || bloqueio.bloqueado ? (
-                                    <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
+                                <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: (bloqueio.bloqueado || isProjeto) ? 'not-allowed' : undefined }} title={isProjeto ? 'Valor definido via Projetos de Investimento' : bloqueio.bloqueado ? bloqueio.motivo : undefined}>
+                                  {isGlobal || bloqueio.bloqueado || isProjeto ? (
+                                    <span className={`text-[8px] text-right block px-0.5 leading-tight ${(bloqueio.bloqueado || isProjeto) ? 'opacity-30' : ''}`}>{(bloqueio.bloqueado || isProjeto) ? '–' : fmtCompact(v)}</span>
                                   ) : (
                                     <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
                                   )}
