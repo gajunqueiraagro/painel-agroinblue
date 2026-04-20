@@ -151,7 +151,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     Promise.all([
       supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id', clienteId).limit(10000),
       supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id', clienteId).limit(10000),
-      supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false).limit(10000),
+      supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id', clienteId).eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false).limit(10000),
     ]).then(([sRes, legRes, lRes]) => {
       const set = new Set<string>();
       set.add(String(currentYear));
@@ -266,6 +267,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .select('id, tipo_operacao, valor, sinal, data_competencia, data_pagamento, descricao, status_transacao, favorecido_id, numero_documento, conta_bancaria_id, conta_destino_id, ano_mes')
         .eq('cliente_id', clienteId)
         .eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false)
         .in('status_transacao', [...STATUS_REALIZADOS])
         .gte('ano_mes', anoMesMin)
         .lte('ano_mes', anoMesMax);
