@@ -148,9 +148,27 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, importarSubcentro, salvarGrid, salvarCelula, salvarVersao, listarVersoes, restaurarVersao, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, dividendos, importarSubcentro, salvarGrid, salvarCelula, salvarVersao, listarVersoes, restaurarVersao, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
+
+  // Garantir que todos dividendos apareçam mesmo se buildGrid rodou com estado antigo
+  const gridComTodosDividendos = useMemo(() => {
+    if (!grid.length && !dividendos.length) return grid;
+    const keys = new Set(grid.map(g => g.subcentro));
+    const extras = dividendos
+      .filter(d => !keys.has(`Dividendos ${d.nome}`))
+      .map((d, i) => ({
+        macro_custo: 'Dividendos',
+        grupo_custo: 'Dividendos',
+        centro_custo: 'Dividendos',
+        subcentro: `Dividendos ${d.nome}`,
+        escopo_negocio: 'pecuaria',
+        ordem_exibicao: 9000 + i,
+        meses: new Array(12).fill(0),
+      }));
+    return [...grid, ...extras];
+  }, [grid, dividendos]);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [nutricaoModalOpen, setNutricaoModalOpen] = useState(false);
@@ -187,7 +205,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const hierarchy = useMemo<MacroNode[]>(() => {
     const macroMap = new Map<string, Map<string, Map<string, SubNode[]>>>();
 
-    grid.forEach((g, idx) => {
+    gridComTodosDividendos.forEach((g, idx) => {
       const macro = g.macro_custo || '(Sem macro)';
       if (MACROS_EXCLUIDOS.has(macro)) return;
 
@@ -251,7 +269,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [grid, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
+  }, [gridComTodosDividendos, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
 
   /* ── Separate entradas / saidas macros ── */
   const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
@@ -296,6 +314,7 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
   const handleCellChange = useCallback((gridIdx: number, mesIdx: number, value: number) => {
     setGrid(prev => {
       const next = [...prev];
+      if (!next[gridIdx]) return prev;
       const row = { ...next[gridIdx], meses: [...next[gridIdx].meses] };
       row.meses[mesIdx] = value;
       next[gridIdx] = row;

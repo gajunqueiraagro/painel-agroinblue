@@ -904,6 +904,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   return {
     loading,
     buildGrid,
+    dividendos,
     importarRealizado,
     importarSubcentro,
     salvarGrid,
