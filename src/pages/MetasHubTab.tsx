@@ -2,7 +2,7 @@
  * Hub de Metas — sub-abas GMD Meta, Preços Meta, Movimentações Meta e Consolidação.
  */
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, DollarSign, ArrowLeftRight, Table2, Calculator } from 'lucide-react';
+import { TrendingUp, DollarSign, ArrowLeftRight, Table2 } from 'lucide-react';
 import type { TabId } from '@/components/BottomNav';
 
 interface Props {
@@ -37,13 +37,6 @@ const items = [
     desc: 'Preços de mercado para o cenário meta',
     icon: DollarSign,
     color: 'text-blue-600',
-  },
-  {
-    id: 'planejamento_financeiro' as TabId,
-    title: 'Planejamento Financeiro',
-    desc: 'Custos fixos e variáveis por centro de custo com drivers zootécnicos',
-    icon: Calculator,
-    color: 'text-teal-600',
   },
 ];
 

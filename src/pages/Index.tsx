@@ -75,7 +75,6 @@ import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
-import { PlanejamentoFinanceiroTab } from './PlanejamentoFinanceiroTab';
 
 const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
 const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
@@ -151,7 +150,6 @@ const TITLES: Record<TabId, string> = {
   historico_importacoes_zoot: 'Histórico Importações',
   auditoria_zoot: 'Auditoria Zootécnica',
   auditoria_tecnica: 'Auditoria Técnica',
-  planejamento_financeiro: 'Planejamento Financeiro',
 };
 
 const Index = () => {
@@ -417,7 +415,6 @@ const Index = () => {
     meta_preco: () => setActiveTab('precos_mercado_hub'),
     meta_consolidacao: () => setActiveTab('painel_consultor_hub'),
     meta_movimentacoes: () => setActiveTab('painel_consultor_hub'),
-    planejamento_financeiro: () => setActiveTab('painel_consultor_hub'),
     precos_mercado_hub: () => setActiveTab('painel_consultor_hub'),
     conferencia_gmd: () => setActiveTab('painel_consultor'),
     // Financeiro (analysis) sub-screens
@@ -851,12 +848,6 @@ const Index = () => {
       )}
       {activeTab === 'historico_importacoes_zoot' && (
         <HistoricoImportacoesZootTab />
-      )}
-      {canEditMeta && activeTab === 'planejamento_financeiro' && (
-        <PlanejamentoFinanceiroTab
-          onBack={() => setActiveTab('painel_consultor_hub')}
-          metaConsolidacao={metaConsolidacaoData}
-        />
       )}
       </div>
       {!finV2Intensivo && <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />}
