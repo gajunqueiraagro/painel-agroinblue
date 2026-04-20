@@ -1,4 +1,4 @@
-export const TIPO_OPERACAO_TRANSFERENCIA = '3-Transferência';
+export const TIPO_OPERACAO_TRANSFERENCIA = '3-Transferências';
 
 type StatusTransacaoNormalizada = 'meta' | 'agendado' | 'programado' | 'realizado';
 
