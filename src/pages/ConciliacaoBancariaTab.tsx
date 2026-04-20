@@ -424,6 +424,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           });
           status = perAccountStatuses.some(s => s === 'nao_conciliado') ? 'nao_conciliado' : 'realizado';
         }
+      } else {
+        const official = calcConciliacaoMensal({
+          contaId,
+          anoMes,
+          saldoRows: saldoRows,
+          lancamentos: lancamentos as ConciliacaoLancamentoBase[],
+          fallbackSaldoInicial: prevFinalByAccount.get(contaId) || 0,
+        });
+        status = official.status;
       }
 
       cards.push({
