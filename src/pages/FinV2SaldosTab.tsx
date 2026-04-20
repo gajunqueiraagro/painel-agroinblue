@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -164,24 +164,26 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [overrideInicial, setOverrideInicial] = useState(false);
   const [autoSaldoInicial, setAutoSaldoInicial] = useState<number | null>(null);
 
-  // Auto-preenche saldo_inicial com saldo_final do mês anterior ao criar novo registro
+  const allSaldosRef = useRef(allSaldos);
+  useEffect(() => { allSaldosRef.current = allSaldos; });
+
   useEffect(() => {
     if (editing || !contaId || !anoMes || overrideInicial) return;
     const [ano, mes] = anoMes.split('-').map(Number);
     const prevDate = new Date(ano, mes - 2, 1);
     const prevAm = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-    const prevSaldo = allSaldos.find(s =>
+    const prevSaldo = allSaldosRef.current.find(s =>
       (s.conta_bancaria_id === contaId || s.conta_bancaria_id_v2 === contaId) &&
       s.ano_mes === prevAm
     );
     if (prevSaldo) {
-      const val = prevSaldo.saldo_final;
+      const val = Number(prevSaldo.saldo_final);
       setAutoSaldoInicial(val);
       setSaldoInicial(val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     } else {
       setAutoSaldoInicial(null);
     }
-  }, [contaId, anoMes, editing, overrideInicial, allSaldos]);
+  }, [contaId, anoMes, editing, overrideInicial]);
 
   // Status management
   const [statusAction, setStatusAction] = useState<{ saldo: SaldoBancario; newStatus: string } | null>(null);
