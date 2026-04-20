@@ -612,33 +612,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               {/* ═══ 3 COLUNAS ═══ */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
 
-                {/* ── COL 1: Conciliação ── */}
-                <div className="rounded-md p-3 space-y-2">
-                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground">Saldo Extrato</p>
-                      <p className="text-xs font-medium tabular-nums text-muted-foreground/70">
-                          {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
-                        </p>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground">Saldo no Sistema</p>
-                      <p className="text-xs font-medium tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
-                    </div>
-
-                    <div className="border-t pt-1.5 flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground">Diferença para Conciliar</p>
-                      <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatMoeda(card.diferenca)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── COL 2: Movimento Financeiro ── */}
+                {/* ── COL 1: Movimento Financeiro ── */}
                 <div className="space-y-0">
                   <div className="px-2 py-0.5 flex items-center justify-between">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo Inicial</p>
@@ -684,6 +658,32 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-medium">Saldo no Sistema</p>
                       <p className={`text-xs font-bold tabular-nums ${card.saldoCalculado >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatMoeda(card.saldoCalculado)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── COL 2: Conciliação ── */}
+                <div className="rounded-md p-3 space-y-2">
+                  <p className="text-[10px] font-bold text-foreground uppercase tracking-wider">Conciliação</p>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Saldo Extrato</p>
+                      <p className="text-xs font-medium tabular-nums text-muted-foreground/70">
+                          {card.saldoExtrato !== null ? formatMoeda(card.saldoExtrato) : '—'}
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Saldo no Sistema</p>
+                      <p className="text-xs font-medium tabular-nums">{formatMoeda(card.saldoCalculado)}</p>
+                    </div>
+
+                    <div className="border-t pt-1.5 flex items-center justify-between">
+                      <p className="text-[10px] text-muted-foreground">Diferença para Conciliar</p>
+                      <p className={`text-xs font-bold tabular-nums ${Math.round(card.diferenca * 100) === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatMoeda(card.diferenca)}
                       </p>
                     </div>
                   </div>
