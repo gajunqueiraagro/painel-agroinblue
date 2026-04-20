@@ -271,9 +271,31 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     });
   }, [gridComTodosDividendos, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
 
+  /* ── Filtros de macros por tipo de fazenda ── */
+  const macrosEntradaPermitidos = useMemo(() => {
+    if (isFazendaOp) return MACROS_ENTRADA_ORDERED.filter(m => m !== 'Entrada Financeira');
+    return MACROS_ENTRADA_ORDERED;
+  }, [isFazendaOp]);
+
+  const macrosSaidaPermitidos = useMemo(() => {
+    if (isFazendaOp) return MACROS_SAIDA_ORDERED.filter(m => m !== 'Saída Financeira' && m !== 'Dividendos');
+    return MACROS_SAIDA_ORDERED;
+  }, [isFazendaOp]);
+
+  const macrosEntradaSet = useMemo(() => {
+    const s = new Set(MACROS_ENTRADA_SET);
+    if (isFazendaOp) s.delete('Entrada Financeira');
+    return s;
+  }, [isFazendaOp]);
+  const macrosSaidaSet = useMemo(() => {
+    const s = new Set(MACROS_SAIDA_SET);
+    if (isFazendaOp) { s.delete('Saída Financeira'); s.delete('Dividendos'); }
+    return s;
+  }, [isFazendaOp]);
+
   /* ── Separate entradas / saidas macros ── */
-  const macrosEntrada = useMemo(() => hierarchy.filter(m => MACROS_ENTRADA_ORDERED.includes(m.nome)), [hierarchy]);
-  const macrosSaida = useMemo(() => hierarchy.filter(m => MACROS_SAIDA_ORDERED.includes(m.nome)), [hierarchy]);
+  const macrosEntrada = useMemo(() => hierarchy.filter(m => macrosEntradaPermitidos.includes(m.nome)), [hierarchy, macrosEntradaPermitidos]);
+  const macrosSaida = useMemo(() => hierarchy.filter(m => macrosSaidaPermitidos.includes(m.nome)), [hierarchy, macrosSaidaPermitidos]);
 
   /* ── Totals computation ── */
   const totals = useMemo(() => {
@@ -281,10 +303,10 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     const saidas = new Array(12).fill(0);
 
     for (const macro of hierarchy) {
-      if (MACROS_ENTRADA_SET.has(macro.nome)) {
+      if (macrosEntradaSet.has(macro.nome)) {
         for (let i = 0; i < 12; i++) entradas[i] += macro.meses[i];
       }
-      if (MACROS_SAIDA_SET.has(macro.nome)) {
+      if (macrosSaidaSet.has(macro.nome)) {
         for (let i = 0; i < 12; i++) saidas[i] += macro.meses[i];
       }
     }

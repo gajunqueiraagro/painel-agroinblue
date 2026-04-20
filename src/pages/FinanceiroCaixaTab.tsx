@@ -9,6 +9,7 @@ import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinancei
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
 import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
+import { PlanejamentoFinanceiroTab } from '@/pages/PlanejamentoFinanceiroTab';
 import DrillDownMacro from '@/components/financeiro/DrillDownMacro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -69,6 +70,7 @@ function classifySaida(l: FinanceiroLancamento): string {
 
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
+  const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>('realizado');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();
@@ -437,20 +439,41 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             </div>
           )}
           {subTab === 'fluxo' && (
-            <FluxoFinanceiro
-              lancamentos={lancamentos}
-              rateioADM={rateioADM}
-              ano={Number(localAno)}
-              mesAte={localMes}
-              fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
-              onEditLancamento={handleEditFromAuditoria}
-              modalOpen={auditModalOpen}
-              modalPayload={auditPayload}
-              modalValorClicado={auditValorClicado}
-              onModalOpen={handleAuditModalOpen}
-              onModalClose={handleAuditModalClose}
-              onFluxoReloadRef={handleFluxoReloadRef}
-            />
+            <>
+              <div className="flex items-center gap-0.5 px-3 pt-2">
+                {(['realizado', 'meta'] as const).map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setFluxoCenario(c)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                      fluxoCenario === c
+                        ? (c === 'meta' ? 'bg-orange-500 text-white' : 'bg-primary text-primary-foreground')
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {c === 'meta' ? 'META' : 'Realizado'}
+                  </button>
+                ))}
+              </div>
+              {fluxoCenario === 'realizado' ? (
+                <FluxoFinanceiro
+                  lancamentos={lancamentos}
+                  rateioADM={rateioADM}
+                  ano={Number(localAno)}
+                  mesAte={localMes}
+                  fazendaAtualNome={isGlobal ? undefined : fazendaAtual?.nome}
+                  onEditLancamento={handleEditFromAuditoria}
+                  modalOpen={auditModalOpen}
+                  modalPayload={auditPayload}
+                  modalValorClicado={auditValorClicado}
+                  onModalOpen={handleAuditModalOpen}
+                  onModalClose={handleAuditModalClose}
+                  onFluxoReloadRef={handleFluxoReloadRef}
+                />
+              ) : (
+                <PlanejamentoFinanceiroTab />
+              )}
+            </>
           )}
           {subTab === 'rateio' && (
             <div className="p-4">
