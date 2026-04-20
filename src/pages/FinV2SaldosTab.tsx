@@ -379,8 +379,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
     const orderedTypes = Object.keys(byTipo).sort((a, b) => (TIPO_ORDER[a] ?? 99) - (TIPO_ORDER[b] ?? 99));
     for (const tipo of orderedTypes) {
       const items = byTipo[tipo].sort((a, b) => {
-        const na = contaNome(a);
-        const nb = contaNome(b);
+        const na = contaNome(a) ?? '';
+        const nb = contaNome(b) ?? '';
         return na.localeCompare(nb) || a.ano_mes.localeCompare(b.ano_mes);
       });
       groups.push({
