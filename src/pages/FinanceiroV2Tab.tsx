@@ -858,7 +858,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
                       <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
                       <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                      <SelectItem value="meta" className={itemCls}>{CENTRAL_STATUS_LABEL.meta}</SelectItem>
+                      <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1065,7 +1065,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <SelectItem value="realizado" className={itemCls}>{CENTRAL_STATUS_LABEL.realizado}</SelectItem>
                       <SelectItem value="agendado" className={itemCls}>Agendado</SelectItem>
                       <SelectItem value="programado" className={itemCls}>{CENTRAL_STATUS_LABEL.programado}</SelectItem>
-                      <SelectItem value="meta" className={itemCls}>{CENTRAL_STATUS_LABEL.meta}</SelectItem>
+                      <SelectItem value="previsto" className={itemCls}>Previsto</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
