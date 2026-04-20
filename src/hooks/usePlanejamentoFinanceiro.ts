@@ -573,7 +573,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       const grid = map.get(key)!;
       if (r.mes >= 1 && r.mes <= 12) {
-        grid.meses[r.mes - 1] = r.valor_planejado;
+        grid.meses[r.mes - 1] += r.valor_planejado;
       }
     }
 
