@@ -1575,9 +1575,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // For Boitel venda, use saldoReceber (financial cash value) as the grid TOTAL
     const isBoitelVenda = isVenda && tipoPeso === 'boitel';
     const boitelSaldo = boitelDataForResumo?._saldoReceber || boitelDataForResumo?._lucroTotal || 0;
+    const compraValorTotal = (isCompra && compraDetalhes)
+      ? (() => {
+          const qtd = parseNumericValue(quantidade) || 0;
+          const totalKg = qtd * (parseNumericValue(pesoKg) || 0);
+          if (compraDetalhes.tipoPreco === 'por_kg') return totalKg * (Number(compraDetalhes.precoKg) || 0);
+          if (compraDetalhes.tipoPreco === 'por_cab') return qtd * (Number(compraDetalhes.precoCab) || 0);
+          return Number(compraDetalhes.valorTotal) || 0;
+        })()
+      : 0;
     const valorTotalFinal = isBoitelVenda
       ? (boitelSaldo > 0 ? boitelSaldo : undefined)
-      : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
+      : isCompra
+        ? (compraValorTotal > 0 ? compraValorTotal : undefined)
+        : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
 
     const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
@@ -1628,7 +1639,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       detalhesSnapshot: (() => {
         if (isCompra && compraDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === compraFornecedorId)?.nome;
-          return { type: 'compra', ...compraDetalhes, fornecedorId: compraFornecedorId || undefined, fornecedorNome: fornNome || undefined };
+          return { type: 'compra', ...compraDetalhes, valorTotal: String(compraValorTotal), fornecedorId: compraFornecedorId || undefined, fornecedorNome: fornNome || undefined };
         }
         if (isAbate && abateDetalhes) {
           const fornNome = abateFornecedores.find(f => f.id === abateFornecedorId)?.nome;
