@@ -37,7 +37,7 @@ interface Props {
 const TIPOS_OPERACAO = [
   { value: '1-Entradas', label: 'Entradas' },
   { value: '2-Saídas', label: 'Saídas' },
-  { value: '3-Transferência', label: 'Transferências' },
+  { value: '3-Transferências', label: 'Transferências' },
 ];
 
 const STATUS_OPTIONS = [
@@ -216,7 +216,7 @@ export function LancamentoV2Dialog({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const subcentroItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const isTransferencia = tipoOperacao === '3-Transferência';
+  const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
 
   const classMap = useMemo(() => {
@@ -259,7 +259,7 @@ export function LancamentoV2Dialog({
       // For transfers: origin = conta_bancaria_id, destination = conta_destino_id
       // For entries: destination = conta_bancaria_id
       // For exits: origin = conta_bancaria_id
-      if (lancamento.tipo_operacao === '3-Transferência') {
+      if (lancamento.tipo_operacao === '3-Transferências') {
         setContaOrigemId(lancamento.conta_bancaria_id || '');
         const destId = lancamento.conta_destino_id || '';
         console.log('[FinV2] DIALOG INIT transfer destino =', destId, 'from lancamento.conta_destino_id =', lancamento.conta_destino_id);

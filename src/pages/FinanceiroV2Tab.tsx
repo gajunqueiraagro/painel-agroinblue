@@ -234,7 +234,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const isEntrada = tipoOperacao === '1-Entradas';
   const isSaida = tipoOperacao === '2-Saídas';
-  const isTransf = tipoOperacao === '3-Transferência';
+  const isTransf = tipoOperacao === '3-Transferências';
 
   // === Cascading classification filters: Tipo → Macro → Grupo → Centro → Subcentro ===
   const filteredByTipo = useMemo(() => {

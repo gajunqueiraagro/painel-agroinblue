@@ -49,7 +49,7 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
       .from('financeiro_lancamentos_v2')
       .select('id, descricao, valor, data_pagamento, data_competencia, conta_bancaria_id, ano_mes, fazenda_id')
       .eq('cliente_id', clienteId)
-      .eq('tipo_operacao', '3-Transferência')
+      .eq('tipo_operacao', '3-Transferências')
       .eq('cancelado', false)
       .is('conta_destino_id', null)
       .order('data_pagamento', { ascending: true, nullsFirst: false })

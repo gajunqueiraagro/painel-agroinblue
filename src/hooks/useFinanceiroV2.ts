@@ -262,7 +262,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     if (contaOrigemId && contaDestinoId) {
       query = query
-        .eq('tipo_operacao', '3-Transferência')
+        .eq('tipo_operacao', '3-Transferências')
         .eq('conta_bancaria_id', contaOrigemId)
         .eq('conta_destino_id', contaDestinoId);
     } else {
@@ -301,7 +301,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       if (!data || data.length === 0) break;
 
       for (const row of data) {
-        if ((row as any).tipo_operacao === '3-Transferência') {
+        if ((row as any).tipo_operacao === '3-Transferências') {
           console.log('[FinV2] load RAW row', {
             id: (row as any).id,
             conta_bancaria_id: (row as any).conta_bancaria_id,
@@ -314,7 +314,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
       const mapped = data as LancamentoV2[];
       for (const row of mapped) {
-        if (row.tipo_operacao === '3-Transferência') {
+        if (row.tipo_operacao === '3-Transferências') {
           console.log('[FinV2] load MAPPED row', {
             id: row.id,
             conta_bancaria_id: row.conta_bancaria_id,
