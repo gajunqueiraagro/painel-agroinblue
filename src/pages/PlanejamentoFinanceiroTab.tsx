@@ -139,6 +139,9 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     if (isFazOnly && (isAdminFazenda || isGlobal)) {
       return { bloqueado: true, motivo: 'Exclusivo de fazenda operacional' };
     }
+    if (macroNome === 'Investimento na Fazenda') {
+      return { bloqueado: true, motivo: 'Use a tela Projetos de Investimento para lançar valores' };
+    }
     return { bloqueado: false, motivo: '' };
   }, [isFazendaOp, isAdminFazenda, isGlobal]);
 
