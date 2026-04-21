@@ -315,7 +315,7 @@ export function ModoRapidoGrid({ fazendaId, contas, classificacoes, onSaveBatch,
                       className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
                     >
                       <option value="">—</option>
-                      {contasFazenda.map(c => <option key={c.id} value={c.id}>{c.nome_conta}</option>)}
+                      {contasFazenda.map(c => <option key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</option>)}
                     </select>
                   </td>
                   {/* Descrição */}
