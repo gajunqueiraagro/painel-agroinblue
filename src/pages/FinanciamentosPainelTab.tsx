@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, ComposedChart, Line,
 } from 'recharts';
 import { format } from 'date-fns';
 import { useFinanciamentosPainel, type TipoFin } from '@/hooks/useFinanciamentosPainel';
@@ -29,11 +29,12 @@ const fmtCompact = (v: number) => {
 export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento }: Props = {}) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear);
+  const [mes, setMes] = useState<number | 'todos'>('todos');
   const [tipo, setTipo] = useState<TipoFin>('todos');
   const [mesSelecionado, setMesSelecionado] = useState<number | null>(null);
 
-  const painel = useFinanciamentosPainel(ano, tipo);
-  const { kpis, barrasMensais, pizzaVencimentos, dividaPorCredor, alavancagem, proximasParcelas, parcelasEnriquecidas } = painel;
+  const painel = useFinanciamentosPainel(ano, tipo, mes);
+  const { kpis, barrasMensais, pizzaVencimentos, dividaPorCredor, alavancagem, proximasParcelas, parcelasEnriquecidas, evolucaoDivida, historicoAlavancagem } = painel;
 
   const parcelasDoMes = useMemo(() => {
     if (!mesSelecionado) return [];
@@ -96,6 +97,15 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                 {anosDisp.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={mes === 'todos' ? 'todos' : String(mes)} onValueChange={v => setMes(v === 'todos' ? 'todos' : Number(v))}>
+              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos meses</SelectItem>
+                {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, i) => (
+                  <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={tipo} onValueChange={v => setTipo(v as TipoFin)}>
               <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -111,122 +121,86 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
       {painel.loading ? (
         <div className="flex-1 flex items-center justify-center"><span className="text-3xl animate-pulse">💰</span></div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* SEÇÃO 1 — KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="p-3 space-y-1">
-                <p className="text-[10px] uppercase text-muted-foreground">Saldo devedor</p>
-                <p className="text-base font-bold tabular-nums">{fmt(kpis.saldoDevedor.total.total)}</p>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Principal</span><span>{fmt(kpis.saldoDevedor.total.principal)}</span>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* LINHA 1+2 — grid 4 cols (cards + BarChart span 2x2) */}
+          <div className="grid grid-cols-4 gap-3 auto-rows-fr">
+            <KpiCard
+              label="Saldo devedor"
+              total={fmt(kpis.saldoDevedor.total.total)}
+              principal={fmt(kpis.saldoDevedor.total.principal)}
+              juros={fmt(kpis.saldoDevedor.total.juros)}
+              extra={`Pec: ${fmtCompact(kpis.saldoDevedor.pecuaria.total)} · Agri: ${fmtCompact(kpis.saldoDevedor.agricultura.total)}`}
+            />
+            <KpiCard
+              label={`Amortizado em ${ano}`}
+              total={fmt(kpis.amortizadoNoAno.total)}
+              totalClass="text-emerald-600"
+              principal={fmt(kpis.amortizadoNoAno.principal)}
+              juros={fmt(kpis.amortizadoNoAno.juros)}
+            />
+
+            {/* BarChart — col-span-2 row-span-2 */}
+            <Card className="col-span-2 row-span-2">
+              <CardContent className="p-3 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-2 shrink-0">
+                  <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
+                  <p className="text-[10px] text-muted-foreground">Clique em uma barra</p>
                 </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Juros</span><span>{fmt(kpis.saldoDevedor.total.juros)}</span>
-                </div>
-                <p className="text-[10px] text-muted-foreground pt-0.5 border-t">
-                  Pec: {fmtCompact(kpis.saldoDevedor.pecuaria.total)} · Agri: {fmtCompact(kpis.saldoDevedor.agricultura.total)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 space-y-1">
-                <p className="text-[10px] uppercase text-muted-foreground">Amortizado em {ano}</p>
-                <p className="text-base font-bold tabular-nums text-emerald-600">{fmt(kpis.amortizadoNoAno.total)}</p>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Principal</span><span>{fmt(kpis.amortizadoNoAno.principal)}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Juros</span><span>{fmt(kpis.amortizadoNoAno.juros)}</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 space-y-1">
-                <p className="text-[10px] uppercase text-muted-foreground">A amortizar em {ano}</p>
-                <p className="text-base font-bold tabular-nums text-amber-600">{fmt(kpis.aAmortizarNoAno.total)}</p>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Principal</span><span>{fmt(kpis.aAmortizarNoAno.principal)}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Juros</span><span>{fmt(kpis.aAmortizarNoAno.juros)}</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 space-y-1">
-                <p className="text-[10px] uppercase text-muted-foreground">Anos seguintes</p>
-                <p className="text-base font-bold tabular-nums">{fmt(kpis.totalAnosSeguintes.total)}</p>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Principal</span><span>{fmt(kpis.totalAnosSeguintes.principal)}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
-                  <span>Juros</span><span>{fmt(kpis.totalAnosSeguintes.juros)}</span>
+                <div className="flex-1 min-h-0" style={{ height: 280 }}>
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={barrasMensais}
+                      onClick={(e: any) => {
+                        const idx = e?.activeTooltipIndex;
+                        if (typeof idx === 'number' && idx >= 0 && idx < 12) {
+                          setMesSelecionado(idx + 1);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                      <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="principalPago" stackId="a" fill="#1e3a8a" name="Principal (pago)" />
+                      <Bar dataKey="principalPendente" stackId="a" fill="#1e3a8a" fillOpacity={0.45} name="Principal (pendente)" />
+                      <Bar dataKey="jurosPago" stackId="a" fill="#f97316" name="Juros (pago)" />
+                      <Bar dataKey="jurosPendente" stackId="a" fill="#f97316" fillOpacity={0.45} name="Juros (pendente)" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
+
+            <KpiCard
+              label={`A amortizar em ${ano}`}
+              total={fmt(kpis.aAmortizarNoAno.total)}
+              totalClass="text-amber-600"
+              principal={fmt(kpis.aAmortizarNoAno.principal)}
+              juros={fmt(kpis.aAmortizarNoAno.juros)}
+            />
+            <KpiCard
+              label="Anos seguintes"
+              total={fmt(kpis.totalAnosSeguintes.total)}
+              principal={fmt(kpis.totalAnosSeguintes.principal)}
+              juros={fmt(kpis.totalAnosSeguintes.juros)}
+            />
           </div>
 
-          {/* SEÇÃO 2 — Barras Mensais (clicável) */}
-          <Card>
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
-                <p className="text-[10px] text-muted-foreground">Clique em uma barra para ver as parcelas</p>
-              </div>
-              <div style={{ width: '100%', height: 260 }}>
-                <ResponsiveContainer>
-                  <BarChart
-                    data={barrasMensais}
-                    onClick={(e: any) => {
-                      const idx = e?.activeTooltipIndex;
-                      if (typeof idx === 'number' && idx >= 0 && idx < 12) {
-                        setMesSelecionado(idx + 1);
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                    <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
-                    <Tooltip
-                      formatter={(v: number) => fmt(Number(v))}
-                      contentStyle={{ fontSize: 11 }}
-                      cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="principalPago" stackId="a" fill="#1e3a8a" name="Principal (pago)" />
-                    <Bar dataKey="principalPendente" stackId="a" fill="#1e3a8a" fillOpacity={0.45} name="Principal (pendente)" />
-                    <Bar dataKey="jurosPago" stackId="a" fill="#f97316" name="Juros (pago)" />
-                    <Bar dataKey="jurosPendente" stackId="a" fill="#f97316" fillOpacity={0.45} name="Juros (pendente)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* SEÇÃO 3 — Pizza + Credor */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* LINHA 3 — grid 3 cols: Pizza | Evolução | Credor */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-3">
                 <p className="text-xs font-semibold">Perfil de vencimentos (Principal)</p>
-                <p className="text-[10px] text-muted-foreground mb-2">Apenas amortização do principal</p>
+                <p className="text-[10px] text-muted-foreground mb-1">Apenas amortização do principal</p>
                 {pizzaVencimentos.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Sem parcelas pendentes</p>
                 ) : (
-                  <div style={{ width: '100%', height: 220 }}>
+                  <div style={{ width: '100%', height: 200 }}>
                     <ResponsiveContainer>
                       <PieChart>
-                        <Pie
-                          data={pizzaVencimentos}
-                          dataKey="valor"
-                          nameKey="nome"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={55}
-                          outerRadius={85}
-                          paddingAngle={2}
-                        >
+                        <Pie data={pizzaVencimentos} dataKey="valor" nameKey="nome" cx="50%" cy="50%" innerRadius={48} outerRadius={78} paddingAngle={2}>
                           {pizzaVencimentos.map((s, i) => <Cell key={i} fill={s.color} />)}
                         </Pie>
                         <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} />
@@ -241,16 +215,39 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
 
             <Card>
               <CardContent className="p-3">
+                <p className="text-xs font-semibold mb-1">Evolução da dívida (Principal)</p>
+                <p className="text-[10px] text-muted-foreground mb-1">Ini = saldo atual | anos = parcelas pendentes</p>
+                <div style={{ width: '100%', height: 200 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={evolucaoDivida}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                      <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} labelFormatter={(l: string, payload: any) => {
+                        const row = payload?.[0]?.payload;
+                        return row?.anoRef ? `Ano ${row.anoRef}` : l;
+                      }} />
+                      <Bar dataKey="valor" name="Principal">
+                        {evolucaoDivida.map((b, i) => <Cell key={i} fill={b.cor} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-3">
                 <p className="text-xs font-semibold mb-2">Dívida por credor (top 8)</p>
                 {dividaPorCredor.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Sem dados</p>
                 ) : (
-                  <div style={{ width: '100%', height: 220 }}>
+                  <div style={{ width: '100%', height: 200 }}>
                     <ResponsiveContainer>
                       <BarChart data={dividaPorCredor} layout="vertical" margin={{ left: 40, right: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis type="number" tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
-                        <YAxis type="category" dataKey="credor" tick={{ fontSize: 10 }} width={90} />
+                        <YAxis type="category" dataKey="credor" tick={{ fontSize: 10 }} width={80} />
                         <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} />
                         <Bar dataKey="valor" fill="#0ea5e9" />
                       </BarChart>
@@ -261,56 +258,81 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
             </Card>
           </div>
 
-          {/* SEÇÃO 4 — Alavancagem Pecuária */}
-          <Card>
-            <CardContent className="p-3 space-y-2">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-xs font-semibold">Alavancagem pecuária</p>
-                {alavancagem.status === 'indisponivel' ? (
-                  <span className="text-[10px] text-muted-foreground">Sem valor de rebanho cadastrado</span>
-                ) : (
-                  <span className={`text-xs font-bold ${alavancagemColor}`}>
-                    {alavancagem.percentual.toFixed(1)}%
-                    <span className="ml-2 text-[10px] uppercase">
-                      {alavancagem.status === 'saudavel' && 'saudável'}
-                      {alavancagem.status === 'atencao' && 'atenção'}
-                      {alavancagem.status === 'critico' && 'crítico'}
+          {/* LINHA 4 — grid 2 cols: Alavancagem card | Histórico */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card>
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs font-semibold">Alavancagem pecuária</p>
+                  {alavancagem.status === 'indisponivel' ? (
+                    <span className="text-[10px] text-muted-foreground">Sem rebanho cadastrado</span>
+                  ) : (
+                    <span className={`text-xs font-bold ${alavancagemColor}`}>
+                      {alavancagem.percentual.toFixed(1)}%
+                      <span className="ml-2 text-[10px] uppercase">
+                        {alavancagem.status === 'saudavel' && 'saudável'}
+                        {alavancagem.status === 'atencao' && 'atenção'}
+                        {alavancagem.status === 'critico' && 'crítico'}
+                      </span>
                     </span>
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária</p>
-                  <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.dividaPecuaria)}</p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase text-muted-foreground">Valor do rebanho</p>
-                  <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.valorRebanho)}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária</p>
+                    <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.dividaPecuaria)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-muted-foreground">Valor do rebanho</p>
+                    <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.valorRebanho)}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-0.5">
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${alavancagemBarColor} transition-all`}
-                    style={{ width: `${Math.min(100, alavancagem.percentual)}%` }}
-                  />
+                <div className="space-y-0.5">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full ${alavancagemBarColor} transition-all`} style={{ width: `${Math.min(100, alavancagem.percentual)}%` }} />
+                  </div>
+                  <div className="flex justify-between text-[9px] text-muted-foreground">
+                    <span>0%</span>
+                    <span>30% (saudável)</span>
+                    <span>50% (atenção)</span>
+                    <span>100%</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-[9px] text-muted-foreground">
-                  <span>0%</span>
-                  <span>30% (saudável)</span>
-                  <span>50% (atenção)</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* SEÇÃO 5 — Cronograma próximas parcelas */}
+            <Card>
+              <CardContent className="p-3">
+                <p className="text-xs font-semibold mb-1">Histórico de alavancagem</p>
+                <p className="text-[10px] text-muted-foreground mb-1">Barras: amortização anual · Linha: % alavancagem</p>
+                {historicoAlavancagem.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sem histórico</p>
+                ) : (
+                  <div style={{ width: '100%', height: 220 }}>
+                    <ResponsiveContainer>
+                      <ComposedChart data={historicoAlavancagem}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="left" tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Number(v).toFixed(0)}%`} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: number, name: string) => name === 'Alavancagem' ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} contentStyle={{ fontSize: 11 }} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        <Bar yAxisId="left" dataKey="amortizado" fill="#1e3a8a" name="Amortizado" />
+                        <Bar yAxisId="left" dataKey="meta" fill="#f97316" name="Meta" />
+                        <Line yAxisId="right" type="monotone" dataKey="alavancagem" stroke="#dc2626" strokeWidth={2} name="Alavancagem" dot={{ r: 3 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* LINHA 5 — Cronograma próximas parcelas */}
           <Card>
             <CardContent className="p-0">
               <div className="p-3 border-b">
-                <p className="text-xs font-semibold">Próximas 12 parcelas</p>
+                <p className="text-xs font-semibold">Cronograma — Próximas Parcelas</p>
               </div>
               {proximasParcelas.length === 0 ? (
                 <p className="text-xs text-muted-foreground p-3">Nenhuma parcela pendente</p>
@@ -325,6 +347,8 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                       <TableHead className="text-right py-1.5">Principal</TableHead>
                       <TableHead className="text-right py-1.5">Juros</TableHead>
                       <TableHead className="text-right py-1.5">Total</TableHead>
+                      <TableHead className="py-1.5">Status</TableHead>
+                      <TableHead className="py-1.5 w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -347,6 +371,18 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                         <TableCell className="text-right tabular-nums py-1">{fmt(p.principal)}</TableCell>
                         <TableCell className="text-right tabular-nums py-1">{fmt(p.juros)}</TableCell>
                         <TableCell className="text-right tabular-nums py-1 font-semibold">{fmt(p.total)}</TableCell>
+                        <TableCell className="py-1">
+                          <span className={`inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-semibold ${p.vencida ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {p.vencida ? 'vencida' : 'pendente'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1">
+                          {onAbrirFinanciamento && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onAbrirFinanciamento(p.financiamento_id)} title="Ver contrato">
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -426,5 +462,34 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function KpiCard({
+  label, total, totalClass = '', principal, juros, extra,
+}: {
+  label: string;
+  total: string;
+  totalClass?: string;
+  principal: string;
+  juros: string;
+  extra?: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-3 space-y-1">
+        <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+        <p className={`text-xl font-bold tabular-nums ${totalClass}`}>{total}</p>
+        <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+          <span>Principal</span><span>{principal}</span>
+        </div>
+        <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+          <span>Juros</span><span>{juros}</span>
+        </div>
+        {extra && (
+          <p className="text-[10px] text-muted-foreground pt-0.5 border-t">{extra}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

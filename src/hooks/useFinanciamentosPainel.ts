@@ -82,6 +82,22 @@ export interface Breakdown {
   total: number;
 }
 
+export interface EvolucaoDividaBar {
+  label: string;
+  valor: number;
+  cor: string;
+  anoRef?: number | null;
+}
+
+export interface HistoricoAlavancagemPoint {
+  label: string;
+  ano: number;
+  amortizado: number;
+  meta?: number;
+  saldoDevedor: number;
+  alavancagem: number; // %
+}
+
 export interface PainelData {
   loading: boolean;
   kpis: {
@@ -102,11 +118,13 @@ export interface PainelData {
   };
   proximasParcelas: ProximaParcela[];
   parcelasEnriquecidas: ParcelaEnriquecida[];
+  evolucaoDivida: EvolucaoDividaBar[];
+  historicoAlavancagem: HistoricoAlavancagemPoint[];
 }
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): PainelData {
+export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef: number | 'todos' = 'todos'): PainelData {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
@@ -342,6 +360,80 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
       { nome: `Longo Prazo (${ano + 2}+)`, valor: longoPrazo, color: '#EF4444' },
     ].filter(s => s.valor > 0);
 
+    // ── Evolução da Dívida: 7 barras (Ini + 5 anos + Demais) — só Principal pendente ──
+    const evoIni = parcelas
+      .filter(p => p.status === 'pendente' && finById.has(p.financiamento_id))
+      .reduce((s, p) => s + (Number(p.valor_principal) || 0), 0);
+    const evoPorAno: Record<number, number> = {};
+    for (const p of parcelas) {
+      if (p.status !== 'pendente') continue;
+      if (!finById.has(p.financiamento_id)) continue;
+      const vy = Number(p.data_vencimento.substring(0, 4));
+      evoPorAno[vy] = (evoPorAno[vy] || 0) + (Number(p.valor_principal) || 0);
+    }
+    const sumAteAnoPlus4 = [0, 1, 2, 3, 4].reduce((s, k) => s + (evoPorAno[ano + k] || 0), 0);
+    const demais = Object.entries(evoPorAno)
+      .filter(([y]) => Number(y) > ano + 4)
+      .reduce((s, [, v]) => s + v, 0);
+    const evolucaoDivida: EvolucaoDividaBar[] = [
+      { label: 'Ini.', valor: evoIni, cor: '#1e293b', anoRef: null },
+      { label: String(ano).slice(2), valor: evoPorAno[ano] || 0, cor: '#1e3a8a', anoRef: ano },
+      { label: String(ano + 1).slice(2), valor: evoPorAno[ano + 1] || 0, cor: '#1e3a8a', anoRef: ano + 1 },
+      { label: String(ano + 2).slice(2), valor: evoPorAno[ano + 2] || 0, cor: '#3b82f6', anoRef: ano + 2 },
+      { label: String(ano + 3).slice(2), valor: evoPorAno[ano + 3] || 0, cor: '#3b82f6', anoRef: ano + 3 },
+      { label: String(ano + 4).slice(2), valor: evoPorAno[ano + 4] || 0, cor: '#3b82f6', anoRef: ano + 4 },
+      { label: 'Demais', valor: demais, cor: '#60a5fa', anoRef: null },
+    ];
+
+    // ── Histórico de Alavancagem: por ano, usar mesRef (default Mar) como corte ──
+    const refMonth = mesRef === 'todos' ? 3 : mesRef;
+    const refMonthLabel = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][refMonth - 1];
+    // Descobre primeiro ano dos dados
+    const anosPresentes = new Set<number>();
+    for (const p of parcelas) {
+      const y = Number(p.data_vencimento.substring(0, 4));
+      if (!Number.isNaN(y)) anosPresentes.add(y);
+    }
+    const anosOrdenados = Array.from(anosPresentes).filter(y => y <= ano).sort((a, b) => a - b);
+    const amortizadoPorAno: Record<number, number> = {};
+    for (const p of parcelas) {
+      if (p.status !== 'pago') continue;
+      const ref = p.data_pagamento || p.data_vencimento;
+      const y = Number(ref.substring(0, 4));
+      if (!Number.isNaN(y)) amortizadoPorAno[y] = (amortizadoPorAno[y] || 0) + (Number(p.valor_principal) || 0);
+    }
+    const saldoAposRef = (yRef: number, mRef: number): number => {
+      const cutISO = `${yRef}-${String(mRef).padStart(2, '0')}-01`;
+      let s = 0;
+      for (const p of parcelas) {
+        if (!finById.has(p.financiamento_id)) continue;
+        const refPag = p.data_pagamento || p.data_vencimento;
+        if (p.status === 'pendente' && p.data_vencimento >= cutISO) s += (Number(p.valor_principal) || 0);
+        else if (p.status === 'pago' && refPag >= cutISO) s += (Number(p.valor_principal) || 0);
+      }
+      return s;
+    };
+    const historicoAlavancagem: HistoricoAlavancagemPoint[] = anosOrdenados.map(y => {
+      const saldoDev = saldoAposRef(y, refMonth);
+      return {
+        label: `${refMonthLabel}/${String(y).slice(2)}`,
+        ano: y,
+        amortizado: amortizadoPorAno[y] || 0,
+        saldoDevedor: saldoDev,
+        alavancagem: valorRebanho > 0 ? (saldoDev / valorRebanho) * 100 : 0,
+      };
+    });
+    // Adiciona barra META no final (ano filtrado)
+    const saldoMetaRef = saldoAposRef(ano, refMonth);
+    historicoAlavancagem.push({
+      label: 'META',
+      ano: ano,
+      amortizado: 0,
+      meta: aAmortizar.principal,
+      saldoDevedor: saldoMetaRef,
+      alavancagem: valorRebanho > 0 ? (saldoMetaRef / valorRebanho) * 100 : 0,
+    });
+
     const alavancagemPerc = valorRebanho > 0 ? (saldoPec.total / valorRebanho) * 100 : 0;
     const alavancagemStatus: 'saudavel' | 'atencao' | 'critico' | 'indisponivel' =
       valorRebanho <= 0 ? 'indisponivel'
@@ -368,8 +460,10 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
       },
       proximasParcelas,
       parcelasEnriquecidas,
+      evolucaoDivida,
+      historicoAlavancagem,
     };
-  }, [financiamentos, parcelas, valorRebanho, ano]);
+  }, [financiamentos, parcelas, valorRebanho, ano, mesRef]);
 
   return { loading, ...derived };
 }
