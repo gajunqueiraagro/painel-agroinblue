@@ -28,6 +28,9 @@ export interface FinanciamentoInput {
   cliente_id: string;
   fazenda_id?: string | null;
   tipo_financiamento: 'pecuaria' | 'agricultura';
+  descricao?: string | null;
+  numero_contrato?: string | null;
+  credor_id?: string | null;
 }
 
 interface Classificacao {
@@ -72,6 +75,17 @@ const JUROS: Record<'pecuaria' | 'agricultura', Classificacao> = {
   },
 };
 
+function buildDescricao(
+  financiamento: FinanciamentoInput,
+  origemTipo: 'parcela_principal' | 'parcela_juros',
+): string {
+  const prefixo = origemTipo === 'parcela_principal' ? 'Amortização' : 'Juros';
+  const desc = (financiamento.descricao ?? '').trim();
+  const contrato = (financiamento.numero_contrato ?? '').trim();
+  const nucleo = [desc, contrato].filter(Boolean).join(' ').trim();
+  return nucleo ? `${prefixo} ${nucleo}` : `${prefixo} parcela financiamento`;
+}
+
 function lancamentoRow(
   parcela: ParcelaInput,
   financiamento: FinanciamentoInput,
@@ -101,6 +115,8 @@ function lancamentoRow(
     subcentro: cls.subcentro,
     escopo_negocio: cls.escopo_negocio,
     plano_conta_id: cls.plano_conta_id,
+    descricao: buildDescricao(financiamento, origemTipo),
+    favorecido_id: financiamento.credor_id ?? null,
     observacao: parcela.id,
   };
 }
@@ -136,7 +152,7 @@ export async function criarMirrorParcela(
   parcela: ParcelaInput,
   financiamento: FinanciamentoInput,
 ): Promise<{ lancamentoIdPrincipal: string | null; lancamentoIdJuros: string | null }> {
-  // Evita duplicata
+  // Evita duplicata por parcela.lancamento_id
   if (parcela.lancamento_id) {
     return { lancamentoIdPrincipal: parcela.lancamento_id, lancamentoIdJuros: null };
   }
@@ -144,6 +160,30 @@ export async function criarMirrorParcela(
   if (tipo !== 'pecuaria' && tipo !== 'agricultura') {
     console.warn('[parcelaMirror] tipo_financiamento invalido:', tipo);
     return { lancamentoIdPrincipal: null, lancamentoIdJuros: null };
+  }
+
+  // Idempotência: se já existem mirrors para esta parcela (observacao=parcela.id) não reinsere.
+  // Isso cobre o caso do update de parcela.lancamento_id ter falhado em uma execução anterior.
+  const { data: existentes } = await supabase
+    .from('financeiro_lancamentos_v2')
+    .select('id, origem_tipo, cancelado')
+    .eq('origem_lancamento', 'parcela_financiamento')
+    .eq('observacao', parcela.id)
+    .eq('cancelado', false);
+  if (existentes && existentes.length > 0) {
+    const principalExist = existentes.find((r: any) => r.origem_tipo === 'parcela_principal');
+    const jurosExist = existentes.find((r: any) => r.origem_tipo === 'parcela_juros');
+    const vinculoId = principalExist?.id ?? jurosExist?.id ?? null;
+    if (vinculoId && !parcela.lancamento_id) {
+      await supabase
+        .from('financiamento_parcelas')
+        .update({ lancamento_id: vinculoId })
+        .eq('id', parcela.id);
+    }
+    return {
+      lancamentoIdPrincipal: principalExist?.id ?? null,
+      lancamentoIdJuros: jurosExist?.id ?? null,
+    };
   }
 
   const principal = Number(parcela.valor_principal) || 0;

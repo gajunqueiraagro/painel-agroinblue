@@ -4,9 +4,12 @@ import { criarMirrorParcela, type FinanciamentoInput, type ParcelaInput } from '
 /**
  * Varre parcelas pendentes de financiamentos ativos do cliente que ainda não
  * têm lancamento_id vinculado, e cria os mirrors (financeiro_lancamentos_v2 +
- * planejamento_financeiro) para cada uma. Idempotente: pula parcelas já vinculadas.
+ * planejamento_financeiro) para cada uma. Idempotente em camadas:
+ *  - Query filtra lancamento_id IS NULL.
+ *  - criarMirrorParcela também consulta financeiro_lancamentos_v2 por observacao=parcela.id
+ *    como segunda camada de defesa (caso o update do lancamento_id tenha falhado).
  *
- * Retorna métricas: { processadas, criadas, puladas, erros }
+ * Retorna métricas: { processadas, criadas, puladas, erros }.
  */
 export interface BackfillReport {
   processadas: number;
@@ -15,55 +18,54 @@ export interface BackfillReport {
   erros: number;
 }
 
+// Query única com embed para obter parcela + dados do financiamento em uma só viagem.
+// Evita produto cartesiano e não depende de montar Map em memória.
 export async function backfillParcelasPendentes(clienteId: string): Promise<BackfillReport> {
   const report: BackfillReport = { processadas: 0, criadas: 0, puladas: 0, erros: 0 };
 
-  const { data: fins, error: fErr } = await supabase
-    .from('financiamentos')
-    .select('id, cliente_id, fazenda_id, tipo_financiamento, status')
-    .eq('cliente_id', clienteId)
-    .eq('status', 'ativo');
-  if (fErr || !fins || fins.length === 0) {
-    if (fErr) console.error('[backfillParcelas] erro financiamentos:', fErr);
-    return report;
-  }
-
-  const finMap = new Map<string, FinanciamentoInput>();
-  for (const f of fins) {
-    finMap.set(f.id, {
-      id: f.id,
-      cliente_id: f.cliente_id,
-      fazenda_id: (f as any).fazenda_id ?? null,
-      tipo_financiamento: f.tipo_financiamento as 'pecuaria' | 'agricultura',
-    });
-  }
-
-  const { data: parcs, error: pErr } = await supabase
+  const { data, error } = await supabase
     .from('financiamento_parcelas')
-    .select('id, financiamento_id, cliente_id, data_vencimento, valor_principal, valor_juros, status, lancamento_id')
+    .select('id, financiamento_id, cliente_id, data_vencimento, valor_principal, valor_juros, status, lancamento_id, financiamentos!inner(id, cliente_id, fazenda_id, tipo_financiamento, descricao, numero_contrato, credor_id, status)')
     .eq('cliente_id', clienteId)
     .eq('status', 'pendente')
     .is('lancamento_id', null);
-  if (pErr || !parcs || parcs.length === 0) {
-    if (pErr) console.error('[backfillParcelas] erro parcelas:', pErr);
+
+  if (error) {
+    console.error('[backfillParcelas] erro na query:', error);
     return report;
   }
+  if (!data || data.length === 0) return report;
 
-  for (const p of parcs) {
+  for (const row of data as any[]) {
     report.processadas++;
-    const fin = finMap.get(p.financiamento_id);
-    if (!fin) { report.puladas++; continue; }
+    const fin = row.financiamentos;
+    // Só ativos
+    if (!fin || fin.status !== 'ativo') { report.puladas++; continue; }
+    if (fin.tipo_financiamento !== 'pecuaria' && fin.tipo_financiamento !== 'agricultura') {
+      report.puladas++; continue;
+    }
+
     const parcela: ParcelaInput = {
-      id: p.id,
-      cliente_id: p.cliente_id,
-      fazenda_id: (p as any).fazenda_id ?? null,
-      data_vencimento: p.data_vencimento,
-      valor_principal: Number(p.valor_principal) || 0,
-      valor_juros: Number(p.valor_juros) || 0,
-      lancamento_id: p.lancamento_id,
+      id: row.id,
+      cliente_id: row.cliente_id,
+      fazenda_id: fin.fazenda_id ?? null,
+      data_vencimento: row.data_vencimento,
+      valor_principal: Number(row.valor_principal) || 0,
+      valor_juros: Number(row.valor_juros) || 0,
+      lancamento_id: row.lancamento_id,
     };
+    const financiamento: FinanciamentoInput = {
+      id: fin.id,
+      cliente_id: fin.cliente_id,
+      fazenda_id: fin.fazenda_id ?? null,
+      tipo_financiamento: fin.tipo_financiamento,
+      descricao: fin.descricao ?? null,
+      numero_contrato: fin.numero_contrato ?? null,
+      credor_id: fin.credor_id ?? null,
+    };
+
     try {
-      const result = await criarMirrorParcela(supabase as any, parcela, fin);
+      const result = await criarMirrorParcela(supabase as any, parcela, financiamento);
       if (result.lancamentoIdPrincipal || result.lancamentoIdJuros) {
         report.criadas++;
       } else {
@@ -71,7 +73,7 @@ export async function backfillParcelasPendentes(clienteId: string): Promise<Back
       }
     } catch (e: any) {
       report.erros++;
-      console.error('[backfillParcelas] erro parcela', p.id, e);
+      console.error('[backfillParcelas] erro parcela', row.id, e);
     }
   }
 
