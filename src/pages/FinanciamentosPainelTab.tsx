@@ -113,33 +113,56 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* SEÇÃO 1 — KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <Card>
-              <CardContent className="p-3 space-y-0.5">
+              <CardContent className="p-3 space-y-1">
                 <p className="text-[10px] uppercase text-muted-foreground">Saldo devedor</p>
-                <p className="text-base font-bold tabular-nums">{fmt(kpis.saldoDevedor.total)}</p>
-                <p className="text-[10px] text-muted-foreground">Pec: {fmtCompact(kpis.saldoDevedor.pecuaria)} · Agri: {fmtCompact(kpis.saldoDevedor.agricultura)}</p>
+                <p className="text-base font-bold tabular-nums">{fmt(kpis.saldoDevedor.total.total)}</p>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Principal</span><span>{fmt(kpis.saldoDevedor.total.principal)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Juros</span><span>{fmt(kpis.saldoDevedor.total.juros)}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground pt-0.5 border-t">
+                  Pec: {fmtCompact(kpis.saldoDevedor.pecuaria.total)} · Agri: {fmtCompact(kpis.saldoDevedor.agricultura.total)}
+                </p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3 space-y-0.5">
+              <CardContent className="p-3 space-y-1">
                 <p className="text-[10px] uppercase text-muted-foreground">Amortizado em {ano}</p>
-                <p className="text-base font-bold tabular-nums text-emerald-600">{fmt(kpis.amortizadoNoAno)}</p>
-                <p className="text-[10px] text-muted-foreground">Principal das parcelas pagas</p>
+                <p className="text-base font-bold tabular-nums text-emerald-600">{fmt(kpis.amortizadoNoAno.total)}</p>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Principal</span><span>{fmt(kpis.amortizadoNoAno.principal)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Juros</span><span>{fmt(kpis.amortizadoNoAno.juros)}</span>
+                </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3 space-y-0.5">
+              <CardContent className="p-3 space-y-1">
                 <p className="text-[10px] uppercase text-muted-foreground">A amortizar em {ano}</p>
-                <p className="text-base font-bold tabular-nums text-amber-600">{fmt(kpis.aAmortizarNoAno)}</p>
-                <p className="text-[10px] text-muted-foreground">Principal pendente do ano</p>
+                <p className="text-base font-bold tabular-nums text-amber-600">{fmt(kpis.aAmortizarNoAno.total)}</p>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Principal</span><span>{fmt(kpis.aAmortizarNoAno.principal)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Juros</span><span>{fmt(kpis.aAmortizarNoAno.juros)}</span>
+                </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-3 space-y-0.5">
+              <CardContent className="p-3 space-y-1">
                 <p className="text-[10px] uppercase text-muted-foreground">Anos seguintes</p>
-                <p className="text-base font-bold tabular-nums">{fmt(kpis.totalAnosSeguintes)}</p>
-                <p className="text-[10px] text-muted-foreground">Principal após dez/{ano}</p>
+                <p className="text-base font-bold tabular-nums">{fmt(kpis.totalAnosSeguintes.total)}</p>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Principal</span><span>{fmt(kpis.totalAnosSeguintes.principal)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground tabular-nums">
+                  <span>Juros</span><span>{fmt(kpis.totalAnosSeguintes.juros)}</span>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -211,7 +234,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                     </ResponsiveContainer>
                   </div>
                 )}
-                <p className="text-center text-[10px] text-muted-foreground">Total pendente: <strong>{fmt(kpis.saldoDevedor.total)}</strong></p>
+                <p className="text-center text-[10px] text-muted-foreground">Total pendente: <strong>{fmt(kpis.saldoDevedor.total.total)}</strong></p>
               </CardContent>
             </Card>
 

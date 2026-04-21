@@ -76,13 +76,19 @@ export interface ParcelaEnriquecida {
   status: string;
 }
 
+export interface Breakdown {
+  principal: number;
+  juros: number;
+  total: number;
+}
+
 export interface PainelData {
   loading: boolean;
   kpis: {
-    saldoDevedor: { total: number; pecuaria: number; agricultura: number };
-    amortizadoNoAno: number;
-    aAmortizarNoAno: number;
-    totalAnosSeguintes: number;
+    saldoDevedor: { total: Breakdown; pecuaria: Breakdown; agricultura: Breakdown };
+    amortizadoNoAno: Breakdown;
+    aAmortizarNoAno: Breakdown;
+    totalAnosSeguintes: Breakdown;
     overdueCount: number;
   };
   barrasMensais: BarraMes[];
@@ -176,11 +182,12 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
     for (const f of financiamentos) finById.set(f.id, f);
 
     // ── KPIs ──
-    const saldoPec = { total: 0 };
-    const saldoAgri = { total: 0 };
-    let amortizadoNoAno = 0;
-    let aAmortizarNoAno = 0;
-    let totalAnosSeguintes = 0;
+    const mkBreakdown = (): Breakdown => ({ principal: 0, juros: 0, total: 0 });
+    const saldoPec = mkBreakdown();
+    const saldoAgri = mkBreakdown();
+    const amortizado = mkBreakdown();
+    const aAmortizar = mkBreakdown();
+    const anosSeguintes = mkBreakdown();
     let overdueCount = 0;
 
     // Mensal series (do ano filtrado)
@@ -231,8 +238,14 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
 
       // Saldo devedor total (só pendentes, independente do ano)
       if (isPendente) {
-        if (fin.tipo_financiamento === 'pecuaria') saldoPec.total += valorTotal;
-        else if (fin.tipo_financiamento === 'agricultura') saldoAgri.total += valorTotal;
+        const bucket = fin.tipo_financiamento === 'pecuaria' ? saldoPec
+          : fin.tipo_financiamento === 'agricultura' ? saldoAgri
+            : null;
+        if (bucket) {
+          bucket.principal += principal;
+          bucket.juros += juros;
+          bucket.total += valorTotal;
+        }
 
         credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
 
@@ -243,11 +256,22 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
 
         if (venc < hojeISO) overdueCount++;
 
-        if (isThisYear) aAmortizarNoAno += principal;
-        else if (venc > anoFim) totalAnosSeguintes += principal;
+        if (isThisYear) {
+          aAmortizar.principal += principal;
+          aAmortizar.juros += juros;
+          aAmortizar.total += valorTotal;
+        } else if (venc > anoFim) {
+          anosSeguintes.principal += principal;
+          anosSeguintes.juros += juros;
+          anosSeguintes.total += valorTotal;
+        }
       }
 
-      if (isPago && pagoThisYear) amortizadoNoAno += principal;
+      if (isPago && pagoThisYear) {
+        amortizado.principal += principal;
+        amortizado.juros += juros;
+        amortizado.total += valorTotal;
+      }
 
       if (isThisYear) {
         const mesIdx = Number(venc.substring(5, 7)) - 1;
@@ -303,7 +327,11 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
         };
       });
 
-    const saldoTotal = saldoPec.total + saldoAgri.total;
+    const saldoTotal: Breakdown = {
+      principal: saldoPec.principal + saldoAgri.principal,
+      juros: saldoPec.juros + saldoAgri.juros,
+      total: saldoPec.total + saldoAgri.total,
+    };
 
     const dividaPorCredor: DividaCredor[] = Array.from(credorMap.entries())
       .map(([credor, valor]) => ({ credor, valor }))
@@ -325,10 +353,10 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
 
     return {
       kpis: {
-        saldoDevedor: { total: saldoTotal, pecuaria: saldoPec.total, agricultura: saldoAgri.total },
-        amortizadoNoAno,
-        aAmortizarNoAno,
-        totalAnosSeguintes,
+        saldoDevedor: { total: saldoTotal, pecuaria: saldoPec, agricultura: saldoAgri },
+        amortizadoNoAno: amortizado,
+        aAmortizarNoAno: aAmortizar,
+        totalAnosSeguintes: anosSeguintes,
         overdueCount,
       },
       barrasMensais: mensal,
