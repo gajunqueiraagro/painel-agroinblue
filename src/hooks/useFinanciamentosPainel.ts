@@ -26,6 +26,7 @@ interface FinanciamentoRow {
   credor_id: string | null;
   credor_nome: string;
   status: string;
+  data_contrato: string | null;
 }
 
 export interface BarraMes {
@@ -92,10 +93,10 @@ export interface EvolucaoDividaBar {
 export interface HistoricoAlavancagemPoint {
   label: string;
   ano: number;
-  amortizado: number;
-  meta?: number;
+  amortizado: number; // reusado como 'endividamento pecuaria' no chart
+  meta?: number;      // reusado como 'valor do rebanho' no chart
   saldoDevedor: number;
-  alavancagem: number; // %
+  alavancagem: number | null; // % — null quando não há dado de rebanho
 }
 
 export interface PainelData {
@@ -134,7 +135,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     queryFn: async () => {
       let q = supabase
         .from('financiamentos')
-        .select('id, cliente_id, descricao, numero_contrato, tipo_financiamento, credor_id, status, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
+        .select('id, cliente_id, descricao, numero_contrato, tipo_financiamento, credor_id, status, data_contrato, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
         .eq('cliente_id', clienteId!)
         .eq('status', 'ativo');
       if (tipoFiltro !== 'todos') q = q.eq('tipo_financiamento', tipoFiltro);
@@ -149,6 +150,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
         credor_id: f.credor_id ?? null,
         credor_nome: f.financeiro_fornecedores?.nome ?? '—',
         status: f.status,
+        data_contrato: f.data_contrato ?? null,
       }));
     },
   });
@@ -168,24 +170,27 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     },
   });
 
-  const { data: valorRebanho = 0, isLoading: loadingReb } = useQuery({
-    queryKey: ['painel-valor-rebanho', clienteId],
+  const { data: rebanhoSnapshots = [], isLoading: loadingReb } = useQuery({
+    queryKey: ['painel-rebanho-snapshots', clienteId],
     enabled: !!clienteId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .eq('cliente_id', clienteId!)
-        .order('ano_mes', { ascending: false })
-        .limit(50);
+        .order('ano_mes', { ascending: false });
       if (error) throw error;
-      if (!data || data.length === 0) return 0;
-      const maxAnoMes = data[0].ano_mes;
-      return data
-        .filter(r => r.ano_mes === maxAnoMes)
-        .reduce((s, r) => s + Number(r.valor_total || 0), 0);
+      // Agrega valor_total por ano_mes (múltiplas fazendas)
+      const agg = new Map<string, number>();
+      for (const r of data ?? []) {
+        agg.set(r.ano_mes, (agg.get(r.ano_mes) || 0) + (Number(r.valor_total) || 0));
+      }
+      return Array.from(agg.entries())
+        .map(([ano_mes, total]) => ({ ano_mes, total }))
+        .sort((a, b) => b.ano_mes.localeCompare(a.ano_mes));
     },
   });
+  const valorRebanho = rebanhoSnapshots.length > 0 ? rebanhoSnapshots[0].total : 0;
 
   const loading = loadingFin || loadingParc || loadingReb;
 
@@ -356,8 +361,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       .slice(0, 8);
 
     const pizzaVencimentos: SliceVencimento[] = [
-      { nome: `Curto Prazo (${ano}–${ano + 1})`, valor: curtoPrazo, color: '#EAB308' },
-      { nome: `Longo Prazo (${ano + 2}+)`, valor: longoPrazo, color: '#EF4444' },
+      { nome: `Curto Prazo (${ano}–${ano + 1})`, valor: curtoPrazo, color: '#EF4444' },
+      { nome: `Longo Prazo (${ano + 2}+)`, valor: longoPrazo, color: '#EAB308' },
     ].filter(s => s.valor > 0);
 
     // ── Evolução da Dívida: 7 barras (Ini + 5 anos + Demais) — só Principal pendente ──
@@ -385,54 +390,56 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       { label: 'Demais', valor: demais, cor: '#60a5fa', anoRef: null },
     ];
 
-    // ── Histórico de Alavancagem: por ano, usar mesRef (default Mar) como corte ──
+    // ── Histórico de Alavancagem (apenas pecuária, snapshots anuais) ──
+    // Para cada ano entre minAno (data_contrato mais antiga dos financiamentos pec) e anoFiltro:
+    //   endividamento = sum principal de parcelas onde fin.data_contrato <= refDate E p.data_vencimento >= refDate E tipo=pecuaria
+    //   rebanho = max ano_mes <= refMês mais próximo em rebanhoSnapshots
+    //   alavancagem = endividamento / rebanho * 100
     const refMonth = mesRef === 'todos' ? 3 : mesRef;
     const refMonthLabel = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][refMonth - 1];
-    // Descobre primeiro ano dos dados
-    const anosPresentes = new Set<number>();
-    for (const p of parcelas) {
-      const y = Number(p.data_vencimento.substring(0, 4));
-      if (!Number.isNaN(y)) anosPresentes.add(y);
-    }
-    const anosOrdenados = Array.from(anosPresentes).filter(y => y <= ano).sort((a, b) => a - b);
-    const amortizadoPorAno: Record<number, number> = {};
-    for (const p of parcelas) {
-      if (p.status !== 'pago') continue;
-      const ref = p.data_pagamento || p.data_vencimento;
-      const y = Number(ref.substring(0, 4));
-      if (!Number.isNaN(y)) amortizadoPorAno[y] = (amortizadoPorAno[y] || 0) + (Number(p.valor_principal) || 0);
-    }
-    const saldoAposRef = (yRef: number, mRef: number): number => {
-      const cutISO = `${yRef}-${String(mRef).padStart(2, '0')}-01`;
-      let s = 0;
-      for (const p of parcelas) {
-        if (!finById.has(p.financiamento_id)) continue;
-        const refPag = p.data_pagamento || p.data_vencimento;
-        if (p.status === 'pendente' && p.data_vencimento >= cutISO) s += (Number(p.valor_principal) || 0);
-        else if (p.status === 'pago' && refPag >= cutISO) s += (Number(p.valor_principal) || 0);
+    const refMonthPadded = String(refMonth).padStart(2, '0');
+
+    const financiamentosPec = financiamentos.filter(f => f.tipo_financiamento === 'pecuaria');
+    let minAnoPec = ano;
+    for (const f of financiamentosPec) {
+      if (f.data_contrato) {
+        const y = Number(f.data_contrato.substring(0, 4));
+        if (!Number.isNaN(y) && y < minAnoPec) minAnoPec = y;
       }
-      return s;
-    };
-    const historicoAlavancagem: HistoricoAlavancagemPoint[] = anosOrdenados.map(y => {
-      const saldoDev = saldoAposRef(y, refMonth);
-      return {
+    }
+
+    const finPecById = new Map(financiamentosPec.map(f => [f.id, f] as const));
+
+    const historicoAlavancagem: HistoricoAlavancagemPoint[] = [];
+    for (let y = minAnoPec; y <= ano; y++) {
+      const refDate = `${y}-${refMonthPadded}-01`;
+      const refAnoMes = `${y}-${refMonthPadded}`;
+
+      // Endividamento: parcelas onde fin ativa antes da refDate E não venceu ainda
+      let endividamento = 0;
+      for (const p of parcelas) {
+        const fin = finPecById.get(p.financiamento_id);
+        if (!fin) continue;
+        const dataContrato = fin.data_contrato;
+        if (!dataContrato || dataContrato > refDate) continue;
+        if (p.data_vencimento < refDate) continue;
+        endividamento += Number(p.valor_principal) || 0;
+      }
+
+      // Rebanho: último snapshot com ano_mes <= refAnoMes
+      const snap = rebanhoSnapshots.find(r => r.ano_mes <= refAnoMes);
+      const rebanho = snap?.total ?? 0;
+      const alavancagem = rebanho > 0 ? (endividamento / rebanho) * 100 : null;
+
+      historicoAlavancagem.push({
         label: `${refMonthLabel}/${String(y).slice(2)}`,
         ano: y,
-        amortizado: amortizadoPorAno[y] || 0,
-        saldoDevedor: saldoDev,
-        alavancagem: valorRebanho > 0 ? (saldoDev / valorRebanho) * 100 : 0,
-      };
-    });
-    // Adiciona barra META no final (ano filtrado)
-    const saldoMetaRef = saldoAposRef(ano, refMonth);
-    historicoAlavancagem.push({
-      label: 'META',
-      ano: ano,
-      amortizado: 0,
-      meta: aAmortizar.principal,
-      saldoDevedor: saldoMetaRef,
-      alavancagem: valorRebanho > 0 ? (saldoMetaRef / valorRebanho) * 100 : 0,
-    });
+        amortizado: endividamento,
+        saldoDevedor: endividamento,
+        meta: rebanho > 0 ? rebanho : undefined,
+        alavancagem,
+      });
+    }
 
     const alavancagemPerc = valorRebanho > 0 ? (saldoPec.total / valorRebanho) * 100 : 0;
     const alavancagemStatus: 'saudavel' | 'atencao' | 'critico' | 'indisponivel' =
@@ -463,7 +470,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       evolucaoDivida,
       historicoAlavancagem,
     };
-  }, [financiamentos, parcelas, valorRebanho, ano, mesRef]);
+  }, [financiamentos, parcelas, valorRebanho, rebanhoSnapshots, ano, mesRef]);
 
   return { loading, ...derived };
 }

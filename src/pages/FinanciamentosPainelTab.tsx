@@ -258,9 +258,9 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
             </Card>
           </div>
 
-          {/* LINHA 4 — grid 2 cols: Alavancagem card | Histórico */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Card>
+          {/* LINHA 4 — grid 4 cols: Alavancagem card (1/4) | Histórico (3/4) */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <Card className="md:col-span-1">
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-xs font-semibold">Alavancagem pecuária</p>
@@ -301,25 +301,28 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="md:col-span-3">
               <CardContent className="p-3">
                 <p className="text-xs font-semibold mb-1">Histórico de alavancagem</p>
-                <p className="text-[10px] text-muted-foreground mb-1">Barras: amortização anual · Linha: % alavancagem</p>
+                <p className="text-[10px] text-muted-foreground mb-1">Barras agrupadas: endividamento pecuária vs valor do rebanho · Linha: % alavancagem</p>
                 {historicoAlavancagem.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Sem histórico</p>
                 ) : (
-                  <div style={{ width: '100%', height: 220 }}>
+                  <div style={{ width: '100%', height: 240 }}>
                     <ResponsiveContainer>
                       <ComposedChart data={historicoAlavancagem}>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="left" tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
                         <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Number(v).toFixed(0)}%`} tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(v: number, name: string) => name === 'Alavancagem' ? `${Number(v).toFixed(1)}%` : fmt(Number(v))} contentStyle={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(v: number, name: string) => name === 'Alavancagem (%)' ? `${Number(v).toFixed(1)}%` : fmt(Number(v))}
+                          contentStyle={{ fontSize: 11 }}
+                        />
                         <Legend wrapperStyle={{ fontSize: 10 }} />
-                        <Bar yAxisId="left" dataKey="amortizado" fill="#1e3a8a" name="Amortizado" />
-                        <Bar yAxisId="left" dataKey="meta" fill="#f97316" name="Meta" />
-                        <Line yAxisId="right" type="monotone" dataKey="alavancagem" stroke="#dc2626" strokeWidth={2} name="Alavancagem" dot={{ r: 3 }} />
+                        <Bar yAxisId="left" dataKey="amortizado" fill="#1e3a8a" name="Endividamento Pecuária" />
+                        <Bar yAxisId="left" dataKey="meta" fill="#86efac" name="Valor do Rebanho" />
+                        <Line yAxisId="right" type="monotone" dataKey="alavancagem" stroke="#dc2626" strokeWidth={2} name="Alavancagem (%)" dot={{ r: 3 }} connectNulls={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
