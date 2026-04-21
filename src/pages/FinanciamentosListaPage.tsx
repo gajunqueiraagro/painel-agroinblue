@@ -1,7 +1,5 @@
 import { ArrowLeft, Plus, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -140,9 +138,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   }
 
   return (
-    <div className="min-h-screen bg-background max-w-5xl mx-auto">
-      {/* Bloco sticky: titulo + filtros + totalizadores inline */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b shadow-sm px-4 pt-4 pb-2 space-y-2">
+    <div className="w-full max-w-5xl mx-auto flex flex-col bg-background" style={{ height: 'calc(100vh - 60px)' }}>
+      {/* Cabeçalho fixo: título + filtros + totalizadores inline */}
+      <div className="shrink-0 bg-background border-b shadow-sm px-4 pt-4 pb-2 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onVoltar && (
@@ -191,80 +189,73 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         </div>
       </div>
 
-      <div className="px-4 pt-4 pb-20">
-
-      {/* Tabela */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground p-4">Carregando…</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-4">Nenhum financiamento encontrado.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="sticky top-[96px] z-10 bg-background">
-                  <TableRow>
-                    <TableHead className="bg-background">Descrição</TableHead>
-                    <TableHead className="bg-background">Contrato</TableHead>
-                    <TableHead className="bg-background">Data Contrato</TableHead>
-                    <TableHead className="bg-background">Tipo</TableHead>
-                    <TableHead className="bg-background">Credor</TableHead>
-                    <TableHead className="bg-background text-right">Valor total</TableHead>
-                    <TableHead className="bg-background text-center">Parcelas</TableHead>
-                    <TableHead className="bg-background">Próx. venc.</TableHead>
-                    <TableHead className="bg-background">Status</TableHead>
-                    <TableHead className="bg-background" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map(f => (
-                    <TableRow key={f.id} className="text-xs">
-                      <TableCell className="max-w-[180px] truncate py-1.5">{f.descricao}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground py-1.5">{f.numero_contrato || '—'}</TableCell>
-                      <TableCell className="tabular-nums py-1.5">
-                        {f.data_contrato
-                          ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yyyy')
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                          {f.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[120px] truncate py-1.5">{f.credor_nome}</TableCell>
-                      <TableCell className="text-right tabular-nums py-1.5">{fmt(f.valor_total)}</TableCell>
-                      <TableCell className="text-center tabular-nums py-1.5">
-                        {f.parcelas_pagas}/{f.total_parcelas}
-                      </TableCell>
-                      <TableCell className="tabular-nums py-1.5">
-                        {f.prox_vencimento
-                          ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yyyy')
-                          : '—'}
-                      </TableCell>
-                      <TableCell className="py-1.5">
-                        <span className={`inline-flex items-center rounded-full text-xs px-2 py-0.5 font-semibold ${statusColor[f.status] ?? ''}`}>
-                          {f.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onDetalhe?.(f.id)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Área de rolagem com tabela — thead sticky DENTRO deste container */}
+      <div className="flex-1 overflow-auto">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground p-4">Carregando…</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground p-4">Nenhum financiamento encontrado.</p>
+        ) : (
+          <Table>
+            <TableHeader className="sticky top-0 z-10">
+              <TableRow className="bg-background">
+                <TableHead className="bg-background">Descrição</TableHead>
+                <TableHead className="bg-background">Contrato</TableHead>
+                <TableHead className="bg-background">Data Contrato</TableHead>
+                <TableHead className="bg-background">Tipo</TableHead>
+                <TableHead className="bg-background">Credor</TableHead>
+                <TableHead className="bg-background text-right">Valor total</TableHead>
+                <TableHead className="bg-background text-center">Parcelas</TableHead>
+                <TableHead className="bg-background">Próx. venc.</TableHead>
+                <TableHead className="bg-background">Status</TableHead>
+                <TableHead className="bg-background" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(f => (
+                <TableRow key={f.id} className="text-xs">
+                  <TableCell className="max-w-[180px] truncate py-1">{f.descricao}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground py-1">{f.numero_contrato || '—'}</TableCell>
+                  <TableCell className="tabular-nums py-1">
+                    {f.data_contrato
+                      ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yyyy')
+                      : '—'}
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className={`inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-medium text-white ${f.tipo_financiamento === 'pecuaria' ? 'bg-green-700' : 'bg-blue-600'}`}>
+                      {f.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-[120px] truncate py-1">{f.credor_nome}</TableCell>
+                  <TableCell className="text-right tabular-nums py-1">{fmt(f.valor_total)}</TableCell>
+                  <TableCell className="text-center tabular-nums py-1">
+                    {f.parcelas_pagas}/{f.total_parcelas}
+                  </TableCell>
+                  <TableCell className="tabular-nums py-1">
+                    {f.prox_vencimento
+                      ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yyyy')
+                      : '—'}
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <span className={`inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-semibold ${statusColor[f.status] ?? ''}`}>
+                      {f.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => onDetalhe?.(f.id)}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );
