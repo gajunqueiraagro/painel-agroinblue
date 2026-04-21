@@ -62,6 +62,20 @@ export interface ProximaParcela {
   vencendo: boolean; // próximos 30 dias
 }
 
+export interface ParcelaEnriquecida {
+  parcela_id: string;
+  financiamento_id: string;
+  vencimento: string;
+  data_pagamento: string | null;
+  descricao: string;
+  tipo: string;
+  credor: string;
+  principal: number;
+  juros: number;
+  total: number;
+  status: string;
+}
+
 export interface PainelData {
   loading: boolean;
   kpis: {
@@ -81,6 +95,7 @@ export interface PainelData {
     status: 'saudavel' | 'atencao' | 'critico' | 'indisponivel';
   };
   proximasParcelas: ProximaParcela[];
+  parcelasEnriquecidas: ParcelaEnriquecida[];
 }
 
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -183,6 +198,9 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
     // Próximas parcelas
     const pendentes: ProximaParcela[] = [];
 
+    // Parcelas enriquecidas (usadas para drilldown por mês na UI)
+    const parcelasEnriquecidas: ParcelaEnriquecida[] = [];
+
     for (const p of parcelas) {
       const fin = finById.get(p.financiamento_id);
       if (!fin) continue;
@@ -193,7 +211,23 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
       const isPago = p.status === 'pago';
       const venc = p.data_vencimento;
       const isThisYear = venc >= anoInicio && venc <= anoFim;
-      const pagoThisYear = !!(p.data_pagamento && p.data_pagamento >= anoInicio && p.data_pagamento <= anoFim);
+      // Se data_pagamento for NULL, usa data_vencimento como fallback para determinar o ano do pagamento
+      const refPagamento = p.data_pagamento || p.data_vencimento;
+      const pagoThisYear = !!(refPagamento && refPagamento >= anoInicio && refPagamento <= anoFim);
+
+      parcelasEnriquecidas.push({
+        parcela_id: p.id,
+        financiamento_id: p.financiamento_id,
+        vencimento: venc,
+        data_pagamento: p.data_pagamento,
+        descricao: fin.descricao,
+        tipo: fin.tipo_financiamento,
+        credor: fin.credor_nome,
+        principal,
+        juros,
+        total: valorTotal,
+        status: p.status,
+      });
 
       // Saldo devedor total (só pendentes, independente do ano)
       if (isPendente) {
@@ -307,6 +341,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
         status: alavancagemStatus,
       },
       proximasParcelas,
+      parcelasEnriquecidas,
     };
   }, [financiamentos, parcelas, valorRebanho, ano]);
 

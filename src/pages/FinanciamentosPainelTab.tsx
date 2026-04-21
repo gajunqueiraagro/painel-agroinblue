@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { ArrowLeft, AlertTriangle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ArrowLeft, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
   PieChart, Pie, Cell,
@@ -13,7 +14,10 @@ import { useFinanciamentosPainel, type TipoFin } from '@/hooks/useFinanciamentos
 
 interface Props {
   onVoltar?: () => void;
+  onAbrirFinanciamento?: (id: string) => void;
 }
+
+const MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const fmtCompact = (v: number) => {
@@ -22,13 +26,36 @@ const fmtCompact = (v: number) => {
   return fmt(v);
 };
 
-export default function FinanciamentosPainelTab({ onVoltar }: Props = {}) {
+export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento }: Props = {}) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear);
   const [tipo, setTipo] = useState<TipoFin>('todos');
+  const [mesSelecionado, setMesSelecionado] = useState<number | null>(null);
 
   const painel = useFinanciamentosPainel(ano, tipo);
-  const { kpis, barrasMensais, pizzaVencimentos, dividaPorCredor, alavancagem, proximasParcelas } = painel;
+  const { kpis, barrasMensais, pizzaVencimentos, dividaPorCredor, alavancagem, proximasParcelas, parcelasEnriquecidas } = painel;
+
+  const parcelasDoMes = useMemo(() => {
+    if (!mesSelecionado) return [];
+    const mm = String(mesSelecionado).padStart(2, '0');
+    const prefix = `${ano}-${mm}`;
+    return parcelasEnriquecidas
+      .filter(p => p.vencimento.startsWith(prefix))
+      .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+  }, [mesSelecionado, parcelasEnriquecidas, ano]);
+
+  const statusBadgeClass = (status: string, vencimento: string) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (status === 'pago') return 'bg-emerald-100 text-emerald-800';
+    if (status === 'pendente' && vencimento < hoje) return 'bg-red-100 text-red-800';
+    return 'bg-amber-100 text-amber-800';
+  };
+  const statusLabel = (status: string, vencimento: string) => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    if (status === 'pago') return 'pago';
+    if (status === 'pendente' && vencimento < hoje) return 'vencido';
+    return status;
+  };
 
   const anosDisp = [currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
@@ -117,19 +144,32 @@ export default function FinanciamentosPainelTab({ onVoltar }: Props = {}) {
             </Card>
           </div>
 
-          {/* SEÇÃO 2 — Barras Mensais */}
+          {/* SEÇÃO 2 — Barras Mensais (clicável) */}
           <Card>
             <CardContent className="p-3">
-              <p className="text-xs font-semibold mb-2">Parcelas por mês em {ano}</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
+                <p className="text-[10px] text-muted-foreground">Clique em uma barra para ver as parcelas</p>
+              </div>
               <div style={{ width: '100%', height: 260 }}>
                 <ResponsiveContainer>
-                  <BarChart data={barrasMensais}>
+                  <BarChart
+                    data={barrasMensais}
+                    onClick={(e: any) => {
+                      const idx = e?.activeTooltipIndex;
+                      if (typeof idx === 'number' && idx >= 0 && idx < 12) {
+                        setMesSelecionado(idx + 1);
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
                     <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
                     <Tooltip
                       formatter={(v: number) => fmt(Number(v))}
                       contentStyle={{ fontSize: 11 }}
+                      cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="principalPago" stackId="a" fill="#1e3a8a" name="Principal (pago)" />
@@ -292,6 +332,75 @@ export default function FinanciamentosPainelTab({ onVoltar }: Props = {}) {
           </Card>
         </div>
       )}
+
+      {/* Drawer: parcelas do mês clicado */}
+      <Sheet open={mesSelecionado !== null} onOpenChange={(v) => { if (!v) setMesSelecionado(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              Parcelas — {mesSelecionado ? `${MESES_NOME[mesSelecionado - 1]} / ${ano}` : ''}
+            </SheetTitle>
+            <SheetDescription>
+              {parcelasDoMes.length} parcela{parcelasDoMes.length !== 1 ? 's' : ''} encontrada{parcelasDoMes.length !== 1 ? 's' : ''} no filtro atual.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            {parcelasDoMes.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-2">Nenhuma parcela neste mês.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="py-1.5">Venc.</TableHead>
+                    <TableHead className="py-1.5">Financiamento</TableHead>
+                    <TableHead className="py-1.5">Tipo</TableHead>
+                    <TableHead className="py-1.5">Credor</TableHead>
+                    <TableHead className="text-right py-1.5">Principal</TableHead>
+                    <TableHead className="text-right py-1.5">Juros</TableHead>
+                    <TableHead className="text-right py-1.5">Total</TableHead>
+                    <TableHead className="py-1.5">Status</TableHead>
+                    <TableHead className="py-1.5" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parcelasDoMes.map(p => (
+                    <TableRow key={p.parcela_id} className="text-xs">
+                      <TableCell className="py-1 tabular-nums">{format(new Date(p.vencimento + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
+                      <TableCell className="py-1 max-w-[180px] truncate">{p.descricao}</TableCell>
+                      <TableCell className="py-1">
+                        <span className={`inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-medium text-white ${p.tipo === 'pecuaria' ? 'bg-green-700' : 'bg-blue-600'}`}>
+                          {p.tipo === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-1 max-w-[120px] truncate">{p.credor}</TableCell>
+                      <TableCell className="text-right tabular-nums py-1">{fmt(p.principal)}</TableCell>
+                      <TableCell className="text-right tabular-nums py-1">{fmt(p.juros)}</TableCell>
+                      <TableCell className="text-right tabular-nums py-1 font-semibold">{fmt(p.total)}</TableCell>
+                      <TableCell className="py-1">
+                        <span className={`inline-flex items-center rounded-full text-[10px] px-2 py-0.5 font-semibold ${statusBadgeClass(p.status, p.vencimento)}`}>
+                          {statusLabel(p.status, p.vencimento)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-1">
+                        {onAbrirFinanciamento && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[10px] gap-1"
+                            onClick={() => { onAbrirFinanciamento(p.financiamento_id); setMesSelecionado(null); }}
+                          >
+                            Ver contrato <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
