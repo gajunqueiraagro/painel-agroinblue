@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Plus, RefreshCw, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,13 +7,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
 import { useFinanciamentoCadastro, FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
+import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
 
 interface FinanciamentoCadastroProps {
   onVoltar?: () => void;
@@ -33,7 +32,6 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
     clienteId,
   } = useFinanciamentoCadastro();
 
-  const [credorOpen, setCredorOpen] = useState(false);
   const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
 
   const set = useCallback(
@@ -104,35 +102,13 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
             </div>
             <div>
               <Label className="text-xs">Credor</Label>
-              <Popover open={credorOpen} onOpenChange={setCredorOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
-                    {form.credor_id
-                      ? fornecedores.find(f => f.id === form.credor_id)?.nome
-                      : 'Selecionar credor...'}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0">
-                  <Command>
-                    <CommandInput placeholder="Buscar credor..." />
-                    <CommandEmpty>Nenhum credor encontrado.</CommandEmpty>
-                    <CommandList>
-                      <CommandGroup>
-                        {fornecedores.map(f => (
-                          <CommandItem
-                            key={f.id}
-                            value={f.nome}
-                            onSelect={() => { set('credor_id', f.id); setCredorOpen(false); }}
-                          >
-                            {f.nome}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              {clienteId && (
+                <CredorAutocomplete
+                  value={form.credor_id || ''}
+                  onChange={(id) => set('credor_id', id)}
+                  clienteId={clienteId}
+                />
+              )}
             </div>
           </div>
 

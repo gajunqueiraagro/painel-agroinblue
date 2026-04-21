@@ -15,6 +15,7 @@ interface FinanciamentoRow {
   id: string;
   descricao: string;
   numero_contrato: string | null;
+  data_contrato: string | null;
   tipo_financiamento: string;
   credor_id: string | null;
   valor_total: number;
@@ -46,7 +47,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
-  const [filtroStatus, setFiltroStatus] = useState('todos');
+  const [filtroStatus, setFiltroStatus] = useState('ativo');
   const [filtroTipo, setFiltroTipo] = useState('todos');
 
   /* ── Query principal ── */
@@ -93,6 +94,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           id: f.id,
           descricao: f.descricao,
           numero_contrato: f.numero_contrato ?? null,
+          data_contrato: f.data_contrato ?? null,
           tipo_financiamento: f.tipo_financiamento,
           credor_id: f.credor_id,
           valor_total: Number(f.valor_total),
@@ -186,6 +188,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   <TableRow>
                     <TableHead>Descrição</TableHead>
                     <TableHead>Contrato</TableHead>
+                    <TableHead>Data Contrato</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Credor</TableHead>
                     <TableHead className="text-right">Valor total</TableHead>
@@ -197,33 +200,39 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 </TableHeader>
                 <TableBody>
                   {filtered.map(f => (
-                    <TableRow key={f.id}>
-                      <TableCell className="max-w-[180px] truncate">{f.descricao}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{f.numero_contrato || '—'}</TableCell>
-                      <TableCell>
+                    <TableRow key={f.id} className="text-xs">
+                      <TableCell className="max-w-[180px] truncate py-2">{f.descricao}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground py-2">{f.numero_contrato || '—'}</TableCell>
+                      <TableCell className="tabular-nums py-2">
+                        {f.data_contrato
+                          ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yyyy')
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="py-2">
                         <Badge variant="secondary" className="text-[10px]">
                           {f.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate">{f.credor_nome}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(f.valor_total)}</TableCell>
-                      <TableCell className="text-center tabular-nums">
+                      <TableCell className="max-w-[120px] truncate py-2">{f.credor_nome}</TableCell>
+                      <TableCell className="text-right tabular-nums py-2">{fmt(f.valor_total)}</TableCell>
+                      <TableCell className="text-center tabular-nums py-2">
                         {f.parcelas_pagas}/{f.total_parcelas}
                       </TableCell>
-                      <TableCell className="tabular-nums">
+                      <TableCell className="tabular-nums py-2">
                         {f.prox_vencimento
                           ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yyyy')
                           : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-2">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor[f.status] ?? ''}`}>
                           {f.status}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1">
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
                           onClick={() => onDetalhe?.(f.id)}
                         >
                           <Eye className="h-4 w-4" />

@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
-import { ArrowLeft, Pencil, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
+import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
+import { ArrowLeft, Pencil, Trash2, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +47,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [parcelaBaixa, setParcelaBaixa] = useState<any>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   /* ── Financiamento ── */
   const { data: fin, isLoading: loadingFin } = useQuery({
@@ -145,6 +152,25 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     toast.success('Financiamento atualizado');
     setEditOpen(false);
     qc.invalidateQueries({ queryKey: ['financiamento-detalhe', id] });
+  };
+
+  const excluirFinanciamento = async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      await supabase.from('financiamento_parcelas').delete().eq('financiamento_id', id);
+      const { error } = await supabase.from('financiamentos').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Financiamento excluído');
+      qc.invalidateQueries({ queryKey: ['financiamentos-lista'] });
+      setConfirmDelete(false);
+      setEditOpen(false);
+      onVoltar?.();
+    } catch (e: any) {
+      toast.error('Erro ao excluir: ' + (e.message || e));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   /* ── Inline edit parcela ── */
@@ -374,12 +400,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">Credor</Label>
-                <Select value={editForm.credor_id} onValueChange={v => setEditForm(p => ({ ...p, credor_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {fornecedores.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {clienteId && (
+                  <CredorAutocomplete
+                    value={editForm.credor_id || ''}
+                    onChange={(credorId) => setEditForm(p => ({ ...p, credor_id: credorId }))}
+                    clienteId={clienteId}
+                  />
+                )}
               </div>
               <div>
                 <Label className="text-xs">Conta bancária</Label>
@@ -414,12 +441,44 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
               <Textarea value={editForm.observacao ?? ''} onChange={e => setEditForm(p => ({ ...p, observacao: e.target.value }))} rows={2} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
-            <Button onClick={saveEdit}>Salvar</Button>
+          <DialogFooter className="flex sm:justify-between gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="gap-1"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir contrato
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
+              <Button onClick={saveEdit}>Salvar</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir financiamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove permanentemente o contrato e todas as parcelas associadas. Não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={excluirFinanciamento}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Modal de baixa de parcela (P5) ── */}
       <ModalBaixaParcela
