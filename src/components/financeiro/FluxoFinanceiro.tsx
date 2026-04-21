@@ -582,13 +582,15 @@ function FluxoTable({
 
   type RenderItem =
     | { type: 'static'; row: RowDef }
-    | { type: 'tree'; node: TreeNode };
+    | { type: 'tree'; node: TreeNode }
+    | { type: 'separator' };
 
   const renderRows = useMemo((): RenderItem[] => {
     const result: RenderItem[] = [];
 
     // Saldo Inicial
     result.push({ type: 'static', row: ROWS_SUMMARY[0] });
+    result.push({ type: 'separator' });
 
     // Total Entradas
     result.push({ type: 'static', row: ROWS_SUMMARY[1] });
@@ -597,6 +599,7 @@ function FluxoTable({
         result.push({ type: 'tree', node });
       }
     }
+    result.push({ type: 'separator' });
 
     // Total Saídas
     result.push({ type: 'static', row: ROWS_SUMMARY[2] });
@@ -605,6 +608,7 @@ function FluxoTable({
         result.push({ type: 'tree', node });
       }
     }
+    result.push({ type: 'separator' });
 
     // Saldo Final + Acumulado
     result.push({ type: 'static', row: ROWS_SUMMARY[3] });
@@ -655,6 +659,13 @@ function FluxoTable({
 
         <tbody>
           {renderRows.map((item, rowIdx) => {
+            if (item.type === 'separator') {
+              return (
+                <tr key={`sep-${rowIdx}`}>
+                  <td colSpan={meses.length + 2} className="h-px" style={{ background: 'hsl(var(--border))' }} />
+                </tr>
+              );
+            }
             if (item.type === 'static') {
               const row = item.row;
               const nivel = row.nivel ?? 3;

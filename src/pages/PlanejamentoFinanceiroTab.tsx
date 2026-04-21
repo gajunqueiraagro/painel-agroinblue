@@ -512,14 +512,14 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                               {ajusteMeses.map((v, mesIdx) => (
                                 <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: (bloqueio.bloqueado || isProjeto) ? 'not-allowed' : undefined }} title={isProjeto ? 'Valor definido via Projetos de Investimento' : bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                                   {isGlobal || bloqueio.bloqueado || isProjeto ? (
-                                    <span className={`text-[8px] text-right block px-0.5 leading-tight ${(bloqueio.bloqueado || isProjeto) ? 'opacity-30' : ''}`}>{(bloqueio.bloqueado || isProjeto) ? '–' : fmtCompact(v)}</span>
+                                    <span className={`text-[8px] text-right block px-0.5 leading-tight ${isProjeto ? 'opacity-30' : bloqueio.bloqueado ? 'opacity-60' : ''}`}>{fmtCompact(v)}</span>
                                   ) : (
                                     <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
                                   )}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
-                                {bloqueio.bloqueado ? '–' : fmtCompact(ajusteTotal)}
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-60' : ''}`} style={{ background: BG_MUTED }}>
+                                {fmtCompact(ajusteTotal)}
                               </td>
                             </tr>
                             {/* Total */}
@@ -528,12 +528,12 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                                 {sub.subcentro}
                               </td>
                               {totalMeses.map((v, i) => (
-                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_NIVEL2 }}>
-                                  {bloqueio.bloqueado ? '–' : fmtCompact(v)}
+                                <td key={i} className={`px-1 py-[2px] text-right leading-tight font-semibold text-[9px] ${cor}${trimBorder(i)} ${bloqueio.bloqueado ? 'opacity-60' : ''}`} style={{ background: BG_NIVEL2 }}>
+                                  {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
-                                {bloqueio.bloqueado ? '–' : fmtCompact(lineTotal)}
+                              <td className={`px-1 py-[2px] text-right leading-tight font-bold text-[9px] border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-60' : ''}`} style={{ background: BG_MUTED }}>
+                                {fmtCompact(lineTotal)}
                               </td>
                             </tr>
                           </React.Fragment>
@@ -557,14 +557,14 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                           {sub.meses.map((v, mesIdx) => (
                             <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                               {isGlobal || bloqueio.bloqueado ? (
-                                <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-30' : ''}`}>{bloqueio.bloqueado ? '–' : fmtCompact(v)}</span>
+                                <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-60' : ''}`}>{fmtCompact(v)}</span>
                               ) : (
                                 <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
                               )}
                             </td>
                           ))}
-                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-30' : ''}`} style={{ background: BG_MUTED }}>
-                            {bloqueio.bloqueado ? '–' : fmtCompact(sub.total)}
+                          <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] font-medium border-l-2 border-border ${cor} ${bloqueio.bloqueado ? 'opacity-60' : ''}`} style={{ background: BG_MUTED }}>
+                            {fmtCompact(sub.total)}
                           </td>
                         </tr>
                       );
