@@ -740,7 +740,10 @@ const Index = () => {
             />
           )}
           {finView.mode === 'painel' && (
-            <FinanciamentosPainelTab onVoltar={() => setFinView(null)} />
+            <FinanciamentosPainelTab
+              onVoltar={() => setFinView(null)}
+              onAbrirFinanciamento={(id) => setFinView({ mode: 'detalhe', id })}
+            />
           )}
         </Suspense>
       )}
