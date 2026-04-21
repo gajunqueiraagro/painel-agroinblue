@@ -1285,18 +1285,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
+                    const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento';
                     const isImported = !!l.lote_importacao_id;
                     const rowMesFechado = fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes);
-                    const canEditRow = !isHistoricoReadOnly && !rowMesFechado;
+                    const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento && !rowMesFechado;
 
                     return (
                       <tr key={l.id} className={`border-b italic !h-auto hover:bg-muted/50 transition-colors ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}>
                         <td className="px-1 py-1 align-middle text-center sticky left-0 z-10 bg-background">
-                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={rowMesFechado} className="h-3 w-3" />
+                          <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={rowMesFechado || isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[28px] z-10 bg-background text-center">{fmtDate(l.data_competencia)}</td>
                         <td className="font-mono px-0.5 py-1 align-middle text-[12px] font-medium leading-tight sticky left-[90px] z-10 bg-background text-center">{fmtDate(l.data_pagamento)}</td>
-                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={l.descricao || ''}>{l.descricao || '-'}</td>
+                        <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${l.descricao || ''}` : (l.descricao || '')}>
+                          {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
+                          {l.descricao || '-'}
+                        </td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
@@ -1310,7 +1314,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : isParcelaFinanciamento ? 'Edite pelo módulo de Financiamentos' : 'Editar'}>
                               <Pencil className="h-2.5 w-2.5" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={rowMesFechado} title={rowMesFechado ? 'Mês fechado' : 'Duplicar'}>

@@ -158,6 +158,15 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     if (!id) return;
     setDeleting(true);
     try {
+      // Apaga mirrors (financeiro_lancamentos_v2 + planejamento_financeiro) de cada parcela
+      const { data: pRows } = await supabase
+        .from('financiamento_parcelas')
+        .select('id')
+        .eq('financiamento_id', id);
+      if (pRows && pRows.length > 0) {
+        const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+        await Promise.all(pRows.map((p: any) => deletarMirrorParcela(supabase as any, p.id)));
+      }
       await supabase.from('financiamento_parcelas').delete().eq('financiamento_id', id);
       const { error } = await supabase.from('financiamentos').delete().eq('id', id);
       if (error) throw error;

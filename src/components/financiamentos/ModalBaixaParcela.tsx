@@ -142,6 +142,17 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
       return;
     }
 
+    // Passo 3: atualizar status dos lançamentos-espelho (principal + juros) em
+    // financeiro_lancamentos_v2 — muda status_transacao de 'programado' para 'realizado'
+    // e seta data_pagamento. Idempotente: se não houver mirrors para esta parcela,
+    // a query é no-op.
+    try {
+      const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
+      await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+    } catch (e) {
+      console.error('[ModalBaixaParcela] erro atualizarStatusMirror:', e);
+    }
+
     toast.success('Parcela registrada com sucesso!');
     qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamento.id] });
     qc.invalidateQueries({ queryKey: ['financiamentos-lista', financiamento.cliente_id] });

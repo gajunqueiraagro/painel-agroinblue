@@ -1,11 +1,12 @@
 import { ArrowLeft, Plus, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
+import { backfillParcelasPendentes } from '@/lib/financiamentos/backfillParcelas';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 
 /* ── Types ── */
@@ -47,6 +48,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   const [filtroStatus, setFiltroStatus] = useState('ativo');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+
+  // Backfill de mirrors de parcelas: roda uma vez por cliente via flag em localStorage.
+  useEffect(() => {
+    if (!clienteId) return;
+    const flagKey = `backfill_parcelas_done:${clienteId}`;
+    if (localStorage.getItem(flagKey) === '1') return;
+    (async () => {
+      const r = await backfillParcelasPendentes(clienteId);
+      localStorage.setItem(flagKey, '1');
+      if (r.criadas > 0) console.info(`[FinanciamentosLista] backfill: ${r.criadas} parcelas espelhadas`);
+    })();
+  }, [clienteId]);
 
   /* ── Query principal ── */
   const { data: financiamentos = [], isLoading } = useQuery({

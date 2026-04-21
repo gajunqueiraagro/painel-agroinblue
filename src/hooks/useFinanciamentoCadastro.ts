@@ -256,13 +256,34 @@ export function useFinanciamentoCadastro() {
         status: 'pendente' as const,
       }));
 
-      const { error: errParcelas } = await supabase
+      const { data: parcelasSalvas, error: errParcelas } = await supabase
         .from('financiamento_parcelas')
-        .insert(parcelasInsert);
+        .insert(parcelasInsert)
+        .select('id, data_vencimento, valor_principal, valor_juros');
 
       if (errParcelas) {
         await supabase.from('financiamentos').delete().eq('id', fin.id);
         throw new Error(errParcelas.message);
+      }
+
+      // Espelha cada parcela em financeiro_lancamentos_v2 e planejamento_financeiro
+      if (parcelasSalvas && parcelasSalvas.length > 0 && (fin.tipo_financiamento === 'pecuaria' || fin.tipo_financiamento === 'agricultura')) {
+        const { criarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+        await Promise.all(parcelasSalvas.map((p: any) =>
+          criarMirrorParcela(supabase as any, {
+            id: p.id,
+            cliente_id: clienteId,
+            fazenda_id: fazendaId,
+            data_vencimento: p.data_vencimento,
+            valor_principal: Number(p.valor_principal) || 0,
+            valor_juros: Number(p.valor_juros) || 0,
+          }, {
+            id: fin.id,
+            cliente_id: clienteId,
+            fazenda_id: fazendaId,
+            tipo_financiamento: fin.tipo_financiamento as 'pecuaria' | 'agricultura',
+          }),
+        ));
       }
 
       // 3 – Lançamento de captação (opcional)
