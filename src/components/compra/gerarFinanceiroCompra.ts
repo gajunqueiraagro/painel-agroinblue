@@ -61,7 +61,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
 
   const { data: planoContas } = await supabase
     .from('financeiro_plano_contas')
-    .select('id, macro_custo, centro_custo, subcentro')
+    .select('id, macro_custo, grupo_custo, centro_custo, subcentro')
     .eq('ativo', true)
     .eq('tipo_operacao', '2-Saídas')
     .in('subcentro', subcentrosNecessarios);
@@ -88,7 +88,9 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     origem_lancamento: 'movimentacao_rebanho',
     movimentacao_rebanho_id: lancamentoId,
     macro_custo: clasCompra.macro_custo,
+    grupo_custo: (clasCompra as any).grupo_custo ?? null,
     centro_custo: clasCompra.centro_custo,
+    plano_conta_id: clasCompra.id,
     sem_movimentacao_caixa: false,
   };
 
@@ -130,8 +132,10 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
       ...baseRecord,
       ano_mes: anoMes,
       macro_custo: clasFrete.macro_custo,
+      grupo_custo: (clasFrete as any).grupo_custo ?? null,
       centro_custo: clasFrete.centro_custo,
       subcentro: clasFrete.subcentro,
+      plano_conta_id: clasFrete.id,
       valor: freteVal,
       data_competencia: data,
       data_pagamento: data,
@@ -146,8 +150,10 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
       ...baseRecord,
       ano_mes: anoMes,
       macro_custo: clasComissao.macro_custo,
+      grupo_custo: (clasComissao as any).grupo_custo ?? null,
       centro_custo: clasComissao.centro_custo,
       subcentro: clasComissao.subcentro,
+      plano_conta_id: clasComissao.id,
       valor: comissaoVal,
       data_competencia: data,
       data_pagamento: data,

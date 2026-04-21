@@ -26,9 +26,9 @@ const trimBorder = (i: number) => (i === 2 || i === 5 || i === 8) ? ' border-r b
 const COL1_BORDER = 'border-r-2 border-border/40';
 
 /** Macros de entrada (na ordem de exibição) */
-const MACROS_ENTRADA_ORDERED = ['Receita Operacional', 'Entrada Financeira', 'Deduções de Receitas'];
-/** Macros de saída (na ordem de exibição) */
-const MACROS_SAIDA_ORDERED = ['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Saída Financeira', 'Dividendos'];
+const MACROS_ENTRADA_ORDERED = ['Receita Operacional', 'Entrada Financeira'];
+/** Macros de saída (na ordem de exibição) — Deduções de Receitas listado aqui para aparecer junto das saídas */
+const MACROS_SAIDA_ORDERED = ['Deduções de Receitas', 'Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Saída Financeira', 'Dividendos'];
 
 const MACROS_ENTRADA_SET = new Set(['Receita Operacional', 'Entrada Financeira']);
 const MACROS_SAIDA_SET = new Set(['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos']);
@@ -90,9 +90,9 @@ const fmt = (v: number) => {
 
 const fmtCompact = (v: number) => {
   if (v === 0) return '–';
-  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
-  return `R$ ${v.toFixed(0)}`;
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+  return v.toFixed(0);
 };
 
 const fmtSaldo = (v: number) =>
@@ -101,6 +101,8 @@ const fmtSaldo = (v: number) =>
 interface Props {
   onBack?: () => void;
   metaConsolidacao?: any[];
+  ano?: number;
+  mesAte?: number;
 }
 
 interface SubNode {
@@ -115,9 +117,12 @@ interface GrupoNode { nome: string; meses: number[]; total: number; centros: Cen
 interface MacroNode { nome: string; meses: number[]; total: number; grupos: GrupoNode[]; }
 
 /* ================================================================ */
-export function PlanejamentoFinanceiroTab({ onBack }: Props) {
+export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAte }: Props) {
   const currentYear = new Date().getFullYear();
-  const [ano, setAno] = useState(currentYear);
+  const [internalAno, setInternalAno] = useState(currentYear);
+  const ano = anoProp ?? internalAno;
+  const setAno = setInternalAno;
+  const isAnoExterno = anoProp !== undefined;
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id ?? '';
   const isGlobal = !fazendaId || fazendaId === '__global__' || fazendaId === '';
@@ -589,15 +594,17 @@ export function PlanejamentoFinanceiroTab({ onBack }: Props) {
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
       {/* Header — sticky, never scrolls */}
       <div className="sticky top-0 z-30 bg-background py-2 flex flex-wrap items-center gap-2 shrink-0">
-        <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Evolução Financeira — META</span>
-        <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
-          <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(y => (
-              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Fluxo de Caixa META</span>
+        {!isAnoExterno && (
+          <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
+            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {isGlobal && (
           <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
             <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />

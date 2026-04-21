@@ -590,7 +590,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 
       const { data: planoReceita } = await supabase
         .from('financeiro_plano_contas')
-        .select('id, macro_custo, centro_custo, subcentro')
+        .select('id, macro_custo, grupo_custo, centro_custo, subcentro')
         .eq('ativo', true)
         .eq('tipo_operacao', '1-Entradas')
         .in('subcentro', subcentroCandidates);
@@ -615,8 +615,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         origem_lancamento: 'movimentacao_rebanho',
         movimentacao_rebanho_id: targetLancamentoId,
         macro_custo: clasReceita.macro_custo,
+        grupo_custo: (clasReceita as any).grupo_custo ?? null,
         centro_custo: clasReceita.centro_custo,
         subcentro: clasReceita.subcentro,
+        plano_conta_id: clasReceita.id,
         numero_documento: notaFiscal || undefined,
         sem_movimentacao_caixa: false,
       };
@@ -667,7 +669,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const subcentroDeducao = 'Impostos e Despesas de Abates e Vendas';
         const { data: planoDeducao } = await supabase
           .from('financeiro_plano_contas')
-          .select('id, macro_custo, centro_custo, subcentro')
+          .select('id, macro_custo, grupo_custo, centro_custo, subcentro')
           .eq('ativo', true)
           .eq('tipo_operacao', '2-Saídas')
           .eq('subcentro', subcentroDeducao)
@@ -691,8 +693,10 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
             origem_lancamento: 'movimentacao_rebanho',
             movimentacao_rebanho_id: targetLancamentoId,
             macro_custo: clasDed.macro_custo,
+            grupo_custo: (clasDed as any).grupo_custo ?? null,
             centro_custo: clasDed.centro_custo,
             subcentro: clasDed.subcentro,
+            plano_conta_id: clasDed.id,
             numero_documento: notaFiscal || undefined,
             ano_mes: anoMes,
             valor: item.valor,

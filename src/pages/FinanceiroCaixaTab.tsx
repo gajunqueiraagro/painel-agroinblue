@@ -471,7 +471,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                   onFluxoReloadRef={handleFluxoReloadRef}
                 />
               ) : (
-                <PlanejamentoFinanceiroTab />
+                <PlanejamentoFinanceiroTab ano={Number(localAno)} mesAte={localMes} />
               )}
             </>
           )}
