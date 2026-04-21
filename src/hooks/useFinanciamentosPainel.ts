@@ -195,9 +195,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
       mes: m, principalPago: 0, principalPendente: 0, jurosPago: 0, jurosPendente: 0, total: 0,
     }));
 
-    // Pizza por faixa (baseado no saldo pendente)
-    const umAnoMs = 365 * 24 * 3600 * 1000;
-    let curtoPrazo = 0, medioPrazo = 0, longoPrazo = 0;
+    // Pizza por faixa: Curto (anoFiltro..anoFiltro+1) vs Longo (anoFiltro+2+)
+    let curtoPrazo = 0, longoPrazo = 0;
 
     // Credor
     const credorMap = new Map<string, number>();
@@ -249,9 +248,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
 
         credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
 
-        const diffMs = new Date(venc + 'T00:00:00').getTime() - hojeMs;
-        if (diffMs <= 365 * 24 * 3600 * 1000) curtoPrazo += valorTotal;
-        else if (diffMs <= 3 * umAnoMs) medioPrazo += valorTotal;
+        const vencYear = Number(venc.substring(0, 4));
+        if (vencYear <= ano + 1) curtoPrazo += valorTotal;
         else longoPrazo += valorTotal;
 
         if (venc < hojeISO) overdueCount++;
@@ -339,9 +337,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
       .slice(0, 8);
 
     const pizzaVencimentos: SliceVencimento[] = [
-      { nome: 'Curto prazo (<= 1 ano)', valor: curtoPrazo, color: '#16a34a' },
-      { nome: 'Médio prazo (1-3 anos)', valor: medioPrazo, color: '#eab308' },
-      { nome: 'Longo prazo (> 3 anos)', valor: longoPrazo, color: '#dc2626' },
+      { nome: `Curto Prazo (${ano}–${ano + 1})`, valor: curtoPrazo, color: '#EAB308' },
+      { nome: `Longo Prazo (${ano + 2}+)`, valor: longoPrazo, color: '#EF4444' },
     ].filter(s => s.valor > 0);
 
     const alavancagemPerc = valorRebanho > 0 ? (saldoPec.total / valorRebanho) * 100 : 0;
