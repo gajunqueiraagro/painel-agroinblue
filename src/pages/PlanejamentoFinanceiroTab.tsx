@@ -22,7 +22,7 @@ import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Setting
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 /** Trimester border after Mar(2), Jun(5), Set(8) */
-const trimBorder = (i: number) => (i === 2 || i === 5 || i === 8) ? ' border-r border-border/30' : '';
+const trimBorder = (i: number) => (i === 2 || i === 5 || i === 8) ? ' border-r-2 border-border' : '';
 const COL1_BORDER = 'border-r-2 border-border/40';
 
 /** Macros de entrada (na ordem de exibição) */
@@ -496,12 +496,12 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                                 {sub.subcentro} (auto)
                               </td>
                               {autoMeses!.map((v, i) => (
-                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic ${bloqueio.bloqueado ? 'opacity-30' : 'opacity-70'} ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
-                                  {bloqueio.bloqueado ? '–' : fmtCompact(v)}
+                                <td key={i} className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>
+                                  {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border ${bloqueio.bloqueado ? 'opacity-30' : 'opacity-70'} ${cor}`} style={{ background: BG_MUTED }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
-                                {bloqueio.bloqueado ? '–' : fmtCompact(autoTotal)}
+                              <td className={`px-1 py-[1.5px] text-right leading-tight text-[8px] italic font-medium border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
+                                {fmtCompact(autoTotal)}
                               </td>
                             </tr>
                             {/* Ajuste */}
@@ -641,7 +641,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
 
               <thead className="sticky top-0 z-20">
                 <tr className="border-b-2 border-border">
-                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30 border-r-2 border-border/40" style={{ background: BG_CARD }} />
+                  <th className="px-1 py-[3px] text-left text-[9px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 z-30" style={{ background: BG_CARD }} />
                   {MESES.map(m => (
                     <th key={m} className={`px-1 py-[3px] text-right text-[9px] font-bold text-muted-foreground uppercase tracking-wider${trimBorder(MESES.indexOf(m))}`} style={{ background: BG_CARD }}>{m}</th>
                   ))}

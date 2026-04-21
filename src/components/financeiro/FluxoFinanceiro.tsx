@@ -36,14 +36,14 @@ type FmtMode = 'compact' | 'full';
 
 const fmtK = (v: number): string => {
   if (v === 0) return '-';
-  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
-  return `R$ ${v.toFixed(0)}`;
+  if (Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
+  return v.toFixed(0);
 };
 
 const fmtFull = (v: number): string => {
   if (v === 0) return '-';
-  return `R$ ${Math.round(v).toLocaleString('pt-BR')}`;
+  return Math.round(v).toLocaleString('pt-BR');
 };
 
 const fmtVal = (v: number, mode: FmtMode): string =>
