@@ -61,7 +61,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
     queryFn: async () => {
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
-        .select('id, nome_conta')
+        .select('id, nome_conta, nome_exibicao')
         .eq('cliente_id', financiamento.cliente_id)
         .eq('ativa', true)
         .order('ordem_exibicao');
@@ -201,7 +201,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
                 {contas.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

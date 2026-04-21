@@ -50,7 +50,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     queryFn: async () => {
       const { data, error } = await supabase
         .from('financiamentos')
-        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta)')
+        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta, nome_exibicao)')
         .eq('id', id!)
         .single();
       if (error) throw error;
@@ -96,7 +96,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     queryKey: ['fin-contas', clienteId],
     enabled: !!clienteId && editOpen,
     queryFn: async () => {
-      const { data } = await supabase.from('financeiro_contas_bancarias').select('id, nome_conta').eq('cliente_id', clienteId!).eq('ativa', true).order('ordem_exibicao');
+      const { data } = await supabase.from('financeiro_contas_bancarias').select('id, nome_conta, nome_exibicao').eq('cliente_id', clienteId!).eq('ativa', true).order('ordem_exibicao');
       return data ?? [];
     },
   });
@@ -233,7 +233,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
           <Info label="Data contrato" value={fmtDate(fin.data_contrato)} />
           <Info label="1ª parcela" value={fmtDate(fin.data_primeira_parcela)} />
           <Info label="Total parcelas" value={String(fin.total_parcelas)} />
-          <Info label="Conta bancária" value={fin.financeiro_contas_bancarias?.nome_conta ?? '—'} />
+          <Info label="Conta bancária" value={(fin.financeiro_contas_bancarias as any)?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || '—'} />
           {fin.observacao && <Info label="Observação" value={fin.observacao} className="col-span-2 sm:col-span-3" />}
         </CardContent>
       </Card>
@@ -386,7 +386,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
                 <Select value={editForm.conta_bancaria_id} onValueChange={v => setEditForm(p => ({ ...p, conta_bancaria_id: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_conta}</SelectItem>)}
+                    {contas.map(c => <SelectItem key={c.id} value={c.id}>{(c as any).nome_exibicao || c.nome_conta}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
