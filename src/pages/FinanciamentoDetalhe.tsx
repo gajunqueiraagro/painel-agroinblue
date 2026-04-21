@@ -47,6 +47,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [parcelaBaixa, setParcelaBaixa] = useState<any>(null);
+  const [parcelaEdit, setParcelaEdit] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -349,15 +350,27 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
                       </TableCell>
                       <TableCell className="tabular-nums">{fmtDate(p.data_pagamento)}</TableCell>
                       <TableCell>
-                        {p.status === 'pago' && p.lancamento_id ? (
-                          <Button variant="ghost" size="sm" className="text-[10px] h-6" disabled>
-                            Ver lançamento
+                        <div className="flex items-center gap-1">
+                          {p.status === 'pago' && p.lancamento_id && (
+                            <Button variant="ghost" size="sm" className="text-[10px] h-6" disabled>
+                              Ver lançamento
+                            </Button>
+                          )}
+                          {isPending && (
+                            <Button size="sm" className="text-[10px] h-6" onClick={() => setParcelaBaixa(p)}>
+                              Registrar pagamento
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setParcelaEdit(p)}
+                            title="Editar parcela"
+                          >
+                            <Pencil className="h-3 w-3" />
                           </Button>
-                        ) : isPending ? (
-                          <Button size="sm" className="text-[10px] h-6" onClick={() => setParcelaBaixa(p)}>
-                            Registrar pagamento
-                          </Button>
-                        ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -490,6 +503,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
       </AlertDialog>
 
       {/* ── Modal de baixa de parcela (P5) ── */}
+      <ModalBaixaParcela
+        parcela={parcelaEdit}
+        financiamento={fin}
+        onClose={() => setParcelaEdit(null)}
+        modo="editar"
+      />
+
       <ModalBaixaParcela
         parcela={parcelaBaixa}
         financiamento={fin}

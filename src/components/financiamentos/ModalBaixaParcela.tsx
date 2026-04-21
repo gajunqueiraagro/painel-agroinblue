@@ -12,10 +12,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { format, parseISO } from 'date-fns';
-import { Pencil } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface Parcela {
   id: string;
@@ -36,7 +35,7 @@ interface Financiamento {
   descricao: string;
   total_parcelas: number;
   tipo_financiamento?: string;
-  status?: string; // 'ativo' | 'quitado' | 'cancelado'
+  status?: string;
   plano_conta_parcela_id: string | null;
   conta_bancaria_id: string | null;
 }
@@ -45,28 +44,28 @@ interface Props {
   parcela: Parcela | null;
   financiamento: Financiamento;
   onClose: () => void;
+  modo?: 'registrar' | 'editar';
 }
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtDate = (d: string | null | undefined) => (d ? format(parseISO(d + 'T12:00:00'), 'dd/MM/yyyy') : '—');
 
-const STATUS_LABELS: Record<string, string> = { pendente: 'Pendente', pago: 'Pago', cancelado: 'Cancelado' };
-
-export default function ModalBaixaParcela({ parcela, financiamento, onClose }: Props) {
+export default function ModalBaixaParcela({ parcela, financiamento, onClose, modo = 'registrar' }: Props) {
   const qc = useQueryClient();
-  const [modo, setModo] = useState<'visualizar' | 'editar'>('visualizar');
   const [saving, setSaving] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
 
-  // form state
+  // ── Registrar (baixa) ──
+  const [dataPagamento, setDataPagamento] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [contaBancariaId, setContaBancariaId] = useState(financiamento.conta_bancaria_id ?? '');
+
+  // ── Editar ──
   const [dataVencimento, setDataVencimento] = useState('');
   const [principal, setPrincipal] = useState(0);
   const [juros, setJuros] = useState(0);
   const [status, setStatus] = useState<'pendente' | 'pago' | 'cancelado'>('pendente');
-  const [dataPagamento, setDataPagamento] = useState('');
   const [observacao, setObservacao] = useState('');
 
-  // baseline for dirty check
+  // Dirty check (só no modo editar)
   const [lastParcelaId, setLastParcelaId] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<{
     data_vencimento: string;
@@ -81,64 +80,60 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
     if (!parcela) return;
     if (parcela.id === lastParcelaId) return;
     setLastParcelaId(parcela.id);
-    setModo('visualizar');
+
     const dv = parcela.data_vencimento;
     const dp = parcela.data_pagamento ?? '';
     const st = (parcela.status ?? 'pendente') as 'pendente' | 'pago' | 'cancelado';
     const obs = parcela.observacao ?? '';
     const p = Number(parcela.valor_principal) || 0;
     const j = Number(parcela.valor_juros) || 0;
+
     setDataVencimento(dv);
     setPrincipal(p);
     setJuros(j);
     setStatus(st);
-    setDataPagamento(dp);
     setObservacao(obs);
-    setBaseline({
-      data_vencimento: dv,
-      valor_principal: p,
-      valor_juros: j,
-      status: st,
-      data_pagamento: dp,
-      observacao: obs,
-    });
-  }, [parcela, lastParcelaId]);
+    setBaseline({ data_vencimento: dv, valor_principal: p, valor_juros: j, status: st, data_pagamento: dp, observacao: obs });
+
+    // Registrar: sempre inicia com hoje e conta default do financiamento
+    setDataPagamento(dp || format(new Date(), 'yyyy-MM-dd'));
+    setContaBancariaId(financiamento.conta_bancaria_id ?? '');
+  }, [parcela, lastParcelaId, financiamento.conta_bancaria_id]);
 
   const valorTotal = principal + juros;
-  const finativo = (financiamento.status ?? 'ativo') === 'ativo';
+  const isEditar = modo === 'editar';
 
-  const dirty = !!baseline && (
+  const { data: contas = [] } = useQuery({
+    queryKey: ['baixa-contas', financiamento.cliente_id],
+    enabled: !!parcela && modo === 'registrar',
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('id, nome_conta, nome_exibicao')
+        .eq('cliente_id', financiamento.cliente_id)
+        .eq('ativa', true)
+        .order('ordem_exibicao');
+      return data ?? [];
+    },
+  });
+
+  const dirty = isEditar && !!baseline && (
     dataVencimento !== baseline.data_vencimento ||
     principal !== baseline.valor_principal ||
     juros !== baseline.valor_juros ||
     status !== baseline.status ||
-    dataPagamento !== baseline.data_pagamento ||
+    (status === 'pago' ? dataPagamento : '') !== (baseline.status === 'pago' ? baseline.data_pagamento : '') ||
     observacao !== baseline.observacao
   );
 
   const handleRequestClose = () => {
-    if (modo === 'editar' && dirty) {
-      setConfirmClose(true);
-      return;
-    }
+    if (isEditar && dirty) { setConfirmClose(true); return; }
     onClose();
   };
 
-  const voltarVisualizar = () => {
-    if (!baseline) { setModo('visualizar'); return; }
-    // Reset form para baseline
-    setDataVencimento(baseline.data_vencimento);
-    setPrincipal(baseline.valor_principal);
-    setJuros(baseline.valor_juros);
-    setStatus(baseline.status as 'pendente' | 'pago' | 'cancelado');
-    setDataPagamento(baseline.data_pagamento);
-    setObservacao(baseline.observacao);
-    setModo('visualizar');
-  };
-
-  // ── Erros de validação ─────────────────────────────────
+  // ── Validação (editar) ──
   const erros: Record<string, string> = {};
-  if (modo === 'editar') {
+  if (isEditar) {
     if (!dataVencimento) erros.data_vencimento = 'Obrigatório';
     if (principal < 0 || Number.isNaN(principal)) erros.valor_principal = 'Deve ser ≥ 0';
     if (juros < 0 || Number.isNaN(juros)) erros.valor_juros = 'Deve ser ≥ 0';
@@ -146,20 +141,93 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
   }
   const temErros = Object.keys(erros).length > 0;
 
-  // ── Salvar alterações ──────────────────────────────────
-  const salvarEdicao = async () => {
-    if (!parcela || !baseline) return;
-    if (temErros) {
-      toast.error('Corrija os erros antes de salvar');
+  // ══════════════════════════════════════════
+  // REGISTRAR — baixa de pagamento (fluxo original)
+  // ══════════════════════════════════════════
+  const handleConfirmRegistrar = async () => {
+    if (!parcela) return;
+
+    if (!financiamento.plano_conta_parcela_id) {
+      toast.error('Conta de amortização não configurada. Edite o financiamento antes de registrar pagamento.');
       return;
     }
+    if (!contaBancariaId) { toast.error('Selecione a conta bancária.'); return; }
+    if (!dataPagamento) { toast.error('Informe a data de pagamento.'); return; }
+
+    setSaving(true);
+    try {
+      const anoMes = dataPagamento.slice(0, 7);
+      const descLanc = `Parcela ${parcela.numero_parcela}/${financiamento.total_parcelas}: ${financiamento.descricao}`;
+
+      const { data: lanc, error: errLanc } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .insert({
+          cliente_id: financiamento.cliente_id,
+          fazenda_id: financiamento.fazenda_id,
+          conta_bancaria_id: contaBancariaId,
+          tipo_operacao: '2-Saídas',
+          sinal: -1,
+          valor: valorTotal,
+          data_competencia: dataPagamento,
+          data_pagamento: dataPagamento,
+          ano_mes: anoMes,
+          origem_lancamento: 'financiamento',
+          origem_tipo: 'financiamento_parcela',
+          plano_conta_id: financiamento.plano_conta_parcela_id,
+          descricao: descLanc,
+          status_transacao: 'realizado',
+          cancelado: false,
+        })
+        .select('id')
+        .single();
+      if (errLanc || !lanc) throw new Error(errLanc?.message ?? 'Falha ao criar lançamento');
+
+      const { error: errParc } = await supabase
+        .from('financiamento_parcelas')
+        .update({
+          status: 'pago',
+          data_pagamento: dataPagamento,
+          valor_principal: principal,
+          valor_juros: juros,
+          lancamento_id: lanc.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', parcela.id);
+      if (errParc) throw errParc;
+
+      // Atualiza status do mirror (programado → realizado) se existir
+      try {
+        const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
+        await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+      } catch (e) {
+        console.error('[ModalBaixaParcela] erro atualizarStatusMirror:', e);
+      }
+
+      toast.success('Parcela registrada com sucesso!');
+      qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamento.id] });
+      qc.invalidateQueries({ queryKey: ['financiamentos-lista', financiamento.cliente_id] });
+      qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamento.id] });
+      onClose();
+    } catch (e: any) {
+      toast.error('Erro ao registrar pagamento: ' + (e?.message ?? e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ══════════════════════════════════════════
+  // EDITAR — alteração direta da parcela + mirror
+  // ══════════════════════════════════════════
+  const handleSalvarEdicao = async () => {
+    if (!parcela || !baseline) return;
+    if (temErros) { toast.error('Corrija os erros antes de salvar'); return; }
+
     setSaving(true);
     try {
       const valoresMudaram = principal !== baseline.valor_principal || juros !== baseline.valor_juros;
       const dataMudou = dataVencimento !== baseline.data_vencimento;
       const statusMudou = status !== baseline.status;
 
-      // 1) UPDATE na parcela
       const { error: errParc } = await supabase
         .from('financiamento_parcelas')
         .update({
@@ -175,18 +243,14 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
         .eq('id', parcela.id);
       if (errParc) throw errParc;
 
-      // 2) Mirror: se valores/data mudaram → delete + recreate (refaz tudo).
-      //    Se só status mudou → update incremental (preserva IDs das linhas do Lanç. Fin.).
       if (valoresMudaram || dataMudou) {
         const { deletarMirrorParcela, criarMirrorParcela, atualizarStatusMirror } =
           await import('@/lib/financiamentos/parcelaMirror');
-
         await deletarMirrorParcela(supabase as any, parcela.id);
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
-
         if (status !== 'cancelado' && (principal > 0 || juros > 0)) {
           const tipo = financiamento.tipo_financiamento;
           if (tipo === 'pecuaria' || tipo === 'agricultura') {
@@ -204,14 +268,12 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
               fazenda_id: financiamento.fazenda_id,
               tipo_financiamento: tipo,
             });
-
             if (status === 'pago' && dataPagamento) {
               await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
             }
           }
         }
       } else if (statusMudou) {
-        // só status mudou: atualiza o mirror incrementalmente
         if (status === 'cancelado') {
           const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
           await deletarMirrorParcela(supabase as any, parcela.id);
@@ -223,7 +285,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
           const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
           await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
         } else if (status === 'pendente') {
-          // reverte para programado + zera data_pagamento
           await supabase
             .from('financeiro_lancamentos_v2')
             .update({ status_transacao: 'programado', data_pagamento: null })
@@ -250,60 +311,61 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
   return (
     <>
       <Dialog open={!!parcela} onOpenChange={(v) => { if (!v) handleRequestClose(); }}>
-        <DialogContent className={`max-w-md ${modo === 'editar' ? 'border-primary/60 border-2' : ''}`}>
+        <DialogContent className={`max-w-md ${isEditar ? 'border-primary/60 border-2' : ''}`}>
           <DialogHeader>
-            <div className="flex items-center justify-between gap-2">
-              <DialogTitle className="text-sm">
-                {modo === 'editar' ? 'Editar Parcela' : 'Parcela'} #{parcela.numero_parcela}/{financiamento.total_parcelas}
-              </DialogTitle>
-              {modo === 'visualizar' && finativo && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => setModo('editar')}
-                >
-                  <Pencil className="h-3 w-3" /> Editar parcela
-                </Button>
-              )}
-            </div>
-            {modo === 'editar' && (
-              <div className="text-[10px] text-primary font-semibold uppercase">Modo edição</div>
-            )}
+            <DialogTitle className="text-sm">
+              {isEditar ? `Editar Parcela #${parcela.numero_parcela}` : `Registrar pagamento — Parcela ${parcela.numero_parcela}/${financiamento.total_parcelas}`}
+            </DialogTitle>
+            {isEditar && <div className="text-[10px] text-primary font-semibold uppercase">Modo edição</div>}
           </DialogHeader>
 
-          {/* ── VISUALIZAR ─────────────────────────────────── */}
-          {modo === 'visualizar' && (
-            <div className="space-y-2 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <InfoLine label="Vencimento" value={fmtDate(parcela.data_vencimento)} />
-                <InfoLine label="Status" value={STATUS_LABELS[status] ?? status} />
-                <InfoLine label="Principal" value={fmt(principal)} />
-                <InfoLine label="Juros" value={fmt(juros)} />
-                <InfoLine label="Total" value={fmt(valorTotal)} strong />
-                <InfoLine label="Data pagamento" value={fmtDate(parcela.data_pagamento ?? null)} />
+          {/* REGISTRAR */}
+          {modo === 'registrar' && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Data do pagamento</Label>
+                <Input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} />
               </div>
-              {parcela.observacao && (
-                <InfoLine label="Observação" value={parcela.observacao} block />
-              )}
-              {!finativo && (
-                <p className="text-[10px] text-muted-foreground italic">
-                  Contrato não está ativo — edição bloqueada.
-                </p>
-              )}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Principal</Label>
+                  <Input type="number" step="0.01" value={principal} onChange={e => setPrincipal(Number(e.target.value))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Juros</Label>
+                  <Input type="number" step="0.01" value={juros} onChange={e => setJuros(Number(e.target.value))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Total</Label>
+                  <Input type="text" value={fmt(valorTotal)} readOnly className="bg-muted font-semibold" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Conta bancária</Label>
+                <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {contas.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Observação</Label>
+                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" />
+              </div>
             </div>
           )}
 
-          {/* ── EDITAR ─────────────────────────────────────── */}
-          {modo === 'editar' && (
+          {/* EDITAR */}
+          {isEditar && (
             <div className="space-y-3">
               <div>
                 <Label className="text-xs">Data de vencimento *</Label>
                 <Input type="date" value={dataVencimento} onChange={e => setDataVencimento(e.target.value)} />
                 {erros.data_vencimento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_vencimento}</p>}
               </div>
-
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className="text-xs">Principal *</Label>
@@ -320,7 +382,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
                   <Input type="text" value={fmt(valorTotal)} readOnly className="bg-muted font-semibold" />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Status *</Label>
@@ -341,7 +402,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
                   </div>
                 )}
               </div>
-
               <div>
                 <Label className="text-xs">Observação</Label>
                 <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" />
@@ -350,15 +410,15 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
           )}
 
           <DialogFooter>
-            {modo === 'visualizar' ? (
-              <Button variant="outline" onClick={onClose}>Fechar</Button>
+            <Button variant="outline" onClick={handleRequestClose} disabled={saving}>Cancelar</Button>
+            {isEditar ? (
+              <Button onClick={handleSalvarEdicao} disabled={saving || temErros}>
+                {saving ? 'Salvando…' : 'Salvar alterações'}
+              </Button>
             ) : (
-              <>
-                <Button variant="outline" onClick={voltarVisualizar} disabled={saving}>Cancelar</Button>
-                <Button onClick={salvarEdicao} disabled={saving || temErros}>
-                  {saving ? 'Salvando…' : 'Salvar alterações'}
-                </Button>
-              </>
+              <Button onClick={handleConfirmRegistrar} disabled={saving}>
+                {saving ? 'Salvando…' : 'Confirmar pagamento'}
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>
@@ -381,14 +441,5 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function InfoLine({ label, value, strong, block }: { label: string; value: string; strong?: boolean; block?: boolean }) {
-  return (
-    <div className={block ? 'col-span-2' : ''}>
-      <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-      <p className={strong ? 'font-bold' : 'font-medium'}>{value}</p>
-    </div>
   );
 }
