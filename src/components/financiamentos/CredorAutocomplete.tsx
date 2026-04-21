@@ -29,6 +29,7 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
   const qc = useQueryClient();
   const { fazendas, fazendaAtual } = useFazenda();
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoNome, setNovoNome] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -48,6 +49,14 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
   });
 
   const selecionado = fornecedores.find(f => f.id === value);
+
+  const credoresFiltrados = (() => {
+    const s = search.trim().toLowerCase();
+    const base = s
+      ? fornecedores.filter(f => f.nome.toLowerCase().includes(s))
+      : fornecedores;
+    return base.slice(0, 50);
+  })();
 
   const resolveFazendaId = (): string | null => {
     if (fazendaAtual?.id && fazendaAtual.id !== '__global__') return fazendaAtual.id;
@@ -89,7 +98,13 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
 
   return (
     <div className="flex gap-1">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) setSearch('');
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -102,22 +117,35 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Buscar credor..." />
-            <CommandEmpty>Nenhum credor encontrado.</CommandEmpty>
-            <CommandList>
+        <PopoverContent
+          className="w-[--radix-popover-trigger-width] p-0 z-[100]"
+          align="start"
+          sideOffset={4}
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Buscar credor..."
+              value={search}
+              onValueChange={setSearch}
+            />
+            <CommandList className="max-h-60">
+              <CommandEmpty>Nenhum credor encontrado.</CommandEmpty>
               <CommandGroup>
-                {fornecedores.map(f => (
+                {credoresFiltrados.map(f => (
                   <CommandItem
                     key={f.id}
                     value={f.nome}
-                    onSelect={() => { onChange(f.id); setOpen(false); }}
+                    onSelect={() => { onChange(f.id); setOpen(false); setSearch(''); }}
                   >
                     {f.nome}
                   </CommandItem>
                 ))}
               </CommandGroup>
+              {search.trim() && fornecedores.filter(f => f.nome.toLowerCase().includes(search.trim().toLowerCase())).length > 50 && (
+                <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                  Refine a busca — mostrando os 50 primeiros resultados.
+                </div>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
