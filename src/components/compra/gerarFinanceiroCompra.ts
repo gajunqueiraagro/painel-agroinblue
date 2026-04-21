@@ -83,6 +83,7 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     tipo_operacao: '2-Saídas',
     sinal: -1,
     status_transacao: statusFin,
+    cenario: statusOp === 'meta' ? 'meta' : 'realizado',
     origem_lancamento: 'movimentacao_rebanho',
     movimentacao_rebanho_id: lancamentoId,
     macro_custo: clasCompra.macro_custo,

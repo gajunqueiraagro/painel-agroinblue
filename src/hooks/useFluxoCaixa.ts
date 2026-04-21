@@ -147,6 +147,7 @@ export function useFluxoCaixa(
           .eq('cliente_id', clienteId)
            .eq('cancelado', false)
            .eq('sem_movimentacao_caixa', false)
+           .neq('cenario', 'meta')
           .gte('data_pagamento', `${ano}-01-01`)
           .lte('data_pagamento', `${ano}-12-31`)
           .range(from, from + PAGE_SIZE - 1);

@@ -232,7 +232,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .select('*')
       .eq('cliente_id', clienteId!)
       .eq('cancelado', false)
-      .neq('status_transacao', 'conciliado');
+      .neq('status_transacao', 'conciliado')
+      .neq('cenario', 'meta');
 
     if (filtros.fazenda_id) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
