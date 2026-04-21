@@ -119,14 +119,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     });
   }, [financiamentos, filtroStatus, filtroTipo]);
 
-  /* ── Totalizadores ── */
-  const totais = useMemo(() => {
-    const ativos = financiamentos.filter(f => f.status === 'ativo');
-    return {
-      financiado: ativos.reduce((s, f) => s + f.valor_total, 0),
-      aPagar: ativos.reduce((s, f) => s + f.total_pendente, 0),
-    };
-  }, [financiamentos]);
+  /* ── Totalizadores (baseado na lista filtrada) ── */
+  const totais = useMemo(() => ({
+    financiado: filtered.reduce((s, f) => s + f.valor_total, 0),
+    aPagar: filtered.reduce((s, f) => s + f.total_pendente, 0),
+  }), [filtered]);
+
+  const fmtCompact = (v: number) => {
+    if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+    if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+    return fmt(v);
+  };
 
   if (!clienteId) {
     return (
@@ -137,42 +140,58 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {onVoltar && (
-            <Button variant="ghost" size="icon" onClick={onVoltar}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          )}
-          <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
+    <div className="min-h-screen bg-background max-w-5xl mx-auto">
+      {/* Bloco sticky: titulo + filtros + totalizadores inline */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b shadow-sm px-4 pt-4 pb-2 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {onVoltar && (
+              <Button variant="ghost" size="icon" onClick={onVoltar}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            <h1 className="text-lg font-bold text-foreground">Financiamentos</h1>
+          </div>
+          <Button size="sm" className="gap-1" onClick={onNovo}>
+            <Plus className="h-4 w-4" /> Novo
+          </Button>
         </div>
-        <Button size="sm" className="gap-1" onClick={onNovo}>
-          <Plus className="h-4 w-4" /> Novo
-        </Button>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos status</SelectItem>
+              <SelectItem value="ativo">Ativo</SelectItem>
+              <SelectItem value="quitado">Quitado</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos tipos</SelectItem>
+              <SelectItem value="pecuaria">Pecuária</SelectItem>
+              <SelectItem value="agricultura">Agricultura</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground uppercase text-[10px]">Total financiado:</span>
+              <span className="font-bold tabular-nums text-foreground">{fmtCompact(totais.financiado)}</span>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-muted-foreground uppercase text-[10px]">A pagar:</span>
+              <span className="font-bold tabular-nums text-foreground">{fmtCompact(totais.aPagar)}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 flex-wrap">
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos status</SelectItem>
-            <SelectItem value="ativo">Ativo</SelectItem>
-            <SelectItem value="quitado">Quitado</SelectItem>
-            <SelectItem value="cancelado">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos tipos</SelectItem>
-            <SelectItem value="pecuaria">Pecuária</SelectItem>
-            <SelectItem value="agricultura">Agricultura</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="px-4 pt-4 pb-20">
 
       {/* Tabela */}
       <Card>
@@ -184,47 +203,47 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           ) : (
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-[96px] z-10 bg-background">
                   <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Contrato</TableHead>
-                    <TableHead>Data Contrato</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Credor</TableHead>
-                    <TableHead className="text-right">Valor total</TableHead>
-                    <TableHead className="text-center">Parcelas</TableHead>
-                    <TableHead>Próx. venc.</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead />
+                    <TableHead className="bg-background">Descrição</TableHead>
+                    <TableHead className="bg-background">Contrato</TableHead>
+                    <TableHead className="bg-background">Data Contrato</TableHead>
+                    <TableHead className="bg-background">Tipo</TableHead>
+                    <TableHead className="bg-background">Credor</TableHead>
+                    <TableHead className="bg-background text-right">Valor total</TableHead>
+                    <TableHead className="bg-background text-center">Parcelas</TableHead>
+                    <TableHead className="bg-background">Próx. venc.</TableHead>
+                    <TableHead className="bg-background">Status</TableHead>
+                    <TableHead className="bg-background" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map(f => (
                     <TableRow key={f.id} className="text-xs">
-                      <TableCell className="max-w-[180px] truncate py-2">{f.descricao}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground py-2">{f.numero_contrato || '—'}</TableCell>
-                      <TableCell className="tabular-nums py-2">
+                      <TableCell className="max-w-[180px] truncate py-1.5">{f.descricao}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground py-1.5">{f.numero_contrato || '—'}</TableCell>
+                      <TableCell className="tabular-nums py-1.5">
                         {f.data_contrato
                           ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yyyy')
                           : '—'}
                       </TableCell>
-                      <TableCell className="py-2">
-                        <Badge variant="secondary" className="text-[10px]">
+                      <TableCell className="py-1.5">
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
                           {f.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate py-2">{f.credor_nome}</TableCell>
-                      <TableCell className="text-right tabular-nums py-2">{fmt(f.valor_total)}</TableCell>
-                      <TableCell className="text-center tabular-nums py-2">
+                      <TableCell className="max-w-[120px] truncate py-1.5">{f.credor_nome}</TableCell>
+                      <TableCell className="text-right tabular-nums py-1.5">{fmt(f.valor_total)}</TableCell>
+                      <TableCell className="text-center tabular-nums py-1.5">
                         {f.parcelas_pagas}/{f.total_parcelas}
                       </TableCell>
-                      <TableCell className="tabular-nums py-2">
+                      <TableCell className="tabular-nums py-1.5">
                         {f.prox_vencimento
                           ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yyyy')
                           : '—'}
                       </TableCell>
-                      <TableCell className="py-2">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor[f.status] ?? ''}`}>
+                      <TableCell className="py-1.5">
+                        <span className={`inline-flex items-center rounded-full text-xs px-2 py-0.5 font-semibold ${statusColor[f.status] ?? ''}`}>
                           {f.status}
                         </span>
                       </TableCell>
@@ -246,21 +265,6 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           )}
         </CardContent>
       </Card>
-
-      {/* Totalizadores */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase">Total financiado (ativos)</p>
-            <p className="text-base font-bold tabular-nums">{fmt(totais.financiado)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase">Total a pagar</p>
-            <p className="text-base font-bold tabular-nums">{fmt(totais.aPagar)}</p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
