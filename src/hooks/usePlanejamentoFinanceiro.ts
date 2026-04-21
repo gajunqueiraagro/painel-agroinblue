@@ -123,7 +123,14 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
       const { data: rows, error } = await (query as any);
       if (error) throw error;
-      setSavedData((rows || []) as PlanejamentoFinanceiroRow[]);
+      const savedRows = (rows || []) as PlanejamentoFinanceiroRow[];
+      console.info(
+        `[usePlanejamentoFinanceiro] loadSaved — fazendaId=${fazendaId || 'GLOBAL'}, ano=${ano}, rows=${savedRows.length}`,
+        savedRows.length > 0
+          ? { firstRow: savedRows[0], fazendasDistintas: new Set(savedRows.map(r => r.fazenda_id)).size }
+          : null,
+      );
+      setSavedData(savedRows);
     } catch (e: any) {
       console.error('Erro ao carregar planejamento:', e);
     } finally {
@@ -556,20 +563,35 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
     }
 
-    // Overlay saved values
+    // Index por subcentro para fallback quando centro_custo divergir (ex.: agregação multi-fazenda em Global)
+    const keysBySubcentro = new Map<string, string>();
+    for (const [key, entry] of map.entries()) {
+      if (!keysBySubcentro.has(entry.subcentro)) {
+        keysBySubcentro.set(entry.subcentro, key);
+      }
+    }
+
+    // Overlay saved values — agrega independente de fazenda_id. O key primário é (centro_custo||subcentro);
+    // se o centro_custo salvo não bate com o plano, cai em fallback por subcentro para não perder valor.
     for (const r of savedData) {
       if (!r.subcentro) continue;
-      const key = `${r.centro_custo}||${r.subcentro}`;
+      let key = `${r.centro_custo}||${r.subcentro}`;
       if (!map.has(key)) {
-        map.set(key, {
-          macro_custo: r.macro_custo,
-          grupo_custo: r.grupo_custo,
-          centro_custo: r.centro_custo,
-          subcentro: r.subcentro,
-          escopo_negocio: r.escopo_negocio,
-          ordem_exibicao: 9999,
-          meses: new Array(12).fill(0),
-        });
+        const fallbackKey = keysBySubcentro.get(r.subcentro);
+        if (fallbackKey) {
+          key = fallbackKey;
+        } else {
+          map.set(key, {
+            macro_custo: r.macro_custo,
+            grupo_custo: r.grupo_custo,
+            centro_custo: r.centro_custo,
+            subcentro: r.subcentro,
+            escopo_negocio: r.escopo_negocio,
+            ordem_exibicao: 9999,
+            meses: new Array(12).fill(0),
+          });
+          keysBySubcentro.set(r.subcentro, key);
+        }
       }
       const grid = map.get(key)!;
       if (r.mes >= 1 && r.mes <= 12) {
