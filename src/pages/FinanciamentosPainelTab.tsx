@@ -209,7 +209,8 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Card>
               <CardContent className="p-3">
-                <p className="text-xs font-semibold mb-2">Perfil de vencimentos</p>
+                <p className="text-xs font-semibold">Perfil de vencimentos (Principal)</p>
+                <p className="text-[10px] text-muted-foreground mb-2">Apenas amortização do principal</p>
                 {pizzaVencimentos.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Sem parcelas pendentes</p>
                 ) : (
@@ -234,7 +235,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                     </ResponsiveContainer>
                   </div>
                 )}
-                <p className="text-center text-[10px] text-muted-foreground">Total pendente: <strong>{fmt(kpis.saldoDevedor.total.total)}</strong></p>
+                <p className="text-center text-[10px] text-muted-foreground">Principal pendente: <strong>{fmt(kpis.saldoDevedor.total.principal)}</strong></p>
               </CardContent>
             </Card>
 

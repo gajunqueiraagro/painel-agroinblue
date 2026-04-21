@@ -249,8 +249,9 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin): Paine
         credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
 
         const vencYear = Number(venc.substring(0, 4));
-        if (vencYear <= ano + 1) curtoPrazo += valorTotal;
-        else longoPrazo += valorTotal;
+        // Pizza de perfil de vencimentos: somamos APENAS o valor_principal (amortização)
+        if (vencYear <= ano + 1) curtoPrazo += principal;
+        else longoPrazo += principal;
 
         if (venc < hojeISO) overdueCount++;
 
