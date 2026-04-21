@@ -79,6 +79,7 @@ import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
 const FinanciamentoCadastro = lazy(() => import('./FinanciamentoCadastro'));
 const FinanciamentoDetalhe = lazy(() => import('./FinanciamentoDetalhe'));
+const FinanciamentosPainelTab = lazy(() => import('./FinanciamentosPainelTab'));
 
 export interface FiltroGlobal {
   ano: string;
@@ -172,7 +173,7 @@ const Index = () => {
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
-  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string } | null>(null);
+  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string } | { mode: 'painel' } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -711,7 +712,11 @@ const Index = () => {
         />
       )}
       {activeTab === 'financeiro_v2_hub' && !finView && (
-        <FinanceiroV2HubTab onTabChange={handleTabChange} onAbrirFinanciamentos={() => setFinView({ mode: 'list' })} />
+        <FinanceiroV2HubTab
+          onTabChange={handleTabChange}
+          onAbrirFinanciamentos={() => setFinView({ mode: 'list' })}
+          onAbrirFinanciamentosPainel={() => setFinView({ mode: 'painel' })}
+        />
       )}
       {activeTab === 'financeiro_v2_hub' && finView && (
         <Suspense fallback={<div className="flex items-center justify-center h-40"><span className="text-3xl animate-pulse">💰</span></div>}>
@@ -733,6 +738,9 @@ const Index = () => {
               id={finView.id}
               onVoltar={() => setFinView({ mode: 'list' })}
             />
+          )}
+          {finView.mode === 'painel' && (
+            <FinanciamentosPainelTab onVoltar={() => setFinView(null)} />
           )}
         </Suspense>
       )}

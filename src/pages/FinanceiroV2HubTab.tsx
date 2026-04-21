@@ -1,12 +1,13 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import {
-  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, SearchCheck, UserCircle,
+  ListChecks, Building2, Users, BookOpen, Wallet, ChevronRight, FileText, Scale, Landmark, SearchCheck, UserCircle, BarChart3,
 } from 'lucide-react';
 
 interface Props {
   onTabChange: (tab: TabId) => void;
   onAbrirFinanciamentos?: () => void;
+  onAbrirFinanciamentosPainel?: () => void;
 }
 
 const CADASTRO_ITEMS = [
@@ -17,7 +18,7 @@ const CADASTRO_ITEMS = [
   { label: 'Dividendos', tab: 'fin_v2_dividendos' as TabId, icon: UserCircle, description: 'Cadastro de nomes para distribuição' },
 ];
 
-export function FinanceiroV2HubTab({ onTabChange, onAbrirFinanciamentos }: Props) {
+export function FinanceiroV2HubTab({ onTabChange, onAbrirFinanciamentos, onAbrirFinanciamentosPainel }: Props) {
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
       <div className="p-4 space-y-5">
@@ -120,20 +121,39 @@ export function FinanceiroV2HubTab({ onTabChange, onAbrirFinanciamentos }: Props
           </Card>
 
           {/* RIGHT column – Financiamentos */}
-          <div
-            onClick={onAbrirFinanciamentos}
-            className="cursor-pointer rounded-xl border border-border bg-card p-4 hover:bg-accent transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Landmark className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium text-sm">Financiamentos</p>
-                  <p className="text-xs text-muted-foreground">Controle de empréstimos e parcelas</p>
+          <div className="flex flex-col gap-2">
+            <div
+              onClick={onAbrirFinanciamentos}
+              className="cursor-pointer rounded-xl border border-border bg-card p-4 hover:bg-accent transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Landmark className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium text-sm">Financiamentos</p>
+                    <p className="text-xs text-muted-foreground">Controle de empréstimos e parcelas</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+            {onAbrirFinanciamentosPainel && (
+              <div
+                onClick={onAbrirFinanciamentosPainel}
+                className="cursor-pointer rounded-xl border border-border bg-card p-3 hover:bg-accent transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <BarChart3 className="h-4 w-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-xs">Painel de Financiamentos</p>
+                      <p className="text-[10px] text-muted-foreground">KPIs, cronograma e alavancagem</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
+            )}
           </div>
         </div>
 
