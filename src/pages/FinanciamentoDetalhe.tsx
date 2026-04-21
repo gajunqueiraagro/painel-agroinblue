@@ -35,9 +35,10 @@ const today = () => format(new Date(), 'yyyy-MM-dd');
 interface FinanciamentoDetalheProps {
   id?: string;
   onVoltar?: () => void;
+  from?: 'lancamentos';
 }
 
-export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDetalheProps = {}) {
+export default function FinanciamentoDetalhe({ id, onVoltar, from }: FinanciamentoDetalheProps = {}) {
   const qc = useQueryClient();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
@@ -222,7 +223,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar }: FinanciamentoDeta
     <div className="min-h-screen bg-background p-4 max-w-5xl mx-auto space-y-4 pb-20">
       {/* Voltar */}
       <Button variant="ghost" size="sm" onClick={onVoltar} className="gap-1">
-        <ArrowLeft className="h-4 w-4" /> Voltar
+        <ArrowLeft className="h-4 w-4" /> {from === 'lancamentos' ? 'Voltar aos Lançamentos' : 'Voltar'}
       </Button>
 
       {/* ── Seção 3: Resumo financeiro ── */}

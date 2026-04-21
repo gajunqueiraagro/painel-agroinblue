@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -145,6 +145,7 @@ interface Props {
   filtroMesInicial?: number;
   onIntensiveToggle?: (active: boolean) => void;
   drillFilters?: FinV2DrillFilters | null;
+  onAbrirFinanciamento?: (id: string) => void;
 }
 
 function getInitialPageSize() {
@@ -155,7 +156,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -209,6 +210,69 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [produtoFiltro, setProdutoFiltro] = useState(defaults.produtoFiltro);
   const [fornecedorFiltro, setFornecedorFiltro] = useState(defaults.fornecedorFiltro);
   const [atividadeFiltro, setAtividadeFiltro] = useState(defaults.atividadeFiltro);
+
+  // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
+  useEffect(() => {
+    const raw = sessionStorage.getItem('financeirov2_return_filters');
+    if (!raw) return;
+    try {
+      const f = JSON.parse(raw);
+      if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
+      if (f.ano !== undefined) setAno(f.ano);
+      if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
+      if (f.statusTransacao !== undefined) setStatusTransacao(f.statusTransacao);
+      if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
+      if (f.contaOrigem !== undefined) setContaOrigem(f.contaOrigem);
+      if (f.contaDestino !== undefined) setContaDestino(f.contaDestino);
+      if (f.macroFiltro !== undefined) setMacroFiltro(f.macroFiltro);
+      if (f.grupoFiltro !== undefined) setGrupoFiltro(f.grupoFiltro);
+      if (f.centroFiltro !== undefined) setCentroFiltro(f.centroFiltro);
+      if (f.subcentroFiltro !== undefined) setSubcentroFiltro(f.subcentroFiltro);
+      if (f.produtoFiltro !== undefined) setProdutoFiltro(f.produtoFiltro);
+      if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
+      if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
+    } catch (e) {
+      console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
+    } finally {
+      sessionStorage.removeItem('financeirov2_return_filters');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const abrirFinanciamentoDaParcela = async (l: any) => {
+    if (!onAbrirFinanciamento) return;
+    // A parcela tem lancamento_id = id do principal. O lançamento (principal OU juros)
+    // carrega o parcela_id em observacao. Buscamos o financiamento_id via parcela.id.
+    let financiamentoId: string | null = null;
+    if (l.observacao) {
+      const { data } = await supabase
+        .from('financiamento_parcelas')
+        .select('financiamento_id')
+        .eq('id', l.observacao)
+        .maybeSingle();
+      financiamentoId = data?.financiamento_id ?? null;
+    }
+    if (!financiamentoId) {
+      // Fallback: pode ser um lancamento antigo de 'financiamento' (não 'parcela_financiamento')
+      const { data } = await supabase
+        .from('financiamento_parcelas')
+        .select('financiamento_id')
+        .eq('lancamento_id', l.id)
+        .maybeSingle();
+      financiamentoId = data?.financiamento_id ?? null;
+    }
+    if (!financiamentoId) {
+      console.warn('[FinanceiroV2Tab] financiamento_id nao encontrado para lancamento', l.id);
+      return;
+    }
+    // Salva filtros para restaurar ao voltar
+    sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
+      fazendaId, ano, mesesSelecionados, statusTransacao, tipoOperacao,
+      contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
+      subcentroFiltro, produtoFiltro, fornecedorFiltro, atividadeFiltro,
+    }));
+    onAbrirFinanciamento(financiamentoId);
+  };
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
   // Track if macro/centro were auto-filled by subcentro
   const [macroLocked, setMacroLocked] = useState(false);
@@ -1314,10 +1378,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : isParcelaFinanciamento ? 'Edite pelo módulo de Financiamentos' : 'Editar'}>
-                              <Pencil className="h-2.5 w-2.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={rowMesFechado} title={rowMesFechado ? 'Mês fechado' : 'Duplicar'}>
+                            {isParcelaFinanciamento ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 rounded-sm text-primary"
+                                onClick={() => abrirFinanciamentoDaParcela(l)}
+                                title="Ver contrato de financiamento"
+                              >
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
+                                <Pencil className="h-2.5 w-2.5" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => handleDuplicate(l)} disabled={rowMesFechado || isParcelaFinanciamento} title={rowMesFechado ? 'Mês fechado' : isParcelaFinanciamento ? 'Parcela de financiamento — não duplicável' : 'Duplicar'}>
                               <Copy className="h-2.5 w-2.5" />
                             </Button>
                           </div>

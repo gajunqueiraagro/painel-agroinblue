@@ -173,7 +173,7 @@ const Index = () => {
   const [conciliacaoContext, setConciliacaoContext] = useState<{ ano: string; mes: string; contaId: string } | null>(null);
   const [finV2Intensivo, setFinV2Intensivo] = useState(false);
   const [finV2DrillFilters, setFinV2DrillFilters] = useState<import('./FinanceiroV2Tab').FinV2DrillFilters | null>(null);
-  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string } | { mode: 'painel' } | null>(null);
+  const [finView, setFinView] = useState<{ mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string; from?: 'lancamentos' } | { mode: 'painel' } | null>(null);
   const [fechamentoFromConciliacao, setFechamentoFromConciliacao] = useState(false);
   const [lancamentosFromFechamento, setLancamentosFromFechamento] = useState(false);
   const [lancamentosFromEvolCategoria, setLancamentosFromEvolCategoria] = useState(false);
@@ -709,6 +709,10 @@ const Index = () => {
           filtroMesInicial={filtroGlobal.mes}
           onIntensiveToggle={setFinV2Intensivo}
           drillFilters={finV2DrillFilters}
+          onAbrirFinanciamento={(id: string) => {
+            setFinView({ mode: 'detalhe', id, from: 'lancamentos' });
+            setActiveTab('financeiro_v2_hub');
+          }}
         />
       )}
       {activeTab === 'financeiro_v2_hub' && !finView && (
@@ -736,7 +740,15 @@ const Index = () => {
           {finView.mode === 'detalhe' && (
             <FinanciamentoDetalhe
               id={finView.id}
-              onVoltar={() => setFinView({ mode: 'list' })}
+              from={finView.from}
+              onVoltar={() => {
+                if (finView.from === 'lancamentos') {
+                  setFinView(null);
+                  setActiveTab('financeiro_v2');
+                } else {
+                  setFinView({ mode: 'list' });
+                }
+              }}
             />
           )}
           {finView.mode === 'painel' && (
