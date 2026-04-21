@@ -441,7 +441,20 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       });
     }
 
-    const alavancagemPerc = valorRebanho > 0 ? (saldoPec.total / valorRebanho) * 100 : 0;
+    // ── Alavancagem atual: mesma fórmula do Histórico para Mar/ano_atual ──
+    // Endividamento pecuária (principal, por data de referência hoje)
+    const hojeRef = hojeISO;
+    let dividaPecuariaPrincipal = 0;
+    for (const p of parcelas) {
+      const fin = finPecById.get(p.financiamento_id);
+      if (!fin) continue;
+      if (fin.status !== 'ativo') continue;
+      const dc = fin.data_contrato;
+      if (!dc || dc > hojeRef) continue;
+      if (p.data_vencimento < hojeRef) continue;
+      dividaPecuariaPrincipal += Number(p.valor_principal) || 0;
+    }
+    const alavancagemPerc = valorRebanho > 0 ? (dividaPecuariaPrincipal / valorRebanho) * 100 : 0;
     const alavancagemStatus: 'saudavel' | 'atencao' | 'critico' | 'indisponivel' =
       valorRebanho <= 0 ? 'indisponivel'
         : alavancagemPerc < 30 ? 'saudavel'
@@ -460,7 +473,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       pizzaVencimentos,
       dividaPorCredor,
       alavancagem: {
-        dividaPecuaria: saldoPec.total,
+        dividaPecuaria: dividaPecuariaPrincipal,
         valorRebanho,
         percentual: alavancagemPerc,
         status: alavancagemStatus,

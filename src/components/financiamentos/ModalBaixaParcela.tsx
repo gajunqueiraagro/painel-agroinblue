@@ -175,15 +175,13 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
         .eq('id', parcela.id);
       if (errParc) throw errParc;
 
-      // 2) Mirror: sempre que valores ou data mudaram, deleta e recria o mirror
-      //    para refletir os novos valores em financeiro_lancamentos_v2 + planejamento_financeiro.
-      //    Se status mudou para 'cancelado', apenas deleta.
-      if (valoresMudaram || dataMudou || statusMudou) {
+      // 2) Mirror: se valores/data mudaram → delete + recreate (refaz tudo).
+      //    Se só status mudou → update incremental (preserva IDs das linhas do Lanç. Fin.).
+      if (valoresMudaram || dataMudou) {
         const { deletarMirrorParcela, criarMirrorParcela, atualizarStatusMirror } =
           await import('@/lib/financiamentos/parcelaMirror');
 
         await deletarMirrorParcela(supabase as any, parcela.id);
-        // Zera o lancamento_id pois o mirror antigo sumiu
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
@@ -212,10 +210,27 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose }: P
             }
           }
         }
-      } else if (statusMudou && status === 'pago' && dataPagamento) {
-        // só mudou status para pago, sem mexer em valores/data
-        const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
-        await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+      } else if (statusMudou) {
+        // só status mudou: atualiza o mirror incrementalmente
+        if (status === 'cancelado') {
+          const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+          await deletarMirrorParcela(supabase as any, parcela.id);
+          await supabase
+            .from('financiamento_parcelas')
+            .update({ lancamento_id: null })
+            .eq('id', parcela.id);
+        } else if (status === 'pago' && dataPagamento) {
+          const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
+          await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+        } else if (status === 'pendente') {
+          // reverte para programado + zera data_pagamento
+          await supabase
+            .from('financeiro_lancamentos_v2')
+            .update({ status_transacao: 'programado', data_pagamento: null })
+            .eq('origem_lancamento', 'parcela_financiamento')
+            .eq('observacao', parcela.id)
+            .eq('cancelado', false);
+        }
       }
 
       toast.success('Parcela atualizada');

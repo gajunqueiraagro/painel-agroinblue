@@ -279,7 +279,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária</p>
+                    <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária (Principal)</p>
                     <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.dividaPecuaria)}</p>
                   </div>
                   <div>
