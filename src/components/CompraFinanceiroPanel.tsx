@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import type { FiltroVisual } from '@/lib/statusOperacional';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 type TipoPreco = 'por_kg' | 'por_cab' | 'por_total';
 
@@ -266,6 +267,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
 
+          await deleteMetaPlanejamentoByMovimentacao(effectiveId, clienteAtual.id);
+
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
@@ -402,6 +405,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
       if (error) throw error;
+
+      await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       const msg = mode === 'update'

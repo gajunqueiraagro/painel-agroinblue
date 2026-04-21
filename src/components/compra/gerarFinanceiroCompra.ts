@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import type { CompraDetalhes } from '@/components/compra/CompraDetalhesDialog';
 import type { FiltroVisual } from '@/lib/statusOperacional';
+import { mirrorMetaToPlanejamento } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 interface GerarFinanceiroCompraParams {
   compraDetalhes: CompraDetalhes;
@@ -160,6 +161,8 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     toast.error('Erro ao gerar lançamentos: ' + error.message);
     return false;
   }
+
+  await mirrorMetaToPlanejamento(inserts);
 
   toast.success(`${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`);
   return true;

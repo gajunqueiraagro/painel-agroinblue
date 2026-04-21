@@ -26,7 +26,7 @@ export interface PlanejamentoFinanceiroRow {
   valor_base: number;
   quantidade_driver: number;
   valor_planejado: number;
-  origem: 'manual' | 'replicado' | 'calculado' | 'importado_realizado';
+  origem: 'manual' | 'replicado' | 'calculado' | 'importado_realizado' | 'rebanho_auto';
   cenario: string;
   observacao: string | null;
   created_at: string;
@@ -686,7 +686,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         .delete()
         .eq('fazenda_id', fazendaId!)
         .eq('ano', ano)
-        .eq('cenario', 'meta') as any);
+        .eq('cenario', 'meta')
+        .eq('origem', 'manual') as any);
 
       if (rows.length > 0) {
         for (let i = 0; i < rows.length; i += 500) {
@@ -773,7 +774,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           .eq('ano', ano)
           .eq('mes', mes)
           .eq('subcentro', subcentro)
-          .eq('cenario', 'meta') as any);
+          .eq('cenario', 'meta')
+          .eq('origem', 'manual') as any);
       } else {
         const row = {
           cliente_id: clienteId,
@@ -872,13 +874,14 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       if (fetchErr) throw fetchErr;
       const rows = (versao?.dados || []) as any[];
 
-      // Delete current meta data for this client+ano
+      // Delete current meta data for this client+ano (só manual — preserva espelhos rebanho_auto)
       await (supabase
         .from('planejamento_financeiro' as any)
         .delete()
         .eq('cliente_id', clienteId)
         .eq('ano', ano)
-        .eq('cenario', 'meta') as any);
+        .eq('cenario', 'meta')
+        .eq('origem', 'manual') as any);
 
       // Insert snapshot rows in batches
       if (rows.length > 0) {

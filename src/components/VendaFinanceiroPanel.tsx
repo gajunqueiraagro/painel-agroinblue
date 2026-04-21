@@ -18,6 +18,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { BoitelPlanningDialog, type BoitelData } from '@/components/BoitelPlanningDialog';
 import { salvarBoitelLote, salvarBoitelPlanejamento, vincularBoitelAoLancamento, gerarFinanceiroBoitel, carregarBoitelOperacao } from '@/hooks/useBoitelOperacoes';
 import type { FiltroVisual } from '@/lib/statusOperacional';
+import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 interface Parcela {
   data: string;
@@ -539,6 +540,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           await supabase.from('financeiro_lancamentos_v2')
             .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
+          await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id, usuario_id: userId || null,
             acao: 'recalculo_financeiro_venda', movimentacao_id: targetLancamentoId,
@@ -719,6 +721,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         return false;
       }
       console.log('[VendaFinanceiro] SUCCESS', insertedData);
+
+      await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       toast.success(`${inserts.length} lançamento(s) financeiro(s) de venda gerado(s)!`);

@@ -13,6 +13,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
 
 interface Parcela {
   data: string;
@@ -192,6 +193,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
             })
             .in('id', oldIds);
 
+          await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
+
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id,
             usuario_id: userId || null,
@@ -358,6 +361,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         throw error;
       }
       console.log('[AbateFinanceiro] INSERT OK', insertedData?.length, 'records');
+
+      await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       const msg = mode === 'update'
