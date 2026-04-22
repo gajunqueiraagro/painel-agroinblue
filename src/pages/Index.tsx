@@ -228,9 +228,13 @@ const Index = () => {
 
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
-  const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>({
-    ano: String(new Date().getFullYear()),
-    mes: new Date().getMonth() + 1,
+  const [filtroGlobal, setFiltroGlobal] = useState<FiltroGlobal>(() => {
+    // Default: mês anterior ao atual. Janeiro → Dezembro do ano anterior.
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 1..12
+    const mes = currentMonth === 1 ? 12 : currentMonth - 1;
+    const ano = currentMonth === 1 ? now.getFullYear() - 1 : now.getFullYear();
+    return { ano: String(ano), mes };
   });
   const metaGmd = useMetaGmd(filtroGlobal.ano);
   const metaLancamentosFiltrados = useMemo(() => filtrarPorCenario(metaLancamentos, 'meta'), [metaLancamentos]);
