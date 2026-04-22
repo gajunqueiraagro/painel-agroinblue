@@ -56,12 +56,17 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
       if (!clienteId) throw new Error('clienteId ausente');
       const anoMesTri = meses.map(m => `${ano}-${String(m).padStart(2, '0')}`);
       const anoPrev = ano - 1;
+      const anoMesTriPrev = meses.map(m => `${anoPrev}-${String(m).padStart(2, '0')}`);
+      // Mês imediatamente anterior ao primeiro do tri (pra variação de estoque)
+      const mesAntCurrent = meses[0] === 1 ? `${anoPrev}-12` : `${ano}-${String(meses[0] - 1).padStart(2, '0')}`;
+      const mesAntPrev = meses[0] === 1 ? `${ano - 2}-12` : `${anoPrev}-${String(meses[0] - 1).padStart(2, '0')}`;
+      const vrfAnoMes = [mesAntCurrent, ...anoMesTri, mesAntPrev, ...anoMesTriPrev];
       const dataIni = anoMesTri[0] + '-01';
       const dataFimMes = meses[2];
       const dataFimDia = new Date(ano, dataFimMes, 0).getDate();
       const dataFim = `${ano}-${String(dataFimMes).padStart(2, '0')}-${String(dataFimDia).padStart(2, '0')}`;
 
-      const [zootReal, zootMeta, zootPrev, finLancs, saldos, movLancs, pastos] = await Promise.all([
+      const [zootReal, zootMeta, zootPrev, finLancs, finLancsPrev, saldos, movLancs, pastos, vrfRes] = await Promise.all([
         supabase.from('zoot_mensal_cache' as any).select('*')
           .eq('cliente_id', clienteId).eq('ano', ano).eq('cenario', 'realizado').in('mes', meses),
         supabase.from('zoot_mensal_cache' as any).select('*')
@@ -70,6 +75,8 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
           .eq('cliente_id', clienteId).eq('ano', anoPrev).eq('cenario', 'realizado').in('mes', meses),
         supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, subcentro, centro_custo')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTri),
+        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+          .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTriPrev),
         supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes, saldo_inicial, saldo_final, total_entradas, total_saidas')
           .eq('cliente_id', clienteId).in('ano_mes', anoMesTri),
         supabase.from('lancamentos').select('data, tipo, quantidade, peso_total, valor_total, cenario, cancelado')
@@ -77,6 +84,8 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
           .gte('data', dataIni).lte('data', dataFim),
         supabase.from('pastos').select('fazenda_id, area_produtiva_ha, ativo, entra_conciliacao')
           .eq('cliente_id', clienteId).eq('ativo', true).eq('entra_conciliacao', true),
+        supabase.from('valor_rebanho_fechamento').select('ano_mes, valor_total, status')
+          .eq('cliente_id', clienteId).in('ano_mes', vrfAnoMes),
       ]);
 
       const zootRealRows = (zootReal.data as any[]) || [];
@@ -201,6 +210,69 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
       // ── DIVIDENDO LÍQUIDO ──
       const dividendoLiquido: Arr3 = [0, 1, 2].map(i => dividendos[i] - aportePessoal[i]) as Arr3;
 
+      // ── DRE (Demonstrativo de Resultado) ──
+      // Agregar valor_rebanho_fechamento por ano_mes (soma das fazendas do cliente)
+      const vrfRows = (vrfRes.data as any[]) || [];
+      const vrfMap = new Map<string, { valor: number; statusOk: boolean }>();
+      for (const r of vrfRows) {
+        const key = r.ano_mes as string;
+        const prev = vrfMap.get(key);
+        const valor = (prev?.valor || 0) + (Number(r.valor_total) || 0);
+        // status=fechado em todas as linhas do mês → considerar disponível
+        const okPrev = prev ? prev.statusOk : true;
+        const statusOk = okPrev && (r.status === 'fechado');
+        vrfMap.set(key, { valor, statusOk });
+      }
+      const vrfValor = (key: string): number | null => vrfMap.has(key) ? vrfMap.get(key)!.valor : null;
+      const vrfDisponivel = (key: string): boolean => vrfMap.has(key) && vrfMap.get(key)!.statusOk;
+
+      // DRE — per-month (atual)
+      const dreFatura: Arr3 = receitaPec;                               // (+) Faturamento competência = Receita Pecuária
+      const dreDesemb: Arr3 = [0, 1, 2].map(i => custoFixoPec[i] + custoVariavelPec[i]) as Arr3;
+      const dreLucroBruto: Arr3 = [0, 1, 2].map(i => dreFatura[i] - dreDesemb[i]) as Arr3;
+      const dreReposicao: Arr3 = compraBovinos;
+      const dreVariacao: Arr3 = [0, 0, 0];
+      const dreFechamentoPendente: [boolean, boolean, boolean] = [false, false, false];
+      for (let i = 0; i < 3; i++) {
+        const mesCurKey = anoMesTri[i];
+        const mesAntKey = i === 0 ? mesAntCurrent : anoMesTri[i - 1];
+        const vCur = vrfValor(mesCurKey);
+        const vAnt = vrfValor(mesAntKey);
+        if (vCur == null || vAnt == null) {
+          dreFechamentoPendente[i] = true;
+          dreVariacao[i] = 0;
+        } else {
+          dreVariacao[i] = vCur - vAnt;
+          dreFechamentoPendente[i] = !vrfDisponivel(mesCurKey) || !vrfDisponivel(mesAntKey);
+        }
+      }
+      const dreLucroOperacional: Arr3 = [0, 1, 2].map(i => dreLucroBruto[i] - dreReposicao[i] + dreVariacao[i]) as Arr3;
+      const dreJuros: Arr3 = jurosPec;
+      const dreLucroLiquido: Arr3 = [0, 1, 2].map(i => dreLucroOperacional[i] - dreJuros[i]) as Arr3;
+      const dreMargemPct: Arr3 = [0, 1, 2].map(i => dreFatura[i] > 0 ? (dreLucroLiquido[i] / dreFatura[i]) * 100 : 0) as Arr3;
+      const dreMarkupPct: Arr3 = [0, 1, 2].map(i => dreDesemb[i] > 0 ? (dreLucroLiquido[i] / dreDesemb[i]) * 100 : 0) as Arr3;
+
+      // DRE — Ref ano anterior (totais do tri)
+      const finRowsPrev = (finLancsPrev.data as any[]) || [];
+      const sumPrev = (pred: (l: any) => boolean): number =>
+        finRowsPrev.filter(pred).reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0);
+      const prevFatura = sumPrev(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const prevCustoFixo = sumPrev(l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const prevCustoVar = sumPrev(l => l.grupo_custo === 'Custo Variável Pecuária');
+      const prevDesemb = prevCustoFixo + prevCustoVar;
+      const prevReposicao = sumPrev(l => l.grupo_custo === 'Compra de Bovinos');
+      const prevJuros = sumPrev(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+      const prevLucroBruto = prevFatura - prevDesemb;
+      const prevMesFinTri = anoMesTriPrev[2];
+      const prevVarFinal = vrfValor(prevMesFinTri);
+      const prevVarInicial = vrfValor(mesAntPrev);
+      const prevFechamentoPend = prevVarFinal == null || prevVarInicial == null;
+      const prevVariacao = prevFechamentoPend ? 0 : (prevVarFinal! - prevVarInicial!);
+      const prevLucroOper = prevLucroBruto - prevReposicao + prevVariacao;
+      const prevLucroLiq = prevLucroOper - prevJuros;
+      const prevMargem = prevFatura > 0 ? (prevLucroLiq / prevFatura) * 100 : 0;
+      const prevMarkup = prevDesemb > 0 ? (prevLucroLiq / prevDesemb) * 100 : 0;
+
       return {
         meses,
         ano,
@@ -222,6 +294,33 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
           investPec, investAgr, compraBovinos, dividendos, amortizacoes, juros: jurosPec,
         },
         aportes: { dividendos, aportePessoal, dividendoLiquido },
+        dre: {
+          faturamento: dreFatura,
+          desembolsoProducao: dreDesemb,
+          lucroBruto: dreLucroBruto,
+          reposicaoBovinos: dreReposicao,
+          variacaoEstoque: dreVariacao,
+          fechamentoPendente: dreFechamentoPendente,
+          lucroOperacional: dreLucroOperacional,
+          jurosFinanciamento: dreJuros,
+          lucroLiquido: dreLucroLiquido,
+          margemLucroPct: dreMargemPct,
+          markupPct: dreMarkupPct,
+          refAnoAnterior: {
+            ano: anoPrev,
+            faturamento: prevFatura,
+            desembolsoProducao: prevDesemb,
+            lucroBruto: prevLucroBruto,
+            reposicaoBovinos: prevReposicao,
+            variacaoEstoque: prevVariacao,
+            lucroOperacional: prevLucroOper,
+            jurosFinanciamento: prevJuros,
+            lucroLiquido: prevLucroLiq,
+            margemLucroPct: prevMargem,
+            markupPct: prevMarkup,
+            fechamentoPendente: prevFechamentoPend,
+          },
+        },
       };
     },
   });

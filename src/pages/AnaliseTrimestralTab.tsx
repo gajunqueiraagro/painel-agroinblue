@@ -10,7 +10,7 @@ import { useAnaliseTrimestral, type Trimestre } from '@/hooks/useAnaliseTrimestr
 import { Button } from '@/components/ui/button';
 import { Printer, BarChart3 } from 'lucide-react';
 
-type AbaId = 'gerente' | 'proprietario';
+type AbaId = 'gerente' | 'proprietario' | 'dre';
 type Arr3 = [number, number, number];
 
 const MES_NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -181,12 +181,14 @@ export function AnaliseTrimestralTab() {
         <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, background: COLOR_CARD, padding: 4, borderRadius: 6, width: 'fit-content' }}>
           <button onClick={() => setAba('gerente')} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 4, background: aba === 'gerente' ? COLOR_ACCENT : 'transparent', color: aba === 'gerente' ? '#0f172a' : COLOR_TEXT, border: 'none', cursor: 'pointer' }}>📋 Gerente</button>
           <button onClick={() => setAba('proprietario')} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 4, background: aba === 'proprietario' ? COLOR_ACCENT : 'transparent', color: aba === 'proprietario' ? '#0f172a' : COLOR_TEXT, border: 'none', cursor: 'pointer' }}>📊 Proprietário</button>
+          <button onClick={() => setAba('dre')} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 4, background: aba === 'dre' ? COLOR_ACCENT : 'transparent', color: aba === 'dre' ? '#0f172a' : COLOR_TEXT, border: 'none', cursor: 'pointer' }}>📒 DRE</button>
         </div>
 
         {q.isLoading && <div style={{ padding: 20, color: COLOR_TEXT_MUTED }}>Carregando dados do trimestre…</div>}
         {q.error && <div style={{ padding: 20, color: COLOR_BAD }}>Erro: {(q.error as Error).message}</div>}
         {d && aba === 'gerente' && <TabGerente d={d} mesLabels={mesLabels} />}
         {d && aba === 'proprietario' && <TabProprietario d={d} mesLabels={mesLabels} />}
+        {d && aba === 'dre' && <TabDRE d={d} mesLabels={mesLabels} />}
 
         {/* Observações */}
         {d && observacoes.length > 0 && (
@@ -349,6 +351,119 @@ function TabProprietario({ d, mesLabels }: { d: NonNullable<ReturnType<typeof us
         <Row label="Aportes Pessoais (entrada)" values={ap.aportePessoal} acum={sum3(ap.aportePessoal)} mode="money" />
         <Row label="Dividendo Líquido" values={ap.dividendoLiquido} acum={sum3(ap.dividendoLiquido)} mode="money" emphasis />
       </TabelaTrimestral>
+    </>
+  );
+}
+
+// ====================================================================
+// ABA: DRE
+// ====================================================================
+function TabDRE({ d, mesLabels }: { d: NonNullable<ReturnType<typeof useAnaliseTrimestral>['data']>; mesLabels: Arr3 }) {
+  const dre = (d as any).dre as {
+    faturamento: Arr3; desembolsoProducao: Arr3; lucroBruto: Arr3;
+    reposicaoBovinos: Arr3; variacaoEstoque: Arr3; fechamentoPendente: [boolean, boolean, boolean];
+    lucroOperacional: Arr3; jurosFinanciamento: Arr3; lucroLiquido: Arr3;
+    margemLucroPct: Arr3; markupPct: Arr3;
+    refAnoAnterior: {
+      ano: number; faturamento: number; desembolsoProducao: number; lucroBruto: number;
+      reposicaoBovinos: number; variacaoEstoque: number; lucroOperacional: number;
+      jurosFinanciamento: number; lucroLiquido: number; margemLucroPct: number;
+      markupPct: number; fechamentoPendente: boolean;
+    };
+  };
+
+  const ref = dre.refAnoAnterior;
+
+  // Cor por sinal. Zero = muted.
+  const clr = (v: number): string => {
+    if (!Number.isFinite(v) || v === 0) return COLOR_TEXT_MUTED;
+    return v < 0 ? COLOR_BAD : COLOR_GOOD;
+  };
+  const fmtCell = (v: number, mode: 'money' | 'pct' = 'money') => {
+    if (!Number.isFinite(v) || v === 0) return '–';
+    return mode === 'money' ? fmtMoeda(v) : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+  };
+
+  // Renderiza linha DRE. `signal` define categoria; `pendente` indica mês com fechamento ausente.
+  const renderLine = (
+    label: string,
+    values: Arr3,
+    acum: number,
+    refAno: number,
+    opts: { signal: '+' | '-' | '=' | ''; pendente?: boolean[]; mode?: 'money' | 'pct'; emphasis?: boolean } = { signal: '' }
+  ) => {
+    const { signal, pendente, mode = 'money', emphasis } = opts;
+    const bg = signal === '=' ? 'rgba(245, 158, 11, 0.08)' : undefined;
+    const italic = signal === '-';
+    return (
+      <tr style={{ background: bg, fontWeight: emphasis || signal === '=' ? 700 : 400, fontStyle: italic ? 'italic' : 'normal' }}>
+        <td style={{ padding: '6px 10px', color: COLOR_TEXT, borderTop: signal === '=' ? `1px solid ${COLOR_BORDER}` : undefined }}>
+          <span style={{ color: COLOR_TEXT_MUTED, fontSize: 11, marginRight: 4, display: 'inline-block', width: 16 }}>{signal}</span>
+          {label}
+        </td>
+        {values.map((v, i) => {
+          const isPend = pendente && pendente[i];
+          return (
+            <td key={i} className="mono" style={{ padding: '6px 10px', textAlign: 'right', color: isPend ? COLOR_TEXT_MUTED : clr(v) }}>
+              {isPend ? <span style={{ fontStyle: 'italic', fontSize: 10 }}>Pendente</span> : fmtCell(v, mode)}
+            </td>
+          );
+        })}
+        <td className="mono acum" style={{ padding: '6px 10px', textAlign: 'right', color: clr(acum), fontWeight: 700, background: signal === '=' ? 'rgba(245, 158, 11, 0.15)' : undefined }}>
+          {fmtCell(acum, mode)}
+        </td>
+        <td className="mono" style={{ padding: '6px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, borderLeft: `1px solid ${COLOR_BORDER}` }}>
+          {fmtCell(refAno, mode)}
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <>
+      {/* KPIs DRE */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+        <KPI label="Faturamento (competência)" value={fmtMoeda(sum3(dre.faturamento))} sub={`ref ${ref.ano}: ${fmtMoeda(ref.faturamento)}`} />
+        <KPI label="Lucro Líquido" value={fmtMoeda(sum3(dre.lucroLiquido))} sub={`ref ${ref.ano}: ${fmtMoeda(ref.lucroLiquido)}`} />
+        <KPI label="Margem" value={`${avg3(dre.margemLucroPct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} sub={`ref ${ref.ano}: ${ref.margemLucroPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} />
+        <KPI label="Markup" value={`${avg3(dre.markupPct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} sub={`ref ${ref.ano}: ${ref.markupPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} />
+      </div>
+
+      <div className="avoid-break" style={{ background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: COLOR_SEC }}>
+              <th style={{ padding: '8px 10px', textAlign: 'left', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>DRE — Demonstrativo de Resultado</th>
+              {mesLabels.map((m, i) => (
+                <th key={i} style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>{m}</th>
+              ))}
+              <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_ACCENT, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Acum. T{d.trimestre}/{d.ano}</th>
+              <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10, textTransform: 'uppercase', borderLeft: `1px solid ${COLOR_BORDER}` }}>Ref. {ref.ano}*</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renderLine('Faturamento — competência', dre.faturamento, sum3(dre.faturamento), ref.faturamento, { signal: '+' })}
+            {renderLine('Desembolso de Produção', dre.desembolsoProducao, sum3(dre.desembolsoProducao), ref.desembolsoProducao, { signal: '-' })}
+            {renderLine('Lucro Bruto', dre.lucroBruto, sum3(dre.lucroBruto), ref.lucroBruto, { signal: '=', emphasis: true })}
+            {renderLine('Reposição de Bovinos', dre.reposicaoBovinos, sum3(dre.reposicaoBovinos), ref.reposicaoBovinos, { signal: '-' })}
+            {renderLine('Variação do Estoque de Gado', dre.variacaoEstoque, sum3(dre.variacaoEstoque), ref.variacaoEstoque, { signal: '+/-', pendente: dre.fechamentoPendente } as any)}
+            {renderLine('Lucro Operacional', dre.lucroOperacional, sum3(dre.lucroOperacional), ref.lucroOperacional, { signal: '=', emphasis: true })}
+            {renderLine('Juros de Financiamento', dre.jurosFinanciamento, sum3(dre.jurosFinanciamento), ref.jurosFinanciamento, { signal: '-' })}
+            {renderLine('Lucro Líquido', dre.lucroLiquido, sum3(dre.lucroLiquido), ref.lucroLiquido, { signal: '=', emphasis: true })}
+            {renderLine('Margem de Lucro (%)', dre.margemLucroPct, avg3(dre.margemLucroPct), ref.margemLucroPct, { signal: '', mode: 'pct' })}
+            {renderLine('Markup (%)', dre.markupPct, avg3(dre.markupPct), ref.markupPct, { signal: '', mode: 'pct' })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="avoid-break" style={{ marginTop: 12, padding: 10, background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, fontSize: 10, color: COLOR_TEXT_MUTED, lineHeight: 1.5 }}>
+        <div style={{ marginBottom: 4 }}>* <strong>Faturamento por competência</strong> = receitas reconhecidas na data do abate/venda (não na data do pagamento).</div>
+        <div>
+          <strong>DRE ≠ Fluxo de Caixa</strong>: o DRE reconhece receita na data do abate/venda (competência);
+          o Fluxo de Caixa registra na data do pagamento (caixa). Variação de estoque é econômica e não transita pelo caixa.
+          Linhas com &ldquo;Pendente&rdquo; indicam mês sem <code>valor_rebanho_fechamento</code> disponível — fechar o mês para computar a variação de estoque.
+        </div>
+      </div>
     </>
   );
 }
