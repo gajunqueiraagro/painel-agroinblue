@@ -13,6 +13,7 @@ import { useResumoStatus, StatusNivel } from '@/hooks/useResumoStatus';
 import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
@@ -188,6 +189,8 @@ function MetricRow({ label, value, accent }: { label: string; value: string; acc
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange, onSetSaldo }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
+  const { canViewTab } = usePermissions();
+  const podeVerAnaliseTrimestral = canViewTab('analise_trimestral');
   const fazendaNaoPecuaria = fazendaAtual && fazendaAtual.id !== '__global__' && fazendaAtual.tem_pecuaria === false;
 
   const anosDisponiveis = useMemo(() => {
@@ -353,16 +356,26 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </button>
 
           {/* STATUS DOS FECHAMENTOS */}
-          <button
-            onClick={() => onTabChange('status_fechamentos' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
-            className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-3 flex flex-col items-center justify-center gap-1.5 transition-colors hover:bg-primary/10 active:bg-primary/15"
-          >
-            <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
-              <ClipboardCheck className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-[10px] font-bold text-foreground text-center">Fechamentos</span>
-            <p className="text-[8px] text-muted-foreground text-center leading-tight">Status do ano</p>
-          </button>
+          <div className="rounded-lg border border-primary/30 bg-primary/5 flex flex-col items-stretch overflow-hidden">
+            <button
+              onClick={() => onTabChange('status_fechamentos' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+              className="flex-1 flex flex-col items-center justify-center gap-1.5 px-2 py-3 transition-colors hover:bg-primary/10 active:bg-primary/15"
+            >
+              <div className="h-8 w-8 rounded-md bg-primary/15 flex items-center justify-center">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-[10px] font-bold text-foreground text-center">Fechamentos</span>
+              <p className="text-[8px] text-muted-foreground text-center leading-tight">Status do ano</p>
+            </button>
+            {podeVerAnaliseTrimestral && (
+              <button
+                onClick={() => onTabChange('analise_trimestral' as TabId, { ano: filtroGlobal.ano, mes: mesNum })}
+                className="border-t border-primary/20 bg-primary/10 hover:bg-primary/20 active:bg-primary/25 text-primary text-[9px] font-semibold py-1.5 px-1 transition-colors"
+              >
+                📊 Ver Análise Trimestral
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
