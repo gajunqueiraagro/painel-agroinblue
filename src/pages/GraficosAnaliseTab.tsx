@@ -35,7 +35,7 @@ interface Props {
 }
 
 const TIPOS_SAIDA_DESFRUTE = ['abate', 'venda', 'consumo', 'transferencia_saida'];
-const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))'];
+const CHART_COLORS = ['hsl(var(--primary))', 'hsl(var(--muted-foreground))', '#f97316'];
 const DOT_STYLE = { r: 2, strokeWidth: 1.5, fill: 'hsl(var(--background))' };
 const ACTIVE_DOT_STYLE = { r: 4, strokeWidth: 2, fill: 'hsl(var(--primary))' };
 const GRID = { strokeDasharray: '3 3', stroke: 'hsl(var(--border))', strokeOpacity: 0.5 };
@@ -166,9 +166,10 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
   // FONTE OFICIAL
   const rebanhoAtual = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
   const rebanhoAnt = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado' });
+  const rebanhoMeta = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
 
   const chartData = useMemo(() => {
-    const buildYear = (rebanho: typeof rebanhoAtual, ano: number) => {
+    const buildYear = (rebanho: typeof rebanhoAtual) => {
       const data: any[] = [];
       for (let m = 1; m <= 12; m++) {
         const cab = rebanho.getSaldoFinalTotal(m);
@@ -179,19 +180,22 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
       }
       return data;
     };
-    const atual = buildYear(rebanhoAtual, anoNum);
-    const anterior = buildYear(rebanhoAnt, anoNum - 1);
+    const atual = buildYear(rebanhoAtual);
+    const anterior = buildYear(rebanhoAnt);
+    const meta = buildYear(rebanhoMeta);
     return MESES_NOMES.map((mes, i) => {
       const isFuturo = i + 1 > mesFiltro;
       return {
         mes,
         [`cab_${anoNum}`]: isFuturo ? null : (atual[i]?.cabecas ?? 0),
         [`cab_${anoNum - 1}`]: anterior[i]?.cabecas ?? 0,
+        [`cabMeta_${anoNum}`]: meta[i]?.cabecas ?? null,
         [`kgHa_${anoNum}`]: isFuturo ? null : atual[i]?.kgHa,
         [`kgHa_${anoNum - 1}`]: anterior[i]?.kgHa,
+        [`kgHaMeta_${anoNum}`]: meta[i]?.kgHa ?? null,
       };
     });
-  }, [rebanhoAtual, rebanhoAnt, anoNum, mesFiltro, pastos]);
+  }, [rebanhoAtual, rebanhoAnt, rebanhoMeta, anoNum, mesFiltro, pastos]);
 
   const prodData = useMemo(() => {
     if (!zoo.historico || zoo.historico.length < 2) return [];
@@ -248,10 +252,12 @@ function ZootecnicoCharts({ zoo, lancamentos, saldosIniciais, anoNum, mesFiltro,
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <ChartCard title="Rebanho Final do mês (cab)" subtitle="Quantidade de cabeças no final do mês" data={chartData}
-        keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+        keys={[`cab_${anoNum}`, `cab_${anoNum - 1}`, `cabMeta_${anoNum}`]}
+        labels={[String(anoNum), String(anoNum - 1), `Meta ${anoNum}`]}
         type="area" mesFiltro={mesFiltro} valueSuffix=" cab." />
       <ChartCard title="Lotação: Kg vivo por ha (Kg/ha)" subtitle="Quantidade de Kg sobre cada hectare produtivo" data={chartData}
-        keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+        keys={[`kgHa_${anoNum}`, `kgHa_${anoNum - 1}`, `kgHaMeta_${anoNum}`]}
+        labels={[String(anoNum), String(anoNum - 1), `Meta ${anoNum}`]}
         type="line" mesFiltro={mesFiltro} decimals={2} valueSuffix=" kg/ha" />
       {prodData.length > 0 && (
         <>
@@ -561,9 +567,12 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Area key={k} type="monotone" dataKey={k} name={labels[i]}
-                    stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]} fillOpacity={i === 0 ? 0.3 : 0.1}
-                    strokeWidth={i === 0 ? 2.5 : 1.5} strokeDasharray={i > 0 ? '4 2' : undefined}
-                    dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} />
+                    stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]}
+                    fillOpacity={i === 0 ? 0.3 : i === 1 ? 0.1 : 0}
+                    strokeWidth={i === 0 ? 2.5 : i === 2 ? 2 : 1.5}
+                    strokeDasharray={i === 1 ? '4 2' : undefined}
+                    dot={i === 2 ? { r: 3, strokeWidth: 1.5, fill: '#f97316' } : DOT_STYLE}
+                    activeDot={ACTIVE_DOT_STYLE} connectNulls />
                 ))}
               </AreaChart>
             ) : (
@@ -575,10 +584,12 @@ function ChartCard({ title, subtitle, data, keys, labels, type, decimals = 0, me
                 <Legend wrapperStyle={{ fontSize: 10 }} />
                 {keys.map((k, i) => (
                   <Line key={k} type="monotone" dataKey={k} name={labels[i]}
-                    stroke={CHART_COLORS[i]} strokeWidth={i === 0 ? 2.5 : 1.5}
-                    strokeDasharray={i > 0 ? '4 2' : undefined}
-                    strokeOpacity={i > 0 ? 0.55 : 1}
-                    dot={DOT_STYLE} activeDot={ACTIVE_DOT_STYLE} connectNulls />
+                    stroke={CHART_COLORS[i]}
+                    strokeWidth={i === 0 ? 2.5 : i === 2 ? 2 : 1.5}
+                    strokeDasharray={i === 1 ? '4 2' : undefined}
+                    strokeOpacity={i === 1 ? 0.55 : 1}
+                    dot={i === 2 ? { r: 3, strokeWidth: 1.5, fill: '#f97316' } : DOT_STYLE}
+                    activeDot={ACTIVE_DOT_STYLE} connectNulls />
                 ))}
               </LineChart>
             )}
