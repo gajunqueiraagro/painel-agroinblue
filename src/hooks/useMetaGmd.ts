@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -16,19 +17,18 @@ export function useMetaGmd(ano: string) {
   const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
   const [rows, setRows] = useState<MetaGmdRow[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!clienteId) return;
-    const isGlobal = !fazendaId || fazendaId === '__global__';
-    if (!isGlobal && !fazendaId) return;
-    setLoading(true);
-    try {
+  const { data: queryData, isLoading: loading, refetch } = useQuery({
+    queryKey: ['meta-gmd', clienteId, fazendaId ?? 'global', ano],
+    enabled: !!clienteId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<MetaGmdRow[]> => {
+      const isGlobal = !fazendaId || fazendaId === '__global__';
       let query = supabase
         .from('meta_gmd_mensal')
         .select('*')
-        .eq('cliente_id', clienteId)
+        .eq('cliente_id', clienteId!)
         .like('ano_mes', `${ano}-%`);
       if (!isGlobal) {
         query = query.eq('fazenda_id', fazendaId);
@@ -37,9 +37,9 @@ export function useMetaGmd(ano: string) {
       if (error) throw error;
 
       // Build rows from CATEGORIAS
-      // Em modo Global, agrega por média ponderada? Aqui usamos a MÉDIA simples
-      // dos valores > 0 por categoria/mês (GMD é taxa — somar não faz sentido).
-      const built: MetaGmdRow[] = CATEGORIAS.map(cat => {
+      // Em modo Global usamos a MÉDIA simples dos valores > 0 por categoria/mês
+      // (GMD é taxa — somar não faz sentido).
+      return CATEGORIAS.map(cat => {
         const meses: Record<string, number> = {};
         for (let m = 1; m <= 12; m++) {
           const key = String(m).padStart(2, '0');
@@ -56,15 +56,15 @@ export function useMetaGmd(ano: string) {
         }
         return { categoria: cat.value, meses };
       });
-      setRows(built);
-    } catch (e: any) {
-      console.error('Erro ao carregar GMD previsto:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [fazendaId, clienteId, ano]);
+    },
+  });
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // queryData fica na ref — evita loop de re-render ao chamar setRows
+  const queryDataRef = useRef(queryData);
+  queryDataRef.current = queryData;
+  useEffect(() => {
+    if (queryDataRef.current) setRows(queryDataRef.current);
+  }, [loading, clienteId, fazendaId, ano]);
 
   const updateCell = useCallback((cat: Categoria, mes: string, val: number) => {
     setRows(prev => prev.map(r =>
@@ -108,13 +108,13 @@ export function useMetaGmd(ano: string) {
       }
 
       toast.success('GMD previsto salvo com sucesso');
-      await loadData();
+      await refetch();
     } catch (e: any) {
       toast.error('Erro ao salvar: ' + e.message);
     } finally {
       setSaving(false);
     }
-  }, [fazendaId, clienteId, ano, rows, loadData]);
+  }, [fazendaId, clienteId, ano, rows, refetch]);
 
   return { rows, setRows, loading, saving, updateCell, salvar };
 }
