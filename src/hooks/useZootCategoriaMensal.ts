@@ -98,8 +98,9 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
     staleTime: 600_000, // 10min — evita re-fetch ao trocar de aba/navegar
     gcTime: 900_000,    // 15min — mantém em cache depois de desmontar
     // Mantém dados anteriores durante troca de fazenda/cliente/ano para evitar
-    // flash de array vazio enquanto a nova query resolve (react-query v5).
-    placeholderData: (previousData) => previousData,
+    // flash de "–" enquanto a nova query resolve. Em primeiro load (sem prev),
+    // devolve [] em vez de undefined para consumidores que iteram direto.
+    placeholderData: (prev) => prev ?? [],
   });
 }
 
