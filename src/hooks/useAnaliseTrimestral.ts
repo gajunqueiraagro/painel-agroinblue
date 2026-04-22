@@ -327,3 +327,201 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
 }
 
 export type AnaliseTrimestralData = NonNullable<ReturnType<typeof useAnaliseTrimestral>['data']>;
+
+// ============================================================================
+// DRE por Período (1..N meses acumulado)
+// ============================================================================
+
+interface DREPeriodoParams {
+  clienteId: string | null | undefined;
+  ano: number;
+  ateMes: number; // 1..12 — DRE acumulado de Jan até este mês
+}
+
+export function useAnaliseDREPeriodo({ clienteId, ano, ateMes }: DREPeriodoParams) {
+  const meses = useMemo(() => Array.from({ length: ateMes }, (_, i) => i + 1), [ateMes]);
+
+  return useQuery({
+    queryKey: ['analise-dre-periodo', clienteId, ano, ateMes],
+    enabled: !!clienteId && ateMes >= 1 && ateMes <= 12,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (!clienteId) throw new Error('clienteId ausente');
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const anoPrev = ano - 1;
+      const anoMes = meses.map(m => `${ano}-${pad(m)}`);
+      const anoMesPrev = meses.map(m => `${anoPrev}-${pad(m)}`);
+      const mesAntAtual = `${anoPrev}-12`;
+      const mesAntPrev = `${ano - 2}-12`;
+      const vrfAnoMes = [mesAntAtual, ...anoMes, mesAntPrev, ...anoMesPrev];
+      const dataIni = `${ano}-01-01`;
+      const dataFim = `${ano}-${pad(ateMes)}-${String(new Date(ano, ateMes, 0).getDate()).padStart(2, '0')}`;
+
+      const [fin, finPrev, compras, zootAtu, vrf] = await Promise.all([
+        supabase.from('financeiro_lancamentos_v2')
+          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+          .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMes),
+        supabase.from('financeiro_lancamentos_v2')
+          .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo')
+          .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesPrev),
+        supabase.from('lancamentos')
+          .select('data, tipo, valor_total, quantidade, peso_total')
+          .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'realizado')
+          .eq('tipo', 'compra').gte('data', dataIni).lte('data', dataFim),
+        supabase.from('zoot_mensal_cache' as any).select('*')
+          .eq('cliente_id', clienteId).eq('ano', ano).eq('cenario', 'realizado').in('mes', meses),
+        supabase.from('valor_rebanho_fechamento')
+          .select('ano_mes, valor_total, status')
+          .eq('cliente_id', clienteId).in('ano_mes', vrfAnoMes),
+      ]);
+
+      const finRows = (fin.data as any[]) || [];
+      const finRowsPrev = (finPrev.data as any[]) || [];
+      const compraRows = (compras.data as any[]) || [];
+      const zootRows = (zootAtu.data as any[]) || [];
+      const vrfRows = (vrf.data as any[]) || [];
+
+      const N = ateMes;
+      const arr = (): number[] => Array(N).fill(0);
+
+      const sumByMes = (rows: any[], pred: (l: any) => boolean): number[] => {
+        const out = arr();
+        for (const l of rows) {
+          if (!pred(l)) continue;
+          const mes = Number(String(l.ano_mes).substring(5, 7));
+          const idx = meses.indexOf(mes);
+          if (idx < 0) continue;
+          out[idx] += Math.abs(Number(l.valor) || 0);
+        }
+        return out;
+      };
+
+      const faturamento = sumByMes(finRows, l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const custoFixo = sumByMes(finRows, l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const custoVar = sumByMes(finRows, l => l.grupo_custo === 'Custo Variável Pecuária');
+      const juros = sumByMes(finRows, l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+
+      const desembolso: number[] = meses.map((_, i) => custoFixo[i] + custoVar[i]);
+      const lucroBruto: number[] = meses.map((_, i) => faturamento[i] - desembolso[i]);
+
+      // Reposição = lancamentos tipo=compra por data (valor_total), soma por mês
+      const reposicao: number[] = arr();
+      let reposicaoTemValor = false;
+      for (const r of compraRows) {
+        const mes = Number(String(r.data).substring(5, 7));
+        const idx = meses.indexOf(mes);
+        if (idx < 0) continue;
+        const v = Number(r.valor_total);
+        if (v != null && !Number.isNaN(v)) {
+          reposicao[idx] += Math.abs(v);
+          reposicaoTemValor = true;
+        }
+      }
+
+      // vrfMap
+      const vrfMap = new Map<string, { valor: number; statusOk: boolean }>();
+      for (const r of vrfRows) {
+        const prev = vrfMap.get(r.ano_mes);
+        const valor = (prev?.valor || 0) + (Number(r.valor_total) || 0);
+        const okPrev = prev ? prev.statusOk : true;
+        vrfMap.set(r.ano_mes, { valor, statusOk: okPrev && r.status === 'fechado' });
+      }
+      const vrfVal = (k: string) => vrfMap.has(k) ? vrfMap.get(k)!.valor : null;
+
+      const variacao: number[] = arr();
+      const fechamentoPendente: boolean[] = Array(N).fill(false);
+      for (let i = 0; i < N; i++) {
+        const cur = anoMes[i];
+        const ant = i === 0 ? mesAntAtual : anoMes[i - 1];
+        const vCur = vrfVal(cur), vAnt = vrfVal(ant);
+        if (vCur == null || vAnt == null) { fechamentoPendente[i] = true; }
+        else variacao[i] = vCur - vAnt;
+      }
+
+      const lucroOper: number[] = meses.map((_, i) => lucroBruto[i] - reposicao[i] + variacao[i]);
+      const lucroLiq: number[] = meses.map((_, i) => lucroOper[i] - juros[i]);
+      const margem: number[] = meses.map((_, i) => faturamento[i] > 0 ? (lucroLiq[i] / faturamento[i]) * 100 : 0);
+      const markup: number[] = meses.map((_, i) => desembolso[i] > 0 ? (lucroLiq[i] / desembolso[i]) * 100 : 0);
+
+      // Acumulados (soma)
+      const acumSum = (a: number[]) => a.reduce((s, v) => s + v, 0);
+      const acumFat = acumSum(faturamento);
+      const acumDesemb = acumSum(desembolso);
+      const acumLucroBruto = acumSum(lucroBruto);
+      const acumReposicao = acumSum(reposicao);
+      const acumVariacao = acumSum(variacao);
+      const acumLucroOper = acumLucroBruto - acumReposicao + acumVariacao;
+      const acumJuros = acumSum(juros);
+      const acumLucroLiq = acumLucroOper - acumJuros;
+      const acumMargem = acumFat > 0 ? (acumLucroLiq / acumFat) * 100 : 0;
+      const acumMarkup = acumDesemb > 0 ? (acumLucroLiq / acumDesemb) * 100 : 0;
+
+      // Ref ano anterior (mesmo período)
+      const sumPrev = (pred: (l: any) => boolean) =>
+        finRowsPrev.filter(pred).reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0);
+      const prevFat = sumPrev(l => l.tipo_operacao === '1-Entradas' && l.grupo_custo === 'Receita Pecuária');
+      const prevFixo = sumPrev(l => l.grupo_custo === 'Custo Fixo Pecuária');
+      const prevVar = sumPrev(l => l.grupo_custo === 'Custo Variável Pecuária');
+      const prevDesemb = prevFixo + prevVar;
+      const prevJuros = sumPrev(l => l.grupo_custo === 'Juros de Financiamento Pecuária');
+      const prevLucroBruto = prevFat - prevDesemb;
+      // Reposição prev: SEM info direta (compras zoo do prev não foram buscadas pra economizar query) — flag zero
+      const prevReposicao = 0;
+      const prevVarFinal = vrfVal(anoMesPrev[N - 1]);
+      const prevVarInicial = vrfVal(mesAntPrev);
+      const prevVariacao = prevVarFinal != null && prevVarInicial != null ? prevVarFinal - prevVarInicial : 0;
+      const prevLucroOper = prevLucroBruto - prevReposicao + prevVariacao;
+      const prevLucroLiq = prevLucroOper - prevJuros;
+      const prevMargem = prevFat > 0 ? (prevLucroLiq / prevFat) * 100 : 0;
+      const prevMarkup = prevDesemb > 0 ? (prevLucroLiq / prevDesemb) * 100 : 0;
+
+      // Rebanho no período: saldo_inicial do 1º mês, saldo_final do último
+      const byMes = new Map<number, { si: number; sf: number }>();
+      for (const r of zootRows) {
+        const m = r.mes as number;
+        if (!byMes.has(m)) byMes.set(m, { si: 0, sf: 0 });
+        const x = byMes.get(m)!;
+        x.si += Number(r.saldo_inicial) || 0;
+        x.sf += Number(r.saldo_final) || 0;
+      }
+      const cabInicial = byMes.get(meses[0])?.si ?? 0;
+      const cabFinal = byMes.get(meses[N - 1])?.sf ?? 0;
+      const valorInicial = vrfVal(mesAntAtual) ?? 0;
+      const valorFinal = vrfVal(anoMes[N - 1]) ?? 0;
+
+      return {
+        ano, ateMes, meses,
+        dre: {
+          faturamento, desembolsoProducao: desembolso,
+          lucroBruto, reposicaoBovinos: reposicao, reposicaoTemValor,
+          variacaoEstoque: variacao, fechamentoPendente,
+          lucroOperacional: lucroOper, jurosFinanciamento: juros,
+          lucroLiquido: lucroLiq, margemLucroPct: margem, markupPct: markup,
+          acum: {
+            faturamento: acumFat, desembolsoProducao: acumDesemb, lucroBruto: acumLucroBruto,
+            reposicaoBovinos: acumReposicao, variacaoEstoque: acumVariacao,
+            lucroOperacional: acumLucroOper, jurosFinanciamento: acumJuros,
+            lucroLiquido: acumLucroLiq, margemLucroPct: acumMargem, markupPct: acumMarkup,
+          },
+          refAnoAnterior: {
+            ano: anoPrev,
+            faturamento: prevFat, desembolsoProducao: prevDesemb, lucroBruto: prevLucroBruto,
+            reposicaoBovinos: prevReposicao, variacaoEstoque: prevVariacao,
+            lucroOperacional: prevLucroOper, jurosFinanciamento: prevJuros,
+            lucroLiquido: prevLucroLiq, margemLucroPct: prevMargem, markupPct: prevMarkup,
+          },
+        },
+        rebanhoPeriodo: {
+          cabInicial, cabFinal,
+          valorInicial, valorFinal,
+          diferencaCab: cabFinal - cabInicial,
+          variacaoReboR: valorFinal - valorInicial,
+          valorInicialPendente: vrfVal(mesAntAtual) == null,
+          valorFinalPendente: vrfVal(anoMes[N - 1]) == null,
+        },
+      };
+    },
+  });
+}
+
+export type DREPeriodoData = NonNullable<ReturnType<typeof useAnaliseDREPeriodo>['data']>;
