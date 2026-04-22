@@ -831,7 +831,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setContaOrigemId(''); setContaDestinoId(''); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -957,7 +957,7 @@ export function LancamentoV2Dialog({
                 {/* Fazenda */}
                 <div>
                   <Label className="text-[10px]">Fazenda *</Label>
-                  <Select value={fazendaId} onValueChange={v => { setFazendaId(v); setContaOrigemId(''); setContaDestinoId(''); }}>
+                  <Select value={fazendaId} onValueChange={setFazendaId}>
                     <SelectTrigger tabIndex={7} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
