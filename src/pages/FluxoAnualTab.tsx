@@ -65,6 +65,16 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
   const totaisPorMes = rebanhoOf.totaisPorMes;
 
+  // Fallback instantâneo (<100ms): soma direta de saldos_iniciais do ano selecionado.
+  // A view vw_zoot_categoria_mensal demora 3-5s; enquanto ela não chega, preenchemos
+  // a célula de Janeiro (e o Total) do "Saldo Início" com o valor de abertura do ano.
+  const saldoInicialAnoFallback = useMemo(() => {
+    const alvoAno = Number(anoFiltro);
+    return saldosIniciais
+      .filter(s => s.ano === alvoAno)
+      .reduce((acc, s) => acc + (s.quantidade || 0), 0);
+  }, [saldosIniciais, anoFiltro]);
+
   // Validação automática da equação antes de renderizar
   const errosEquacao = useMemo(() => {
     if (!rebanhoOf.rawCategorias || rebanhoOf.rawCategorias.length === 0) return [];
@@ -217,7 +227,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
-                const valor = t?.saldo_inicial;
+                // Janeiro tem fallback imediato via saldos_iniciais enquanto a view carrega.
+                const valor = t?.saldo_inicial ?? (mes === 1 ? saldoInicialAnoFallback : undefined);
                 const isNeg = valor != null && valor < 0;
                 return (
                   <td
@@ -232,7 +243,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 );
               })}
               <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
-                {fmtNum(totaisPorMes[1]?.saldo_inicial)}
+                {fmtNum(totaisPorMes[1]?.saldo_inicial ?? saldoInicialAnoFallback)}
               </td>
             </tr>
 
