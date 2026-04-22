@@ -93,5 +93,8 @@ export function useMovimentacoesMensais(ano: number, cenario: 'realizado' | 'met
 
       return { porMesTipo, totalAno };
     },
+    staleTime: 30_000,   // evita re-fetch ao trocar de aba/re-render
+    gcTime: 60_000,      // mantém cache por 1min após desmontar
+    placeholderData: (previousData) => previousData,
   });
 }
