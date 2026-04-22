@@ -361,42 +361,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         saldoInicial = r2(Array.from(prevFinalByAccount.values()).reduce((s, v) => s + v, 0));
       }
 
-      let entradasTerceiros = 0;
-      let transferenciasRecebidas = 0;
-      let saidasTerceiros = 0;
-      let transferenciasEnviadas = 0;
-
-      for (const l of mesLancs) {
-        const valor = r2(Math.abs(l.valor));
-        const isTransf = isTransferenciaTipo(l.tipo_operacao || '');
-
-        if (isTransf) {
-          if (isAllContas) continue;
-          if (l.conta_destino_id === contaId) {
-            transferenciasRecebidas = r2(transferenciasRecebidas + valor);
-          } else if (l.conta_bancaria_id === contaId) {
-            transferenciasEnviadas = r2(transferenciasEnviadas + valor);
-          }
-        } else {
-          if (isAllContas) {
-            if (isEntradaTipo(l.tipo_operacao)) {
-              entradasTerceiros = r2(entradasTerceiros + valor);
-            } else {
-              saidasTerceiros = r2(saidasTerceiros + valor);
-            }
-          } else {
-            if (l.conta_destino_id === contaId) {
-              entradasTerceiros = r2(entradasTerceiros + valor);
-            } else if (l.conta_bancaria_id === contaId) {
-              saidasTerceiros = r2(saidasTerceiros + valor);
-            }
-          }
-        }
-      }
-
-      const totalEntradas = r2(entradasTerceiros + transferenciasRecebidas);
-      const totalSaidas = r2(saidasTerceiros + transferenciasEnviadas);
-      const saldoCalculado = r2(saldoInicial + totalEntradas - totalSaidas);
+      // All accounts: sum per-account so internal transfers net to zero
+      const perAcctResults = contas.map(c => calcConciliacaoMensal({
+        contaId: c.id,
+        anoMes,
+        saldoRows,
+        lancamentos: lancamentos as ConciliacaoLancamentoBase[],
+        fallbackSaldoInicial: prevFinalByAccount.get(c.id) || 0,
+      }));
+      const entradasTerceiros = r2(perAcctResults.reduce((s, r) => s + r.entradasTerceiros, 0));
+      const transferenciasRecebidas = 0;
+      const saidasTerceiros = r2(perAcctResults.reduce((s, r) => s + r.saidasTerceiros, 0));
+      const transferenciasEnviadas = 0;
+      const totalEntradas = entradasTerceiros;
+      const totalSaidas = saidasTerceiros;
+      const saldoCalculado = r2(perAcctResults.reduce((s, r) => s + r.saldoCalculado, 0));
 
       const saldoExtrato = saldoRows.length > 0
         ? r2(saldoRows.reduce((sum, s) => sum + (s.saldo_final || 0), 0))
