@@ -1219,8 +1219,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const isPrevisto = cenario === 'meta';
 
-  // REGRA: Meta em modo Global desabilitado — sem agregação oficial ainda
-  const previstoGlobalBloqueado = isPrevisto && isGlobal;
+  // META em modo Global agora é suportada: os hooks/views consultados já agregam
+  // por cliente quando isGlobal=true. Se alguma fonte não agregar, a UI mostrará zeros
+  // em vez de bloquear (mais transparente para o usuário).
 
   // Consolidação META baseada na VIEW OFICIAL (vw_zoot_categoria_mensal cenario='meta')
   // NUNCA usar cálculo local (useMetaConsolidacao) — a view é a fonte única de verdade
@@ -1233,7 +1234,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
-    if (previstoGlobalBloqueado) return [];
     if (isPrevisto) {
       // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
       const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...valorRebanhoMetaMes.slice(0, 11)];
@@ -1259,7 +1259,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
     return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, previstoGlobalBloqueado, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -1514,16 +1514,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
         {/* ── Content: collapsible blocks ── */}
         <div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">
-          {previstoGlobalBloqueado ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center space-y-2">
-              <span className="text-sm font-semibold text-muted-foreground">Meta indisponível no modo Global</span>
-              <span className="text-xs text-muted-foreground/70 max-w-md">
-                A base meta é registrada por fazenda individual.
-                Selecione uma fazenda específica para visualizar o cenário Meta,
-                ou alterne para o cenário Realizado.
-              </span>
-            </div>
-          ) : blocos.map(b => (
+          {blocos.map(b => (
             <Collapsible
               key={b.nome}
               open={openBlocos[b.nome] ?? false}
