@@ -362,6 +362,12 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   });
   const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
   const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
+  // Custo/@prod acumulado: custeio acumulado / arrobas produzidas acumuladas no período
+  const custoPorArrAcum = (() => {
+    const custAcum = cumSum(d.custOper);
+    const arrAcum = cumSum(d.arrobasProd);
+    return custAcum.map((c, i) => arrAcum[i] > 0 ? c / arrAcum[i] : 0);
+  })();
   const desfruteCab = d.desfruteCab;
   const desfrute_arr = d.desfrute_arr;
   // Use persisted snapshot values when available; fallback to calculation
@@ -423,6 +429,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('@ produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
             r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
             r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Custo/@prod', 'money', custoPorArrAcum, 'custo_arr_prod', true),
           ],
         },
         {
