@@ -2,7 +2,7 @@ import { LayoutDashboard, PenSquare, BarChart3, DollarSign, Settings, Wallet } f
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 
-export type TabId = 'resumo' | 'operacao_hub' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'mapa_geo_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub' | 'fechamento_executivo' | 'analise_consultor' | 'preco_mercado' | 'graficos_analise' | 'financeiro_v2' | 'financeiro_v2_hub' | 'fin_v2_contas' | 'fin_v2_fornecedores' | 'fin_v2_plano' | 'fin_v2_saldos' | 'fin_v2_dividendos' | 'contratos' | 'conciliacao_bancaria' | 'painel_consultor' | 'painel_consultor_hub' | 'auditoria' | 'auditoria_duplicidade' | 'auditoria_zoot' | 'auditoria_tecnica' | 'conta_boitel' | 'status_fechamentos' | 'meta_gmd' | 'meta_preco' | 'meta_movimentacoes' | 'meta_consolidacao' | 'precos_mercado_hub' | 'conferencia_gmd' | 'import_zoot_historico' | 'historico_importacoes_zoot' | 'analise_trimestral';
+export type TabId = 'resumo' | 'operacao_hub' | 'movimentacao' | 'lancamentos' | 'financeiro' | 'evolucao' | 'evolucao_categoria' | 'fluxo_anual' | 'acessos' | 'analise' | 'analise_entradas' | 'analise_saidas' | 'desfrute' | 'cadastros' | 'chuvas' | 'pastos' | 'conciliacao' | 'fin_caixa' | 'zootecnico' | 'zootecnico_hub' | 'analise_economica' | 'valor_rebanho' | 'analise_operacional' | 'resumo_pastos' | 'mapa_pastos' | 'mapa_geo_pastos' | 'fechamento' | 'visao_anual_zoo' | 'lancar_zoo_hub' | 'visao_zoo_hub' | 'lancar_fin_hub' | 'visao_fin_hub' | 'indicadores' | 'evolucao_rebanho_hub' | 'fechamento_executivo' | 'analise_consultor' | 'preco_mercado' | 'graficos_analise' | 'financeiro_v2' | 'financeiro_v2_hub' | 'fin_v2_contas' | 'fin_v2_fornecedores' | 'fin_v2_plano' | 'fin_v2_saldos' | 'fin_v2_dividendos' | 'contratos' | 'conciliacao_bancaria' | 'painel_consultor' | 'painel_consultor_hub' | 'auditoria' | 'auditoria_duplicidade' | 'auditoria_zoot' | 'auditoria_tecnica' | 'conta_boitel' | 'status_fechamentos' | 'meta_gmd' | 'meta_preco' | 'meta_movimentacoes' | 'meta_consolidacao' | 'precos_mercado_hub' | 'conferencia_gmd' | 'import_zoot_historico' | 'historico_importacoes_zoot' | 'analise_trimestral' | 'auditoria_desfrutes';
 
 interface BottomNavProps {
   activeTab: TabId;
@@ -23,7 +23,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs = allTabs.filter(t => canViewTab(t.id));
   const getActiveId = (tab: TabId): TabId => {
     // Lanç. Zoo sub-screens
-    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'resumo_pastos', 'import_zoot_historico', 'auditoria_zoot'];
+    const lancarZooTabs: TabId[] = ['lancar_zoo_hub', 'lancamentos', 'fechamento', 'chuvas', 'resumo_pastos', 'import_zoot_historico', 'auditoria_zoot', 'auditoria_desfrutes'];
     // Lanç. Fin sub-screens (V2 operational)
     const lancarFinTabs: TabId[] = ['financeiro_v2_hub', 'financeiro_v2', 'fin_v2_contas', 'fin_v2_fornecedores', 'fin_v2_plano', 'fin_v2_saldos', 'contratos', 'conciliacao_bancaria', 'conta_boitel', 'auditoria_duplicidade'];
     // Zootécnico (analysis) sub-screens

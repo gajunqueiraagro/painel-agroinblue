@@ -20,7 +20,7 @@ const FINANCIAL_TABS: TabId[] = [
 ];
 
 // Admin/manager-only tabs
-const MANAGER_TABS: TabId[] = ['acessos', 'analise_trimestral'];
+const MANAGER_TABS: TabId[] = ['acessos', 'analise_trimestral', 'auditoria_desfrutes'];
 
 export function usePermissions(): Permissions {
   const { clienteAtual } = useCliente();

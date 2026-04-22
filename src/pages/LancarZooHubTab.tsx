@@ -7,8 +7,9 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import {
   Lock, AlertCircle,
-  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert, Camera,
+  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert, Camera, ClipboardCheck,
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -67,12 +68,21 @@ const ACOES_PRINCIPAIS = [
     icon: ShieldAlert,
     description: 'Identificar inconsistências na base',
   },
-] as Array<{ label: string; description: string; icon: React.ComponentType<{ className?: string }>; tab?: TabId; route?: string }>;
+  {
+    label: 'Auditoria de Desfrutes',
+    tab: 'auditoria_desfrutes' as TabId,
+    icon: ClipboardCheck,
+    description: 'Validar abates/vendas/consumo antes do trimestre',
+    manager: true,
+  },
+] as Array<{ label: string; description: string; icon: React.ComponentType<{ className?: string }>; tab?: TabId; route?: string; manager?: boolean }>;
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
+  const { isManager } = usePermissions();
   const navigate = useNavigate();
+  const acoes = ACOES_PRINCIPAIS.filter(item => !(item as any).manager || isManager);
 
   if (bloqueado) {
     return (
@@ -126,7 +136,7 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       <div className="p-4 space-y-5">
         {/* ── AÇÕES PRINCIPAIS ── */}
         <div className="grid grid-cols-3 gap-2">
-          {ACOES_PRINCIPAIS.map(item => {
+          {acoes.map(item => {
             const blocked = isBlocked(item);
             const key = item.tab ?? item.route!;
             return (

@@ -39,6 +39,7 @@ import { AuditoriaTecnicaTab } from './AuditoriaTecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
 import { AnaliseTrimestralTab } from './AnaliseTrimestralTab';
+import { AuditoriaDesfrutes } from './AuditoriaDesfrutes';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { PrecosMercadoHubTab } from './PrecosMercadoHubTab';
@@ -126,6 +127,7 @@ const TITLES: Record<TabId, string> = {
   fechamento_executivo: 'Fechamento Executivo',
   analise_consultor: 'Análise do Consultor',
   analise_trimestral: 'Análise Trimestral',
+  auditoria_desfrutes: 'Auditoria de Desfrutes',
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
   financeiro_v2: 'Financeiro v2',
@@ -701,6 +703,9 @@ const Index = () => {
       )}
       {activeTab === 'analise_trimestral' && (
         <AnaliseTrimestralTab />
+      )}
+      {activeTab === 'auditoria_desfrutes' && (
+        <AuditoriaDesfrutes />
       )}
       {activeTab === 'graficos_analise' && (
         <GraficosAnaliseTab
