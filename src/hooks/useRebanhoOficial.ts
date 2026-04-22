@@ -414,8 +414,8 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       return result;
     },
     enabled: cenario === 'realizado' && (resolvedGlobal ? !!clienteId : !!fazendaId),
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 30_000,
+    gcTime: 60_000,
   });
 
   // useZootMensal only works for single-fazenda (NOT global).
