@@ -592,11 +592,11 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   const rawFazenda = useMemo(() => {
     if (resolvedGlobal) {
       const rows = buildFazendaRowsFromCategories(rawCategorias);
-      // Area produtiva Global: soma apenas das fazendas que aparecem nos dados da view
-      // (saldo_final > 0 em pelo menos um mês do período). Fazendas com pastos cadastrados
-      // mas sem rebanho no período NÃO entram no denominador da lotação.
+      // Area produtiva Global: soma apenas das fazendas presentes em categoriasData
+      // (saldo_final > 0 em pelo menos um mês do período). Fazendas com pastos
+      // cadastrados mas sem rebanho no período NÃO entram no denominador da lotação.
       const fazendasComRebanho = new Set<string>();
-      for (const c of rawCategorias) {
+      for (const c of baseCategorias) {
         if (c.saldo_final > 0 && c.fazenda_id) fazendasComRebanho.add(c.fazenda_id);
       }
       const areaTotal = pastos
@@ -659,7 +659,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     }
 
     return baseFazenda;
-  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, mesesFechados, ano, pastos]);
+  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, baseCategorias, mesesFechados, ano, pastos]);
 
   // ── Grouped data ──
   const byMes = useMemo(() => groupByMes(rawCategorias), [rawCategorias]);

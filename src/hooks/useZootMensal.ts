@@ -10,7 +10,7 @@
  * Regra de produto: todo indicador mensal do rebanho deve vir de useRebanhoOficial.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 
@@ -71,6 +71,8 @@ export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
     },
     enabled: !!fazendaId,
     staleTime: 30_000,
+    // Mantém dados anteriores durante troca de fazenda/ano para evitar flash vazio.
+    placeholderData: keepPreviousData,
   });
 }
 
