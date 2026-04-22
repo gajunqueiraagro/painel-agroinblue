@@ -16,7 +16,8 @@ import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
-import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck } from 'lucide-react';
+import { usePastos } from '@/hooks/usePastos';
+import { ChevronRight, AlertTriangle, CheckCircle2, TrendingUp, Wallet, BarChart3, Landmark, ClipboardCheck, Wrench } from 'lucide-react';
 import { useFechamentoCompetencia } from '@/hooks/useFechamentoCompetencia';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { Categoria } from '@/types/cattle';
@@ -79,19 +80,23 @@ function StatusBadge({ nivel, label }: { nivel: StatusNivel; label: string }) {
 // Zoo KPIs — FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
 // ---------------------------------------------------------------------------
 
-function useZooKpis(ano: number, mes: number) {
-  const { rawFazenda: rows } = useRebanhoOficial({ ano, cenario: 'realizado' });
+function useZooKpis(ano: number, mes: number, cenario: 'realizado' | 'meta' = 'realizado') {
+  const { rawFazenda: rows } = useRebanhoOficial({ ano, cenario });
+  const { pastos } = usePastos();
 
   return useMemo(() => {
     const mesDado = (rows || []).find(r => r.mes === mes);
     const saldoFinal = mesDado?.cabecas_final ?? 0;
     const pesoMedio = mesDado?.peso_medio_final_kg ?? null;
-    const area = mesDado?.area_produtiva_ha ?? 0;
+    // Área: prioriza soma direta de pastos (instant, fonte única de verdade);
+    // fallback para a view quando pastos ainda não carregou.
+    const areaFromPastos = (pastos || []).reduce((s, p) => s + (p.area_produtiva_ha ?? 0), 0);
+    const area = areaFromPastos > 0 ? areaFromPastos : (mesDado?.area_produtiva_ha ?? 0);
     const pesoTotalKg = mesDado?.peso_total_final_kg ?? 0;
     const lotacaoKgHa = pesoTotalKg > 0 && area > 0 ? pesoTotalKg / area : null;
 
     return { saldoFinal, pesoMedio, lotacaoKgHa, area };
-  }, [rows, mes]);
+  }, [rows, mes, pastos]);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +204,7 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
   const { zootecnico, financeiro, economico, loading } = useResumoStatus(lancamentos, saldosIniciais, anoNum, mesNum);
   const statusZoo = useStatusZootecnico(fazendaAtual?.id, anoNum, mesNum, lancamentos, saldosIniciais);
   const zooKpis = useZooKpis(anoNum, mesNum);
+  const zooKpisMeta = useZooKpis(anoNum, mesNum, 'meta');
   const globalFarmKpis = useGlobalFarmKpis(anoNum, mesNum);
 
   // Status de fechamento (apresentação apenas)
@@ -360,8 +366,12 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
         </div>
       </div>
 
-      {/* ── Zootécnico + Financeiro side by side ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* ── REALIZADO | META | Em construção ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+      {/* ========== COLUNA 1 — REALIZADO ========== */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-bold tracking-widest uppercase text-primary px-1">Realizado</div>
 
         {/* ZOOTÉCNICO */}
         <section className="rounded-lg border border-primary/20 bg-primary/[0.04]">
@@ -498,10 +508,71 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
           </div>
         </section>
       </div>
+      {/* ========== FIM COLUNA 1 ========== */}
 
+      {/* ========== COLUNA 2 — META ========== */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-bold tracking-widest uppercase text-orange-500 px-1">Meta {anoNum}</div>
 
+        {/* META — Zootécnico */}
+        <section className="rounded-lg border border-orange-500/30 bg-orange-50/40 dark:bg-orange-900/10">
+          <div className="px-3 py-2 border-b border-orange-500/20 flex items-center gap-1.5">
+            <span className="text-sm">🎯</span>
+            <span className="text-xs font-bold text-foreground uppercase tracking-wide">Zootécnico</span>
+          </div>
+          <div className="p-3 space-y-2">
+            <div className="text-center">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Rebanho Meta</p>
+              <p className="text-3xl font-extrabold text-orange-600 dark:text-orange-400 tabular-nums leading-tight">
+                {zooKpisMeta.saldoFinal > 0 ? formatNum(zooKpisMeta.saldoFinal) : '—'}
+              </p>
+              <p className="text-[10px] text-muted-foreground">cabeças</p>
+            </div>
+            <div className="border-t border-orange-500/20 pt-2">
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="text-center rounded-md bg-orange-500/10 px-1.5 py-2">
+                  <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Área</p>
+                  <p className="text-sm font-bold text-foreground tabular-nums">{zooKpisMeta.area > 0 ? formatNum(zooKpisMeta.area, 0) : '—'} ha</p>
+                </div>
+                <div className="text-center rounded-md bg-orange-500/10 px-1.5 py-2">
+                  <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Peso Méd.</p>
+                  <p className="text-sm font-bold text-foreground tabular-nums">{zooKpisMeta.pesoMedio ? `${formatNum(zooKpisMeta.pesoMedio, 0)} kg` : '—'}</p>
+                </div>
+                <div className="text-center rounded-md bg-orange-500/10 px-1.5 py-2">
+                  <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Kg/ha</p>
+                  <p className="text-sm font-bold text-foreground tabular-nums">{zooKpisMeta.lotacaoKgHa !== null ? formatNum(zooKpisMeta.lotacaoKgHa, 0) : '—'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
+        {/* META — Financeiro (placeholder até planejamento_financeiro estar plumbed aqui) */}
+        <section className="rounded-lg border border-orange-500/30 bg-orange-50/40 dark:bg-orange-900/10">
+          <div className="px-3 py-2 border-b border-orange-500/20 flex items-center gap-1.5">
+            <Wallet className="h-3.5 w-3.5 text-orange-500" />
+            <span className="text-xs font-bold text-foreground uppercase tracking-wide">Financeiro</span>
+          </div>
+          <div className="p-3 text-center">
+            <p className="text-[10px] text-muted-foreground">Meta financeira em integração</p>
+            <p className="text-[9px] text-muted-foreground/70 mt-0.5">Consuma em Planejamento Financeiro</p>
+          </div>
+        </section>
+      </div>
+      {/* ========== FIM COLUNA 2 ========== */}
 
+      {/* ========== COLUNA 3 — EM CONSTRUÇÃO ========== */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground px-1">Projetado</div>
+        <section className="rounded-lg border border-dashed border-border/60 bg-muted/20 p-6 flex flex-col items-center justify-center min-h-[160px] text-center">
+          <Wrench className="h-6 w-6 text-muted-foreground/60 mb-2" />
+          <p className="text-xs font-semibold text-muted-foreground">Em construção</p>
+          <p className="text-[10px] text-muted-foreground/70 mt-1">Indicadores projetados para próximos meses</p>
+        </section>
+      </div>
+      {/* ========== FIM COLUNA 3 ========== */}
+
+      </div>
       {/* ── Pendências ── */}
       {alertas.length > 0 && (
         <section className="rounded-md border border-warning/30 bg-card overflow-hidden">
