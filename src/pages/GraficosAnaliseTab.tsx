@@ -388,11 +388,26 @@ function OperacionalCharts({ zoo, anoNum, mesFiltro }: {
   anoNum: number;
   mesFiltro: number;
 }) {
+  // Meta cenario — mesma fonte oficial do rebanho
+  const rebanhoMeta = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
+
   const desfrData = useMemo(() => {
     if (!zoo.historico || zoo.historico.length < 2) return [];
     const anoAtual = zoo.historico.find(h => h.ano === anoNum);
     const anoAnt = zoo.historico.find(h => h.ano === anoNum - 1);
     if (!anoAtual) return [];
+    // Meta: desfrute acumulado = Σ saidas_externas até o mês m
+    const metaAcum: number[] = [];
+    {
+      const rows = rebanhoMeta.rawFazenda || [];
+      const byMes = new Map<number, typeof rows[number]>();
+      rows.forEach(r => byMes.set(r.mes, r));
+      let acc = 0;
+      for (let m = 1; m <= 12; m++) {
+        acc += byMes.get(m)?.saidas ?? 0;
+        metaAcum.push(acc);
+      }
+    }
     return MESES_NOMES.map((mes, i) => {
       const m = anoAtual.meses[i];
       const mAnt = anoAnt?.meses[i];
@@ -401,9 +416,10 @@ function OperacionalCharts({ zoo, anoNum, mesFiltro }: {
         mes,
         [`desfCab_${anoNum}`]: isFuturo ? null : (m?.desfruteCabAcum ?? null),
         [`desfCab_${anoNum - 1}`]: mAnt?.desfruteCabAcum ?? null,
+        [`desfCabMeta_${anoNum}`]: metaAcum[i] ?? null,
       };
     });
-  }, [zoo.historico, anoNum, mesFiltro]);
+  }, [zoo.historico, anoNum, mesFiltro, rebanhoMeta.rawFazenda]);
 
   if (desfrData.length === 0) {
     return (
@@ -418,7 +434,8 @@ function OperacionalCharts({ zoo, anoNum, mesFiltro }: {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <ChartCard title="Desfrute acumulado (%)" subtitle="Produção vs estoque médio" data={desfrData}
-        keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`]} labels={[String(anoNum), String(anoNum - 1)]}
+        keys={[`desfCab_${anoNum}`, `desfCab_${anoNum - 1}`, `desfCabMeta_${anoNum}`]}
+        labels={[String(anoNum), String(anoNum - 1), `Meta ${anoNum}`]}
         type="line" decimals={1} mesFiltro={mesFiltro} />
     </div>
   );
