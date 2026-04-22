@@ -70,8 +70,11 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
       if (!effectiveGlobal && !fazendaId) return [];
       if (effectiveGlobal && !clienteId) return [];
 
+      // Fonte de leitura: tabela de cache (zoot_mensal_cache). A view
+      // vw_zoot_categoria_mensal permanece como SOURCE OF TRUTH; o cache é
+      // mantido por trigger AFTER INS/UPD/DEL em lancamentos → refresh_zoot_cache.
       let query = supabase
-        .from('vw_zoot_categoria_mensal' as any)
+        .from('zoot_mensal_cache' as any)
         .select('*')
         .eq('ano', ano)
         .eq('cenario', cenario)
