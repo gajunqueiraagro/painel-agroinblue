@@ -31,10 +31,20 @@ export interface DesfruteAgregado {
   cabecas: Arr3;
   pesoTotalKg: Arr3;
   valorTotal: Arr3;
-  pesoMedioCab: Arr3;     // = pesoTotal / cabecas (ponderado)
+  pesoMedioCab: Arr3;     // = pesoTotal / cabecas (ponderado por mês)
   arrobas: Arr3;          // = pesoTotal * 0.5 / 15
   precoArroba: Arr3;      // = valor / arrobas
   precoCab: Arr3;         // = valor / cabecas
+  // Valores acumulados (derivados dos totais, não da soma dos médios)
+  acum: {
+    cabecas: number;
+    pesoTotalKg: number;
+    valorTotal: number;
+    arrobas: number;
+    pesoMedioCab: number;
+    precoArroba: number;
+    precoCab: number;
+  };
 }
 
 export interface HistoricoAno {
@@ -63,7 +73,21 @@ function aggregar(rows: any[], meses: number[]): DesfruteAgregado {
   const arrobas: Arr3 = [0, 1, 2].map(i => pesoTotal[i] * 0.5 / 15) as Arr3;
   const precoArroba: Arr3 = [0, 1, 2].map(i => arrobas[i] > 0 ? valor[i] / arrobas[i] : 0) as Arr3;
   const precoCab: Arr3 = [0, 1, 2].map(i => cabecas[i] > 0 ? valor[i] / cabecas[i] : 0) as Arr3;
-  return { cabecas, pesoTotalKg: pesoTotal, valorTotal: valor, pesoMedioCab, arrobas, precoArroba, precoCab };
+  // Acumulado — derivado dos TOTAIS, não da soma dos médios.
+  const cabAcum = cabecas[0] + cabecas[1] + cabecas[2];
+  const pesoAcum = pesoTotal[0] + pesoTotal[1] + pesoTotal[2];
+  const valAcum = valor[0] + valor[1] + valor[2];
+  const arrAcum = pesoAcum * 0.5 / 15;
+  const acum = {
+    cabecas: cabAcum,
+    pesoTotalKg: pesoAcum,
+    valorTotal: valAcum,
+    arrobas: arrAcum,
+    pesoMedioCab: cabAcum > 0 ? pesoAcum / cabAcum : 0,
+    precoArroba: arrAcum > 0 ? valAcum / arrAcum : 0,
+    precoCab: cabAcum > 0 ? valAcum / cabAcum : 0,
+  };
+  return { cabecas, pesoTotalKg: pesoTotal, valorTotal: valor, pesoMedioCab, arrobas, precoArroba, precoCab, acum };
 }
 
 function aggregarHistorico(rowsByAno: Record<number, any[]>, faturamentoByAno: Record<number, number>): HistoricoAno[] {
@@ -112,7 +136,7 @@ export function useAuditoriaDesfrutes({ clienteId, ano, trimestre }: Params) {
       for (const y of anosHist) for (const m of meses) anoMesHist.push(`${y}-${String(m).padStart(2, '0')}`);
 
       // Queries em paralelo
-      const [realRes, metaRes, histRes, fatRes] = await Promise.all([
+      const [realRes, metaRes, histRes, histMetaRes, fatRes] = await Promise.all([
         supabase.from('lancamentos')
           .select('data, tipo, quantidade, peso_total, valor_total, peso_medio_kg, categoria, cenario')
           .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'realizado')
@@ -121,10 +145,17 @@ export function useAuditoriaDesfrutes({ clienteId, ano, trimestre }: Params) {
           .select('data, tipo, quantidade, peso_total, valor_total, peso_medio_kg, categoria, cenario')
           .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'meta')
           .in('tipo', TIPOS_DESFRUTE).gte('data', dataIni).lte('data', dataFim),
-        // Histórico — uma query varrendo todo o range (ano-5)-01-01 .. (ano)-12-31, filtramos por mês no JS
+        // Histórico realizado — uma query, filtramos por mês no JS
         supabase.from('lancamentos')
           .select('data, tipo, quantidade, peso_total, valor_total')
           .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'realizado')
+          .in('tipo', TIPOS_DESFRUTE)
+          .gte('data', `${ano - 5}-01-01`)
+          .lte('data', `${ano}-12-31`),
+        // Histórico meta — mesmo range, cenario='meta'
+        supabase.from('lancamentos')
+          .select('data, tipo, quantidade, peso_total, valor_total')
+          .eq('cliente_id', clienteId).eq('cancelado', false).eq('cenario', 'meta')
           .in('tipo', TIPOS_DESFRUTE)
           .gte('data', `${ano - 5}-01-01`)
           .lte('data', `${ano}-12-31`),
@@ -139,27 +170,26 @@ export function useAuditoriaDesfrutes({ clienteId, ano, trimestre }: Params) {
       const realRows = (realRes.data as any[]) || [];
       const metaRows = (metaRes.data as any[]) || [];
       const histRows = (histRes.data as any[]) || [];
+      const histMetaRows = (histMetaRes.data as any[]) || [];
       const fatRows = (fatRes.data as any[]) || [];
 
       // Filtrar histórico pelos meses do trimestre
-      const histByAnoTipo: Record<TipoDesfrute, Record<number, any[]>> = {
-        abate: {}, venda: {}, consumo: {},
-      };
-      for (const r of histRows) {
-        const d = String(r.data);
-        const y = Number(d.substring(0, 4));
-        const m = Number(d.substring(5, 7));
-        if (!meses.includes(m)) continue;
-        if (!TIPOS_DESFRUTE.includes(r.tipo)) continue;
-        if (!histByAnoTipo[r.tipo as TipoDesfrute][y]) histByAnoTipo[r.tipo as TipoDesfrute][y] = [];
-        histByAnoTipo[r.tipo as TipoDesfrute][y].push(r);
-      }
-      // Garantir chave pra cada ano no range (mesmo se vazio)
-      for (const t of TIPOS_DESFRUTE) {
-        for (const y of anosHist) {
-          if (!histByAnoTipo[t][y]) histByAnoTipo[t][y] = [];
+      const buildHistByAnoTipo = (rows: any[]): Record<TipoDesfrute, Record<number, any[]>> => {
+        const out: Record<TipoDesfrute, Record<number, any[]>> = { abate: {}, venda: {}, consumo: {} };
+        for (const r of rows) {
+          const d = String(r.data);
+          const y = Number(d.substring(0, 4));
+          const m = Number(d.substring(5, 7));
+          if (!meses.includes(m)) continue;
+          if (!TIPOS_DESFRUTE.includes(r.tipo)) continue;
+          if (!out[r.tipo as TipoDesfrute][y]) out[r.tipo as TipoDesfrute][y] = [];
+          out[r.tipo as TipoDesfrute][y].push(r);
         }
-      }
+        for (const t of TIPOS_DESFRUTE) for (const y of anosHist) if (!out[t][y]) out[t][y] = [];
+        return out;
+      };
+      const histByAnoTipo = buildHistByAnoTipo(histRows);
+      const histMetaByAnoTipo = buildHistByAnoTipo(histMetaRows);
 
       // Faturamento por ano (somatório dos ano_mes do tri naquele ano)
       const fatByAno: Record<number, number> = {};
@@ -205,6 +235,25 @@ export function useAuditoriaDesfrutes({ clienteId, ano, trimestre }: Params) {
               return all;
             })(),
             fatByAno,
+          ),
+        } as Record<'abate'|'venda'|'consumo'|'desfrutes', HistoricoAno[]>,
+        historicoMeta: {
+          abate: aggregarHistorico(histMetaByAnoTipo.abate, {}),
+          venda: aggregarHistorico(histMetaByAnoTipo.venda, {}),
+          consumo: aggregarHistorico(histMetaByAnoTipo.consumo, {}),
+          desfrutes: aggregarHistorico(
+            (() => {
+              const all: Record<number, any[]> = {};
+              for (const y of anosHist) {
+                all[y] = [
+                  ...(histMetaByAnoTipo.abate[y] || []),
+                  ...(histMetaByAnoTipo.venda[y] || []),
+                  ...(histMetaByAnoTipo.consumo[y] || []),
+                ];
+              }
+              return all;
+            })(),
+            {},
           ),
         } as Record<'abate'|'venda'|'consumo'|'desfrutes', HistoricoAno[]>,
       };

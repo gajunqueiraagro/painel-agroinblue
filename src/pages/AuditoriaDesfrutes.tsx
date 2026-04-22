@@ -19,15 +19,16 @@ const MES_NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','
 const LABEL_TIPO: Record<AbaId, string> = { abate: 'Abates', venda: 'Vendas', consumo: 'Consumo', desfrutes: 'Desfrutes (consolidado)' };
 const ICON_TIPO: Record<AbaId, string> = { abate: '🔪', venda: '💰', consumo: '🍖', desfrutes: '📊' };
 
-const COLOR_BG = '#0f172a';
-const COLOR_CARD = '#1e293b';
-const COLOR_BORDER = '#334155';
-const COLOR_TEXT = '#e2e8f0';
-const COLOR_TEXT_MUTED = '#94a3b8';
-const COLOR_ACCENT = '#f59e0b';
-const COLOR_GOOD = '#10b981';
-const COLOR_BAD = '#ef4444';
-const COLOR_SEC = '#0b1220';
+// Tema claro compacto (bg-background-like)
+const COLOR_BG = 'hsl(var(--background))';
+const COLOR_CARD = 'hsl(var(--card))';
+const COLOR_BORDER = 'hsl(var(--border))';
+const COLOR_TEXT = 'hsl(var(--foreground))';
+const COLOR_TEXT_MUTED = 'hsl(var(--muted-foreground))';
+const COLOR_ACCENT = 'hsl(var(--primary))';
+const COLOR_GOOD = '#16a34a';
+const COLOR_BAD = '#dc2626';
+const COLOR_SEC = 'hsl(var(--muted))';
 
 const PRINT_CSS = `
 @media print {
@@ -64,7 +65,7 @@ function pct(real: number, ref: number): number | null {
 function Delta({ pct }: { pct: number | null }) {
   if (pct == null) return <span style={{ color: COLOR_TEXT_MUTED }}>–</span>;
   const pos = pct >= 0;
-  return <span style={{ color: pos ? COLOR_GOOD : COLOR_BAD, fontWeight: 600 }}>{pos ? '+' : ''}{pct.toFixed(1)}%</span>;
+  return <span style={{ color: pos ? COLOR_GOOD : COLOR_BAD, fontWeight: 600 }}>{pos ? '▲' : '▼'}{Math.abs(pct).toFixed(0)}%</span>;
 }
 
 export function AuditoriaDesfrutes() {
@@ -88,9 +89,9 @@ export function AuditoriaDesfrutes() {
   return (
     <>
       <style>{PRINT_CSS}</style>
-      <div className="report" style={{ background: COLOR_BG, color: COLOR_TEXT, minHeight: '100vh', padding: 16 }}>
+      <div className="report" style={{ background: COLOR_BG, color: COLOR_TEXT, minHeight: '100vh', padding: 10 }}>
         {/* Header */}
-        <div className="avoid-break" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: `1px solid ${COLOR_BORDER}`, paddingBottom: 12, marginBottom: 16 }}>
+        <div className="avoid-break" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${COLOR_BORDER}`, paddingBottom: 8, marginBottom: 8 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: 1, color: COLOR_ACCENT }}>AUDITORIA DE DESFRUTES</div>
             <div style={{ fontSize: 13, color: COLOR_TEXT_MUTED }}>
@@ -111,7 +112,7 @@ export function AuditoriaDesfrutes() {
         </div>
 
         {/* Tabs */}
-        <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, background: COLOR_CARD, padding: 4, borderRadius: 6, width: 'fit-content', flexWrap: 'wrap' }}>
+        <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 8, background: COLOR_CARD, padding: 3, borderRadius: 6, width: 'fit-content', flexWrap: 'wrap' }}>
           {(['abate', 'venda', 'consumo', 'desfrutes'] as AbaId[]).map(id => (
             <button key={id} onClick={() => setAba(id)} style={{
               padding: '6px 14px', fontSize: 12, fontWeight: 700, borderRadius: 4,
@@ -128,14 +129,14 @@ export function AuditoriaDesfrutes() {
         {d && (
           <>
             <TabelaRealVsMeta real={d.realizado[aba]} meta={d.meta[aba]} mesLabels={mesLabels} />
-            <div className="avoid-break chart-wrapper" style={{ marginTop: 16, background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: COLOR_ACCENT, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+            <div className="avoid-break chart-wrapper" style={{ marginTop: 8, background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, padding: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: COLOR_ACCENT, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
                 Histórico — {LABEL_TIPO[aba]} — T{trimestre} (últimos 6 anos)
               </div>
               <HistoricoChart data={d.historico[aba]} />
             </div>
-            <div style={{ marginTop: 16 }}>
-              <TabelaHistorica data={d.historico[aba]} />
+            <div style={{ marginTop: 8 }}>
+              <TabelaHistorica data={d.historico[aba]} meta={(d as any).historicoMeta[aba]} />
             </div>
           </>
         )}
@@ -146,51 +147,50 @@ export function AuditoriaDesfrutes() {
 
 // ====================================================================
 function TabelaRealVsMeta({ real, meta, mesLabels }: { real: DesfruteAgregado; meta: DesfruteAgregado; mesLabels: [string, string, string] }) {
-  const rows: { label: string; realV: Arr3; metaV: Arr3; mode: 'num' | 'money'; dec?: number }[] = [
-    { label: 'Cabeças',             realV: real.cabecas,       metaV: meta.cabecas,       mode: 'num' },
-    { label: 'Peso Total (kg)',     realV: real.pesoTotalKg,   metaV: meta.pesoTotalKg,   mode: 'num', dec: 0 },
-    { label: 'Peso Médio/cab (kg)', realV: real.pesoMedioCab,  metaV: meta.pesoMedioCab,  mode: 'num', dec: 1 },
-    { label: 'Arrobas (@)',         realV: real.arrobas,       metaV: meta.arrobas,       mode: 'num', dec: 1 },
-    { label: 'Valor Total (R$)',    realV: real.valorTotal,    metaV: meta.valorTotal,    mode: 'money' },
-    { label: 'Preço R$/@',          realV: real.precoArroba,   metaV: meta.precoArroba,   mode: 'money' },
-    { label: 'Preço R$/cab',        realV: real.precoCab,      metaV: meta.precoCab,      mode: 'money' },
+  // Cada row traz o acumulado derivado do hook (DesfruteAgregado.acum) para evitar
+  // somar médias. Campos "soma" (cabecas/pesoTotalKg/arrobas/valorTotal) vêm dos
+  // acum.* diretamente (que são somas dos 3 meses); médias (pesoMedio/preco) vêm
+  // das razões dos totais.
+  const rows: { label: string; realV: Arr3; metaV: Arr3; realAcum: number; metaAcum: number; mode: 'num' | 'money'; dec?: number }[] = [
+    { label: 'Cabeças',             realV: real.cabecas,      metaV: meta.cabecas,      realAcum: real.acum.cabecas,      metaAcum: meta.acum.cabecas,      mode: 'num' },
+    { label: 'Peso Total (kg)',     realV: real.pesoTotalKg,  metaV: meta.pesoTotalKg,  realAcum: real.acum.pesoTotalKg,  metaAcum: meta.acum.pesoTotalKg,  mode: 'num', dec: 0 },
+    { label: 'Peso Médio/cab (kg)', realV: real.pesoMedioCab, metaV: meta.pesoMedioCab, realAcum: real.acum.pesoMedioCab, metaAcum: meta.acum.pesoMedioCab, mode: 'num', dec: 1 },
+    { label: 'Arrobas (@)',         realV: real.arrobas,      metaV: meta.arrobas,      realAcum: real.acum.arrobas,      metaAcum: meta.acum.arrobas,      mode: 'num', dec: 1 },
+    { label: 'Valor Total (R$)',    realV: real.valorTotal,   metaV: meta.valorTotal,   realAcum: real.acum.valorTotal,   metaAcum: meta.acum.valorTotal,   mode: 'money' },
+    { label: 'Preço R$/@',          realV: real.precoArroba,  metaV: meta.precoArroba,  realAcum: real.acum.precoArroba,  metaAcum: meta.acum.precoArroba,  mode: 'money' },
+    { label: 'Preço R$/cab',        realV: real.precoCab,     metaV: meta.precoCab,     realAcum: real.acum.precoCab,     metaAcum: meta.acum.precoCab,     mode: 'money' },
   ];
 
-  const fmtVal = (v: number, mode: 'num' | 'money', dec = 0) => {
-    if (mode === 'money') return fmtMoeda(v);
-    return fmt(v, dec);
-  };
+  const fmtVal = (v: number, mode: 'num' | 'money', dec = 0) =>
+    mode === 'money' ? fmtMoeda(v) : fmt(v, dec);
+
+  const th = { padding: '4px 8px', color: COLOR_TEXT_MUTED, fontWeight: 600, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 0.3 };
+  const td = { padding: '3px 8px', fontSize: 11 };
 
   return (
     <div className="avoid-break" style={{ background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
           <tr style={{ background: COLOR_SEC }}>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Indicador</th>
-            {mesLabels.map(m => <th key={m} style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>{m}</th>)}
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_ACCENT, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Acum.</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10, textTransform: 'uppercase' }}>Meta Acum.</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Var%</th>
+            <th style={{ ...th, textAlign: 'left' }}>Indicador</th>
+            {mesLabels.map(m => <th key={m} style={{ ...th, textAlign: 'right' }}>{m}</th>)}
+            <th style={{ ...th, textAlign: 'right', color: COLOR_ACCENT }}>Acum.</th>
+            <th style={{ ...th, textAlign: 'right' }}>Meta Acum.</th>
+            <th style={{ ...th, textAlign: 'right' }}>Var%</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(r => {
-            // Acumulado: para valores "soma" somamos; para médios (peso médio, preço) precisamos derivar.
-            // Regra: peso_medio e preço são derivados. Para acumulado/meta usamos soma dos subtotais.
-            // Médios reais do trimestre são calculados a partir dos totais (já feito no hook para
-            // cada mês; no acum derivado aqui fazemos a soma simples dos 3 valores mensais — visual).
-            const realAcum = sum3(r.realV);
-            const metaAcum = sum3(r.metaV);
-            const v = pct(realAcum, metaAcum);
+            const v = pct(r.realAcum, r.metaAcum);
             return (
               <tr key={r.label}>
-                <td style={{ padding: '5px 8px', color: COLOR_TEXT }}>{r.label}</td>
+                <td style={{ ...td, color: COLOR_TEXT }}>{r.label}</td>
                 {r.realV.map((val, i) => (
-                  <td key={i} className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmtVal(val, r.mode, r.dec)}</td>
+                  <td key={i} className="mono" style={{ ...td, color: COLOR_TEXT, textAlign: 'right' }}>{fmtVal(val, r.mode, r.dec)}</td>
                 ))}
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_ACCENT, textAlign: 'right', fontWeight: 700 }}>{fmtVal(realAcum, r.mode, r.dec)}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT_MUTED, textAlign: 'right' }}>{fmtVal(metaAcum, r.mode, r.dec)}</td>
-                <td className="mono" style={{ padding: '5px 8px', textAlign: 'right' }}><Delta pct={v} /></td>
+                <td className="mono" style={{ ...td, color: COLOR_ACCENT, textAlign: 'right', fontWeight: 700 }}>{fmtVal(r.realAcum, r.mode, r.dec)}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT_MUTED, textAlign: 'right' }}>{fmtVal(r.metaAcum, r.mode, r.dec)}</td>
+                <td className="mono" style={{ ...td, textAlign: 'right' }}><Delta pct={v} /></td>
               </tr>
             );
           })}
@@ -208,21 +208,20 @@ function HistoricoChart({ data }: { data: HistoricoAno[] }) {
     preco: Math.round(h.precoArroba),
   }));
   return (
-    <div style={{ width: '100%', height: 260 }}>
+    <div style={{ width: '100%', height: 150, maxHeight: 180 }}>
       <ResponsiveContainer>
-        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 6 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLOR_BORDER} strokeOpacity={0.5} />
-          <XAxis dataKey="ano" tick={{ fontSize: 11, fill: COLOR_TEXT_MUTED }} />
-          <YAxis yAxisId="cab" tick={{ fontSize: 10, fill: COLOR_TEXT_MUTED }} />
-          <YAxis yAxisId="preco" orientation="right" tick={{ fontSize: 10, fill: COLOR_ACCENT }} />
+        <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={COLOR_BORDER} strokeOpacity={0.4} />
+          <XAxis dataKey="ano" tick={{ fontSize: 9, fill: COLOR_TEXT_MUTED }} />
+          <YAxis yAxisId="cab" tick={{ fontSize: 9, fill: COLOR_TEXT_MUTED }} />
+          <YAxis yAxisId="preco" orientation="right" tick={{ fontSize: 9, fill: COLOR_ACCENT }} />
           <Tooltip
-            contentStyle={{ background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, fontSize: 11 }}
-            labelStyle={{ color: COLOR_TEXT }}
-            itemStyle={{ color: COLOR_TEXT }}
+            contentStyle={{ background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, fontSize: 10, padding: 6 }}
+            labelStyle={{ color: COLOR_TEXT, fontSize: 10 }}
+            itemStyle={{ color: COLOR_TEXT, fontSize: 10 }}
           />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Bar yAxisId="cab" dataKey="cabecas" name="Cabeças" fill={COLOR_ACCENT} fillOpacity={0.75} />
-          <Line yAxisId="preco" type="monotone" dataKey="preco" name="R$/@" stroke={COLOR_GOOD} strokeWidth={2.5} dot={{ r: 3, fill: COLOR_GOOD }} />
+          <Bar yAxisId="cab" dataKey="cabecas" name="Cab" fill={COLOR_ACCENT} fillOpacity={0.75} />
+          <Line yAxisId="preco" type="monotone" dataKey="preco" name="R$/@" stroke={COLOR_GOOD} strokeWidth={2} dot={{ r: 2.5, fill: COLOR_GOOD }} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -230,39 +229,44 @@ function HistoricoChart({ data }: { data: HistoricoAno[] }) {
 }
 
 // ====================================================================
-function TabelaHistorica({ data }: { data: HistoricoAno[] }) {
+function TabelaHistorica({ data, meta }: { data: HistoricoAno[]; meta: HistoricoAno[] }) {
   const refAno = data[data.length - 1];
+  const metaByAno = new Map(meta.map(m => [m.ano, m]));
+  const th = { padding: '4px 6px', color: COLOR_TEXT_MUTED, fontWeight: 600, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: 0.3 };
+  const td = { padding: '3px 6px', fontSize: 11 };
+
   return (
     <div className="avoid-break" style={{ background: COLOR_CARD, border: `1px solid ${COLOR_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
         <thead>
           <tr style={{ background: COLOR_SEC }}>
-            <th style={{ padding: '8px 10px', textAlign: 'left', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Ano</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Cab</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Peso Méd. (kg)</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Arrobas</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>R$/@</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Faturamento</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Var% Cab</th>
-            <th style={{ padding: '8px 10px', textAlign: 'right', color: COLOR_TEXT_MUTED, fontWeight: 700, fontSize: 10 }}>Var% R$/@</th>
+            <th style={{ ...th, textAlign: 'left' }}>Ano</th>
+            <th style={{ ...th, textAlign: 'right' }}>Cab Real</th>
+            <th style={{ ...th, textAlign: 'right' }}>Cab Meta</th>
+            <th style={{ ...th, textAlign: 'right' }}>Var%</th>
+            <th style={{ ...th, textAlign: 'right' }}>@ Real</th>
+            <th style={{ ...th, textAlign: 'right' }}>@ Meta</th>
+            <th style={{ ...th, textAlign: 'right' }}>R$/@ Real</th>
+            <th style={{ ...th, textAlign: 'right' }}>R$/@ Meta</th>
+            <th style={{ ...th, textAlign: 'right' }}>Fat. Real</th>
           </tr>
         </thead>
         <tbody>
-          {data.map((h, i) => {
-            const prev = i > 0 ? data[i - 1] : null;
-            const vCab = prev ? pct(h.cabecas, prev.cabecas) : null;
-            const vPreco = prev ? pct(h.precoArroba, prev.precoArroba) : null;
+          {data.map(h => {
+            const m = metaByAno.get(h.ano);
+            const vCab = m && m.cabecas > 0 ? pct(h.cabecas, m.cabecas) : null;
             const isRef = refAno && h.ano === refAno.ano;
             return (
               <tr key={h.ano} style={{ background: isRef ? COLOR_SEC : undefined, fontWeight: isRef ? 700 : 400 }}>
-                <td style={{ padding: '5px 8px', color: isRef ? COLOR_ACCENT : COLOR_TEXT }}>{h.ano}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmt(h.cabecas)}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmt(h.pesoMedioCab, 1)}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmt(h.arrobas, 1)}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmtMoeda(h.precoArroba)}</td>
-                <td className="mono" style={{ padding: '5px 8px', color: COLOR_TEXT, textAlign: 'right' }}>{fmtMoeda(h.faturamentoReceitaPec)}</td>
-                <td className="mono" style={{ padding: '5px 8px', textAlign: 'right' }}><Delta pct={vCab} /></td>
-                <td className="mono" style={{ padding: '5px 8px', textAlign: 'right' }}><Delta pct={vPreco} /></td>
+                <td style={{ ...td, color: isRef ? COLOR_ACCENT : COLOR_TEXT }}>{h.ano}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT, textAlign: 'right' }}>{fmt(h.cabecas)}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT_MUTED, textAlign: 'right' }}>{m ? fmt(m.cabecas) : '–'}</td>
+                <td className="mono" style={{ ...td, textAlign: 'right' }}><Delta pct={vCab} /></td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT, textAlign: 'right' }}>{fmt(h.arrobas, 1)}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT_MUTED, textAlign: 'right' }}>{m ? fmt(m.arrobas, 1) : '–'}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT, textAlign: 'right' }}>{fmtMoeda(h.precoArroba)}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT_MUTED, textAlign: 'right' }}>{m ? fmtMoeda(m.precoArroba) : '–'}</td>
+                <td className="mono" style={{ ...td, color: COLOR_TEXT, textAlign: 'right' }}>{fmtMoeda(h.faturamentoReceitaPec)}</td>
               </tr>
             );
           })}
