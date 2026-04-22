@@ -11,7 +11,7 @@
  * Qualquer import fora das exceções acima é uma VIOLAÇÃO arquitetural.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -97,10 +97,9 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
     enabled: effectiveGlobal ? !!clienteId : (!!fazendaId && fazendaId !== '__global__'),
     staleTime: 600_000, // 10min — evita re-fetch ao trocar de aba/navegar
     gcTime: 900_000,    // 15min — mantém em cache depois de desmontar
-    // Mantém dados anteriores durante troca de fazenda/cliente/ano para evitar
-    // flash de "–" enquanto a nova query resolve. Em primeiro load (sem prev),
-    // devolve [] em vez de undefined para consumidores que iteram direto.
-    placeholderData: (prev) => prev ?? [],
+    // Mantém dados do cliente/fazenda/ano anterior visíveis durante a troca,
+    // eliminando o flash de zeros no Painel Consultor enquanto o novo resolve.
+    placeholderData: keepPreviousData,
   });
 }
 
