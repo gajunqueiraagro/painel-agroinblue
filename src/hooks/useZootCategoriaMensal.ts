@@ -11,7 +11,7 @@
  * Qualquer import fora das exceções acima é uma VIOLAÇÃO arquitetural.
  */
 
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -92,8 +92,8 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
     enabled: global ? !!clienteId : !!fazendaId,
     staleTime: 30_000,
     // Mantém dados anteriores durante troca de fazenda/cliente/ano para evitar
-    // flash de array vazio enquanto a nova query resolve.
-    placeholderData: keepPreviousData,
+    // flash de array vazio enquanto a nova query resolve (react-query v5).
+    placeholderData: (previousData) => previousData,
   });
 }
 

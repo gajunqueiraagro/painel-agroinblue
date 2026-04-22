@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -23,8 +23,9 @@ export function useMetaGmd(ano: string) {
     queryKey: ['meta-gmd', clienteId, fazendaId ?? 'global', ano],
     enabled: !!clienteId,
     staleTime: 30_000,
-    // Mantém dados anteriores na troca de fazenda/cliente/ano para evitar flash vazio.
-    placeholderData: keepPreviousData,
+    // Mantém dados anteriores na troca de fazenda/cliente/ano para evitar flash vazio
+    // (react-query v5).
+    placeholderData: (previousData) => previousData,
     queryFn: async (): Promise<MetaGmdRow[]> => {
       const isGlobal = !fazendaId || fazendaId === '__global__';
       let query = supabase
