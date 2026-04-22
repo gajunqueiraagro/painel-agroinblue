@@ -185,7 +185,7 @@ function normalizeMetaCategorias(
   }
 
   return normalized.sort((a, b) => {
-    const fazendaCmp = a.fazenda_id.localeCompare(b.fazenda_id);
+    const fazendaCmp = (a.fazenda_id ?? '').localeCompare(b.fazenda_id ?? '');
     if (fazendaCmp !== 0) return fazendaCmp;
     const categoriaCmp = a.ordem_exibicao - b.ordem_exibicao;
     if (categoriaCmp !== 0) return categoriaCmp;
