@@ -35,6 +35,7 @@ import {
 } from '@/hooks/useZootCategoriaMensal';
 import { useZootMensal, indexByMes, type ZootMensal } from '@/hooks/useZootMensal';
 import { useMetaGmd } from '@/hooks/useMetaGmd';
+import { usePastos } from '@/hooks/usePastos';
 
 // ---------------------------------------------------------------------------
 // Tipos internos — dados consolidados de fechamento oficial
@@ -347,6 +348,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
   const { rows: metaGmdRows } = useMetaGmd(String(ano));
+  const { pastos } = usePastos();
 
   const {
     data: categoriasData,
@@ -589,7 +591,24 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
   // ── rawFazenda: SEMPRE recalculado a partir de rawCategorias para meses fechados ──
   const rawFazenda = useMemo(() => {
     if (resolvedGlobal) {
-      return buildFazendaRowsFromCategories(rawCategorias);
+      const rows = buildFazendaRowsFromCategories(rawCategorias);
+      // Area produtiva Global: soma apenas das fazendas que aparecem nos dados da view
+      // (saldo_final > 0 em pelo menos um mês do período). Fazendas com pastos cadastrados
+      // mas sem rebanho no período NÃO entram no denominador da lotação.
+      const fazendasComRebanho = new Set<string>();
+      for (const c of rawCategorias) {
+        if (c.saldo_final > 0 && c.fazenda_id) fazendasComRebanho.add(c.fazenda_id);
+      }
+      const areaTotal = pastos
+        .filter(p => fazendasComRebanho.has(p.fazenda_id))
+        .reduce((sum, p) => sum + (p.area_produtiva_ha ?? 0), 0);
+      return rows.map(r => ({
+        ...r,
+        area_produtiva_ha: areaTotal,
+        lotacao_ua_ha: areaTotal > 0 && r.ua_media !== null
+          ? roundNumber(r.ua_media / areaTotal, 2)
+          : null,
+      }));
     }
 
     if (cenario === 'meta') {
@@ -640,7 +659,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     }
 
     return baseFazenda;
-  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, mesesFechados, ano]);
+  }, [baseFazenda, cenario, resolvedGlobal, rawCategorias, mesesFechados, ano, pastos]);
 
   // ── Grouped data ──
   const byMes = useMemo(() => groupByMes(rawCategorias), [rawCategorias]);
