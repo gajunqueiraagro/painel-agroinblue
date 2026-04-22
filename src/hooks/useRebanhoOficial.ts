@@ -450,7 +450,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
 
   const rawCategorias = useMemo(() => {
     let rows = baseCategorias;
-    if (resolvedGlobal || cenario !== 'meta') {
+    if (cenario !== 'meta') {
       // noop — use baseCategorias as-is before fechamento replacement
     } else {
       rows = normalizeMetaCategorias(baseCategorias, metaGmdRows);

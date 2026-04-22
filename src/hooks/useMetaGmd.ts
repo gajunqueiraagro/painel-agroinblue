@@ -20,26 +20,39 @@ export function useMetaGmd(ano: string) {
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
-    if (!fazendaId || !clienteId || fazendaId === '__global__') return;
+    if (!clienteId) return;
+    const isGlobal = !fazendaId || fazendaId === '__global__';
+    if (!isGlobal && !fazendaId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('meta_gmd_mensal')
         .select('*')
-        .eq('fazenda_id', fazendaId)
+        .eq('cliente_id', clienteId)
         .like('ano_mes', `${ano}-%`);
+      if (!isGlobal) {
+        query = query.eq('fazenda_id', fazendaId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
 
       // Build rows from CATEGORIAS
+      // Em modo Global, agrega por média ponderada? Aqui usamos a MÉDIA simples
+      // dos valores > 0 por categoria/mês (GMD é taxa — somar não faz sentido).
       const built: MetaGmdRow[] = CATEGORIAS.map(cat => {
         const meses: Record<string, number> = {};
         for (let m = 1; m <= 12; m++) {
           const key = String(m).padStart(2, '0');
           const anoMes = `${ano}-${key}`;
-          const found = (data || []).find(
+          const matches = (data || []).filter(
             (d: any) => d.categoria === cat.value && d.ano_mes === anoMes
           );
-          meses[key] = found ? Number(found.gmd_previsto) : 0;
+          if (isGlobal) {
+            const vals = matches.map((d: any) => Number(d.gmd_previsto)).filter(v => v > 0);
+            meses[key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+          } else {
+            meses[key] = matches.length ? Number(matches[0].gmd_previsto) : 0;
+          }
         }
         return { categoria: cat.value, meses };
       });
