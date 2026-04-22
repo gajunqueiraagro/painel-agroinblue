@@ -38,6 +38,7 @@ import { AuditoriaZootecnicaTab } from './AuditoriaZootecnicaTab';
 import { AuditoriaTecnicaTab } from './AuditoriaTecnicaTab';
 import { FechamentoExecutivoTab } from './FechamentoExecutivoTab';
 import { AnaliseConsultorTab } from './AnaliseConsultorTab';
+import { AnaliseTrimestralTab } from './AnaliseTrimestralTab';
 import { PrecoMercadoTab } from './PrecoMercadoTab';
 import { PainelConsultorHubTab } from './PainelConsultorHubTab';
 import { PrecosMercadoHubTab } from './PrecosMercadoHubTab';
@@ -124,6 +125,7 @@ const TITLES: Record<TabId, string> = {
   evolucao_rebanho_hub: 'Evolução Rebanho',
   fechamento_executivo: 'Fechamento Executivo',
   analise_consultor: 'Análise do Consultor',
+  analise_trimestral: 'Análise Trimestral',
   preco_mercado: 'Preço de Mercado',
   graficos_analise: 'Gráficos',
   financeiro_v2: 'Financeiro v2',
@@ -696,6 +698,9 @@ const Index = () => {
       )}
       {activeTab === 'analise_consultor' && (
         <AnaliseConsultorTab />
+      )}
+      {activeTab === 'analise_trimestral' && (
+        <AnaliseTrimestralTab />
       )}
       {activeTab === 'graficos_analise' && (
         <GraficosAnaliseTab
