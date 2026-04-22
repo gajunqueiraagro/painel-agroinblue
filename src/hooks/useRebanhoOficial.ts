@@ -21,7 +21,7 @@
  */
 
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -416,6 +416,8 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
     enabled: cenario === 'realizado' && (resolvedGlobal ? !!clienteId : !!fazendaId),
     staleTime: 30_000,
     gcTime: 60_000,
+    // Mantém overlay anterior visível enquanto nova query resolve — sem piscar.
+    placeholderData: keepPreviousData,
   });
 
   // useZootMensal only works for single-fazenda (NOT global).
