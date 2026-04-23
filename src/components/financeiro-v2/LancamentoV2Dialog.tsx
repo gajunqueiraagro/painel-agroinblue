@@ -655,6 +655,26 @@ export function LancamentoV2Dialog({
     const currentEditId = editingIdRef.current;
     const currentIsEdit = !!currentEditId;
 
+    // Auto-create fornecedor quando o usuário digita um nome que não está
+    // em financeiro_fornecedores. Preserva o id recém-criado ao salvar.
+    let effectiveFavorecidoId = favorecidoId;
+    const searchText = fornecedorSearch.trim();
+    if (!effectiveFavorecidoId && searchText && fazendaId) {
+      const existente = fornecedores.find(f => f.nome.trim().toLowerCase() === searchText.toLowerCase());
+      if (existente) {
+        effectiveFavorecidoId = existente.id;
+        setFavorecidoId(existente.id);
+      } else {
+        const novo = await onCriarFornecedor(searchText, fazendaId);
+        if (novo) {
+          effectiveFavorecidoId = novo.id;
+          setFavorecidoId(novo.id);
+        }
+      }
+      setFornecedorSearch('');
+    }
+    const favorecidoForForm = (effectiveFavorecidoId && effectiveFavorecidoId !== '__none_forn__') ? effectiveFavorecidoId : null;
+
     let contaBancariaId: string | null = null;
     let contaDestinoFinal: string | null = null;
     if (isTransferencia) {
@@ -692,7 +712,7 @@ export function LancamentoV2Dialog({
           observacao,
           numero_documento: notaFiscal || null,
           tipo_documento: tipoDocumento || null,
-          favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+          favorecido_id: favorecidoForForm,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
         };
@@ -728,7 +748,7 @@ export function LancamentoV2Dialog({
           observacao,
            numero_documento: notaFiscal || null,
            tipo_documento: tipoDocumento || null,
-          favorecido_id: favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null,
+          favorecido_id: favorecidoForForm,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
         };
@@ -760,7 +780,7 @@ export function LancamentoV2Dialog({
       observacao,
       numero_documento: notaFiscal || null,
       tipo_documento: tipoDocumento || null,
-      favorecido_id: (favorecidoId && favorecidoId !== '__none_forn__') ? favorecidoId : null,
+      favorecido_id: favorecidoForForm,
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
     };
@@ -1290,7 +1310,10 @@ export function LancamentoV2Dialog({
         open={fornecedorDialogOpen}
         onClose={() => setFornecedorDialogOpen(false)}
         onSave={async (nome, cpfCnpj) => {
-          if (!fazendaId) return;
+          if (!fazendaId) {
+            toast.error('Selecione uma fazenda antes de cadastrar o fornecedor.');
+            return;
+          }
           const f = await onCriarFornecedor(nome, fazendaId, cpfCnpj);
           if (f) handleFornecedorCriado(f);
         }}
