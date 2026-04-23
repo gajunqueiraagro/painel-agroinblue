@@ -139,6 +139,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }, [fazendaId, clienteId, ano]);
 
   // ─── Load plano de contas (global) ────────────────────────
+  // Exclui Dividendos (fonte canônica = financeiro_dividendos por cliente).
   const loadPlano = useCallback(async () => {
     try {
       const { data: rows, error } = await (supabase
@@ -146,6 +147,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
         .eq('ativo', true)
         .not('subcentro', 'is', null)
+        .neq('macro_custo', 'Dividendos')
         .order('ordem_exibicao') as any);
       if (error) throw error;
       setPlanoContas((rows || []) as PlanoContasRow[]);

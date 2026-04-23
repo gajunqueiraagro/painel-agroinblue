@@ -149,7 +149,12 @@ export function buildDividendoEntries(dividendos: Dividendo[], baseOrdem: number
 }
 
 /**
- * Load the full plano de contas (global) merged with client dividendos
+ * Load the full plano de contas (global) merged with client dividendos.
+ *
+ * FONTE ÚNICA de dividendos é `financeiro_dividendos` filtrada por cliente.
+ * Qualquer entrada com macro_custo='Dividendos' no plano global (ou
+ * cliente_id=NULL pré-seed) é EXCLUÍDA aqui — evita vazar dividendos de
+ * outros clientes nos seletores de subcentro.
  */
 export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoContasItem[]> {
   const [planoRes, dividendos] = await Promise.all([
@@ -157,6 +162,7 @@ export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoC
       .from('financeiro_plano_contas')
       .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao')
       .eq('ativo', true)
+      .neq('macro_custo', DIVIDENDO_MACRO)
       .order('ordem_exibicao'),
     loadDividendos(clienteId),
   ]);
