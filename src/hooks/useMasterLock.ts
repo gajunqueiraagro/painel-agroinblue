@@ -161,7 +161,8 @@ export function useMasterLock(anoMes?: string) {
     async (mes: string, senha: string): Promise<boolean> => {
       if (!fazendaId) return false;
       if (senha !== MASTER_PASSWORD) return false;
-      unlockKey(`${fazendaId}|${mes}`);
+      // fix: delay emit() - dialog fecha antes do re-render (evita tela branca)
+     setTimeout(() => unlockKey(`${fazendaId}|${mes}`), 0);
       return true;
     },
     [fazendaId]

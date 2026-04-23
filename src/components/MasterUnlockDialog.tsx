@@ -36,7 +36,11 @@ export function MasterUnlockDialog({ open, onOpenChange, anoMes, onUnlock }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+      className="max-w-md"
+      onInteractOutside={(e) => e.stopPropagation()}
+      onEscapeKeyDown={(e) => e.stopPropagation()}
+    >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-amber-600" />
