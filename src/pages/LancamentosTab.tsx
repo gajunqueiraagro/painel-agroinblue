@@ -1533,6 +1533,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setConfirmDialogOpen(true);
   };
 
+  const triggerZootCacheRefresh = (dateStr: string, includeReclassificacao = false) => {
+    const fazendaId = fazendaAtual?.id;
+    if (!fazendaId || !dateStr) return;
+    const p_ano = Number(dateStr.slice(0, 4));
+    const sb = supabase as any;
+    sb.rpc('refresh_zoot_cache', { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+    if (includeReclassificacao) {
+      sb.rpc('refresh_zoot_cache_reclassificacao', { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -1763,6 +1774,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
+          triggerZootCacheRefresh(data);
           restoreEditOrigin();
         } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
           // Auto-generate/update financeiro for venda
@@ -1778,6 +1790,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
+          triggerZootCacheRefresh(data);
           restoreEditOrigin();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
           // Re-generate financeiro for compra edit
@@ -1803,6 +1816,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
+          triggerZootCacheRefresh(data);
           restoreEditOrigin();
         } else {
           setEditingAbateId(null);
@@ -1813,6 +1827,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
+          triggerZootCacheRefresh(data);
           restoreEditOrigin();
         }
       } else {
@@ -1842,6 +1857,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
+          triggerZootCacheRefresh(data);
         } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
           // Auto-generate financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
@@ -1860,6 +1876,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp(isMeta ? 'meta' : 'realizado');
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
+          triggerZootCacheRefresh(data);
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
           if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
@@ -1873,6 +1890,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
+          triggerZootCacheRefresh(data);
         } else if (isConsumo && returnedId) {
           if (consumoFinanceiroRef.current && calc.valorLiquido > 0) {
             await consumoFinanceiroRef.current.generateFinanceiro(returnedId);
@@ -1885,6 +1903,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
+          triggerZootCacheRefresh(data);
         } else if (returnedId) {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
@@ -1894,6 +1913,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Lançamento registrado!');
+          triggerZootCacheRefresh(data);
         } else if (!returnedId) {
           toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
         }
@@ -3051,6 +3071,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 };
                 await onEditar(editingReclassId, payload);
                 toast.success('Reclassificação atualizada com sucesso.');
+                triggerZootCacheRefresh(reclassState.data, true);
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
@@ -3076,6 +3097,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
                 toast.success('Reclassificação removida.');
+                triggerZootCacheRefresh(reclassState.data, true);
                 if (onReturnFromEdit) await onReturnFromEdit();
               } : undefined}
             />
