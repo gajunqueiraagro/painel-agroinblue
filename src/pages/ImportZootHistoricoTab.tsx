@@ -49,15 +49,6 @@ export default function ImportZootHistoricoTab() {
     const rows = exemplos.map((ex) =>
       headers.reduce((acc, h) => ({ ...acc, [h]: ex[h] ?? '' }), {} as Record<string, any>)
     );
-    const _wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(_wb, XLSX.utils.json_to_sheet(rows, {header: headers}), 'IMPORT_ZOOT_HISTORICO'); XLSX.writeFile(_wb, 'template_importacao_zootecnica.xlsx'); // replaced: ({
-      filename: 'template_importacao_zootecnica.xlsx',
-      sheets: [{
-        name: 'IMPORT_ZOOT_HISTORICO',
-        mode: 'json',
-        rows,
-        cols: headers.map(() => ({ wch: 18 })),
-      }],
-    });
   };
 
   // ── Upload e parse ───────────────────────────────────────────────────────
@@ -150,15 +141,6 @@ export default function ImportZootHistoricoTab() {
       motivo_erro: l.erros.join(' | '),
     }));
 
-    const _wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(_wb, XLSX.utils.json_to_sheet(rows, {header: headers}), 'IMPORT_ZOOT_HISTORICO'); XLSX.writeFile(_wb, 'template_importacao_zootecnica.xlsx'); // replaced: ({
-      filename: 'erros_importacao_zootecnica.xlsx',
-      sheets: [{
-        name: 'ERROS',
-        mode: 'json',
-        rows,
-        cols: Object.keys(rows[0]).map(() => ({ wch: 20 })),
-      }],
-    });
   };
 
   // ── Insert with governance ────────────────────────────────────────────────
