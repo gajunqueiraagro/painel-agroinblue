@@ -31,6 +31,7 @@ export interface FinanciamentoInput {
   descricao?: string | null;
   numero_contrato?: string | null;
   credor_id?: string | null;
+  data_contrato?: string | null;
 }
 
 interface Classificacao {
@@ -39,6 +40,7 @@ interface Classificacao {
   macro_custo: string;
   grupo_custo: string;
   escopo_negocio: string;
+  centro_custo: string;
 }
 
 const AMORT: Record<'pecuaria' | 'agricultura', Classificacao> = {
@@ -48,6 +50,7 @@ const AMORT: Record<'pecuaria' | 'agricultura', Classificacao> = {
     macro_custo: 'Saída Financeira',
     grupo_custo: 'Amortizações',
     escopo_negocio: 'administrativo',
+    centro_custo: 'Pecuária',
   },
   agricultura: {
     subcentro: 'Amortização Financiamento Agricultura',
@@ -55,6 +58,7 @@ const AMORT: Record<'pecuaria' | 'agricultura', Classificacao> = {
     macro_custo: 'Saída Financeira',
     grupo_custo: 'Amortizações',
     escopo_negocio: 'administrativo',
+    centro_custo: 'Agricultura',
   },
 };
 
@@ -65,6 +69,7 @@ const JUROS: Record<'pecuaria' | 'agricultura', Classificacao> = {
     macro_custo: 'Custeio Produção',
     grupo_custo: 'Juros de Financiamento Pecuária',
     escopo_negocio: 'pecuaria',
+    centro_custo: 'Juros de Financiamento Pecuária',
   },
   agricultura: {
     subcentro: 'Juros de Financiamento Agricultura',
@@ -72,6 +77,7 @@ const JUROS: Record<'pecuaria' | 'agricultura', Classificacao> = {
     macro_custo: 'Custeio Produção',
     grupo_custo: 'Juros de Financiamento Agricultura',
     escopo_negocio: 'agricultura',
+    centro_custo: 'Juros de Financiamento Agricultura',
   },
 };
 
@@ -99,7 +105,7 @@ function lancamentoRow(
     fazenda_id: financiamento.fazenda_id ?? parcela.fazenda_id ?? null,
     ano_mes: anoMes,
     data_pagamento: parcela.data_vencimento,
-    data_competencia: parcela.data_vencimento,
+    data_competencia: financiamento.data_contrato ?? parcela.data_vencimento,
     tipo_operacao: '2-Saídas',
     sinal: -1,
     valor,
@@ -114,6 +120,7 @@ function lancamentoRow(
     grupo_custo: cls.grupo_custo,
     subcentro: cls.subcentro,
     escopo_negocio: cls.escopo_negocio,
+    centro_custo: cls.centro_custo,
     plano_conta_id: cls.plano_conta_id,
     descricao: buildDescricao(financiamento, origemTipo),
     favorecido_id: financiamento.credor_id ?? null,
