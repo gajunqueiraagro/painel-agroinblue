@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { CATEGORIAS, Categoria, SaldoInicial } from '@/types/cattle';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -57,8 +57,15 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
 
   const mesOptions = useMemo(() => MESES_CURTOS.map((label, i) => ({ value: String(i + 1), label })), []);
 
+  const initDoneRef = useRef(false);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initDoneRef.current = false;
+      return;
+    }
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
     const anoForm = hasSaldo ? saldoBase.ano : Number(anoSelecionado);
     const mesForm = hasSaldo ? saldoBase.mes : Number(mesSelecionado);
     const v: Record<string, string> = {};
