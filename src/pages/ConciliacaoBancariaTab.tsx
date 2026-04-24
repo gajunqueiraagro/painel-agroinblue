@@ -638,7 +638,34 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     {formatMoeda(selectedCard.diferenca)}
                   </span>
                 </div>
+              {/* Transação — footer do card como badges */}
+              <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
+                <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">
+                  Todos ({selectedCard.lancamentos.length})
+                </button>
+                <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer">
+                  Entradas ({entradas.length})
+                </button>
+                <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer">
+                  Saídas ({saidas.length})
+                </button>
+                {transfEntrada.length > 0 && (
+                  <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
+                    className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer border border-blue-200">
+                    Transf. Ent. ({transfEntrada.length})
+                  </button>
+                )}
+                {transfSaida.length > 0 && (
+                  <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
+                    className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer border border-orange-200">
+                    Transf. Saída ({transfSaida.length})
+                  </button>
+                )}
               </div>
+            </div>
 
               {/* ── COL 2: Status ── */}
               <div className="rounded-lg overflow-hidden flex flex-col" style={{border:`1px solid ${cor.border}`}}>
@@ -707,18 +734,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Total row */}
+                    {/* Total row — sticky, não rola, altura maior */}
                     <tr
-                      className={`border-b cursor-pointer hover:bg-muted/30 transition-colors ${selectedConta === '__all__' ? 'bg-blue-50' : 'bg-muted/20'}`}
+                      className="border-b cursor-pointer transition-colors"
+                      style={{
+                        position:'sticky', top:'64px', zIndex:8,
+                        background: selectedConta==='__all__' ? '#DBEAFE' : '#EFF6FF',
+                      }}
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-0.5 px-2 font-medium text-[9px]">Total — todas as contas</td>
-                      <td className={`py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                      <td className="py-2 px-2 font-semibold text-[9px]">Total — todas as contas</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
                         {formatMoeda(totalSaldos.dif)}
                       </td>
-                      <td className="py-0.5" />
+                      <td className="py-2" />
                     </tr>
 
                     {/* CC group */}
@@ -769,40 +800,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               </div>
             </div>
 
-            {/* ════ FILTER BADGES ════ */}
-            <div className="flex items-center gap-1 flex-wrap">
-              <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
-                className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">
-                Todos ({selectedCard.lancamentos.length})
-              </button>
-              <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
-                className="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer">
-                Entradas ({entradas.length})
-              </button>
-              <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
-                className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer">
-                Saídas ({saidas.length})
-              </button>
-              {transfEntrada.length > 0 && (
-                <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer border border-blue-200">
-                  Transf. Ent. ({transfEntrada.length})
-                </button>
-              )}
-              {transfSaida.length > 0 && (
-                <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer border border-orange-200">
-                  Transf. Saída ({transfSaida.length})
-                </button>
-              )}
-            </div>
+
           </div>
         )}
       </div>
 
       {/* ════ LANÇAMENTOS MODAL ════ */}
       <Dialog open={showLancModal} onOpenChange={setShowLancModal}>
-        <DialogContent className="max-w-4xl p-0 gap-0 flex flex-col" style={{maxHeight:'85vh'}}>
+        <DialogContent className="max-w-4xl p-0 gap-0 flex flex-col" style={{height:'82vh', maxHeight:'82vh'}}>
           <div className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0">
             <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={()=>setShowLancModal(false)}>
               <ArrowLeft className="h-4 w-4" />
