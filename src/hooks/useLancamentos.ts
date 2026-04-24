@@ -536,10 +536,6 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
   const setSaldoInicial = async (ano: number, mes: number, categoria: SaldoInicial['categoria'], quantidade: number, pesoMedioKg?: number, precoKg?: number) => {
     if (!fazendaId || fazendaId === '__global__') return;
 
-    const registroExistente = saldosIniciais.some(
-      s => s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria
-    );
-
     if (true) {
       const payload = {
         fazenda_id: fazendaId,
@@ -552,31 +548,19 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         preco_kg: precoKg ?? null,
       };
 
-      console.log('[SALDO-SAVE] payload:', JSON.stringify({ ...payload, registroExistente }));
+      console.log('[SALDO-SAVE] payload:', JSON.stringify(payload));
 
-      let result;
-      if (registroExistente) {
-        const q = supabase
-          .from('saldos_iniciais')
-          .update({
-            quantidade,
-            peso_medio_kg: pesoMedioKg ?? null,
-            preco_kg: precoKg ?? null,
-          } as any)
-          .eq('fazenda_id', fazendaId)
-          .eq('ano', ano)
-          .eq('categoria', categoria) as any;
-        result = await q.eq('mes', mes).select().maybeSingle();
-      } else {
-        result = await supabase
-          .from('saldos_iniciais')
-          .insert(payload as any)
-          .select()
-          .maybeSingle();
-      }
+      const result = await supabase
+        .from('saldos_iniciais')
+        .upsert(payload as any, {
+          onConflict: 'fazenda_id,categoria,ano,mes',
+          ignoreDuplicates: false,
+        })
+        .select()
+        .maybeSingle();
       const { error, data } = result;
 
-      console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data, registroExistente }));
+      console.log('[SALDO-SAVE] result:', JSON.stringify({ error, data }));
 
       if (error) {
         console.error('Erro ao salvar saldo inicial:', error);
