@@ -49,6 +49,7 @@ export default function ImportZootHistoricoTab() {
     const rows = exemplos.map((ex) =>
       headers.reduce((acc, h) => ({ ...acc, [h]: ex[h] ?? '' }), {} as Record<string, any>)
     );
+    triggerXlsxDownload(rows, 'template_historico_zootecnico.xlsx');
   };
 
   // ── Upload e parse ───────────────────────────────────────────────────────
