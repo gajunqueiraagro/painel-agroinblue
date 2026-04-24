@@ -1533,14 +1533,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setConfirmDialogOpen(true);
   };
 
-  const triggerZootCacheRefresh = (dateStr: string, includeReclassificacao = false) => {
+  const triggerZootCacheRefresh = (dateStr: string, includeReclassificacao = false, mes?: number) => {
     const fazendaId = fazendaAtual?.id;
     if (!fazendaId || !dateStr) return;
     const p_ano = Number(dateStr.slice(0, 4));
-    const sb = supabase as any;
-    sb.rpc('refresh_zoot_cache', { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+    const rpc = (supabase.rpc as any);
+    const args = mes ? { p_fazenda_id: fazendaId, p_ano, p_mes: mes } : { p_fazenda_id: fazendaId, p_ano };
+    Promise.resolve(rpc('refresh_zoot_cache', args)).catch(() => {});
     if (includeReclassificacao) {
-      sb.rpc('refresh_zoot_cache_reclassificacao', { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
+      Promise.resolve(rpc('refresh_zoot_cache_reclassificacao', { p_fazenda_id: fazendaId, p_ano })).catch(() => {});
     }
   };
 
@@ -3071,7 +3072,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 };
                 await onEditar(editingReclassId, payload);
                 toast.success('Reclassificação atualizada com sucesso.');
-                triggerZootCacheRefresh(reclassState.data, true);
+                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 setEditingReclassId(null);
                 reclassState.setQuantidade('');
                 reclassState.setPesoKg('');
@@ -3097,7 +3098,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 reclassState.setPesoKg('');
                 reclassState.setPesoAutoFilled(false);
                 toast.success('Reclassificação removida.');
-                triggerZootCacheRefresh(reclassState.data, true);
+                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 if (onReturnFromEdit) await onReturnFromEdit();
               } : undefined}
             />
