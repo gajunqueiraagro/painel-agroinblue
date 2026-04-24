@@ -20,6 +20,7 @@ import {
   type LinhaValidada,
 } from '@/lib/importZootHistorico';
 import * as XLSX from 'xlsx';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 
 type Filtro = 'todos' | 'validas' | 'erros';
 
@@ -48,7 +49,7 @@ export default function ImportZootHistoricoTab() {
     const rows = exemplos.map((ex) =>
       headers.reduce((acc, h) => ({ ...acc, [h]: ex[h] ?? '' }), {} as Record<string, any>)
     );
-    triggerXlsxDownload({
+    const _wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(_wb, XLSX.utils.json_to_sheet(rows, {header: headers}), 'IMPORT_ZOOT_HISTORICO'); XLSX.writeFile(_wb, 'template_importacao_zootecnica.xlsx'); // replaced: ({
       filename: 'template_importacao_zootecnica.xlsx',
       sheets: [{
         name: 'IMPORT_ZOOT_HISTORICO',
@@ -149,7 +150,7 @@ export default function ImportZootHistoricoTab() {
       motivo_erro: l.erros.join(' | '),
     }));
 
-    triggerXlsxDownload({
+    const _wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(_wb, XLSX.utils.json_to_sheet(rows, {header: headers}), 'IMPORT_ZOOT_HISTORICO'); XLSX.writeFile(_wb, 'template_importacao_zootecnica.xlsx'); // replaced: ({
       filename: 'erros_importacao_zootecnica.xlsx',
       sheets: [{
         name: 'ERROS',
