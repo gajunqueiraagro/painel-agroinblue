@@ -14,10 +14,13 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useZootCategoriaMensal, groupByMes, categoriasUnicas } from '@/hooks/useZootCategoriaMensal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { getAnoMesOptions, formatAnoMes } from '@/lib/dateUtils';
 import { classificarNivelConciliacao, type NivelConciliacao } from '@/lib/calculos/zootecnicos';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props {
   filtroAnoInicial?: string;
@@ -34,7 +37,7 @@ interface ConciliacaoRow {
 }
 
 export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos } = usePastos();
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
   const defaultAnoMes = filtroAnoInicial && filtroMesInicial
@@ -162,6 +165,20 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
           </SelectContent>
         </Select>
         <Badge variant="secondary">{fechadosCount}/{pastosCount} fechados</Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            (supabase.rpc as any)('refresh_zoot_cache', {
+              p_fazenda_id: fazendaAtual?.id,
+              p_ano: Number(anoMes?.split('-')[0]),
+              p_mes: Number(anoMes?.split('-')[1]),
+            }).catch(() => {});
+            toast.info('Atualizando rebanho... aguarde ~15s e recarregue a tela.');
+          }}
+        >
+          🔄 Atualizar Rebanho
+        </Button>
       </div>
 
       {alertas.length > 0 && (
