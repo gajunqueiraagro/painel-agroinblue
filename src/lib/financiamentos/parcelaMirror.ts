@@ -268,13 +268,16 @@ export async function atualizarStatusMirror(
   supabase: SupabaseClient,
   parcelaId: string,
   dataPagamento: string,
+  contaBancariaId?: string | null,
 ): Promise<void> {
+  const update: Record<string, any> = {
+    status_transacao: 'realizado',
+    data_pagamento: dataPagamento,
+  };
+  if (contaBancariaId) update.conta_bancaria_id = contaBancariaId;
   const { error } = await supabase
     .from('financeiro_lancamentos_v2')
-    .update({
-      status_transacao: 'realizado',
-      data_pagamento: dataPagamento,
-    })
+    .update(update)
     .eq('origem_lancamento', 'parcela_financiamento')
     .eq('observacao', parcelaId);
   if (error) console.error('[parcelaMirror] erro update status:', error);

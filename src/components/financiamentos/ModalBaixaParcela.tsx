@@ -40,6 +40,7 @@ interface Financiamento {
   conta_bancaria_id: string | null;
   numero_contrato?: string | null;
   credor_id?: string | null;
+  data_contrato?: string | null;
 }
 
 interface Props {
@@ -189,6 +190,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         descricao: financiamento.descricao ?? null,
         numero_contrato: financiamento.numero_contrato ?? null,
         credor_id: financiamento.credor_id ?? null,
+        data_contrato: financiamento.data_contrato ?? null,
       });
 
       // 3. Setar status realizado + conta bancária + data real de pagamento
@@ -274,9 +276,10 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
               descricao: financiamento.descricao ?? null,
               numero_contrato: financiamento.numero_contrato ?? null,
               credor_id: financiamento.credor_id ?? null,
+              data_contrato: financiamento.data_contrato ?? null,
             });
             if (status === 'pago' && dataPagamento) {
-              await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+              await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
             }
           }
         }
@@ -290,7 +293,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
             .eq('id', parcela.id);
         } else if (status === 'pago' && dataPagamento) {
           const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
-          await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
+          await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
         } else if (status === 'pendente') {
           await supabase
             .from('financeiro_lancamentos_v2')

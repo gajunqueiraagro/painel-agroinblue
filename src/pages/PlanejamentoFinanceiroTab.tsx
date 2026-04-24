@@ -147,6 +147,10 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
     if (macroNome === 'Investimento na Fazenda') {
       return { bloqueado: true, motivo: 'Use a tela Projetos de Investimento para lançar valores' };
     }
+    // Investimento na Fazenda: sempre bloqueado — obrigatório via Projetos de Investimento
+    if (macroNome === 'Investimento na Fazenda') {
+      return { bloqueado: true, motivo: 'Use a tela Projetos de Investimento para lançar valores' };
+    }
     return { bloqueado: false, motivo: '' };
   }, [isFazendaOp, isAdminFazenda, isGlobal]);
 
