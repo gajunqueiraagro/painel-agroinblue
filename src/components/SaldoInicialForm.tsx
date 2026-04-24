@@ -31,7 +31,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   const shouldRender = !anoBase || anoBase === saldoBase.ano;
 
   const hasSaldo = useMemo(() => {
-    return saldosIniciais.some(s => s.ano === saldoBase.ano && (s.mes || 1) === saldoBase.mes && s.quantidade > 0);
+    return saldosIniciais.some(s => s.ano === saldoBase.ano && (s.mes || 1) === saldoBase.mes);
   }, [saldosIniciais, saldoBase]);
 
   const totalCabecas = useMemo(() => {

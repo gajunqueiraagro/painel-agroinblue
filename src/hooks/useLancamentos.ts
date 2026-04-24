@@ -540,7 +540,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       s => s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria
     );
 
-    if (quantidade > 0 || (precoKg != null && precoKg > 0)) {
+    if (true) {
       const payload = {
         fazenda_id: fazendaId,
         cliente_id: clienteId!,
