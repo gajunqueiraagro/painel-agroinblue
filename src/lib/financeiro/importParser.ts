@@ -325,7 +325,7 @@ export function parseExcel(file: ArrayBuffer): ResultadoParsing {
         fazendaId: null,
         tipoOperacao: tipo,
         macroCusto: macro,
-        grupoCusto: str(col(r, colMap, 'Grupo_Custo')),
+        grupoCusto: str(col(r, colMap, 'Grupo_Custo')) ?? (macro === 'Dividendos' ? 'Dividendos' : null),
         centroCusto: str(col(r, colMap, 'Centro_Custo')),
         subcentro: str(col(r, colMap, 'Subcentro')),
         contaOrigem: conta,
