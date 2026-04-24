@@ -561,11 +561,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {!loading && selectedCard && (
           <div className="space-y-2">
             {/* ════ 3 CARDS: [Resumo span-2] [Status] [Saldos por conta span-2] ════ */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', alignItems:'start'}}>
+            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', gridTemplateRows:'auto auto', alignItems:'start'}}>
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
-                <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between">
+                <div className="px-3 py-1.5 border-b bg-blue-50 flex items-center justify-between">
                   <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">📊 Resumo das movimentações</span>
                   <span style={{fontSize:'10px',fontWeight:500,color:'#185FA5',background:'#E6F1FB',padding:'2px 8px',borderRadius:'12px'}}>
                     {contaAtual}
@@ -630,7 +630,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
               {/* ── COL 2: Status ── */}
               <div className="rounded-lg overflow-hidden flex flex-col" style={{border:`1px solid ${cor.border}`}}>
-                <div className="px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider text-muted-foreground"
+                <div className="px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider text-muted-foreground bg-blue-50"
                      style={{borderColor:cor.border}}>
                   ⚖ Status
                 </div>
@@ -655,8 +655,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               </div>
 
               {/* ── COL 3: Saldos por conta ── */}
-              <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
-                <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-card">
+              <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)',gridRow:'1 / 3'}}>
+                <div className="px-3 py-1.5 border-b bg-blue-50 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-blue-50">
                   <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">🏦 Saldos por conta</span>
                   <div className="flex items-center gap-2">
                     {selectedConta !== '__all__' && (
@@ -685,8 +685,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <col style={{width:'18%'}} />
                     <col style={{width:'6%'}} />
                   </colgroup>
-                  <thead>
-                    <tr className="border-b bg-muted/30">
+                  <thead className="sticky z-[9] bg-blue-50" style={{top:'36px'}}>
+                    <tr className="border-b bg-blue-50">
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Conta</th>
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Sistema</th>
                       <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Extrato</th>
@@ -711,7 +711,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
                     {/* CC group */}
                     {contasCC.length > 0 && <>
-                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Conta corrente</td></tr>
+                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Conta corrente</td></tr>
                       {contasCC.map(s=>(
                         <SaldoContaRow key={s.conta.id} data={s}
                           isActive={selectedConta===s.conta.id}
@@ -724,7 +724,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
                     {/* INV group */}
                     {contasINV.length > 0 && <>
-                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Investimento</td></tr>
+                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Investimento</td></tr>
                       {contasINV.map(s=>(
                         <SaldoContaRow key={s.conta.id} data={s}
                           isActive={selectedConta===s.conta.id}
@@ -737,7 +737,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
                     {/* Cartao group */}
                     {contasCartao.length > 0 && <>
-                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Cartão</td></tr>
+                      <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Cartão</td></tr>
                       {contasCartao.map(s=>(
                         <SaldoContaRow key={s.conta.id} data={s}
                           isActive={selectedConta===s.conta.id}
@@ -755,10 +755,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </tbody>
                 </table>
               </div>
-            </div>
-
-            {/* ════ FILTER BADGES → open lançamentos modal ════ */}
-            <div className="flex items-center gap-1 flex-wrap">
+              {/* ════ FILTER BADGES — row 2 cols 1-2 do grid ════ */}
+              <div style={{gridColumn:'1 / 3'}} className="flex items-center gap-1 flex-wrap">
               <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
                 className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">
                 Todos ({selectedCard.lancamentos.length})
@@ -783,6 +781,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   Transf. Saída ({transfSaida.length})
                 </button>
               )}
+            </div>
             </div>
           </div>
         )}
