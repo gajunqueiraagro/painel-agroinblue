@@ -3117,6 +3117,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 if (onReturnFromEdit) await onReturnFromEdit();
               } : undefined}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
+                toast.info('Atualizando rebanho... aguarde ~15s e recarregue a tela.');
+              }}
+            >
+              🔄 Atualizar Rebanho
+            </Button>
           </>
         ) : (
           <>
