@@ -486,7 +486,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ── Render ── */
   return (
     <div className="animate-fade-in pb-20">
-      <div className="p-3 space-y-2">
+      <div className="p-3 space-y-2 sticky top-0 z-20 bg-background">
 
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}
         <div className="flex items-center gap-2">
@@ -557,7 +557,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {!loading && selectedCard && (
           <div className="space-y-2">
             {/* ════ 3 CARDS: [Resumo span-2] [Status] [Saldos por conta span-2] ════ */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr'}}>
+            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', alignItems:'start'}}>
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
@@ -651,8 +651,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               </div>
 
               {/* ── COL 3: Saldos por conta ── */}
-              <div className="rounded-lg border overflow-hidden bg-card">
-                <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between">
+              <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
+                <div className="px-3 py-1.5 border-b bg-muted/30 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-card">
                   <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">🏦 Saldos por conta</span>
                   <div className="flex items-center gap-2">
                     {selectedConta !== '__all__' && (
