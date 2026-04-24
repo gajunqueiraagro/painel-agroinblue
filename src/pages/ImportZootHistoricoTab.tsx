@@ -19,7 +19,6 @@ import {
   CAMPOS_OBRIGATORIOS,
   type LinhaValidada,
 } from '@/lib/importZootHistorico';
-import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import * as XLSX from 'xlsx';
 
 type Filtro = 'todos' | 'validas' | 'erros';

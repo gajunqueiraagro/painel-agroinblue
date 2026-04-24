@@ -39,7 +39,6 @@ export type ColunaTemplate = (typeof COLUNAS_TEMPLATE)[number];
 // ── Tipos válidos ──────────────────────────────────────────────────────────
 
 export const TIPOS_VALIDOS = [
-  'saldo_inicial',
   'nascimento',
   'compra',
   'venda',
@@ -65,7 +64,6 @@ const CATEGORIAS_VALIDAS: string[] = [
 type CampoReq = ColunaTemplate;
 
 export const CAMPOS_OBRIGATORIOS: Record<TipoImportavel, CampoReq[]> = {
-  saldo_inicial:       ['fazenda', 'data', 'categoria', 'quantidade'],
   nascimento:          ['fazenda', 'data', 'categoria', 'quantidade'],
   compra:              ['fazenda', 'data', 'categoria', 'quantidade'],
   venda:               ['fazenda', 'data', 'categoria', 'quantidade'],
@@ -272,7 +270,7 @@ export function montarInserts(
         preco_arroba: l.preco_arroba,
         preco_medio_cabeca: l.preco_cabeca,
         valor_total: l.valor_total,
-        fazenda_destino: fazDestinoId,
+        fazenda_destino_id: fazDestinoId,
         comprador_fornecedor: l.comprador_fornecedor || null,
         numero_documento: l.numero_documento || null,
         observacao: l.observacao || null,
@@ -280,7 +278,7 @@ export function montarInserts(
         lote: l.lote || null,
         sexo: l.sexo || null,
         finalidade: l.finalidade || null,
-        origem_registro: 'importacao_historica',
+        status_operacional: 'realizado', origem_registro: 'importacao_historica',
         cancelado: false,
         lote_importacao_id: loteImportacaoId || null,
         hash_linha: hashLinha,
