@@ -3089,6 +3089,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 setSubmitting(true);
                 try {
                   await reclassState.handleSubmit();
+                  triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
                 } finally {
                   setSubmitting(false);
                 }
