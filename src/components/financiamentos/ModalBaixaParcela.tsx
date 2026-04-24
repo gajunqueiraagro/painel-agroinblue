@@ -38,6 +38,8 @@ interface Financiamento {
   status?: string;
   plano_conta_parcela_id: string | null;
   conta_bancaria_id: string | null;
+  numero_contrato?: string | null;
+  credor_id?: string | null;
 }
 
 interface Props {
@@ -142,66 +144,68 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
   const temErros = Object.keys(erros).length > 0;
 
   // ══════════════════════════════════════════
-  // REGISTRAR — baixa de pagamento (fluxo original)
+  // REGISTRAR — usa parcelaMirror (um lançamento por contrato, plano correto)
   // ══════════════════════════════════════════
   const handleConfirmRegistrar = async () => {
     if (!parcela) return;
-
-    if (!financiamento.plano_conta_parcela_id) {
-      toast.error('Conta de amortização não configurada. Edite o financiamento antes de registrar pagamento.');
-      return;
-    }
     if (!contaBancariaId) { toast.error('Selecione a conta bancária.'); return; }
     if (!dataPagamento) { toast.error('Informe a data de pagamento.'); return; }
-
+    const tipo = financiamento.tipo_financiamento;
+    if (tipo !== 'pecuaria' && tipo !== 'agricultura') {
+      toast.error('Tipo de financiamento inválido. Edite o financiamento antes de registrar.');
+      return;
+    }
     setSaving(true);
     try {
+      const { criarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+
+      // 1. Remover lançamento legado inválido (origem_lancamento='financiamento') se existir
+      if (parcela.lancamento_id) {
+        const { data: oldLanc } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('id, origem_lancamento')
+          .eq('id', parcela.lancamento_id)
+          .maybeSingle();
+        if (oldLanc?.origem_lancamento === 'financiamento') {
+          await supabase.from('financeiro_lancamentos_v2').delete().eq('id', oldLanc.id);
+          await supabase.from('financiamento_parcelas').update({ lancamento_id: null }).eq('id', parcela.id);
+        }
+      }
+
+      // 2. Criar/garantir mirror: 1 amortização + 1 juros, com plano, credor e descrição corretos
+      await criarMirrorParcela(supabase as any, {
+        id: parcela.id,
+        cliente_id: financiamento.cliente_id,
+        fazenda_id: financiamento.fazenda_id,
+        data_vencimento: dataPagamento,
+        valor_principal: parcela.valor_principal,
+        valor_juros: parcela.valor_juros,
+        lancamento_id: null,
+      }, {
+        id: financiamento.id,
+        cliente_id: financiamento.cliente_id,
+        fazenda_id: financiamento.fazenda_id,
+        tipo_financiamento: tipo,
+        descricao: financiamento.descricao ?? null,
+        numero_contrato: financiamento.numero_contrato ?? null,
+        credor_id: financiamento.credor_id ?? null,
+      });
+
+      // 3. Setar status realizado + conta bancária + data real de pagamento
       const anoMes = dataPagamento.slice(0, 7);
-      const descLanc = `Parcela ${parcela.numero_parcela}/${financiamento.total_parcelas}: ${financiamento.descricao}`;
-
-      const { data: lanc, error: errLanc } = await supabase
+      await supabase
         .from('financeiro_lancamentos_v2')
-        .insert({
-          cliente_id: financiamento.cliente_id,
-          fazenda_id: financiamento.fazenda_id,
-          conta_bancaria_id: contaBancariaId,
-          tipo_operacao: '2-Saídas',
-          sinal: -1,
-          valor: valorTotal,
-          data_competencia: dataPagamento,
-          data_pagamento: dataPagamento,
-          ano_mes: anoMes,
-          origem_lancamento: 'financiamento',
-          origem_tipo: 'financiamento_parcela',
-          plano_conta_id: financiamento.plano_conta_parcela_id,
-          descricao: descLanc,
-          status_transacao: 'realizado',
-          cancelado: false,
-        })
-        .select('id')
-        .single();
-      if (errLanc || !lanc) throw new Error(errLanc?.message ?? 'Falha ao criar lançamento');
+        .update({ status_transacao: 'realizado', data_pagamento: dataPagamento, ano_mes: anoMes, conta_bancaria_id: contaBancariaId })
+        .eq('origem_lancamento', 'parcela_financiamento')
+        .eq('observacao', parcela.id)
+        .eq('cancelado', false);
 
+      // 4. Atualizar parcela
       const { error: errParc } = await supabase
         .from('financiamento_parcelas')
-        .update({
-          status: 'pago',
-          data_pagamento: dataPagamento,
-          valor_principal: principal,
-          valor_juros: juros,
-          lancamento_id: lanc.id,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: 'pago', data_pagamento: dataPagamento, valor_principal: parcela.valor_principal, valor_juros: parcela.valor_juros, updated_at: new Date().toISOString() })
         .eq('id', parcela.id);
       if (errParc) throw errParc;
-
-      // Atualiza status do mirror (programado → realizado) se existir
-      try {
-        const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
-        await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
-      } catch (e) {
-        console.error('[ModalBaixaParcela] erro atualizarStatusMirror:', e);
-      }
 
       toast.success('Parcela registrada com sucesso!');
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamento.id] });
@@ -267,6 +271,9 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
               cliente_id: financiamento.cliente_id,
               fazenda_id: financiamento.fazenda_id,
               tipo_financiamento: tipo,
+              descricao: financiamento.descricao ?? null,
+              numero_contrato: financiamento.numero_contrato ?? null,
+              credor_id: financiamento.credor_id ?? null,
             });
             if (status === 'pago' && dataPagamento) {
               await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento);
