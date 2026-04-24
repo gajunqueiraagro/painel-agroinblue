@@ -3058,28 +3058,42 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
               statusOp={reclassState.statusOp}
               onRequestRegister={editingReclassId ? async () => {
-                const isMeta = reclassState.statusOp === 'meta';
-                const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
-                const payload = {
-                  data: reclassState.data,
-                  categoria: reclassState.categoriaOrigem,
-                  categoriaDestino: reclassState.categoriaDestino,
-                  quantidade: Number(reclassState.quantidade),
-                  pesoMedioKg: pesoMedioKg ?? null,
-                  pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
-                  cenario: isMeta ? 'meta' as const : 'realizado' as const,
-                  statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
-                };
-                await onEditar(editingReclassId, payload);
-                toast.success('Reclassificação atualizada com sucesso.');
-                triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
-                setEditingReclassId(null);
-                reclassState.setQuantidade('');
-                reclassState.setPesoKg('');
-                reclassState.setPesoAutoFilled(false);
-                if (onReturnFromEdit) await onReturnFromEdit();
-              } : reclassState.handleSubmit}
-              submitting={false}
+                if (submitting) return;
+                setSubmitting(true);
+                try {
+                  const isMeta = reclassState.statusOp === 'meta';
+                  const pesoMedioKg = parseDecimalInput(reclassState.pesoKg);
+                  const payload = {
+                    data: reclassState.data,
+                    categoria: reclassState.categoriaOrigem,
+                    categoriaDestino: reclassState.categoriaDestino,
+                    quantidade: Number(reclassState.quantidade),
+                    pesoMedioKg: pesoMedioKg ?? null,
+                    pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : null,
+                    cenario: isMeta ? 'meta' as const : 'realizado' as const,
+                    statusOperacional: isMeta ? 'previsto' as const : 'realizado' as const,
+                  };
+                  await onEditar(editingReclassId, payload);
+                  toast.success('Reclassificação atualizada com sucesso.');
+                  triggerZootCacheRefresh(reclassState.data, true, new Date(reclassState.data).getMonth() + 1);
+                  setEditingReclassId(null);
+                  reclassState.setQuantidade('');
+                  reclassState.setPesoKg('');
+                  reclassState.setPesoAutoFilled(false);
+                  if (onReturnFromEdit) await onReturnFromEdit();
+                } finally {
+                  setSubmitting(false);
+                }
+              } : async () => {
+                if (submitting) return;
+                setSubmitting(true);
+                try {
+                  await reclassState.handleSubmit();
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              submitting={submitting}
               canRegister={!!(Number(reclassState.quantidade) > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino)}
               onBack={editingReclassId ? undefined : onBackToConciliacao}
               backLabel={backLabel}
