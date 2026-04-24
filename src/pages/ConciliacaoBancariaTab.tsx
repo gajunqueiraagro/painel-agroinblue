@@ -431,8 +431,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   const transfEntrada = useMemo(() => (selectedCard?.lancamentos||[]).filter(l=>classifyLanc(l,selectedConta)==='transf_entrada'), [selectedCard, selectedConta]);
   const transfSaida   = useMemo(() => (selectedCard?.lancamentos||[]).filter(l=>classifyLanc(l,selectedConta)==='transf_saida'),   [selectedCard, selectedConta]);
-  const totalEntradasModal = useMemo(() => entradas.reduce((s,l)=>s+l.valor,0), [entradas]);
-  const totalSaidasModal   = useMemo(() => saidas.reduce((s,l)=>s+l.valor,0),   [saidas]);
+  // Somas refletem APENAS o filtro ativo
+  const sumModal = useMemo(() => {
+    let ent=0, sai=0, trE=0, trS=0;
+    lancFiltrados.forEach(l => {
+      const cls = classifyLanc(l, selectedConta);
+      if (cls==='entrada')       ent += l.valor;
+      else if (cls==='saida')    sai += l.valor;
+      else if (cls==='transf_entrada') trE += l.valor;
+      else if (cls==='transf_saida')   trS += l.valor;
+    });
+    return {ent, sai, trE, trS, total: ent+sai+trE+trS};
+  }, [lancFiltrados, selectedConta]);
+  const totalEntradasModal = sumModal.ent;
+  const totalSaidasModal   = sumModal.sai;
 
   /* ── Handlers ── */
   const handleEditSaldo = (anoMes: string, cId: string, current: number) => {
@@ -561,7 +573,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {!loading && selectedCard && (
           <div className="space-y-2">
             {/* ════ 3 CARDS: [Resumo span-2] [Status] [Saldos por conta span-2] ════ */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', gridTemplateRows:'auto auto', alignItems:'start'}}>
+            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', alignItems:'start'}}>
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
@@ -655,7 +667,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               </div>
 
               {/* ── COL 3: Saldos por conta ── */}
-              <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)',gridRow:'1 / 3'}}>
+              <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
                 <div className="px-3 py-1.5 border-b bg-blue-50 flex items-center justify-between shrink-0 sticky top-0 z-10 bg-blue-50">
                   <span className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">🏦 Saldos por conta</span>
                   <div className="flex items-center gap-2">
@@ -700,13 +712,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       className={`border-b cursor-pointer hover:bg-muted/30 transition-colors ${selectedConta === '__all__' ? 'bg-blue-50' : 'bg-muted/20'}`}
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-1 px-2 font-medium text-[10px]">Total — todas as contas</td>
-                      <td className={`py-1 px-2 text-right font-medium text-[10px] tabular-nums ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-1 px-2 text-right font-medium text-[10px] tabular-nums">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-1 px-2 text-right font-medium text-[10px] tabular-nums ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                      <td className="py-0.5 px-2 font-medium text-[9px]">Total — todas as contas</td>
+                      <td className={`py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-0.5 px-1 text-right font-medium text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
                         {formatMoeda(totalSaldos.dif)}
                       </td>
-                      <td />
+                      <td className="py-0.5" />
                     </tr>
 
                     {/* CC group */}
@@ -755,8 +767,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </tbody>
                 </table>
               </div>
-              {/* ════ FILTER BADGES — row 2 cols 1-2 do grid ════ */}
-              <div style={{gridColumn:'1 / 3'}} className="flex items-center gap-1 flex-wrap">
+            </div>
+
+            {/* ════ FILTER BADGES ════ */}
+            <div className="flex items-center gap-1 flex-wrap">
               <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
                 className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer">
                 Todos ({selectedCard.lancamentos.length})
@@ -782,7 +796,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </button>
               )}
             </div>
-            </div>
           </div>
         )}
       </div>
@@ -797,9 +810,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             <span className="text-sm font-medium flex-1 min-w-0 truncate">
               Lançamentos — {selectedCard?.label}/{ano} — {contaAtual}
             </span>
-            <div className="flex gap-1.5 flex-shrink-0">
-              <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full tabular-nums">+ {formatMoeda(totalEntradasModal)}</span>
-              <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full tabular-nums">- {formatMoeda(totalSaidasModal)}</span>
+            <div className="flex gap-1 flex-shrink-0 flex-wrap">
+              {sumModal.ent > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full tabular-nums">+ {formatMoeda(sumModal.ent)}</span>}
+              {sumModal.sai > 0 && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full tabular-nums">- {formatMoeda(sumModal.sai)}</span>}
+              {sumModal.trE > 0 && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full tabular-nums">↔ {formatMoeda(sumModal.trE)}</span>}
+              {sumModal.trS > 0 && <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full tabular-nums">↔ {formatMoeda(sumModal.trS)}</span>}
             </div>
           </div>
           {/* Filter badges */}
@@ -933,12 +948,12 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit}: Sal
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
         <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
       </td>
-      <td className={`py-1 px-2 text-right text-[10px] tabular-nums ${sis<0?'text-red-700':''}`}>{formatMoeda(sis)}</td>
-      <td className="py-1 px-2 text-right text-[10px] tabular-nums">{ext===null?'—':formatMoeda(ext)}</td>
-      <td className={`py-1 px-2 text-right text-[10px] font-medium tabular-nums ${dif<0?'text-red-700':dif===0?'text-green-700':''}`}>
+      <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-red-700':''}`}>{formatMoeda(sis)}</td>
+      <td className="py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>
+      <td className={`py-0.5 px-1 text-right text-[9px] font-medium tabular-nums whitespace-nowrap ${dif<0?'text-red-700':dif===0?'text-green-700':''}`}>
         {formatMoeda(dif)}
       </td>
-      <td className="py-1 px-1 text-center">
+      <td className="py-0.5 px-1 text-center">
         {canEdit && (
           <button className="border border-border rounded px-1 py-0.5 hover:bg-muted cursor-pointer"
             onClick={e=>{e.stopPropagation();onEdit();}}>
