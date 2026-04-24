@@ -284,7 +284,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   /* Modal */
   const [showLancModal, setShowLancModal]     = useState(false);
-  const [filtroModal, setFiltroModal]         = useState<'todos'|'entradas'|'saidas'>('todos');
+  const [filtroModal, setFiltroModal]         = useState<'todos'|'entradas'|'saidas'|'transf_entrada'|'transf_saida'>('todos');
   const [lancSort, setLancSort]               = useState<{col:'data'|'descricao'|'fornecedor'|'valor';dir:'asc'|'desc'}>({col:'data',dir:'asc'});
 
   /* Edit saldo */
@@ -403,8 +403,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   const lancFiltrados = useMemo(() => {
     const all = selectedCard?.lancamentos || [];
-    if (filtroModal==='entradas') return all.filter(l=>classifyLanc(l,selectedConta)==='entrada');
-    if (filtroModal==='saidas')   return all.filter(l=>classifyLanc(l,selectedConta)==='saida');
+    if (filtroModal==='entradas')       return all.filter(l=>classifyLanc(l,selectedConta)==='entrada');
+    if (filtroModal==='saidas')           return all.filter(l=>classifyLanc(l,selectedConta)==='saida');
+    if (filtroModal==='transf_entrada')   return all.filter(l=>classifyLanc(l,selectedConta)==='transf_entrada');
+    if (filtroModal==='transf_saida')     return all.filter(l=>classifyLanc(l,selectedConta)==='transf_saida');
     return all;
   }, [selectedCard, filtroModal, selectedConta]);
 
@@ -427,6 +429,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
   }), [lancFiltrados, lancSort, fornecedorMap, selectedConta]);
 
+  const transfEntrada = useMemo(() => (selectedCard?.lancamentos||[]).filter(l=>classifyLanc(l,selectedConta)==='transf_entrada'), [selectedCard, selectedConta]);
+  const transfSaida   = useMemo(() => (selectedCard?.lancamentos||[]).filter(l=>classifyLanc(l,selectedConta)==='transf_saida'),   [selectedCard, selectedConta]);
   const totalEntradasModal = useMemo(() => entradas.reduce((s,l)=>s+l.valor,0), [entradas]);
   const totalSaidasModal   = useMemo(() => saidas.reduce((s,l)=>s+l.valor,0),   [saidas]);
 
@@ -672,83 +676,84 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </div>
                 </div>
 
-                {/* Table header */}
-                <table className="w-full border-collapse" style={{fontSize:'10px'}}>
+                {/* Tabela única — garante alinhamento perfeito entre todos os grupos */}
+                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}>
+                  <colgroup>
+                    <col style={{width:'42%'}} />
+                    <col style={{width:'17%'}} />
+                    <col style={{width:'17%'}} />
+                    <col style={{width:'18%'}} />
+                    <col style={{width:'6%'}} />
+                  </colgroup>
                   <thead>
-                    <tr className="border-b">
-                      <th className="py-1 px-2 text-left text-[9px] font-medium text-muted-foreground">Conta</th>
-                      <th className="py-1 px-2 text-right text-[9px] font-medium text-muted-foreground">Sistema</th>
-                      <th className="py-1 px-2 text-right text-[9px] font-medium text-muted-foreground">Extrato</th>
-                      <th className="py-1 px-2 text-right text-[9px] font-medium text-muted-foreground">Diferença</th>
-                      <th className="py-1 px-1 w-7" />
+                    <tr className="border-b bg-muted/30">
+                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Conta</th>
+                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Sistema</th>
+                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Extrato</th>
+                      <th className="py-1 px-2 text-center text-[9px] font-medium text-muted-foreground">Diferença</th>
+                      <th className="w-7" />
                     </tr>
                   </thead>
                   <tbody>
                     {/* Total row */}
                     <tr
-                      className="border-b cursor-pointer hover:bg-muted/30 transition-colors"
-                      style={{background: selectedConta==='__all__' ? '#E3F2FD' : 'var(--color-background-secondary,#F9FAFB)'}}
+                      className={`border-b cursor-pointer hover:bg-muted/30 transition-colors ${selectedConta === '__all__' ? 'bg-blue-50' : 'bg-muted/20'}`}
                       onClick={() => setSelectedConta('__all__')}
                     >
                       <td className="py-1 px-2 font-medium text-[10px]">Total — todas as contas</td>
-                      <td className={`py-1 px-2 text-right font-medium text-[10px] ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-1 px-2 text-right font-medium text-[10px]">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-1 px-2 text-right font-medium text-[10px] ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                      <td className={`py-1 px-2 text-right font-medium text-[10px] tabular-nums ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-1 px-2 text-right font-medium text-[10px] tabular-nums">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-1 px-2 text-right font-medium text-[10px] tabular-nums ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
                         {formatMoeda(totalSaldos.dif)}
                       </td>
                       <td />
                     </tr>
+
+                    {/* CC group */}
+                    {contasCC.length > 0 && <>
+                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Conta corrente</td></tr>
+                      {contasCC.map(s=>(
+                        <SaldoContaRow key={s.conta.id} data={s}
+                          isActive={selectedConta===s.conta.id}
+                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
+                          onClick={()=>setSelectedConta(s.conta.id)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                      ))}
+                    </>}
+
+                    {/* INV group */}
+                    {contasINV.length > 0 && <>
+                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Investimento</td></tr>
+                      {contasINV.map(s=>(
+                        <SaldoContaRow key={s.conta.id} data={s}
+                          isActive={selectedConta===s.conta.id}
+                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
+                          onClick={()=>setSelectedConta(s.conta.id)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                      ))}
+                    </>}
+
+                    {/* Cartao group */}
+                    {contasCartao.length > 0 && <>
+                      <tr><td colSpan={5} className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Cartão</td></tr>
+                      {contasCartao.map(s=>(
+                        <SaldoContaRow key={s.conta.id} data={s}
+                          isActive={selectedConta===s.conta.id}
+                          isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
+                          onClick={()=>setSelectedConta(s.conta.id)}
+                          onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
+                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                      ))}
+                    </>}
+
+                    {/* Legend */}
+                    <tr><td colSpan={5} className="px-2 py-1 text-[9px] text-muted-foreground">
+                      Clique para filtrar · ● verde=ok · ● vermelho=diverge · ○ cinza=sem extrato
+                    </td></tr>
                   </tbody>
                 </table>
-
-                {/* CC group */}
-                {contasCC.length > 0 && <>
-                  <div className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Conta corrente</div>
-                  <table className="w-full border-collapse" style={{fontSize:'10px'}}>
-                    <tbody>{contasCC.map(s=>(
-                      <SaldoContaRow key={s.conta.id} data={s}
-                        isActive={selectedConta===s.conta.id}
-                        isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                        onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                        canEdit={canEditSaldoFinal(anoMesSel)} />
-                    ))}</tbody>
-                  </table>
-                </>}
-
-                {/* INV group */}
-                {contasINV.length > 0 && <>
-                  <div className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Investimento</div>
-                  <table className="w-full border-collapse" style={{fontSize:'10px'}}>
-                    <tbody>{contasINV.map(s=>(
-                      <SaldoContaRow key={s.conta.id} data={s}
-                        isActive={selectedConta===s.conta.id}
-                        isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                        onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                        canEdit={canEditSaldoFinal(anoMesSel)} />
-                    ))}</tbody>
-                  </table>
-                </>}
-
-                {/* Cartao group */}
-                {contasCartao.length > 0 && <>
-                  <div className="px-2 py-0.5 text-[8px] font-medium uppercase tracking-wider text-muted-foreground bg-muted/30">Cartão</div>
-                  <table className="w-full border-collapse" style={{fontSize:'10px'}}>
-                    <tbody>{contasCartao.map(s=>(
-                      <SaldoContaRow key={s.conta.id} data={s}
-                        isActive={selectedConta===s.conta.id}
-                        isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
-                        onClick={()=>setSelectedConta(s.conta.id)}
-                        onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                        canEdit={canEditSaldoFinal(anoMesSel)} />
-                    ))}</tbody>
-                  </table>
-                </>}
-
-                <div className="px-2 py-1 text-[9px] text-muted-foreground">
-                  Clique para filtrar · ● verde=ok · ● vermelho=diverge · ○ cinza=sem extrato
-                </div>
               </div>
             </div>
 
@@ -766,6 +771,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer">
                 Saídas ({saidas.length})
               </button>
+              {transfEntrada.length > 0 && (
+                <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer border border-blue-200">
+                  Transf. Ent. ({transfEntrada.length})
+                </button>
+              )}
+              {transfSaida.length > 0 && (
+                <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer border border-orange-200">
+                  Transf. Saída ({transfSaida.length})
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -787,13 +804,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </div>
           </div>
           {/* Filter badges */}
-          <div className="px-4 py-1.5 border-b flex gap-1.5 flex-shrink-0">
+          <div className="px-4 py-1.5 border-b flex gap-1.5 flex-shrink-0 flex-wrap">
             {([
-              {key:'todos'   as const, label:`Todos (${selectedCard?.lancamentos.length||0})`, base:'bg-blue-100 text-blue-800',   active:'bg-blue-600 text-white'},
-              {key:'entradas'as const, label:`Entradas (${entradas.length})`,  base:'bg-green-100 text-green-800', active:'bg-green-600 text-white'},
-              {key:'saidas'  as const, label:`Saídas (${saidas.length})`,      base:'bg-red-100 text-red-800',     active:'bg-red-600 text-white'},
+              {key:'todos'         as const, label:`Todos (${selectedCard?.lancamentos.length||0})`, base:'bg-blue-100 text-blue-800',     active:'bg-blue-600 text-white'},
+              {key:'entradas'      as const, label:`Entradas (${entradas.length})`,                  base:'bg-green-100 text-green-800',   active:'bg-green-600 text-white'},
+              {key:'saidas'        as const, label:`Saídas (${saidas.length})`,                      base:'bg-red-100 text-red-800',       active:'bg-red-600 text-white'},
+              {key:'transf_entrada'as const, label:`Transf. Ent. (${transfEntrada.length})`,         base:'bg-blue-50 text-blue-700 border border-blue-200', active:'bg-blue-500 text-white'},
+              {key:'transf_saida'  as const, label:`Transf. Saída (${transfSaida.length})`,          base:'bg-orange-50 text-orange-700 border border-orange-200', active:'bg-orange-500 text-white'},
             ]).map(({key,label,base,active})=>(
-              <button key={key} onClick={()=>setFiltroModal(key)}
+              <button key={key} onClick={()=>setFiltroModal(key as any)}
                 className={`px-2 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-all ${filtroModal===key?active:base}`}>
                 {label}
               </button>
@@ -911,9 +930,9 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit}: Sal
       style={{opacity:isDimmed?0.3:1, background:isActive?'#E3F2FD':undefined}}
       onClick={onClick}
     >
-      <td className="py-1 px-2" style={{display:'flex',alignItems:'center',gap:'4px'}}>
-        <span style={{width:8,height:8,borderRadius:'50%',background:dotColor,display:'inline-block',flexShrink:0}} />
-        <span className="text-[10px] truncate" style={{maxWidth:'140px'}}>{getContaLabel(conta)}</span>
+      <td className="py-1 px-2 overflow-hidden">
+        <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
+        <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
       </td>
       <td className={`py-1 px-2 text-right text-[10px] tabular-nums ${sis<0?'text-red-700':''}`}>{formatMoeda(sis)}</td>
       <td className="py-1 px-2 text-right text-[10px] tabular-nums">{ext===null?'—':formatMoeda(ext)}</td>
