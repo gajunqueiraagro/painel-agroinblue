@@ -743,7 +743,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 2: Cards de mês + Tabela Conciliação ── */}
           <div className="flex flex-col gap-2 min-w-0">
-            <div className="grid grid-cols-12 gap-1">
+            <div className="grid grid-cols-12 gap-0.5 max-w-[400px]">
               {MESES_COLS.map((m, idx) => {
                 const mesNum = idx + 1;
                 const status = statusPorMes[mesNum] || 'vazio';
@@ -768,7 +768,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     key={m.key}
                     type="button"
                     onClick={() => setMesFiltro(mesNum)}
-                    className={`flex flex-col items-center justify-center py-1 rounded text-[10px] font-bold transition-colors ${cls}`}
+                    className={`flex flex-col items-center justify-center py-1 px-0 min-w-[28px] rounded text-[10px] font-bold transition-colors ${cls}`}
                   >
                     <span>{m.label}</span>
                     <span className={`mt-0.5 h-1 w-1 rounded-full ${dotCls}`} />
