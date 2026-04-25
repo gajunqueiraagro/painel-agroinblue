@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Info, Lock, Unlock, AlertTriangle, ShieldAlert, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Save, Copy, Info, Lock, Unlock, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
@@ -18,7 +18,6 @@ import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { toast } from 'sonner';
 import { useRebanhoOficial, type ZootCategoriaMensal } from '@/hooks/useRebanhoOficial';
-import { useStatusZootecnico } from '@/hooks/useStatusZootecnico';
 import { supabase } from '@/integrations/supabase/client';
 import { useSnapshotStatus } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
@@ -404,11 +403,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const isMesFuturo = anoNumFiltro > anoAtualSistema || (anoNumFiltro === anoAtualSistema && mesNumFiltro > mesAtualSistema);
   const isMesAtual = anoNumFiltro === anoAtualSistema && mesNumFiltro === mesAtualSistema;
 
-  const statusZoo = useStatusZootecnico(isGlobal ? undefined : fazendaId, Number(anoFiltro), Number(mesFiltro), lancamentos, saldosIniciais);
-  const categoriasStatus = statusZoo.pendencias.find(p => p.id === 'categorias');
-  const categoriasConciliadas = categoriasStatus?.status === 'fechado';
-  const bloqueadoPorConciliacao = !categoriasConciliadas && !isGlobal && !statusZoo.loading;
-
   const {
     precos,
     saving,
@@ -438,10 +432,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const isSnapCadeiaQuebrada = snapStatusMes === 'cadeia_quebrada';
 
   // FONTE OFICIAL PARA MÊS FECHADO: fechamento_pasto_itens
-  const { fechamentoOficial } = useFechamentoOficialPastos(
+  const { fechamentoOficial, loadingFechamento } = useFechamentoOficialPastos(
     isGlobal ? undefined : fazendaId,
     anoMes,
   );
+  const p1Fechado = !loadingFechamento && fechamentoOficial !== null;
 
   const precosSugeridos = useMemo(() => {
     const map: Record<string, number> = {};
@@ -931,11 +926,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   };
 
   const handleSalvar = async () => {
-    if (bloqueadoPorConciliacao) {
-      toast.error('Não é possível salvar. Existem categorias desconciliadas entre Pasto e Sistema.');
-      return;
-    }
-
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
     const snapshotDetalhado: SnapshotDetalheCategoria[] = liveRows.map(row => ({
       categoria: row.codigo,
@@ -1089,8 +1079,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     );
   }
 
+  if (!isGlobal && loadingFechamento) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  const mostrarOverlayP1 = !isGlobal && !loadingFechamento && !p1Fechado;
+
   return (
-    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
+    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16 relative">
+      <div className={mostrarOverlayP1 ? 'opacity-50 pointer-events-none' : ''}>
       {!isGlobal && <MasterLockBanner anoMes={anoMes} />}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -1108,13 +1109,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
             <Copy className="h-3 w-3" /> Mês anterior
           </Button>
-        )}
-
-        {bloqueadoPorConciliacao && !isGlobal && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-destructive font-medium">
-            <ShieldAlert className="h-3 w-3 shrink-0" />
-            Bloqueado: divergências na Conciliação{categoriasStatus?.descricao && ` (${categoriasStatus.descricao})`}
-          </span>
         )}
 
         {isMesFuturo && (
@@ -1149,9 +1143,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             </Button>
           )}
           {uCanEdit && !isGlobal && (
-            <Button size="sm" onClick={handleSalvar} disabled={saving || bloqueadoPorConciliacao} className="gap-1 h-7 text-xs px-3">
+            <Button size="sm" onClick={handleSalvar} disabled={saving} className="gap-1 h-7 text-xs px-3">
               <Save className="h-3 w-3" />
-              {bloqueadoPorConciliacao ? 'Bloqueado' : saving ? 'Salvando...' : 'Salvar e Fechar'}
+              {saving ? 'Salvando...' : 'Salvar e Fechar'}
             </Button>
           )}
         </div>
@@ -1488,6 +1482,24 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           current="valor_rebanho"
           onPrev={onNavigateToFechamentoPastos}
         />
+      )}
+      </div>
+      {mostrarOverlayP1 && (
+        <div className="absolute inset-0 z-50 flex items-start justify-center pt-24 pointer-events-none">
+          <Card className="pointer-events-auto max-w-md mx-4 shadow-xl border-amber-300 dark:border-amber-700">
+            <CardContent className="p-6 text-center space-y-3">
+              <Lock className="h-8 w-8 mx-auto text-amber-600 dark:text-amber-400" />
+              <p className="text-sm font-medium">
+                Feche os pastos deste mês primeiro para inserir o valor do rebanho.
+              </p>
+              {onNavigateToMovimentacoes && (
+                <Button size="sm" onClick={onNavigateToMovimentacoes} className="gap-1">
+                  Ir para Mapa de Pastos
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
