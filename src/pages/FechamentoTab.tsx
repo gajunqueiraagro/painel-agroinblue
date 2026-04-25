@@ -745,7 +745,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 2: Cards de mês + Tabela Conciliação ── */}
           <div className="flex flex-col gap-2 min-w-0">
-            <div className="grid grid-cols-12 gap-0.5 max-w-[400px]">
+            <div className="grid grid-cols-12 gap-0.5 max-w-[400px] mx-auto">
               {MESES_COLS.map((m, idx) => {
                 const mesNum = idx + 1;
                 const status = statusPorMes[mesNum] || 'vazio';
