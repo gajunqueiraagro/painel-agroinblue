@@ -100,14 +100,13 @@ function getStatusOrdenacao(lancamento: Lancamento): 'realizado' | 'programado' 
 
 function getFazendaColumnHeader(tipo: string): string {
   switch (tipo) {
-    case 'nascimento': return 'Destino';
-    case 'compra':
+    case 'compra': return 'Destino';
     case 'transferencia_entrada':
     case 'transferencia_saida': return 'Origem e Destino';
-    case 'abate':
-    case 'venda':
-    case 'consumo': return 'Origem';
-    case 'morte': return 'Origem e Motivo';
+    case 'abate': return 'Frigorífico';
+    case 'venda': return 'Destino';
+    case 'consumo':
+    case 'morte': return 'Fazenda';
     default: return 'Fazenda';
   }
 }
@@ -115,22 +114,12 @@ function getFazendaColumnHeader(tipo: string): string {
 function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): string {
   const fazNome = l.fazendaId ? (fazendaMap.get(l.fazendaId) || '') : '';
   switch (l.tipo) {
-    case 'nascimento':
-      return fazNome || '-';
-    case 'compra':
     case 'transferencia_entrada':
     case 'transferencia_saida': {
       const parts = [l.fazendaOrigem || fazNome, l.fazendaDestino].filter(Boolean);
-      return parts.length > 0 ? parts.join(' → ') : '-';
+      return parts.join(' → ') || '-';
     }
-    case 'abate':
-    case 'venda':
-      return fazNome || l.fazendaOrigem || '-';
-    case 'morte':
-    case 'consumo':
-      return l.motivo || l.observacao || '-';
-    default:
-      return fazNome || '-';
+    default: return fazNome || '-';
   }
 }
 
@@ -281,11 +270,10 @@ function useSortableTable() {
 /* ── Tables ── */
 
 function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
-  const TIPOS_COM_DESTINO = ['abate', 'compra', 'venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
-  const showDestino = !isGlobal && (showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false));
-  const isMorte = subTipo === 'morte';
   const isCompra = subTipo === 'compra';
-  const showLiqKg = showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false);
+  const showFornecedorCol = ['abate', 'venda'].includes(subTipo || '');
+  const showMotivoCol = ['morte', 'consumo'].includes(subTipo || '');
+  const showLiqKg = showTipo || ['abate', 'venda', 'compra', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'].includes(subTipo || '');
   const fMap = fazendaMap || new Map<string, string>();
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
 
@@ -309,7 +297,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           <SortableHeader label="Qtd" align="text-right" sortKey="qtd" {...hp} />
           <SortableHeader label="Categoria" align="text-left" sortKey="categoria" {...hp} />
           {isCompra && <th className={`${TABLE_HEAD_CELL} text-left`}>Fornecedor</th>}
-          {showDestino && <SortableHeader label={isMorte ? 'Motivo' : 'Destino'} align="text-left" sortKey="destino" {...hp} />}
+          {showFornecedorCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '90px' }}>{subTipo === 'abate' ? 'Frigorífico' : 'Destino'}</th>}
+          {showMotivoCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '90px' }}>Motivo</th>}
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
           <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
           <SortableHeader label="P.@" align="text-right" sortKey="pesoArroba" {...hp} />
@@ -332,7 +321,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
               <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
               {isCompra && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaOrigem || l.compradorFornecedor || '—'}</td>}
-              {showDestino && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l.tipo === 'morte' ? l.fazendaDestino : (l.fazendaDestino || l.fazendaOrigem)) || '-'}</td>}
+              {showFornecedorCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fazendaOrigem || l.compradorFornecedor || '—'}</td>}
+              {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l as any).motivo || l.observacao || '—'}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
               <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
@@ -376,7 +366,9 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showTipo && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{totals.qtd}</td>
               <td className={TABLE_FOOT_CELL}></td>
-              {showDestino && <td className={TABLE_FOOT_CELL}></td>}
+              {isCompra && <td className={TABLE_FOOT_CELL}></td>}
+              {showFornecedorCol && <td className={TABLE_FOOT_CELL}></td>}
+              {showMotivoCol && <td className={TABLE_FOOT_CELL}></td>}
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}>{fmtValor(arrobaMedio)}</td>
