@@ -1537,11 +1537,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     const fazendaId = fazendaAtual?.id;
     if (!fazendaId || !dateStr) return;
     const p_ano = Number(dateStr.slice(0, 4));
-    const rpc = (supabase.rpc as any);
     const args = mes ? { p_fazenda_id: fazendaId, p_ano, p_mes: mes } : { p_fazenda_id: fazendaId, p_ano };
-    Promise.resolve(rpc('refresh_zoot_cache', args)).catch(() => {});
+    supabase.rpc('refresh_zoot_cache' as any, args).catch(() => {});
     if (includeReclassificacao) {
-      Promise.resolve(rpc('refresh_zoot_cache_reclassificacao', { p_fazenda_id: fazendaId, p_ano })).catch(() => {});
+      supabase.rpc('refresh_zoot_cache_reclassificacao' as any, { p_fazenda_id: fazendaId, p_ano }).catch(() => {});
     }
   };
 
