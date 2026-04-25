@@ -1483,6 +1483,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
       </div>
+      </div>
 
         </div>
         {mostrarOverlayP1 && (
