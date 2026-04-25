@@ -123,7 +123,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         quantidade: l.quantidade,
         categoria: l.categoria as Categoria,
         categoriaDestino: l.categoria_destino as Categoria | undefined,
-        fazendaOrigem: l.fazenda_origem ?? undefined,
+        fazendaOrigem: l.fazenda_origem ?? ((l.tipo === 'abate' || l.tipo === 'venda') ? (l.comprador_fornecedor ?? undefined) : undefined),
         fazendaDestino: l.fazenda_destino ?? undefined,
         pesoMedioKg: l.peso_medio_kg ?? undefined,
         pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
