@@ -532,14 +532,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
       // 1) Batch insert: criar fechamentos faltantes em uma única chamada
       if (pastosParaCriar.length > 0) {
-        const rowsToInsert = pastosParaCriar.map(pastoId => ({
-          pasto_id: pastoId,
-          fazenda_id: fazendaAtual!.id,
-          cliente_id: fazendaAtual!.cliente_id!,
-          ano_mes: anoMes,
-          status: 'fechado',
-          responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
-        }));
+        const rowsToInsert = pastosParaCriar.map(pastoId => {
+          const pasto = pastosAtivos.find(p => p.id === pastoId)!;
+          return {
+            pasto_id: pastoId,
+            fazenda_id: fazendaAtual!.id,
+            cliente_id: fazendaAtual!.cliente_id!,
+            ano_mes: anoMes,
+            status: 'fechado',
+            tipo_uso_mes: isPastoOperacional(pasto, null) ? 'pecuario' : 'vedado',
+            responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
+          };
+        });
 
         const BATCH_SIZE = 500;
         for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
@@ -696,6 +700,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <Unlock className="h-3.5 w-3.5" /> Reabrir Mês
               </Button>
             )}
+            {showCloseButton && (
+              <Button
+                size="sm"
+                className="w-full h-8 text-xs font-bold gap-1"
+                onClick={handleCloseClick}
+                disabled={verificandoVazios}
+              >
+                <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
+              </Button>
+            )}
             {allClosed && onNavigateToValorRebanho && (
               <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={() => onNavigateToValorRebanho({ ano: anoFiltro, mes: mesFiltro })}>
                 Inserir preço do rebanho →
@@ -810,17 +824,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             {onNavigateToMapaPastos && (
               <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => onNavigateToMapaPastos({ ano: anoFiltro, mes: mesFiltro })}>
                 <MapIcon className="h-3.5 w-3.5" /> Mapa de Pastos
-              </Button>
-            )}
-
-            {showCloseButton && (
-              <Button
-                size="sm"
-                className="w-full h-8 text-xs font-bold gap-1"
-                onClick={handleCloseClick}
-                disabled={verificandoVazios}
-              >
-                <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
               </Button>
             )}
 
