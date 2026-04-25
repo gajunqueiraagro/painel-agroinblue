@@ -793,6 +793,12 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
               onEditar={(id, dados) => { onEditar(id, dados); setDetalheId(null); }}
               onRemover={(id) => { onRemover(id); setDetalheId(null); }}
               onEditarReclass={onEditarReclass ? (l) => { setDetalheId(null); onEditarReclass(l, { subAba: 'historico' as SubAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarAbate={onEditarAbate ? (l) => { setDetalheId(null); onEditarAbate(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarVenda={onEditarVenda ? (l) => { setDetalheId(null); onEditarVenda(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarCompra={onEditarCompra ? (l) => { setDetalheId(null); onEditarCompra(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarTransferencia={onEditarTransferencia ? (l) => { setDetalheId(null); onEditarTransferencia(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarMorte={onEditarMorte ? (l) => { setDetalheId(null); onEditarMorte(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
+              onEditarConsumo={onEditarConsumo ? (l) => { setDetalheId(null); onEditarConsumo(l, { subAba: subAba, statusFiltro, anoFiltro, mesFiltro }); } : undefined}
             />
           ) : null;
         })()}
