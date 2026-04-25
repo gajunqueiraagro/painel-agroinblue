@@ -1837,7 +1837,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
-          triggerZootCacheRefresh(data);
+          triggerZootCacheRefresh(data, tipo === 'reclassificacao');
           restoreEditOrigin();
         }
       } else {
@@ -1927,7 +1927,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setObservacao(''); setStatusOp('realizado');
           resetFinancialFields();
           toast.success('Lançamento registrado!');
-          triggerZootCacheRefresh(data);
+          triggerZootCacheRefresh(data, tipo === 'reclassificacao');
           restoreEditOrigin();
         } else if (!returnedId) {
           toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
