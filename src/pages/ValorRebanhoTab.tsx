@@ -103,6 +103,7 @@ const MESES_SHORT = [
 ];
 
 const CHART_LABELS = ['I', 'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const CHART_FULL_LABELS = ['Inicial', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function mapFonteToOrigem(fonte?: string): OrigemPeso {
   if (fonte === 'fechamento') return 'pastos';
@@ -334,23 +335,28 @@ function VariacaoBadge({ valor, label, showLabel }: { valor: number | null; labe
   );
 }
 
-function MiniChart({ data, color, title }: { data: { label: string; value: number | null }[]; color: string; title: string }) {
+function MiniChart({ data, color, title, unit }: { data: { label: string; fullLabel?: string; value: number | null }[]; color: string; title: string; unit?: 'currency' | 'arroba' }) {
   // Strip leading null points so the chart renders from the first real value (e.g. Jan)
   const firstRealIdx = data.findIndex(d => d.value !== null);
   const visibleData = firstRealIdx > 0 ? data.slice(firstRealIdx) : data;
 
   return (
     <div className="flex-1 min-w-0">
-      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate">{title}</p>
+      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 truncate text-center">{title}</p>
       <div className="h-[150px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={visibleData} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
             <XAxis dataKey="label" tick={{ fontSize: 8 }} interval={0} tickLine={false} axisLine={false} />
             <YAxis hide domain={['auto', 'auto']} />
             <RechartsTooltip
-              contentStyle={{ fontSize: 10, padding: '2px 6px' }}
-              labelStyle={{ fontSize: 9 }}
-              formatter={(v: number) => [formatNum(v, 1), '']}
+              contentStyle={{ fontSize: 9, padding: '2px 6px' }}
+              labelStyle={{ fontSize: 8 }}
+              labelFormatter={(label: string, payload: any[]) => payload?.[0]?.payload?.fullLabel || label}
+              formatter={(v: number) => {
+                if (unit === 'currency') return ['R$ ' + formatNum(v, 0), ''];
+                if (unit === 'arroba') return [formatNum(v, 1) + ' @', ''];
+                return [formatNum(v, 1), ''];
+              }}
             />
             <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} dot={{ r: 2.5, fill: color, strokeWidth: 0 }} activeDot={{ r: 4 }} connectNulls={false} />
           </LineChart>
@@ -862,10 +868,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
 
   const buildChartData = useCallback((getValue: (mes: number) => number | null) => {
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: getValue(0) };
+      const fullLabel = CHART_FULL_LABELS[idx];
+      if (idx === 0) return { label, fullLabel, value: getValue(0) };
       const mes = idx;
-      if (mes > mesNum) return { label, value: null };
-      return { label, value: getValue(mes) };
+      if (mes > mesNum) return { label, fullLabel, value: null };
+      return { label, fullLabel, value: getValue(mes) };
     });
   }, [mesNum]);
 
@@ -1025,14 +1032,15 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!isGlobal) return chartDataValor;
     const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
-      if (idx === 0) return { label, value: uHistoricoPorMes[dezKey]?.valor ?? null };
+      const fullLabel = CHART_FULL_LABELS[idx];
+      if (idx === 0) return { label, fullLabel, value: uHistoricoPorMes[dezKey]?.valor ?? null };
       const mes = idx;
-      if (mes > mesNum) return { label, value: null };
+      if (mes > mesNum) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, value: uMetricas.valor };
+        return { label, fullLabel, value: uMetricas.valor };
       }
-      return { label, value: uHistoricoPorMes[key]?.valor ?? null };
+      return { label, fullLabel, value: uHistoricoPorMes[key]?.valor ?? null };
     });
   }, [isGlobal, chartDataValor, anoFiltro, mesNum, globalData.fonteMes, uMetricas.valor, uHistoricoPorMes]);
 
@@ -1040,18 +1048,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!isGlobal) return chartDataArrobas;
     const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
+      const fullLabel = CHART_FULL_LABELS[idx];
       if (idx === 0) {
         const frozen = uHistoricoPorMes[dezKey];
-        return { label, value: frozen ? frozen.pesoKg / 30 : null };
+        return { label, fullLabel, value: frozen ? frozen.pesoKg / 30 : null };
       }
       const mes = idx;
-      if (mes > mesNum) return { label, value: null };
+      if (mes > mesNum) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, value: uMetricas.totalArrobas };
+        return { label, fullLabel, value: uMetricas.totalArrobas };
       }
       const frozen = uHistoricoPorMes[key];
-      return { label, value: frozen ? frozen.pesoKg / 30 : null };
+      return { label, fullLabel, value: frozen ? frozen.pesoKg / 30 : null };
     });
   }, [isGlobal, chartDataArrobas, anoFiltro, mesNum, globalData.fonteMes, uMetricas.totalArrobas, uHistoricoPorMes]);
 
@@ -1059,18 +1068,19 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     if (!isGlobal) return chartDataPrecoArroba;
     const dezKey = `${Number(anoFiltro) - 1}-12`;
     return CHART_LABELS.map((label, idx) => {
+      const fullLabel = CHART_FULL_LABELS[idx];
       if (idx === 0) {
         const frozen = uHistoricoPorMes[dezKey];
-        return { label, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
+        return { label, fullLabel, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
       }
       const mes = idx;
-      if (mes > mesNum) return { label, value: null };
+      if (mes > mesNum) return { label, fullLabel, value: null };
       const key = `${anoFiltro}-${String(mes).padStart(2, '0')}`;
       if (mes === mesNum && globalData.fonteMes === 'live') {
-        return { label, value: uMetricas.precoArroba };
+        return { label, fullLabel, value: uMetricas.precoArroba };
       }
       const frozen = uHistoricoPorMes[key];
-      return { label, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
+      return { label, fullLabel, value: frozen && frozen.pesoKg > 0 ? frozen.valor / (frozen.pesoKg / 30) : null };
     });
   }, [isGlobal, chartDataPrecoArroba, anoFiltro, mesNum, globalData.fonteMes, uMetricas.precoArroba, uHistoricoPorMes]);
 
@@ -1475,9 +1485,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           </Card>
 
           <div className="flex gap-3">
-            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" />
-            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" />
-            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" />
+            <MiniChart data={uChartDataValor} color="hsl(var(--primary))" title="Valor do Rebanho" unit="currency" />
+            <MiniChart data={uChartDataArrobas} color="hsl(142, 71%, 45%)" title="Arrobas em Estoque" unit="arroba" />
+            <MiniChart data={uChartDataPrecoArroba} color="hsl(217, 91%, 60%)" title="R$/@ Médio" unit="currency" />
           </div>
           </>
           )}
