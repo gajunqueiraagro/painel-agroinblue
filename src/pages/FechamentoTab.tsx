@@ -156,6 +156,38 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [verificandoVazios, setVerificandoVazios] = useState(false);
   const [bulkReopening, setBulkReopening] = useState(false);
   const [showSugestoes, setShowSugestoes] = useState(false);
+  const [statusPorMes, setStatusPorMes] = useState<Record<number, 'fechado' | 'rascunho' | 'vazio'>>({});
+
+  useEffect(() => {
+    if (!fazendaAtual?.id || fazendaAtual.id === '__global__') {
+      setStatusPorMes({});
+      return;
+    }
+    supabase
+      .from('fechamento_pastos')
+      .select('ano_mes, status')
+      .eq('fazenda_id', fazendaAtual.id)
+      .like('ano_mes', `${anoFiltro}-%`)
+      .then(({ data }) => {
+        if (!data) return;
+        const grouped: Record<number, { total: number; fechados: number }> = {};
+        data.forEach((r: any) => {
+          const m = parseInt(String(r.ano_mes).substring(5, 7));
+          if (isNaN(m)) return;
+          if (!grouped[m]) grouped[m] = { total: 0, fechados: 0 };
+          grouped[m].total++;
+          if (r.status === 'fechado') grouped[m].fechados++;
+        });
+        const result: Record<number, 'fechado' | 'rascunho' | 'vazio'> = {};
+        for (let m = 1; m <= 12; m++) {
+          const g = grouped[m];
+          if (!g || g.total === 0) result[m] = 'vazio';
+          else if (g.fechados === g.total) result[m] = 'fechado';
+          else result[m] = 'rascunho';
+        }
+        setStatusPorMes(result);
+      });
+  }, [fazendaAtual?.id, anoFiltro, fechamentos]);
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
@@ -669,14 +701,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
-                <SelectTrigger className="w-[72px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MESES_COLS.map((m, i) => (
-                    <SelectItem key={m.key} value={String(i + 1)}>{m.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
@@ -717,8 +741,43 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             )}
           </div>
 
-          {/* ── COL 2: Tabela Conciliação (compacta, centralizada) ── */}
-          <div className="flex justify-center overflow-x-auto">
+          {/* ── COL 2: Cards de mês + Tabela Conciliação ── */}
+          <div className="flex flex-col gap-2 min-w-0">
+            <div className="grid grid-cols-12 gap-1">
+              {MESES_COLS.map((m, idx) => {
+                const mesNum = idx + 1;
+                const status = statusPorMes[mesNum] || 'vazio';
+                const isSelected = mesFiltro === mesNum;
+                let cls = '';
+                let dotCls = '';
+                if (isSelected) {
+                  cls = 'bg-[#185FA5] text-white border border-[#185FA5]';
+                  dotCls = 'bg-white/60';
+                } else if (status === 'fechado') {
+                  cls = 'bg-[#EAF3DE] text-[#3B6D11] border border-[#639922] hover:brightness-95';
+                  dotCls = 'bg-[#639922]';
+                } else if (status === 'rascunho') {
+                  cls = 'bg-[#FAEEDA] text-[#854F0B] border border-[#BA7517] hover:brightness-95';
+                  dotCls = 'bg-[#BA7517]';
+                } else {
+                  cls = 'bg-muted text-muted-foreground border border-border hover:bg-muted/80';
+                  dotCls = 'bg-transparent border border-border';
+                }
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setMesFiltro(mesNum)}
+                    className={`flex flex-col items-center justify-center py-1 rounded text-[10px] font-bold transition-colors ${cls}`}
+                  >
+                    <span>{m.label}</span>
+                    <span className={`mt-0.5 h-1 w-1 rounded-full ${dotCls}`} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
             <table className="text-[10px] border-collapse w-auto">
               <thead>
@@ -809,6 +868,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </tbody>
             </table>
             </TooltipProvider>
+            </div>
           </div>
 
           {/* ── COL 3: Ações ── */}
