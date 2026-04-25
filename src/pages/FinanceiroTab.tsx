@@ -954,7 +954,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           {topTab === 'todas' ? (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : subAba === 'abate' ? (
-            <AbateTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} isGlobal={isGlobal} fazendaMap={fazendaMap} />
+            <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo="abate" isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
           )}
