@@ -781,7 +781,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
-            <table className="text-[10px] border-collapse w-auto">
+            <table className="text-[10px] border-collapse table-fixed">
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
                   <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-20 border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Cabeças</th>
@@ -790,7 +790,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     return (
                       <Tooltip key={c.sigla}>
                         <TooltipTrigger asChild>
-                          <th className={`text-center font-bold text-blue-900 dark:text-blue-200 px-2 py-1 min-w-[40px] cursor-help${hasSepRight ? ' border-r-2 border-blue-300 dark:border-blue-700' : ''}`}>{c.sigla}</th>
+                          <th className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 w-[38px] cursor-help${hasSepRight ? ' border-r-2 border-blue-300 dark:border-blue-700' : ''}`}>{c.sigla}</th>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="text-xs font-medium">{c.nome}</TooltipContent>
                       </Tooltip>
