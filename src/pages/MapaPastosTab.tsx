@@ -15,6 +15,7 @@ import { exportMapaPastosPdf } from '@/lib/exportMapaPastosPdf';
 import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -64,11 +65,28 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
   const { fechamentos, loadFechamentos, loadItens } = useFechamento();
 
   const curYear = new Date().getFullYear();
-  const anosDisp = useMemo(() => {
+  const [anosDisp, setAnosDisp] = useState<string[]>(() => {
     const set = new Set<string>();
     for (let y = curYear; y >= curYear - 3; y--) set.add(String(y));
     return Array.from(set).sort().reverse();
-  }, [curYear]);
+  });
+
+  useEffect(() => {
+    if (!fazendaAtual || fazendaAtual.id === '__global__') return;
+    supabase
+      .from('fechamento_pastos')
+      .select('ano_mes')
+      .eq('fazenda_id', fazendaAtual.id)
+      .then(({ data }) => {
+        if (!data) return;
+        const anos = new Set<string>();
+        for (let y = curYear; y >= curYear - 3; y--) anos.add(String(y));
+        data.forEach(r => {
+          if (r.ano_mes) anos.add(r.ano_mes.substring(0, 4));
+        });
+        setAnosDisp(Array.from(anos).sort().reverse());
+      });
+  }, [fazendaAtual?.id, curYear]);
 
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));
   const mesDefault = filtroMesInicial || (Number(anoFiltro) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
