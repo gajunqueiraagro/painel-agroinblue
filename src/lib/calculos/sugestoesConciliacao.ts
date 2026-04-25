@@ -36,6 +36,7 @@ export interface RowData {
 export interface Sugestao {
   tipo: 'evolucao' | 'excesso' | 'falta';
   mensagem: string;
+  acao?: { origemCodigo: string; destinoCodigo: string; qtd: number };
 }
 
 export function gerarSugestoes(rows: RowData[], catMap: Map<string, string>): Sugestao[] {
@@ -59,6 +60,7 @@ export function gerarSugestoes(rows: RowData[], catMap: Map<string, string>): Su
         sugestoes.push({
           tipo: 'evolucao',
           mensagem: `${r.nome} tem ${Math.abs(r.diferenca)} cab a mais no sistema e ${vizRow.nome} tem ${vizRow.diferenca} a menos. Sugestão: reclassificar ${qty} cabeça(s) de ${r.nome} → ${vizRow.nome}.`,
+          acao: { origemCodigo: r.codigo, destinoCodigo: vizRow.codigo, qtd: qty },
         });
         usados.add(r.codigo);
         usados.add(viz);
@@ -69,6 +71,7 @@ export function gerarSugestoes(rows: RowData[], catMap: Map<string, string>): Su
         sugestoes.push({
           tipo: 'evolucao',
           mensagem: `${vizRow.nome} tem ${Math.abs(vizRow.diferenca)} cab a mais no sistema e ${r.nome} tem ${r.diferenca} a menos. Sugestão: reclassificar ${qty} cabeça(s) de ${vizRow.nome} → ${r.nome}.`,
+          acao: { origemCodigo: vizRow.codigo, destinoCodigo: r.codigo, qtd: qty },
         });
         usados.add(r.codigo);
         usados.add(viz);

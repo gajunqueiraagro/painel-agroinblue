@@ -20,7 +20,8 @@ import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
-import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
+import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
+import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
@@ -116,7 +117,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { canEdit } = usePermissions();
 
   const { pastos, categorias } = usePastos();
-  const { lancamentos, saldosIniciais } = useLancamentos();
+  const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
 
   const anosDisp = useMemo(() => {
@@ -645,6 +646,25 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       setConfirmBulkReopenOpen(false);
     }
   };
+
+  const dataInicialReclass = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}-01`;
+  const reclassState = useReclassificacaoState({
+    onAdicionar: async (lancamento) => {
+      const id = await adicionarLancamento(lancamento);
+      if (id) {
+        setShowReclassModal(false);
+        await loadFechamentos(anoMes);
+      }
+      return id;
+    },
+    dataInicial: dataInicialReclass,
+    lancamentos,
+    ano: Number(anoFiltro),
+  });
+  const [reclassSubmitting, setReclassSubmitting] = useState(false);
+  const reclassPesoNum = parseFloat((reclassState.pesoKg || '0').replace(',', '.')) || 0;
+  const reclassQtdNum = Number(reclassState.quantidade) || 0;
+  const reclassCanRegister = reclassQtdNum > 0 && reclassState.categoriaOrigem !== reclassState.categoriaDestino;
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
 
@@ -1183,16 +1203,88 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       {showReclassModal && (
         <Dialog open={showReclassModal} onOpenChange={setShowReclassModal}>
           <DialogContent
-            className="max-w-4xl p-0"
-            style={{ position: 'fixed', top: 'auto', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', maxHeight: '80vh', overflowY: 'auto' }}
+            className="max-w-5xl p-0"
+            style={{ position: 'fixed', top: 'auto', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', maxHeight: '85vh', overflowY: 'auto' }}
           >
-            <EvolucaoCategoriaTab
-              initialAno={anoFiltro}
-              initialMes={String(mesFiltro).padStart(2, '0')}
-              initialCenario="realizado"
-              onNavigateToFechamentoPastos={() => setShowReclassModal(false)}
-              onNavigateToReclass={() => {}}
-            />
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 240px' }}>
+
+              {/* COL 1: Form */}
+              <div className="p-3 border-r border-border/50">
+                <p className="text-[11px] font-medium text-muted-foreground mb-2">
+                  Reclassificar — {MESES_COLS[mesFiltro - 1]?.label}/{anoFiltro}
+                </p>
+                <ReclassificacaoFormFields state={reclassState} hideStatus={true} />
+              </div>
+
+              {/* COL 2: Sugestões */}
+              <div className="p-3 border-r border-border/50">
+                <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                  Sugestões de ajuste
+                </p>
+                {sugestoes.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">Nenhuma divergência encontrada.</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {sugestoes.map((s, i) => (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          if (!s.acao) return;
+                          reclassState.setCategoriaOrigem(s.acao.origemCodigo as any);
+                          reclassState.setCategoriaDestino(s.acao.destinoCodigo as any);
+                          reclassState.setQuantidade(String(s.acao.qtd));
+                        }}
+                        style={{
+                          background: s.tipo === 'evolucao' ? '#EAF3DE' : '#FCEBEB',
+                          border: `0.5px solid ${s.tipo === 'evolucao' ? '#639922' : '#E24B4A'}`,
+                          borderRadius: '6px',
+                          padding: '6px 8px',
+                          cursor: s.acao ? 'pointer' : 'default',
+                          display: 'flex',
+                          gap: '6px',
+                          alignItems: 'flex-start',
+                        }}
+                      >
+                        <span style={{ fontSize: '11px', flexShrink: 0, color: s.tipo === 'evolucao' ? '#639922' : '#E24B4A' }}>
+                          {s.tipo === 'evolucao' ? '↻' : '✕'}
+                        </span>
+                        <div>
+                          <p style={{ fontSize: '10px', color: s.tipo === 'evolucao' ? '#3B6D11' : '#A32D2D', margin: 0, lineHeight: 1.4 }}>
+                            {s.mensagem}
+                          </p>
+                          {s.acao && (
+                            <p style={{ fontSize: '9px', color: s.tipo === 'evolucao' ? '#639922' : '#E24B4A', margin: '2px 0 0', opacity: 0.8 }}>
+                              Clique para preencher
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* COL 3: Resumo */}
+              <div className="p-3 bg-muted/30">
+                <ReclassificacaoResumoPanel
+                  quantidade={reclassQtdNum}
+                  pesoKg={reclassPesoNum}
+                  origemLabel={reclassState.origemLabel}
+                  destinoLabel={reclassState.destinoLabel}
+                  pesoMedioOrigem={reclassState.origemInfo?.pesoMedioKg ?? null}
+                  statusOp={reclassState.statusOp}
+                  onRequestRegister={async () => {
+                    setReclassSubmitting(true);
+                    try { await reclassState.handleSubmit(); } finally { setReclassSubmitting(false); }
+                  }}
+                  submitting={reclassSubmitting}
+                  canRegister={reclassCanRegister}
+                  onBack={() => setShowReclassModal(false)}
+                  backLabel="Fechar"
+                />
+              </div>
+
+            </div>
           </DialogContent>
         </Dialog>
       )}

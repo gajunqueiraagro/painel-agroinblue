@@ -34,10 +34,11 @@ const STATUS_BUTTONS: { value: StatusOpcao; label: string; dot: string; activeBo
 
 interface FormFieldsProps {
   state: ReturnType<typeof useReclassificacaoState>;
+  hideStatus?: boolean;
 }
 
 export function ReclassificacaoFormFields(props: FormFieldsProps) {
-  const { state } = props;
+  const { state, hideStatus } = props;
   const {
     categoriaOrigem, setCategoriaOrigem,
     categoriaDestino, setCategoriaDestino,
@@ -64,6 +65,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
       </div>
 
       {/* Status selector – Realizado / META */}
+      {!hideStatus && (
       <div className="space-y-1">
         <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Status da Operação</Label>
         <div className="grid grid-cols-2 gap-1">
@@ -95,6 +97,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
           {STATUS_DESCRIPTIONS[statusOp]}
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
         <div>
