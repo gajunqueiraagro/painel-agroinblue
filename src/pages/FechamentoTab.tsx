@@ -1182,67 +1182,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
       {showReclassModal && (
         <Dialog open={showReclassModal} onOpenChange={setShowReclassModal}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="px-4 pt-4 pb-2 border-b sticky top-0 bg-background z-10">
-              <DialogTitle className="text-sm font-bold flex items-center gap-2">
-                <Pencil className="h-4 w-4" />
-                Ajustar Conciliação — {MESES_COLS[mesFiltro - 1]?.label}/{anoFiltro}
-              </DialogTitle>
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full text-[11px] border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-1 px-2 font-semibold text-muted-foreground">Cabeças</th>
-                      {CAT_COLS.map(c => (
-                        <th key={c.codigo} className="text-center py-1 px-1.5 font-semibold text-muted-foreground">{c.sigla}</th>
-                      ))}
-                      <th className="text-center py-1 px-2 font-semibold text-muted-foreground">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="py-1 px-2 text-muted-foreground">Sistema</td>
-                      {CAT_COLS.map(c => {
-                        const v = saldoMap.get(c.codigo) || 0;
-                        return <td key={c.codigo} className="text-center py-1 px-1.5">{v || '—'}</td>;
-                      })}
-                      <td className="text-center py-1 px-2 font-semibold">{totalSistema}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-1 px-2 text-muted-foreground">Pasto</td>
-                      {CAT_COLS.map(c => {
-                        const v = pastoDataByCat.get(c.codigo) || 0;
-                        return <td key={c.codigo} className="text-center py-1 px-1.5">{v || '—'}</td>;
-                      })}
-                      <td className="text-center py-1 px-2 font-semibold">{totalPasto}</td>
-                    </tr>
-                    <tr className="border-t">
-                      <td className="py-1 px-2 text-muted-foreground font-semibold">Dif.</td>
-                      {CAT_COLS.map(c => {
-                        const dif = (saldoMap.get(c.codigo) || 0) - (pastoDataByCat.get(c.codigo) || 0);
-                        return (
-                          <td key={c.codigo} className={`text-center py-1 px-1.5 font-semibold ${dif !== 0 ? 'text-destructive' : 'text-emerald-600'}`}>
-                            {dif === 0 ? '0 ✓' : dif}
-                          </td>
-                        );
-                      })}
-                      <td className={`text-center py-1 px-2 font-semibold ${totalSistema - totalPasto !== 0 ? 'text-destructive' : 'text-emerald-600'}`}>
-                        {totalSistema - totalPasto === 0 ? '0 ✓' : totalSistema - totalPasto}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </DialogHeader>
-            <div className="p-0">
-              <EvolucaoCategoriaTab
-                initialAno={anoFiltro}
-                initialMes={String(mesFiltro).padStart(2, '0')}
-                initialCenario="realizado"
-                onNavigateToFechamentoPastos={() => setShowReclassModal(false)}
-                onNavigateToReclass={() => {}}
-              />
-            </div>
+          <DialogContent
+            className="max-w-4xl p-0"
+            style={{ position: 'fixed', top: 'auto', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', maxHeight: '80vh', overflowY: 'auto' }}
+          >
+            <EvolucaoCategoriaTab
+              initialAno={anoFiltro}
+              initialMes={String(mesFiltro).padStart(2, '0')}
+              initialCenario="realizado"
+              onNavigateToFechamentoPastos={() => setShowReclassModal(false)}
+              onNavigateToReclass={() => {}}
+            />
           </DialogContent>
         </Dialog>
       )}
