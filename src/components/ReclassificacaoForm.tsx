@@ -125,7 +125,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 items-end">
+      <div className="grid grid-cols-[2fr_1fr_1fr] gap-2 items-end">
         <div>
           <Label className="text-[10px] font-semibold">Data</Label>
           <Input type="date" value={data} onChange={e => setData(e.target.value)} className={`h-7 text-[11px] ${borderAccent}`} />
@@ -159,6 +159,9 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, lancamentos,
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('garrotes');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('bois');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
+  useEffect(() => {
+    if (dataInicial) setData(dataInicial);
+  }, [dataInicial]);
   const [quantidade, setQuantidade] = useState('');
   const [pesoKg, setPesoKg] = useState('');
   const [pesoAutoFilled, setPesoAutoFilled] = useState(false);
