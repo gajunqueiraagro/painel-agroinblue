@@ -15,7 +15,20 @@ export interface XlsxDownloadPayload {
 
 const EXPORT_XLSX_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-xlsx`;
 
-export function triggerXlsxDownload(payload: XlsxDownloadPayload) {
+export function triggerXlsxDownload(
+  payloadOrRows: XlsxDownloadPayload | Record<string, XlsxCellValue>[],
+  legacyFilename?: string
+) {
+  let payload: XlsxDownloadPayload;
+  if (Array.isArray(payloadOrRows)) {
+    payload = {
+      filename: legacyFilename ?? 'export.xlsx',
+      sheets: [{ name: 'Dados', mode: 'json', rows: payloadOrRows }],
+    };
+  } else {
+    payload = payloadOrRows;
+  }
+
   console.log('[XLSX-DIAG] triggerXlsxDownload CHAMADO', { filename: payload.filename, sheetsCount: payload.sheets.length });
 
   if (!payload.sheets.length) {
