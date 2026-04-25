@@ -14,7 +14,6 @@ import {
   parsePlanilha,
   validarLinhas,
   montarInserts,
-  gerarTemplateHistorico,
   computeFileHash,
   CAMPOS_OBRIGATORIOS,
   type LinhaValidada,
@@ -45,11 +44,71 @@ export default function ImportZootHistoricoTab() {
   // ── Download template ────────────────────────────────────────────────────
 
   const handleDownloadTemplate = () => {
-    const { headers, exemplos } = gerarTemplateHistorico();
-    const rows = exemplos.map((ex) =>
+    const headers = [
+      'data', 'fazenda', 'tipo', 'categoria', 'categoria_destino',
+      'quantidade', 'peso_medio_kg', 'peso_carcaca_kg', 'rendimento', 'abate_frigorifico',
+      'preco_arroba', 'preco_cabeca', 'valor_total', 'fazenda_destino', 'comprador_fornecedor',
+      'motivo', 'numero_documento', 'observacao', 'cenario', 'lote',
+    ];
+
+    const fazendaExemplo = fazendas.length > 0 ? fazendas[0].nome : 'Minha Fazenda';
+    const fazendaDestExemplo = fazendas.length > 1 ? fazendas[1].nome : fazendaExemplo;
+
+    const exemplos: Record<string, any>[] = [
+      { data: '15/01/2020', fazenda: fazendaExemplo, tipo: 'nascimento', categoria: 'mamotes_m', quantidade: 30, cenario: 'realizado' },
+      { data: '20/02/2020', fazenda: fazendaExemplo, tipo: 'compra', categoria: 'garrotes', quantidade: 100, peso_medio_kg: 280, preco_cabeca: 2500, valor_total: 250000, comprador_fornecedor: 'João Silva', cenario: 'realizado' },
+      { data: '10/03/2020', fazenda: fazendaExemplo, tipo: 'venda', categoria: 'bois', quantidade: 50, peso_medio_kg: 540, preco_arroba: 320, valor_total: 288000, comprador_fornecedor: 'Frigorífico X', cenario: 'realizado' },
+      { data: '15/04/2020', fazenda: fazendaExemplo, tipo: 'abate', categoria: 'bois', quantidade: 20, peso_medio_kg: 550, peso_carcaca_kg: 302, rendimento: 55.2, abate_frigorifico: 'JBS - Unid 01', preco_arroba: 330, valor_total: 132000, cenario: 'realizado' },
+      { data: '01/05/2020', fazenda: fazendaExemplo, tipo: 'morte', categoria: 'vacas', quantidade: 2, motivo: 'Picada de cobra', cenario: 'realizado' },
+      { data: '10/06/2020', fazenda: fazendaExemplo, tipo: 'transferencia_saida', categoria: 'garrotes', quantidade: 40, fazenda_destino: fazendaDestExemplo, cenario: 'realizado' },
+      { data: '01/07/2020', fazenda: fazendaExemplo, tipo: 'reclassificacao', categoria: 'garrotes', categoria_destino: 'bois', quantidade: 60, cenario: 'realizado' },
+    ];
+
+    const importacaoRows = exemplos.map((ex) =>
       headers.reduce((acc, h) => ({ ...acc, [h]: ex[h] ?? '' }), {} as Record<string, any>)
     );
-    triggerXlsxDownload(rows, 'template_historico_zootecnico.xlsx');
+
+    const tipos = ['nascimento', 'compra', 'venda', 'abate', 'morte', 'transferencia_saida', 'reclassificacao', 'consumo'];
+    const categoriasValidas = ['mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros', 'mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
+    const cenarios = ['realizado', 'meta'];
+    const fazendaNomes = fazendas.map((f) => f.nome);
+
+    const maxRows = Math.max(fazendaNomes.length, tipos.length, categoriasValidas.length, cenarios.length);
+    const validosAoa: any[][] = [['fazenda', 'tipo', 'categoria', 'cenario']];
+    for (let i = 0; i < maxRows; i++) {
+      validosAoa.push([
+        fazendaNomes[i] ?? '',
+        tipos[i] ?? '',
+        categoriasValidas[i] ?? '',
+        cenarios[i] ?? '',
+      ]);
+    }
+
+    const instrucoesAoa: any[][] = [
+      ['Instruções de Preenchimento'],
+      [''],
+      ['1. Use a aba "Importação" para inserir seus eventos zootécnicos (1 linha = 1 evento).'],
+      ['2. Consulte a aba "Valores Válidos" para os nomes exatos das fazendas, tipos, categorias e cenários aceitos.'],
+      ['3. Datas: aceitam formatos dd/mm/aaaa ou aaaa-mm-dd.'],
+      ['4. Tipos válidos: nascimento, compra, venda, abate, morte, transferencia_saida, reclassificacao, consumo.'],
+      ['   - transferencia_entrada NÃO deve ser preenchida — é criada automaticamente no destino.'],
+      ['5. Campos obrigatórios para todos os tipos: data, fazenda, tipo, categoria, quantidade.'],
+      ['   - reclassificacao exige também categoria_destino.'],
+      ['   - transferencia_saida exige também fazenda_destino.'],
+      ['6. Para abate: preencha rendimento (%) e abate_frigorifico quando disponível.'],
+      ['7. Para morte/consumo: preencha motivo para auditoria.'],
+      ['8. Cenário aceito: realizado (padrão) ou meta.'],
+      ['9. Faça primeiro o teste piloto (10 linhas) antes da carga completa.'],
+    ];
+
+    triggerXlsxDownload({
+      filename: 'template_historico_zootecnico.xlsx',
+      sheets: [
+        { name: 'Importação', mode: 'json', rows: importacaoRows },
+        { name: 'Valores Válidos', mode: 'aoa', rows: validosAoa },
+        { name: 'Instruções', mode: 'aoa', rows: instrucoesAoa },
+      ],
+    });
   };
 
   // ── Upload e parse ───────────────────────────────────────────────────────
