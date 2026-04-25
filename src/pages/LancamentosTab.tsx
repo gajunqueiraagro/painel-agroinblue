@@ -1859,6 +1859,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
           triggerZootCacheRefresh(data);
+          restoreEditOrigin();
         } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
           // Auto-generate financeiro for abate — pass overrides to avoid race condition
           if (abateFinanceiroRef.current) {
@@ -1878,6 +1879,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
           triggerZootCacheRefresh(data);
+          restoreEditOrigin();
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
           if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
@@ -1892,6 +1894,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
           triggerZootCacheRefresh(data);
+          restoreEditOrigin();
         } else if (isConsumo && returnedId) {
           if (consumoFinanceiroRef.current && calc.valorLiquido > 0) {
             await consumoFinanceiroRef.current.generateFinanceiro(returnedId);
@@ -1905,6 +1908,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
           triggerZootCacheRefresh(data);
+          restoreEditOrigin();
         } else if (returnedId) {
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria('');
@@ -1915,6 +1919,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Lançamento registrado!');
           triggerZootCacheRefresh(data);
+          restoreEditOrigin();
         } else if (!returnedId) {
           toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
         }
@@ -3080,7 +3085,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   reclassState.setQuantidade('');
                   reclassState.setPesoKg('');
                   reclassState.setPesoAutoFilled(false);
-                  if (onReturnFromEdit) await onReturnFromEdit();
+                  restoreEditOrigin();
                 } finally {
                   setSubmitting(false);
                 }
