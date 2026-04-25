@@ -125,14 +125,10 @@ function getFazendaCellValue(l: Lancamento, fazendaMap: Map<string, string>): st
     }
     case 'abate':
     case 'venda':
-    case 'consumo':
       return fazNome || l.fazendaOrigem || '-';
-    case 'morte': {
-      const origem = fazNome || l.fazendaOrigem || '';
-      const motivo = l.fazendaDestino || '';
-      const parts2 = [origem, motivo].filter(Boolean);
-      return parts2.length > 0 ? parts2.join(' / ') : '-';
-    }
+    case 'morte':
+    case 'consumo':
+      return l.motivo || l.observacao || '-';
     default:
       return fazNome || '-';
   }
