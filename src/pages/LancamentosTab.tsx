@@ -1168,7 +1168,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
-    if (vendaParaEditar && abateFornecedores.length > 0) {
+    if (vendaParaEditar) {
       loadVendaForEdit(vendaParaEditar);
     }
   }, [vendaParaEditar, abateFornecedores]);
@@ -1356,7 +1356,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
-    if (compraParaEditar && abateFornecedores.length > 0) {
+    if (compraParaEditar) {
       loadCompraForEdit(compraParaEditar);
     }
   }, [compraParaEditar, abateFornecedores]);
