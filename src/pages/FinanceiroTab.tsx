@@ -285,7 +285,7 @@ function useSortableTable() {
 /* ── Tables ── */
 
 function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazendaMap }: { lancamentos: Lancamento[]; onEdit: (l: Lancamento) => void; showTipo?: boolean; subTipo?: string; isGlobal?: boolean; fazendaMap?: Map<string, string> }) {
-  const TIPOS_COM_DESTINO = ['venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
+  const TIPOS_COM_DESTINO = ['abate', 'compra', 'venda', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'];
   const showDestino = !isGlobal && (showTipo ? true : (subTipo ? TIPOS_COM_DESTINO.includes(subTipo) : false));
   const isMorte = subTipo === 'morte';
   const isCompra = subTipo === 'compra';
