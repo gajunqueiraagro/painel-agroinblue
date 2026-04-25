@@ -926,6 +926,13 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   };
 
   const handleSalvar = async () => {
+    const semPreco = liveRows.filter(r => r.saldo > 0 && (!r.precoKg || r.precoKg <= 0));
+    if (semPreco.length > 0) {
+      const nomes = semPreco.map(r => r.nome).join(', ');
+      toast.error(`Preencha o preço de: ${nomes}`);
+      return;
+    }
+
     const items = Object.entries(precosLocal).map(([categoria, preco_kg]) => ({ categoria, preco_kg }));
     const snapshotDetalhado: SnapshotDetalheCategoria[] = liveRows.map(row => ({
       categoria: row.codigo,
