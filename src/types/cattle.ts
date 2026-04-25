@@ -59,6 +59,7 @@ export interface Lancamento {
   precoMedioCabeca?: number;
   observacao?: string;
   motivo?: string;
+  rendimento?: number;
   compradorFornecedor?: string;
   // Financial fields
   precoArroba?: number;

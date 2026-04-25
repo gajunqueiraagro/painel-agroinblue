@@ -131,6 +131,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         observacao: l.observacao ?? undefined,
         motivo: (l as any).motivo ?? undefined,
         abateFrigorifico: (l as any).abate_frigorifico ?? undefined,
+        rendimento: l.rendimento ?? undefined,
         compradorFornecedor: l.comprador_fornecedor ?? undefined,
         precoArroba: l.preco_arroba ?? undefined,
         pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,

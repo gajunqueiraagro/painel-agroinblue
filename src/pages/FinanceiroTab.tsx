@@ -274,6 +274,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const showFornecedorCol = ['abate', 'venda'].includes(subTipo || '');
   const showMotivoCol = ['morte', 'consumo'].includes(subTipo || '');
   const showLiqKg = showTipo || ['abate', 'venda', 'compra', 'transferencia_entrada', 'transferencia_saida', 'consumo', 'morte'].includes(subTipo || '');
+  const showRendimento = subTipo === 'abate' || (showTipo && false); // só para abates
   const fMap = fazendaMap || new Map<string, string>();
   const globalColHeader = isGlobal ? (subTipo ? getFazendaColumnHeader(subTipo) : 'Fazenda') : '';
 
@@ -301,6 +302,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
           {showMotivoCol && <th className={`${TABLE_HEAD_CELL} text-left`} style={{ minWidth: '90px' }}>Motivo</th>}
           {isGlobal && <th className={`${TABLE_HEAD_CELL} text-left`}>{showTipo ? 'Fazenda' : globalColHeader}</th>}
           <SortableHeader label="P.Vivo" align="text-right" sortKey="pesoVivo" {...hp} />
+          {showRendimento && <SortableHeader label="Rend." align="text-right" sortKey="rendimento" {...hp} />}
           <SortableHeader label="P.@" align="text-right" sortKey="pesoArroba" {...hp} />
           <SortableHeader label="Total" align="text-right" sortKey="total" {...hp} />
           <SortableHeader label="R$/líq @" align="text-right" sortKey="liqArroba" {...hp} />
@@ -325,6 +327,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l as any).motivo || l.observacao || '—'}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{l.pesoMedioKg != null ? l.pesoMedioKg.toFixed(2) : '-'}</td>
+              {showRendimento && <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{l.rendimento ? `${l.rendimento.toFixed(1)}%` : '-'}</td>}
               <td className={`${TABLE_BODY_CELL} text-right text-[9px] text-muted-foreground`}>{c.pesoArroba ? c.pesoArroba.toFixed(2) : '-'}</td>
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px] text-primary`}>{fmtValor(c.valorFinal)}</td>
               <td className={`${TABLE_BODY_CELL} text-right text-[9px]`}>{fmtValor(c.liqArroba)}</td>
@@ -371,6 +374,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showMotivoCol && <td className={TABLE_FOOT_CELL}></td>}
               {isGlobal && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(pesoVivoMedio)}</td>
+              {showRendimento && <td className={TABLE_FOOT_CELL}></td>}
               <td className={`${TABLE_FOOT_CELL} text-right opacity-80`}>{fmtValor(arrobaMedio)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(totals.valorTotal)}</td>
               <td className={`${TABLE_FOOT_CELL} text-right`}>{fmtValor(liqArroba)}</td>
