@@ -32,6 +32,9 @@ export const COLUNAS_TEMPLATE = [
   'lote',
   'sexo',
   'finalidade',
+  'rendimento',
+  'abate_frigorifico',
+  'motivo',
 ] as const;
 
 export type ColunaTemplate = (typeof COLUNAS_TEMPLATE)[number];
@@ -98,6 +101,9 @@ export interface LinhaImportacao {
   lote: string;
   sexo: string;
   finalidade: string;
+  rendimento: number | null;
+  abateFrigorifico: string;
+  motivo: string;
 }
 
 export interface LinhaValidada extends LinhaImportacao {
@@ -169,6 +175,9 @@ export function parsePlanilha(rows: Record<string, any>[]): LinhaImportacao[] {
       lote: toStr(norm.lote),
       sexo: toStr(norm.sexo),
       finalidade: toStr(norm.finalidade),
+      rendimento: toNum(norm.rendimento),
+      abateFrigorifico: toStr(norm.abate_frigorifico),
+      motivo: toStr(norm.motivo),
     };
   });
 }
@@ -278,6 +287,9 @@ export function montarInserts(
         lote: l.lote || null,
         sexo: l.sexo || null,
         finalidade: l.finalidade || null,
+        rendimento: l.rendimento || null,
+        abate_frigorifico: l.abateFrigorifico || null,
+        motivo: l.motivo || null,
         status_operacional: 'realizado', origem_registro: 'importacao_historica',
         cancelado: false,
         lote_importacao_id: loteImportacaoId || null,
