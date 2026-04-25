@@ -1090,8 +1090,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
   const mostrarOverlayP1 = !isGlobal && !loadingFechamento && !p1Fechado;
 
   return (
-    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16 relative">
-      <div className={mostrarOverlayP1 ? 'opacity-50 pointer-events-none' : ''}>
+    <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
       {!isGlobal && <MasterLockBanner anoMes={anoMes} />}
       <div className="flex gap-1.5 items-center flex-wrap">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -1193,6 +1192,9 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           );
         })}
       </div>
+
+      <div className="relative">
+        <div className={mostrarOverlayP1 ? 'opacity-40 pointer-events-none' : ''}>
 
       {/* Snapshot governance banner */}
       {!isGlobal && (isSnapInvalidado || isSnapCadeiaQuebrada) && (
@@ -1474,6 +1476,25 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           )}
         </div>
       </div>
+
+        </div>
+        {mostrarOverlayP1 && (
+          <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
+            <Card className="pointer-events-auto max-w-md mx-4 shadow-xl border-amber-300 dark:border-amber-700">
+              <CardContent className="p-6 text-center space-y-3">
+                <Lock className="h-8 w-8 mx-auto text-amber-600 dark:text-amber-400" />
+                <p className="text-sm font-medium">
+                  Feche os pastos deste mês primeiro para inserir o valor do rebanho.
+                </p>
+                {onNavigateToMovimentacoes && (
+                  <Button size="sm" onClick={onNavigateToMovimentacoes} className="gap-1">
+                    Ir para Mapa de Pastos
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Footer de atalhos do fluxo de fechamento */}
@@ -1482,24 +1503,6 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
           current="valor_rebanho"
           onPrev={onNavigateToFechamentoPastos}
         />
-      )}
-      </div>
-      {mostrarOverlayP1 && (
-        <div className="absolute inset-0 z-50 flex items-start justify-center pt-24 pointer-events-none">
-          <Card className="pointer-events-auto max-w-md mx-4 shadow-xl border-amber-300 dark:border-amber-700">
-            <CardContent className="p-6 text-center space-y-3">
-              <Lock className="h-8 w-8 mx-auto text-amber-600 dark:text-amber-400" />
-              <p className="text-sm font-medium">
-                Feche os pastos deste mês primeiro para inserir o valor do rebanho.
-              </p>
-              {onNavigateToMovimentacoes && (
-                <Button size="sm" onClick={onNavigateToMovimentacoes} className="gap-1">
-                  Ir para Mapa de Pastos
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       )}
     </div>
   );
