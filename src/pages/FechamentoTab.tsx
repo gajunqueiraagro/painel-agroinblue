@@ -20,6 +20,7 @@ import { formatAnoMes } from '@/lib/dateUtils';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergencia } from '@/lib/classificacaoArea';
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
+import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
@@ -156,6 +157,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [verificandoVazios, setVerificandoVazios] = useState(false);
   const [bulkReopening, setBulkReopening] = useState(false);
   const [showSugestoes, setShowSugestoes] = useState(false);
+  const [showReclassModal, setShowReclassModal] = useState(false);
   const [statusPorMes, setStatusPorMes] = useState<Record<number, 'fechado' | 'rascunho' | 'vazio'>>({});
 
   useEffect(() => {
@@ -899,16 +901,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
                   </Button>
                 )}
-                {onNavigateToReclass && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px] font-bold gap-1 w-full justify-start"
-                    onClick={() => onNavigateToReclass({ ano: anoFiltro, mes: mesFiltro })}
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[10px] font-bold gap-1 w-full justify-start"
+                  onClick={() => setShowReclassModal(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Ajustar Conciliação
+                </Button>
               </div>
             )}
           </div>
@@ -1179,6 +1179,73 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
           )}
         </DialogContent>
       </Dialog>
+
+      {showReclassModal && (
+        <Dialog open={showReclassModal} onOpenChange={setShowReclassModal}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="px-4 pt-4 pb-2 border-b sticky top-0 bg-background z-10">
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <Pencil className="h-4 w-4" />
+                Ajustar Conciliação — {MESES_COLS[mesFiltro - 1]?.label}/{anoFiltro}
+              </DialogTitle>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[11px] border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-1 px-2 font-semibold text-muted-foreground">Cabeças</th>
+                      {CAT_COLS.map(c => (
+                        <th key={c.codigo} className="text-center py-1 px-1.5 font-semibold text-muted-foreground">{c.sigla}</th>
+                      ))}
+                      <th className="text-center py-1 px-2 font-semibold text-muted-foreground">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-1 px-2 text-muted-foreground">Sistema</td>
+                      {CAT_COLS.map(c => {
+                        const v = saldoMap.get(c.codigo) || 0;
+                        return <td key={c.codigo} className="text-center py-1 px-1.5">{v || '—'}</td>;
+                      })}
+                      <td className="text-center py-1 px-2 font-semibold">{totalSistema}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-1 px-2 text-muted-foreground">Pasto</td>
+                      {CAT_COLS.map(c => {
+                        const v = pastoDataByCat.get(c.codigo) || 0;
+                        return <td key={c.codigo} className="text-center py-1 px-1.5">{v || '—'}</td>;
+                      })}
+                      <td className="text-center py-1 px-2 font-semibold">{totalPasto}</td>
+                    </tr>
+                    <tr className="border-t">
+                      <td className="py-1 px-2 text-muted-foreground font-semibold">Dif.</td>
+                      {CAT_COLS.map(c => {
+                        const dif = (saldoMap.get(c.codigo) || 0) - (pastoDataByCat.get(c.codigo) || 0);
+                        return (
+                          <td key={c.codigo} className={`text-center py-1 px-1.5 font-semibold ${dif !== 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                            {dif === 0 ? '0 ✓' : dif}
+                          </td>
+                        );
+                      })}
+                      <td className={`text-center py-1 px-2 font-semibold ${totalSistema - totalPasto !== 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                        {totalSistema - totalPasto === 0 ? '0 ✓' : totalSistema - totalPasto}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </DialogHeader>
+            <div className="p-0">
+              <EvolucaoCategoriaTab
+                initialAno={anoFiltro}
+                initialMes={String(mesFiltro).padStart(2, '0')}
+                initialCenario="realizado"
+                onNavigateToFechamentoPastos={() => setShowReclassModal(false)}
+                onNavigateToReclass={() => {}}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
