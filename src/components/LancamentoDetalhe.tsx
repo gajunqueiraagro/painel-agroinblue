@@ -318,8 +318,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {lancamento.fazendaOrigem && (
                   <Row label="Fazenda Origem" value={lancamento.fazendaOrigem} />
                 )}
-                {lancamento.fazendaDestino && (
-                  <Row label={isAbate ? 'Frigorífico' : 'Fazenda Destino'} value={lancamento.fazendaDestino} />
+                {(lancamento.fazendaDestino || (isAbate && (lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico))) && (
+                  <Row label={isAbate ? 'Frigorífico' : 'Fazenda Destino'} value={isAbate ? (lancamento.fazendaDestino || lancamento.compradorFornecedor || (lancamento as any).abateFrigorifico) : lancamento.fazendaDestino} />
                 )}
               </div>
 

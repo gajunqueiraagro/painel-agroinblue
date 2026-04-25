@@ -103,7 +103,7 @@ function getFazendaColumnHeader(tipo: string): string {
     case 'compra': return 'Destino';
     case 'transferencia_entrada':
     case 'transferencia_saida': return 'Origem e Destino';
-    case 'abate': return 'Frigorífico';
+    case 'abate': return 'Origem';
     case 'venda': return 'Origem';
     case 'consumo':
     case 'morte': return 'Fazenda';
