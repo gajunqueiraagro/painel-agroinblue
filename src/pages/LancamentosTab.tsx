@@ -863,7 +863,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // Try immediate match if fornecedores already loaded
     const matchedFornecedor = matchFornecedor(abateFornecedores, {
       id: snap?.fornecedorId,
-      nome: snap?.fornecedorNome || l.fazendaDestino,
+      nome: snap?.fornecedorNome || l.compradorFornecedor || l.fazendaDestino,
     });
 
     if (matchedFornecedor) {
@@ -881,7 +881,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
-    if (abateParaEditar && abateFornecedores.length > 0) {
+    if (abateParaEditar) {
       loadAbateForEdit(abateParaEditar);
     }
   }, [abateParaEditar, abateFornecedores]);
