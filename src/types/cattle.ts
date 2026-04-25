@@ -73,6 +73,8 @@ export interface Lancamento {
   acrescimos?: number;
   deducoes?: number;
   valorTotal?: number;
+  pesoTotal?: number;
+  precoUnitario?: number;
   notaFiscal?: string;
   tipoPeso?: string;
   cenario?: 'meta' | 'realizado';

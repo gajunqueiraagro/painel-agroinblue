@@ -274,6 +274,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
       acrescimos: lancamento.acrescimos || null,
       deducoes: lancamento.deducoes || null,
       valor_total: lancamento.valorTotal || null,
+      peso_total: lancamento.pesoTotal || null,
+      preco_unitario: lancamento.precoUnitario || null,
       numero_documento: lancamento.notaFiscal || null,
       tipo_peso: lancamento.tipoPeso || 'vivo',
       status_operacional: lancamento.statusOperacional === null ? null : (lancamento.statusOperacional || 'realizado'),
@@ -400,6 +402,8 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     if (dados.acrescimos !== undefined) update.acrescimos = dados.acrescimos;
     if (dados.deducoes !== undefined) update.deducoes = dados.deducoes;
     if (dados.valorTotal !== undefined) update.valor_total = dados.valorTotal;
+    if (dados.pesoTotal !== undefined) update.peso_total = dados.pesoTotal;
+    if (dados.precoUnitario !== undefined) update.preco_unitario = dados.precoUnitario;
     if (dados.notaFiscal !== undefined) update.numero_documento = dados.notaFiscal;
     if (dados.tipoPeso !== undefined) update.tipo_peso = dados.tipoPeso;
     if (dados.cenario !== undefined) update.cenario = dados.cenario;

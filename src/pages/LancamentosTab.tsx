@@ -1635,6 +1635,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       acrescimos: numOrUndef(bonus),
       deducoes: numOrUndef(descontos),
       valorTotal: valorTotalFinal,
+      pesoTotal: (() => {
+        const qtd = parseNumericValue(quantidade) || 0;
+        const peso = parseNumericValue(pesoKg) || 0;
+        return qtd > 0 && peso > 0 ? Math.round(qtd * peso * 100) / 100 : undefined;
+      })(),
+      precoUnitario: (() => {
+        const qtd = parseNumericValue(quantidade) || 0;
+        const vt = valorTotalFinal || 0;
+        return qtd > 0 && vt > 0 ? Math.round((vt / qtd) * 100) / 100 : undefined;
+      })(),
       notaFiscal: abNotaFiscal || undefined,
       tipoPeso: tipoPesoFinal,
       statusOperacional: isCenarioMeta ? null : effectiveStatusOp as StatusOperacional,
@@ -2267,7 +2277,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             if (!clienteAtual || !fazendaAtual) return;
             const { data: rec, error } = await supabase
               .from('financeiro_fornecedores')
-              .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+              .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
               .select('id, nome')
               .single();
             if (error) { toast.error('Erro ao salvar fornecedor'); return; }
@@ -3475,7 +3485,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
             .from('financeiro_fornecedores')
-            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
@@ -3497,7 +3507,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
             .from('financeiro_fornecedores')
-            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
@@ -3518,7 +3528,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
             .from('financeiro_fornecedores')
-            .insert({ cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id, nome, cpf_cnpj: cpfCnpj || null })
+            .insert({ cliente_id: clienteAtual.id, fazenda_id: (fazendaAtual?.id && fazendaAtual.id !== '__global__') ? fazendaAtual.id : null, nome, cpf_cnpj: cpfCnpj || null })
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
