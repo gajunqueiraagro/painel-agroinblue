@@ -63,7 +63,13 @@ export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
         .order('mes');
 
       if (error) {
-        console.error('useZootMensal error:', error);
+        console.error('[useZootMensal] vw_zoot_fazenda_mensal indisponível', {
+          message: error.message,
+          code: (error as any).code,
+          details: (error as any).details,
+          hint: (error as any).hint,
+          fazendaId, ano, cenario,
+        });
         return [];
       }
 

@@ -217,6 +217,7 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'arr_ha': { id: 'arr_ha', nome: '@/ha', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'desfrute_cab': { id: 'desfrute_cab', nome: 'Desfrute (cab)', aba: 'medio', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
   'desfrute_arr': { id: 'desfrute_arr', nome: 'Desfrute (@)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'custo_arr_prod': { id: 'custo_arr_prod', nome: 'Custo/@prod', aba: 'medio', bloco: 'Produção', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
 
   // ─── Médio > Estrutura ───
   'area_prod': { id: 'area_prod', nome: 'Área prod. (ha)', aba: 'medio', bloco: 'Estrutura', realizado: { ...FONTE_ZOOT_VIEW_REAL, fonte_tabela: 'pastos', fonte_campo: 'area_ha (onde entra_conciliacao=true)', tela_origem: '/pastos', tela_label: 'Mapa de Pastos' }, previsto: FONTE_ZOOT_VIEW_PREVISTO },
