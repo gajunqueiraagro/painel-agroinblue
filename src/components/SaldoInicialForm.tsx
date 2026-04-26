@@ -66,8 +66,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     }
     if (initDoneRef.current) return;
     initDoneRef.current = true;
-    const anoForm = hasSaldo ? saldoBase.ano : Number(anoSelecionado);
-    const mesForm = hasSaldo ? saldoBase.mes : Number(mesSelecionado);
+    const anoForm = Number(anoSelecionado);
+    const mesForm = Number(mesSelecionado);
     const v: Record<string, string> = {};
     const p: Record<string, string> = {};
     const pr: Record<string, string> = {};
@@ -93,9 +93,13 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
     return isNaN(n) ? undefined : n;
   };
 
+  const [salvando, setSalvando] = useState(false);
+
   const handleSalvar = async () => {
-    const anoFinal = hasSaldo ? saldoBase.ano : Number(anoSelecionado);
-    const mesFinal = hasSaldo ? saldoBase.mes : Number(mesSelecionado);
+    if (salvando) return;
+    setSalvando(true);
+    const anoFinal = Number(anoSelecionado);
+    const mesFinal = Number(mesSelecionado);
 
     try {
       for (const c of CATEGORIAS) {
@@ -107,6 +111,8 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
       setOpen(false);
     } catch {
       // erro já tratado no fluxo de persistência
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -160,6 +166,7 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
               setMesSelecionado={setMesSelecionado}
               anoOptions={anoOptions}
               mesOptions={mesOptions}
+              salvando={salvando}
             />
           </Dialog>
         </div>
@@ -242,6 +249,14 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
           setPrecos={setPrecos}
           onSalvar={handleSalvar}
           mesFechado={mesFechado}
+          showSelector
+          anoSelecionado={anoSelecionado}
+          setAnoSelecionado={setAnoSelecionado}
+          mesSelecionado={mesSelecionado}
+          setMesSelecionado={setMesSelecionado}
+          anoOptions={anoOptions}
+          mesOptions={mesOptions}
+          salvando={salvando}
         />
       </Dialog>
     </>
@@ -259,7 +274,7 @@ const MESES_CURTOS_DIALOG = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'A
 // ── Dialog content ──
 function SaldoInicialDialogContent({
   anoSaldo, mesSaldo, valores, pesos, precos, setValores, setPesos, setPrecos, onSalvar,
-  mesFechado, showSelector, anoSelecionado, setAnoSelecionado, mesSelecionado, setMesSelecionado, anoOptions, mesOptions,
+  mesFechado, showSelector, anoSelecionado, setAnoSelecionado, mesSelecionado, setMesSelecionado, anoOptions, mesOptions, salvando,
 }: {
   anoSaldo: number;
   mesSaldo: number;
@@ -272,6 +287,7 @@ function SaldoInicialDialogContent({
   onSalvar: () => void;
   mesFechado: boolean;
   showSelector?: boolean;
+  salvando?: boolean;
   anoSelecionado?: string;
   setAnoSelecionado?: (v: string) => void;
   mesSelecionado?: string;
@@ -427,8 +443,8 @@ function SaldoInicialDialogContent({
           </TableBody>
         </Table>
 
-        <Button className="w-full touch-target font-bold" onClick={onSalvar}>
-          Salvar Saldo Inicial
+        <Button className="w-full touch-target font-bold" onClick={onSalvar} disabled={salvando}>
+          {salvando ? 'Salvando...' : 'Salvar Saldo Inicial'}
         </Button>
       </div>
     </DialogContent>
