@@ -306,6 +306,18 @@ export function DashboardFinanceiro({
     return Array.from(map.entries()).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [ind, saidaTab]);
 
+  // Mapas de cor por nome — garante que bullet do plano de contas use a mesma cor do slice da pizza.
+  const entradaColorByName = useMemo(() => {
+    const m = new Map<string, string>();
+    pieEntradas.forEach((item, i) => m.set(item.name, PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length]));
+    return m;
+  }, [pieEntradas]);
+  const saidaColorByName = useMemo(() => {
+    const m = new Map<string, string>();
+    pieSaidas.forEach((item, i) => m.set(item.name, PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length]));
+    return m;
+  }, [pieSaidas]);
+
   // =========================================================================
   // EMPTY STATE
   // =========================================================================
@@ -340,12 +352,12 @@ export function DashboardFinanceiro({
       )}
 
       {/* ================================================================= */}
-      {/* 1. CARDS EXECUTIVOS — Entradas / Saídas / Saldo */}
+      {/* LINHA 1 — Cards executivos (Entradas / Saídas / Saldo) — alinhamento por items-stretch */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-3 gap-2 items-stretch mb-2">
         {/* Entradas */}
-        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
-          <CardContent className="p-2">
+        <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
+          <CardContent className="p-2 flex flex-col flex-1">
             <div className="flex items-center justify-between mb-0.5">
               <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: 'hsl(142, 50%, 35%)' }}>
                 <TrendingUp className="h-3 w-3" /> Entradas
@@ -359,10 +371,14 @@ export function DashboardFinanceiro({
               {ind.categoriasEntrada.map((cat: string) => {
                 const val = (entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0;
                 if (val === 0) return null;
+                const bulletColor = entradaColorByName.get(cat) ?? 'hsl(142, 35%, 50%)';
                 return (
-                  <div key={cat} className="flex justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
+                  <div key={cat} className="flex items-center justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
                     onClick={() => onMacroDrillDown?.(cat)}>
-                    <span className="text-muted-foreground truncate mr-1">{cat}</span>
+                    <span className="flex items-center min-w-0 mr-1">
+                      <span className="inline-block w-2 h-2 rounded-full mr-1.5 flex-shrink-0" style={{ background: bulletColor }} />
+                      <span className="text-muted-foreground truncate">{cat}</span>
+                    </span>
                     <span className="font-mono font-semibold italic whitespace-nowrap" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(val)}</span>
                   </div>
                 );
@@ -372,8 +388,8 @@ export function DashboardFinanceiro({
         </Card>
 
         {/* Saídas */}
-        <Card className="border-l-4" style={{ borderLeftColor: 'hsl(0, 55%, 48%)' }}>
-          <CardContent className="p-2">
+        <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(0, 55%, 48%)' }}>
+          <CardContent className="p-2 flex flex-col flex-1">
             <div className="flex items-center justify-between mb-0.5">
               <div className="flex items-center gap-1 text-[10px] font-bold text-destructive">
                 <TrendingDown className="h-3 w-3" /> Saídas
@@ -387,10 +403,14 @@ export function DashboardFinanceiro({
               {ind.categoriasSaida.map((cat: string) => {
                 const val = (saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0;
                 if (val === 0) return null;
+                const bulletColor = saidaColorByName.get(cat) ?? 'hsl(0, 35%, 55%)';
                 return (
-                  <div key={cat} className="flex justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
+                  <div key={cat} className="flex items-center justify-between text-[9px] leading-tight cursor-pointer hover:bg-muted/50 rounded px-0.5"
                     onClick={() => onMacroDrillDown?.(cat)}>
-                    <span className="text-muted-foreground truncate mr-1">{cat}</span>
+                    <span className="flex items-center min-w-0 mr-1">
+                      <span className="inline-block w-2 h-2 rounded-full mr-1.5 flex-shrink-0" style={{ background: bulletColor }} />
+                      <span className="text-muted-foreground truncate">{cat}</span>
+                    </span>
                     <span className="font-mono font-semibold italic whitespace-nowrap text-destructive">{formatMoeda(val)}</span>
                   </div>
                 );
@@ -408,8 +428,8 @@ export function DashboardFinanceiro({
         </Card>
 
         {/* Saldo líquido */}
-        <Card className="border-l-4" style={{ borderLeftColor: saldoLiquido >= 0 ? 'hsl(210, 60%, 48%)' : 'hsl(30, 70%, 48%)' }}>
-          <CardContent className="p-2">
+        <Card className="flex flex-col border-l-4" style={{ borderLeftColor: saldoLiquido >= 0 ? 'hsl(210, 60%, 48%)' : 'hsl(30, 70%, 48%)' }}>
+          <CardContent className="p-2 flex flex-col flex-1">
             <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground mb-0.5">
               <BarChart3 className="h-3 w-3" /> Saldo Líquido
             </div>
@@ -431,81 +451,53 @@ export function DashboardFinanceiro({
       </div>
 
       {/* ================================================================= */}
-      {/* 2. PIE CHARTS + GRÁFICO BARRAS — 3 colunas */}
+      {/* LINHA 2 — Pizzas (sem título/legenda) + gráfico Entradas vs Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
-        {/* Pie Entradas */}
-        <Card>
-          <CardContent className="p-2">
-            <div className="text-[9px] font-bold mb-1" style={{ color: 'hsl(142, 50%, 35%)' }}>
-              Entradas — {entradaTab === 'mes' ? MESES_NOMES[mesAte - 1]?.substring(0, 3) : 'Acum'}
-            </div>
+      <div className="grid grid-cols-3 gap-2 items-stretch">
+        {/* Pie Entradas — centralizada, maior, sem título/legenda */}
+        <Card className="flex flex-col">
+          <CardContent className="flex items-center justify-center p-3 flex-1">
             {pieEntradas.length === 0 ? (
               <p className="text-center text-muted-foreground text-[9px] py-4">Sem entradas</p>
             ) : (
-              <>
-                <div className="h-28 mx-auto" style={{ maxWidth: 130 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieEntradas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} innerRadius={22}
-                        label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
-                        {pieEntradas.map((_, i) => <Cell key={i} fill={PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => formatMoeda(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-0 mt-1">
-                  {pieEntradas.map((item, i) => (
-                    <div key={item.name} className="flex items-center gap-1 text-[8px] leading-tight">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length] }} />
-                      <span className="truncate text-muted-foreground flex-1">{item.name}</span>
-                      <span className="font-mono font-bold italic whitespace-nowrap">{formatMoeda(item.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieEntradas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
+                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
+                      {pieEntradas.map((_, i) => <Cell key={i} fill={PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Pie Saídas */}
-        <Card>
-          <CardContent className="p-2">
-            <div className="text-[9px] font-bold text-destructive mb-1">
-              Saídas — {saidaTab === 'mes' ? MESES_NOMES[mesAte - 1]?.substring(0, 3) : 'Acum'}
-            </div>
+        {/* Pie Saídas — centralizada, maior, sem título/legenda */}
+        <Card className="flex flex-col">
+          <CardContent className="flex items-center justify-center p-3 flex-1">
             {pieSaidas.length === 0 ? (
               <p className="text-center text-muted-foreground text-[9px] py-4">Sem saídas</p>
             ) : (
-              <>
-                <div className="h-28 mx-auto" style={{ maxWidth: 130 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieSaidas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} innerRadius={22}
-                        label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
-                        {pieSaidas.map((_, i) => <Cell key={i} fill={PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => formatMoeda(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="space-y-0 mt-1">
-                  {pieSaidas.map((item, i) => (
-                    <div key={item.name} className="flex items-center gap-1 text-[8px] leading-tight">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length] }} />
-                      <span className="truncate text-muted-foreground flex-1">{item.name}</span>
-                      <span className="font-mono font-bold italic whitespace-nowrap">{formatMoeda(item.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieSaidas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
+                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
+                      {pieSaidas.map((_, i) => <Cell key={i} fill={PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Gráfico Entradas vs Saídas — compacto */}
-        <Card>
+        {/* Gráfico Entradas vs Saídas — preservado */}
+        <Card className="flex flex-col">
           <CardContent className="p-2">
             <div className="text-[9px] font-bold text-muted-foreground mb-1">
               Entradas vs Saídas — {anoFiltro}
