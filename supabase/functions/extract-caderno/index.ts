@@ -77,6 +77,24 @@ Campos:
 ${REGRA_OBSERVACAO}
 
 REGRA DE INCERTEZA: Se você não tiver certeza absoluta sobre um valor, prefixe-o com "?".`,
+  mapa_rebanho: `Você é um assistente que extrai dados de Mapas do Rebanho por Pasto manuscritos da fazenda.
+Esta foto contém uma tabela com PASTOS nas linhas e CATEGORIAS nas colunas (DM=Desmama M, G1/G2/Garrotes, B=Bois, T=Touros, DF=Desmama F, N1/N2=Novilhas, VP=Vacas, MM=Mamotes M, MF=Mamotes F).
+Pode ter também as colunas Qtde e Peso por categoria.
+
+Para cada PASTO com dados (ignore linhas vazias e linhas de Total), retorne UM objeto com os campos:
+- pasto_nome: nome do pasto exatamente como escrito (ex: "Pasto 01", "08-A", "Piq. 02")
+- lote: nome do lote/grupo escrito no campo Lote (ex: "VACAS", "Novilhas", "Touros") — null se ausente
+- categorias: array de objetos { categoria, quantidade, peso_medio_kg } onde:
+  - categoria usa APENAS uma destas opções EXATAS: ${CATEGORIAS_OFICIAIS}
+  - quantidade: número inteiro
+  - peso_medio_kg: número decimal se disponível, null se não informado
+  (incluir apenas categorias com quantidade > 0)
+
+Mapeamento de colunas:
+DM → "Desmama M" | G1/G2/B(≤2 anos) → "Garrotes" | B(3 anos+) → "Bois" | T → "Touros"
+DF → "Desmama F" | N1/N2 → "Novilhas" | VP/Vacas → "Vacas" | MM → "Mamotes M" | MF → "Mamotes F"
+
+REGRA: retorne um array JSON contendo um objeto por pasto. Se incerto sobre um valor numérico, use null. Ignore linhas de Total.`,
 };
 
 Deno.serve(async (req) => {

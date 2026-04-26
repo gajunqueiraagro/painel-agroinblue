@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, Sparkles } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -22,6 +22,7 @@ import { isPastoPecuario, isPastoOperacional, getTipoUsoEfetivo, isPastoDivergen
 import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { useReclassificacaoState, ReclassificacaoFormFields } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
+import { MapaRebanhoImportDialog, type MapaItem } from '@/components/MapaRebanhoImportDialog';
 import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { supabase } from '@/integrations/supabase/client';
@@ -159,6 +160,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [bulkReopening, setBulkReopening] = useState(false);
   const [showSugestoes, setShowSugestoes] = useState(false);
   const [showReclassModal, setShowReclassModal] = useState(false);
+  const [showMapaImport, setShowMapaImport] = useState(false);
   const [statusPorMes, setStatusPorMes] = useState<Record<number, 'fechado' | 'rascunho' | 'vazio'>>({});
 
   useEffect(() => {
@@ -620,6 +622,31 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
+  const handleImportMapa = async (dados: MapaItem[]) => {
+    let pastosImportados = 0;
+    for (const item of dados) {
+      let fech = getFechamento(item.pasto_id);
+      if (!fech) fech = await criarFechamento(item.pasto_id, anoMes);
+      if (!fech) continue;
+      const itensPayload = item.categorias.map(c => ({
+        categoria_id: c.categoria_id,
+        quantidade: c.quantidade,
+        peso_medio_kg: c.peso_medio_kg,
+        lote: item.lote,
+        observacoes: null,
+        origem_dado: 'ia_mapa_rebanho',
+      }));
+      const ok = await salvarItens(fech.id, itensPayload);
+      if (ok) pastosImportados++;
+    }
+    await loadFechamentos(anoMes);
+    if (pastosImportados > 0) {
+      toast.success(`${pastosImportados} pasto(s) importado(s) do Mapa do Rebanho`);
+    } else {
+      toast.error('Nenhum pasto importado');
+    }
+  };
+
   const handleBulkReopen = async () => {
     if (!fazendaAtual || fazendaAtual.id === '__global__') return;
     setBulkReopening(true);
@@ -895,6 +922,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 3: Ações ── */}
           <div className="flex flex-col gap-1.5 items-end min-w-[120px]">
+            {!isGlobal && (
+              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start border-primary/40 text-primary hover:bg-primary/10" onClick={() => setShowMapaImport(true)}>
+                <Sparkles className="h-3.5 w-3.5" /> Importar Mapa IA
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
               <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
             </Button>
@@ -1287,6 +1319,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {!isGlobal && (
+        <MapaRebanhoImportDialog
+          open={showMapaImport}
+          onOpenChange={setShowMapaImport}
+          pastos={pastos}
+          categorias={categorias}
+          anoMes={anoMes}
+          onImportar={handleImportMapa}
+        />
       )}
     </div>
   );
