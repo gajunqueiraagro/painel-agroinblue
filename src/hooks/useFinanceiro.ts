@@ -182,7 +182,20 @@ async function fetchAllPaginated<T>(
     if (data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
-  return allData;
+  // Dedup por id quando presente — paginação com sort não-determinístico pode produzir
+  // duplicatas se chave secundária não estiver definida (ex: dois rows com mesmo
+  // data_competencia podem trocar de página entre offsets). Backstop adicional ao sort.
+  const hasId = allData.length > 0 && typeof (allData[0] as any)?.id === 'string';
+  if (!hasId) return allData;
+  const seen = new Set<string>();
+  const deduped: T[] = [];
+  for (const row of allData) {
+    const id = (row as any).id as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    deduped.push(row);
+  }
+  return deduped;
 }
 
 /** Map a V2 row to the FinanceiroLancamento interface for backward compatibility */
@@ -387,7 +400,7 @@ export function useFinanceiro() {
         const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
           fetchAllPaginated<any>((from, to) =>
             (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).range(from, to),
+              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).order('id', { ascending: true }).range(from, to),
           ),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -415,13 +428,13 @@ export function useFinanceiro() {
 
         const lancPromise = fetchAllPaginated<any>((from, to) =>
           (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).range(from, to),
+              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).order('id', { ascending: true }).range(from, to),
         ).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) =>
               (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).range(from, to),
+              .eq('sem_movimentacao_caixa', false).neq('status_transacao', 'conciliado').neq('cenario', 'meta').order('data_competencia', { ascending: false }).order('id', { ascending: true }).range(from, to),
             ).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
