@@ -70,6 +70,7 @@ export function ClientesTab() {
   };
 
   const handleCreate = async () => {
+    if (saving) return;
     if (!nome.trim() || !slug.trim()) {
       toast.error('Nome e identificador são obrigatórios.');
       return;
@@ -132,6 +133,7 @@ export function ClientesTab() {
   };
 
   const handleUpdate = async () => {
+    if (saving) return;
     if (!editing || !editing.nome.trim() || !editing.slug.trim()) {
       toast.error('Nome e identificador são obrigatórios.');
       return;

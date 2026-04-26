@@ -156,6 +156,7 @@ export function FornecedorFormDialog({
   }, [nome, allFornecedores, editing]);
 
   const save = useCallback(async () => {
+    if (saving) return;
     if (!clienteId || !nome.trim() || !fazendaId) {
       toast.error('Preencha nome e fazenda');
       return;
@@ -191,7 +192,7 @@ export function FornecedorFormDialog({
     setSaving(false);
     onClose();
     onSaved();
-  }, [clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
+  }, [saving, clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
 
   const handleMerge = useCallback(async (target: Fornecedor) => {
     if (!editing) return;

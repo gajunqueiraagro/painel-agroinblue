@@ -280,6 +280,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [saldos, setSaldos] = useState<SaldoRow[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [savingSaldo, setSavingSaldo] = useState(false);
   const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2,'0'));
 
   /* Modal */
@@ -453,29 +454,35 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   };
 
   const handleSaveSaldo = async () => {
+    if (savingSaldo) return;
     if (!editingSaldo || !clienteId) return;
     const val = parseFloat(editValue.replace(/\./g,'').replace(',','.'));
     if (isNaN(val)) { toast.error('Valor inválido'); return; }
-    const existing = saldos.find(s => s.ano_mes===editingSaldo.anoMes && s.conta_bancaria_id===editingSaldo.contaId);
-    if (existing) {
-      const {error} = await supabase.from('financeiro_saldos_bancarios_v2')
-        .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing.id);
-      if (error) { toast.error('Erro ao salvar'); return; }
-    } else {
-      const {data:cd} = await supabase.from('financeiro_contas_bancarias')
-        .select('fazenda_id').eq('id',editingSaldo.contaId).single();
-      if (!cd) { toast.error('Erro ao buscar fazenda'); return; }
-      const {error} = await supabase.from('financeiro_saldos_bancarios_v2').insert({
-        cliente_id:clienteId, fazenda_id:cd.fazenda_id,
-        conta_bancaria_id:editingSaldo.contaId, ano_mes:editingSaldo.anoMes,
-        saldo_inicial:0, saldo_final:val,
-        origem_saldo_inicial:'manual', status_mes:'aberto',
-      });
-      if (error) { toast.error('Erro ao criar saldo'); return; }
+    setSavingSaldo(true);
+    try {
+      const existing = saldos.find(s => s.ano_mes===editingSaldo.anoMes && s.conta_bancaria_id===editingSaldo.contaId);
+      if (existing) {
+        const {error} = await supabase.from('financeiro_saldos_bancarios_v2')
+          .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing.id);
+        if (error) { toast.error('Erro ao salvar'); return; }
+      } else {
+        const {data:cd} = await supabase.from('financeiro_contas_bancarias')
+          .select('fazenda_id').eq('id',editingSaldo.contaId).single();
+        if (!cd) { toast.error('Erro ao buscar fazenda'); return; }
+        const {error} = await supabase.from('financeiro_saldos_bancarios_v2').insert({
+          cliente_id:clienteId, fazenda_id:cd.fazenda_id,
+          conta_bancaria_id:editingSaldo.contaId, ano_mes:editingSaldo.anoMes,
+          saldo_inicial:0, saldo_final:val,
+          origem_saldo_inicial:'manual', status_mes:'aberto',
+        });
+        if (error) { toast.error('Erro ao criar saldo'); return; }
+      }
+      toast.success('Saldo do extrato atualizado');
+      setEditingSaldo(null);
+      loadData();
+    } finally {
+      setSavingSaldo(false);
     }
-    toast.success('Saldo do extrato atualizado');
-    setEditingSaldo(null);
-    loadData();
   };
 
   const canEditSaldoFinal = (anoMes: string): boolean => {
@@ -922,7 +929,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={()=>setEditingSaldo(null)}>Cancelar</Button>
-            <Button size="sm" onClick={handleSaveSaldo}>Salvar</Button>
+            <Button size="sm" onClick={handleSaveSaldo} disabled={savingSaldo}>{savingSaldo ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

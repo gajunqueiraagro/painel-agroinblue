@@ -118,6 +118,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   const [allSaldos, setAllSaldos] = useState<SaldoBancario[]>([]);
   const [contas, setContas] = useState<ContaRef[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SaldoBancario | null>(null);
 
@@ -519,10 +520,20 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
 
   /* ── save ── */
   const save = async () => {
+    if (isSaving) return;
     if (!clienteAtual?.id || !anoMes || !contaId) {
       toast.error('Preencha todos os campos');
       return;
     }
+    setIsSaving(true);
+    try {
+    await saveInner();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveInner = async () => {
 
     // Resolve fazenda_id: for legacy edits, derive from the V2 conta; for V2 edits, keep existing; for new, lookup
     const resolveFazendaId = async (): Promise<string | null> => {
@@ -1150,7 +1161,7 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button size="sm" onClick={save}>{editing ? 'Salvar' : 'Registrar'}</Button>
+              <Button size="sm" onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Registrar')}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

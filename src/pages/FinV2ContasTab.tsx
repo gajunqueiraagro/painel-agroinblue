@@ -72,6 +72,7 @@ export function FinV2ContasTab() {
   const [bancos, setBancos] = useState<BancoRef[]>([]);
   const [contasComLancamento, setContasComLancamento] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContaBancaria | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -215,36 +216,42 @@ export function FinV2ContasTab() {
   };
 
   const save = async () => {
+    if (isSaving) return;
     if (!clienteAtual?.id || !nomeExibicao.trim() || !fazendaId) {
       toast.error('Preencha o nome da conta e a fazenda');
       return;
     }
-    const displayName = nomeExibicao.trim();
-    const payload = {
-      cliente_id: clienteAtual.id,
-      fazenda_id: fazendaId,
-      nome_conta: displayName,
-      nome_exibicao: displayName,
-      banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
-      tipo_conta: tipoConta,
-      codigo_conta: codigoConta.trim() || null,
-      agencia: agencia.trim() || null,
-      numero_conta: numeroConta.trim() || null,
-      conta_digito: contaDigito.trim() || null,
-      ativa,
-    };
+    setIsSaving(true);
+    try {
+      const displayName = nomeExibicao.trim();
+      const payload = {
+        cliente_id: clienteAtual.id,
+        fazenda_id: fazendaId,
+        nome_conta: displayName,
+        nome_exibicao: displayName,
+        banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
+        tipo_conta: tipoConta,
+        codigo_conta: codigoConta.trim() || null,
+        agencia: agencia.trim() || null,
+        numero_conta: numeroConta.trim() || null,
+        conta_digito: contaDigito.trim() || null,
+        ativa,
+      };
 
-    if (editing) {
-      const { error } = await supabase.from('financeiro_contas_bancarias').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar'); return; }
-      toast.success('Conta atualizada');
-    } else {
-      const { error } = await supabase.from('financeiro_contas_bancarias').insert(payload);
-      if (error) { toast.error('Erro ao criar conta'); return; }
-      toast.success('Conta criada');
+      if (editing) {
+        const { error } = await supabase.from('financeiro_contas_bancarias').update(payload).eq('id', editing.id);
+        if (error) { toast.error('Erro ao atualizar'); return; }
+        toast.success('Conta atualizada');
+      } else {
+        const { error } = await supabase.from('financeiro_contas_bancarias').insert(payload);
+        if (error) { toast.error('Erro ao criar conta'); return; }
+        toast.success('Conta criada');
+      }
+      setDialogOpen(false);
+      load();
+    } finally {
+      setIsSaving(false);
     }
-    setDialogOpen(false);
-    load();
   };
 
   const handleDesativar = async () => {
@@ -510,7 +517,7 @@ export function FinV2ContasTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save}>{editing ? 'Salvar' : 'Criar'}</Button>
+            <Button onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

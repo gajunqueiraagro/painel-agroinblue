@@ -67,6 +67,7 @@ export function DividendosTab() {
   const { clienteAtual } = useCliente();
   const [items, setItems] = useState<Dividendo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<Dividendo | null>(null);
   const [nome, setNome] = useState('');
@@ -91,26 +92,32 @@ export function DividendosTab() {
   const filtered = showInativos ? items : items.filter(i => i.ativo);
 
   const handleSave = async () => {
+    if (isSaving) return;
     if (!clienteAtual?.id || !nome.trim()) return;
-    if (editItem) {
-      const { error } = await supabase
-        .from('financeiro_dividendos')
-        .update({ nome: nome.trim() })
-        .eq('id', editItem.id);
-      if (error) { toast.error(error.message); return; }
-      toast.success('Dividendo atualizado');
-    } else {
-      const maxOrdem = items.reduce((m, i) => Math.max(m, i.ordem_exibicao), -1);
-      const { error } = await supabase
-        .from('financeiro_dividendos')
-        .insert({ cliente_id: clienteAtual.id, nome: nome.trim(), ordem_exibicao: maxOrdem + 1 });
-      if (error) { toast.error(error.message); return; }
-      toast.success('Dividendo criado');
+    setIsSaving(true);
+    try {
+      if (editItem) {
+        const { error } = await supabase
+          .from('financeiro_dividendos')
+          .update({ nome: nome.trim() })
+          .eq('id', editItem.id);
+        if (error) { toast.error(error.message); return; }
+        toast.success('Dividendo atualizado');
+      } else {
+        const maxOrdem = items.reduce((m, i) => Math.max(m, i.ordem_exibicao), -1);
+        const { error } = await supabase
+          .from('financeiro_dividendos')
+          .insert({ cliente_id: clienteAtual.id, nome: nome.trim(), ordem_exibicao: maxOrdem + 1 });
+        if (error) { toast.error(error.message); return; }
+        toast.success('Dividendo criado');
+      }
+      setDialogOpen(false);
+      setEditItem(null);
+      setNome('');
+      load();
+    } finally {
+      setIsSaving(false);
     }
-    setDialogOpen(false);
-    setEditItem(null);
-    setNome('');
-    load();
   };
 
   const toggleAtivo = async (item: Dividendo, ativo: boolean) => {
@@ -204,7 +211,7 @@ export function DividendosTab() {
                 onKeyDown={e => e.key === 'Enter' && handleSave()}
               />
             </div>
-            <Button onClick={handleSave} disabled={!nome.trim()} className="w-full">
+            <Button onClick={handleSave} disabled={!nome.trim() || isSaving} className="w-full">
               {editItem ? 'Salvar' : 'Criar'}
             </Button>
           </div>

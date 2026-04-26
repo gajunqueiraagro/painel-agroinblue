@@ -47,6 +47,7 @@ export function FinV2FornecedoresTab() {
   const { fazendas } = useFazenda();
   const [items, setItems] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
+  const [creatingPendingId, setCreatingPendingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -150,21 +151,27 @@ export function FinV2FornecedoresTab() {
 
   // Create new fornecedor from pending and link
   const createAndLink = async (pending: PendingItem) => {
+    if (creatingPendingId) return;
     if (!clienteAtual?.id) return;
     const faz = fazendas.find(f => f.id !== '__global__');
     if (!faz) return;
 
-    const { data, error } = await supabase
-      .from('financeiro_fornecedores')
-      .insert({ cliente_id: clienteAtual.id, fazenda_id: faz.id, nome: pending.descricao })
-      .select('id')
-      .single();
-    if (error || !data) {
-      toast.error('Erro ao criar fornecedor');
-      return;
+    setCreatingPendingId(pending.descricao);
+    try {
+      const { data, error } = await supabase
+        .from('financeiro_fornecedores')
+        .insert({ cliente_id: clienteAtual.id, fazenda_id: faz.id, nome: pending.descricao })
+        .select('id')
+        .single();
+      if (error || !data) {
+        toast.error('Erro ao criar fornecedor');
+        return;
+      }
+      await linkToFornecedor(pending, data.id);
+      load();
+    } finally {
+      setCreatingPendingId(null);
     }
-    await linkToFornecedor(pending, data.id);
-    load();
   };
 
   const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
@@ -296,8 +303,8 @@ export function FinV2FornecedoresTab() {
                                 <Link2 className="h-2.5 w-2.5 mr-0.5" />Vincular
                               </Button>
                             )}
-                            <Button size="sm" variant="default" className="h-5 text-[9px] px-1.5" onClick={() => createAndLink(p)}>
-                              <Plus className="h-2.5 w-2.5 mr-0.5" />Criar
+                            <Button size="sm" variant="default" className="h-5 text-[9px] px-1.5" onClick={() => createAndLink(p)} disabled={creatingPendingId === p.descricao}>
+                              <Plus className="h-2.5 w-2.5 mr-0.5" />{creatingPendingId === p.descricao ? '...' : 'Criar'}
                             </Button>
                           </div>
                         </TableCell>

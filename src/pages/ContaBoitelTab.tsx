@@ -108,6 +108,7 @@ export function ContaBoitelTab({ onBack }: Props) {
   const [selected, setSelected] = useState<BoitelOp | null>(null);
   const [lancamentos, setLancamentos] = useState<FinLancamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailLanc, setDetailLanc] = useState<FinLancamento | null>(null);
 
@@ -198,12 +199,14 @@ export function ContaBoitelTab({ onBack }: Props) {
   }, [selected, lancamentos]);
 
   async function handleNovoLancamento() {
+    if (isSaving) return;
     if (!selected || !clienteId || !fazendaAtual?.id) return;
     const valor = parseFloat(novoValor);
     if (!novoData || isNaN(valor) || valor <= 0) {
       toast.error('Preencha data e valor válidos.');
       return;
     }
+    setIsSaving(true);
 
     const origemTipo = `boitel:${novoTipo}`;
     const config = BOITEL_CLASSIFICACAO[origemTipo];
@@ -238,7 +241,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       sem_movimentacao_caixa: false,
     });
 
-    if (error) { toast.error('Erro ao salvar: ' + error.message); return; }
+    if (error) { toast.error('Erro ao salvar: ' + error.message); setIsSaving(false); return; }
 
     toast.success('Lançamento registrado!');
     setDialogOpen(false);
@@ -246,6 +249,7 @@ export function ContaBoitelTab({ onBack }: Props) {
     setNovoDesc('');
     setNovoData('');
     loadLancamentos(selected.id);
+    setIsSaving(false);
   }
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -606,7 +610,7 @@ export function ContaBoitelTab({ onBack }: Props) {
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" className="h-8 text-[11px]" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button size="sm" className="h-8 text-[11px]" onClick={handleNovoLancamento}>Salvar</Button>
+              <Button size="sm" className="h-8 text-[11px]" onClick={handleNovoLancamento} disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar'}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
