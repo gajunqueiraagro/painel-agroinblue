@@ -47,7 +47,6 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
-  const [parcelaBaixa, setParcelaBaixa] = useState<any>(null);
   const [parcelaEdit, setParcelaEdit] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -357,11 +356,6 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                               Ver lançamento
                             </Button>
                           )}
-                          {isPending && (
-                            <Button size="sm" className="text-[10px] h-6" onClick={() => setParcelaBaixa(p)}>
-                              Registrar pagamento
-                            </Button>
-                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -503,18 +497,12 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Modal de baixa de parcela (P5) ── */}
+      {/* ── Modal único: editar parcela (cobre registro de pagamento via mudança de status) ── */}
       <ModalBaixaParcela
         parcela={parcelaEdit}
         financiamento={fin}
         onClose={() => setParcelaEdit(null)}
         modo="editar"
-      />
-
-      <ModalBaixaParcela
-        parcela={parcelaBaixa}
-        financiamento={fin}
-        onClose={() => setParcelaBaixa(null)}
       />
     </div>
   );

@@ -108,7 +108,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
 
   const { data: contas = [] } = useQuery({
     queryKey: ['baixa-contas', financiamento.cliente_id],
-    enabled: !!parcela && modo === 'registrar',
+    enabled: !!parcela,
     queryFn: async () => {
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
@@ -126,6 +126,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     juros !== baseline.valor_juros ||
     status !== baseline.status ||
     (status === 'pago' ? dataPagamento : '') !== (baseline.status === 'pago' ? baseline.data_pagamento : '') ||
+    (status === 'pago' && contaBancariaId !== (financiamento.conta_bancaria_id ?? '')) ||
     observacao !== baseline.observacao
   );
 
@@ -141,6 +142,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     if (principal < 0 || Number.isNaN(principal)) erros.valor_principal = 'Deve ser ≥ 0';
     if (juros < 0 || Number.isNaN(juros)) erros.valor_juros = 'Deve ser ≥ 0';
     if (status === 'pago' && !dataPagamento) erros.data_pagamento = 'Obrigatório quando pago';
+    if (status === 'pago' && !contaBancariaId) erros.conta_bancaria_id = 'Obrigatório quando pago';
   }
   const temErros = Object.keys(erros).length > 0;
 
@@ -249,58 +251,101 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         .eq('id', parcela.id);
       if (errParc) throw errParc;
 
-      if (valoresMudaram || dataMudou) {
-        const { deletarMirrorParcela, criarMirrorParcela, atualizarStatusMirror } =
-          await import('@/lib/financiamentos/parcelaMirror');
+      const dataPagamentoMudou = (status === 'pago' ? dataPagamento : '') !== (baseline.status === 'pago' ? baseline.data_pagamento : '');
+      const indoParaPago = statusMudou && status === 'pago';
+      const saindoDePago = statusMudou && baseline.status === 'pago' && status !== 'pago';
+      const ehPagoComMudancas = status === 'pago' && (valoresMudaram || dataMudou || dataPagamentoMudou);
+
+      const tipo = financiamento.tipo_financiamento;
+      const tipoValido = tipo === 'pecuaria' || tipo === 'agricultura';
+
+      const { deletarMirrorParcela, criarMirrorParcela, atualizarStatusMirror } =
+        await import('@/lib/financiamentos/parcelaMirror');
+
+      if (status === 'cancelado' || saindoDePago) {
+        // Remove mirror e desvincula a parcela.
         await deletarMirrorParcela(supabase as any, parcela.id);
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
-        if (status !== 'cancelado' && (principal > 0 || juros > 0)) {
-          const tipo = financiamento.tipo_financiamento;
-          if (tipo === 'pecuaria' || tipo === 'agricultura') {
-            await criarMirrorParcela(supabase as any, {
-              id: parcela.id,
-              cliente_id: financiamento.cliente_id,
-              fazenda_id: financiamento.fazenda_id,
-              data_vencimento: dataVencimento,
-              valor_principal: principal,
-              valor_juros: juros,
-              lancamento_id: null,
-            }, {
-              id: financiamento.id,
-              cliente_id: financiamento.cliente_id,
-              fazenda_id: financiamento.fazenda_id,
-              tipo_financiamento: tipo,
-              descricao: financiamento.descricao ?? null,
-              numero_contrato: financiamento.numero_contrato ?? null,
-              credor_id: financiamento.credor_id ?? null,
-              data_contrato: financiamento.data_contrato ?? null,
-            });
-            if (status === 'pago' && dataPagamento) {
-              await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
-            }
+        // Se saindoDePago e não cancelado, e ainda há valor → recria mirror programado para o novo vencimento.
+        if (status !== 'cancelado' && tipoValido && (principal > 0 || juros > 0)) {
+          await criarMirrorParcela(supabase as any, {
+            id: parcela.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            data_vencimento: dataVencimento,
+            valor_principal: principal,
+            valor_juros: juros,
+            lancamento_id: null,
+          }, {
+            id: financiamento.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            tipo_financiamento: tipo,
+            descricao: financiamento.descricao ?? null,
+            numero_contrato: financiamento.numero_contrato ?? null,
+            credor_id: financiamento.credor_id ?? null,
+            data_contrato: financiamento.data_contrato ?? null,
+          });
+        }
+      } else if (indoParaPago || ehPagoComMudancas) {
+        // Recria mirror com novos valores/data e marca como realizado.
+        await deletarMirrorParcela(supabase as any, parcela.id);
+        await supabase
+          .from('financiamento_parcelas')
+          .update({ lancamento_id: null })
+          .eq('id', parcela.id);
+        if (tipoValido && (principal > 0 || juros > 0)) {
+          await criarMirrorParcela(supabase as any, {
+            id: parcela.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            data_vencimento: dataPagamento || dataVencimento,
+            valor_principal: principal,
+            valor_juros: juros,
+            lancamento_id: null,
+          }, {
+            id: financiamento.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            tipo_financiamento: tipo,
+            descricao: financiamento.descricao ?? null,
+            numero_contrato: financiamento.numero_contrato ?? null,
+            credor_id: financiamento.credor_id ?? null,
+            data_contrato: financiamento.data_contrato ?? null,
+          });
+          if (dataPagamento) {
+            await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
           }
         }
-      } else if (statusMudou) {
-        if (status === 'cancelado') {
-          const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
-          await deletarMirrorParcela(supabase as any, parcela.id);
-          await supabase
-            .from('financiamento_parcelas')
-            .update({ lancamento_id: null })
-            .eq('id', parcela.id);
-        } else if (status === 'pago' && dataPagamento) {
-          const { atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
-          await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
-        } else if (status === 'pendente') {
-          await supabase
-            .from('financeiro_lancamentos_v2')
-            .update({ status_transacao: 'programado', data_pagamento: null })
-            .eq('origem_lancamento', 'parcela_financiamento')
-            .eq('observacao', parcela.id)
-            .eq('cancelado', false);
+      } else if (valoresMudaram || dataMudou) {
+        // Pendente com valores/data alterados — recria mirror programado.
+        await deletarMirrorParcela(supabase as any, parcela.id);
+        await supabase
+          .from('financiamento_parcelas')
+          .update({ lancamento_id: null })
+          .eq('id', parcela.id);
+        if (tipoValido && (principal > 0 || juros > 0)) {
+          await criarMirrorParcela(supabase as any, {
+            id: parcela.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            data_vencimento: dataVencimento,
+            valor_principal: principal,
+            valor_juros: juros,
+            lancamento_id: null,
+          }, {
+            id: financiamento.id,
+            cliente_id: financiamento.cliente_id,
+            fazenda_id: financiamento.fazenda_id,
+            tipo_financiamento: tipo,
+            descricao: financiamento.descricao ?? null,
+            numero_contrato: financiamento.numero_contrato ?? null,
+            credor_id: financiamento.credor_id ?? null,
+            data_contrato: financiamento.data_contrato ?? null,
+          });
         }
       }
 
@@ -412,6 +457,20 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
                   </div>
                 )}
               </div>
+              {status === 'pago' && (
+                <div>
+                  <Label className="text-xs">Conta bancária *</Label>
+                  <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {contas.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {erros.conta_bancaria_id && <p className="text-[10px] text-destructive mt-0.5">{erros.conta_bancaria_id}</p>}
+                </div>
+              )}
               <div>
                 <Label className="text-xs">Observação</Label>
                 <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" />
