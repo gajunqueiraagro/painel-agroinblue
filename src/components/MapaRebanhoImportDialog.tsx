@@ -41,8 +41,15 @@ interface Props {
   pastos: Pasto[];
   categorias: CategoriaRebanho[];
   anoMes: string;
-  onImportar: (dados: MapaItem[]) => void | Promise<void>;
+  onImportar: (dados: MapaItem[], anoMes: string) => void | Promise<void>;
 }
+
+const MESES_OPCOES = [
+  { value: '01', label: 'Jan' }, { value: '02', label: 'Fev' }, { value: '03', label: 'Mar' },
+  { value: '04', label: 'Abr' }, { value: '05', label: 'Mai' }, { value: '06', label: 'Jun' },
+  { value: '07', label: 'Jul' }, { value: '08', label: 'Ago' }, { value: '09', label: 'Set' },
+  { value: '10', label: 'Out' }, { value: '11', label: 'Nov' }, { value: '12', label: 'Dez' },
+];
 
 function normalize(s: string): string {
   return s.toLowerCase()
@@ -71,7 +78,16 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [extraidos, setExtraidos] = useState<ExtraidoPasto[]>([]);
+  const [anoSel, setAnoSel] = useState(() => anoMes.split('-')[0] || String(new Date().getFullYear()));
+  const [mesSel, setMesSel] = useState(() => anoMes.split('-')[1] || '01');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const anosOpcoes = useMemo(() => {
+    const anoAtual = new Date().getFullYear();
+    const out: string[] = [];
+    for (let y = anoAtual; y >= 2020; y--) out.push(String(y));
+    return out;
+  }, []);
 
   const pastosOpts = useMemo(
     () => [...pastos].filter(p => p.ativo).sort((a, b) => a.nome.localeCompare(b.nome)),
@@ -98,8 +114,12 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
       setLoading(false);
       setExtraidos([]);
       if (inputRef.current) inputRef.current.value = '';
+    } else {
+      const [a, m] = anoMes.split('-');
+      if (a) setAnoSel(a);
+      if (m) setMesSel(m);
     }
-  }, [open]);
+  }, [open, anoMes]);
 
   const onFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -224,7 +244,7 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
 
     setImporting(true);
     try {
-      await onImportar(dados);
+      await onImportar(dados, `${anoSel}-${mesSel}`);
       onOpenChange(false);
     } finally {
       setImporting(false);
@@ -238,7 +258,24 @@ export function MapaRebanhoImportDialog({ open, onOpenChange, pastos, categorias
           <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="h-4 w-4 text-primary" />
             Importar Mapa do Rebanho com IA
-            <Badge variant="outline" className="ml-2 text-[10px]">{anoMes}</Badge>
+            <div className="ml-2 flex items-center gap-1">
+              <Select value={mesSel} onValueChange={setMesSel}>
+                <SelectTrigger className="h-7 w-[72px] text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_OPCOES.map(m => (
+                    <SelectItem key={m.value} value={m.value} className="text-[11px]">{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={anoSel} onValueChange={setAnoSel}>
+                <SelectTrigger className="h-7 w-[72px] text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {anosOpcoes.map(a => (
+                    <SelectItem key={a} value={a} className="text-[11px]">{a}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </DialogTitle>
         </DialogHeader>
 

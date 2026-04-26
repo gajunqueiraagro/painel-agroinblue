@@ -633,11 +633,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
   };
 
-  const handleImportMapa = async (dados: MapaItem[]) => {
+  const handleImportMapa = async (dados: MapaItem[], anoMesAlvo: string) => {
+    // Carrega fechamentos do mês alvo (pode ser diferente do filtro atual da tela).
+    if (anoMesAlvo !== anoMes) {
+      await loadFechamentos(anoMesAlvo);
+    }
     let pastosImportados = 0;
     for (const item of dados) {
-      let fech = getFechamento(item.pasto_id);
-      if (!fech) fech = await criarFechamento(item.pasto_id, anoMes);
+      // Recarregar fechamento pelo pasto_id no contexto do anoMesAlvo. Como `fechamentos`
+      // pode ainda estar com o mês antigo neste tick, criamos sempre que necessário.
+      const existente = fechamentos.find(f => f.pasto_id === item.pasto_id && f.ano_mes === anoMesAlvo);
+      let fech = existente ?? null;
+      if (!fech) fech = await criarFechamento(item.pasto_id, anoMesAlvo);
       if (!fech) continue;
       const itensPayload = item.categorias.map(c => ({
         categoria_id: c.categoria_id,
@@ -652,7 +659,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     await loadFechamentos(anoMes);
     if (pastosImportados > 0) {
-      toast.success(`${pastosImportados} pasto(s) importado(s) do Mapa do Rebanho`);
+      toast.success(`${pastosImportados} pasto(s) importado(s) em ${anoMesAlvo}`);
     } else {
       toast.error('Nenhum pasto importado');
     }
