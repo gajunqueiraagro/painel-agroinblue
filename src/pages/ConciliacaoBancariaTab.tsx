@@ -791,19 +791,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       Clique para filtrar · ● verde=ok · ● vermelho=diverge · ○ cinza=sem extrato
                     </td></tr>
 
-                    {/* Total row — sticky no rodapé, sempre visível */}
+                    {/* Total row — sticky no topo, destaque azul-escuro */}
                     <tr
                       className="border-t cursor-pointer transition-colors"
                       style={{
-                        position:'sticky', bottom:'0', zIndex:8,
-                        background: selectedConta==='__all__' ? '#DBEAFE' : '#EFF6FF',
+                        position:'sticky', top:'64px', zIndex:8,
+                        background: selectedConta==='__all__' ? '#93C5FD' : '#BFDBFE',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.10)',
                       }}
                       onClick={() => setSelectedConta('__all__')}
                     >
-                      <td className="py-2 px-2 font-semibold text-[9px]">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                      <td className="py-2 px-2 font-bold text-[9px] text-blue-900">Total — todas as contas</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap text-blue-900 ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
                         {formatMoeda(totalSaldos.dif)}
                       </td>
                       <td className="py-2" />
