@@ -376,16 +376,16 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </table>
       </div>
 
-      {onSetSaldo && (
-        <div className="w-[260px] shrink-0 flex flex-col gap-2">
+      <div className="w-[260px] shrink-0 flex flex-col gap-2">
+        {onSetSaldo && (
           <SaldoInicialForm
             saldosIniciais={saldosIniciais}
             onSetSaldo={onSetSaldo}
             anoBase={Number(anoFiltro)}
             totalLancamentos={lancamentos.length}
           />
-        </div>
-      )}
+        )}
+      </div>
       </div>
     </div>
   );
