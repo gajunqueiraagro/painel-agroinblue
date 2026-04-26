@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -623,6 +623,17 @@ export function LancamentoV2Dialog({
 
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
+  // Dividendos sempre na fazenda Administrativo do cliente.
+  const fazendaAdm = useMemo(
+    () => fazendas.find(f => f.nome?.toLowerCase().includes('administrat')),
+    [fazendas],
+  );
+  useEffect(() => {
+    if (macroCusto === 'Dividendos' && fazendaAdm && fazendaId !== fazendaAdm.id) {
+      setFazendaId(fazendaAdm.id);
+    }
+  }, [macroCusto, fazendaAdm, fazendaId]);
+
   // Validation
   const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
   const contaDestinoValid = isTransferencia || isEntrada ? !!contaDestinoId && contaDestinoId !== '__none__' : true;
@@ -638,6 +649,8 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async () => {
     if (!canSave) return;
+    // Dividendos sempre na fazenda Administrativo (defesa caso useEffect não tenha disparado).
+    const fazendaIdEfetivo = (macroCusto === 'Dividendos' && fazendaAdm) ? fazendaAdm.id : fazendaId;
     // Extra validation for transfers
     if (isTransferencia) {
       if (!contaOrigemId || contaOrigemId === '__none__' || !contaDestinoId || contaDestinoId === '__none__') {
@@ -697,7 +710,7 @@ export function LancamentoV2Dialog({
         const row = recorrenciaRows[i];
         const recVal = parseBRL(row.valorDisplay);
         const form: LancamentoV2Form = {
-          fazenda_id: fazendaId,
+          fazenda_id: fazendaIdEfetivo,
           conta_bancaria_id: contaBancariaId,
           conta_destino_id: contaDestinoFinal,
           data_competencia: row.dataCompetencia,
@@ -733,7 +746,7 @@ export function LancamentoV2Dialog({
         const parcelaDesc = `${descricao} - Parcela ${i + 1}/${numParcelas}`;
 
         const form: LancamentoV2Form = {
-          fazenda_id: fazendaId,
+          fazenda_id: fazendaIdEfetivo,
           conta_bancaria_id: contaBancariaId,
           conta_destino_id: contaDestinoFinal,
           data_competencia: dataCompetencia,
@@ -764,7 +777,7 @@ export function LancamentoV2Dialog({
 
     // --- Single save (à vista) or EDIT ---
     const form: LancamentoV2Form = {
-      fazenda_id: fazendaId,
+      fazenda_id: fazendaIdEfetivo,
       conta_bancaria_id: contaBancariaId,
       conta_destino_id: contaDestinoFinal,
       data_competencia: dataCompetencia,
@@ -977,12 +990,18 @@ export function LancamentoV2Dialog({
                 {/* Fazenda */}
                 <div>
                   <Label className="text-[10px]">Fazenda *</Label>
-                  <Select value={fazendaId} onValueChange={setFazendaId}>
+                  <Select value={fazendaId} onValueChange={setFazendaId} disabled={macroCusto === 'Dividendos'}>
                     <SelectTrigger tabIndex={7} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {macroCusto === 'Dividendos' && fazendaAdm && (
+                    <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Dividendos são salvos automaticamente em {fazendaAdm.nome}
+                    </p>
+                  )}
                 </div>
 
                 {/* Conta Bancária */}
