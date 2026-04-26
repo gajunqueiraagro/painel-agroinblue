@@ -3,6 +3,7 @@
  * Visual: software financeiro / ERP / BI executivo.
  */
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { parseISO, format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -187,6 +188,7 @@ function MetricRow({ label, value, accent }: { label: string; value: string; acc
 // ---------------------------------------------------------------------------
 
 export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlobal, onFiltroChange, onSetSaldo }: Props) {
+  const navigate = useNavigate();
   const { fazendaAtual, isGlobal } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
   const { canViewTab } = usePermissions();
@@ -266,6 +268,23 @@ export function ResumoTab({ lancamentos, saldosIniciais, onTabChange, filtroGlob
 
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
+      {/* ── Acesso rápido: Resumo Operacional ── */}
+      <div className="px-3 pt-3">
+        <button
+          onClick={() => navigate('/resumo-operacional')}
+          className="w-full rounded-lg border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-900/10 px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-colors text-left"
+        >
+          <div>
+            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+              🚀 Resumo Operacional
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Dashboard executivo · 10 telas · KPIs em tempo real
+            </p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+        </button>
+      </div>
       {/* ── Sticky filter bar ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-3 md:px-4 py-0.5">
         <div className="flex items-center justify-between gap-2 w-full">

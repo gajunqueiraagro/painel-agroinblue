@@ -6,6 +6,7 @@ import AuthPage from '@/pages/AuthPage';
 import FazendaSetup from '@/pages/FazendaSetup';
 import Index from '@/pages/Index';
 import CadernoImportTab from '@/pages/CadernoImportTab';
+import ResumoOperacionalPage from '@/pages/ResumoOperacionalPage';
 
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
@@ -41,6 +42,7 @@ export default function AppRouter() {
   return (
     <Routes>
       <Route path="/caderno-importacao" element={<CadernoImportTab />} />
+      <Route path="/resumo-operacional" element={<ResumoOperacionalPage />} />
       <Route path="/" element={<Index />} />
       <Route path="*" element={<Index />} />
     </Routes>
