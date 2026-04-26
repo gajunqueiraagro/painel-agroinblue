@@ -741,24 +741,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Total row — sticky, não rola, altura maior */}
-                    <tr
-                      className="border-b cursor-pointer transition-colors"
-                      style={{
-                        position:'sticky', top:'64px', zIndex:8,
-                        background: selectedConta==='__all__' ? '#DBEAFE' : '#EFF6FF',
-                      }}
-                      onClick={() => setSelectedConta('__all__')}
-                    >
-                      <td className="py-2 px-2 font-semibold text-[9px]">Total — todas as contas</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
-                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
-                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
-                        {formatMoeda(totalSaldos.dif)}
-                      </td>
-                      <td className="py-2" />
-                    </tr>
-
                     {/* CC group */}
                     {contasCC.length > 0 && <>
                       <tr className="border-t-2 border-blue-100"><td colSpan={5} className="px-2 py-1 text-[8px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50">Conta corrente</td></tr>
@@ -802,6 +784,24 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <tr><td colSpan={5} className="px-2 py-1 text-[9px] text-muted-foreground">
                       Clique para filtrar · ● verde=ok · ● vermelho=diverge · ○ cinza=sem extrato
                     </td></tr>
+
+                    {/* Total row — sticky no rodapé, sempre visível */}
+                    <tr
+                      className="border-t cursor-pointer transition-colors"
+                      style={{
+                        position:'sticky', bottom:'0', zIndex:8,
+                        background: selectedConta==='__all__' ? '#DBEAFE' : '#EFF6FF',
+                      }}
+                      onClick={() => setSelectedConta('__all__')}
+                    >
+                      <td className="py-2 px-2 font-semibold text-[9px]">Total — todas as contas</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.sis<0?'text-red-700':''}`}>{formatMoeda(totalSaldos.sis)}</td>
+                      <td className="py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap">{totalSaldos.ext===null?'—':formatMoeda(totalSaldos.ext)}</td>
+                      <td className={`py-2 px-1 text-right font-semibold text-[9px] tabular-nums whitespace-nowrap ${totalSaldos.dif<0?'text-red-700':totalSaldos.dif===0?'text-green-700':''}`}>
+                        {formatMoeda(totalSaldos.dif)}
+                      </td>
+                      <td className="py-2" />
+                    </tr>
                   </tbody>
                 </table>
               </div>
