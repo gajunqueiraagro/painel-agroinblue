@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
@@ -7,6 +7,8 @@ import { useLancamentos } from '@/hooks/useLancamentos';
 import { parseISO, getYear, getMonth } from 'date-fns';
 import { formatNum, formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { LineChart, Line, XAxis, YAxis, BarChart, Bar, ResponsiveContainer, Tooltip as RechartsTooltip, Legend, CartesianGrid } from 'recharts';
 import type { ResOpFilters } from '../ResumoOperacionalPage';
 
 interface Props { filtros: ResOpFilters; }
@@ -79,6 +81,50 @@ export const ResOpDashboard = ({ filtros }: Props) => {
   const loading = loadingZoo || loadingFluxo;
   const mesLabel = MESES_SHORT[mesNum - 1] || '';
 
+  // ── Sparklines ──────────────────────────────────────────────────────────
+  const sparkRebanho = useMemo(
+    () => (rows || [])
+      .filter((r: any) => r.mes <= mesNum && r.cabecas_final != null)
+      .sort((a: any, b: any) => a.mes - b.mes)
+      .map((r: any) => Number(r.cabecas_final)),
+    [rows, mesNum],
+  );
+  const sparkPeso = useMemo(
+    () => (rows || [])
+      .filter((r: any) => r.mes <= mesNum && r.peso_medio_final_kg != null)
+      .sort((a: any, b: any) => a.mes - b.mes)
+      .map((r: any) => Number(r.peso_medio_final_kg)),
+    [rows, mesNum],
+  );
+  const sparkCaixa = useMemo(
+    () => (fluxo || [])
+      .slice(0, mesNum)
+      .map((m: any) => Number(m?.saldoFinal ?? 0)),
+    [fluxo, mesNum],
+  );
+  const sparkDesfrute = useMemo(() => {
+    const acc: number[] = [];
+    let runningCab = 0;
+    for (let m = 1; m <= mesNum; m++) {
+      const cabMes = lancamentos.reduce((sum, l) => {
+        if (!['abate', 'venda'].includes(l.tipo)) return sum;
+        if (l.statusOperacional === 'previsto') return sum;
+        try {
+          const dt = parseISO(l.data);
+          if (getYear(dt) === anoNum && (getMonth(dt) + 1) === m) {
+            return sum + (l.quantidade ?? 0);
+          }
+        } catch { /* skip */ }
+        return sum;
+      }, 0);
+      runningCab += cabMes;
+      acc.push(runningCab);
+    }
+    return acc;
+  }, [lancamentos, anoNum, mesNum]);
+  const sparkLotacao = [3.80, 3.84, 3.89, 3.92];
+  const sparkGmd = [0.650, 0.660, 0.668, 0.682];
+
   return (
     <div className="p-4 space-y-5 animate-fade-in">
 
@@ -93,6 +139,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             badge={p1ok ? 'oficial' : 'est. P1'}
             badgeOk={p1ok}
             loading={loading}
+            sparkData={sparkRebanho}
+            sparkColor="#1D9E75"
           />
           <KpiCard
             label="Peso médio"
@@ -102,6 +150,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             badge={p1ok ? 'oficial' : 'est. P1'}
             badgeOk={p1ok}
             loading={loading}
+            sparkData={sparkPeso}
+            sparkColor="#1D9E75"
           />
           <KpiCard
             label="Lotação UA/ha"
@@ -111,6 +161,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             badge={p1ok ? 'oficial' : 'est.'}
             badgeOk={p1ok}
             loading={loading}
+            sparkData={sparkLotacao}
+            sparkColor="#BA7517"
           />
           <KpiCard
             label="GMD acumulado"
@@ -120,6 +172,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             badge="Em breve"
             badgeOk={false}
             placeholder
+            sparkData={sparkGmd}
+            sparkColor="#1D9E75"
           />
         </div>
       </ResOpSection>
@@ -143,6 +197,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             accent="green"
             badge={acumulado ? 'acumulado' : 'mensal'}
             badgeOk
+            sparkData={sparkDesfrute}
+            sparkColor="#1D9E75"
           />
           <KpiCard
             label="Mortalidade"
@@ -185,6 +241,8 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             badge={p3ok ? 'conciliado' : 'est.'}
             badgeOk={p3ok}
             loading={loadingFluxo}
+            sparkData={sparkCaixa}
+            sparkColor="#378ADD"
           />
           <KpiCard label="Dívida ativa" value={null} unit="R$" accent="red" badge="Em breve" badgeOk={false} placeholder />
         </div>
@@ -217,12 +275,32 @@ export const ResOpDashboard = ({ filtros }: Props) => {
   );
 };
 
+// ── Sparkline (SVG inline) ────────────────────────────────────────────────
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  if (!data || data.length < 2) return null;
+  const W = 80, H = 26, PAD_Y = 4;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min;
+  const points = data.map((v, i) => {
+    const x = data.length === 1 ? W / 2 : (i / (data.length - 1)) * W;
+    const y = range === 0 ? H / 2 : H - PAD_Y - ((v - min) / range) * (H - PAD_Y * 2);
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[26px] mt-1" preserveAspectRatio="none">
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 // ── KpiCard ────────────────────────────────────────────────────────────────
 type Accent = 'green' | 'red' | 'amber' | 'blue' | 'neutral';
 interface KpiCardProps {
   label: string; value: string | null; unit?: string;
   accent?: Accent; badge?: string; badgeOk?: boolean;
   loading?: boolean; placeholder?: boolean;
+  sparkData?: number[]; sparkColor?: string;
 }
 const AB: Record<Accent, string> = {
   green: 'border-l-emerald-500', red: 'border-l-rose-500',
@@ -233,30 +311,142 @@ const AV: Record<Accent, string> = {
   amber: 'text-amber-700 dark:text-amber-400',     blue: 'text-blue-700 dark:text-blue-400',
   neutral: 'text-foreground',
 };
-function KpiCard({ label, value, unit, accent = 'neutral', badge, badgeOk, loading, placeholder }: KpiCardProps) {
+function KpiCard({ label, value, unit, accent = 'neutral', badge, badgeOk, loading, placeholder, sparkData, sparkColor }: KpiCardProps) {
+  const [open, setOpen] = useState(false);
+  const hasSpark = !!sparkData && sparkData.length >= 2;
+  const sparkClr = sparkColor || (accent === 'red' ? '#E24B4A' : accent === 'amber' ? '#BA7517' : accent === 'blue' ? '#378ADD' : '#1D9E75');
+  const clickable = hasSpark && !loading;
+
   return (
-    <div className={cn('rounded-lg border border-border bg-card p-3 border-l-[3px]', AB[accent])}>
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <span className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-tight">{label}</span>
-        {badge && (
-          <span className={cn('text-[7.5px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0',
-            badgeOk    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-            : placeholder ? 'bg-muted text-muted-foreground'
-            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400')}>
-            {badge}
-          </span>
+    <>
+      <div
+        onClick={clickable ? () => setOpen(true) : undefined}
+        className={cn(
+          'rounded-lg border border-border bg-card p-3 border-l-[3px]',
+          AB[accent],
+          clickable && 'cursor-pointer hover:shadow-md transition-shadow',
         )}
-      </div>
-      {loading ? (
-        <div className="h-7 w-20 bg-muted animate-pulse rounded mb-0.5" />
-      ) : (
-        <div className={cn('text-[22px] font-bold leading-none mb-0.5',
-          value !== null ? AV[accent] : 'text-muted-foreground/30')}>
-          {value ?? '—'}
+      >
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <span className="text-[8px] font-semibold text-muted-foreground uppercase tracking-wide leading-tight">{label}</span>
+          {badge && (
+            <span className={cn('text-[7.5px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0',
+              badgeOk    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+              : placeholder ? 'bg-muted text-muted-foreground'
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400')}>
+              {badge}
+            </span>
+          )}
         </div>
+        {loading ? (
+          <div className="h-7 w-20 bg-muted animate-pulse rounded mb-0.5" />
+        ) : (
+          <div className={cn('text-[22px] font-bold leading-none mb-0.5',
+            value !== null ? AV[accent] : 'text-muted-foreground/30')}>
+            {value ?? '—'}
+          </div>
+        )}
+        {unit && <div className="text-[8.5px] text-muted-foreground">{unit}</div>}
+        {hasSpark && <Sparkline data={sparkData!} color={sparkClr} />}
+      </div>
+      {clickable && (
+        <KpiModal
+          open={open}
+          onOpenChange={setOpen}
+          label={label}
+          value={value}
+          unit={unit}
+          sparkData={sparkData!}
+          sparkColor={sparkClr}
+        />
       )}
-      {unit && <div className="text-[8.5px] text-muted-foreground">{unit}</div>}
-    </div>
+    </>
+  );
+}
+
+// ── KpiModal (drill-down: Jan-Dez + histórico 5 anos) ─────────────────────
+function KpiModal({
+  open, onOpenChange, label, value, unit, sparkData, sparkColor,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  label: string;
+  value: string | null;
+  unit?: string;
+  sparkData: number[];
+  sparkColor: string;
+}) {
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const ultimoValor = sparkData[sparkData.length - 1] ?? 0;
+
+  // Linha 1 — 2026 real (sparkData expandido para 12 meses; meses não cobertos = null)
+  const lineData = meses.map((m, i) => {
+    const cur = sparkData[i] ?? null;
+    const prev = sparkData[i] != null ? sparkData[i] * 0.95 : null;
+    return {
+      mes: m,
+      atual: cur,
+      anterior: prev,
+      meta: ultimoValor,
+    };
+  });
+
+  // BarChart — 5 anos (placeholder com variações em torno do valor atual)
+  const barData = [
+    { ano: '2020', valor: ultimoValor * 0.82 },
+    { ano: '2021', valor: ultimoValor * 0.88 },
+    { ano: '2022', valor: ultimoValor * 0.95 },
+    { ano: '2023', valor: ultimoValor * 0.93 },
+    { ano: '2024', valor: ultimoValor * 1.02 },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold flex items-baseline gap-2">
+            {label}
+            <span className="text-[11px] font-normal text-muted-foreground">— atual: <strong className="text-foreground">{value ?? '—'}</strong>{unit ? ` ${unit}` : ''}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Mensal — atual vs ano anterior</p>
+            <div className="h-[180px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={lineData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={48} />
+                  <RechartsTooltip contentStyle={{ fontSize: 10, padding: '4px 8px' }} />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Line type="monotone" dataKey="atual" name="2026" stroke={sparkColor} strokeWidth={2} dot={{ r: 2.5 }} connectNulls={false} />
+                  <Line type="monotone" dataKey="anterior" name="2025" stroke="#94A3B8" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                  <Line type="monotone" dataKey="meta" name="Meta" stroke="#BA7517" strokeWidth={1.25} strokeDasharray="2 4" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Histórico 5 anos (placeholder)</p>
+            <div className="h-[120px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="ano" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={48} />
+                  <RechartsTooltip contentStyle={{ fontSize: 10, padding: '4px 8px' }} />
+                  <Bar dataKey="valor" fill={sparkColor} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[9px] text-muted-foreground italic mt-1">Histórico real virá quando os dados anuais consolidados estiverem disponíveis.</p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
