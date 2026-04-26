@@ -233,7 +233,13 @@ function buildMonthCards(
       saldoRow: null, lancamentos: mesLancs,
     });
 
-    if (saldoRows.length > 0) saldoRows.forEach(s => prevFinal.set(s.conta_bancaria_id, r2(s.saldo_final||0)));
+    // Propaga prevFinal para o próximo mês: usa saldo_final salvo se houver,
+    // senão saldoCalculado (assim cada conta sem extrato continua acumulando o cálculo).
+    contas.forEach((c, idx) => {
+      const row = saldoRows.find(s => s.conta_bancaria_id === c.id);
+      if (row) prevFinal.set(c.id, r2(row.saldo_final || 0));
+      else prevFinal.set(c.id, perAcct[idx].saldoCalculado);
+    });
   }
   return cards;
 }
