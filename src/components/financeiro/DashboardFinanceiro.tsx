@@ -105,10 +105,7 @@ function ToggleGroup({ value, onChange }: { value: 'mes' | 'acum'; onChange: (v:
 // ---------------------------------------------------------------------------
 // Custom pie label
 // ---------------------------------------------------------------------------
-function renderPieLabel({ name, percent }: any) {
-  if (percent < 0.04) return null;
-  return `${(percent * 100).toFixed(0)}%`;
-}
+function renderPieLabel() { return null; }
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -130,6 +127,8 @@ export function DashboardFinanceiro({
   const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
   const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
   const [fornTab, setFornTab] = useState<'mes' | 'acum'>('mes');
+  const [activeEntrada, setActiveEntrada] = useState<number | null>(null);
+  const [activeSaida, setActiveSaida] = useState<number | null>(null);
 
   const anoFiltro = String(ano);
   const mesLimite = mesAte;
@@ -464,10 +463,45 @@ export function DashboardFinanceiro({
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieEntradas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
-                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
+                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
+                      onMouseEnter={(_, index) => setActiveEntrada(index)}
+                      onMouseLeave={() => setActiveEntrada(null)}>
                       {pieEntradas.map((_, i) => <Cell key={i} fill={PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const { name, value, payload: p } = payload[0] as any;
+                        const pct = p?.percent != null ? ` (${(p.percent * 100).toFixed(0)}%)` : '';
+                        return (
+                          <div style={{
+                            background: 'var(--color-background-primary)',
+                            border: '0.5px solid var(--color-border-secondary)',
+                            borderRadius: 4,
+                            padding: '3px 7px',
+                            fontSize: 9,
+                            lineHeight: 1.4,
+                            boxShadow: 'none',
+                          }}>
+                            <span style={{ fontWeight: 600 }}>{name}</span>
+                            <br />
+                            <span>{formatMoeda(value as number)}{pct}</span>
+                          </div>
+                        );
+                      }}
+                    />
+                    {activeEntrada !== null && pieEntradas[activeEntrada] && (
+                      <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: 13, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
+                        {`${((pieEntradas[activeEntrada].value / pieEntradas.reduce((s,p)=>s+p.value,0))*100).toFixed(0)}%`}
+                      </text>
+                    )}
+                    {activeEntrada !== null && pieEntradas[activeEntrada] && (
+                      <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: 8, fill: 'var(--color-text-secondary)' }}>
+                        {pieEntradas[activeEntrada].name}
+                      </text>
+                    )}
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -485,10 +519,45 @@ export function DashboardFinanceiro({
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieSaidas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
-                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}>
+                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
+                      onMouseEnter={(_, index) => setActiveSaida(index)}
+                      onMouseLeave={() => setActiveSaida(null)}>
                       {pieSaidas.map((_, i) => <Cell key={i} fill={PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length]} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatMoeda(v)} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const { name, value, payload: p } = payload[0] as any;
+                        const pct = p?.percent != null ? ` (${(p.percent * 100).toFixed(0)}%)` : '';
+                        return (
+                          <div style={{
+                            background: 'var(--color-background-primary)',
+                            border: '0.5px solid var(--color-border-secondary)',
+                            borderRadius: 4,
+                            padding: '3px 7px',
+                            fontSize: 9,
+                            lineHeight: 1.4,
+                            boxShadow: 'none',
+                          }}>
+                            <span style={{ fontWeight: 600 }}>{name}</span>
+                            <br />
+                            <span>{formatMoeda(value as number)}{pct}</span>
+                          </div>
+                        );
+                      }}
+                    />
+                    {activeSaida !== null && pieSaidas[activeSaida] && (
+                      <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: 13, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
+                        {`${((pieSaidas[activeSaida].value / pieSaidas.reduce((s,p)=>s+p.value,0))*100).toFixed(0)}%`}
+                      </text>
+                    )}
+                    {activeSaida !== null && pieSaidas[activeSaida] && (
+                      <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontSize: 8, fill: 'var(--color-text-secondary)' }}>
+                        {pieSaidas[activeSaida].name}
+                      </text>
+                    )}
                   </PieChart>
                 </ResponsiveContainer>
               </div>
