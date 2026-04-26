@@ -1,15 +1,15 @@
 /**
  * Hub Lançar Zootécnico — tela de ação rápida operacional
+ * Layout: 3 colunas (Movimentações | Rebanho em Pastos | Chuvas).
+ * Cada coluna: card manual + card por foto IA. Histórico vira link abaixo.
  */
-import { Card, CardContent } from '@/components/ui/card';
 import { TabId } from '@/components/BottomNav';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import {
   Lock, AlertCircle,
-  ArrowLeftRight, LayoutGrid, CloudRain, Upload, ShieldAlert, Camera, ClipboardCheck,
+  ArrowLeftRight, LayoutGrid, CloudRain, Camera, ClipboardList,
 } from 'lucide-react';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -18,71 +18,80 @@ interface Props {
   filtroGlobal?: { ano: string; mes: number };
 }
 
-interface GroupItem {
+interface AcaoCard {
   label: string;
-  tab: TabId;
-  icon: React.ComponentType<{ className?: string }>;
   description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tab?: TabId;
+  route?: string;
+  disabled?: boolean;
 }
 
-const ACOES_PRINCIPAIS = [
+interface Coluna {
+  titulo: string;
+  cards: AcaoCard[];
+}
+
+const COLUNAS: Coluna[] = [
   {
-    label: 'Lançar Movimentações manuais',
-    tab: 'lancamentos' as TabId,
-    icon: ArrowLeftRight,
-    description: 'Entradas, saídas e transferências',
+    titulo: 'Movimentações',
+    cards: [
+      {
+        label: 'Lançar Movimentações',
+        description: 'Manual — entradas, saídas e transferências',
+        icon: ArrowLeftRight,
+        tab: 'lancamentos',
+      },
+      {
+        label: 'Lançar Movimentações por Foto',
+        description: 'Extração automática via foto do caderno',
+        icon: Camera,
+        route: '/caderno-importacao',
+      },
+    ],
   },
   {
-    label: 'Lançar Movimentações por Foto (IA)',
-    route: '/caderno-importacao',
-    icon: Camera,
-    description: 'Extração automática via foto do caderno',
+    titulo: 'Rebanho em Pastos',
+    cards: [
+      {
+        label: 'Lançar Rebanho em Pastos',
+        description: 'Manual — alocação e ajuste por pasto',
+        icon: LayoutGrid,
+        tab: 'fechamento',
+      },
+      {
+        label: 'Lançar Rebanho em Pastos por Foto',
+        description: 'Importar Mapa do Rebanho via IA',
+        icon: Camera,
+        tab: 'fechamento',
+      },
+    ],
   },
   {
-    label: 'Lançar Rebanho em Pastos',
-    tab: 'fechamento' as TabId,
-    icon: LayoutGrid,
-    description: 'Alocação e ajuste por pasto',
+    titulo: 'Chuvas',
+    cards: [
+      {
+        label: 'Lançar Chuvas',
+        description: 'Manual — registro climático',
+        icon: CloudRain,
+        tab: 'chuvas',
+      },
+      {
+        label: 'Lançar Chuvas por Foto',
+        description: 'Em breve',
+        icon: Camera,
+        disabled: true,
+      },
+    ],
   },
-  {
-    label: 'Lançar Chuvas',
-    tab: 'chuvas' as TabId,
-    icon: CloudRain,
-    description: 'Registro climático',
-  },
-  {
-    label: 'Importar Histórico Zootécnico',
-    tab: 'import_zoot_historico' as TabId,
-    icon: Upload,
-    description: 'Carga de dados desde 2020',
-  },
-  {
-    label: 'Histórico de Importações',
-    tab: 'historico_importacoes_zoot' as TabId,
-    icon: Upload,
-    description: 'Auditoria e exclusão de lotes',
-  },
-  {
-    label: 'Auditoria Zootécnica',
-    tab: 'auditoria_zoot' as TabId,
-    icon: ShieldAlert,
-    description: 'Identificar inconsistências na base',
-  },
-  {
-    label: 'Auditoria de Desfrutes',
-    tab: 'auditoria_desfrutes' as TabId,
-    icon: ClipboardCheck,
-    description: 'Validar abates/vendas/consumo antes do trimestre',
-    manager: true,
-  },
-] as Array<{ label: string; description: string; icon: React.ComponentType<{ className?: string }>; tab?: TabId; route?: string; manager?: boolean }>;
+];
+
+const HISTORICO_TAB: TabId = 'historico_importacoes_zoot';
 
 export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
   const { isGlobal } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
-  const { isManager } = usePermissions();
   const navigate = useNavigate();
-  const acoes = ACOES_PRINCIPAIS.filter(item => !(item as any).manager || isManager);
 
   if (bloqueado) {
     return (
@@ -96,7 +105,8 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
 
   const ALLOWED_GLOBAL: TabId[] = ['fechamento_executivo'];
 
-  const navTo = (item: { tab?: TabId; route?: string }) => {
+  const navTo = (item: AcaoCard) => {
+    if (item.disabled) return;
     if (item.route) {
       if (isGlobal) {
         toast.info('Selecione uma fazenda para realizar lançamentos');
@@ -110,20 +120,27 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
       toast.info('Selecione uma fazenda para realizar lançamentos');
       return;
     }
-    if (filtroGlobal) {
-      onTabChange(tab, filtroGlobal);
-    } else {
-      onTabChange(tab);
-    }
+    if (filtroGlobal) onTabChange(tab, filtroGlobal);
+    else onTabChange(tab);
   };
 
-  const isBlocked = (item: { tab?: TabId; route?: string }) => {
+  const isBlocked = (item: AcaoCard) => {
+    if (item.disabled) return true;
     if (item.route) return isGlobal;
     return isGlobal && !ALLOWED_GLOBAL.includes(item.tab!);
   };
 
+  const goHistorico = () => {
+    if (isGlobal) {
+      toast.info('Selecione uma fazenda para visualizar o histórico');
+      return;
+    }
+    if (filtroGlobal) onTabChange(HISTORICO_TAB, filtroGlobal);
+    else onTabChange(HISTORICO_TAB);
+  };
+
   return (
-    <div className="w-full px-4 animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {isGlobal && (
         <div className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
           <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -133,37 +150,54 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
         </div>
       )}
 
-      <div className="p-4 space-y-5">
-        {/* ── AÇÕES PRINCIPAIS ── */}
-        <div className="grid grid-cols-3 gap-2">
-          {acoes.map(item => {
-            const blocked = isBlocked(item);
-            const key = item.tab ?? item.route!;
-            return (
-              <button
-                key={key}
-                onClick={() => navTo(item)}
-                className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 bg-card px-2 py-4 min-h-[130px] transition-all ${
-                  blocked
-                    ? 'border-border opacity-50 cursor-not-allowed'
-                    : 'border-primary/20 hover:border-primary hover:shadow-md active:scale-[0.98] shadow-sm'
-                }`}
-              >
-                <div className={`rounded-full p-3 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
-                  <item.icon className={`h-7 w-7 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
-                </div>
-                <div className="text-center">
-                  <p className={`text-sm font-semibold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
-                    {item.label}
-                  </p>
-                  <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{item.description}</p>
-                </div>
-                {blocked && <Lock className="h-3 w-3 text-muted-foreground" />}
-              </button>
-            );
-          })}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+        {COLUNAS.map(col => (
+          <div key={col.titulo} className="flex flex-col gap-4">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1.5">
+              {col.titulo}
+            </h3>
+            {col.cards.map(card => {
+              const blocked = isBlocked(card);
+              return (
+                <button
+                  key={card.label}
+                  onClick={() => navTo(card)}
+                  disabled={blocked}
+                  className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 bg-card px-3 py-5 min-h-[140px] transition-all ${
+                    blocked
+                      ? 'border-border opacity-50 cursor-not-allowed'
+                      : 'border-primary/20 hover:border-primary hover:shadow-md active:scale-[0.98] shadow-sm'
+                  }`}
+                >
+                  <div className={`rounded-full p-3 ${blocked ? 'bg-muted' : 'bg-primary/10'}`}>
+                    <card.icon className={`h-7 w-7 ${blocked ? 'text-muted-foreground' : 'text-primary'}`} />
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-sm font-semibold leading-tight ${blocked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                      {card.label}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1 leading-snug">{card.description}</p>
+                  </div>
+                  {blocked && !card.disabled && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
+      <div className="border-t border-border px-6 py-3">
+        <button
+          onClick={goHistorico}
+          disabled={isGlobal}
+          className={`flex items-center gap-2 text-sm transition-colors ${
+            isGlobal ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ClipboardList className="h-4 w-4" />
+          <span className="font-medium">Histórico de Importações</span>
+          <span className="text-xs text-muted-foreground/70">— Auditoria e exclusão de lotes</span>
+        </button>
       </div>
     </div>
   );
