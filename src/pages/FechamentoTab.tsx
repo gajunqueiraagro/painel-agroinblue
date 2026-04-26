@@ -29,6 +29,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { gerarSugestoes, type Sugestao } from '@/lib/calculos/sugestoesConciliacao';
 import { useZootCategoriaMensal } from '@/hooks/useZootCategoriaMensal';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 
 /* ── Colunas de categorias ── */
 const CAT_COLS = [
@@ -138,6 +139,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   // FONTE OFICIAL: view zootécnica para saldo por movimentações (conciliação)
   const { data: viewDataForConcil } = useZootCategoriaMensal({ ano: anoNum2, cenario: 'realizado' });
+  // Fonte oficial (com overlay de fechamento) para GMD e produção biológica.
+  const { rawCategorias: rebanhoRows } = useRebanhoOficial({ ano: anoNum2, cenario: 'realizado' });
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
@@ -319,15 +322,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return map;
   }, [viewDataForConcil, mesNum]);
 
-  // GMD por categoria da view oficial
+  // GMD por categoria — fonte oficial (rawCategorias com overlay de fechamento)
   const gmdByCat = useMemo(() => {
     const map = new Map<string, number | null>();
-    const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
-    for (const cat of monthData) {
-      map.set(cat.categoria_codigo, cat.gmd);
+    const monthData = (rebanhoRows || []).filter(r => r.mes === mesNum);
+    for (const row of monthData) {
+      if (row.categoria_codigo) {
+        map.set(row.categoria_codigo, row.gmd ?? null);
+      }
     }
     return map;
-  }, [viewDataForConcil, mesNum]);
+  }, [rebanhoRows, mesNum]);
 
   // Operational fechamentos: only pecuário pastos
   const operationalFechamentos = useMemo(
@@ -337,6 +342,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       .filter((fech): fech is FechamentoPasto => Boolean(fech)),
     [pastosAtivos, getFechamento]
   );
+
+  // Mês "fechado" para fins de exibir GMD: todos os pastos operacionais com fechamento status='fechado'.
+  const mesFechado = useMemo(() => {
+    if (!operationalFechamentos.length) return false;
+    return operationalFechamentos.every(f => f.status === 'fechado');
+  }, [operationalFechamentos]);
 
   const operationalFechIds = useMemo(
     () => new Set(operationalFechamentos.map(f => f.id)),
@@ -418,18 +429,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
 
-  // GMD total ponderado
+  // GMD total ponderado — fonte oficial (rawCategorias)
   const gmdTotal = useMemo(() => {
-    const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
+    const monthData = (rebanhoRows || []).filter(r => r.mes === mesNum);
     let totalProd = 0;
     let totalCabDias = 0;
-    for (const cat of monthData) {
-      totalProd += cat.producao_biologica;
-      const cabMedia = (cat.saldo_inicial + cat.saldo_final) / 2;
-      totalCabDias += cabMedia * cat.dias_mes;
+    for (const row of monthData) {
+      totalProd += row.producao_biologica ?? 0;
+      const cabMedia = ((row.saldo_inicial ?? 0) + (row.saldo_final ?? 0)) / 2;
+      totalCabDias += cabMedia * (row.dias_mes ?? 30);
     }
     return totalCabDias > 0 ? totalProd / totalCabDias : null;
-  }, [viewDataForConcil, mesNum]);
+  }, [rebanhoRows, mesNum]);
 
   const hasDivergencia = useMemo(() => {
     if (totalDiferenca !== 0) return true;
@@ -923,15 +934,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     );
                   })()}
                 </tr>
-                {/* GMD */}
-                <tr className="bg-muted/20">
-                  <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">GMD</td>
-                  {CAT_COLS.map((c, idx) => {
-                    const g = gmdByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic px-2 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
-                  })}
-                  <td className={`text-center text-[9px] italic px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/30 ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
-                </tr>
+                {/* GMD — só após fechamento P1 de todos os pastos operacionais */}
+                {mesFechado && (
+                  <tr className="bg-muted/20">
+                    <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">GMD</td>
+                    {CAT_COLS.map((c, idx) => {
+                      const g = gmdByCat.get(c.codigo);
+                      return <td key={c.sigla} className={`text-center text-[9px] italic px-2 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
+                    })}
+                    <td className={`text-center text-[9px] italic px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/30 ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
             </TooltipProvider>
