@@ -14,7 +14,6 @@ import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
 import { MESES_COLS } from '@/lib/calculos/labels';
 import { validarEquacaoTotal } from '@/lib/calculos/validacaoZootecnica';
 import { MesAnteriorAvisoIcon } from '@/components/MesAnteriorAvisoIcon';
-import { FluxoFechamentoFooter } from '@/components/FluxoFechamentoFooter';
 
 const QB = new Set(['04', '07', '10']);
 const qb = (key: string) => QB.has(key) ? 'border-l border-border/60' : '';
@@ -163,16 +162,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </div>
       </div>
 
-      {/* Saldo Inicial — only on base year */}
-      {onSetSaldo && (
-        <SaldoInicialForm
-          saldosIniciais={saldosIniciais}
-          onSetSaldo={onSetSaldo}
-          anoBase={Number(anoFiltro)}
-          totalLancamentos={lancamentos.length}
-        />
-      )}
-
       {/* Alerta de inconsistência de cálculo */}
       {errosEquacao.length > 0 && !isGlobal && (
         <div className="mx-4 mb-2 p-2 rounded-md border border-destructive/50 bg-destructive/10 flex items-start gap-2">
@@ -189,19 +178,19 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
         </div>
       )}
 
-      <div className="p-3 pt-2 flex justify-center">
+      <div className="p-3 pt-2 flex justify-center gap-3 items-start flex-wrap">
 
-      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto w-[70%] max-w-[1200px] min-w-[900px]">
-        <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
+      <div className="bg-card rounded-lg shadow-sm border overflow-x-auto flex-1 max-w-[1200px] min-w-[760px]">
+        <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
           <thead>
             <tr className="border-b bg-primary/25">
-              <th className="text-left px-1.5 py-1.5 font-bold text-primary-foreground sticky left-0 bg-primary/25 w-[110px]">
+              <th className="text-left px-1.5 py-2 font-bold text-primary-foreground sticky left-0 bg-primary/25 w-[140px] min-w-[140px]">
                 Movimentação
               </th>
               {MESES_COLS.map(m => (
                 <th
                   key={m.key}
-                  className={`px-1 py-1.5 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
+                  className={`px-1.5 py-2 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
                   onClick={() => setDrilldownMonth(m.key)}
                 >
                   <div className="flex items-center justify-center gap-0.5">
@@ -215,7 +204,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   </div>
                 </th>
               ))}
-              <th className="px-1.5 py-1.5 font-bold text-primary-foreground text-center w-[60px] bg-primary/25 border-l border-border/60">
+              <th className="px-1.5 py-2 font-bold text-primary-foreground text-center w-[64px] bg-primary/25 border-l border-border/60">
                 Total
               </th>
             </tr>
@@ -223,7 +212,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           <tbody>
             {/* Saldo Início — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="bg-primary/15 border-b">
-              <td className="px-1.5 py-1 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
+              <td className="px-1.5 py-2 font-bold text-foreground sticky left-0 bg-primary/15">Saldo Início</td>
               {MESES_COLS.map(m => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
@@ -233,7 +222,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 return (
                   <td
                     key={m.key}
-                    className={`px-1 py-1 text-center font-extrabold tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
+                    className={`px-1.5 py-2 text-center font-extrabold tabular-nums cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
                     onClick={() => setDrilldownMonth(m.key)}
                     title={isNeg ? '⚠ Saldo inicial negativo — verificar consistência' : undefined}
                   >
@@ -242,36 +231,38 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   </td>
                 );
               })}
-              <td className="px-1.5 py-1 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
+              <td className="px-1.5 py-2 text-center font-extrabold text-foreground tabular-nums bg-primary/15 border-l border-border/60">
                 {fmtNum(totaisPorMes[1]?.saldo_inicial ?? saldoInicialAnoFallback)}
               </td>
             </tr>
 
             {/* Linhas de movimentação — FONTE: query direta ao banco */}
-            {FLUXO_LINHAS.map((li) => {
+            {FLUXO_LINHAS.map((li, idx) => {
               const corPositiva = statusFiltro === 'meta' ? 'text-orange-500' : 'text-success';
               const corNegativa = statusFiltro === 'meta' ? 'text-orange-400' : 'text-destructive';
               const rowBg = li.sinal === '+' ? 'bg-emerald-50/40' : 'bg-red-50/30';
               const colFirstBg = li.sinal === '+' ? 'bg-emerald-50/60' : 'bg-red-50/50';
+              const isFirstSaida = li.sinal === '-' && FLUXO_LINHAS.findIndex(l => l.sinal === '-') === idx;
+              const sepCls = isFirstSaida ? ' border-t-2 border-muted' : '';
               return (
               <tr
                 key={li.tipo}
-                className={`${rowBg} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
+                className={`${rowBg}${sepCls} ${onNavigateToMovimentacao ? 'cursor-pointer hover:bg-accent/50' : ''}`}
                 onClick={() => onNavigateToMovimentacao?.(li.tipo as SubAba, {
                   ano: anoFiltro,
                   label: `${li.label} | ${anoFiltro}`,
                   status: statusFiltro,
                 })}
               >
-                <td className={`px-1.5 py-0.5 font-medium text-foreground sticky left-0 ${colFirstBg}`}>
-                  <span className="text-[8px] opacity-60">{li.sinal === '+' ? '+' : '−'}</span> {li.label}
+                <td className={`px-1.5 py-2 font-medium text-foreground sticky left-0 ${colFirstBg}`}>
+                  <span className="text-[10px] opacity-60">{li.sinal === '+' ? '+' : '−'}</span> {li.label}
                 </td>
                 {MESES_COLS.map(m => {
                   const val = porMesTipo[m.key]?.[li.tipo] ?? 0;
                   return (
                     <td
                       key={m.key}
-                      className={`px-1 py-0.5 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}
+                      className={`px-1.5 py-2 text-center font-semibold tabular-nums ${qb(m.key)} ${val > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onNavigateToMovimentacao?.(li.tipo as SubAba, {
@@ -286,7 +277,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                     </td>
                   );
                 })}
-                <td className={`px-1.5 py-0.5 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${(totalAno[li.tipo] ?? 0) > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
+                <td className={`px-1.5 py-2 text-center font-bold tabular-nums bg-muted/80 border-l border-border/60 ${(totalAno[li.tipo] ?? 0) > 0 ? (li.sinal === '+' ? corPositiva : corNegativa) : 'text-transparent'}`}>
                   {totalAno[li.tipo] ? fmtNum(totalAno[li.tipo]) : '–'}
                 </td>
               </tr>
@@ -295,21 +286,21 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
             {/* Saldo Final — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
             <tr className="border-t-2 bg-primary/20">
-              <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
+              <td className="px-1.5 py-2 font-extrabold text-foreground sticky left-0 bg-primary/20">Saldo Final</td>
               {MESES_COLS.map((m) => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
                 const saldoFim = t?.saldo_final;
                 const isNeg = saldoFim != null && saldoFim < 0;
                 return (
-                  <td key={m.key} className={`px-1 py-1 text-center font-extrabold tabular-nums ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
+                  <td key={m.key} className={`px-1.5 py-2 text-center font-extrabold tabular-nums ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
                       title={isNeg ? '⚠ Saldo final negativo — verificar saídas vs entradas' : undefined}>
                     {saldoFim != null ? fmtNum(saldoFim) : '–'}
                     {isNeg && <span className="text-[7px] ml-0.5">⚠</span>}
                   </td>
                 );
               })}
-              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums bg-primary/20 border-l border-border/60 ${(totaisPorMes[12]?.saldo_final ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
+              <td className={`px-1.5 py-2 text-center font-extrabold tabular-nums bg-primary/20 border-l border-border/60 ${(totaisPorMes[12]?.saldo_final ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
                 {fmtNum(totaisPorMes[12]?.saldo_final)}
               </td>
             </tr>
@@ -384,15 +375,18 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
           </tbody>
         </table>
       </div>
-      </div>
 
-      {/* Footer de atalhos do fluxo de fechamento */}
-      {(onNavigateToFechamentoPastos || onNavigateToValorRebanho) && (
-        <FluxoFechamentoFooter
-          current="movimentacoes"
-          onNext={onNavigateToFechamentoPastos}
-        />
+      {onSetSaldo && (
+        <div className="w-full md:w-[260px] shrink-0">
+          <SaldoInicialForm
+            saldosIniciais={saldosIniciais}
+            onSetSaldo={onSetSaldo}
+            anoBase={Number(anoFiltro)}
+            totalLancamentos={lancamentos.length}
+          />
+        </div>
       )}
+      </div>
     </div>
   );
 }
