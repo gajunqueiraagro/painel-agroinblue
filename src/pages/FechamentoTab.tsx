@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, Sparkles } from 'lucide-react';
+import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon } from 'lucide-react';
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -161,6 +161,17 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const [showSugestoes, setShowSugestoes] = useState(false);
   const [showReclassModal, setShowReclassModal] = useState(false);
   const [showMapaImport, setShowMapaImport] = useState(false);
+
+  // Auto-abre o modal "Importar Mapa IA" quando navegado via card "por Foto" no LancarZooHub.
+  useEffect(() => {
+    if (isGlobal) return;
+    try {
+      if (sessionStorage.getItem('fechamento:autoOpenMapaImport') === '1') {
+        sessionStorage.removeItem('fechamento:autoOpenMapaImport');
+        setShowMapaImport(true);
+      }
+    } catch { /* ignore */ }
+  }, [isGlobal]);
   const [statusPorMes, setStatusPorMes] = useState<Record<number, 'fechado' | 'rascunho' | 'vazio'>>({});
 
   useEffect(() => {
@@ -922,11 +933,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 3: Ações ── */}
           <div className="flex flex-col gap-1.5 items-end min-w-[120px]">
-            {!isGlobal && (
-              <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start border-primary/40 text-primary hover:bg-primary/10" onClick={() => setShowMapaImport(true)}>
-                <Sparkles className="h-3.5 w-3.5" /> Importar Mapa IA
-              </Button>
-            )}
             <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start" onClick={() => setShowResumoAtividades(true)}>
               <BarChart3 className="h-3.5 w-3.5" /> Resumo por Atividade
             </Button>

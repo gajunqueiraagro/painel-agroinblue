@@ -25,6 +25,8 @@ interface AcaoCard {
   tab?: TabId;
   route?: string;
   disabled?: boolean;
+  /** Flag em sessionStorage para sinalizar à tela destino abrir um modal automaticamente. */
+  autoOpenFlag?: string;
 }
 
 interface Coluna {
@@ -64,6 +66,7 @@ const COLUNAS: Coluna[] = [
         description: 'Importar Mapa do Rebanho via IA',
         icon: Camera,
         tab: 'fechamento',
+        autoOpenFlag: 'fechamento:autoOpenMapaImport',
       },
     ],
   },
@@ -119,6 +122,9 @@ export function LancarZooHubTab({ onTabChange, filtroGlobal }: Props) {
     if (isGlobal && !ALLOWED_GLOBAL.includes(tab)) {
       toast.info('Selecione uma fazenda para realizar lançamentos');
       return;
+    }
+    if (item.autoOpenFlag) {
+      try { sessionStorage.setItem(item.autoOpenFlag, '1'); } catch { /* sessionStorage indisponível */ }
     }
     if (filtroGlobal) onTabChange(tab, filtroGlobal);
     else onTabChange(tab);
