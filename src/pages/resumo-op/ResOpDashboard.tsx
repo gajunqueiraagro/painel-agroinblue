@@ -125,11 +125,165 @@ export const ResOpDashboard = ({ filtros }: Props) => {
   const sparkLotacao = [3.80, 3.84, 3.89, 3.92];
   const sparkGmd = [0.650, 0.660, 0.668, 0.682];
 
+  // ── Bloco 1: Análise Executiva (texto automático) ────────────────────
+  const acumuladoResultado = finKpi.entradas - finKpi.saidas;
+  const margemOpPct = finKpi.entradas > 0 ? ((finKpi.entradas - finKpi.saidas) / finKpi.entradas) * 100 : null;
+  const fragments: string[] = [];
+  if (rebanho !== null) fragments.push(`Rebanho de ${formatNum(rebanho)} cab.`);
+  if (desfrute.taxa !== null) fragments.push(`Desfrute de ${formatNum(desfrute.taxa, 1)}%.`);
+  if (finKpi.saldo >= 0) fragments.push(`Resultado positivo de ${formatMoeda(finKpi.saldo)}.`);
+  else fragments.push(`Resultado negativo de ${formatMoeda(finKpi.saldo)}.`);
+  if (!p1ok || !p2ok || !p3ok) fragments.push('Dados parcialmente estimados (P1/P2/P3 pendentes).');
+  const analise = fragments.join(' ');
+
+  // ── Bloco 2: Diagnóstico ──────────────────────────────────────────────
+  const problemas: string[] = [];
+  if (finKpi.saldo < 0) problemas.push(`Resultado negativo: ${formatMoeda(finKpi.saldo)}`);
+  if (desfrute.taxa !== null && desfrute.taxa < 5) problemas.push(`Desfrute abaixo de 5%: ${formatNum(desfrute.taxa, 1)}%`);
+  if (!p1ok) problemas.push('Fechamento P1 pendente — dados estimados');
+  if (!p2ok) problemas.push('Valor do rebanho sem P2 oficial');
+  if (!p3ok) problemas.push('Caixa sem conciliação oficial');
+  if (problemas.length === 0) problemas.push('Nenhum problema identificado com os dados disponíveis');
+
+  const acertos: string[] = [];
+  if (finKpi.saldo >= 0) acertos.push(`Resultado positivo: ${formatMoeda(finKpi.saldo)}`);
+  if (desfrute.taxa !== null && desfrute.taxa >= 5) acertos.push(`Desfrute saudável: ${formatNum(desfrute.taxa, 1)}%`);
+  if (rebanho !== null && rebanho > 0) acertos.push(`Rebanho monitorado: ${formatNum(rebanho)} cab.`);
+  if (p1ok) acertos.push('P1 oficial — dados de rebanho validados');
+  if (p3ok) acertos.push('Caixa conciliado');
+  if (acertos.length === 0) acertos.push('Aguardando dados suficientes para análise');
+
+  // ── Bloco 4: Dados do gráfico de tendência ────────────────────────────
+  const tendenciaData = (fluxo || []).map((m: any, idx: number) => ({
+    mes: MESES_SHORT[idx],
+    entradas: m?.totalEntradas ?? null,
+    saidas: m?.totalSaidas ?? null,
+    saldo: m?.saldoFinal ?? null,
+  }));
+
   return (
     <div className="p-4 space-y-5 animate-fade-in">
 
-      {/* ── ZOOTÉCNICO ─────────────────────────────────── */}
-      <ResOpSection title="Zootécnico" color="emerald">
+      {/* ═══ BLOCO 1: RESUMO EXECUTIVO ═══ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="rounded-md border border-border bg-card p-2.5">
+            <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wide">Resultado do mês</div>
+            <div className={cn('text-[18px] font-bold leading-tight mt-0.5', finKpi.saldo >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              {formatMoeda(finKpi.saldo)}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2.5">
+            <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wide">Acumulado</div>
+            <div className={cn('text-[18px] font-bold leading-tight mt-0.5', acumuladoResultado >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              {formatMoeda(acumuladoResultado)}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2.5">
+            <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wide">Margem op.</div>
+            <div className={cn('text-[18px] font-bold leading-tight mt-0.5', (margemOpPct ?? 0) >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              {margemOpPct !== null ? `${formatNum(margemOpPct, 1)}%` : '—'}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2.5">
+            <div className="flex items-start justify-between gap-1">
+              <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wide">Caixa</div>
+              <span className={cn('text-[7.5px] font-semibold px-1.5 py-0.5 rounded', p3ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                {p3ok ? 'oficial' : 'est. P3'}
+              </span>
+            </div>
+            <div className={cn('text-[18px] font-bold leading-tight mt-0.5', finKpi.saldo >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-rose-700 dark:text-rose-400')}>
+              {formatMoeda(finKpi.saldo)}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-lg bg-muted/40 p-3">
+          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Análise Executiva</p>
+          <p className="text-sm text-muted-foreground italic leading-relaxed">{analise}</p>
+        </div>
+      </div>
+
+      {/* ═══ BLOCO 2: DIAGNÓSTICO ═══ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="rounded-lg border border-rose-200 dark:border-rose-900/40 bg-card p-3">
+          <p className="text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wide mb-2">Principais Problemas</p>
+          <ul className="space-y-1.5">
+            {problemas.map((p, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-rose-500 leading-none mt-1">●</span>
+                <span className="text-foreground">{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-card p-3">
+          <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">Principais Acertos</p>
+          <ul className="space-y-1.5">
+            {acertos.map((a, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="text-emerald-500 leading-none mt-1">●</span>
+                <span className="text-foreground">{a}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* ═══ BLOCO 3: DRE SIMPLIFICADA ═══ */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">DRE Simplificada — {acumulado ? `jan-${mesLabel}` : `${mesLabel}/${filtros.ano}`}</p>
+          <span className={cn('text-[7.5px] font-semibold px-1.5 py-0.5 rounded', p3ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+            {p3ok ? 'conciliado' : 'estimado'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border">
+          <div className="px-3 first:pl-0">
+            <div className="text-[9px] font-semibold text-emerald-600 uppercase tracking-wide">Receita</div>
+            <div className="text-base font-bold text-emerald-700 dark:text-emerald-400 tabular-nums mt-0.5">{formatMoeda(finKpi.entradas)}</div>
+          </div>
+          <div className="px-3">
+            <div className="text-[9px] font-semibold text-rose-600 uppercase tracking-wide">Custo Total</div>
+            <div className="text-base font-bold text-rose-700 dark:text-rose-400 tabular-nums mt-0.5">{formatMoeda(finKpi.saidas)}</div>
+          </div>
+          <div className="px-3">
+            <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Resultado</div>
+            <div className={cn('text-base font-bold tabular-nums mt-0.5', acumuladoResultado >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              {formatMoeda(acumuladoResultado)}
+            </div>
+          </div>
+          <div className="px-3">
+            <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Margem</div>
+            <div className={cn('text-base font-bold tabular-nums mt-0.5', (margemOpPct ?? 0) >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400')}>
+              {margemOpPct !== null ? `${formatNum(margemOpPct, 1)}%` : '—'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ BLOCO 4: TENDÊNCIA 12 MESES ═══ */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Fluxo financeiro jan-dez {filtros.ano}
+        </p>
+        <div className="h-[160px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={tendenciaData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={56} tickFormatter={(v) => formatNum(v / 1000, 0) + 'k'} />
+              <RechartsTooltip contentStyle={{ fontSize: 10, padding: '4px 8px' }} formatter={(v: any) => v != null ? formatMoeda(Number(v)) : '—'} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Line type="monotone" dataKey="entradas" name="Entradas" stroke="#16A34A" strokeWidth={1.75} dot={{ r: 2 }} connectNulls={false} />
+              <Line type="monotone" dataKey="saidas"   name="Saídas"   stroke="#E11D48" strokeWidth={1.75} dot={{ r: 2 }} connectNulls={false} />
+              <Line type="monotone" dataKey="saldo"    name="Saldo"    stroke="#2563EB" strokeWidth={2}    dot={{ r: 2.5 }} connectNulls={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ═══ BLOCO 5: INDICADORES ═══ */}
+      <ResOpSection title="Produção" color="darkgreen">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard
             label="Rebanho final"
@@ -175,12 +329,6 @@ export const ResOpDashboard = ({ filtros }: Props) => {
             sparkData={sparkGmd}
             sparkColor="#1D9E75"
           />
-        </div>
-      </ResOpSection>
-
-      {/* ── PRODUÇÃO ───────────────────────────────────── */}
-      <ResOpSection title="Produção" color="darkgreen">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KpiCard
             label="@ produzidas"
             value={null}
@@ -212,8 +360,7 @@ export const ResOpDashboard = ({ filtros }: Props) => {
         </div>
       </ResOpSection>
 
-      {/* ── OPERACIONAL ────────────────────────────────── */}
-      <ResOpSection title="Operacional" color="red">
+      <ResOpSection title="Eficiência" color="red">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KpiCard label="Custo/cab/mês" value={null} unit="R$/cab" accent="red" badge="Em breve" badgeOk={false} placeholder />
           <KpiCard label="Custo/arroba"  value={null} unit="R$/@"   accent="red" badge="Em breve" badgeOk={false} placeholder />
@@ -229,7 +376,31 @@ export const ResOpDashboard = ({ filtros }: Props) => {
         </div>
       </ResOpSection>
 
-      {/* ── PATRIMÔNIO ─────────────────────────────────── */}
+      <ResOpSection title="Financeiro" color="emerald">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <SummaryCard title={`Fluxo financeiro ${acumulado ? `jan-${mesLabel}` : `${mesNum}/${filtros.ano}`}`}>
+            <SummaryRow label="Entradas" value={formatMoeda(finKpi.entradas)} color="text-emerald-600" />
+            <SummaryRow label="Saídas"   value={formatMoeda(finKpi.saidas)}   color="text-rose-600" />
+            <div className="border-t border-border pt-1.5 mt-1 flex justify-between">
+              <span className="text-xs font-medium">Saldo em caixa</span>
+              <span className={cn('text-sm font-bold', finKpi.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600')}>
+                {formatMoeda(finKpi.saldo)}
+              </span>
+            </div>
+          </SummaryCard>
+          <SummaryCard title={`Desfrute ${acumulado ? 'acumulado' : 'mensal'}`}>
+            <SummaryRow label="Cabeças desfrutadas" value={desfrute.cab > 0 ? formatNum(desfrute.cab) : '—'} />
+            <SummaryRow label="@ produzidas"        value="— (Em breve)" />
+            <div className="border-t border-border pt-1.5 mt-1 flex justify-between">
+              <span className="text-xs font-medium">Taxa desfrute</span>
+              <span className="text-sm font-bold">
+                {desfrute.taxa !== null ? `${formatNum(desfrute.taxa, 1)}%` : '—'}
+              </span>
+            </div>
+          </SummaryCard>
+        </div>
+      </ResOpSection>
+
       <ResOpSection title="Patrimônio" color="blue">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <KpiCard label="Valor rebanho" value={null} unit="R$" accent="blue" badge={p2ok ? 'P2 oficial' : 'sem P2'} badgeOk={p2ok} placeholder />
@@ -247,30 +418,6 @@ export const ResOpDashboard = ({ filtros }: Props) => {
           <KpiCard label="Dívida ativa" value={null} unit="R$" accent="red" badge="Em breve" badgeOk={false} placeholder />
         </div>
       </ResOpSection>
-
-      {/* ── Sumários ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <SummaryCard title={`Fluxo financeiro ${acumulado ? `jan-${mesLabel}` : `${mesNum}/${filtros.ano}`}`}>
-          <SummaryRow label="Entradas" value={formatMoeda(finKpi.entradas)} color="text-emerald-600" />
-          <SummaryRow label="Saídas"   value={formatMoeda(finKpi.saidas)}   color="text-rose-600" />
-          <div className="border-t border-border pt-1.5 mt-1 flex justify-between">
-            <span className="text-xs font-medium">Saldo em caixa</span>
-            <span className={cn('text-sm font-bold', finKpi.saldo >= 0 ? 'text-emerald-600' : 'text-rose-600')}>
-              {formatMoeda(finKpi.saldo)}
-            </span>
-          </div>
-        </SummaryCard>
-        <SummaryCard title={`Desfrute ${acumulado ? 'acumulado' : 'mensal'}`}>
-          <SummaryRow label="Cabeças desfrutadas" value={desfrute.cab > 0 ? formatNum(desfrute.cab) : '—'} />
-          <SummaryRow label="@ produzidas"        value="— (Em breve)" />
-          <div className="border-t border-border pt-1.5 mt-1 flex justify-between">
-            <span className="text-xs font-medium">Taxa desfrute</span>
-            <span className="text-sm font-bold">
-              {desfrute.taxa !== null ? `${formatNum(desfrute.taxa, 1)}%` : '—'}
-            </span>
-          </div>
-        </SummaryCard>
-      </div>
     </div>
   );
 };
