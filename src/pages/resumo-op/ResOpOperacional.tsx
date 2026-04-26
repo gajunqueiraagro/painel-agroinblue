@@ -37,7 +37,7 @@ export const ResOpOperacional = ({ filtros }: Props) => {
     if (!lancamentosGlobais) return [];
     const map = new Map<string, number>();
     for (const l of lancamentosGlobais) {
-      if ((l as any).tipo_operacao !== 'saida') continue;
+      if ((l as any).tipo_operacao !== '2-Saídas') continue;
       const dpStr = (l as any).data_pagamento;
       if (!dpStr) continue;
       const dt = new Date(dpStr);
