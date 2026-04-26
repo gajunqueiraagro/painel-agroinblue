@@ -178,33 +178,37 @@ export function SaldoInicialForm({ saldosIniciais, onSetSaldo, anoBase, totalLan
   return (
     <>
       <div className="mx-2 my-2 rounded-lg border border-border bg-card shadow-sm">
-        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg">
-          <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <span className="text-xs font-bold text-foreground">Saldo Inicial</span>
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Calendar className="h-3 w-3" />
+        <div className="flex flex-col gap-1 px-3 py-2 bg-muted/30 rounded-lg">
+          {/* Linha 1: label + data */}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1">
+              <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+              <span className="text-[10px] font-bold text-foreground">Saldo Inicial</span>
+            </div>
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+              <Calendar className="h-2.5 w-2.5" />
               {mesLabel}/{saldoBase.ano}
             </span>
-            {mesFechado && (
-              <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">
-                Mês fechado — só preço editável
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1 text-xs font-bold text-foreground">
-              <Users className="h-3 w-3 text-primary" />
+          {mesFechado && (
+            <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold w-fit">
+              Mês fechado — só preço editável
+            </span>
+          )}
+          {/* Linha 2: cabeças */}
+          <div className="flex items-center gap-1">
+            <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-xs font-bold text-foreground">
               {totalCabecas.toLocaleString('pt-BR')} cab.
             </span>
-            <button
-              onClick={handleEditClick}
-              className="flex items-center gap-1 px-2 py-0.5 rounded border border-border text-[10px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-              Editar
-            </button>
           </div>
+          {/* Linha 3: botão editar */}
+          <button
+            onClick={handleEditClick}
+            className="flex items-center gap-1 px-2 py-0.5 rounded border border-border text-[10px] font-medium text-foreground hover:bg-muted transition-colors w-full justify-center mt-0.5"
+          >
+            <Pencil className="h-2.5 w-2.5" /> Editar
+          </button>
         </div>
       </div>
 
