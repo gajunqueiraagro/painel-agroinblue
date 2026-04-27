@@ -212,18 +212,25 @@ export function useFluxoCaixa(
         return;
       }
 
-      // 2) Try legacy for exact Dec of previous year
-      const { data: legacyData } = await supabase
-        .from('financeiro_saldos_bancarios')
-        .select('saldo_final, conta_banco')
-        .in('fazenda_id', allFazendaIds)
-        .eq('ano_mes', anoMesDez);
+      // 2) Dez anterior não existe em v2 — tentar saldo_inicial de Jan do ano atual (primeiro registro da conta)
+      const anoMesJan = `${ano}-01`;
+      const { data: janData } = await supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_inicial, conta_bancaria_id')
+        .eq('cliente_id', clienteId)
+        .eq('ano_mes', anoMesJan);
 
-      if (legacyData && legacyData.length > 0) {
-        const total = legacyData.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+      if (janData && janData.length > 0) {
+        const total = janData.reduce((s, r) => s + (Number(r.saldo_inicial) || 0), 0);
         setSaldoInicialAno(total);
         setSaldoInicialAusente(false);
-        setSaldoInicialAudit({ fonte: 'financeiro_saldos_bancarios (legado)', periodo: anoMesDez, qtdRegistros: legacyData.length, contas: legacyData.map(r => r.conta_banco).filter(Boolean), somaTotal: total });
+        setSaldoInicialAudit({
+          fonte: 'financeiro_saldos_bancarios_v2',
+          periodo: anoMesJan,
+          qtdRegistros: janData.length,
+          contas: janData.map(r => r.conta_bancaria_id).filter(Boolean),
+          somaTotal: total,
+        });
         setLoadingSaldo(false);
         return;
       }
