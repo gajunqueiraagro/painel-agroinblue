@@ -286,6 +286,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [lancamentos, setLancamentos] = useState<LancamentoResumo[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingSaldo, setSavingSaldo] = useState(false);
+  const [fechandoSemMovimento, setFechandoSemMovimento] = useState(false);
   const [selectedMes, setSelectedMes] = useState<string>(initialMes || String(currentMonth).padStart(2,'0'));
 
   /* Modal */
@@ -542,6 +543,69 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const contasINV   = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
   const contasCartao= perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
 
+  const handleFecharSemMovimento = useCallback(async () => {
+    if (!clienteId) return;
+    const anoMes = anoMesSel;
+
+    // Contas sem extrato no mês selecionado
+    const contasSemExtrato = perContaSaldos.filter(p => p.ext === null);
+    if (contasSemExtrato.length === 0) {
+      toast.info('Nenhuma conta sem extrato neste mês.');
+      return;
+    }
+
+    setFechandoSemMovimento(true);
+    let salvos = 0;
+    let erros = 0;
+
+    try {
+      for (const p of contasSemExtrato) {
+        // Saldo inicial = saldo_final do registro do mês anterior, se existir
+        const [anoNum, mesNum] = anoMes.split('-').map(Number);
+        const mesAnterior = mesNum === 1
+          ? `${anoNum - 1}-12`
+          : `${anoNum}-${String(mesNum - 1).padStart(2, '0')}`;
+        const rowAnterior = saldos.find(
+          s => s.conta_bancaria_id === p.conta.id && s.ano_mes === mesAnterior
+        );
+        const saldoInicial = rowAnterior?.saldo_final ?? 0;
+
+        // Buscar fazenda_id da conta
+        const { data: cd } = await supabase
+          .from('financeiro_contas_bancarias')
+          .select('fazenda_id')
+          .eq('id', p.conta.id)
+          .single();
+        if (!cd) { erros++; continue; }
+
+        const { error } = await supabase
+          .from('financeiro_saldos_bancarios_v2')
+          .insert({
+            cliente_id: clienteId,
+            fazenda_id: cd.fazenda_id,
+            conta_bancaria_id: p.conta.id,
+            ano_mes: anoMes,
+            saldo_inicial: saldoInicial,
+            saldo_final: p.sis,
+            origem_saldo_inicial: 'propagacao_automatica',
+            status_mes: 'aberto',
+          });
+
+        if (error) { erros++; } else { salvos++; }
+      }
+    } finally {
+      setFechandoSemMovimento(false);
+    }
+
+    if (salvos > 0) {
+      toast.success(`${salvos} conta${salvos > 1 ? 's fechadas' : ' fechada'} com sucesso.`);
+      loadData();
+    }
+    if (erros > 0) {
+      toast.error(`${erros} conta${erros > 1 ? 's' : ''} com erro ao fechar.`);
+    }
+  }, [clienteId, anoMesSel, perContaSaldos, saldos, loadData]);
+
   /* ── Render ── */
   return (
     <div className="animate-fade-in pb-20">
@@ -746,6 +810,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         className="text-[9px] text-muted-foreground border border-border rounded px-1.5 py-0.5 bg-transparent hover:bg-muted cursor-pointer">
                         ← Todas
                       </button>
+                    )}
+                    {perContaSaldos.some(p => p.ext === null) && canEditSaldoFinal(anoMesSel) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleFecharSemMovimento}
+                        disabled={fechandoSemMovimento}
+                        className="h-6 text-[10px] px-2"
+                      >
+                        {fechandoSemMovimento ? 'Fechando...' : 'Fechar contas sem movimento'}
+                      </Button>
                     )}
                     <button
                       onClick={() => {
