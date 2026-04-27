@@ -271,9 +271,9 @@ function buildPlanoTree(
           centroNode.total += subTotal;
           centroNode.inconsistencias.push(...leaf.inconsistencias);
         }
-        // Sort subcentros by ordem_exibicao
+        // Sort subcentros A-Z dentro de cada centro
         centroNode.children.sort((a, b) =>
-          getOrdem(`sub:${a.subcentro}`) - getOrdem(`sub:${b.subcentro}`)
+          (a.subcentro || '').localeCompare(b.subcentro || '', 'pt-BR', { sensitivity: 'base' })
         );
         grupoNode.children.push(centroNode);
         for (let i = 0; i < 12; i++) {
@@ -284,10 +284,9 @@ function buildPlanoTree(
         grupoNode.total += centroNode.total;
         grupoNode.inconsistencias.push(...centroNode.inconsistencias);
       }
-      // Sort centros by ordem_exibicao
+      // Sort centros A-Z dentro de cada grupo
       grupoNode.children.sort((a, b) =>
-        getOrdem(`centro:${macroLabel}|${grupoLabel}|${a.centro}`) -
-        getOrdem(`centro:${macroLabel}|${grupoLabel}|${b.centro}`)
+        a.centro.localeCompare(b.centro, 'pt-BR', { sensitivity: 'base' })
       );
       macroNode.children.push(grupoNode);
       for (let i = 0; i < 12; i++) {
