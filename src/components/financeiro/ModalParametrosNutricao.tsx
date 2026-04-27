@@ -27,6 +27,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
   const [engordaConsumo, setEngordaConsumo] = useState(5);
   const [engordaCustoKg, setEngordaCustoKg] = useState(0);
   const [comercialCusto, setComercialCusto] = useState(0);
+  const [freteCusto, setFreteCusto] = useState(0);
   const [saving, setSaving] = useState(false);
 
   const custoTotalEngorda = engordaDias * engordaConsumo * engordaCustoKg;
@@ -49,6 +50,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
         setEngordaConsumo(Number(data.engorda_consumo_kg_ms) || 5);
         setEngordaCustoKg(Number(data.engorda_custo_kg_ms) || 0);
         setComercialCusto(Number(data.comercial_custo_cab) || 0);
+        setFreteCusto(Number(data.frete_custo_cab) || 0);
       } else {
         setCriaCusto(0);
         setRecriaCusto(0);
@@ -56,6 +58,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
         setEngordaConsumo(5);
         setEngordaCustoKg(0);
         setComercialCusto(0);
+        setFreteCusto(0);
       }
     })();
   }, [open, fazendaId, clienteId, ano]);
@@ -73,6 +76,7 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
         engorda_consumo_kg_ms: engordaConsumo,
         engorda_custo_kg_ms: engordaCustoKg,
         comercial_custo_cab: comercialCusto,
+        frete_custo_cab: freteCusto,
       };
 
       const { error } = await (supabase
@@ -185,6 +189,23 @@ export function ModalParametrosNutricao({ open, onOpenChange, fazendaId, cliente
                   className="h-7 text-xs w-24"
                   value={comercialCusto || ''}
                   onChange={e => setComercialCusto(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-card-foreground">
+                DESPESAS COM FRETES EM TRANSFERÊNCIAS DE GADO
+              </p>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs whitespace-nowrap w-32">R$ por cabeça</Label>
+                <Input
+                  type="number" step="0.01" min="0"
+                  className="h-7 text-xs w-24"
+                  value={freteCusto || ''}
+                  onChange={e => setFreteCusto(parseFloat(e.target.value) || 0)}
                 />
               </div>
             </div>
