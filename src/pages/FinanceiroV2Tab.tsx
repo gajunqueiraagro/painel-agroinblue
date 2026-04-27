@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL as CENTRAL_STATUS_LABEL } from '@/lib/statusOperacional';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
+import { validarLancamento } from '@/lib/financeiro/validacaoLancamento';
 import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -473,6 +474,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const handlePageChange = (p: number) => setCurrentPage(p);
 
   const handleSave = async (form: any, id?: string) => {
+    // Validação obrigatória antes de salvar
+    // Regra 4 (Aporte Pessoal) só se aplica em novos registros (sem id)
+    const formParaValidar = id
+      ? { ...form, origem_lancamento: undefined, origem: undefined }
+      : form;
+    const errosValidacao = validarLancamento(formParaValidar);
+    if (errosValidacao.length > 0) {
+      errosValidacao.forEach(e => {
+        toast.error(e.mensagem);
+      });
+      return false;
+    }
+
     let ok: boolean;
     if (id) {
       console.log('[FinV2] before save', {
