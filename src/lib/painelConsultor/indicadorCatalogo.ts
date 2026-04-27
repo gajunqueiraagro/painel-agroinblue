@@ -286,6 +286,58 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'arr_ha_acum': { id: 'arr_ha_acum', nome: '@/ha acum.', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'desfrute_acum_cab': { id: 'desfrute_acum_cab', nome: 'Desfrute acum. (cab)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
   'desfrute_acum_arr': { id: 'desfrute_acum_arr', nome: 'Desfrute acum. (@)', aba: 'acumulado', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+
+  // ─── DRE Planejamento (Fase 1D) ───
+  'rec_oper_meta': {
+    id: 'rec_oper_meta',
+    nome: 'Receita Operacional (META)',
+    aba: 'acumulado',
+    bloco: 'DRE (Planejamento)',
+    realizado: { fonte_tipo: 'sem_fonte', fonte_tabela: '', fonte_campo: '',
+      regra_calculo: 'Não exibido no realizado', regra_prioridade: '',
+      tela_origem: '', tela_label: '', permite_fallback: false },
+    previsto: FONTE_META_PLANEJAMENTO,
+  },
+  'custo_prod_meta': {
+    id: 'custo_prod_meta',
+    nome: 'Custo de Produção (META)',
+    aba: 'acumulado',
+    bloco: 'DRE (Planejamento)',
+    realizado: { fonte_tipo: 'sem_fonte', fonte_tabela: '', fonte_campo: '',
+      regra_calculo: 'Não exibido no realizado', regra_prioridade: '',
+      tela_origem: '', tela_label: '', permite_fallback: false },
+    previsto: FONTE_META_PLANEJAMENTO,
+  },
+  'res_oper_meta': {
+    id: 'res_oper_meta',
+    nome: 'Resultado Operacional (META)',
+    aba: 'acumulado',
+    bloco: 'DRE (Planejamento)',
+    realizado: { fonte_tipo: 'sem_fonte', fonte_tabela: '', fonte_campo: '',
+      regra_calculo: 'Não exibido no realizado', regra_prioridade: '',
+      tela_origem: '', tela_label: '', permite_fallback: false },
+    previsto: FONTE_META_PLANEJAMENTO,
+  },
+  'outras_saidas_meta': {
+    id: 'outras_saidas_meta',
+    nome: 'Outras Saídas (META)',
+    aba: 'acumulado',
+    bloco: 'DRE (Planejamento)',
+    realizado: { fonte_tipo: 'sem_fonte', fonte_tabela: '', fonte_campo: '',
+      regra_calculo: 'Não exibido no realizado', regra_prioridade: '',
+      tela_origem: '', tela_label: '', permite_fallback: false },
+    previsto: FONTE_META_PLANEJAMENTO,
+  },
+  'res_final_meta': {
+    id: 'res_final_meta',
+    nome: 'Resultado Final (META)',
+    aba: 'acumulado',
+    bloco: 'DRE (Planejamento)',
+    realizado: { fonte_tipo: 'sem_fonte', fonte_tabela: '', fonte_campo: '',
+      regra_calculo: 'Não exibido no realizado', regra_prioridade: '',
+      tela_origem: '', tela_label: '', permite_fallback: false },
+    previsto: FONTE_META_PLANEJAMENTO,
+  },
 };
 
 /** Lookup by indicator name (display name) */
