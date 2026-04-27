@@ -333,10 +333,18 @@ function computePeriodGmd(prodBio: number[], cabMedia: number[], dias: number[])
  *   Na Fase 1D, receita operacional da DRE = apenas macro 'Receita Operacional'.
  */
 interface FinMetaPainel {
+  // Caixa (já existente)
   entradas: number[];
   saidas: number[];
-  recPec: number[];
+  // DRE
+  recOper: number[];    // macro 'Receita Operacional' APENAS (sem Entrada Financeira)
   custoProd: number[];
+  outrasSaidas: number[]; // MACROS_SAIDA exceto 'Custeio Produção'
+  // Resultados pré-calculados
+  resOper: number[];    // recOper - custoProd
+  resFinal: number[];   // resOper - outrasSaidas
+  // manter recPec (compatibilidade Fase 1C)
+  recPec: number[];
 }
 
 /**
@@ -390,6 +398,10 @@ function agregarGridMetaPainelConsultor(
   const saidas    = z12();
   const recPec    = z12();
   const custoProd = z12();
+  const recOper      = z12();
+  const outrasSaidas = z12();
+  const resOper      = z12();
+  const resFinal     = z12();
 
   for (const g of grid) {
     const macro = g.macro_custo ?? '';
@@ -421,10 +433,23 @@ function agregarGridMetaPainelConsultor(
         if (macro === 'Custeio Produção') custoProd[i] += v;
       }
       // 'Transferências' → excluído de ambos os lados
+
+      if (macro === 'Receita Operacional') {
+        recOper[i] += v;
+        // Entrada Financeira NÃO entra em recOper (reservado DRE)
+      }
+      if (MACROS_SAIDA.has(macro) && macro !== 'Custeio Produção') {
+        outrasSaidas[i] += v;
+      }
     }
   }
 
-  return { entradas, saidas, recPec, custoProd };
+  for (let i = 0; i < 12; i++) {
+    resOper[i]  = recOper[i] - custoProd[i];
+    resFinal[i] = resOper[i] - outrasSaidas[i];
+  }
+
+  return { entradas, saidas, recPec, custoProd, recOper, outrasSaidas, resOper, resFinal };
 }
 
 function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
@@ -717,8 +742,11 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const finRecPec   = noFinMeta ? nanArr : finMeta.recPec;
   const finResCaixa = noFinMeta ? nanArr
     : finMeta.entradas.map((v, i) => v - finMeta!.saidas[i]);
-  const finResOper  = noFinMeta ? nanArr
-    : finMeta.recPec.map((v, i) => v - finMeta!.custoProd[i]);
+  const finResOper = noFinMeta ? nanArr : finMeta.resOper;
+  const finCustoProd    = noFinMeta ? nanArr : finMeta.custoProd;
+  const finRecOper      = noFinMeta ? nanArr : finMeta.recOper;
+  const finOutrasSaidas = noFinMeta ? nanArr : finMeta.outrasSaidas;
+  const finResFinal     = noFinMeta ? nanArr : finMeta.resFinal;
 
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
   const vrmIni = valorRebanhoMetaMesAnteriorOuDez || Array(12).fill(0);
@@ -831,6 +859,16 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
             r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
             r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
+          ],
+        },
+        {
+          nome: 'DRE (Planejamento)',
+          rows: [
+            r('Receita Operacional', 'money', finRecOper,      'rec_oper_meta'),
+            r('Custo de Produção',   'money', finCustoProd,    'custo_prod_meta'),
+            r('Resultado Operacional','money', finResOper,      'res_oper_meta'),
+            r('Outras Saídas',       'money', finOutrasSaidas, 'outras_saidas_meta'),
+            r('Resultado Final',     'money', finResFinal,     'res_final_meta'),
           ],
         },
       ];
@@ -968,8 +1006,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const finRecPec   = noFinMeta ? nanArr : finMeta.recPec;
   const finResCaixa = noFinMeta ? nanArr
     : finMeta.entradas.map((v, i) => v - finMeta!.saidas[i]);
-  const finResOper  = noFinMeta ? nanArr
-    : finMeta.recPec.map((v, i) => v - finMeta!.custoProd[i]);
+  const finResOper = noFinMeta ? nanArr : finMeta.resOper;
+  const finCustoProd    = noFinMeta ? nanArr : finMeta.custoProd;
+  const finRecOper      = noFinMeta ? nanArr : finMeta.recOper;
+  const finOutrasSaidas = noFinMeta ? nanArr : finMeta.outrasSaidas;
+  const finResFinal     = noFinMeta ? nanArr : finMeta.resFinal;
 
   // Valor do Rebanho META: lido do snapshot validado (valor_rebanho_meta_validada)
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
@@ -1088,6 +1129,16 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
             r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
             r('Var. valor reb.', 'money', varValorRebMeta, 'var_valor_reb'),
+          ],
+        },
+        {
+          nome: 'DRE (Planejamento)',
+          rows: [
+            r('Receita Operacional', 'money', finRecOper,      'rec_oper_meta'),
+            r('Custo de Produção',   'money', finCustoProd,    'custo_prod_meta'),
+            r('Resultado Operacional','money', finResOper,      'res_oper_meta'),
+            r('Outras Saídas',       'money', finOutrasSaidas, 'outras_saidas_meta'),
+            r('Resultado Final',     'money', finResFinal,     'res_final_meta'),
           ],
         },
       ];
