@@ -184,13 +184,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     supabase
       .from('fechamento_pastos')
-      .select('ano_mes, status')
+      .select('ano_mes, status, pastos!inner(ativo)')
       .eq('fazenda_id', fazendaAtual.id)
+      .eq('pastos.ativo', true)
       .like('ano_mes', `${anoFiltro}-%`)
       .then(({ data }) => {
         if (!data) return;
         const grouped: Record<number, { total: number; fechados: number }> = {};
-        data.forEach((r: any) => {
+        (data as any[]).forEach((r: any) => {
           const m = parseInt(String(r.ano_mes).substring(5, 7));
           if (isNaN(m)) return;
           if (!grouped[m]) grouped[m] = { total: 0, fechados: 0 };
