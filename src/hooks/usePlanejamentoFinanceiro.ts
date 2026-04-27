@@ -746,7 +746,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           const batch = rows.slice(i, i + 500);
           const { error } = await (supabase
             .from('planejamento_financeiro' as any)
-            .upsert(batch, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro' }) as any);
+            .upsert(batch, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro,cenario' }) as any);
           if (error) throw error;
         }
       }
