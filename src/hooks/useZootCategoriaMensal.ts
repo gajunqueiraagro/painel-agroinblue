@@ -55,7 +55,7 @@ interface UseZootCategoriaMensalParams {
 }
 
 export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZootCategoriaMensalParams) {
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
@@ -64,11 +64,20 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
   // automaticamente — jamais enviar fazenda_id=eq.__global__ para o banco (retorna 400).
   const effectiveGlobal = global || fazendaId === '__global__';
 
+  // Em global, lista das fazendas reais (sem o sentinel) — usada como filtro explícito
+  // .in('fazenda_id', ...) para evitar cache vazio quando a coluna cliente_id estiver
+  // ausente/divergente em zoot_mensal_cache.
+  const fazendaIdsReais = fazendas
+    .map(f => f.id)
+    .filter(id => id && id !== '__global__');
+  const fazendaIdsKey = fazendaIdsReais.slice().sort().join(',');
+
   return useQuery({
-    queryKey: ['zoot-categoria-mensal', effectiveGlobal ? `global-${clienteId}` : fazendaId, ano, cenario],
+    queryKey: ['zoot-categoria-mensal', effectiveGlobal ? `global-${clienteId}-${fazendaIdsKey}` : fazendaId, ano, cenario],
     queryFn: async (): Promise<ZootCategoriaMensal[]> => {
       if (!effectiveGlobal && !fazendaId) return [];
       if (effectiveGlobal && !clienteId) return [];
+      if (effectiveGlobal && fazendaIdsReais.length === 0) return [];
 
       if (!effectiveGlobal) {
         const { data, error } = await supabase.rpc('fn_zoot_categoria_mensal' as any, {
@@ -85,24 +94,35 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
         return rows.filter(r => r.cenario === cenario);
       }
 
-      const { data, error } = await supabase
-        .from('zoot_mensal_cache' as any)
-        .select('*')
-        .eq('ano', ano)
-        .eq('cenario', cenario)
-        .eq('cliente_id', clienteId)
-        .order('mes')
-        .order('ordem_exibicao');
+      // Global: pagina o cache (PostgREST default = 1000) e filtra explicitamente por
+      // fazenda_id IN (lista de fazendas do cliente) — não confia em cliente_id da cache.
+      const PAGE_SIZE = 1000;
+      const all: any[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('zoot_mensal_cache' as any)
+          .select('*')
+          .eq('ano', ano)
+          .eq('cenario', cenario)
+          .in('fazenda_id', fazendaIdsReais)
+          .order('mes')
+          .order('ordem_exibicao')
+          .range(from, from + PAGE_SIZE - 1);
 
-      if (error) {
-        console.error('useZootCategoriaMensal error:', error);
-        return [];
+        if (error) {
+          console.error('useZootCategoriaMensal error:', error);
+          return [];
+        }
+        const page = data || [];
+        all.push(...page);
+        if (page.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
       }
-
-      return (data as unknown as ZootCategoriaMensal[]) || [];
+      return all as unknown as ZootCategoriaMensal[];
     },
     // Guard: se NÃO é global e fazendaId é o sentinel, desliga a query.
-    enabled: effectiveGlobal ? !!clienteId : (!!fazendaId && fazendaId !== '__global__'),
+    enabled: effectiveGlobal ? (!!clienteId && fazendaIdsReais.length > 0) : (!!fazendaId && fazendaId !== '__global__'),
     staleTime: 0,
   });
 }
