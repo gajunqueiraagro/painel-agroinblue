@@ -52,7 +52,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
 
   // FONTE OFICIAL: useRebanhoOficial — saldos agregados da vw_zoot_categoria_mensal
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
-  const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta' });
+  const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta', global: isGlobal });
   console.log('[FLUXO DEBUG]', { anoFiltro, cenarioView, fazendaAtualId: fazendaAtual?.id, fazendaAtualNome: fazendaAtual?.nome });
   // Verificar se o mês tem dados oficiais de fechamento
   const temFechamento = (mesKey: string): boolean => {
@@ -64,15 +64,28 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
   const totaisPorMes = rebanhoOf.totaisPorMes;
 
+  if (isGlobal) {
+    const fazendasNasCategorias = [...new Set((rebanhoOf.rawCategorias || []).map((r: any) => r.fazenda_id))];
+    console.log('[TOTAIS_DEBUG] mes=1 saldo_inicial:', totaisPorMes[1]?.saldo_inicial,
+      'mes=12 saldo_final:', totaisPorMes[12]?.saldo_final,
+      'rawCategorias count:', rebanhoOf.rawCategorias?.length,
+      'fazendas distintas em rawCategorias:', fazendasNasCategorias);
+  }
+
   // Fallback instantâneo (<100ms): soma direta de saldos_iniciais do ano selecionado.
   // A view vw_zoot_categoria_mensal demora 3-5s; enquanto ela não chega, preenchemos
   // a célula de Janeiro (e o Total) do "Saldo Início" com o valor de abertura do ano.
   const saldoInicialAnoFallback = useMemo(() => {
     const alvoAno = Number(anoFiltro);
+    const fazendasUnicas = [...new Set(saldosIniciais.map(s => (s as any).fazendaId ?? (s as any).fazenda_id))];
+    if (isGlobal) {
+      console.log('[SALDO_DEBUG] global mode — saldosIniciais count:', saldosIniciais.length,
+        'fazendas únicas:', fazendasUnicas);
+    }
     return saldosIniciais
       .filter(s => s.ano === alvoAno)
       .reduce((acc, s) => acc + (s.quantidade || 0), 0);
-  }, [saldosIniciais, anoFiltro]);
+  }, [saldosIniciais, anoFiltro, isGlobal]);
 
   // Validação automática da equação antes de renderizar
   const errosEquacao = useMemo(() => {
