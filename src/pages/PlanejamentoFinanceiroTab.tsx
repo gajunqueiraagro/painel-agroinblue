@@ -184,9 +184,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   const [projetosOpen, setProjetosOpen] = useState(false);
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
   const [versoesOpen, setVersoesOpen] = useState(false);
-  const [versaoNome, setVersaoNome] = useState('');
-  const [versoes, setVersoes] = useState<{ id: string; nome: string; created_at: string }[]>([]);
-  const [versaoSaving, setVersaoSaving] = useState(false);
+  const [versoes, setVersoes] = useState<{ id: string; nome: string; created_at: string; usuario_email: string | null; fazenda_id: string | null }[]>([]);
 
   useEffect(() => {
     setGrid(buildGrid());
@@ -779,51 +777,30 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Modal Versões ── */}
+      {/* ── Modal Versões — histórico read-only ── */}
       <Dialog open={versoesOpen} onOpenChange={setVersoesOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-sm">📌 Gerenciar Versões — {ano}</DialogTitle>
+            <DialogTitle className="text-sm">📌 Histórico de Versões — {ano}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nome da versão (ex: V1 Aprovada)"
-                className="text-xs h-8"
-                value={versaoNome}
-                onChange={e => setVersaoNome(e.target.value)}
-              />
-              <Button
-                size="sm"
-                disabled={!versaoNome.trim() || versaoSaving}
-                onClick={async () => {
-                  setVersaoSaving(true);
-                  try {
-                    await salvarVersao(versaoNome.trim());
-                    setVersaoNome('');
-                    setVersoes(await listarVersoes());
-                  } finally {
-                    setVersaoSaving(false);
-                  }
-                }}
-              >
-                Salvar
-              </Button>
-            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Snapshots automáticos criados a cada salvamento. Selecione uma versão para restaurar.
+            </p>
             {versoes.length > 0 && (
-              <div className="border rounded-md divide-y max-h-48 overflow-auto">
+              <div className="border rounded-md divide-y max-h-72 overflow-auto">
                 {versoes.map(v => (
-                  <div key={v.id} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <div>
-                      <span className="font-medium">{v.nome}</span>
-                      <span className="text-muted-foreground ml-2">
-                        {new Date(v.created_at).toLocaleDateString('pt-BR')} {new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                  <div key={v.id} className="flex items-center justify-between px-3 py-2 text-xs gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{v.nome}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {v.usuario_email || '—'} · {new Date(v.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </div>
                     </div>
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-6 text-[10px]"
+                      className="h-6 text-[10px] shrink-0"
                       onClick={async () => {
                         await restaurarVersao(v.id);
                         setVersoesOpen(false);
@@ -836,7 +813,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
               </div>
             )}
             {versoes.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma versão salva para {ano}.</p>
+              <p className="text-xs text-muted-foreground text-center py-4">Nenhuma versão registrada para {ano}.</p>
             )}
           </div>
         </DialogContent>

@@ -718,7 +718,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           const batch = rows.slice(i, i + 500);
           const { error } = await (supabase
             .from('planejamento_financeiro' as any)
-            .insert(batch) as any);
+            .upsert(batch, { onConflict: 'fazenda_id,ano,mes,centro_custo,subcentro' }) as any);
           if (error) throw error;
         }
       }
@@ -726,6 +726,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       toast.success(`Planejamento salvo — ${rows.length} registros`);
 
       await loadSaved();
+      // Snapshot automático: cria versão a cada save bem-sucedido.
+      try { await salvarVersao(); } catch (e) { console.error('Erro auto-snapshot:', e); }
 
       return true;
     } catch (e: any) {
@@ -831,10 +833,12 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, [fazendaId, clienteId, ano]);
 
-  // ─── Salvar versão (snapshot consolidado) ─────────────────
-  const salvarVersao = useCallback(async (nome: string) => {
+  // ─── Salvar versão (snapshot automático com user/data) ────
+  const salvarVersao = useCallback(async () => {
     if (!clienteId) return;
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const nome = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
       let allRows: any[] = [];
       let from = 0;
       const PAGE = 1000;
@@ -859,14 +863,15 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           ano,
           nome,
           dados: allRows,
+          user_id: user?.id ?? null,
+          usuario_email: user?.email ?? null,
+          fazenda_id: isValidFazenda(fazendaId) ? fazendaId : null,
         }) as any);
       if (error) throw error;
-      toast.success(`Versão salva: ${nome}`);
     } catch (e: any) {
       console.error('Erro ao salvar versão:', e);
-      toast.error('Erro ao salvar versão');
     }
-  }, [clienteId, ano]);
+  }, [clienteId, ano, fazendaId]);
 
   // ─── Listar versões ───────────────────────────────────────
   const listarVersoes = useCallback(async () => {
@@ -874,12 +879,12 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     try {
       const { data, error } = await (supabase
         .from('meta_versoes' as any)
-        .select('id, nome, created_at')
+        .select('id, nome, created_at, usuario_email, fazenda_id')
         .eq('cliente_id', clienteId)
         .eq('ano', ano)
         .order('created_at', { ascending: false }) as any);
       if (error) throw error;
-      return (data || []) as { id: string; nome: string; created_at: string }[];
+      return (data || []) as { id: string; nome: string; created_at: string; usuario_email: string | null; fazenda_id: string | null }[];
     } catch (e: any) {
       console.error('Erro ao listar versões:', e);
       return [];
