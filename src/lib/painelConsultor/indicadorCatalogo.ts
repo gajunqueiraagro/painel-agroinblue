@@ -155,6 +155,23 @@ const FONTE_ZOOT_VIEW_REAL: FonteIndicador = {
   permite_fallback: true,
 };
 
+// ─── Financeiro META (planejamento_financeiro) ───
+const FONTE_META_PLANEJAMENTO: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'planejamento_financeiro',
+  fonte_campo: 'valor_planejado por macro_custo/grupo_custo/mes',
+  regra_calculo: 'Agregado por agregarGridMetaPainelConsultor no PainelConsultorTab. '
+    + 'Entradas = macro Receita Operacional + Entrada Financeira. '
+    + 'Saídas = macro Custeio Produção + Deduções + Dividendos + Investimentos + Saída Financeira. '
+    + 'recPec = grupo Receita Pecuária (apenas Receita Operacional). '
+    + 'ATENÇÃO: Entrada Financeira entra apenas em entradas/resCaixa, não em recPec nem DRE futura.',
+  regra_prioridade: '1. planejamento_financeiro buildGrid com auto lines; 2. vazio se grid vazio',
+  tela_origem: '/planejamento-financeiro',
+  tela_label: 'Planejamento Financeiro',
+  permite_fallback: false,
+  observacao: 'Implementado na Fase 1C. DRE futura (Fase 1D) usará apenas macro Receita Operacional.',
+};
+
 // ─── Financeiro Caixa ───
 const FONTE_FIN_CAIXA_REAL: FonteIndicador = {
   fonte_tipo: 'financeiro_v2',
@@ -224,15 +241,15 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'reb_medio': { id: 'reb_medio', nome: 'Reb. médio (cab)', aba: 'medio', bloco: 'Estrutura', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
 
   // ─── Acumulado > Financeiro Caixa ───
-  'ent_fin_acum': { id: 'ent_fin_acum', nome: 'Entradas fin. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
-  'sai_fin_acum': { id: 'sai_fin_acum', nome: 'Saídas fin. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
-  'rec_pec_acum': { id: 'rec_pec_acum', nome: 'Rec. pec. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
-  'res_caixa_acum': { id: 'res_caixa_acum', nome: 'Res. caixa acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
+  'ent_fin_acum': { id: 'ent_fin_acum', nome: 'Entradas fin. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'sai_fin_acum': { id: 'sai_fin_acum', nome: 'Saídas fin. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'rec_pec_acum': { id: 'rec_pec_acum', nome: 'Rec. pec. acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_caixa_acum': { id: 'res_caixa_acum', nome: 'Res. caixa acum.', aba: 'acumulado', bloco: 'Financeiro no Caixa', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
 
   // ─── Acumulado > Financeiro Competência ───
-  'rec_pec_comp_acum': { id: 'rec_pec_comp_acum', nome: 'Rec. pec. comp. acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
-  'res_oper_acum': { id: 'res_oper_acum', nome: 'Res. oper. acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
-  'ebitda_acum': { id: 'ebitda_acum', nome: 'EBITDA acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
+  'rec_pec_comp_acum': { id: 'rec_pec_comp_acum', nome: 'Rec. pec. comp. acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_oper_acum': { id: 'res_oper_acum', nome: 'Res. oper. acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'ebitda_acum': { id: 'ebitda_acum', nome: 'EBITDA acum.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'var_valor_reb': { id: 'var_valor_reb', nome: 'Var. valor reb.', aba: 'acumulado', bloco: 'Financeiro por Competência', realizado: FONTE_VALOR_REB_REAL, previsto: SEM_PREVISTO },
 
   // ─── Média do Período ───
@@ -253,10 +270,10 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'prod_media_arr': { id: 'prod_media_arr', nome: 'Prod. média (@)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'prod_media_kg': { id: 'prod_media_kg', nome: 'Prod. média (kg)', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'desfrute_medio': { id: 'desfrute_medio', nome: 'Desfrute médio', aba: 'media_periodo', bloco: 'Produção Média', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
-  'receita_media': { id: 'receita_media', nome: 'Receita média', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
-  'res_oper_medio': { id: 'res_oper_medio', nome: 'Res. oper. médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
-  'ebitda_medio': { id: 'ebitda_medio', nome: 'EBITDA médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
-  'res_caixa_medio': { id: 'res_caixa_medio', nome: 'Res. caixa médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: SEM_PREVISTO },
+  'receita_media': { id: 'receita_media', nome: 'Receita média', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_oper_medio': { id: 'res_oper_medio', nome: 'Res. oper. médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'ebitda_medio': { id: 'ebitda_medio', nome: 'EBITDA médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_caixa_medio': { id: 'res_caixa_medio', nome: 'Res. caixa médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
 
   // ─── Acumulado > Rebanho ───
   'entradas_acum': { id: 'entradas_acum', nome: 'Entradas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
