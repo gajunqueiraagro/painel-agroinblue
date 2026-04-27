@@ -17,7 +17,8 @@ import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametros
 import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark, Camera } from 'lucide-react';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark, Camera, ClipboardCheck } from 'lucide-react';
+import { ResumoExecMetaModal } from '@/components/financeiro/ResumoExecMetaModal';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -126,7 +127,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   const ano = anoProp ?? internalAno;
   const setAno = setInternalAno;
   const isAnoExterno = anoProp !== undefined;
-  const { fazendaAtual } = useFazenda();
+  const { fazendaAtual, fazendas } = useFazenda();
   const fazendaId = fazendaAtual?.id ?? '';
   const isGlobal = !fazendaId || fazendaId === '__global__' || fazendaId === '';
   const isAdminFazenda = fazendaAtual?.nome?.toLowerCase().includes('admin') ?? false;
@@ -188,6 +189,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
   const [versoesOpen, setVersoesOpen] = useState(false);
   const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [resumoOpen, setResumoOpen] = useState(false);
   const [versoes, setVersoes] = useState<{ id: string; nome: string; created_at: string; usuario_email: string | null; fazenda_id: string | null }[]>([]);
 
   useEffect(() => {
@@ -624,6 +626,15 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
         <Button size="sm" variant="outline" onClick={async () => { setVersoesOpen(true); setVersoes(await listarVersoes()); }} title="Gerenciar Versões">
           <Bookmark className="h-4 w-4 mr-1" />Versão
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setResumoOpen(true)}
+          disabled={isGlobal}
+          title="Resumo Executivo para Aprovação"
+        >
+          <ClipboardCheck className="h-4 w-4 mr-1" />Aprovar
+        </Button>
         {!isGlobal && (
           <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
             <Settings className="h-4 w-4" />
@@ -763,6 +774,17 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
           clienteId={clienteAtual.id}
           ano={ano}
           onSaved={reloadNutricao}
+        />
+      )}
+
+      {clienteAtual?.id && fazendaId && fazendaId !== '__global__' && (
+        <ResumoExecMetaModal
+          open={resumoOpen}
+          onOpenChange={setResumoOpen}
+          clienteId={clienteAtual.id}
+          fazendaId={fazendaId}
+          ano={ano}
+          fazendaNome={fazendas.find(f => f.id === fazendaId)?.nome ?? ''}
         />
       )}
 
