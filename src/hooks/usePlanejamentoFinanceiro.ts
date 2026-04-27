@@ -437,6 +437,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i] * 100) / 100;
       result.set('Despesas Comerciais Pecuária', comercial);
+      result.set('Impostos e Despesas de Abates e Vendas', [...comercial]);
     }
 
     // FRETE EM TRANSFERÊNCIAS: alocado na fazenda destino (transferencia_entrada)
