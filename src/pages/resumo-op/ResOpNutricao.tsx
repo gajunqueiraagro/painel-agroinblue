@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
@@ -25,7 +26,8 @@ export const ResOpNutricao = ({ filtros }: Props) => {
   const mesNum = filtros.mes;
   const acumulado = filtros.visao === 'acumulado';
 
-  const { lancamentosGlobais, loading: loadingFluxo } = useFluxoCaixa([], [], anoNum, mesNum);
+  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
+  const { lancamentosGlobais, loading: loadingFluxo } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesNum);
   const { rawFazenda: rebanhoRows, loading: loadingZoo } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
 
   const mesDado: any = useMemo(

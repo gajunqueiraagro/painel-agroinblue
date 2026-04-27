@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { parseISO, getYear, getMonth } from 'date-fns';
@@ -35,9 +36,9 @@ export const ResOpDashboard = ({ filtros }: Props) => {
     return pesoTotal > 0 && area > 0 ? pesoTotal / area : null;
   }, [mesDado]);
 
-  // ── Financeiro — fonte oficial: useFluxoCaixa ──────────────────────
-  // Os dois primeiros arrays são ignorados pelo hook (parâmetros legados)
-  const { meses: fluxo, loading: loadingFluxo } = useFluxoCaixa([], [], anoNum, mesNum);
+  // ── Financeiro — fonte oficial: useFluxoCaixa (recebe lancamentos do useFinanceiro) ──
+  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
+  const { meses: fluxo, loading: loadingFluxo } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesNum);
 
   const finKpi = useMemo(() => {
     if (!fluxo || fluxo.length === 0) return { entradas: 0, saidas: 0, saldo: 0 };

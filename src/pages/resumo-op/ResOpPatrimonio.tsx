@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
@@ -17,7 +18,8 @@ export const ResOpPatrimonio = ({ filtros }: Props) => {
   const mesNum = filtros.mes;
   const anoMes = `${filtros.ano}-${String(mesNum).padStart(2, '0')}`;
 
-  const { meses, loading: loadingFluxo } = useFluxoCaixa([], [], anoNum, mesNum);
+  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
+  const { meses, loading: loadingFluxo } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesNum);
   const { kpis, dividaPorCredor, loading: loadingFin } = useFinanciamentosPainel(anoNum, 'todos', mesNum);
 
   const fazendaId = isGlobal ? undefined : fazendaAtual?.id;

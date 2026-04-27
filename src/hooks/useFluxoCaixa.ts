@@ -12,7 +12,6 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
   isRealizado,
@@ -26,7 +25,6 @@ import {
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
 } from '@/lib/financeiro/classificacao';
-import { normalizeDividendoSubcentro } from '@/lib/financeiro/planoContasBuilder';
 
 interface FluxoLancamentoBase extends LancamentoClassificavel {
   id: string;
@@ -110,81 +108,35 @@ export interface FluxoCaixaResult {
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function useFluxoCaixa(
-  _lancamentosFinanceiros: unknown[],
+  lancamentosFinanceiros: any[],
   _rateioADM: unknown[],
   ano: number,
   mesAte: number,
   filtros?: FluxoFiltros,
 ) {
-  const { fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
-  const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
 
-  const [lancamentosGlobais, setLancamentosGlobais] = useState<FluxoLancamentoBase[]>([]);
-  const [loadingLancamentos, setLoadingLancamentos] = useState(true);
   const [saldoInicialAno, setSaldoInicialAno] = useState<number>(0);
   const [saldoInicialAusente, setSaldoInicialAusente] = useState(false);
   const [saldoInicialAudit, setSaldoInicialAudit] = useState<SaldoInicialAudit | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
 
-  const loadLancamentosGlobais = useCallback(async () => {
-    if (!clienteId || allFazendaIds.length === 0) {
-      setLancamentosGlobais([]);
-      setLoadingLancamentos(false);
-      return;
-    }
-    setLoadingLancamentos(true);
-    try {
-      const PAGE_SIZE = 1000;
-      let allData: any[] = [];
-      let from = 0;
-
-      while (true) {
-        const { data } = await supabase
-          .from('financeiro_lancamentos_v2')
-          .select('id, status_transacao, data_pagamento, valor, tipo_operacao, macro_custo, descricao, escopo_negocio, centro_custo, subcentro, grupo_custo')
-          .eq('cliente_id', clienteId)
-           .eq('cancelado', false)
-           .eq('sem_movimentacao_caixa', false)
-           .neq('cenario', 'meta')
-          .gte('data_pagamento', `${ano}-01-01`)
-          .lte('data_pagamento', `${ano}-12-31`)
-          .range(from, from + PAGE_SIZE - 1);
-
-        if (!data || data.length === 0) break;
-        allData = allData.concat(data);
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-      }
-
-      setLancamentosGlobais(
-        allData.map((r: any) => ({
-          id: r.id,
-          status_transacao: r.status_transacao,
-          data_pagamento: r.data_pagamento ? String(r.data_pagamento) : null,
-          valor: Number(r.valor) || 0,
-          tipo_operacao: r.tipo_operacao,
-          macro_custo: r.macro_custo,
-          produto: r.descricao,
-          escopo_negocio: r.escopo_negocio,
-          grupo_custo: r.grupo_custo,
-          centro_custo: r.centro_custo,
-          subcentro: normalizeDividendoSubcentro(r.subcentro) || r.subcentro,
-        })),
-      );
-    } catch {
-      setLancamentosGlobais([]);
-    } finally {
-      setLoadingLancamentos(false);
-    }
-  }, [ano, clienteId, allFazendaIds.join(',')]);
+  const lancamentosGlobais = useMemo(() => {
+    return lancamentosFinanceiros.filter(l => {
+      const st = ((l as any).status_transacao || '').toLowerCase().trim();
+      if (st !== 'realizado') return false;
+      const ano_l = datePagtoAnoClass(l);
+      if (ano_l !== ano) return false;
+      return true;
+    });
+  }, [lancamentosFinanceiros, ano]);
 
   // Fetch saldo inicial GLOBAL de Dez do ano anterior (V2)
   // Se não existir registro de saldo para Dez do ano anterior,
   // busca o último saldo disponível e encadeia com lançamentos até Dez.
   const loadSaldoInicial = useCallback(async () => {
-    if (!clienteId || allFazendaIds.length === 0) {
+    if (!clienteId) {
       setSaldoInicialAno(0);
       setSaldoInicialAusente(true);
       setSaldoInicialAudit(null);
@@ -246,14 +198,13 @@ export function useFluxoCaixa(
     } finally {
       setLoadingSaldo(false);
     }
-  }, [ano, clienteId, allFazendaIds.join(',')]);
+  }, [ano, clienteId]);
 
 
 
   useEffect(() => {
     loadSaldoInicial();
-    loadLancamentosGlobais();
-  }, [loadSaldoInicial, loadLancamentosGlobais]);
+  }, [loadSaldoInicial]);
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
@@ -393,12 +344,11 @@ export function useFluxoCaixa(
 
   const reload = useCallback(() => {
     loadSaldoInicial();
-    loadLancamentosGlobais();
-  }, [loadSaldoInicial, loadLancamentosGlobais]);
+  }, [loadSaldoInicial]);
 
   return {
     meses,
-    loading: loadingSaldo || loadingLancamentos,
+    loading: loadingSaldo,
     saldoInicialAno,
     saldoInicialAusente,
     saldoInicialAudit,

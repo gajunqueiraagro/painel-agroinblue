@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { parseISO, getYear, getMonth } from 'date-fns';
@@ -62,8 +63,9 @@ export const ResOpDesvios = ({ filtros }: Props) => {
 
   const { rawFazenda: zooAtual, loading: loadZooAt } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
   const { rawFazenda: zooAnterior, loading: loadZooAnt } = useRebanhoOficial({ ano: anoNum - 1, cenario: 'realizado' });
-  const { meses: fluxoAtual, loading: loadFluxoAt } = useFluxoCaixa([], [], anoNum, mesNum);
-  const { meses: fluxoAnterior, loading: loadFluxoAnt } = useFluxoCaixa([], [], anoNum - 1, mesNum);
+  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
+  const { meses: fluxoAtual, loading: loadFluxoAt } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesNum);
+  const { meses: fluxoAnterior, loading: loadFluxoAnt } = useFluxoCaixa(lancFin, rateioADM, anoNum - 1, mesNum);
 
   const mesAt: any = useMemo(() => (zooAtual || []).find((r: any) => r.mes === mesNum), [zooAtual, mesNum]);
   const mesAn: any = useMemo(() => (zooAnterior || []).find((r: any) => r.mes === mesNum), [zooAnterior, mesNum]);

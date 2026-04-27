@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
+import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import type { ResOpFilters } from '../ResumoOperacionalPage';
@@ -20,7 +21,8 @@ export const ResOpCentros = ({ filtros }: Props) => {
   const mesNum = filtros.mes;
   const acumulado = filtros.visao === 'acumulado';
 
-  const { lancamentosGlobais, loading } = useFluxoCaixa([], [], anoNum, mesNum);
+  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
+  const { lancamentosGlobais, loading } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesNum);
 
   const ranking = useMemo<Linha[]>(() => {
     if (!lancamentosGlobais) return [];
