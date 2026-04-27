@@ -27,6 +27,7 @@ import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltip
 import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
 import { CATEGORIAS } from '@/types/cattle';
@@ -316,6 +317,116 @@ function computePeriodGmd(prodBio: number[], cabMedia: number[], dias: number[])
   return out;
 }
 
+/**
+ * Dados financeiros META agregados do planejamento_financeiro.
+ * Calculado por agregarGridMetaPainelConsultor. Uso exclusivo do PainelConsultorTab — não exportar.
+ *
+ * entradas  = macro 'Receita Operacional' + 'Entrada Financeira'
+ * saidas    = macro 'Custeio Produção' + 'Deduções de Receitas' + 'Dividendos'
+ *             + 'Investimento em Bovinos' + 'Investimento na Fazenda' + 'Saída Financeira'
+ * recPec    = grupo 'Receita Pecuária' APENAS dentro de macro 'Receita Operacional'
+ * custoProd = macro 'Custeio Produção'
+ *
+ * ATENÇÃO FASE 1D (DRE futura):
+ *   'Entrada Financeira' entra APENAS nos indicadores de caixa (entradas, resCaixa).
+ *   NÃO deve entrar em Receita Operacional da DRE nem em recPec.
+ *   Na Fase 1D, receita operacional da DRE = apenas macro 'Receita Operacional'.
+ */
+interface FinMetaPainel {
+  entradas: number[];
+  saidas: number[];
+  recPec: number[];
+  custoProd: number[];
+}
+
+/**
+ * Agrega o planejamento META em indicadores financeiros para o PainelConsultorTab.
+ *
+ * Fonte: planejamento_financeiro via usePlanejamentoFinanceiro.buildGrid()
+ *
+ * Auto lines aplicadas exatamente como em PlanejamentoFinanceiroTab:
+ *   effectiveMeses[i] = g.meses[i] + autoMeses[i]
+ *   Prioridade: lancNutricao > lancProjetos > lancFinanciamento > lancRebanho
+ *
+ * Classificação por macro_custo (strings reais do banco financeiro_plano_contas):
+ *   MACROS_ENTRADA: 'Receita Operacional', 'Entrada Financeira'
+ *   MACROS_SAIDA:   'Custeio Produção', 'Deduções de Receitas', 'Dividendos',
+ *                   'Investimento em Bovinos', 'Investimento na Fazenda', 'Saída Financeira'
+ *   Excluído: 'Transferências'
+ *
+ * IMPORTANTE — separação de escopos:
+ *   'Entrada Financeira' entra em entradas e resCaixa (indicadores de caixa).
+ *   NÃO entra em recPec nem custoProd.
+ *   Na Fase 1D (DRE futura), receita operacional = apenas macro 'Receita Operacional'.
+ *
+ * Retorna null quando grid.length === 0 → NaN → '-' na UI.
+ * Retorna zeros quando planejamento existe e soma for zero → R$ 0,00.
+ * Não exportar.
+ */
+function agregarGridMetaPainelConsultor(
+  grid: SubcentroGrid[],
+  lancNutricao: Map<string, number[]>,
+  lancFinanciamento: Map<string, number[]>,
+  lancRebanho: Map<string, number[]>,
+  lancProjetos: Map<string, number[]>,
+): FinMetaPainel | null {
+  if (grid.length === 0) return null;
+
+  const MACROS_ENTRADA = new Set([
+    'Receita Operacional',
+    'Entrada Financeira',
+  ]);
+  const MACROS_SAIDA = new Set([
+    'Custeio Produção',
+    'Deduções de Receitas',
+    'Dividendos',
+    'Investimento em Bovinos',
+    'Investimento na Fazenda',
+    'Saída Financeira',
+  ]);
+
+  const z12 = (): number[] => new Array(12).fill(0);
+  const entradas  = z12();
+  const saidas    = z12();
+  const recPec    = z12();
+  const custoProd = z12();
+
+  for (const g of grid) {
+    const macro = g.macro_custo ?? '';
+    const grupo = g.grupo_custo ?? '';
+
+    // Auto lines — mesma lógica de PlanejamentoFinanceiroTab
+    const autoMeses: number[] | undefined =
+      lancNutricao.has(g.subcentro)        ? lancNutricao.get(g.subcentro)
+      : lancProjetos.has(g.subcentro)      ? lancProjetos.get(g.subcentro)
+      : lancFinanciamento.has(g.subcentro) ? lancFinanciamento.get(g.subcentro)
+      : lancRebanho.has(g.subcentro)       ? lancRebanho.get(g.subcentro)
+      : undefined;
+
+    const effectiveMeses = autoMeses
+      ? g.meses.map((v, i) => v + (autoMeses[i] || 0))
+      : g.meses;
+
+    for (let i = 0; i < 12; i++) {
+      const v = effectiveMeses[i] || 0;
+      if (MACROS_ENTRADA.has(macro)) {
+        entradas[i] += v;
+        // recPec: apenas 'Receita Operacional' com grupo 'Receita Pecuária'
+        // 'Entrada Financeira' NÃO entra aqui (reservado DRE Fase 1D)
+        if (macro === 'Receita Operacional' && grupo === 'Receita Pecuária') {
+          recPec[i] += v;
+        }
+      } else if (MACROS_SAIDA.has(macro)) {
+        saidas[i] += v;
+        if (macro === 'Custeio Produção') custoProd[i] += v;
+      }
+      // 'Transferências' → excluído de ambos os lados
+    }
+  }
+
+  return { entradas, saidas, recPec, custoProd };
+}
+
 function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -518,7 +629,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -596,6 +707,19 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   };
 
   const emptyMoney = Array(12).fill(0);
+  const nanArr: number[] = Array(12).fill(NaN);
+  const noFinMeta = finMeta == null;
+
+  // Séries financeiras META — NaN quando sem planejamento (renderiza '-')
+  // Zero real quando planejamento existe e valor planejado for zero (renderiza R$ 0,00)
+  const finEntradas = noFinMeta ? nanArr : finMeta.entradas;
+  const finSaidas   = noFinMeta ? nanArr : finMeta.saidas;
+  const finRecPec   = noFinMeta ? nanArr : finMeta.recPec;
+  const finResCaixa = noFinMeta ? nanArr
+    : finMeta.entradas.map((v, i) => v - finMeta!.saidas[i]);
+  const finResOper  = noFinMeta ? nanArr
+    : finMeta.recPec.map((v, i) => v - finMeta!.custoProd[i]);
+
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
   const vrmIni = valorRebanhoMetaMesAnteriorOuDez || Array(12).fill(0);
   const valorPorCabMeta = cabFin.map((c, i) => {
@@ -694,18 +818,18 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         {
           nome: 'Financeiro no Caixa',
           rows: [
-            r('Entradas fin. acum.', 'money', emptyMoney, 'ent_fin_acum'),
-            r('Saídas fin. acum.', 'money', emptyMoney, 'sai_fin_acum'),
-            r('Rec. pec. acum.', 'money', emptyMoney, 'rec_pec_acum'),
-            r('Res. caixa acum.', 'money', emptyMoney, 'res_caixa_acum'),
+            r('Entradas fin. acum.', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas fin. acum.', 'money', finSaidas, 'sai_fin_acum'),
+            r('Rec. pec. acum.', 'money', finRecPec, 'rec_pec_acum'),
+            r('Res. caixa acum.', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
           nome: 'Financeiro por Competência',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
-            r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
-            r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
+            r('Rec. pec. comp. acum.', 'money', finRecPec, 'rec_pec_comp_acum'),
+            r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
+            r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
             r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
           ],
         },
@@ -740,10 +864,10 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         {
           nome: 'Financeiro Médio',
           rows: [
-            r('Receita média', 'money', emptyMoney, 'receita_media'),
-            r('Res. oper. médio', 'money', emptyMoney, 'res_oper_medio'),
-            r('EBITDA médio', 'money', emptyMoney, 'ebitda_medio'),
-            r('Res. caixa médio', 'money', emptyMoney, 'res_caixa_medio'),
+            r('Receita média', 'money', finRecPec, 'receita_media'),
+            r('Res. oper. médio', 'money', finResOper, 'res_oper_medio'),
+            r('EBITDA médio', 'money', finResOper, 'ebitda_medio'),
+            r('Res. caixa médio', 'money', finResCaixa, 'res_caixa_medio'),
           ],
         },
       ];
@@ -752,7 +876,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -834,6 +958,18 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   };
 
   const emptyMoney = Array(12).fill(0);
+  const nanArr: number[] = Array(12).fill(NaN);
+  const noFinMeta = finMeta == null;
+
+  // Séries financeiras META — NaN quando sem planejamento (renderiza '-')
+  // Zero real quando planejamento existe e valor planejado for zero (renderiza R$ 0,00)
+  const finEntradas = noFinMeta ? nanArr : finMeta.entradas;
+  const finSaidas   = noFinMeta ? nanArr : finMeta.saidas;
+  const finRecPec   = noFinMeta ? nanArr : finMeta.recPec;
+  const finResCaixa = noFinMeta ? nanArr
+    : finMeta.entradas.map((v, i) => v - finMeta!.saidas[i]);
+  const finResOper  = noFinMeta ? nanArr
+    : finMeta.recPec.map((v, i) => v - finMeta!.custoProd[i]);
 
   // Valor do Rebanho META: lido do snapshot validado (valor_rebanho_meta_validada)
   const vrm = valorRebanhoMetaMes || Array(12).fill(0);
@@ -939,18 +1075,18 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Financeiro no Caixa',
           rows: [
-            r('Entradas fin. acum.', 'money', emptyMoney, 'ent_fin_acum'),
-            r('Saídas fin. acum.', 'money', emptyMoney, 'sai_fin_acum'),
-            r('Rec. pec. acum.', 'money', emptyMoney, 'rec_pec_acum'),
-            r('Res. caixa acum.', 'money', emptyMoney, 'res_caixa_acum'),
+            r('Entradas fin. acum.', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas fin. acum.', 'money', finSaidas, 'sai_fin_acum'),
+            r('Rec. pec. acum.', 'money', finRecPec, 'rec_pec_acum'),
+            r('Res. caixa acum.', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
           nome: 'Financeiro por Competência',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', emptyMoney, 'rec_pec_comp_acum'),
-            r('Res. oper. acum.', 'money', emptyMoney, 'res_oper_acum'),
-            r('EBITDA acum.', 'money', emptyMoney, 'ebitda_acum'),
+            r('Rec. pec. comp. acum.', 'money', finRecPec, 'rec_pec_comp_acum'),
+            r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
+            r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
             r('Var. valor reb.', 'money', varValorRebMeta, 'var_valor_reb'),
           ],
         },
@@ -985,10 +1121,10 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Financeiro Médio',
           rows: [
-            r('Receita média', 'money', emptyMoney, 'receita_media'),
-            r('Res. oper. médio', 'money', emptyMoney, 'res_oper_medio'),
-            r('EBITDA médio', 'money', emptyMoney, 'ebitda_medio'),
-            r('Res. caixa médio', 'money', emptyMoney, 'res_caixa_medio'),
+            r('Receita média', 'money', finRecPec, 'receita_media'),
+            r('Res. oper. médio', 'money', finResOper, 'res_oper_medio'),
+            r('EBITDA médio', 'money', finResOper, 'ebitda_medio'),
+            r('Res. caixa médio', 'money', finResCaixa, 'res_caixa_medio'),
           ],
         },
       ];
@@ -1101,6 +1237,14 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, [saldosIniciais]);
 
   const fazendaId = fazendaAtual?.id;
+
+  const {
+    buildGrid: buildGridMeta,
+    lancamentosNutricao: lancNutricaoMeta,
+    lancamentosFinanciamento: lancFinanciamentoMeta,
+    lancamentosRebanho: lancRebanhoMeta,
+    lancamentosProjetos: lancProjetosMeta,
+  } = usePlanejamentoFinanceiro(anoNum, fazendaId);
 
   // ─── Status dos pilares de governança (mês atual selecionado) ───
   const mesAtualRef = useMemo(() => {
@@ -1226,6 +1370,19 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const isPrevisto = cenario === 'meta';
 
+  const finMetaPainel = useMemo<FinMetaPainel | null>(() => {
+    if (!isPrevisto) return null;
+    const grid = buildGridMeta();
+    return agregarGridMetaPainelConsultor(
+      grid,
+      lancNutricaoMeta,
+      lancFinanciamentoMeta,
+      lancRebanhoMeta,
+      lancProjetosMeta,
+    );
+  }, [isPrevisto, buildGridMeta, lancNutricaoMeta, lancFinanciamentoMeta,
+      lancRebanhoMeta, lancProjetosMeta]);
+
   // META em modo Global agora é suportada: os hooks/views consultados já agregam
   // por cliente quando isGlobal=true. Se alguma fonte não agregar, a UI mostrará zeros
   // em vez de bloquear (mais transparente para o usuário).
@@ -1252,11 +1409,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
+        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel);
       }
 
       // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap);
+      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel);
     }
     // Realizado: slice(1) removes Dec prev year index for 12-month arrays
     const realPesoSnap12: PesoSnapshot = {
@@ -1266,7 +1423,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
     return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel]);
 
   useEffect(() => {
     if (blocos.length > 0) {
