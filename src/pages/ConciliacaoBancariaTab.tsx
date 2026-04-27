@@ -267,12 +267,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     if (!clienteId) return;
     Promise.all([
       supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes').eq('cliente_id',clienteId).limit(10000),
-      supabase.from('financeiro_saldos_bancarios').select('ano_mes').eq('cliente_id',clienteId).limit(10000),
       supabase.from('financeiro_lancamentos_v2').select('ano_mes').eq('cliente_id',clienteId)
               .eq('cancelado',false).not('sem_movimentacao_caixa','is',true).limit(10000),
-    ]).then(([sR,lR,lancR]) => {
+    ]).then(([sR,lancR]) => {
       const set = new Set<string>([String(currentYear)]);
-      ([...(sR.data||[]),...(lR.data||[]),...(lancR.data||[])]).forEach((r:any) => {
+      ([...(sR.data||[]),...(lancR.data||[])]).forEach((r:any) => {
         if (r.ano_mes) set.add(r.ano_mes.substring(0,4));
       });
       setAnos(Array.from(set).sort((a,b)=>b.localeCompare(a)));
@@ -297,6 +296,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* Edit saldo */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
   const [editValue, setEditValue]       = useState('');
+  const [editValueSaldoInicial, setEditValueSaldoInicial] = useState('');
+
+  const isInsertMode = useMemo(() => {
+    if (!editingSaldo) return false;
+    const existing = saldos.find(
+      s =>
+        s.ano_mes === editingSaldo.anoMes &&
+        s.conta_bancaria_id === editingSaldo.contaId
+    );
+    return !existing || String(existing.id).startsWith('legacy:');
+  }, [editingSaldo, saldos]);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -462,11 +472,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const handleEditSaldo = (anoMes: string, cId: string, current: number) => {
     setEditingSaldo({anoMes, contaId:cId, current});
     setEditValue(current.toFixed(2).replace('.',','));
+    setEditValueSaldoInicial('0,00');
   };
 
   const handleSaveSaldo = async () => {
     if (savingSaldo) return;
     if (!editingSaldo || !clienteId) return;
+    const parseMoedaBR = (value: string): number | null => {
+      const normalized = value.replace(/\./g, '').replace(',', '.').trim();
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
     const val = parseFloat(editValue.replace(/\./g,'').replace(',','.'));
     if (isNaN(val)) { toast.error('Valor inválido'); return; }
     setSavingSaldo(true);
@@ -479,13 +495,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing!.id);
         if (error) { toast.error('Erro ao salvar'); return; }
       } else {
+        const saldoInicialParsed = parseMoedaBR(editValueSaldoInicial);
+        if (saldoInicialParsed === null) {
+          toast.error('Saldo inicial inválido', {
+            description: 'Informe um valor válido para o saldo inicial da conta.',
+          });
+          return;
+        }
         const {data:cd} = await supabase.from('financeiro_contas_bancarias')
           .select('fazenda_id').eq('id',editingSaldo.contaId).single();
         if (!cd) { toast.error('Erro ao buscar fazenda'); return; }
         const {error} = await supabase.from('financeiro_saldos_bancarios_v2').insert({
           cliente_id:clienteId, fazenda_id:cd.fazenda_id,
           conta_bancaria_id:editingSaldo.contaId, ano_mes:editingSaldo.anoMes,
-          saldo_inicial:0, saldo_final:val,
+          saldo_inicial:saldoInicialParsed, saldo_final:val,
           origem_saldo_inicial:'manual', status_mes:'aberto',
         });
         if (error) { toast.error('Erro ao criar saldo'); return; }
@@ -936,6 +959,25 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            {isInsertMode && (
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Saldo Inicial da Conta
+                </label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={editValueSaldoInicial}
+                  onChange={e => setEditValueSaldoInicial(e.target.value)}
+                  onFocus={e => e.target.select()}
+                  placeholder="0,00"
+                  className="text-right font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Informe o saldo inicial oficial da conta neste primeiro registro.
+                </p>
+              </div>
+            )}
             <label className="text-xs font-medium">Valor (R$)</label>
             <Input value={editValue} onChange={e=>setEditValue(e.target.value)}
               className="h-8 text-sm" placeholder="0,00" autoFocus
