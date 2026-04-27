@@ -334,12 +334,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       legacySaldos:(legData as SaldoLegacySourceRow[])||[],
       contas:contasRef, movSummary:{},
     });
-    setSaldos(unified.map(u => ({
-      id:u.id, ano_mes:u.ano_mes,
-      conta_bancaria_id: u.conta_bancaria_id_v2 || u.conta_bancaria_id,
-      saldo_inicial:u.saldo_inicial, saldo_final:u.saldo_final,
-      status_mes:u.status_mes, origem_saldo_inicial:u.origem_saldo_inicial,
-    })));
+    // Conciliação bancária só pode confiar em saldos v2 reais. Linhas legacy mapeadas via
+    // fuzzy match (tipo+codigo / nome) podem atribuir o extrato à conta errada
+    // (ex: BTG legacy aparecendo na linha "Dinheiro"). Fonte 'v2' apenas.
+    setSaldos(unified
+      .filter(u => u.fonte === 'v2')
+      .map(u => ({
+        id:u.id, ano_mes:u.ano_mes,
+        conta_bancaria_id: u.conta_bancaria_id_v2 || u.conta_bancaria_id,
+        saldo_inicial:u.saldo_inicial, saldo_final:u.saldo_final,
+        status_mes:u.status_mes, origem_saldo_inicial:u.origem_saldo_inicial,
+      })));
 
     const allLanc: LancamentoResumo[] = [];
     let from = 0;
@@ -467,9 +472,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     setSavingSaldo(true);
     try {
       const existing = saldos.find(s => s.ano_mes===editingSaldo.anoMes && s.conta_bancaria_id===editingSaldo.contaId);
-      if (existing) {
+      // Defesa: se o id começa com 'legacy:', não é uma row real do v2 — fazer INSERT.
+      const isV2Real = !!existing && !String(existing.id).startsWith('legacy:');
+      if (isV2Real) {
         const {error} = await supabase.from('financeiro_saldos_bancarios_v2')
-          .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing.id);
+          .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing!.id);
         if (error) { toast.error('Erro ao salvar'); return; }
       } else {
         const {data:cd} = await supabase.from('financeiro_contas_bancarias')
