@@ -1383,6 +1383,27 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, [isPrevisto, buildGridMeta, lancNutricaoMeta, lancFinanciamentoMeta,
       lancRebanhoMeta, lancProjetosMeta]);
 
+  // F1C_DEBUG — remover após diagnóstico
+  useEffect(() => {
+    if (!isPrevisto) return;
+    const _grid = buildGridMeta();
+    console.log('F1C_DEBUG', {
+      isPrevisto,
+      anoNum,
+      fazendaId,
+      gridLength: _grid.length,
+      finMetaPainel,
+    });
+    if (finMetaPainel) {
+      console.log('F1C_SERIES', {
+        entradas: finMetaPainel.entradas,
+        saidas: finMetaPainel.saidas,
+        recPec: finMetaPainel.recPec,
+        custoProd: finMetaPainel.custoProd,
+      });
+    }
+  }, [isPrevisto, anoNum, fazendaId, finMetaPainel, buildGridMeta]);
+
   // META em modo Global agora é suportada: os hooks/views consultados já agregam
   // por cliente quando isGlobal=true. Se alguma fonte não agregar, a UI mostrará zeros
   // em vez de bloquear (mais transparente para o usuário).
