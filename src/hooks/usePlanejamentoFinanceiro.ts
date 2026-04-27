@@ -349,7 +349,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
     // 2. Load rebanho META (saldo_final por categoria/mês)
     const { data: rebanhoRows } = await (supabase
-      .from('vw_zoot_categoria_mensal' as any)
+      .from('zoot_mensal_cache' as any)
       .select('categoria_codigo, mes, saldo_final')
       .eq('fazenda_id', fId)
       .eq('cenario', 'meta')
