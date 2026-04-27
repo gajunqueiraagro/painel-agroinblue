@@ -17,7 +17,7 @@ import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametros
 import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark } from 'lucide-react';
+import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark, Camera } from 'lucide-react';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -187,6 +187,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   const [projetosOpen, setProjetosOpen] = useState(false);
   const [importConfirm, setImportConfirm] = useState<{ subcentro: string; centro_custo: string; gridIdx: number } | null>(null);
   const [versoesOpen, setVersoesOpen] = useState(false);
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
   const [versoes, setVersoes] = useState<{ id: string; nome: string; created_at: string; usuario_email: string | null; fazenda_id: string | null }[]>([]);
 
   useEffect(() => {
@@ -787,8 +788,32 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
             <DialogTitle className="text-sm">📌 Histórico de Versões — {ano}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="rounded-md border bg-muted/30 p-2.5 space-y-1.5">
+              <Button
+                size="sm"
+                className="w-full gap-1.5 h-8 text-xs"
+                disabled={snapshotSaving || isGlobal}
+                onClick={async () => {
+                  if (snapshotSaving) return;
+                  setSnapshotSaving(true);
+                  try {
+                    await salvarVersao();
+                    setVersoes(await listarVersoes());
+                    toast.success('Snapshot criado');
+                  } finally {
+                    setSnapshotSaving(false);
+                  }
+                }}
+              >
+                <Camera className="h-3.5 w-3.5" />
+                {snapshotSaving ? 'Criando...' : 'Criar Snapshot'}
+              </Button>
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                Registra o estado atual como versão, mesmo sem alterações pendentes.
+              </p>
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              Snapshots automáticos criados a cada salvamento. Selecione uma versão para restaurar.
+              Snapshots automáticos também são criados a cada salvamento. Selecione uma versão para restaurar.
             </p>
             {versoes.length > 0 && (
               <div className="border rounded-md divide-y max-h-72 overflow-auto">
