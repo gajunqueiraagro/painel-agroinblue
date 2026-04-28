@@ -1358,12 +1358,55 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [realPrecoArrMes, setRealPrecoArrMes] = useState<number[]>(Array(13).fill(0));
   const [realPesoSnap, setRealPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
 
+  const clienteId = clienteAtual?.id;
+
   useEffect(() => {
-    if (!fazendaId) { setValorRebanhoMes(Array(13).fill(0)); return; }
+    if (!fazendaId) {
+      setValorRebanhoMes(Array(13).fill(0));
+      setRealValorCabMes(Array(13).fill(0));
+      setRealPrecoArrMes(Array(13).fill(0));
+      setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
+      return;
+    }
     (async () => {
       const dezAnoAnterior = `${anoNum - 1}-12`;
       const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
       const todasMeses = [dezAnoAnterior, ...meses];
+
+      if (isGlobal) {
+        // GLOBAL: ler view agregada no banco — sem cálculo no front
+        if (!clienteId) {
+          setValorRebanhoMes(Array(13).fill(NaN));
+          setRealValorCabMes(Array(13).fill(NaN));
+          setRealPrecoArrMes(Array(13).fill(NaN));
+          setRealPesoSnap({ cabecas: Array(13).fill(NaN), pesoMedio: Array(13).fill(NaN), arrobas: Array(13).fill(NaN) });
+          return;
+        }
+        const { data, error } = await supabase
+          .from('vw_valor_rebanho_realizado_global_mensal' as any)
+          .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
+          .eq('cliente_id', clienteId)
+          .in('ano_mes', todasMeses);
+        if (error || !data?.length) {
+          setValorRebanhoMes(Array(13).fill(NaN));
+          setRealValorCabMes(Array(13).fill(NaN));
+          setRealPrecoArrMes(Array(13).fill(NaN));
+          setRealPesoSnap({ cabecas: Array(13).fill(NaN), pesoMedio: Array(13).fill(NaN), arrobas: Array(13).fill(NaN) });
+          return;
+        }
+        const byMes = Object.fromEntries((data as any[]).map((r: any) => [r.ano_mes, r]));
+        setValorRebanhoMes(todasMeses.map(m => byMes[m] ? Number(byMes[m].valor_total) : NaN));
+        setRealValorCabMes(todasMeses.map(m => byMes[m] ? Number(byMes[m].valor_cabeca_medio) : NaN));
+        setRealPrecoArrMes(todasMeses.map(m => byMes[m] ? Number(byMes[m].preco_arroba_medio) : NaN));
+        setRealPesoSnap({
+          cabecas: todasMeses.map(m => byMes[m] ? Number(byMes[m].cabecas) : NaN),
+          pesoMedio: todasMeses.map(m => byMes[m] ? Number(byMes[m].peso_medio_kg) : NaN),
+          arrobas: todasMeses.map(m => byMes[m] ? Number(byMes[m].arrobas_total) : NaN),
+        });
+        return;
+      }
+
+      // FAZENDA INDIVIDUAL: código original mantido sem alteração
       const fazendaIds = fazendaId === '__global__'
         ? fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id) : [fazendaId];
       if (fazendaIds.length === 0) {
@@ -1379,7 +1422,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         .in('fazenda_id', fazendaIds)
         .in('ano_mes', todasMeses);
       if (error) {
-        // Fallback to old table if new one has no data yet
         const { data: oldData } = await supabase
           .from('valor_rebanho_fechamento')
           .select('ano_mes, valor_total')
@@ -1395,9 +1437,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         setRealPesoSnap({ cabecas: Array(13).fill(0), pesoMedio: Array(13).fill(0), arrobas: Array(13).fill(0) });
         return;
       }
-      // GOVERNANÇA: Apenas snapshots validados alimentam o Painel oficial
       const validRows = (data as any[] || []).filter((row: any) => row.status === 'validado');
-      // Consolidação global: usar agregação oficial (2 camadas)
       const agg = agregaSnapshotsGlobal(validRows, todasMeses);
       setValorRebanhoMes(todasMeses.map(mes => agg.valorTotal.get(mes) || 0));
       setRealValorCabMes(todasMeses.map(mes => agg.valorCabeca.get(mes) || 0));
@@ -1408,7 +1448,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         arrobas: todasMeses.map(mes => agg.arrobas.get(mes) || 0),
       });
     })();
-  }, [fazendaId, anoNum, fazendas]);
+  }, [fazendaId, anoNum, fazendas, isGlobal, clienteId]);
 
   const areaProdutiva = useMemo(() => calcAreaProdutivaPecuaria(pastos), [pastos]);
 
