@@ -160,12 +160,42 @@ function buildContaLookup(contas: ContaOption[]): Map<string, { id: string; labe
     const resolved = { label, id: c.id };
     const exibKey = norm(c.nome_exibicao);
     if (exibKey) m.set(exibKey, resolved);
+    const nomeContaKey = norm(c.nome_conta);
+    if (nomeContaKey && !m.has(nomeContaKey)) m.set(nomeContaKey, resolved);
     if (c.codigo_conta) {
       const ck = norm(c.codigo_conta);
       if ((codigoCount.get(ck) || 0) <= 1 && ck) m.set(ck, resolved);
     }
   }
   return m;
+}
+
+function lookupConta(
+  contaKey: string,
+  m: Map<string, { id: string; label: string }>,
+): { id: string; label: string } | undefined {
+  if (!contaKey) return undefined;
+
+  // 1. Exact match (normalizado)
+  const exact = m.get(contaKey);
+  if (exact) return exact;
+
+  // 2. includes: fallback somente se candidato único
+  //    Exige mínimo 4 chars para evitar falsos positivos
+  if (contaKey.length < 4) return undefined;
+
+  const candidatos: { id: string; label: string }[] = [];
+  for (const [k, v] of m.entries()) {
+    if (!k || k.length < 4) continue;
+    if (k.includes(contaKey) || contaKey.includes(k)) {
+      if (!candidatos.some(c => c.id === v.id)) {
+        candidatos.push(v);
+      }
+    }
+  }
+
+  // Retorna somente se exatamente 1 candidato — evita atribuição errada
+  return candidatos.length === 1 ? candidatos[0] : undefined;
 }
 
 function isTransf(tipo: string | null): boolean {
@@ -192,13 +222,13 @@ function validarEstrutura(
   if (!row.tipoOperacao) erros.push({ campo: 'Tipo', mensagem: 'Tipo de operação obrigatório' });
 
   const contaKey = norm(row.contaOrigem);
-  const contaR = contaKey ? contaLookup.get(contaKey) : null;
+  const contaR = contaKey ? lookupConta(contaKey, contaLookup) : undefined;
   if (!row.contaOrigem) erros.push({ campo: 'Conta', mensagem: 'Conta bancária obrigatória' });
   else if (!contaR) erros.push({ campo: 'Conta', mensagem: `Conta "${row.contaOrigem}" não encontrada` });
 
   if (isTransf(row.tipoOperacao)) {
     const contaDestKey = norm(row.contaDestino);
-    const contaDestR = contaDestKey ? contaLookup.get(contaDestKey) : null;
+    const contaDestR = contaDestKey ? lookupConta(contaDestKey, contaLookup) : undefined;
     if (!row.contaDestino) erros.push({ campo: 'Conta Destino', mensagem: 'Transferência sem conta destino' });
     else if (!contaDestR) erros.push({ campo: 'Conta Destino', mensagem: `Conta destino "${row.contaDestino}" não encontrada` });
     else if (contaR && contaDestR && contaR.id === contaDestR.id) erros.push({ campo: 'Conta Destino', mensagem: 'Conta origem e destino iguais' });
@@ -358,7 +388,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     const preResolved = linhas.map((l, idx) => {
       const erros = validarEstrutura(l, contaLookup, fazendaLookup, subcentrosOficiais);
       const contaKey = norm(l.contaOrigem);
-      const contaR = contaKey ? contaLookup.get(contaKey) : null;
+      const contaR = contaKey ? lookupConta(contaKey, contaLookup) : undefined;
       const fornecedorResolved = fornecedorResolverFn(l.fornecedor);
       const hash = gerarHashImportacao(l.dataPagamento, l.valor, l.fornecedor, contaR?.id || null, l.numeroDocumento);
       return { l, idx, erros, contaR, fornecedorResolved, hash };
