@@ -15,7 +15,6 @@ import {
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import {
-  STATUS_REALIZADOS,
   belongsToConta,
   calcConciliacaoMensal,
   type ConciliacaoLancamentoBase,
@@ -81,6 +80,8 @@ interface MesCard {
   status: MesStatusExt;
   saldoRow: SaldoRow | null;
   lancamentos: LancamentoResumo[];
+  semContaSaidas?: number;
+  semContaEntradas?: number;
 }
 
 interface PerContaSaldo {
@@ -205,6 +206,31 @@ function buildMonthCards(
     const saldoExtrato = saldoRows.length > 0 ? r2(saldoRows.reduce((s,r) => s + (r.saldo_final||0), 0)) : null;
     const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
 
+    // Total oficial: calculado direto de mesLancs (inclui sem-conta)
+    const totalSaidasOficial = r2(
+      mesLancs
+        .filter(l => (l.tipo_operacao || '') === '2-Saídas')
+        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
+    );
+    const totalEntradasOficial = r2(
+      mesLancs
+        .filter(l => (l.tipo_operacao || '') === '1-Entradas')
+        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
+    );
+
+    // Pendências: lançamentos sem conta vinculada
+    const semConta = mesLancs.filter(l => !l.conta_bancaria_id);
+    const semContaSaidas = r2(
+      semConta
+        .filter(l => (l.tipo_operacao || '') === '2-Saídas')
+        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
+    );
+    const semContaEntradas = r2(
+      semConta
+        .filter(l => (l.tipo_operacao || '') === '1-Entradas')
+        .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
+    );
+
     /* Extended status: realizado / parcial / nao_conciliado / pendente */
     const accsWithSaldo = contas.filter(c => saldoRows.some(s => s.conta_bancaria_id === c.id));
     let status: MesStatusExt;
@@ -228,9 +254,10 @@ function buildMonthCards(
     cards.push({
       mes: mesStr, label: MESES_LABELS[m-1], anoMes,
       saldoInicial, entradasTerceiros, transferenciasRecebidas: 0,
-      totalEntradas: entradasTerceiros, saidasTerceiros, transferenciasEnviadas: 0,
-      totalSaidas: saidasTerceiros, saldoCalculado, saldoExtrato, diferenca, status,
+      totalEntradas: totalEntradasOficial, saidasTerceiros, transferenciasEnviadas: 0,
+      totalSaidas: totalSaidasOficial, saldoCalculado, saldoExtrato, diferenca, status,
       saldoRow: null, lancamentos: mesLancs,
+      semContaSaidas, semContaEntradas,
     });
 
     // Propaga prevFinal para o próximo mês: usa saldo_final salvo se houver,
@@ -323,6 +350,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const loadData = useCallback(async () => {
     if (!clienteId) return;
     setLoading(true);
+    setLancamentos([]);
     const prevDec    = `${Number(ano)-1}-12`;
     const anoMesMin  = `${ano}-01`;
     const anoMesMax  = `${ano}-12`;
@@ -365,8 +393,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .from('financeiro_lancamentos_v2')
         .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro')
         .eq('cliente_id',clienteId).eq('cancelado',false)
-        .not('sem_movimentacao_caixa','is',true)
-        .in('status_transacao',[...STATUS_REALIZADOS])
+        .eq('sem_movimentacao_caixa', false)
+        .eq('status_transacao', 'realizado')
+        .eq('cenario', 'realizado')
         .gte('ano_mes',anoMesMin).lte('ano_mes',anoMesMax)
         .order('ano_mes').order('data_competencia')
         .range(from, from+batchSize-1);
@@ -626,32 +655,40 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </Select>
 
           {/* 12 month cards — color = global status of ALL accounts */}
-          <div className="flex flex-1 gap-0.5">
-            {monthBarCards.map(c => {
-              const cc    = STATUS_COR[c.status] || STATUS_COR.pendente;
-              const isSel = selectedMes === c.mes;
-              return (
-                <button
-                  key={c.mes}
-                  onClick={() => setSelectedMes(c.mes)}
-                  style={{
-                    flex:1, textAlign:'center', padding:'5px 3px',
-                    fontSize:'10px', borderRadius:'8px',
-                    border:`1.5px solid ${cc.border}`,
-                    cursor:'pointer', background:cc.bg, color:cc.txt,
-                    fontWeight: isSel ? 700 : 500,
-                    ...(isSel ? {
-                      outline:'2.5px solid #185FA5', outlineOffset:'2px',
-                      transform:'scale(1.09)', position:'relative', zIndex:1,
-                    } : {}),
-                  }}
-                  title={STATUS_META[c.status]?.label || c.status}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
+          {loading ? (
+            <div className="flex flex-1 gap-0.5">
+              {Array.from({length: 12}).map((_, i) => (
+                <div key={i} className="flex-1 h-7 rounded bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-1 gap-0.5">
+              {monthBarCards.map(c => {
+                const cc    = STATUS_COR[c.status] || STATUS_COR.pendente;
+                const isSel = selectedMes === c.mes;
+                return (
+                  <button
+                    key={c.mes}
+                    onClick={() => setSelectedMes(c.mes)}
+                    style={{
+                      flex:1, textAlign:'center', padding:'5px 3px',
+                      fontSize:'10px', borderRadius:'8px',
+                      border:`1.5px solid ${cc.border}`,
+                      cursor:'pointer', background:cc.bg, color:cc.txt,
+                      fontWeight: isSel ? 700 : 500,
+                      ...(isSel ? {
+                        outline:'2.5px solid #185FA5', outlineOffset:'2px',
+                        transform:'scale(1.09)', position:'relative', zIndex:1,
+                      } : {}),
+                    }}
+                    title={STATUS_META[c.status]?.label || c.status}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Subtitle */}
@@ -721,6 +758,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <div className="flex justify-between text-[9px] text-muted-foreground">
                       <span>↳ transferências</span><span className="tabular-nums">{formatMoeda(selectedCard.transferenciasEnviadas)}</span>
                     </div>
+                  </div>
+                )}
+                {((selectedCard?.semContaSaidas ?? 0) > 0 ||
+                  (selectedCard?.semContaEntradas ?? 0) > 0) && (
+                  <div className="mx-3 my-1 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Lançamentos sem conta bancária vinculada
+                      {(selectedCard?.semContaSaidas ?? 0) > 0 &&
+                        <> — Saídas: {formatMoeda(selectedCard!.semContaSaidas!)}</>}
+                      {(selectedCard?.semContaEntradas ?? 0) > 0 &&
+                        <> — Entradas: {formatMoeda(selectedCard!.semContaEntradas!)}</>}
+                      . Entram no total oficial mas não são conciliáveis por conta.
+                    </span>
                   </div>
                 )}
                 <div className="mx-3 my-1 h-px bg-border" />
@@ -991,7 +1042,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <TableRow key={idx} className={idx%2===1?'bg-muted/20':''}>
                       <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento||l.data_competencia)}</TableCell>
                       <TableCell className="text-[9px] py-0.5 truncate max-w-[180px]">{l.descricao||'-'}</TableCell>
-                      <TableCell className="text-[9px] py-0.5 truncate max-w-[110px] text-muted-foreground">{fornNome||<span className="italic">n/c</span>}</TableCell>
+                      <TableCell className="text-[9px] py-0.5 truncate max-w-[110px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          {fornNome||<span className="italic">n/c</span>}
+                          {!l.conta_bancaria_id && (
+                            <span
+                              title="Lançamento sem conta bancária vinculada"
+                              className="inline-flex items-center px-1 py-0 rounded text-[8px] font-semibold border border-amber-300 bg-amber-50 text-amber-800"
+                            >
+                              Sem conta
+                            </span>
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntr?'text-green-700':'text-red-700'}`}>
                         {formatMoeda(isEntr ? Math.abs(l.valor) : -Math.abs(l.valor))}
                       </TableCell>
