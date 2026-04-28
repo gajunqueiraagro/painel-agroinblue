@@ -4,20 +4,20 @@
 import { triggerXlsxDownload, type XlsxCellValue } from '@/lib/xlsxDownload';
 
 const COLS: XlsxCellValue[] = [
-  'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Conta', 'Conta_Destino', 'Fazenda',
+  'Tipo_Registro', 'AnoMes', 'Data_Ref', 'Data_Competencia', 'Conta', 'Conta_Destino', 'Fazenda',
   'Tipo', 'Grupo', 'Valor', 'Status', 'Produto',
   'Fornecedor', 'Macro_Custo', 'Grupo_Custo', 'Centro_Custo', 'Subcentro', 'Documento', 'Obs',
 ];
 
 const EXAMPLES: XlsxCellValue[][] = [
-  ['LANCAMENTO', '2026-01', '2026-01-15', 'Banco do Brasil', null, '3M', '2-Saídas', 'Nutrição', 4500.00, 'Realizado', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produtivo', 'Nutrição', 'Sal mineral', 'Proteinado', 'NF 123456', 'Entrega mensal'],
-  ['LANCAMENTO', '2026-02', '2026-02-10', 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Realizado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produtivo', 'Sanidade', 'Vacinação', null, 'Recibo 4567', 'Campanha mai/2026'],
-  ['LANCAMENTO', '2026-03', '2026-03-05', 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferências', 'Resgate', 50000.00, 'Realizado', 'Resgate CDI', null, null, null, null, null, null, 'Transferência entre contas'],
-  ['SALDO', '2026-01', null, 'Banco do Brasil', null, null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null, null],
-  ['SALDO', '2026-01', null, 'Sicredi', null, null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Saidas', null, 62000.00, null, null, null, null, null, null, null, null, null],
-  ['RESUMO', '2026-01', null, null, null, null, 'Saldo_Final_Total', null, 168200.50, null, null, null, null, null, null, null, null, null],
+  ['LANCAMENTO', '2026-01', '2026-01-15', null, 'Banco do Brasil', null, '3M', '2-Saídas', 'Nutrição', 4500.00, 'Realizado', 'Sal mineral', 'Agro Nutrição Ltda', 'Custeio Produção', 'Nutrição', 'Sal mineral', null, 'NF 123456', 'Entrega mensal'],
+  ['LANCAMENTO', '2026-02', '2026-02-10', null, 'Sicredi', null, 'BG', '2-Saídas', 'Sanidade', 2800.00, 'Realizado', 'Vacina aftosa', 'Vet Saúde Animal', 'Custeio Produção', 'Sanidade', 'Vacinação', null, 'Recibo 4567', 'Campanha mai/2026'],
+  ['LANCAMENTO', '2026-03', '2026-03-05', null, 'Itaú CDI', 'Itaú Personalité', '3M', '3-Transferências', 'Resgate', 50000.00, 'Realizado', 'Resgate CDI', null, null, null, null, null, null, 'Transferência entre contas'],
+  ['SALDO', '2026-01', null, null, 'Banco do Brasil', null, null, 'Saldo_Final', null, 125000.00, null, null, null, null, null, null, null, null, null],
+  ['SALDO', '2026-01', null, null, 'Sicredi', null, null, 'Saldo_Final', null, 43200.50, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, null, 'Entradas', null, 85000.00, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, null, 'Saidas', null, 62000.00, null, null, null, null, null, null, null, null, null],
+  ['RESUMO', '2026-01', null, null, null, null, null, 'Saldo_Final_Total', null, 168200.50, null, null, null, null, null, null, null, null, null],
 ];
 
 const INSTRUCOES: XlsxCellValue[][] = [
@@ -31,6 +31,7 @@ const INSTRUCOES: XlsxCellValue[][] = [
   ['Tipo_Registro', 'SIM', 'Texto', 'LANCAMENTO, SALDO ou RESUMO'],
   ['AnoMes', 'SIM', 'AAAA-MM', 'Competência (ex: 2026-03)'],
   ['Data_Ref', 'NÃO', 'AAAA-MM-DD', 'Data de referência/pagamento'],
+  ['Data_Competencia', 'NÃO', 'AAAA-MM-DD', 'Data da competência. Se vazia = usa Data_Ref. Use quando pagamento ≠ competência (ex: salário pago em abr mas competência mar)'],
   ['Conta', 'NÃO', 'Texto', 'Conta bancária de origem (obrigatório para SALDO e Transferências)'],
   ['Conta_Destino', 'NÃO', 'Texto', 'Conta bancária de destino (obrigatório para Transferências)'],
   ['Fazenda', 'SIM', 'Texto', 'Código de importação da fazenda'],
@@ -74,7 +75,7 @@ export function downloadModeloExcel() {
         name: 'INSTRUCOES',
         mode: 'aoa',
         rows: INSTRUCOES,
-        cols: [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 60 }],
+        cols: [{ wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 70 }],
       },
     ],
   });
