@@ -202,9 +202,7 @@ function buildMonthCards(
 
     const entradasTerceiros = r2(perAcct.reduce((s,r) => s + r.entradasTerceiros, 0));
     const saidasTerceiros   = r2(perAcct.reduce((s,r) => s + r.saidasTerceiros, 0));
-    const saldoCalculado    = r2(perAcct.reduce((s,r) => s + r.saldoCalculado, 0));
     const saldoExtrato = saldoRows.length > 0 ? r2(saldoRows.reduce((s,r) => s + (r.saldo_final||0), 0)) : null;
-    const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
 
     // Total oficial: calculado direto de mesLancs (inclui sem-conta)
     const totalSaidasOficial = r2(
@@ -217,6 +215,11 @@ function buildMonthCards(
         .filter(l => (l.tipo_operacao || '') === '1-Entradas')
         .reduce((s, l) => s + Math.abs(Number(l.valor) || 0), 0)
     );
+
+    // FLUXO COMPLETO: saldo agregado = saldo_inicial + entradas - saídas (inclui sem-conta).
+    // O saldoCalculado por-conta (perAcct) continua usado em prevFinal para encadear meses.
+    const saldoCalculado = r2(saldoInicial + totalEntradasOficial - totalSaidasOficial);
+    const diferenca = saldoExtrato !== null ? r2(saldoExtrato - saldoCalculado) : 0;
 
     // Pendências: lançamentos sem conta vinculada
     const semConta = mesLancs.filter(l => !l.conta_bancaria_id && !l.conta_destino_id);
@@ -760,20 +763,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     </div>
                   </div>
                 )}
-                {((selectedCard?.semContaSaidas ?? 0) > 0 ||
-                  (selectedCard?.semContaEntradas ?? 0) > 0) && (
-                  <div className="mx-3 my-1 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>
-                      Lançamentos sem conta bancária vinculada
-                      {(selectedCard?.semContaSaidas ?? 0) > 0 &&
-                        <> — Saídas: {formatMoeda(selectedCard!.semContaSaidas!)}</>}
-                      {(selectedCard?.semContaEntradas ?? 0) > 0 &&
-                        <> — Entradas: {formatMoeda(selectedCard!.semContaEntradas!)}</>}
-                      . Entram no total oficial mas não são conciliáveis por conta.
-                    </span>
-                  </div>
-                )}
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
@@ -837,6 +826,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   <div className="text-[11px] font-bold" style={{color:cor.txt}}>{meta.label}</div>
                   {meta.sub && (
                     <div className="text-[9px] leading-tight" style={{color:cor.txt, maxWidth:'90px'}}>{meta.sub}</div>
+                  )}
+                  {((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0)) > 0 && (
+                    <div className="text-[9px] leading-tight font-medium text-amber-700">
+                      ⚠ {formatMoeda((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0))} em lançamentos sem conta bancária
+                    </div>
                   )}
                   {cardStatus === 'parcial' && (
                     <div className="mt-1 w-full border-t pt-1.5 space-y-0.5" style={{borderColor:`${cor.border}80`}}>
