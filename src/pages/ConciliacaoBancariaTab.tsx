@@ -219,7 +219,7 @@ function buildMonthCards(
     );
 
     // Pendências: lançamentos sem conta vinculada
-    const semConta = mesLancs.filter(l => !l.conta_bancaria_id);
+    const semConta = mesLancs.filter(l => !l.conta_bancaria_id && !l.conta_destino_id);
     const semContaSaidas = r2(
       semConta
         .filter(l => (l.tipo_operacao || '') === '2-Saídas')
