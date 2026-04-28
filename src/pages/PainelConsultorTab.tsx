@@ -198,17 +198,17 @@ function buildMonthlyDataFromView(
   }
   const pesoTotalIni = mk(m => viewTotals[m]?.peso_total_inicial ?? 0);
   const pesoTotalFin = mk(m => viewTotals[m]?.peso_total_final ?? 0);
-  const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : 0; });
-  const pesoMedioFin = mk(m => { const c = cabFin[m - 1]; return c > 0 ? pesoTotalFin[m - 1] / c : 0; });
+  const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : NaN; });
+  const pesoMedioFin = mk(m => { const c = cabFin[m - 1]; return c > 0 ? pesoTotalFin[m - 1] / c : NaN; });
 
   // GMD: weighted average from view rows
   const gmd = mk(m => {
     const mesRows = viewRows.filter(r => r.mes === m);
     const cabMedia = (cabIni[m - 1] + cabFin[m - 1]) / 2;
-    if (cabMedia <= 0) return 0;
+    if (cabMedia <= 0) return NaN;
     const prodBio = mesRows.reduce((s, r) => s + r.producao_biologica, 0);
     const dias = diasNoMes(m);
-    return dias > 0 ? prodBio / cabMedia / dias : 0;
+    return dias > 0 ? prodBio / cabMedia / dias : NaN;
   });
 
   const arrobasProd = mk(m => (viewTotals[m]?.producao_biologica ?? 0) / 30);
@@ -494,15 +494,15 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const uaMedia = cabMedia.map((v, i) => {
     const pm = pesoMedioFin[i];
-    return pm > 0 ? (v * pm) / 450 : 0;
+    return pm > 0 ? (v * pm) / 450 : NaN;
   });
-  const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
-  const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : 0);
+  const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : NaN);
+  const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : NaN);
   // Custo/@prod acumulado: custeio acumulado / arrobas produzidas acumuladas no período
   const custoPorArrAcum = (() => {
     const custAcum = cumSum(d.custOper);
     const arrAcum = cumSum(d.arrobasProd);
-    return custAcum.map((c, i) => arrAcum[i] > 0 ? c / arrAcum[i] : 0);
+    return custAcum.map((c, i) => arrAcum[i] > 0 ? c / arrAcum[i] : NaN);
   })();
   const desfruteCab = d.desfruteCab;
   const desfrute_arr = d.desfrute_arr;
@@ -512,11 +512,11 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   const finResCaixa = d.resCaixa;
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : 0))
-    : d.valorRebFin.map((v, i) => { const c = cabFin[i]; return c > 0 ? v / c : 0; });
+    ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : NaN))
+    : d.valorRebFin.map((v, i) => { const c = cabFin[i]; return c > 0 ? v / c : NaN; });
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
-    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : 0))
-    : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : 0; });
+    ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : NaN))
+    : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : NaN; });
 
   switch (tab) {
     case 'mensal':
@@ -742,7 +742,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
   const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
     ? dezRealizadoSnap.pesoMedioKg
-    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : NaN);
   const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
   const gmdNum = get('gmd_numerador_kg');
@@ -758,7 +758,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   });
   const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
   const desfruteCab = saidas;
-  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
+  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
 
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -792,12 +792,12 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   const vrmIni = valorRebanhoMetaMesAnteriorOuDez || Array(12).fill(0);
   const valorPorCabMeta = cabFin.map((c, i) => {
     if (metaValorCabMes && metaValorCabMes[i] > 0) return metaValorCabMes[i];
-    return c > 0 && vrm[i] > 0 ? vrm[i] / c : 0;
+    return c > 0 && vrm[i] > 0 ? vrm[i] / c : NaN;
   });
   const valorPorArrMeta = pesoFin.map((peso, i) => {
     if (metaPrecoArrMes && metaPrecoArrMes[i] > 0) return metaPrecoArrMes[i];
-    const arrobas = peso > 0 ? peso / 30 : 0;
-    return arrobas > 0 && vrm[i] > 0 ? vrm[i] / arrobas : 0;
+    const arrobas = peso > 0 ? peso / 30 : NaN;
+    return arrobas > 0 && vrm[i] > 0 ? vrm[i] / arrobas : NaN;
   });
 
   switch (tab) {
@@ -993,14 +993,14 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Peso médio final = peso total final / SF (weighted across categories)
   const pesoMedFinRaw = Array.from({ length: 12 }, (_, i) => {
     const sf = cabFin[i];
-    return sf > 0 ? pesoFinRaw[i] / sf : 0;
+    return sf > 0 ? pesoFinRaw[i] / sf : NaN;
   });
   const pesoMedFin = hasSnap ? pesoSnap!.pesoMedio : pesoMedFinRaw;
 
   // Peso médio ini: Jan = Dez realizado validado pesoMedioKg; Fev+ = meta final mês anterior
   const pesoMedIniJan = dezRealizadoSnap && dezRealizadoSnap.pesoMedioKg > 0
     ? dezRealizadoSnap.pesoMedioKg
-    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : 0);
+    : (cabIni[0] > 0 ? pesoIni[0] / cabIni[0] : NaN);
   const pesoMedIni = [pesoMedIniJan, ...pesoMedFin.slice(0, 11)];
   const cabMedia = cabIni.map((v, i) => (v + cabFin[i]) / 2);
 
@@ -1018,11 +1018,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const arrobasProd = prodBio.map(v => v / 30);
   const prodKgArr = prodBio;
 
-  const uaMedia = cabMedia.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 450 : 0);
-  const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : 0);
-  const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : 0);
+  const uaMedia = cabMedia.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 450 : NaN);
+  const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : NaN);
+  const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : NaN);
   const desfruteCab = saidas;
-  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : 0);
+  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
 
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -1060,13 +1060,13 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const valorPorCabMeta = cabFin.map((c, i) => {
     // Prefer persisted valor_cabeca_medio, fallback to calculation
     if (metaValorCabMes && metaValorCabMes[i] > 0) return metaValorCabMes[i];
-    return c > 0 && vrm[i] > 0 ? vrm[i] / c : 0;
+    return c > 0 && vrm[i] > 0 ? vrm[i] / c : NaN;
   });
   const arrobasEstoqueMeta = pesoFin.map(v => v / 30);
   const valorPorArrMeta = arrobasEstoqueMeta.map((a, i) => {
     // Prefer persisted preco_arroba_medio, fallback to calculation
     if (metaPrecoArrMes && metaPrecoArrMes[i] > 0) return metaPrecoArrMes[i];
-    return a > 0 && vrm[i] > 0 ? vrm[i] / a : 0;
+    return a > 0 && vrm[i] > 0 ? vrm[i] / a : NaN;
   });
   const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
 
