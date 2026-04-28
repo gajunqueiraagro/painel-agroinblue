@@ -609,8 +609,6 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Financeiro por Competência',
           rows: [
             r('Rec. pec. comp. acum.', 'money', d.recPecComp, 'rec_pec_comp_acum'),
-            r('Res. oper. acum.', 'money', d.resOper, 'res_oper_acum'),
-            r('EBITDA acum.', 'money', d.ebitda, 'ebitda_acum'),
             r('Var. valor reb.', 'money', d.varValorReb, 'var_valor_reb'),
           ],
         },
@@ -643,8 +641,6 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Financeiro Médio',
           rows: [
             r('Receita média', 'money', d.recPec, 'receita_media', true),
-            r('Res. oper. médio', 'money', d.resOper, 'res_oper_medio', true),
-            r('EBITDA médio', 'money', d.ebitda, 'ebitda_medio', true),
             r('Res. caixa médio', 'money', d.resCaixa, 'res_caixa_medio', true),
           ],
         },
