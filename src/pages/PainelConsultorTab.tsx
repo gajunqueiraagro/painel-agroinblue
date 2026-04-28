@@ -800,66 +800,93 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     return arrobas > 0 && vrm[i] > 0 ? vrm[i] / arrobas : NaN;
   });
 
+  const diasMesPeriodo = Array.from({ length: 12 }, (_, i) => {
+    const m = byMes[String(i + 1).padStart(2, '0')];
+    return m ? (Number(m.dias_mes) || new Date(new Date().getFullYear(), i + 1, 0).getDate()) : new Date(new Date().getFullYear(), i + 1, 0).getDate();
+  });
+  const gmdPeriodo = computePeriodGmd(prodKg, cabMedia, diasMesPeriodo);
+  const rebMedioPeriodoVals = rollingAvg(cabMedia);
+
   switch (tab) {
     case 'mensal':
       return [
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
+            r('Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
             r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
+            r('Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
+            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
           ],
         },
         {
-          nome: 'Peso',
+          nome: 'Produção',
           rows: [
-            r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
-            r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', hasSnap ? pesoSnap!.pesoMedio.map(v => v > 0 ? v : NaN) : pesoFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
-            r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
-            r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
-            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
-            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin', true),
+            r('Produção mensal (kg)', 'padrao', prodKg, 'prod_kg'),
+            r('Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+            r('Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Valor do Rebanho',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Valor reb. inicial', 'moneyInt', vrmIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'moneyInt', vrm, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', emptyMoney, 'var_valor_reb'),
           ],
         },
       ];
     case 'medio':
       return [
         {
-          nome: 'Desempenho',
+          nome: 'Rebanho',
           rows: [
-            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
-            r('Peso méd. reb.', 'med2', pesoMedFin, 'peso_med_reb'),
-            r('UA média', 'med2', uaMedia, 'ua_media'),
-            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao'),
+            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+            r('Peso méd. reb. (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
+            r('UA média', 'med2', uaMedia, 'ua_media', true),
+            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
           ],
         },
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-            r('Produção (kg)', 'padrao', prodKg, 'prod_kg'),
-            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Produção média (kg)', 'padrao', prodKg, 'prod_kg_med'),
+            r('Arrobas médias', 'padrao', arrobasProd, 'arrobas_prod_med'),
+            r('Arrobas/ha média', 'med2', arrHa, 'arr_ha_med'),
+            r('GMD médio', 'gmd', gmd, 'gmd_med', true),
             r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Estrutura',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Área prod. (ha)', 'med2', areaProd, 'area_prod'),
-            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
@@ -876,80 +903,74 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas acum.', 'padrao', arrobasProd, 'arrobas_acum'),
-            r('Produção kg acum.', 'padrao', prodKg, 'prod_kg_acum'),
-            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
+            r('Produção acumulada (kg)', 'padrao', prodKg, 'prod_kg_acum'),
+            r('Arrobas acumuladas', 'padrao', arrobasProd, 'arrobas_acum'),
+            r('Arrobas/ha acumulado', 'med2', arrHa, 'arr_ha_acum'),
             r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
         {
-          nome: 'Financeiro no Caixa',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas fin. acum.', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas fin. acum.', 'money', finSaidas, 'sai_fin_acum'),
-            r('Rec. pec. acum.', 'money', finRecPec, 'rec_pec_acum'),
-            r('Res. caixa acum.', 'money', finResCaixa, 'res_caixa_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
-          nome: 'Financeiro por Competência',
+          nome: 'Patrimônio',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', finRecPec, 'rec_pec_comp_acum'),
-            r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
-            r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
-            r('Var. valor reb.', 'money', emptyMoney, 'var_valor_reb'),
-          ],
-        },
-        {
-          nome: 'DRE (Planejamento)',
-          rows: [
-            r('Receita Operacional', 'money', finRecOper,      'rec_oper_meta'),
-            r('Custo de Produção',   'money', finCustoProd,    'custo_prod_meta'),
-            r('Resultado Operacional','money', finResOper,      'res_oper_meta'),
-            r('Outras Saídas',       'money', finOutrasSaidas, 'outras_saidas_meta'),
-            r('Resultado Final',     'money', finResFinal,     'res_final_meta'),
+            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', emptyMoney, 'var_valor_reb'),
           ],
         },
       ];
-    case 'media_periodo': {
-      const diasMes = Array.from({ length: 12 }, (_, i) => {
-        const m = byMes[String(i + 1).padStart(2, '0')];
-        return m ? (Number(m.dias_mes) || new Date(new Date().getFullYear(), i + 1, 0).getDate()) : new Date(new Date().getFullYear(), i + 1, 0).getDate();
-      });
-      const gmdPeriodo = computePeriodGmd(prodKg, cabMedia, diasMes);
-      const rebMedioPeriodoVals = rollingAvg(cabMedia);
+    case 'media_periodo':
       return [
         {
-          nome: 'Desempenho Médio',
+          nome: 'Rebanho',
           rows: [
             { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
-            r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
+            r('Peso médio período (kg)', 'med2', pesoMedFin, 'peso_medio_periodo'),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
-            r('Lotação média', 'med2', lotacao, 'lotacao_media'),
+            r('Lotação média (UA/ha)', 'med2', lotacao, 'lotacao_media'),
           ],
         },
         {
-          nome: 'Produção Média',
+          nome: 'Produção',
           rows: [
-            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
-            r('Prod. média (@)', 'padrao', arrobasProd, 'prod_media_arr'),
-            r('Prod. média (kg)', 'padrao', prodKg, 'prod_media_kg'),
-            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
+            r('Produção média do período (@)', 'padrao', arrobasProd, 'prod_media_arr', true),
+            r('Produção média do período (kg)', 'padrao', prodKg, 'prod_media_kg', true),
+            r('Arrobas/ha período', 'med2', arrHa, 'arr_ha_media', true),
+            r('Desfrute médio período (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
+            r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
+            { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
         {
-          nome: 'Financeiro Médio',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Receita média', 'money', finRecPec, 'receita_media'),
-            r('Res. oper. médio', 'money', finResOper, 'res_oper_medio'),
-            r('EBITDA médio', 'money', finResOper, 'ebitda_medio'),
-            r('Res. caixa médio', 'money', finResCaixa, 'res_caixa_medio'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
+            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', vrm, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
-    }
+    default:
+      return [];
   }
 }
 
@@ -1070,66 +1091,93 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   });
   const varValorRebMeta = valorRebFin.map((v, i) => v - valorRebIni[i]);
 
+  const diasMesPeriodo = Array.from({ length: 12 }, (_, i) => {
+    const row = consolidacao.find(c => c.mes === String(i + 1).padStart(2, '0'));
+    return Number(row?.dias) || new Date(new Date().getFullYear(), i + 1, 0).getDate();
+  });
+  const gmdPeriodo = computePeriodGmd(prodBio, cabMedia, diasMesPeriodo);
+  const rebMedioPeriodoVals = rollingAvg(cabMedia);
+
   switch (tab) {
     case 'mensal':
       return [
         {
           nome: 'Rebanho',
           rows: [
-            r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
+            r('Rebanho inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
             r('Entradas (cab)', 'cab', entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', saidas, 'saidas_cab'),
+            r('Rebanho final (cab)', 'cab', cabFin, 'reb_final', true),
+            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
           ],
         },
         {
-          nome: 'Peso',
+          nome: 'Produção',
           rows: [
-            r('Peso ini. (kg)', 'cab', pesoIni, 'peso_ini_kg', true),
-            r('Peso final (kg)', 'cab', pesoFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', hasSnap ? pesoSnap!.pesoMedio.map(v => v > 0 ? v : NaN) : pesoFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
-            r('Peso ini. (@)', 'cab', pesoIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
-            r('Peso final (@)', 'cab', pesoFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
-            r('Peso méd. ini.', 'med2', pesoMedIni, 'peso_med_ini', true),
-            r('Peso méd. final', 'med2', pesoMedFin, 'peso_med_fin', true),
+            r('Produção mensal (kg)', 'padrao', prodKgArr, 'prod_kg'),
+            r('Arrobas produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
+            r('Arrobas/ha', 'med2', arrHa, 'arr_ha'),
+            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Valor do Rebanho',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Valor reb. inicial', 'moneyInt', valorRebIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', valorPorCabMeta, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', varValorRebMeta, 'var_valor_reb'),
           ],
         },
       ];
     case 'medio':
       return [
         {
-          nome: 'Desempenho',
+          nome: 'Rebanho',
           rows: [
-            r('GMD (kg/cab/dia)', 'gmd', gmd, 'gmd'),
-            r('Peso méd. reb.', 'med2', pesoMedFin, 'peso_med_reb'),
-            r('UA média', 'med2', uaMedia, 'ua_media'),
-            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao'),
+            r('Rebanho médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+            r('Peso méd. reb. (kg)', 'med2', pesoMedFin, 'peso_med_reb', true),
+            r('UA média', 'med2', uaMedia, 'ua_media', true),
+            r('Lotação (UA/ha)', 'med2', lotacao, 'lotacao', true),
           ],
         },
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas', 'padrao', arrobasProd, 'arrobas_prod'),
-            r('Produção (kg)', 'padrao', prodKgArr, 'prod_kg'),
-            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('Produção média (kg)', 'padrao', prodKgArr, 'prod_kg_med'),
+            r('Arrobas médias', 'padrao', arrobasProd, 'arrobas_prod_med'),
+            r('Arrobas/ha média', 'med2', arrHa, 'arr_ha_med'),
+            r('GMD médio', 'gmd', gmd, 'gmd_med', true),
             r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Estrutura',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Área prod. (ha)', 'med2', Array(12).fill(areaProd), 'area_prod'),
-            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
@@ -1146,80 +1194,74 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas acum.', 'padrao', arrobasProd, 'arrobas_acum'),
-            r('Produção kg acum.', 'padrao', prodKgArr, 'prod_kg_acum'),
-            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
+            r('Produção acumulada (kg)', 'padrao', prodKgArr, 'prod_kg_acum'),
+            r('Arrobas acumuladas', 'padrao', arrobasProd, 'arrobas_acum'),
+            r('Arrobas/ha acumulado', 'med2', arrHa, 'arr_ha_acum'),
             r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
         {
-          nome: 'Financeiro no Caixa',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas fin. acum.', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas fin. acum.', 'money', finSaidas, 'sai_fin_acum'),
-            r('Rec. pec. acum.', 'money', finRecPec, 'rec_pec_acum'),
-            r('Res. caixa acum.', 'money', finResCaixa, 'res_caixa_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
-          nome: 'Financeiro por Competência',
+          nome: 'Patrimônio',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', finRecPec, 'rec_pec_comp_acum'),
-            r('Res. oper. acum.', 'money', finResOper, 'res_oper_acum'),
-            r('EBITDA acum.', 'money', finResOper, 'ebitda_acum'),
-            r('Var. valor reb.', 'money', varValorRebMeta, 'var_valor_reb'),
-          ],
-        },
-        {
-          nome: 'DRE (Planejamento)',
-          rows: [
-            r('Receita Operacional', 'money', finRecOper,      'rec_oper_meta'),
-            r('Custo de Produção',   'money', finCustoProd,    'custo_prod_meta'),
-            r('Resultado Operacional','money', finResOper,      'res_oper_meta'),
-            r('Outras Saídas',       'money', finOutrasSaidas, 'outras_saidas_meta'),
-            r('Resultado Final',     'money', finResFinal,     'res_final_meta'),
+            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', varValorRebMeta, 'var_valor_reb'),
           ],
         },
       ];
-    case 'media_periodo': {
-      const diasMes = Array.from({ length: 12 }, (_, i) => {
-        const row = consolidacao.find(c => c.mes === String(i + 1).padStart(2, '0'));
-        return Number(row?.dias) || new Date(new Date().getFullYear(), i + 1, 0).getDate();
-      });
-      const gmdPeriodo = computePeriodGmd(prodBio, cabMedia, diasMes);
-      const rebMedioPeriodoVals = rollingAvg(cabMedia);
+    case 'media_periodo':
       return [
         {
-          nome: 'Desempenho Médio',
+          nome: 'Rebanho',
           rows: [
             { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
-            r('Peso médio período', 'med2', pesoMedFin, 'peso_medio_periodo'),
+            r('Peso médio período (kg)', 'med2', pesoMedFin, 'peso_medio_periodo'),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo'),
-            r('Lotação média', 'med2', lotacao, 'lotacao_media'),
+            r('Lotação média (UA/ha)', 'med2', lotacao, 'lotacao_media'),
           ],
         },
         {
-          nome: 'Produção Média',
+          nome: 'Produção',
           rows: [
-            r('@/ha média período', 'med2', arrHa, 'arr_ha_media'),
-            r('Prod. média (@)', 'padrao', arrobasProd, 'prod_media_arr'),
-            r('Prod. média (kg)', 'padrao', prodKgArr, 'prod_media_kg'),
-            r('Desfrute médio', 'cab', desfruteCab, 'desfrute_medio'),
+            r('Produção média do período (@)', 'padrao', arrobasProd, 'prod_media_arr', true),
+            r('Produção média do período (kg)', 'padrao', prodKgArr, 'prod_media_kg', true),
+            r('Arrobas/ha período', 'med2', arrHa, 'arr_ha_media', true),
+            r('Desfrute médio período (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
+            r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
+            { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
         {
-          nome: 'Financeiro Médio',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Receita média', 'money', finRecPec, 'receita_media'),
-            r('Res. oper. médio', 'money', finResOper, 'res_oper_medio'),
-            r('EBITDA médio', 'money', finResOper, 'ebitda_medio'),
-            r('Res. caixa médio', 'money', finResCaixa, 'res_caixa_medio'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
+            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCabMeta, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArrMeta, 'valor_arr_fin', true),
           ],
         },
       ];
-    }
+    default:
+      return [];
   }
 }
 
