@@ -397,7 +397,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .eq('status_transacao', 'realizado')
         .eq('cenario', 'realizado')
         .gte('ano_mes',anoMesMin).lte('ano_mes',anoMesMax)
-        .order('ano_mes').order('data_competencia')
+        .order('ano_mes').order('data_pagamento').order('id')
         .range(from, from+batchSize-1);
       if (!lData || lData.length === 0) break;
       allLanc.push(...(lData as LancamentoResumo[]).filter(l => belongsToConta(l,'__all__')));
