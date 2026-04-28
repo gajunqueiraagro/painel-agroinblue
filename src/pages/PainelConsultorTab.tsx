@@ -545,10 +545,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
@@ -587,10 +587,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
@@ -671,8 +671,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
           ],
