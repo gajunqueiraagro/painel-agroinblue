@@ -275,6 +275,33 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'ebitda_medio': { id: 'ebitda_medio', nome: 'EBITDA médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'res_caixa_medio': { id: 'res_caixa_medio', nome: 'Res. caixa médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
 
+  // — Mensal > Financeiro (Caixa) —
+  'ent_fin_mensal': { id: 'ent_fin_mensal', nome: 'Entradas Financeiras Mensais', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'sai_fin_mensal': { id: 'sai_fin_mensal', nome: 'Saídas Financeiras Mensais', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'rec_pec_mensal': { id: 'rec_pec_mensal', nome: 'Receita Pecuária Mensal', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_caixa_mensal': { id: 'res_caixa_mensal', nome: 'Resultado de Caixa Mensal', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+
+  // — Médio > Financeiro (Caixa) —
+  'ent_fin_med': { id: 'ent_fin_med', nome: 'Entradas Financeiras Médias', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'sai_fin_med': { id: 'sai_fin_med', nome: 'Saídas Financeiras Médias', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'rec_pec_med': { id: 'rec_pec_med', nome: 'Receita Pecuária Média', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'res_caixa_med': { id: 'res_caixa_med', nome: 'Resultado de Caixa Médio', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+
+  // — Período > Financeiro (Caixa) —
+  'ent_fin_periodo': { id: 'ent_fin_periodo', nome: 'Entradas Financeiras do Período', aba: 'media_periodo', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'sai_fin_periodo': { id: 'sai_fin_periodo', nome: 'Saídas Financeiras do Período', aba: 'media_periodo', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+
+  // — Médio > Produção —
+  'prod_kg_med': { id: 'prod_kg_med', nome: 'Produção Média (kg)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'arrobas_prod_med': { id: 'arrobas_prod_med', nome: 'Arrobas Produzidas Médias', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'arr_ha_med': { id: 'arr_ha_med', nome: 'Arrobas por Hectare Médio', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'gmd_med': { id: 'gmd_med', nome: 'GMD Médio', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+
+  // — Período > Produção —
+  'desfrute_cab_periodo': { id: 'desfrute_cab_periodo', nome: 'Desfrute do Período (cab)', aba: 'media_periodo', bloco: 'Produção', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
+  'desfrute_arr_periodo': { id: 'desfrute_arr_periodo', nome: 'Desfrute do Período (@)', aba: 'media_periodo', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+  'gmd_periodo': { id: 'gmd_periodo', nome: 'GMD do Período', aba: 'media_periodo', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
+
   // ─── Acumulado > Rebanho ───
   'entradas_acum': { id: 'entradas_acum', nome: 'Entradas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
   'saidas_acum': { id: 'saidas_acum', nome: 'Saídas acum. (cab)', aba: 'acumulado', bloco: 'Rebanho', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },
