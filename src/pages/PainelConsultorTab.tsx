@@ -506,6 +506,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   })();
   const desfruteCab = d.desfruteCab;
   const desfrute_arr = d.desfrute_arr;
+  const finEntradas = d.entFin;
+  const finSaidas = d.saiFin;
+  const finRecPec = d.recPec;
+  const finResCaixa = d.resCaixa;
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : 0))
@@ -521,40 +525,50 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Rebanho',
           rows: [
             r('Reb. inicial (cab)', 'cab', cabIni, 'reb_inicial', true),
-            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
             r('Entradas (cab)', 'cab', d.entradas, 'entradas_cab'),
             r('Saídas (cab)', 'cab', d.saidas, 'saidas_cab'),
+            r('Reb. final (cab)', 'cab', cabFin, 'reb_final', true),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
           ],
         },
         {
-          nome: 'Peso',
+          nome: 'Produção',
           rows: [
-            r('Peso ini. (kg)', 'cab', pesoTotalIni, 'peso_ini_kg', true),
-            r('Peso final (kg)', 'cab', pesoTotalFin, 'peso_fin_kg', true),
-            r('Peso fin. cab (kg)', 'med2', pesoTotalFin.map((p, i) => cabFin[i] > 0 ? p / cabFin[i] : NaN), 'peso_fin_cab_kg', true),
-            r('Peso ini. (@)', 'cab', pesoTotalIni.map(v => Math.round(v / 30)), 'peso_ini_arr', true),
-            r('Peso final (@)', 'cab', pesoTotalFin.map(v => Math.round(v / 30)), 'peso_fin_arr', true),
-            r('Peso méd. ini.', 'med2', pesoMedioIni, 'peso_med_ini', true),
-            r('Peso méd. final', 'med2', pesoMedioFin, 'peso_med_fin', true),
+            r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
+            r('Arrobas', 'padrao', d.arrobasProd, 'arrobas_prod'),
+            r('@/ha', 'med2', arrHa, 'arr_ha'),
+            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd'),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Valor do Rebanho',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Valor reb. inicial', 'moneyInt', d.valorRebIni, 'valor_reb_ini', true),
-            r('Valor reb. final', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
-            r('Valor/cab final', 'money', valorPorCab, 'valor_cab_fin', true),
-            r('Valor/@ final', 'money', valorPorArr, 'valor_arr_fin', true),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', d.varValorReb, 'var_valor_reb'),
           ],
         },
       ];
+
     case 'medio':
       return [
         {
-          nome: 'Desempenho',
+          nome: 'Rebanho',
           rows: [
-            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
-            r('Peso méd. reb.', 'med2', pesoMedioFin, 'peso_med_reb', true),
+            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+            r('Peso méd. reb. (kg)', 'med2', pesoMedioFin, 'peso_med_reb', true),
             r('UA média', 'med2', uaMedia, 'ua_media', true),
             r('Lotação (UA/ha)', 'med2', lotUaHa, 'lotacao', true),
           ],
@@ -562,90 +576,120 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas', 'padrao', d.arrobasProd, 'arrobas_prod'),
             r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
+            r('Arrobas', 'padrao', d.arrobasProd, 'arrobas_prod'),
             r('@/ha', 'med2', arrHa, 'arr_ha'),
-            r('Custo/@prod', 'money', custoPorArrAcum, 'custo_arr_prod', true),
+            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
         {
-          nome: 'Estrutura',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Área prod. (ha)', 'med2', Array(12).fill(d.areaProd), 'area_prod', true),
-            r('Reb. médio (cab)', 'cab', cabMedia.map(Math.round), 'reb_medio', true),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa'),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
           ],
         },
       ];
+
     case 'acumulado':
       return [
         {
           nome: 'Rebanho',
           rows: [
-            r('Entradas acum. (cab)', 'cab', d.entradas, 'entradas_acum'),
-            r('Saídas acum. (cab)', 'cab', d.saidas, 'saidas_acum'),
-            r('Saldo acum. reb.', 'cab', d.entradas.map((v, i) => v - d.saidas[i]), 'saldo_acum'),
+            r('Entradas Acumuladas (cab)', 'cab', d.entradas, 'entradas_acum'),
+            r('Saídas Acumuladas (cab)', 'cab', d.saidas, 'saidas_acum'),
+            r('Saldo Acumulado (cab)', 'cab', d.entradas.map((v, i) => v - d.saidas[i]), 'saldo_acum'),
           ],
         },
         {
           nome: 'Produção',
           rows: [
-            r('@ produzidas acum.', 'padrao', d.arrobasProd, 'arrobas_acum'),
-            r('Produção kg acum.', 'padrao', d.prodKg, 'prod_kg_acum'),
-            r('@/ha acum.', 'med2', arrHa, 'arr_ha_acum'),
-            r('Desfrute acum. (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
-            r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
+            r('Produção (kg) Acumulada', 'padrao', d.prodKg, 'prod_kg_acum'),
+            r('Arrobas Acumuladas', 'padrao', d.arrobasProd, 'arrobas_acum'),
+            r('@/ha Acumulado', 'med2', arrHa, 'arr_ha_acum'),
+            r('Desfrute Acumulado (cab)', 'cab', desfruteCab, 'desfrute_acum_cab'),
+            r('Desfrute Acumulado (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
         {
-          nome: 'Financeiro no Caixa',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas fin. acum.', 'money', d.entFin, 'ent_fin_acum'),
-            r('Saídas fin. acum.', 'money', d.saiFin, 'sai_fin_acum'),
-            r('Rec. pec. acum.', 'money', d.recPec, 'rec_pec_acum'),
-            r('Res. caixa acum.', 'money', d.resCaixa, 'res_caixa_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
         {
-          nome: 'Financeiro por Competência',
+          nome: 'Patrimônio',
           rows: [
-            r('Rec. pec. comp. acum.', 'money', d.recPecComp, 'rec_pec_comp_acum'),
-            r('Var. valor reb.', 'money', d.varValorReb, 'var_valor_reb'),
+            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
+            r('Variação do Valor', 'money', d.varValorReb, 'var_valor_reb'),
           ],
         },
       ];
+
     case 'media_periodo': {
-      // Período acumulado: rebanho médio (média das cabMedia mensais) e GMD período correto.
       const diasMes = Array.from({ length: 12 }, (_, i) => new Date(new Date().getFullYear(), i + 1, 0).getDate());
       const gmdPeriodo = computePeriodGmd(d.prodKg, cabMedia, diasMes);
       const rebMedioPeriodoVals = rollingAvg(cabMedia);
       return [
         {
-          nome: 'Desempenho Médio',
+          nome: 'Rebanho',
           rows: [
             { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
             { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
-            r('Peso médio período', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
+            r('Peso médio período (kg)', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
-            r('Lotação média', 'med2', lotUaHa, 'lotacao_media', true),
+            r('Lotação média (UA/ha)', 'med2', lotUaHa, 'lotacao_media', true),
           ],
         },
         {
-          nome: 'Produção Média',
+          nome: 'Produção',
           rows: [
+            r('Produção média (@)', 'padrao', d.arrobasProd, 'prod_media_arr', true),
+            r('Produção média (kg)', 'padrao', d.prodKg, 'prod_media_kg', true),
             r('@/ha média período', 'med2', arrHa, 'arr_ha_media', true),
-            r('Prod. média (@)', 'padrao', d.arrobasProd, 'prod_media_arr', true),
-            r('Prod. média (kg)', 'padrao', d.prodKg, 'prod_media_kg', true),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab', true),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr', true),
           ],
         },
         {
-          nome: 'Financeiro Médio',
+          nome: 'Financeiro (Caixa)',
           rows: [
-            r('Receita média', 'money', d.recPec, 'receita_media', true),
-            r('Res. caixa médio', 'money', d.resCaixa, 'res_caixa_medio', true),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin'),
+            r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+          ],
+        },
+        {
+          nome: 'Patrimônio',
+          rows: [
+            r('Valor do Rebanho', 'moneyInt', d.valorRebFin, 'valor_reb_fin', true),
+            r('Valor por Cabeça', 'money', valorPorCab, 'valor_cab_fin', true),
+            r('Valor por Arroba', 'money', valorPorArr, 'valor_arr_fin', true),
           ],
         },
       ];
     }
+
+    default:
+      return [];
 }
 }
 
