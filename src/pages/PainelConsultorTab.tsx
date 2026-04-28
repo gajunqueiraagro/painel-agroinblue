@@ -545,10 +545,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_mensal'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
           ],
         },
         {
@@ -576,10 +576,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Produção',
           rows: [
-            r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg'),
-            r('Arrobas', 'padrao', d.arrobasProd, 'arrobas_prod'),
-            r('@/ha', 'med2', arrHa, 'arr_ha'),
-            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd', true),
+            r('Produção (kg)', 'padrao', d.prodKg, 'prod_kg_med'),
+            r('Arrobas', 'padrao', d.arrobasProd, 'arrobas_prod_med'),
+            r('@/ha', 'med2', arrHa, 'arr_ha_med'),
+            r('GMD (kg/cab/dia)', 'gmd', d.gmd, 'gmd_med', true),
             r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab'),
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
@@ -587,10 +587,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
-            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
-            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_med'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
+            r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
+            r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
           ],
         },
         {
@@ -652,7 +652,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
           nome: 'Rebanho',
           rows: [
             { indicador: 'Rebanho médio período (cab)', format: 'cab', valores: rebMedioPeriodoVals.map(v => Math.round(v)), indicadorId: 'reb_medio_periodo', noTotal: true },
-            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_medio', noTotal: true },
+            { indicador: 'GMD médio período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
             r('Peso médio período (kg)', 'med2', pesoMedioFin, 'peso_medio_periodo', true),
             r('UA média período', 'med2', uaMedia, 'ua_media_periodo', true),
             r('Lotação média (UA/ha)', 'med2', lotUaHa, 'lotacao_media', true),
@@ -664,15 +664,15 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Produção média (@)', 'padrao', d.arrobasProd, 'prod_media_arr', true),
             r('Produção média (kg)', 'padrao', d.prodKg, 'prod_media_kg', true),
             r('@/ha média período', 'med2', arrHa, 'arr_ha_media', true),
-            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab', true),
-            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr', true),
+            r('Desfrute (cab)', 'cab', desfruteCab, 'desfrute_cab_periodo', true),
+            r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
           ],
         },
         {
           nome: 'Financeiro (Caixa)',
           rows: [
-            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_acum'),
-            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
+            r('Entradas Financeiras', 'money', finEntradas, 'ent_fin_periodo'),
+            r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
           ],
