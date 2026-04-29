@@ -306,7 +306,8 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
         if (tipoValido && (principal > 0 || juros > 0)) {
-          await criarMirrorParcela(supabase as any, {
+          const { lancamentoIdPrincipal: newLancId, lancamentoIdJuros: newJurosId } =
+            await criarMirrorParcela(supabase as any, {
             id: parcela.id,
             cliente_id: financiamento.cliente_id,
             fazenda_id: financiamento.fazenda_id,
@@ -327,8 +328,8 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
           if (dataPagamento) {
             await atualizarStatusMirror(
             supabase as any,
-            parcela.lancamento_id ?? null,
-            parcela.lancamento_juros_id ?? null,
+            newLancId,
+            newJurosId,
             dataPagamento,
             contaBancariaId,
           );
