@@ -257,29 +257,56 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, []);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
+    const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
+      ano, mesesSelecionados, contaOrigem, contaDestino,
+    }));
+
+    // Captação: financiamento_id direto no lançamento
+    if (l.financiamento_id && (l.origem_tipo === 'financiamento_captacao' || l.origem_lancamento === 'financiamento')) {
+      if (!onAbrirFinanciamento) {
+        toast.info('Este lançamento vem de financiamento. Abra pelo módulo de Financiamentos.');
+        return;
+      }
+      salvarEstado();
+      onAbrirFinanciamento(l.financiamento_id);
+      return;
+    }
+
+    // Parcelas de amortização/juros: buscar em financiamento_parcelas
     const { data: parcela } = await supabase
       .from('financiamento_parcelas')
       .select('financiamento_id')
       .or(`lancamento_id.eq.${l.id},lancamento_juros_id.eq.${l.id}`)
       .maybeSingle();
 
-    if (!parcela?.financiamento_id) {
-      toast.error('Vínculo de origem não encontrado para este lançamento.');
+    if (parcela?.financiamento_id) {
+      if (!onAbrirFinanciamento) {
+        toast.info('Este lançamento vem de financiamento. Abra pelo módulo de Financiamentos.');
+        return;
+      }
+      salvarEstado();
+      onAbrirFinanciamento(parcela.financiamento_id);
       return;
     }
 
-    if (!onAbrirFinanciamento) {
-      toast.info('Este lançamento vem de financiamento. Abra pelo módulo de Financiamentos.');
+    // Fallback: buscar em financiamentos por lancamento_captacao_id
+    const { data: fin } = await supabase
+      .from('financiamentos')
+      .select('id')
+      .eq('lancamento_captacao_id', l.id)
+      .maybeSingle();
+
+    if (fin?.id) {
+      if (!onAbrirFinanciamento) {
+        toast.info('Este lançamento vem de financiamento. Abra pelo módulo de Financiamentos.');
+        return;
+      }
+      salvarEstado();
+      onAbrirFinanciamento(fin.id);
       return;
     }
 
-    sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
-      ano,
-      mesesSelecionados,
-      contaOrigem,
-      contaDestino,
-    }));
-    onAbrirFinanciamento(parcela.financiamento_id);
+    toast.error('Vínculo de origem não encontrado para este lançamento.');
   };
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
   // Track if macro/centro were auto-filled by subcentro
@@ -1370,7 +1397,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const stLabel = STATUS_LABELS[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_TEXT_COLORS[stKey] || 'text-muted-foreground';
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
-                    const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento';
+                    const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
                     const rowMesFechado = fazendaId !== '__all__' && fechamentoHook.isMesFechado(l.fazenda_id, l.ano_mes);
                     const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento && !rowMesFechado;
