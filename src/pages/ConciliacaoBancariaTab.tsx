@@ -250,10 +250,11 @@ function buildMonthCards(
       }).status);
       const allOk  = perStatuses.every(s => s === 'realizado');
       const anyBad = perStatuses.some(s => s === 'nao_conciliado');
-      if (allOk)              status = 'realizado';
-      else if (globalOk && anyBad) status = 'parcial';
-      else if (anyBad)        status = 'nao_conciliado';
-      else                    status = 'pendente';
+      if (allOk)                       status = 'realizado';
+      else if (globalOk && !anyBad)       status = 'realizado';  // diff=0, nenhuma conta diverge (algumas sem extrato = ok)
+      else if (globalOk && anyBad)        status = 'parcial';
+      else if (anyBad)                    status = 'nao_conciliado';
+      else                                status = 'pendente';
     }
 
     cards.push({
@@ -904,9 +905,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <tr
                       className="border-t cursor-pointer transition-colors"
                       style={{
-                        position:'sticky', top:'64px', zIndex:8,
                         background: selectedConta==='__all__' ? '#93C5FD' : '#BFDBFE',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.10)',
                       }}
                       onClick={() => setSelectedConta('__all__')}
                     >
