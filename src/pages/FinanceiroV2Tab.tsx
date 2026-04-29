@@ -28,6 +28,7 @@ import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2E
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { FechamentoMensalBanner } from '@/components/financeiro/FechamentoMensalBanner';
 import { format, parseISO } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 // ── Sorting helpers ──
 
