@@ -175,6 +175,21 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Load dynamic years from DB
   useEffect(() => {
+    const saved = sessionStorage.getItem('financeiro_v2_state');
+    if (!saved) return;
+    try {
+      const state = JSON.parse(saved);
+      if (state.ano) setAno(state.ano);
+      if (Array.isArray(state.mesesSelecionados)) setMesesSelecionados(state.mesesSelecionados);
+      if (state.contaOrigem) setContaOrigem(state.contaOrigem);
+      if (state.contaDestino) setContaDestino(state.contaDestino);
+      sessionStorage.removeItem('financeiro_v2_state');
+    } catch (e) {
+      console.error('Erro ao restaurar estado do financeiro', e);
+    }
+  }, []);
+
+  useEffect(() => {
     hook.loadAnosDisponiveis().then(setAnos);
   }, [hook.loadAnosDisponiveis]);
 
@@ -258,6 +273,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       return;
     }
 
+    sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
+      ano,
+      mesesSelecionados,
+      contaOrigem,
+      contaDestino,
+    }));
     onAbrirFinanciamento(parcela.financiamento_id);
   };
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
