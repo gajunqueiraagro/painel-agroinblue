@@ -1052,7 +1052,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <TableCell className="text-[9px] py-0.5 truncate max-w-[110px] text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           {fornNome||<span className="italic">n/c</span>}
-                          {!l.conta_bancaria_id && (
+                          {(l.tipo_operacao?.startsWith('1-')
+                            ? !l.conta_destino_id
+                            : l.tipo_operacao?.startsWith('3-')
+                              ? (!l.conta_bancaria_id && !l.conta_destino_id)
+                              : !l.conta_bancaria_id
+                          ) && (
                             <span
                               title="Lançamento sem conta bancária vinculada"
                               className="inline-flex items-center px-1 py-0 rounded text-[8px] font-semibold border border-amber-300 bg-amber-50 text-amber-800"
