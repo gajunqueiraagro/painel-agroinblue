@@ -26,6 +26,7 @@ interface Parcela {
   status?: string;
   observacao?: string | null;
   lancamento_id?: string | null;
+  lancamento_juros_id?: string | null;
 }
 
 interface Financiamento {
@@ -317,7 +318,13 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
             data_contrato: financiamento.data_contrato ?? null,
           });
           if (dataPagamento) {
-            await atualizarStatusMirror(supabase as any, parcela.id, dataPagamento, contaBancariaId);
+            await atualizarStatusMirror(
+            supabase as any,
+            parcela.lancamento_id ?? null,
+            parcela.lancamento_juros_id ?? null,
+            dataPagamento,
+            contaBancariaId,
+          );
           }
         }
       } else if (valoresMudaram || dataMudou) {

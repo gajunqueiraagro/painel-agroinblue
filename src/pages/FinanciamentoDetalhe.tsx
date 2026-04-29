@@ -203,9 +203,27 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       .from('financiamento_parcelas')
       .update(updatePayload)
       .eq('id', editingCell.parcelaId);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      toast.error(error.message);
+    } else {
+      // Buscar IDs oficiais para sincronizar o financeiro
+      const { data: parcelaAtualizada } = await supabase
+        .from('financiamento_parcelas')
+        .select('lancamento_id, lancamento_juros_id, valor_principal, valor_juros')
+        .eq('id', editingCell.parcelaId)
+        .maybeSingle();
+      if (parcelaAtualizada?.lancamento_id || parcelaAtualizada?.lancamento_juros_id) {
+        const { atualizarValoresMirror } = await import('@/lib/financiamentos/parcelaMirror');
+        await atualizarValoresMirror(
+          supabase as any,
+          parcelaAtualizada.lancamento_id ?? null,
+          parcelaAtualizada.lancamento_juros_id ?? null,
+          Number(parcelaAtualizada.valor_principal) || 0,
+          Number(parcelaAtualizada.valor_juros) || 0,
+        );
+      }
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
+      qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });
     }
     setEditingCell(null);
   };

@@ -21,6 +21,7 @@ export interface ParcelaInput {
   valor_principal: number;
   valor_juros: number;
   lancamento_id?: string | null;
+  lancamento_juros_id?: string | null;
 }
 
 export interface FinanciamentoInput {
@@ -159,38 +160,17 @@ export async function criarMirrorParcela(
   parcela: ParcelaInput,
   financiamento: FinanciamentoInput,
 ): Promise<{ lancamentoIdPrincipal: string | null; lancamentoIdJuros: string | null }> {
-  // Evita duplicata por parcela.lancamento_id
-  if (parcela.lancamento_id) {
-    return { lancamentoIdPrincipal: parcela.lancamento_id, lancamentoIdJuros: null };
+  // Idempotência: usa IDs oficiais da parcela — observacao não é vínculo
+  if (parcela.lancamento_id || parcela.lancamento_juros_id) {
+    return {
+      lancamentoIdPrincipal: parcela.lancamento_id ?? null,
+      lancamentoIdJuros: parcela.lancamento_juros_id ?? null,
+    };
   }
   const tipo = financiamento.tipo_financiamento;
   if (tipo !== 'pecuaria' && tipo !== 'agricultura') {
     console.warn('[parcelaMirror] tipo_financiamento invalido:', tipo);
     return { lancamentoIdPrincipal: null, lancamentoIdJuros: null };
-  }
-
-  // Idempotência: se já existem mirrors para esta parcela (observacao=parcela.id) não reinsere.
-  // Isso cobre o caso do update de parcela.lancamento_id ter falhado em uma execução anterior.
-  const { data: existentes } = await supabase
-    .from('financeiro_lancamentos_v2')
-    .select('id, origem_tipo, cancelado')
-    .eq('origem_lancamento', 'parcela_financiamento')
-    .eq('observacao', parcela.id)
-    .eq('cancelado', false);
-  if (existentes && existentes.length > 0) {
-    const principalExist = existentes.find((r: any) => r.origem_tipo === 'parcela_principal');
-    const jurosExist = existentes.find((r: any) => r.origem_tipo === 'parcela_juros');
-    const vinculoId = principalExist?.id ?? jurosExist?.id ?? null;
-    if (vinculoId && !parcela.lancamento_id) {
-      await supabase
-        .from('financiamento_parcelas')
-        .update({ lancamento_id: vinculoId })
-        .eq('id', parcela.id);
-    }
-    return {
-      lancamentoIdPrincipal: principalExist?.id ?? null,
-      lancamentoIdJuros: jurosExist?.id ?? null,
-    };
   }
 
   const principal = Number(parcela.valor_principal) || 0;
@@ -232,14 +212,16 @@ export async function criarMirrorParcela(
     if (planErr) console.error('[parcelaMirror] erro insert planejamento:', planErr);
   }
 
-  // Linka principal (ou juros, se não houver principal) na parcela
-  const vinculoId = lancamentoIdPrincipal ?? lancamentoIdJuros;
-  if (vinculoId) {
+  // lancamento_id = só principal; lancamento_juros_id = só juros; sem fallback entre campos
+  const updateParcela: Record<string, any> = {};
+  if (lancamentoIdPrincipal) updateParcela.lancamento_id        = lancamentoIdPrincipal;
+  if (lancamentoIdJuros)     updateParcela.lancamento_juros_id  = lancamentoIdJuros;
+  if (Object.keys(updateParcela).length > 0) {
     const { error: upErr } = await supabase
       .from('financiamento_parcelas')
-      .update({ lancamento_id: vinculoId })
+      .update(updateParcela)
       .eq('id', parcela.id);
-    if (upErr) console.error('[parcelaMirror] erro update parcela.lancamento_id:', upErr);
+    if (upErr) console.error('[parcelaMirror] erro update IDs na parcela:', upErr);
   }
 
   return { lancamentoIdPrincipal, lancamentoIdJuros };
@@ -249,22 +231,29 @@ export async function deletarMirrorParcela(
   supabase: SupabaseClient,
   parcelaId: string,
 ): Promise<void> {
-  // Buscar lancamento_id oficial da parcela
+  // Buscar IDs oficiais da parcela
   const { data: parcela } = await supabase
     .from('financiamento_parcelas')
-    .select('lancamento_id')
+    .select('lancamento_id, lancamento_juros_id')
     .eq('id', parcelaId)
     .maybeSingle();
 
-  if (parcela?.lancamento_id) {
+  const ids = [parcela?.lancamento_id, parcela?.lancamento_juros_id].filter(Boolean) as string[];
+  if (ids.length > 0) {
     const { error: lancErr } = await supabase
       .from('financeiro_lancamentos_v2')
       .update({ cancelado: true })
-      .eq('id', parcela.lancamento_id);
-    if (lancErr) console.error('[parcelaMirror] erro cancelar lancamento:', lancErr);
+      .in('id', ids);
+    if (lancErr) console.error('[parcelaMirror] erro cancelar lançamentos:', lancErr);
   } else {
-    console.warn('[parcelaMirror] parcela sem lancamento_id — nenhum lançamento cancelado:', parcelaId);
+    console.warn('[parcelaMirror] parcela sem IDs vinculados — nenhum lançamento cancelado:', parcelaId);
   }
+  // Limpar IDs na parcela para garantir que criarMirrorParcela grava os novos sem ambiguidade
+  const { error: clearErr } = await supabase
+    .from('financiamento_parcelas')
+    .update({ lancamento_id: null, lancamento_juros_id: null })
+    .eq('id', parcelaId);
+  if (clearErr) console.error('[parcelaMirror] erro limpar IDs da parcela:', clearErr);
 
   const { error: planErr } = await (supabase
     .from('planejamento_financeiro' as any)
@@ -274,12 +263,41 @@ export async function deletarMirrorParcela(
   if (planErr) console.error('[parcelaMirror] erro delete planejamento:', planErr);
 }
 
+export async function atualizarValoresMirror(
+  supabase: SupabaseClient,
+  lancamentoPrincipalId: string | null,
+  lancamentoJurosId: string | null,
+  valorPrincipal: number,
+  valorJuros: number,
+): Promise<void> {
+  if (lancamentoPrincipalId) {
+    const { error } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .update({ valor: valorPrincipal })
+      .eq('id', lancamentoPrincipalId);
+    if (error) console.error('[parcelaMirror] erro update valor principal:', error);
+  }
+  if (lancamentoJurosId) {
+    const { error } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .update({ valor: valorJuros })
+      .eq('id', lancamentoJurosId);
+    if (error) console.error('[parcelaMirror] erro update valor juros:', error);
+  }
+}
+
 export async function atualizarStatusMirror(
   supabase: SupabaseClient,
-  parcelaId: string,
+  lancamentoPrincipalId: string | null,
+  lancamentoJurosId: string | null,
   dataPagamento: string,
   contaBancariaId?: string | null,
 ): Promise<void> {
+  const ids = [lancamentoPrincipalId, lancamentoJurosId].filter(Boolean) as string[];
+  if (ids.length === 0) {
+    console.warn('[parcelaMirror] atualizarStatusMirror: nenhum ID oficial fornecido');
+    return;
+  }
   const update: Record<string, any> = {
     status_transacao: 'realizado',
     data_pagamento: dataPagamento,
@@ -288,7 +306,6 @@ export async function atualizarStatusMirror(
   const { error } = await supabase
     .from('financeiro_lancamentos_v2')
     .update(update)
-    .eq('origem_lancamento', 'parcela_financiamento')
-    .eq('observacao', parcelaId);
+    .in('id', ids);
   if (error) console.error('[parcelaMirror] erro update status:', error);
 }
