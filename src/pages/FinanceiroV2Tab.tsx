@@ -1378,16 +1378,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
                             {isParcelaFinanciamento ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 rounded-sm text-primary"
-                                onClick={(e) => { e.stopPropagation(); abrirFinanciamentoDaParcela(l); }}
-                                title="Ver contrato de financiamento"
-                              >
-                                <ExternalLink className="h-2.5 w-2.5" />
-                              </Button>
+                              <button
+                                  type="button"
+                                  className="h-5 w-5 flex items-center justify-center text-blue-600 hover:text-blue-800"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('CLICK HARD', l.id);
+                                    abrirFinanciamentoDaParcela(l);
+                                  }}
+                                  title="Ver contrato de financiamento"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </button>
                             ) : (
                               <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" onClick={() => openEdit(l)} disabled={!canEditRow} title={rowMesFechado ? 'Mês fechado' : isHistoricoReadOnly ? 'Histórico antigo: somente leitura' : 'Editar'}>
                                 <Pencil className="h-2.5 w-2.5" />
