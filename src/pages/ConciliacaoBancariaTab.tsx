@@ -33,6 +33,7 @@ interface ContaRef {
   tipo_conta: string | null;
   codigo_conta: string | null;
   mes_inicio: string | null;
+  saldo_inicial_oficial: number | null;
 }
 
 interface SaldoRow {
@@ -343,7 +344,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   useEffect(() => {
     if (!clienteId) return;
     supabase.from('financeiro_contas_bancarias')
-      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta,mes_inicio')
+      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta,mes_inicio,saldo_inicial_oficial')
       .eq('cliente_id',clienteId).eq('ativa',true).order('ordem_exibicao')
       .then(({data}) => setContas(sortContas((data as ContaRef[])||[])));
     supabase.from('financeiro_fornecedores')
@@ -926,7 +927,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
                           onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                          canEdit={canEditSaldoFinal(anoMesSel)}
+                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
                     </>}
 
@@ -939,7 +941,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
                           onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                          canEdit={canEditSaldoFinal(anoMesSel)}
+                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
                     </>}
 
@@ -952,7 +955,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           isDimmed={selectedConta!=='__all__'&&selectedConta!==s.conta.id}
                           onClick={()=>setSelectedConta(s.conta.id)}
                           onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,s.ext??0)}
-                          canEdit={canEditSaldoFinal(anoMesSel)} />
+                          canEdit={canEditSaldoFinal(anoMesSel)}
+                          showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null} />
                       ))}
                     </>}
 
@@ -1155,9 +1159,10 @@ interface SaldoContaRowProps {
   onClick: () => void;
   onEdit: () => void;
   canEdit: boolean;
+  showSaldoAlert?: boolean;
 }
 
-function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit}: SaldoContaRowProps) {
+function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert}: SaldoContaRowProps) {
   const {conta, sis, ext, dif, status} = data;
   const dotColor = status==='realizado' ? '#2E7D32' : status==='nao_conciliado' ? '#C62828' : '#90A4AE';
   return (
@@ -1169,6 +1174,9 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit}: Sal
       <td className="py-1 px-2 overflow-hidden">
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0}} />
         <span className="text-[10px]" style={{verticalAlign:'middle'}}>{getContaLabel(conta)}</span>
+        {showSaldoAlert && (
+          <span className="ml-1 text-[8px] font-semibold text-amber-700 border border-amber-300 bg-amber-50 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
+        )}
       </td>
       <td className={`py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap ${sis<0?'text-red-700':''}`}>{formatMoeda(sis)}</td>
       <td className="py-0.5 px-1 text-right text-[9px] tabular-nums whitespace-nowrap">{ext===null?'—':formatMoeda(ext)}</td>

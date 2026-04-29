@@ -36,6 +36,8 @@ interface ContaBancaria {
   fazenda_id: string;
   ativa: boolean;
   ordem_exibicao: number;
+  mes_inicio: string | null;
+  saldo_inicial_oficial: number | null;
 }
 
 const TIPO_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
@@ -372,6 +374,9 @@ export function FinV2ContasTab() {
                         </TableCell>
                         <TableCell className={cellClass}>
                           <span className="font-semibold">{c.nome_exibicao || c.nome_conta}</span>
+                          {c.saldo_inicial_oficial === null && (
+                            <span className="ml-1.5 text-[9px] font-semibold text-amber-700 border border-amber-300 bg-amber-50 rounded px-1 py-0 align-middle" title="Saldo inicial não definido para esta conta">⚠ Saldo inicial</span>
+                          )}
                           {c.codigo_conta && (
                             <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({c.codigo_conta})</span>
                           )}
