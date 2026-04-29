@@ -244,7 +244,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     const { data: parcela } = await supabase
       .from('financiamento_parcelas')
       .select('financiamento_id')
-      .eq('lancamento_id', l.id)
+      .or(`lancamento_id.eq.${l.id},lancamento_juros_id.eq.${l.id}`)
       .maybeSingle();
 
     if (!parcela?.financiamento_id) {
