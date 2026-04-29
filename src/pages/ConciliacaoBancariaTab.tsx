@@ -32,6 +32,7 @@ interface ContaRef {
   nome_exibicao: string | null;
   tipo_conta: string | null;
   codigo_conta: string | null;
+  mes_inicio: string | null;
 }
 
 interface SaldoRow {
@@ -342,7 +343,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   useEffect(() => {
     if (!clienteId) return;
     supabase.from('financeiro_contas_bancarias')
-      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta')
+      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta,mes_inicio')
       .eq('cliente_id',clienteId).eq('ativa',true).order('ordem_exibicao')
       .then(({data}) => setContas(sortContas((data as ContaRef[])||[])));
     supabase.from('financeiro_fornecedores')
