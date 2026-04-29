@@ -32,6 +32,7 @@ interface ContaRef {
   nome_exibicao: string | null;
   tipo_conta: string | null;
   codigo_conta: string | null;
+  mes_inicio: string | null;
 }
 
 interface SaldoRow {
@@ -336,13 +337,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         s.ano_mes === editingSaldo.anoMes &&
         s.conta_bancaria_id === editingSaldo.contaId
     );
-    return !existing || String(existing.id).startsWith('legacy:');
-  }, [editingSaldo, saldos]);
+    if (existing && !String(existing.id).startsWith('legacy:')) return false;
+    // Saldo inicial só editável no mes_inicio da conta
+    const conta = contas.find(ct => ct.id === editingSaldo.contaId);
+    if (conta?.mes_inicio && conta.mes_inicio !== editingSaldo.anoMes) return false;
+    return true;
+  }, [editingSaldo, saldos, contas]);
 
   useEffect(() => {
     if (!clienteId) return;
     supabase.from('financeiro_contas_bancarias')
-      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta')
+      .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta,mes_inicio')
       .eq('cliente_id',clienteId).eq('ativa',true).order('ordem_exibicao')
       .then(({data}) => setContas(sortContas((data as ContaRef[])||[])));
     supabase.from('financeiro_fornecedores')
@@ -416,20 +421,20 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ── Month cards: two versions ── */
   // Month BAR always shows global status (all accounts)
   const monthBarCards = useMemo(
-    () => buildMonthCards(ano, '__all__', saldos, lancamentos, contas),
-    [ano, saldos, lancamentos, contas]
+    () => buildMonthCards(ano, '__all__', saldos, lancamentos, contasDoMes),
+    [ano, saldos, lancamentos, contasDoMes]
   );
   // Detail cards: filtered by selectedConta
   const mesCards = useMemo(
-    () => buildMonthCards(ano, selectedConta, saldos, lancamentos, contas),
-    [ano, selectedConta, saldos, lancamentos, contas]
+    () => buildMonthCards(ano, selectedConta, saldos, lancamentos, contasDoMes),
+    [ano, selectedConta, saldos, lancamentos, contasDoMes]
   );
   const selectedCard = useMemo(() => mesCards.find(c => c.mes === selectedMes)||null, [mesCards, selectedMes]);
 
   /* ── Per-account saldo data for current month ── */
   const perContaSaldos = useMemo((): PerContaSaldo[] => {
     const anoMes = `${ano}-${selectedMes}`;
-    return sortContas(contas).map(c => {
+    return sortContas(contasDoMes).map(c => {
       const saldoRow = saldos.find(s => s.ano_mes===anoMes && s.conta_bancaria_id===c.id)||null;
       const official = calcConciliacaoMensal({
         contaId:c.id, anoMes, saldoRows:saldos,
@@ -571,6 +576,17 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     : getContaLabel(contas.find(c=>c.id===selectedConta) || {id:'',nome_conta:selectedConta,nome_exibicao:null,tipo_conta:null,codigo_conta:null});
 
   const anoMesSel = `${ano}-${selectedMes}`;
+  // Contas ativas no mês selecionado (respeitando mes_inicio)
+  const contasDoMes = useMemo(
+    () => contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel),
+    [contas, anoMesSel]
+  );
+  // Reset selectedConta se a conta selecionada não existe no mês
+  useEffect(() => {
+    if (selectedConta === '__all__') return;
+    const existeNoMes = contasDoMes.some(c => c.id === selectedConta);
+    if (!existeNoMes) setSelectedConta('__all__');
+  }, [selectedConta, contasDoMes]);
   const contasCC    = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
   const contasINV   = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
   const contasCartao= perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
