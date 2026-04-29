@@ -161,9 +161,13 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     }
     setSaving(true);
     try {
-      const { criarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+      const { criarMirrorParcela, atualizarStatusMirror } = await import('@/lib/financiamentos/parcelaMirror');
 
       // 1. Remover lançamento legado inválido (origem_lancamento='financiamento') se existir
+      // Rastrear IDs efetivos: se legado removido, zerar; senão usar state atual
+      let lancamentoIdEfetivo: string | null = parcela.lancamento_id ?? null;
+      let lancamentoJurosIdEfetivo: string | null = parcela.lancamento_juros_id ?? null;
+
       if (parcela.lancamento_id) {
         const { data: oldLanc } = await supabase
           .from('financeiro_lancamentos_v2')
@@ -172,19 +176,22 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
           .maybeSingle();
         if (oldLanc?.origem_lancamento === 'financiamento') {
           await supabase.from('financeiro_lancamentos_v2').delete().eq('id', oldLanc.id);
-          await supabase.from('financiamento_parcelas').update({ lancamento_id: null }).eq('id', parcela.id);
+          await supabase.from('financiamento_parcelas').update({ lancamento_id: null, lancamento_juros_id: null }).eq('id', parcela.id);
+          lancamentoIdEfetivo = null;
+          lancamentoJurosIdEfetivo = null;
         }
       }
 
-      // 2. Criar/garantir mirror: 1 amortização + 1 juros, com plano, credor e descrição corretos
-      await criarMirrorParcela(supabase as any, {
+      // 2. Criar/garantir mirror via IDs oficiais (idempotente por lancamento_id/lancamento_juros_id)
+      const { lancamentoIdPrincipal, lancamentoIdJuros } = await criarMirrorParcela(supabase as any, {
         id: parcela.id,
         cliente_id: financiamento.cliente_id,
         fazenda_id: financiamento.fazenda_id,
         data_vencimento: dataPagamento,
         valor_principal: parcela.valor_principal,
         valor_juros: parcela.valor_juros,
-        lancamento_id: null,
+        lancamento_id: lancamentoIdEfetivo,
+        lancamento_juros_id: lancamentoJurosIdEfetivo,
       }, {
         id: financiamento.id,
         cliente_id: financiamento.cliente_id,
@@ -196,14 +203,14 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         data_contrato: financiamento.data_contrato ?? null,
       });
 
-      // 3. Setar status realizado + conta bancária + data real de pagamento
+      // 3. Setar status realizado + conta bancária + data real de pagamento via IDs oficiais
       const anoMes = dataPagamento.slice(0, 7);
-      await supabase
-        .from('financeiro_lancamentos_v2')
-        .update({ status_transacao: 'realizado', data_pagamento: dataPagamento, ano_mes: anoMes, conta_bancaria_id: contaBancariaId })
-        .eq('origem_lancamento', 'parcela_financiamento')
-        .eq('observacao', parcela.id)
-        .eq('cancelado', false);
+      await atualizarStatusMirror(supabase as any, lancamentoIdPrincipal, lancamentoIdJuros, dataPagamento, contaBancariaId);
+      // Atualizar ano_mes para refletir o mês efetivo de pagamento
+      const idsParaAtualizar = [lancamentoIdPrincipal, lancamentoIdJuros].filter(Boolean) as string[];
+      if (idsParaAtualizar.length > 0) {
+        await supabase.from('financeiro_lancamentos_v2').update({ ano_mes: anoMes }).in('id', idsParaAtualizar);
+      }
 
       // 4. Atualizar parcela
       const { error: errParc } = await supabase
