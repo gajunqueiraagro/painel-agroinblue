@@ -98,6 +98,8 @@ export function FinV2ContasTab() {
   const [agencia, setAgencia] = useState('');
   const [numeroConta, setNumeroConta] = useState('');
   const [contaDigito, setContaDigito] = useState('');
+  const [mesInicio, setMesInicio] = useState('2026-04');
+  const [saldoInicialOficial, setSaldoInicialOficial] = useState('');
 
   const loadBancos = useCallback(async () => {
     const { data } = await supabase
@@ -189,6 +191,8 @@ export function FinV2ContasTab() {
     setNumeroConta('');
     setContaDigito('');
     setAdvancedOpen(false);
+    setMesInicio('2026-04');
+    setSaldoInicialOficial('');
     setDialogOpen(true);
   };
 
@@ -214,6 +218,9 @@ export function FinV2ContasTab() {
     setNumeroConta(c.numero_conta || '');
     setContaDigito(c.conta_digito || '');
     setAdvancedOpen(!!(c.codigo_conta || c.agencia || c.numero_conta || c.conta_digito));
+    setMesInicio(c.mes_inicio || '');
+    setSaldoInicialOficial(c.saldo_inicial_oficial !== null && c.saldo_inicial_oficial !== undefined
+      ? String(c.saldo_inicial_oficial).replace('.', ',') : '');
     setDialogOpen(true);
   };
 
@@ -221,6 +228,11 @@ export function FinV2ContasTab() {
     if (isSaving) return;
     if (!clienteAtual?.id || !nomeExibicao.trim() || !fazendaId) {
       toast.error('Preencha o nome da conta e a fazenda');
+      return;
+    }
+    // mes_inicio obrigatório em criar e editar
+    if (!mesInicio.trim()) {
+      toast.error('Informe o mês inicial da conta.');
       return;
     }
     setIsSaving(true);
@@ -238,16 +250,70 @@ export function FinV2ContasTab() {
         numero_conta: numeroConta.trim() || null,
         conta_digito: contaDigito.trim() || null,
         ativa,
+        mes_inicio: mesInicio.trim() || null,
+      };
+      // Parse robusto: aceita "1000", "1000.50", "1.000,50"
+      const rawSaldoInicial = saldoInicialOficial.replace(/\s/g, '');
+      const normalizedSaldoInicial = rawSaldoInicial.includes(',')
+        ? rawSaldoInicial.replace(/\./g, '').replace(',', '.')
+        : rawSaldoInicial;
+      const parsedSaldo = normalizedSaldoInicial ? parseFloat(normalizedSaldoInicial) : null;
+      const payloadComSaldo = {
+        ...payload,
+        saldo_inicial_oficial: (parsedSaldo !== null && !isNaN(parsedSaldo)) ? parsedSaldo : null,
       };
 
       if (editing) {
-        const { error } = await supabase.from('financeiro_contas_bancarias').update(payload).eq('id', editing.id);
+        const { error } = await supabase.from('financeiro_contas_bancarias').update(payloadComSaldo).eq('id', editing.id);
         if (error) { toast.error('Erro ao atualizar'); return; }
+        if (payloadComSaldo.saldo_inicial_oficial !== null && editing.saldo_inicial_oficial === null && payloadComSaldo.mes_inicio) {
+          const saldo = payloadComSaldo.saldo_inicial_oficial;
+          const { data: existRow } = await supabase
+            .from('financeiro_saldos_bancarios_v2')
+            .select('id, origem_saldo_inicial')
+            .eq('conta_bancaria_id', editing.id)
+            .eq('ano_mes', payloadComSaldo.mes_inicio)
+            .maybeSingle();
+          if (!existRow) {
+            await supabase.from('financeiro_saldos_bancarios_v2').insert({
+              cliente_id: clienteAtual.id, fazenda_id: editing.fazenda_id,
+              conta_bancaria_id: editing.id, ano_mes: payloadComSaldo.mes_inicio,
+              saldo_inicial: saldo, saldo_final: saldo,
+              origem_saldo_inicial: 'manual', origem_saldo: 'manual',
+              status_mes: 'aberto', fechado: false,
+            });
+          } else if (existRow.origem_saldo_inicial === 'manual') {
+            await supabase.from('financeiro_saldos_bancarios_v2')
+              .update({ saldo_inicial: saldo, saldo_final: saldo })
+              .eq('id', existRow.id);
+          }
+        }
         toast.success('Conta atualizada');
       } else {
-        const { error } = await supabase.from('financeiro_contas_bancarias').insert(payload);
+        const { data: insertedContas, error } = await supabase
+          .from('financeiro_contas_bancarias').insert(payloadComSaldo).select('id,fazenda_id');
         if (error) { toast.error('Erro ao criar conta'); return; }
-        toast.success('Conta criada');
+        const novaContaId = insertedContas?.[0]?.id;
+        const novaFazendaId = insertedContas?.[0]?.fazenda_id;
+        if (novaContaId && payloadComSaldo.mes_inicio) {
+          const saldo = payloadComSaldo.saldo_inicial_oficial ?? 0;
+          const { error: sErr } = await supabase.from('financeiro_saldos_bancarios_v2').insert({
+            cliente_id: clienteAtual.id,
+            fazenda_id: novaFazendaId,
+            conta_bancaria_id: novaContaId,
+            ano_mes: payloadComSaldo.mes_inicio,
+            saldo_inicial: saldo,
+            saldo_final: saldo,
+            origem_saldo_inicial: 'manual',
+            origem_saldo: 'manual',
+            status_mes: 'aberto',
+            fechado: false,
+          });
+          if (sErr) toast.error('Conta criada, mas erro ao salvar saldo inicial');
+          else toast.success('Conta criada com saldo inicial');
+        } else {
+          toast.success('Conta criada');
+        }
       }
       setDialogOpen(false);
       load();
@@ -520,6 +586,42 @@ export function FinV2ContasTab() {
               </CollapsibleContent>
             </Collapsible>
           </div>
+
+          {(!editing || editing.saldo_inicial_oficial === null) && (
+            <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-3">
+              <p className="text-[11px] font-semibold text-amber-700">⚠ Saldo inicial da conta</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[11px]">
+                    Mês inicial <span className="text-red-500">*</span>
+                  </Label>
+                  <input
+                    type="month"
+                    value={mesInicio}
+                    onChange={e => setMesInicio(e.target.value)}
+                    className="w-full border rounded px-2 py-1 text-[11px] mt-0.5"
+                    required
+                  />
+                  <p className="text-[9px] text-muted-foreground mt-0.5">Primeiro mês de operação</p>
+                </div>
+                <div>
+                  <Label className="text-[11px]">
+                    Saldo inicial (R$) <span className="text-red-500">*</span>
+                  </Label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={saldoInicialOficial}
+                    onChange={e => setSaldoInicialOficial(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right font-mono"
+                  />
+                  <p className="text-[9px] text-muted-foreground mt-0.5">Saldo real no início do período</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}</Button>
