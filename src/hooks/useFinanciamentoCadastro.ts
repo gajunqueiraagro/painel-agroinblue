@@ -289,28 +289,40 @@ export function useFinanciamentoCadastro() {
       // 3 – Lançamento de captação (opcional)
       if (form.gerar_lancamento_captacao && form.plano_conta_captacao_id) {
         const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
-        const { error: errLanc } = await supabase
+        const { data: lancCap, error: errLanc } = await supabase
           .from('financeiro_lancamentos_v2')
           .insert({
             cliente_id: clienteId,
             fazenda_id: fazendaId,
+            financiamento_id: fin.id,
             conta_bancaria_id: form.conta_bancaria_id || null,
+            favorecido_id: form.credor_id || null,
             tipo_operacao: '1-Entradas',
             sinal: 1,
             valor: form.valor_total,
             data_competencia: form.data_contrato,
+            data_pagamento: form.data_contrato,
             ano_mes: anoMes,
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
             plano_conta_id: form.plano_conta_captacao_id,
             descricao: `Captação: ${form.descricao.trim()}`,
             status_transacao: 'realizado',
+            sem_movimentacao_caixa: false,
+            cancelado: false,
             created_by: user.id,
-          });
+          })
+          .select('id')
+          .single();
 
         if (errLanc) {
           console.error('Erro ao gerar lançamento de captação:', errLanc);
           toast.warning('Financiamento salvo, mas o lançamento de captação falhou.');
+        } else if (lancCap?.id) {
+          await supabase
+            .from('financiamentos')
+            .update({ lancamento_captacao_id: lancCap.id })
+            .eq('id', fin.id);
         }
       }
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
 import { ArrowLeft, Pencil, Trash2, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -45,6 +46,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [planosEntrada, setPlanosEntrada] = useState<Array<{id:string; subcentro:string}>>([]);
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [parcelaEdit, setParcelaEdit] = useState<any>(null);
@@ -124,8 +126,19 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       data_contrato: fin.data_contrato,
       observacao: fin.observacao ?? '',
       status: fin.status,
+      gerar_lancamento_captacao: fin.gerar_lancamento_captacao ?? false,
+      plano_conta_captacao_id: fin.plano_conta_captacao_id ?? '',
     });
     setEditOpen(true);
+    if (planosEntrada.length === 0) {
+      supabase
+        .from('financeiro_plano_contas')
+        .select('id, subcentro')
+        .eq('tipo_operacao', '1-Entradas')
+        .eq('ativo', true)
+        .order('ordem_exibicao')
+        .then(({ data }) => { if (data) setPlanosEntrada(data as any); });
+    }
   };
 
   const saveEdit = async () => {
@@ -143,6 +156,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         data_contrato: editForm.data_contrato,
         observacao: editForm.observacao || null,
         status: editForm.status,
+        gerar_lancamento_captacao: !!editForm.gerar_lancamento_captacao,
+        plano_conta_captacao_id: editForm.plano_conta_captacao_id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id!);
@@ -150,6 +165,69 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       toast.error('Erro ao salvar: ' + error.message);
       return;
     }
+
+    // ── Sync lançamento de captação ──────────────────────────────────
+    const novoGerar = !!editForm.gerar_lancamento_captacao;
+    const novoPlanoCap = editForm.plano_conta_captacao_id;
+    const lancId: string | null = (fin as any)?.lancamento_captacao_id ?? null;
+    const anoMes = format(new Date(editForm.data_contrato + 'T12:00:00'), 'yyyy-MM');
+
+    if (novoGerar && novoPlanoCap) {
+      if (lancId) {
+        await supabase.from('financeiro_lancamentos_v2').update({
+          valor: Number(editForm.valor_total),
+          data_competencia: editForm.data_contrato,
+          data_pagamento: editForm.data_contrato,
+          conta_bancaria_id: editForm.conta_bancaria_id || null,
+          favorecido_id: editForm.credor_id || null,
+          plano_conta_id: novoPlanoCap,
+          ano_mes: anoMes,
+          cancelado: false,
+          cancelado_em: null,
+          cancelado_por: null,
+          sem_movimentacao_caixa: false,
+          updated_at: new Date().toISOString(),
+        }).eq('id', lancId);
+      } else {
+        const { data: novoLanc } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .insert({
+            cliente_id: (fin as any)?.cliente_id,
+            fazenda_id: (fin as any)?.fazenda_id,
+            financiamento_id: id!,
+            conta_bancaria_id: editForm.conta_bancaria_id || null,
+            favorecido_id: editForm.credor_id || null,
+            tipo_operacao: '1-Entradas',
+            sinal: 1,
+            valor: Number(editForm.valor_total),
+            data_competencia: editForm.data_contrato,
+            data_pagamento: editForm.data_contrato,
+            ano_mes: anoMes,
+            origem_lancamento: 'financiamento',
+            origem_tipo: 'financiamento_captacao',
+            plano_conta_id: novoPlanoCap,
+            descricao: `Captação: ${(editForm.descricao ?? '').trim()}`,
+            status_transacao: 'realizado',
+            sem_movimentacao_caixa: false,
+            cancelado: false,
+          })
+          .select('id')
+          .single();
+        if (novoLanc?.id) {
+          await supabase.from('financiamentos')
+            .update({ lancamento_captacao_id: novoLanc.id })
+            .eq('id', id!);
+        }
+      }
+    } else if (!novoGerar && lancId) {
+      await supabase.from('financeiro_lancamentos_v2').update({
+        cancelado: true,
+        cancelado_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', lancId);
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     toast.success('Financiamento atualizado');
     setEditOpen(false);
     qc.invalidateQueries({ queryKey: ['financiamento-detalhe', id] });
@@ -474,6 +552,36 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             <div>
               <Label className="text-xs">Observação</Label>
               <Textarea value={editForm.observacao ?? ''} onChange={e => setEditForm(p => ({ ...p, observacao: e.target.value }))} rows={2} />
+            </div>
+
+            {/* Captação */}
+            <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-captacao"
+                  checked={!!editForm.gerar_lancamento_captacao}
+                  onCheckedChange={v => setEditForm(p => ({ ...p, gerar_lancamento_captacao: !!v }))}
+                />
+                <Label htmlFor="edit-captacao" className="text-xs cursor-pointer font-medium text-amber-800">
+                  Registrar entrada da captação no fluxo de caixa
+                </Label>
+              </div>
+              {editForm.gerar_lancamento_captacao && (
+                <div>
+                  <Label className="text-xs">Conta de captação (plano)</Label>
+                  <Select
+                    value={editForm.plano_conta_captacao_id ?? ''}
+                    onValueChange={v => setEditForm(p => ({ ...p, plano_conta_captacao_id: v }))}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
+                    <SelectContent>
+                      {planosEntrada.map(p => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">{p.subcentro}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter className="flex sm:justify-between gap-2">
