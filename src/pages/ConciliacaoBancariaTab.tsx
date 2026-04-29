@@ -1055,7 +1055,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         <span className="inline-flex items-center gap-1">
                           {fornNome||<span className="italic">n/c</span>}
                           {(l.tipo_operacao?.startsWith('1-')
-                            ? !l.conta_destino_id
+                            ? (!l.conta_destino_id && !l.conta_bancaria_id)
                             : l.tipo_operacao?.startsWith('3-')
                               ? (!l.conta_bancaria_id && !l.conta_destino_id)
                               : !l.conta_bancaria_id
