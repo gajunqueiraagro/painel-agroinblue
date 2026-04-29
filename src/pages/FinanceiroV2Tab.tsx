@@ -1379,10 +1379,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           <div className="flex items-center justify-center gap-0.5">
                             {isParcelaFinanciamento ? (
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="icon"
                                 className="h-5 w-5 rounded-sm text-primary"
-                                onClick={() => abrirFinanciamentoDaParcela(l)}
+                                onClick={(e) => { e.stopPropagation(); abrirFinanciamentoDaParcela(l); }}
                                 title="Ver contrato de financiamento"
                               >
                                 <ExternalLink className="h-2.5 w-2.5" />
