@@ -1007,9 +1007,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <TableRow className="bg-blue-600 hover:bg-blue-600">
                   {([
                     {key:'data'      as const, label:'Data pgto',  cls:'w-[72px]', right:false},
-                    {key:'descricao' as const, label:'Descrição',   cls:'',         right:false},
                     {key:'fornecedor'as const, label:'Fornecedor',  cls:'w-[120px]',right:false},
-                    {key:'valor'     as const, label:'Valor',       cls:'w-[90px]', right:true},
+                    {key:'descricao' as const, label:'Descrição',   cls:'',         right:false},
                   ]).map(h=>{
                     const active = lancSort.col===h.key;
                     const Icon = active ? (lancSort.dir==='asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
@@ -1024,6 +1023,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     );
                   })}
                   <TableHead className="text-[9px] text-white font-semibold w-[100px]">Grupo</TableHead>
+                  {([
+                    {key:'valor'     as const, label:'Valor',       cls:'w-[90px]', right:true},
+                  ]).map(h=>{
+                    const active = lancSort.col===h.key;
+                    const Icon = active ? (lancSort.dir==='asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+                    return (
+                      <TableHead key={h.key}
+                        className={`text-[9px] text-white font-semibold cursor-pointer select-none ${h.cls} ${h.right?'text-right':''}`}
+                        onClick={()=>setLancSort(p=>p.col===h.key?{col:h.key,dir:p.dir==='asc'?'desc':'asc'}:{col:h.key,dir:'asc'})}>
+                        <span className="inline-flex items-center gap-0.5">
+                          {h.label}<Icon className={`h-2.5 w-2.5 ${active?'opacity-100':'opacity-50'}`} />
+                        </span>
+                      </TableHead>
+                    );
+                  })}
                   <TableHead className="w-[32px]" />
                 </TableRow>
               </TableHeader>
@@ -1035,7 +1049,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   return (
                     <TableRow key={idx} className={idx%2===1?'bg-muted/20':''}>
                       <TableCell className="text-[9px] py-0.5">{fmtDate(l.data_pagamento||l.data_competencia)}</TableCell>
-                      <TableCell className="text-[9px] py-0.5 truncate max-w-[180px]">{l.descricao||'-'}</TableCell>
                       <TableCell className="text-[9px] py-0.5 truncate max-w-[110px] text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           {fornNome||<span className="italic">n/c</span>}
@@ -1049,10 +1062,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                           )}
                         </span>
                       </TableCell>
+                      <TableCell className="text-[9px] py-0.5 truncate max-w-[180px]">{l.descricao||'-'}</TableCell>
+                      <TableCell className="text-[9px] py-0.5 text-muted-foreground truncate max-w-[90px]">{l.subcentro||'-'}</TableCell>
                       <TableCell className={`text-[9px] py-0.5 text-right font-medium tabular-nums ${isEntr?'text-green-700':'text-red-700'}`}>
                         {formatMoeda(isEntr ? Math.abs(l.valor) : -Math.abs(l.valor))}
                       </TableCell>
-                      <TableCell className="text-[9px] py-0.5 text-muted-foreground truncate max-w-[90px]">{l.subcentro||'-'}</TableCell>
                       <TableCell className="py-0.5 text-center">
                         <button
                           className="border border-border rounded px-1 py-0.5 hover:bg-muted cursor-pointer"
