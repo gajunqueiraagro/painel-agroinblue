@@ -1,5 +1,6 @@
 import { ArrowLeft, Plus, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
 import { backfillParcelasPendentes } from '@/lib/financiamentos/backfillParcelas';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -48,6 +49,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   const [filtroStatus, setFiltroStatus] = useState('ativo');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroDescricao, setFiltroDescricao] = useState('');
+  const [filtroContrato, setFiltroContrato] = useState('');
+  const [filtroCredor, setFiltroCredor] = useState('todos');
+  const [filtroDataContratoDe, setFiltroDataContratoDe] = useState('');
+  const [filtroDataContratoAte, setFiltroDataContratoAte] = useState('');
+  const [filtroVencDe, setFiltroVencDe] = useState('');
+  const [filtroVencAte, setFiltroVencAte] = useState('');
 
   // Backfill de mirrors de parcelas: roda uma vez por cliente via flag em localStorage.
   useEffect(() => {
@@ -121,14 +129,37 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     },
   });
 
-  /* ── Filtros ── */
+  /* ── Credores únicos para o select ── */
+  const credores = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const f of financiamentos) {
+      if (f.credor_nome && f.credor_nome !== '—' && !seen.has(f.credor_nome)) {
+        seen.add(f.credor_nome);
+        result.push(f.credor_nome);
+      }
+    }
+    return result.sort();
+  }, [financiamentos]);
+
+  /* ── Filtros (client-side, sobre dados já carregados) ── */
   const filtered = useMemo(() => {
+    const descQ = filtroDescricao.trim().toLowerCase();
+    const contQ = filtroContrato.trim().toLowerCase();
     return financiamentos.filter(f => {
       if (filtroStatus !== 'todos' && f.status !== filtroStatus) return false;
       if (filtroTipo !== 'todos' && f.tipo_financiamento !== filtroTipo) return false;
+      if (descQ && !f.descricao.toLowerCase().includes(descQ)) return false;
+      if (contQ && !(f.numero_contrato ?? '').toLowerCase().includes(contQ)) return false;
+      if (filtroCredor !== 'todos' && f.credor_nome !== filtroCredor) return false;
+      if (filtroDataContratoDe && (f.data_contrato ?? '') < filtroDataContratoDe) return false;
+      if (filtroDataContratoAte && (f.data_contrato ?? '') > filtroDataContratoAte) return false;
+      if (filtroVencDe && (f.prox_vencimento ?? '') < filtroVencDe) return false;
+      if (filtroVencAte && (f.prox_vencimento ?? '') > filtroVencAte) return false;
       return true;
     });
-  }, [financiamentos, filtroStatus, filtroTipo]);
+  }, [financiamentos, filtroStatus, filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
+      filtroDataContratoDe, filtroDataContratoAte, filtroVencDe, filtroVencAte]);
 
   /* ── Totalizadores (baseado na lista filtrada) ── */
   const totais = useMemo(() => ({
@@ -140,6 +171,19 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
     if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
     return fmt(v);
+  };
+
+  const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
+    filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
+
+  const clearExtraFilters = () => {
+    setFiltroDescricao('');
+    setFiltroContrato('');
+    setFiltroCredor('todos');
+    setFiltroDataContratoDe('');
+    setFiltroDataContratoAte('');
+    setFiltroVencDe('');
+    setFiltroVencAte('');
   };
 
   if (!clienteId) {
@@ -199,6 +243,70 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <span className="font-bold tabular-nums text-foreground">{fmtCompact(totais.aPagar)}</span>
             </div>
           </div>
+        </div>
+
+        {/* Linha 2: Filtros adicionais — Descrição, Contrato, Credor, Data Contrato, Vencimento */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            placeholder="Buscar descrição..."
+            value={filtroDescricao}
+            onChange={e => setFiltroDescricao(e.target.value)}
+            className="h-8 text-xs w-44"
+          />
+          <Input
+            placeholder="Nº contrato..."
+            value={filtroContrato}
+            onChange={e => setFiltroContrato(e.target.value)}
+            className="h-8 text-xs w-36"
+          />
+          <Select value={filtroCredor} onValueChange={setFiltroCredor}>
+            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Credor" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos credores</SelectItem>
+              {credores.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Contrato:</span>
+            <input
+              type="date"
+              value={filtroDataContratoDe}
+              onChange={e => setFiltroDataContratoDe(e.target.value)}
+              className="h-8 text-xs border rounded-md px-2 bg-background"
+              title="Data contrato — de"
+            />
+            <span className="text-[10px] text-muted-foreground">–</span>
+            <input
+              type="date"
+              value={filtroDataContratoAte}
+              onChange={e => setFiltroDataContratoAte(e.target.value)}
+              className="h-8 text-xs border rounded-md px-2 bg-background"
+              title="Data contrato — até"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Venc.:</span>
+            <input
+              type="date"
+              value={filtroVencDe}
+              onChange={e => setFiltroVencDe(e.target.value)}
+              className="h-8 text-xs border rounded-md px-2 bg-background"
+              title="Próx. vencimento — de"
+            />
+            <span className="text-[10px] text-muted-foreground">–</span>
+            <input
+              type="date"
+              value={filtroVencAte}
+              onChange={e => setFiltroVencAte(e.target.value)}
+              className="h-8 text-xs border rounded-md px-2 bg-background"
+              title="Próx. vencimento — até"
+            />
+          </div>
+          {hasExtraFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearExtraFilters}>
+              Limpar
+            </Button>
+          )}
         </div>
       </div>
 
