@@ -432,6 +432,18 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const selectedCard = useMemo(() => mesCards.find(c => c.mes === selectedMes)||null, [mesCards, selectedMes]);
 
   /* ── Per-account saldo data for current month ── */
+  // anoMesSel e contasDoMes declarados antes de perContaSaldos (evita TDZ)
+  const anoMesSel = `${ano}-${selectedMes}`;
+  const contasDoMes = useMemo(
+    () => contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel),
+    [contas, anoMesSel]
+  );
+  // Reset selectedConta se a conta selecionada não existe no mês
+  useEffect(() => {
+    if (selectedConta === '__all__') return;
+    const existeNoMes = contasDoMes.some(c => c.id === selectedConta);
+    if (!existeNoMes) setSelectedConta('__all__');
+  }, [selectedConta, contasDoMes]);
   const perContaSaldos = useMemo((): PerContaSaldo[] => {
     const anoMes = `${ano}-${selectedMes}`;
     return sortContas(contasDoMes).map(c => {
@@ -575,18 +587,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     ? 'Todas as contas'
     : getContaLabel(contas.find(c=>c.id===selectedConta) || {id:'',nome_conta:selectedConta,nome_exibicao:null,tipo_conta:null,codigo_conta:null});
 
-  const anoMesSel = `${ano}-${selectedMes}`;
-  // Contas ativas no mês selecionado (respeitando mes_inicio)
-  const contasDoMes = useMemo(
-    () => contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel),
-    [contas, anoMesSel]
-  );
-  // Reset selectedConta se a conta selecionada não existe no mês
-  useEffect(() => {
-    if (selectedConta === '__all__') return;
-    const existeNoMes = contasDoMes.some(c => c.id === selectedConta);
-    if (!existeNoMes) setSelectedConta('__all__');
-  }, [selectedConta, contasDoMes]);
   const contasCC    = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cc');
   const contasINV   = perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='inv');
   const contasCartao= perContaSaldos.filter(c=>(c.conta.tipo_conta||'').toLowerCase()==='cartao');
