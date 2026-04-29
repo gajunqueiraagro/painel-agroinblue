@@ -47,13 +47,20 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
 
-  const [filtroStatus, setFiltroStatus] = useState('ativo');
-  const [filtroTipo, setFiltroTipo] = useState('todos');
-  const [filtroDescricao, setFiltroDescricao] = useState('');
-  const [filtroContrato, setFiltroContrato] = useState('');
-  const [filtroCredor, setFiltroCredor] = useState('todos');
-  const [filtroDataContratoDe, setFiltroDataContratoDe] = useState('');
-  const [filtroDataContratoAte, setFiltroDataContratoAte] = useState('');
+  const STORAGE_KEY = `financiamentos_lista_filtros_${clienteAtual?.id ?? 'anon'}`;
+  const _sf = (() => {
+    if (!clienteAtual?.id) return null;
+    try { const r = sessionStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; }
+    catch { return null; }
+  })();
+
+  const [filtroStatus, setFiltroStatus] = useState(_sf?.status ?? 'ativo');
+  const [filtroTipo, setFiltroTipo] = useState(_sf?.tipo ?? 'todos');
+  const [filtroDescricao, setFiltroDescricao] = useState(_sf?.descricao ?? '');
+  const [filtroContrato, setFiltroContrato] = useState(_sf?.contrato ?? '');
+  const [filtroCredor, setFiltroCredor] = useState(_sf?.credor ?? 'todos');
+  const [filtroDataContratoDe, setFiltroDataContratoDe] = useState(_sf?.dataContratoDe ?? '');
+  const [filtroDataContratoAte, setFiltroDataContratoAte] = useState(_sf?.dataContratoAte ?? '');
   const [filtroVencDe, setFiltroVencDe] = useState('');
   const [filtroVencAte, setFiltroVencAte] = useState('');
 
@@ -205,6 +212,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     setFiltroDataContratoAte('');
     setFiltroVencDe('');
     setFiltroVencAte('');
+    try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
   };
 
   if (!clienteId) {
@@ -402,7 +410,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
-                      onClick={() => onDetalhe?.(f.id)}
+                      onClick={() => {
+                      try {
+                        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+                          status: filtroStatus, tipo: filtroTipo,
+                          descricao: filtroDescricao, contrato: filtroContrato,
+                          credor: filtroCredor, dataContratoDe: filtroDataContratoDe,
+                          dataContratoAte: filtroDataContratoAte,
+                          vencDe: filtroVencDe, vencAte: filtroVencAte,
+                        }));
+                      } catch {}
+                      onDetalhe?.(f.id);
+                    }}
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
