@@ -533,20 +533,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           .update({saldo_final:val, updated_at:new Date().toISOString()}).eq('id',existing!.id);
         if (error) { toast.error('Erro ao salvar'); return; }
       } else {
-        const saldoInicialParsed = parseMoedaBR(editValueSaldoInicial);
-        if (saldoInicialParsed === null) {
-          toast.error('Saldo inicial inválido', {
-            description: 'Informe um valor válido para o saldo inicial da conta.',
-          });
-          return;
-        }
+        // Saldo inicial vem de saldo_inicial_oficial do cadastro da conta — não editável aqui
+        const contaRef = contas.find(c => c.id === editingSaldo.contaId);
+        const saldoInicialOficial = contaRef?.saldo_inicial_oficial ?? 0;
         const {data:cd} = await supabase.from('financeiro_contas_bancarias')
           .select('fazenda_id').eq('id',editingSaldo.contaId).single();
         if (!cd) { toast.error('Erro ao buscar fazenda'); return; }
         const {error} = await supabase.from('financeiro_saldos_bancarios_v2').insert({
           cliente_id:clienteId, fazenda_id:cd.fazenda_id,
           conta_bancaria_id:editingSaldo.contaId, ano_mes:editingSaldo.anoMes,
-          saldo_inicial:saldoInicialParsed, saldo_final:val,
+          saldo_inicial:saldoInicialOficial, saldo_final:val,
           origem_saldo_inicial:'manual', status_mes:'aberto',
         });
         if (error) { toast.error('Erro ao criar saldo'); return; }
@@ -1117,19 +1113,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </DialogHeader>
           <div className="space-y-2">
             {isInsertMode && (
-              <div>
-                <label className="text-xs text-muted-foreground">
-                  Saldo Inicial da Conta
-                </label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={editValueSaldoInicial}
-                  onChange={e => setEditValueSaldoInicial(e.target.value)}
-                  onFocus={e => e.target.select()}
-                  placeholder="0,00"
-                  className="text-right font-mono"
-                />
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-[11px] text-amber-700 font-medium">
+                  ⚠ Saldo inicial deve ser definido no Cadastro da Conta.
+                </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Informe o saldo inicial oficial da conta neste primeiro registro.
                 </p>
