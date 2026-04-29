@@ -57,6 +57,23 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const [filtroVencDe, setFiltroVencDe] = useState('');
   const [filtroVencAte, setFiltroVencAte] = useState('');
 
+  // dd/mm/aaaa → yyyy-mm-dd; retorna '' se incompleto/inválido
+  const brToISO = (v: string): string => {
+    const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return '';
+    const [, d, mo, y] = m;
+    const dt = new Date(`${y}-${mo}-${d}`);
+    if (isNaN(dt.getTime())) return '';
+    return `${y}-${mo}-${d}`;
+  };
+  // Máscara automática: insere '/' ao digitar (dd/mm/aaaa)
+  const maskDate = (v: string): string => {
+    const d = v.replace(/\D/g, '').slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
+    return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
+  };
+
   // Backfill de mirrors de parcelas: roda uma vez por cliente via flag em localStorage.
   useEffect(() => {
     if (!clienteId) return;
@@ -152,10 +169,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (descQ && !f.descricao.toLowerCase().includes(descQ)) return false;
       if (contQ && !(f.numero_contrato ?? '').toLowerCase().includes(contQ)) return false;
       if (filtroCredor !== 'todos' && f.credor_nome !== filtroCredor) return false;
-      if (filtroDataContratoDe && (f.data_contrato ?? '') < filtroDataContratoDe) return false;
-      if (filtroDataContratoAte && (f.data_contrato ?? '') > filtroDataContratoAte) return false;
-      if (filtroVencDe && (f.prox_vencimento ?? '') < filtroVencDe) return false;
-      if (filtroVencAte && (f.prox_vencimento ?? '') > filtroVencAte) return false;
+      const isoContratoDe = brToISO(filtroDataContratoDe);
+      const isoContratoAte = brToISO(filtroDataContratoAte);
+      const isoVencDe      = brToISO(filtroVencDe);
+      const isoVencAte     = brToISO(filtroVencAte);
+      if (isoContratoDe && (f.data_contrato ?? '') < isoContratoDe) return false;
+      if (isoContratoAte && (f.data_contrato ?? '') > isoContratoAte) return false;
+      if (isoVencDe && (f.prox_vencimento ?? '') < isoVencDe) return false;
+      if (isoVencAte && (f.prox_vencimento ?? '') > isoVencAte) return false;
       return true;
     });
   }, [financiamentos, filtroStatus, filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
@@ -245,68 +266,82 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           </div>
         </div>
 
-        {/* Linha 2: Filtros adicionais — Descrição, Contrato, Credor, Data Contrato, Vencimento */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Input
-            placeholder="Buscar descrição..."
-            value={filtroDescricao}
-            onChange={e => setFiltroDescricao(e.target.value)}
-            className="h-8 text-xs w-44"
-          />
-          <Input
-            placeholder="Nº contrato..."
-            value={filtroContrato}
-            onChange={e => setFiltroContrato(e.target.value)}
-            className="h-8 text-xs w-36"
-          />
-          <Select value={filtroCredor} onValueChange={setFiltroCredor}>
-            <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Credor" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos credores</SelectItem>
-              {credores.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Contrato:</span>
-            <input
-              type="date"
-              value={filtroDataContratoDe}
-              onChange={e => setFiltroDataContratoDe(e.target.value)}
-              className="h-8 text-xs border rounded-md px-2 bg-background"
-              title="Data contrato — de"
+        {/* Filtros linha 1: texto + credor | linha 2: datas em grid 2 colunas */}
+        <div className="space-y-2">
+          {/* Linha 1 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              placeholder="Buscar descrição..."
+              value={filtroDescricao}
+              onChange={e => setFiltroDescricao(e.target.value)}
+              className="h-8 text-xs w-44"
             />
-            <span className="text-[10px] text-muted-foreground">–</span>
-            <input
-              type="date"
-              value={filtroDataContratoAte}
-              onChange={e => setFiltroDataContratoAte(e.target.value)}
-              className="h-8 text-xs border rounded-md px-2 bg-background"
-              title="Data contrato — até"
+            <Input
+              placeholder="Nº contrato..."
+              value={filtroContrato}
+              onChange={e => setFiltroContrato(e.target.value)}
+              className="h-8 text-xs w-36"
             />
+            <Select value={filtroCredor} onValueChange={setFiltroCredor}>
+              <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Credor" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos credores</SelectItem>
+                {credores.map(cr => <SelectItem key={cr} value={cr}>{cr}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {hasExtraFilters && (
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearExtraFilters}>
+                Limpar
+              </Button>
+            )}
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">Venc.:</span>
-            <input
-              type="date"
-              value={filtroVencDe}
-              onChange={e => setFiltroVencDe(e.target.value)}
-              className="h-8 text-xs border rounded-md px-2 bg-background"
-              title="Próx. vencimento — de"
-            />
-            <span className="text-[10px] text-muted-foreground">–</span>
-            <input
-              type="date"
-              value={filtroVencAte}
-              onChange={e => setFiltroVencAte(e.target.value)}
-              className="h-8 text-xs border rounded-md px-2 bg-background"
-              title="Próx. vencimento — até"
-            />
+          {/* Linha 2: grid 2×2 para datas */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 w-fit">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Contrato de:</span>
+              <input
+                type="text"
+                value={filtroDataContratoDe}
+                onChange={e => setFiltroDataContratoDe(maskDate(e.target.value))}
+                placeholder="dd/mm/aaaa"
+                maxLength={10}
+                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Contrato até:</span>
+              <input
+                type="text"
+                value={filtroDataContratoAte}
+                onChange={e => setFiltroDataContratoAte(maskDate(e.target.value))}
+                placeholder="dd/mm/aaaa"
+                maxLength={10}
+                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Venc. de:</span>
+              <input
+                type="text"
+                value={filtroVencDe}
+                onChange={e => setFiltroVencDe(maskDate(e.target.value))}
+                placeholder="dd/mm/aaaa"
+                maxLength={10}
+                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground w-24 shrink-0">Venc. até:</span>
+              <input
+                type="text"
+                value={filtroVencAte}
+                onChange={e => setFiltroVencAte(maskDate(e.target.value))}
+                placeholder="dd/mm/aaaa"
+                maxLength={10}
+                className="h-8 text-xs border rounded-md px-2 bg-background w-28 font-mono"
+              />
+            </div>
           </div>
-          {hasExtraFilters && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearExtraFilters}>
-              Limpar
-            </Button>
-          )}
         </div>
       </div>
 
