@@ -10,7 +10,9 @@ const STATUS_TRANSACAO_VALIDOS = new Set<StatusTransacaoNormalizada>([
 ]);
 
 export function isTransferenciaTipo(tipoOperacao?: string | null): boolean {
-  return (tipoOperacao || '').trim() === TIPO_OPERACAO_TRANSFERENCIA;
+  const t = (tipoOperacao || '').trim();
+  // Aceita o padrão oficial ('3-Transferências') e variante de importação legada ('3-Transferência')
+  return t === TIPO_OPERACAO_TRANSFERENCIA || t === '3-Transferência';
 }
 
 export function normalizeStatusTransacao(status?: string | null): StatusTransacaoNormalizada {
