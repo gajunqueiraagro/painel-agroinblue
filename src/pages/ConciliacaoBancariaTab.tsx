@@ -766,8 +766,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <div className="mx-3 my-1 h-px bg-border" />
                 <div className="px-3 flex justify-between">
                   <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
-                  <span className={`text-[11px] font-bold tabular-nums ${selectedCard.saldoCalculado>=0?'text-green-700':'text-red-700'}`}>
-                    {formatMoeda(selectedCard.saldoCalculado)}
+                  <span className={`text-[11px] font-bold tabular-nums ${(selectedConta==='__all__'?totalSaldos.sis:selectedCard.saldoCalculado)>=0?'text-green-700':'text-red-700'}`}>
+                    {formatMoeda(selectedConta === '__all__' ? totalSaldos.sis : selectedCard.saldoCalculado)}
                   </span>
                 </div>
                 <div className="mx-3 my-1 h-px bg-border" />
