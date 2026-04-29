@@ -241,38 +241,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, []);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
-    if (!onAbrirFinanciamento) return;
-    // A parcela tem lancamento_id = id do principal. O lançamento (principal OU juros)
-    // carrega o parcela_id em observacao. Buscamos o financiamento_id via parcela.id.
-    let financiamentoId: string | null = null;
-    if (l.observacao) {
-      const { data } = await supabase
-        .from('financiamento_parcelas')
-        .select('financiamento_id')
-        .eq('id', l.observacao)
-        .maybeSingle();
-      financiamentoId = data?.financiamento_id ?? null;
-    }
-    if (!financiamentoId) {
-      // Fallback: pode ser um lancamento antigo de 'financiamento' (não 'parcela_financiamento')
-      const { data } = await supabase
-        .from('financiamento_parcelas')
-        .select('financiamento_id')
-        .eq('lancamento_id', l.id)
-        .maybeSingle();
-      financiamentoId = data?.financiamento_id ?? null;
-    }
-    if (!financiamentoId) {
-      console.warn('[FinanceiroV2Tab] financiamento_id nao encontrado para lancamento', l.id);
+    const { data: parcela } = await supabase
+      .from('financiamento_parcelas')
+      .select('financiamento_id')
+      .eq('lancamento_id', l.id)
+      .maybeSingle();
+
+    if (!parcela?.financiamento_id) {
+      toast.error('Vínculo de origem não encontrado para este lançamento.');
       return;
     }
-    // Salva filtros para restaurar ao voltar
-    sessionStorage.setItem('financeirov2_return_filters', JSON.stringify({
-      fazendaId, ano, mesesSelecionados, statusTransacao, tipoOperacao,
-      contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
-      subcentroFiltro, produtoFiltro, fornecedorFiltro, atividadeFiltro,
-    }));
-    onAbrirFinanciamento(financiamentoId);
+
+    if (!onAbrirFinanciamento) {
+      toast.info('Este lançamento vem de financiamento. Abra pelo módulo de Financiamentos.');
+      return;
+    }
+
+    onAbrirFinanciamento(parcela.financiamento_id);
   };
   const [mesPopoverOpen, setMesPopoverOpen] = useState(false);
   // Track if macro/centro were auto-filled by subcentro

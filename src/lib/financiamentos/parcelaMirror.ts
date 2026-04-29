@@ -249,12 +249,22 @@ export async function deletarMirrorParcela(
   supabase: SupabaseClient,
   parcelaId: string,
 ): Promise<void> {
-  const { error: lancErr } = await supabase
-    .from('financeiro_lancamentos_v2')
-    .delete()
-    .eq('origem_lancamento', 'parcela_financiamento')
-    .eq('observacao', parcelaId);
-  if (lancErr) console.error('[parcelaMirror] erro delete lancamentos:', lancErr);
+  // Buscar lancamento_id oficial da parcela
+  const { data: parcela } = await supabase
+    .from('financiamento_parcelas')
+    .select('lancamento_id')
+    .eq('id', parcelaId)
+    .maybeSingle();
+
+  if (parcela?.lancamento_id) {
+    const { error: lancErr } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .update({ cancelado: true })
+      .eq('id', parcela.lancamento_id);
+    if (lancErr) console.error('[parcelaMirror] erro cancelar lancamento:', lancErr);
+  } else {
+    console.warn('[parcelaMirror] parcela sem lancamento_id — nenhum lançamento cancelado:', parcelaId);
+  }
 
   const { error: planErr } = await (supabase
     .from('planejamento_financeiro' as any)
