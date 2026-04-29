@@ -181,10 +181,26 @@ export function calcConciliacaoMensal({
       continue;
     }
 
-    if (lancamento.conta_destino_id === contaId) {
-      entradasTerceiros = roundCurrency(entradasTerceiros + valor);
-    } else if (lancamento.conta_bancaria_id === contaId) {
-      saidasTerceiros = roundCurrency(saidasTerceiros + valor);
+    // Classificar por tipo_operacao para evitar inversão de entrada/saída
+    const tipoOp = (lancamento.tipo_operacao || '').trim();
+
+    if (tipoOp.startsWith('1-')) {
+      // Entrada: conta_destino_id OU conta_bancaria_id qualifica como entrada
+      if (lancamento.conta_destino_id === contaId || lancamento.conta_bancaria_id === contaId) {
+        entradasTerceiros = roundCurrency(entradasTerceiros + valor);
+      }
+    } else if (tipoOp.startsWith('2-')) {
+      // Saída: conta_bancaria_id qualifica como saída
+      if (lancamento.conta_bancaria_id === contaId) {
+        saidasTerceiros = roundCurrency(saidasTerceiros + valor);
+      }
+    } else {
+      // Outros tipos — comportamento conservador original
+      if (lancamento.conta_destino_id === contaId) {
+        entradasTerceiros = roundCurrency(entradasTerceiros + valor);
+      } else if (lancamento.conta_bancaria_id === contaId) {
+        saidasTerceiros = roundCurrency(saidasTerceiros + valor);
+      }
     }
   }
 
