@@ -430,7 +430,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* ── Per-account saldo data for current month ── */
   const perContaSaldos = useMemo((): PerContaSaldo[] => {
     const anoMes = `${ano}-${selectedMes}`;
-    return sortContas(contas).map(c => {
+    const anoMesSel2 = `${ano}-${selectedMes}`;
+    const contasAtivas = contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel2);
+    return sortContas(contasAtivas).map(c => {
       const saldoRow = saldos.find(s => s.ano_mes===anoMes && s.conta_bancaria_id===c.id)||null;
       const official = calcConciliacaoMensal({
         contaId:c.id, anoMes, saldoRows:saldos,
