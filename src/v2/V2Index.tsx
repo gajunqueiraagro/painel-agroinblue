@@ -8,6 +8,7 @@ import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2Home } from './pages/V2Home';
 import { V2PainelConsultor } from './pages/V2PainelConsultor';
+import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -19,6 +20,7 @@ export default function V2Index() {
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
+    if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     const labels: Record<string, string> = {
       financeiro: 'Financeiro', rebanho: 'Rebanho',
       movimentacoes: 'Movimentações', indicadores: 'Indicadores',

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 
-export type V2Section = 'home' | 'financeiro' | 'rebanho' | 'movimentacoes' | 'indicadores' | 'meta-cenario' | 'meta-metas' | 'painel-consultor' | 'configuracoes';
+export type V2Section = 'home' | 'financeiro' | 'rebanho' | 'movimentacoes' | 'indicadores' | 'meta-cenario' | 'meta-metas' | 'painel-consultor' | 'auditoria-anual' | 'configuracoes';
 
 const NAV: { label: string; icon: React.ComponentType<{ className?: string }>; directSection?: V2Section; items?: { id: V2Section; label: string }[]; }[] = [
   { label: 'Visão Geral', icon: LayoutDashboard, directSection: 'home' },
@@ -18,7 +18,7 @@ const NAV: { label: string; icon: React.ComponentType<{ className?: string }>; d
 function getActiveGroup(s: V2Section): string {
   if (s === 'home') return 'Visão Geral';
   if (['financeiro','rebanho','movimentacoes','indicadores'].includes(s)) return 'Operação';
-  if (['meta-cenario','meta-metas','painel-consultor'].includes(s)) return 'Planejamento';
+  if (['meta-cenario','meta-metas','painel-consultor','auditoria-anual'].includes(s)) return 'Planejamento';
   return 'Configurações';
 }
 
