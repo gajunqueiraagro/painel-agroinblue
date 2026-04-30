@@ -6,6 +6,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
 import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
+import { V2ContextDrawer } from './components/V2ContextDrawer';
 import { V2Home } from './pages/V2Home';
 import { V2PainelConsultor } from './pages/V2PainelConsultor';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
@@ -16,6 +17,7 @@ export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [mes, setMes] = useState(String(new Date().getMonth() + 1));
+  const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const { clientes } = useCliente();
   const { fazendas } = useFazenda();
 
@@ -46,7 +48,9 @@ export default function V2Index() {
       <div className="px-4 py-6 space-y-3">
         <h2 className="text-base font-semibold text-foreground">{labels[section] ?? section}</h2>
         <p className="text-sm text-muted-foreground">
-          {isPlan ? 'Módulo de planejamento — edição de META exclusiva nesta seção (Fase 2).' : 'Tela existente integrada aqui na Fase 2, sem modificação.'}
+          {isPlan
+            ? 'Módulo de planejamento — edição de META exclusiva nesta seção (Fase 2).'
+            : 'Tela existente integrada aqui na Fase 2, sem modificação.'}
         </p>
         <div className="p-6 rounded-lg border border-dashed border-border text-center text-muted-foreground text-sm">
           Conteúdo integrado na Fase 2.
@@ -57,17 +61,41 @@ export default function V2Index() {
     );
   }
 
+  const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
+  const fazendaSelector = fazendas.length > 1 ? <FazendaSelector /> : undefined;
+
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
-      <V2Sidebar
-        activeSection={section}
-        onNavigate={setSection}
-        clienteSelector={clientes.length > 1 ? <ClienteSelector /> : undefined}
-        fazendaSelector={fazendas.length > 1 ? <FazendaSelector /> : undefined}
-        className="hidden md:flex"
-      />
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm">
+    <div className="h-screen bg-background overflow-hidden">
+
+      {/* ── Desktop: grid empurra conteúdo ao abrir o drawer ──────────── */}
+      <div
+        className="hidden md:grid h-screen transition-[grid-template-columns] duration-200"
+        style={{ gridTemplateColumns: drawerAtivo ? '224px 240px 1fr' : '224px 0px 1fr' }}
+      >
+        <V2Sidebar
+          activeSection={section}
+          onNavigate={setSection}
+          drawerAtivo={drawerAtivo}
+          onDrawerToggle={setDrawerAtivo}
+          clienteSelector={clienteSelector}
+          fazendaSelector={fazendaSelector}
+        />
+        <V2ContextDrawer
+          grupoAtivo={drawerAtivo}
+          activeSection={section}
+          onSelect={(s) => { setSection(s); setDrawerAtivo(null); }}
+        />
+        <div className="flex flex-col min-w-0 h-screen overflow-hidden">
+          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} showFazenda={false} />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {renderContent()}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Mobile: layout original preservado, sem drawer ────────────── */}
+      <div className="flex flex-col h-screen md:hidden">
+        <div className="flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm">
           <span className="text-sm font-bold">Agroinblue</span>
           <div className="flex items-center gap-1">
             {clientes.length > 1 && (
@@ -83,11 +111,12 @@ export default function V2Index() {
           </div>
         </div>
         <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} showFazenda={false} />
-        <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-16">
           {renderContent()}
         </div>
         <V2MobileNav activeSection={section} onNavigate={setSection} />
       </div>
+
     </div>
   );
 }

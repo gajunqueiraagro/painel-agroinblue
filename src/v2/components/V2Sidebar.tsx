@@ -22,7 +22,7 @@ function getActiveGroup(s: V2Section): string {
   return 'Configurações';
 }
 
-export interface V2SidebarProps { activeSection: V2Section; onNavigate: (s: V2Section) => void; clienteSelector?: ReactNode; fazendaSelector?: ReactNode; className?: string; }
+export interface V2SidebarProps { activeSection: V2Section; onNavigate: (s: V2Section) => void; drawerAtivo?: string | null; onDrawerToggle?: (id: string | null) => void; clienteSelector?: ReactNode; fazendaSelector?: ReactNode; className?: string; }
 
 export function V2Sidebar({ activeSection, onNavigate, clienteSelector, fazendaSelector, className }: V2SidebarProps) {
   const { signOut } = useAuth();
