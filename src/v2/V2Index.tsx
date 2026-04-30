@@ -64,14 +64,16 @@ export default function V2Index() {
   const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
   const fazendaSelector = fazendas.length > 1 ? <FazendaSelector /> : undefined;
 
+  function handleSelect(s: V2Section) {
+    setSection(s);
+    setDrawerAtivo(null);
+  }
+
   return (
     <div className="h-screen bg-background overflow-hidden">
 
-      {/* ── Desktop: grid empurra conteúdo ao abrir o drawer ──────────── */}
-      <div
-        className="hidden md:grid h-screen transition-[grid-template-columns] duration-200"
-        style={{ gridTemplateColumns: drawerAtivo ? '224px 240px 1fr' : '224px 0px 1fr' }}
-      >
+      {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
+      <div className="hidden md:flex h-screen">
         <V2Sidebar
           activeSection={section}
           onNavigate={setSection}
@@ -80,16 +82,19 @@ export default function V2Index() {
           clienteSelector={clienteSelector}
           fazendaSelector={fazendaSelector}
         />
-        <V2ContextDrawer
-          grupoAtivo={drawerAtivo}
-          activeSection={section}
-          onSelect={(s) => { setSection(s); setDrawerAtivo(null); }}
-        />
-        <div className="flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Conteúdo principal — relative para ancorar o drawer overlay */}
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
           <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} showFazenda={false} />
           <div className="flex-1 min-h-0 overflow-y-auto">
             {renderContent()}
           </div>
+          {/* Drawer overlay — absolute sobre o conteúdo, não desloca nada */}
+          <V2ContextDrawer
+            grupoAtivo={drawerAtivo}
+            activeSection={section}
+            onSelect={handleSelect}
+            onClose={() => setDrawerAtivo(null)}
+          />
         </div>
       </div>
 
