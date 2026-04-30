@@ -7,6 +7,7 @@ import { V2Sidebar, type V2Section } from './components/V2Sidebar';
 import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2Home } from './pages/V2Home';
+import { V2PainelConsultor } from './pages/V2PainelConsultor';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -17,6 +18,7 @@ export default function V2Index() {
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
+    if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     const labels: Record<string, string> = {
       financeiro: 'Financeiro', rebanho: 'Rebanho',
       movimentacoes: 'Movimentações', indicadores: 'Indicadores',
