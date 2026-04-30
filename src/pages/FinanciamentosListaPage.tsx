@@ -64,6 +64,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const [filtroVencDe, setFiltroVencDe] = useState('');
   const [filtroVencAte, setFiltroVencAte] = useState('');
 
+  const [sortCol, setSortCol] = useState<string>('data_contrato');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSort = (col: string) => {
+    if (sortCol === col) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  };
+
   // dd/mm/aaaa → yyyy-mm-dd; retorna '' se incompleto/inválido
   const brToISO = (v: string): string => {
     const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -188,6 +199,25 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     });
   }, [financiamentos, filtroStatus, filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
       filtroDataContratoDe, filtroDataContratoAte, filtroVencDe, filtroVencAte]);
+
+  const dadosOrdenados = [...filtered].sort((a: any, b: any) => {
+    let vA = a[sortCol];
+    let vB = b[sortCol];
+    if (sortCol === 'data_contrato' || sortCol === 'prox_vencimento') {
+      vA = vA ? new Date(vA).getTime() : 0;
+      vB = vB ? new Date(vB).getTime() : 0;
+    } else if (sortCol === 'valor_total') {
+      vA = Number(vA);
+      vB = Number(vB);
+    } else if (sortCol === 'parcelas') {
+      vA = a.total_parcelas > 0 ? a.parcelas_pagas / a.total_parcelas : 0;
+      vB = b.total_parcelas > 0 ? b.parcelas_pagas / b.total_parcelas : 0;
+    }
+    if (typeof vA === 'string' && typeof vB === 'string') {
+      return sortDir === 'asc' ? vA.localeCompare(vB, 'pt-BR') : vB.localeCompare(vA, 'pt-BR');
+    }
+    return sortDir === 'asc' ? (vA ?? 0) - (vB ?? 0) : (vB ?? 0) - (vA ?? 0);
+  });
 
   /* ── Totalizadores (baseado na lista filtrada) ── */
   const totais = useMemo(() => ({
@@ -357,26 +387,26 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       <div className="flex-1 overflow-auto">
         {isLoading ? (
           <p className="text-sm text-muted-foreground p-4">Carregando…</p>
-        ) : filtered.length === 0 ? (
+        ) : dadosOrdenados.length === 0 ? (
           <p className="text-sm text-muted-foreground p-4">Nenhum financiamento encontrado.</p>
         ) : (
           <Table>
             <TableHeader className="sticky top-0 z-10">
               <TableRow className="bg-background">
-                <TableHead className="bg-background">Descrição</TableHead>
-                <TableHead className="bg-background">Contrato</TableHead>
-                <TableHead className="bg-background">Data Contrato</TableHead>
-                <TableHead className="bg-background">Tipo</TableHead>
-                <TableHead className="bg-background">Credor</TableHead>
-                <TableHead className="bg-background text-right">Valor total</TableHead>
-                <TableHead className="bg-background text-center">Parcelas</TableHead>
-                <TableHead className="bg-background">Próx. venc.</TableHead>
-                <TableHead className="bg-background">Status</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('descricao')}>Descrição {sortCol==='descricao' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('numero_contrato')}>Contrato {sortCol==='numero_contrato' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('data_contrato')}>Data Contrato {sortCol==='data_contrato' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('tipo_financiamento')}>Tipo {sortCol==='tipo_financiamento' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('credor_nome')}>Credor {sortCol==='credor_nome' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background text-right cursor-pointer select-none" onClick={() => handleSort('valor_total')}>Valor total {sortCol==='valor_total' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background text-center cursor-pointer select-none" onClick={() => handleSort('parcelas')}>Parcelas {sortCol==='parcelas' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('prox_vencimento')}>Próx. venc. {sortCol==='prox_vencimento' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="bg-background cursor-pointer select-none" onClick={() => handleSort('status')}>Status {sortCol==='status' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
                 <TableHead className="bg-background" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(f => (
+              {dadosOrdenados.map(f => (
                 <TableRow key={f.id} className="text-xs">
                   <TableCell className="max-w-[180px] truncate py-1">{f.descricao}</TableCell>
                   <TableCell className="text-xs text-muted-foreground py-1">{f.numero_contrato || '—'}</TableCell>
