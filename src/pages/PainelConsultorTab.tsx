@@ -1664,9 +1664,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // ─── Table render ───
   const renderBlocoTable = (blocoRows: Row[]) => (
     <div className="overflow-x-auto border rounded border-border/40 -mx-2 sm:mx-0">
-      <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '780px' }}>
+      <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '1100px' }}>
         <colgroup>
-          <col style={{ width: '240px', minWidth: '240px' }} />
+          <col style={{ width: '180px', minWidth: '160px' }} />
           {MESES_LABELS.map((_, i) => <col key={i} style={{ width: '54px', minWidth: '54px' }} />)}
           {viewTab === 'mensal' && <col style={{ width: '60px', minWidth: '60px' }} />}
         </colgroup>
@@ -1701,7 +1701,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
                 <td className={`sticky left-0 z-10 text-[10px] font-medium py-0.5 px-1.5 leading-tight border-r border-border/30 ${idx % 2 !== 0 ? 'bg-muted/10' : 'bg-card'}`} title={row.indicador} style={{ boxShadow: '2px 0 4px -1px rgba(0,0,0,0.06)' }}>
-                  <span className="truncate inline-block max-w-[220px] align-middle">{row.indicador}</span>
+                  <span className="truncate inline-block max-w-[170px] align-middle">{row.indicador}</span>
                   <SourceInfoTooltip indicadorId={row.indicadorId} cenario={cenario} />
                 </td>
                 {row.valores.map((v, i) => {

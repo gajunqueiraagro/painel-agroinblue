@@ -1,4 +1,4 @@
-import { LayoutDashboard, Layers, Target, MoreHorizontal } from 'lucide-react';
+import { LayoutDashboard, Layers, Target, MoreHorizontal, ClipboardCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { V2Section } from './V2Sidebar';
 
@@ -6,6 +6,7 @@ const TABS: { id: V2Section; label: string; icon: React.ComponentType<{ classNam
   { id: 'home', label: 'Home', icon: LayoutDashboard },
   { id: 'financeiro', label: 'Operação', icon: Layers },
   { id: 'meta-cenario', label: 'Plan.', icon: Target },
+  { id: 'painel-anual', label: 'PC-100', icon: ClipboardCheck },
   { id: 'configuracoes', label: 'Mais', icon: MoreHorizontal },
 ];
 
@@ -13,6 +14,7 @@ function getHighlighted(s: V2Section): V2Section {
   if (['financeiro','rebanho','movimentacoes','indicadores'].includes(s)) return 'financeiro';
   if (['meta-cenario','meta-metas','painel-consultor'].includes(s)) return 'meta-cenario';
   if (s === 'configuracoes') return 'configuracoes';
+  if (s === 'painel-anual') return 'painel-anual';
   return 'home';
 }
 
