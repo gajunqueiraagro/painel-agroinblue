@@ -10,6 +10,7 @@ import { V2Home } from './pages/V2Home';
 import { V2PainelConsultor } from './pages/V2PainelConsultor';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
+import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -22,6 +23,12 @@ export default function V2Index() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
+    if (section === 'evolucao-categoria') return (
+      <EvolucaoCategoriaTab
+        initialAno={ano}
+        initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
+      />
+    );
     if (section === 'painel-anual') return (
       <PainelConsultorTab
         onBack={() => setSection('home')}

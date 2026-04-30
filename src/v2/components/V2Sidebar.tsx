@@ -6,18 +6,18 @@ import { Button } from '@/components/ui/button';
 import { AlterarSenhaDialog } from '@/components/AlterarSenhaDialog';
 import logo from '@/assets/logo.png';
 
-export type V2Section = 'home' | 'financeiro' | 'rebanho' | 'movimentacoes' | 'indicadores' | 'meta-cenario' | 'meta-metas' | 'painel-consultor' | 'auditoria-anual' | 'painel-anual' | 'configuracoes';
+export type V2Section = 'home' | 'financeiro' | 'rebanho' | 'movimentacoes' | 'indicadores' | 'evolucao-categoria' | 'meta-cenario' | 'meta-metas' | 'painel-consultor' | 'auditoria-anual' | 'painel-anual' | 'configuracoes';
 
 const NAV: { label: string; icon: React.ComponentType<{ className?: string }>; directSection?: V2Section; items?: { id: V2Section; label: string }[]; }[] = [
   { label: 'Visão Geral', icon: LayoutDashboard, directSection: 'home' },
-  { label: 'Operação', icon: Layers, items: [{ id: 'financeiro', label: 'Financeiro' }, { id: 'rebanho', label: 'Rebanho' }, { id: 'movimentacoes', label: 'Movimentações' }, { id: 'indicadores', label: 'Indicadores' }] },
+  { label: 'Operação', icon: Layers, items: [{ id: 'financeiro', label: 'Financeiro' }, { id: 'rebanho', label: 'Rebanho' }, { id: 'movimentacoes', label: 'Movimentações' }, { id: 'indicadores', label: 'Indicadores' }, { id: 'evolucao-categoria', label: 'Mapa do Rebanho' }] },
   { label: 'Planejamento', icon: Target, items: [{ id: 'meta-cenario', label: 'Cenário META' }, { id: 'meta-metas', label: 'Metas Mensais' }, { id: 'painel-consultor', label: 'Painel Consultor' }, { id: 'auditoria-anual', label: 'Visão Anual — Auditoria' }, { id: 'painel-anual', label: 'Painel Consultor PC-100' }] },
   { label: 'Configurações', icon: Settings, directSection: 'configuracoes' },
 ];
 
 function getActiveGroup(s: V2Section): string {
   if (s === 'home') return 'Visão Geral';
-  if (['financeiro','rebanho','movimentacoes','indicadores'].includes(s)) return 'Operação';
+  if (['financeiro','rebanho','movimentacoes','indicadores','evolucao-categoria'].includes(s)) return 'Operação';
   if (['meta-cenario','meta-metas','painel-consultor','auditoria-anual','painel-anual'].includes(s)) return 'Planejamento';
   return 'Configurações';
 }
