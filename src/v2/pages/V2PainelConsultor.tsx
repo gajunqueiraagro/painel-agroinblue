@@ -1,15 +1,12 @@
 /**
  * V2PainelConsultor — Painel Consultor / Auditoria
- * Ambiente /v2 · Fase 1
+ * Ambiente /v2 · Fase 2
  *
- * Hooks usados (somente leitura, sem modificação):
- *   useStatusPilares      — pilares P1–P5
- *   useRebanhoOficial     — saldo, peso, UA, GMD
- *   useAuditoriaDesfrutes — desfrutes trimestrais + histórico 6 anos
- *   useValorRebanho       — preços por categoria + status P2
+ * Hooks (somente leitura, zero modificação):
+ *   useStatusPilares      · useRebanhoOficial · useAuditoriaDesfrutes · useValorRebanho
  *
  * NÃO usa: useLancamentos · useResumoStatus · useIndicadoresZootecnicos · useAnaliseTrimestral
- * Dados ausentes: "não disponível nesta fase — exige fonte oficial futura"
+ * Zero cálculo no componente.
  */
 import { useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -18,37 +15,25 @@ import { useStatusPilares, type StatusPilares } from '@/hooks/useStatusPilares';
 import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { useAuditoriaDesfrutes } from '@/hooks/useAuditoriaDesfrutes';
 import { useValorRebanho } from '@/hooks/useValorRebanho';
+import { AuditoriaRebanhoTable } from '@/v2/components/auditoria/AuditoriaRebanhoTable';
+import { FazendaMesCard } from '@/v2/components/auditoria/FazendaMesCard';
 import { cn } from '@/lib/utils';
 
-// Trimestre definido localmente — não importar de useAnaliseTrimestral (proibido)
 type Trimestre = 1 | 2 | 3 | 4;
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function fmt(n: number | null | undefined, decimais = 0): string {
+function fmt(n: number | null | undefined, dec = 0): string {
   if (n == null || isNaN(n)) return '—';
-  return n.toLocaleString('pt-BR', {
-    minimumFractionDigits: decimais,
-    maximumFractionDigits: decimais,
-  });
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
-
 function fmtR(n: number | null | undefined): string {
   if (n == null || isNaN(n)) return '—';
   return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 function mesParaTrimestre(mes: number): Trimestre {
-  if (mes <= 3) return 1;
-  if (mes <= 6) return 2;
-  if (mes <= 9) return 3;
-  return 4;
+  if (mes <= 3) return 1; if (mes <= 6) return 2; if (mes <= 9) return 3; return 4;
 }
 
-// ── pilares — leitura tipada sem as any ───────────────────────────────────
-
 type PilarKey = keyof StatusPilares;
-
 const PILARES: { key: PilarKey; label: string }[] = [
   { key: 'p1_mapa_pastos',           label: 'P1 Pastos'      },
   { key: 'p2_valor_rebanho',         label: 'P2 Valor'       },
@@ -56,17 +41,12 @@ const PILARES: { key: PilarKey; label: string }[] = [
   { key: 'p4_competencia',           label: 'P4 Competência' },
   { key: 'p5_economico_consolidado', label: 'P5 Econômico'   },
 ];
-
 const PILAR_CLS: Record<string, string> = {
   oficial:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   provisorio: 'bg-amber-50   text-amber-700   border-amber-200',
   bloqueado:  'bg-red-50     text-red-700     border-red-200',
 };
-const PILAR_ICON: Record<string, string> = {
-  oficial: '🟢', provisorio: '🟡', bloqueado: '🔴',
-};
-
-// ── sub-componentes ────────────────────────────────────────────────────────
+const PILAR_ICON: Record<string, string> = { oficial: '🟢', provisorio: '🟡', bloqueado: '🔴' };
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -75,7 +55,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     </p>
   );
 }
-
 function Unavailable({ label }: { label: string }) {
   return (
     <p className="text-xs text-muted-foreground/60 italic py-1">
@@ -83,22 +62,17 @@ function Unavailable({ label }: { label: string }) {
     </p>
   );
 }
-
 function MetaBlock({ children }: { children: React.ReactNode }) {
   return (
     <div className="border-l-[3px] border-amber-500 bg-amber-50 px-3 py-2.5 rounded-r mt-3">
       <div className="flex items-center gap-1.5 mb-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">
-          META
-        </span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-200 px-1.5 py-0.5 rounded">META</span>
         <span className="text-[10px] text-amber-600">somente leitura</span>
       </div>
       <div className="text-xs text-amber-800 space-y-0.5">{children}</div>
     </div>
   );
 }
-
-// ── componente principal ───────────────────────────────────────────────────
 
 export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
   const { clienteAtual } = useCliente();
@@ -110,35 +84,29 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
   const trimestre: Trimestre = useMemo(() => mesParaTrimestre(mesEfetivo), [mesEfetivo]);
   const anoMes = `${ano}-${String(mesEfetivo).padStart(2, '0')}`;
 
-  // ── hooks autossuficientes (somente leitura) ─────────────────────────────
   const { data: pilares, loading: loadingPilares } = useStatusPilares(
     isGlobal ? undefined : fazendaAtual?.id,
     anoMes,
   );
-
   const rebanhoReal = useRebanhoOficial({ ano: anoNum, cenario: 'realizado' });
   const rebanhoMeta = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
-
   const { data: desfrutes, isLoading: loadingDesfrutes } = useAuditoriaDesfrutes({
     clienteId: clienteAtual?.id,
     ano: anoNum,
     trimestre,
   });
-
   const { precos, isFechado: p2Fechado } = useValorRebanho(anoMes);
 
-  // ── leitura via API do hook — zero cálculo novo ──────────────────────────
-  const saldoFinalReal = rebanhoReal.getSaldoFinalTotal?.(anoNum, mesEfetivo) ?? null;
-  const saldoFinalMeta = rebanhoMeta.getSaldoFinalTotal?.(anoNum, mesEfetivo) ?? null;
-  const pesoMedioReal  = rebanhoReal.getPesoMedioRebanho?.(anoNum, mesEfetivo) ?? null;
-  const gmdReal        = rebanhoReal.getGMD?.(anoNum, mesEfetivo) ?? null;
-  const uaReal         = rebanhoReal.getUATotal?.(anoNum, mesEfetivo) ?? null;
-
+  // leitura via API do hook — zero cálculo novo
+  const saldoFinalReal    = rebanhoReal.getSaldoFinalTotal?.(anoNum, mesEfetivo) ?? null;
+  const saldoFinalMeta    = rebanhoMeta.getSaldoFinalTotal?.(anoNum, mesEfetivo) ?? null;
+  const categoriasDetalhe = rebanhoReal.getCategoriasDetalhe?.(mesEfetivo) ?? [];
+  const fazendaMes        = rebanhoReal.getFazendaMes?.(mesEfetivo) ?? null;
   const desfrutesAcum     = desfrutes?.realizado?.desfrutes?.acum;
   const metaDesfrutesAcum = desfrutes?.meta?.desfrutes?.acum;
 
   return (
-    <div className="space-y-6 px-4 py-4">
+    <div className="space-y-8 px-4 py-4">
 
       {/* Contexto */}
       <div>
@@ -150,7 +118,7 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
         </p>
       </div>
 
-      {/* ── STATUS DOS PILARES ─────────────────────────────────────────── */}
+      {/* ── 1. PILARES ────────────────────────────────────────────────── */}
       <div>
         <SectionTitle>Status dos Pilares de Fechamento</SectionTitle>
         {isGlobal ? (
@@ -177,58 +145,57 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
         )}
       </div>
 
-      {/* ── REBANHO ───────────────────────────────────────────────────── */}
+      {/* ── 2. TABELA MOVIMENTAÇÃO OFICIAL POR CATEGORIA ──────────────── */}
       <div>
-        <SectionTitle>Rebanho — Realizado</SectionTitle>
-        {rebanhoReal.loading ? (
-          <p className="text-xs text-muted-foreground">Carregando...</p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3">
-            {([
-              { label: 'Cabeças',    value: fmt(saldoFinalReal),   unit: 'cab'    },
-              { label: 'Peso Médio', value: fmt(pesoMedioReal, 1), unit: 'kg'     },
-              { label: 'UA Total',   value: fmt(uaReal, 1),        unit: 'UA'     },
-              { label: 'GMD',        value: fmt(gmdReal, 3),       unit: 'kg/dia' },
-            ] as const).map(({ label, value, unit }) => (
-              <div key={label}>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
-                <p className="text-xl font-bold mt-0.5 tabular-nums">
-                  {value}
-                  <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {precos.length > 0 && (
-          <div className="mt-3">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-              Preços por Categoria — P2 {p2Fechado ? '🟢 Fechado' : '🟡 Aberto'}
-            </p>
-            <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-xs text-muted-foreground">
-              {precos.map(p => (
-                <span key={p.categoria}>{p.categoria}: {fmtR(p.preco_kg)}/kg</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <MetaBlock>
-          <p>Rebanho Meta: <strong>{fmt(saldoFinalMeta)} cab</strong>{' · '}Realizado: <strong>{fmt(saldoFinalReal)} cab</strong></p>
-          <p className="text-[10px] text-amber-600 mt-0.5">
-            Desvio — não disponível nesta fase · exige fonte oficial futura
-          </p>
-        </MetaBlock>
+        <SectionTitle>Movimentação Oficial por Categoria</SectionTitle>
+        <AuditoriaRebanhoTable
+          categorias={categoriasDetalhe}
+          loading={rebanhoReal.loading}
+        />
       </div>
 
-      {/* ── DESFRUTES DO TRIMESTRE ────────────────────────────────────── */}
+      {/* ── 3. TOTAIS DA FAZENDA + PRODUÇÃO BIOLÓGICA ─────────────────── */}
+      <div>
+        <SectionTitle>Totais da Fazenda no Mês</SectionTitle>
+        <FazendaMesCard
+          fazendaMes={fazendaMes}
+          categorias={categoriasDetalhe}
+          loading={rebanhoReal.loading}
+        />
+      </div>
+
+      {/* ── Preços P2 ─────────────────────────────────────────────────── */}
+      {precos.length > 0 && (
+        <div>
+          <SectionTitle>
+            Preços por Categoria — P2 {p2Fechado ? '🟢 Fechado' : '🟡 Aberto'}
+          </SectionTitle>
+          <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-xs text-muted-foreground">
+            {precos.map(p => (
+              <span key={p.categoria}>{p.categoria}: {fmtR(p.preco_kg)}/kg</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── META rebanho ──────────────────────────────────────────────── */}
+      <MetaBlock>
+        <p>Rebanho Meta: <strong>{fmt(saldoFinalMeta)} cab</strong>{' · '}Realizado: <strong>{fmt(saldoFinalReal)} cab</strong></p>
+        <p className="text-[10px] text-amber-600 mt-0.5">
+          Desvio — não disponível nesta fase · exige fonte oficial futura
+        </p>
+      </MetaBlock>
+
+      {/* ── 4. DESFRUTES DO TRIMESTRE ─────────────────────────────────── */}
       <div>
         <SectionTitle>Desfrutes — T{trimestre}/{ano}</SectionTitle>
         {loadingDesfrutes ? (
           <p className="text-xs text-muted-foreground">Carregando...</p>
         ) : desfrutes ? (
           <>
+            <p className="text-[10px] text-muted-foreground/60 italic mb-2">
+              Leitura da fonte oficial. Esta versão não recalcula saldos nem valida divergências automaticamente.
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
@@ -268,9 +235,7 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
             </div>
             <MetaBlock>
               <p>Desfrutes Meta: <strong>{fmt(metaDesfrutesAcum?.cabecas)} cab</strong>{' · '}Realizado: <strong>{fmt(desfrutesAcum?.cabecas)} cab</strong></p>
-              <p className="text-[10px] text-amber-600 mt-0.5">
-                Desvio — não disponível nesta fase · exige fonte oficial futura
-              </p>
+              <p className="text-[10px] text-amber-600 mt-0.5">Desvio — não disponível nesta fase · exige fonte oficial futura</p>
             </MetaBlock>
           </>
         ) : (
@@ -288,7 +253,7 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b">
-                  {['Ano', 'Cabeças', 'Peso Méd.', 'Arrobas', 'Preço/@', 'Fat. Pec.'].map(h => (
+                  {['Ano','Cabeças','Peso Méd.','Arrobas','Preço/@','Fat. Pec.'].map(h => (
                     <th key={h} className="text-right first:text-left py-1.5 px-2 text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{h}</th>
                   ))}
                 </tr>
@@ -318,16 +283,16 @@ export function V2PainelConsultor({ ano, mes }: { ano: string; mes: string }) {
         <div className="space-y-1 text-xs text-muted-foreground/60 italic">
           <p>• Caixa atual / resultado financeiro — exige useResumoStatus (requer lancamentos)</p>
           <p>• KPIs comparativos MoM/YoY — exige useIndicadoresZootecnicos (requer lancamentos)</p>
-          <p>• Análise trimestral financeira — exige hook oficial futuro</p>
+          <p>• Divergência SI mês N vs SF mês N-1 — exige hook oficial futuro</p>
+          <p>• Realizado vs META por categoria — exige hook oficial futuro</p>
+          <p>• Alertas automáticos de inconsistência — exige hook oficial futuro</p>
           <p>• Endividamento total — exige hook oficial futuro</p>
-          <p>• Desvio % Realizado vs META — exige cálculo em hook oficial futuro</p>
-          <p>• Projeções — exige hook oficial futuro</p>
         </div>
       </div>
 
       {/* Banner */}
       <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg text-xs text-primary">
-        <strong>/v2 · Fase 1 · Painel Consultor.</strong>{' '}
+        <strong>/v2 · Fase 2 · Painel Consultor.</strong>{' '}
         Hooks: useStatusPilares · useRebanhoOficial · useAuditoriaDesfrutes · useValorRebanho.
         App original em <code>/</code> intacto.
       </div>
