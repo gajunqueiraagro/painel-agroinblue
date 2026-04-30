@@ -114,6 +114,7 @@ export function useFinanciamentoCadastro() {
         .select('id, nome_conta, nome_exibicao, banco')
         .eq('cliente_id', clienteId)
         .eq('ativa', true)
+        .eq('tipo_conta', 'cc')
         .order('ordem_exibicao');
       return data ?? [];
     },
