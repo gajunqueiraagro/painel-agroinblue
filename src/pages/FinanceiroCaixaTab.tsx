@@ -368,6 +368,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
       {/* ── Topo fixo: filtros + abas na mesma linha ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-1.5">
         <div className="flex items-center gap-1.5 overflow-x-auto">
+          {!filtroAnoInicial && (<>
           <Select value={localAno} onValueChange={setLocalAno}>
             <SelectTrigger className="w-20 h-7 text-xs font-bold shrink-0">
               <SelectValue placeholder="Ano" />
@@ -390,6 +391,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
               ))}
             </SelectContent>
           </Select>
+          </>)}
 
           <div className="h-5 w-px bg-border shrink-0 mx-1" />
 
