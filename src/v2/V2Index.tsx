@@ -66,16 +66,16 @@ export default function V2Index() {
       <ContratosTab />
     );
     if (section === 'importacao-extratos') return (
-      <FinanceiroCaixaTab />
+      <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs />
     );
     if (section === 'rateio-adm') return (
-      <FinanceiroCaixaTab />
+      <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs />
     );
     if (section === 'fluxo-caixa') return (
-      <FinanceiroCaixaTab />
+      <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs />
     );
     if (section === 'financeiro-dashboard') return (
-      <FinanceiroCaixaTab />
+      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs />
     );
     if (section === 'pastos') return (
       <PastosTab />
