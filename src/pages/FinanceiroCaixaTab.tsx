@@ -71,6 +71,12 @@ function classifySaida(l: FinanceiroLancamento): string {
 
 export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false }: Props) {
   const [subTab, setSubTab] = useState<SubTab>(initialTab ?? 'dashboard');
+  useEffect(() => {
+    if (initialTab) {
+      setSubTab(initialTab);
+    }
+  }, [initialTab]);
+
   const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>('realizado');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
