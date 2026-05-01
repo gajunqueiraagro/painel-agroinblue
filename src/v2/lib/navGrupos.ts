@@ -1,66 +1,42 @@
 /**
  * navGrupos.ts — Fonte única de verdade para a navegação do /v2
- *
- * Exporta:
- *   - V2Section: union type de todas as sections do sistema
- *   - NAV_GRUPOS: estrutura de dados para Sidebar + ContextDrawer
- *   - SECTION_TO_GROUP: lookup reverso section → grupo
- *
- * NÃO importar em nenhum componente ainda (Etapa 1 do plano incremental).
- * Será importado na Etapa 2 (V2ContextDrawer) e Etapa 5 (V2Sidebar).
+ * Atualizado com estrutura completa do módulo Financeiro.
  */
 
-// ─── V2Section ────────────────────────────────────────────────────────────────
-
 export type V2Section =
-  // raiz
   | 'home'
   // rebanho
-  | 'rebanho-home'
-  | 'pastos'
-  | 'chuvas'
-  | 'lancamentos-zoot'
-  | 'mapa-pastos'
-  | 'fechamento'
-  | 'meta-gmd'
-  | 'mapa-geo-pastos'
-  | 'resumo-pastos'
-  | 'evolucao-categoria'
-  | 'auditoria-tecnica'
-  | 'auditoria-zoot'
-  | 'valor-rebanho'
-  | 'indicadores'
-  // financeiro
-  | 'financeiro-home'
-  | 'financeiro-lanc'
-  | 'conciliacao'
-  | 'analise-trimestral'
-  | 'financeiro-caixa'
-  | 'fluxo-anual'
-  // planejamento (IDs legados preservados para compatibilidade)
-  | 'planejamento-home'
-  | 'meta-cenario'
-  | 'meta-metas'
-  | 'meta-consolidacao'
-  | 'painel-consultor'
-  | 'auditoria-anual'
-  | 'painel-anual'
-  // mobile atalhos
-  | 'atalhos-campeiro'
-  | 'atalhos-financeiro'
+  | 'rebanho-home' | 'pastos' | 'chuvas' | 'lancamentos-zoot'
+  | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
+  | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
+  | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores'
+  // financeiro — visão geral
+  | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
+  | 'rateio-adm' | 'importacao-extratos'
+  // financeiro — lançamentos
+  | 'financeiro-lanc' | 'contratos'
+  // financeiro — conciliação
+  | 'conciliacao' | 'saldos-mensais'
+  // financeiro — financiamentos
+  | 'financiamentos' | 'painel-financiamentos'
+  // financeiro — cadastros
+  | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
+  // financeiro — análise
+  | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
+  // planejamento (IDs legados preservados)
+  | 'planejamento-home' | 'meta-cenario' | 'meta-metas' | 'meta-consolidacao'
+  | 'painel-consultor' | 'auditoria-anual' | 'painel-anual'
+  // mobile
+  | 'atalhos-campeiro' | 'atalhos-financeiro'
   // config
   | 'configuracoes';
 
-// ─── Tipos do drawer ──────────────────────────────────────────────────────────
-
-/** ready = tela original montável diretamente | needs-wrapper = exige lancamentos/saldosIniciais */
 export type ItemStatus = 'ready' | 'needs-wrapper';
 
 export interface NavItem {
   id: V2Section;
   label: string;
   status: ItemStatus;
-  /** Destaque visual — Fechamento de Pastos é o item principal do módulo */
   primary?: boolean;
 }
 
@@ -75,8 +51,6 @@ export interface NavGrupo {
   drawer: NavSecao[];
 }
 
-// ─── NAV_GRUPOS ───────────────────────────────────────────────────────────────
-
 export const NAV_GRUPOS: NavGrupo[] = [
 
   // ── REBANHO ────────────────────────────────────────────────────────────────
@@ -86,10 +60,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
     drawer: [
       {
         titulo: 'Visão Geral',
-        itens: [
-          // status do mês + divergências + atalhos para Pastos
-          { id: 'rebanho-home', label: 'Resumo do Rebanho', status: 'ready' },
-        ],
+        itens: [{ id: 'rebanho-home', label: 'Resumo do Rebanho', status: 'ready' }],
       },
       {
         titulo: 'Lançamentos',
@@ -130,20 +101,41 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Visão Geral',
         itens: [
-          // saldo + entradas vs saídas + status de conciliação
-          { id: 'financeiro-home', label: 'Resumo Financeiro', status: 'ready' },
+          { id: 'financeiro-home',      label: 'Resumo Financeiro',     status: 'ready' },
+          { id: 'financeiro-dashboard', label: 'Dashboard Financeiro',  status: 'needs-wrapper' },
+          { id: 'fluxo-caixa',          label: 'Fluxo de Caixa',        status: 'needs-wrapper' },
+          { id: 'rateio-adm',           label: 'Rateio ADM',            status: 'needs-wrapper' },
+          { id: 'importacao-extratos',  label: 'Importação / Extratos', status: 'needs-wrapper' },
         ],
       },
       {
         titulo: 'Lançamentos',
         itens: [
-          { id: 'financeiro-lanc', label: 'Lançamentos Financeiros', status: 'ready' },
+          { id: 'financeiro-lanc', label: 'Lançamentos Financeiros',  status: 'ready' },
+          { id: 'contratos',       label: 'Contratos / Recorrências', status: 'needs-wrapper' },
         ],
       },
       {
         titulo: 'Conciliação',
         itens: [
-          { id: 'conciliacao', label: 'Conciliação Bancária', status: 'ready' },
+          { id: 'conciliacao',    label: 'Conciliação Bancária',    status: 'ready' },
+          { id: 'saldos-mensais', label: 'Saldos Mensais (legado)', status: 'needs-wrapper' },
+        ],
+      },
+      {
+        titulo: 'Financiamentos',
+        itens: [
+          { id: 'financiamentos',        label: 'Financiamentos',          status: 'needs-wrapper' },
+          { id: 'painel-financiamentos', label: 'Painel de Financiamentos', status: 'needs-wrapper' },
+        ],
+      },
+      {
+        titulo: 'Cadastros',
+        itens: [
+          { id: 'contas-bancarias', label: 'Contas Bancárias', status: 'needs-wrapper' },
+          { id: 'fornecedores',     label: 'Fornecedores',     status: 'needs-wrapper' },
+          { id: 'plano-contas',     label: 'Plano de Contas',  status: 'needs-wrapper' },
+          { id: 'dividendos',       label: 'Dividendos',       status: 'needs-wrapper' },
         ],
       },
       {
@@ -164,10 +156,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
     drawer: [
       {
         titulo: 'Visão Geral',
-        itens: [
-          // realizado vs meta (YTD)
-          { id: 'planejamento-home', label: 'Resumo Planejamento', status: 'ready' },
-        ],
+        itens: [{ id: 'planejamento-home', label: 'Resumo Planejamento', status: 'ready' }],
       },
       {
         titulo: 'META',
@@ -178,47 +167,32 @@ export const NAV_GRUPOS: NavGrupo[] = [
       },
       {
         titulo: 'Painel Consultor',
-        itens: [
-          { id: 'painel-anual', label: 'PC-100', status: 'ready' },
-        ],
+        itens: [{ id: 'painel-anual', label: 'PC-100', status: 'ready' }],
       },
     ],
   },
 ];
 
-// ─── SECTION_TO_GROUP ─────────────────────────────────────────────────────────
-// Lookup reverso: dado uma section, retorna o id do grupo pai.
-// Usado pela Sidebar para saber qual grupo destacar.
-
 export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // rebanho
-  'rebanho-home':       'rebanho',
-  'pastos':             'rebanho',
-  'chuvas':             'rebanho',
-  'lancamentos-zoot':   'rebanho',
-  'mapa-pastos':        'rebanho',
-  'fechamento':         'rebanho',
-  'meta-gmd':           'rebanho',
-  'mapa-geo-pastos':    'rebanho',
-  'resumo-pastos':      'rebanho',
-  'evolucao-categoria': 'rebanho',
-  'auditoria-tecnica':  'rebanho',
-  'auditoria-zoot':     'rebanho',
-  'valor-rebanho':      'rebanho',
-  'indicadores':        'rebanho',
+  'rebanho-home': 'rebanho', 'pastos': 'rebanho', 'chuvas': 'rebanho',
+  'lancamentos-zoot': 'rebanho', 'mapa-pastos': 'rebanho', 'fechamento': 'rebanho',
+  'meta-gmd': 'rebanho', 'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho',
+  'evolucao-categoria': 'rebanho', 'auditoria-tecnica': 'rebanho',
+  'auditoria-zoot': 'rebanho', 'valor-rebanho': 'rebanho', 'indicadores': 'rebanho',
   // financeiro
-  'financeiro-home':    'financeiro',
-  'financeiro-lanc':    'financeiro',
-  'conciliacao':        'financeiro',
-  'analise-trimestral': 'financeiro',
-  'financeiro-caixa':   'financeiro',
-  'fluxo-anual':        'financeiro',
+  'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
+  'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
+  'importacao-extratos': 'financeiro', 'financeiro-lanc': 'financeiro',
+  'contratos': 'financeiro', 'conciliacao': 'financeiro',
+  'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
+  'painel-financiamentos': 'financeiro', 'contas-bancarias': 'financeiro',
+  'fornecedores': 'financeiro', 'plano-contas': 'financeiro',
+  'dividendos': 'financeiro', 'analise-trimestral': 'financeiro',
+  'financeiro-caixa': 'financeiro', 'fluxo-anual': 'financeiro',
   // planejamento
-  'planejamento-home':  'planejamento',
-  'meta-cenario':       'planejamento',
-  'meta-metas':         'planejamento',
-  'meta-consolidacao':  'planejamento',
-  'painel-consultor':   'planejamento',
-  'auditoria-anual':    'planejamento',
-  'painel-anual':       'planejamento',
+  'planejamento-home': 'planejamento', 'meta-cenario': 'planejamento',
+  'meta-metas': 'planejamento', 'meta-consolidacao': 'planejamento',
+  'painel-consultor': 'planejamento', 'auditoria-anual': 'planejamento',
+  'painel-anual': 'planejamento',
 };
