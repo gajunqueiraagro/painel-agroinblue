@@ -24,6 +24,7 @@ import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
 import { MetaGmdTab } from '@/pages/MetaGmdTab';
 import { MovimentacaoTab } from '@/pages/MovimentacaoTab';
 import { V2ZootWrapper } from './components/V2ZootWrapper';
+import { ValorRebanhoTab } from '@/pages/ValorRebanhoTab';
 import { EvolucaoTab } from '@/pages/EvolucaoTab';
 import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
@@ -94,6 +95,17 @@ export default function V2Index() {
           <IndicadoresTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
+          />
+        )}
+      </V2ZootWrapper>
+    );
+    if (section === 'valor-rebanho') return (
+      <V2ZootWrapper>
+        {({ lancamentos, saldosIniciais }) => (
+          <ValorRebanhoTab
+            lancamentos={lancamentos}
+            saldosIniciais={saldosIniciais}
+            onBack={() => setSection('rebanho-home')}
           />
         )}
       </V2ZootWrapper>
