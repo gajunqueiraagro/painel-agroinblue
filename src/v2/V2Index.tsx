@@ -124,7 +124,7 @@ export default function V2Index() {
       <MovimentacaoTab onNavigate={() => {}} />
     );
     if (section === 'meta-gmd') return (
-      <MetaGmdTab />
+      <MetaGmdTab initialAno={ano} ocultarFiltroAno />
     );
     if (section === 'resumo-pastos') return (
       <ResumoPastosTab />

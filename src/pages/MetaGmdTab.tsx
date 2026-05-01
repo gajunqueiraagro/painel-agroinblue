@@ -14,11 +14,12 @@ interface Props {
   onBack?: () => void;
   initialAno?: string;
   backLabel?: string;
+  ocultarFiltroAno?: boolean;
 }
 
 const MESES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function MetaGmdTab({ onBack, initialAno, backLabel }: Props) {
+export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: Props) {
   const now = new Date();
   const [ano, setAno] = useState(initialAno || String(now.getFullYear()));
   const { rows, loading, saving, updateCell, salvar } = useMetaGmd(ano);
@@ -53,6 +54,7 @@ export function MetaGmdTab({ onBack, initialAno, backLabel }: Props) {
           )}
           <h2 className="text-sm font-semibold text-orange-600">GMD Meta</h2>
           <div className="ml-auto flex items-center gap-2">
+            {!ocultarFiltroAno && (<>
             <span className="text-[10px] font-semibold text-muted-foreground">Ano:</span>
             <Select value={ano} onValueChange={setAno}>
               <SelectTrigger className="w-18 h-6 text-[10px]">
@@ -64,6 +66,7 @@ export function MetaGmdTab({ onBack, initialAno, backLabel }: Props) {
                 ))}
               </SelectContent>
             </Select>
+            </>)}
             <Button
               size="sm"
               className="text-[10px] h-6 px-2 bg-orange-500 hover:bg-orange-600 text-white"
