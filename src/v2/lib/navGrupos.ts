@@ -63,9 +63,14 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [{ id: 'rebanho-home', label: 'Resumo do Rebanho', status: 'ready' }],
       },
       {
+        titulo: 'Cadastros',
+        itens: [
+          { id: 'pastos', label: 'Pastos', status: 'ready' },
+        ],
+      },
+      {
         titulo: 'Lançamentos',
         itens: [
-          { id: 'pastos',           label: 'Pastos',                   status: 'ready' },
           { id: 'chuvas',           label: 'Chuvas',                   status: 'ready' },
           { id: 'lancamentos-zoot', label: 'Movimentações do Rebanho', status: 'ready' },
         ],
