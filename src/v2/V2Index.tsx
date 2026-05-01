@@ -15,6 +15,7 @@ import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
+import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -28,6 +29,9 @@ export default function V2Index() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
+    if (section === 'conciliacao') return (
+      <ConciliacaoBancariaTab />
+    );
     if (section === 'pastos') return (
       <PastosTab />
     );
