@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { useFinanciamentosPainel, type TipoFin } from '@/hooks/useFinanciamentos
 interface Props {
   onVoltar?: () => void;
   onAbrirFinanciamento?: (id: string) => void;
+  filtroAnoInicial?: number;
 }
 
 const MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -26,9 +27,12 @@ const fmtCompact = (v: number) => {
   return fmt(v);
 };
 
-export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento }: Props = {}) {
+export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento, filtroAnoInicial }: Props = {}) {
   const currentYear = new Date().getFullYear();
   const [ano, setAno] = useState(currentYear);
+  useEffect(() => {
+    if (filtroAnoInicial !== undefined) setAno(filtroAnoInicial);
+  }, [filtroAnoInicial]);
   const [mes, setMes] = useState<number | 'todos'>('todos');
   const [tipo, setTipo] = useState<TipoFin>('todos');
   const [mesSelecionado, setMesSelecionado] = useState<number | null>(null);
@@ -91,12 +95,14 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
             )}
           </div>
           <div className="flex items-center gap-2">
+            {!filtroAnoInicial && (
             <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
               <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {anosDisp.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
               </SelectContent>
             </Select>
+            )}
             <Select value={mes === 'todos' ? 'todos' : String(mes)} onValueChange={v => setMes(v === 'todos' ? 'todos' : Number(v))}>
               <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>

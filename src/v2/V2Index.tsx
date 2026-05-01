@@ -57,7 +57,7 @@ export default function V2Index() {
       <ConciliacaoBancariaTab />
     );
     if (section === 'painel-financiamentos') return (
-      <FinanciamentosPainelTab />
+      <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
     );
     if (section === 'financiamentos') return (
       <FinanciamentosListaPage />
