@@ -15,6 +15,7 @@ import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
+import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
@@ -63,6 +64,18 @@ export default function V2Index() {
     );
     if (section === 'contratos') return (
       <ContratosTab />
+    );
+    if (section === 'importacao-extratos') return (
+      <FinanceiroCaixaTab />
+    );
+    if (section === 'rateio-adm') return (
+      <FinanceiroCaixaTab />
+    );
+    if (section === 'fluxo-caixa') return (
+      <FinanceiroCaixaTab />
+    );
+    if (section === 'financeiro-dashboard') return (
+      <FinanceiroCaixaTab />
     );
     if (section === 'pastos') return (
       <PastosTab />
