@@ -353,7 +353,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 1 — Cards executivos (Entradas / Saídas / Saldo) — alinhamento por items-stretch */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-3 gap-2 items-stretch mb-2">
+      <div className="grid grid-cols-3 gap-2 items-stretch mb-2 [&>*]:min-w-0">
         {/* Entradas */}
         <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
           <CardContent className="p-2 flex flex-col flex-1">
@@ -452,7 +452,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 2 — Pizzas (sem título/legenda) + gráfico Entradas vs Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-3 gap-2 items-stretch">
+      <div className="grid grid-cols-3 gap-2 items-stretch [&>*]:min-w-0">
         {/* Pie Entradas — centralizada, maior, sem título/legenda */}
         <Card className="flex flex-col">
           <CardContent className="flex items-center justify-center p-3 flex-1">
