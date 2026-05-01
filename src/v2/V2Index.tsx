@@ -23,6 +23,9 @@ import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
 import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
 import { MetaGmdTab } from '@/pages/MetaGmdTab';
 import { MovimentacaoTab } from '@/pages/MovimentacaoTab';
+import { V2ZootWrapper } from './components/V2ZootWrapper';
+import { EvolucaoTab } from '@/pages/EvolucaoTab';
+import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
@@ -84,6 +87,26 @@ export default function V2Index() {
     );
     if (section === 'financeiro-dashboard') return (
       <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs />
+    );
+    if (section === 'indicadores-zoot') return (
+      <V2ZootWrapper>
+        {({ lancamentos, saldosIniciais }) => (
+          <IndicadoresTab
+            lancamentos={lancamentos}
+            saldosIniciais={saldosIniciais}
+          />
+        )}
+      </V2ZootWrapper>
+    );
+    if (section === 'evolucao') return (
+      <V2ZootWrapper>
+        {({ lancamentos, saldosIniciais }) => (
+          <EvolucaoTab
+            lancamentos={lancamentos}
+            saldosIniciais={saldosIniciais}
+          />
+        )}
+      </V2ZootWrapper>
     );
     if (section === 'lancamentos-zoot') return (
       <MovimentacaoTab onNavigate={() => {}} />
