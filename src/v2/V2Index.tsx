@@ -15,6 +15,8 @@ import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
+import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
+import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 
 export default function V2Index() {
@@ -31,6 +33,12 @@ export default function V2Index() {
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     if (section === 'conciliacao') return (
       <ConciliacaoBancariaTab />
+    );
+    if (section === 'painel-financiamentos') return (
+      <FinanciamentosPainelTab />
+    );
+    if (section === 'financiamentos') return (
+      <FinanciamentosListaPage />
     );
     if (section === 'pastos') return (
       <PastosTab />
