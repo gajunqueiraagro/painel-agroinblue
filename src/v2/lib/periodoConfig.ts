@@ -22,7 +22,7 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'indicadores-zoot':      'ano',
   'financeiro-home':       'nenhum',
   'financeiro-dashboard':  'ano-mes',
-  'fluxo-caixa':           'ano',
+  'fluxo-caixa':           'ano-mes',
   'rateio-adm':            'ano',
   'importacao-extratos':   'nenhum',
   'financeiro-lanc':       'nenhum',
