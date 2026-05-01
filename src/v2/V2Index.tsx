@@ -112,7 +112,6 @@ export default function V2Index() {
             saldosIniciais={saldosIniciais}
             onBack={() => setSection('rebanho-home')}
             filtroAnoInicial={ano}
-            filtroMesInicial={mes === '0' ? undefined : Number(mes)}
           />
         )}
       </V2ZootWrapper>

@@ -17,7 +17,7 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'evolucao-categoria':    'ano-mes',
   'auditoria-tecnica':     'ano',
   'auditoria-zoot':        'ano',
-  'valor-rebanho':         'ano-mes',
+  'valor-rebanho':         'ano',
   'evolucao':              'ano',
   'indicadores-zoot':      'ano',
   'financeiro-home':       'nenhum',

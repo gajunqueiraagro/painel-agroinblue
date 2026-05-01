@@ -1115,6 +1115,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
+        {!filtroAnoInicial && (
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
             <SelectValue placeholder="Ano" />
@@ -1125,6 +1126,7 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
             ))}
           </SelectContent>
         </Select>
+        )}
 
         {uCanEdit && !isGlobal && (
           <Button variant="outline" size="sm" onClick={handleCopiarMesAnterior} className="gap-1 h-7 text-xs px-2">
