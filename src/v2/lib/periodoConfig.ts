@@ -8,7 +8,7 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'chuvas':                'ano',
   'lancamentos-zoot':      'nenhum',
   'fechamento':               'ano',
-  'conferencia-lancamentos':   'ano-mes',
+  'conferencia-lancamentos':   'ano',
   'conferencia-mensal':        'ano-mes',
   'meta-gmd':              'ano',
   'mapa-pastos':           'ano-mes',

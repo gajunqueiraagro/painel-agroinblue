@@ -666,10 +666,10 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
           {/* Filters row */}
           <div className="flex flex-wrap items-center gap-1">
-            <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+            {!filtroAnoInicial && (<Select value={anoFiltro} onValueChange={setAnoFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border"><SelectValue placeholder="Ano" /></SelectTrigger>
               <SelectContent side="bottom">{anosDisponiveis.map(a => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}</SelectContent>
-            </Select>
+            </Select>)}
             <Select value={mesFiltro} onValueChange={setMesFiltro}>
               <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border"><SelectValue placeholder="Mês" /></SelectTrigger>
               <SelectContent side="bottom">{MESES_OPTIONS.map(m => <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>)}</SelectContent>
@@ -882,7 +882,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
 
         {/* Filters row */}
         <div className="flex flex-wrap items-center gap-1">
-          <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+          {!filtroAnoInicial && (<Select value={anoFiltro} onValueChange={setAnoFiltro}>
             <SelectTrigger className="h-6 text-[10px] font-bold w-[68px] bg-card text-foreground border-border">
               <SelectValue placeholder="Ano" />
             </SelectTrigger>
@@ -891,7 +891,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
                 <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
               ))}
             </SelectContent>
-          </Select>
+          </Select>)}
           <Select value={mesFiltro} onValueChange={setMesFiltro}>
             <SelectTrigger className="h-6 text-[10px] font-bold w-[110px] bg-card text-foreground border-border">
               <SelectValue placeholder="Mês" />
