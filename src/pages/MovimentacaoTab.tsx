@@ -1,10 +1,8 @@
-import { ArrowLeftRight, TrendingUp, Map, ChevronRight, Construction, DollarSign } from 'lucide-react';
+import { ArrowLeftRight, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { TabId } from '@/components/BottomNav';
 
 interface Props {
   onNavigate: (dest: 'tipos' | 'resumo') => void;
-  onTabChange?: (tab: TabId) => void;
 }
 
 function HubCard({ icon: Icon, title, description, onClick, disabled, showArrow }: {
@@ -34,7 +32,7 @@ function HubCard({ icon: Icon, title, description, onClick, disabled, showArrow 
   );
 }
 
-export function MovimentacaoTab({ onNavigate, onTabChange }: Props) {
+export function MovimentacaoTab({ onNavigate }: Props) {
   return (
     <div className="p-4 pb-24 w-full">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -44,54 +42,20 @@ export function MovimentacaoTab({ onNavigate, onTabChange }: Props) {
           <div className="space-y-2">
             <HubCard
               icon={ArrowLeftRight}
-              title="Lista das Movimentações"
-              description="Entradas, saídas e transferências"
+              title="Conferência de Lançamentos"
+              description="Entradas, saídas e transferências detalhadas"
               onClick={() => onNavigate('tipos')}
             />
             <HubCard
               icon={TrendingUp}
-              title="Tela das Movimentações"
-              description="Evolução do rebanho e categorias"
+              title="Conferência Mensal"
+              description="Resumo mensal por categoria do rebanho"
               onClick={() => onNavigate('resumo')}
             />
-            <HubCard
-              icon={DollarSign}
-              title="Valor do Rebanho"
-              description="Valoração do estoque e preços por categoria"
-              onClick={() => onTabChange?.('valor_rebanho' as TabId)}
-            />
           </div>
         </div>
 
-        {/* Coluna 2 — Pastos */}
-        <div className="space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">🌿 Pastos</h2>
-          <div className="space-y-2">
-            <HubCard
-              icon={Map}
-              title="Mapa de Pastos"
-              description="Visualização consolidada"
-              onClick={() => onTabChange?.('mapa_pastos')}
-              showArrow
-            />
-            <HubCard
-              icon={Map}
-              title="Mapa Geográfico"
-              description="Mapa real com polígonos KML"
-              onClick={() => onTabChange?.('mapa_geo_pastos')}
-              showArrow
-            />
-          </div>
-        </div>
 
-        {/* Coluna 3 — Reservada */}
-        <div className="space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">🔧 Em construção</h2>
-          <div className="space-y-2">
-            <HubCard icon={Construction} title="Em construção" description="Em breve" disabled />
-            <HubCard icon={Construction} title="Em construção" description="Em breve" disabled />
-          </div>
-        </div>
       </div>
     </div>
   );
