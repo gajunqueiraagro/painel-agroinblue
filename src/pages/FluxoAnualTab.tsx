@@ -5,9 +5,7 @@ import { useMovimentacoesMensais } from '@/hooks/useMovimentacoesMensais';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
 import { Lancamento, SaldoInicial, Categoria } from '@/types/cattle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, DollarSign, AlertTriangle } from 'lucide-react';
-import { EvolucaoCategoriaTab } from './EvolucaoCategoriaTab';
+import { DollarSign, AlertTriangle } from 'lucide-react';
 import type { SubAba } from './FinanceiroTab';
 import { SaldoInicialForm } from '@/components/SaldoInicialForm';
 import { FLUXO_LINHAS } from '@/lib/calculos/zootecnicos';
@@ -38,11 +36,11 @@ interface Props {
   onNavigateToFechamentoPastos?: () => void;
   onSetSaldo?: (ano: number, mes: number, categoria: Categoria, quantidade: number, pesoMedioKg?: number, precoKg?: number) => void;
   onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
+  onNavigate?: (section: string, params?: { ano?: string; mes?: number }) => void;
 }
 
-export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onNavigateToFechamentoPastos, onSetSaldo, onNavigateToReclass }: Props) {
+export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimentacao, onNavigateToValorRebanho, onNavigateToFechamentoPastos, onSetSaldo, onNavigateToReclass, onNavigate }: Props) {
   const { isGlobal, fazendaAtual } = useFazenda();
-  const [drilldownMonth, setDrilldownMonth] = useState<string | null>(null);
 
   // FONTE OFICIAL: anos reais do banco
   const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
@@ -100,28 +98,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   const { data: movData } = useMovimentacoesMensais(Number(anoFiltro), cenarioView as 'realizado' | 'meta');
   const porMesTipo = movData?.porMesTipo ?? {};
   const totalAno = movData?.totalAno ?? ({} as Record<string, number>);
-
-  if (drilldownMonth) {
-    const mesLabel = MESES_COLS.find(m => m.key === drilldownMonth)?.label || drilldownMonth;
-    return (
-      <div className="animate-fade-in pb-20">
-        <div className="px-3 py-1.5 flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setDrilldownMonth(null)} className="gap-1 h-7 text-xs">
-            <ArrowLeft className="h-3.5 w-3.5" /> Voltar
-          </Button>
-          <h2 className="text-sm font-bold text-foreground">
-            Evolução de Categorias
-          </h2>
-        </div>
-        <EvolucaoCategoriaTab
-          initialAno={anoFiltro}
-          initialMes={drilldownMonth}
-          initialCenario={statusFiltro}
-          onNavigateToReclass={onNavigateToReclass}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="w-full px-4 animate-fade-in pb-20">
@@ -204,7 +180,10 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                 <th
                   key={m.key}
                   className={`px-1 py-1 font-bold text-foreground text-center cursor-pointer hover:bg-primary/30 transition-colors ${qb(m.key)}`}
-                  onClick={() => setDrilldownMonth(m.key)}
+                  onClick={() => onNavigate?.('evolucao-categoria', {
+                    ano: anoFiltro,
+                    mes: Number(m.key),
+                  })}
                 >
                   <div className="flex items-center justify-center gap-0.5">
                     <span>{m.label}</span>
@@ -236,7 +215,10 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   <td
                     key={m.key}
                     className={`px-1 py-1 text-center font-extrabold tabular-nums whitespace-nowrap cursor-pointer hover:bg-accent/50 transition-colors ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
-                    onClick={() => setDrilldownMonth(m.key)}
+                    onClick={() => onNavigate?.('evolucao-categoria', {
+                      ano: anoFiltro,
+                      mes: Number(m.key),
+                    })}
                     title={isNeg ? '⚠ Saldo inicial negativo — verificar consistência' : undefined}
                   >
                     {valor != null ? fmtNum(valor) : '–'}

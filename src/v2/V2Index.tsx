@@ -26,8 +26,8 @@ import { MetaGmdTab } from '@/pages/MetaGmdTab';
 import { V2ZootWrapper } from './components/V2ZootWrapper';
 import { ValorRebanhoTab } from '@/pages/ValorRebanhoTab';
 import { EvolucaoTab } from '@/pages/EvolucaoTab';
+import { FluxoAnualTab } from '@/pages/FluxoAnualTab';
 import { FinanceiroTab } from '@/pages/FinanceiroTab';
-import { EvolucaoRebanhoHubTab } from '@/pages/EvolucaoRebanhoHubTab';
 import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
@@ -143,11 +143,14 @@ export default function V2Index() {
     if (section === 'conferencia-mensal') return (
       <V2ZootWrapper>
         {({ lancamentos, saldosIniciais }) => (
-          <EvolucaoRebanhoHubTab
+          <FluxoAnualTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
-            filtroAnoInicial={ano}
-            filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+            onNavigate={(targetSection, params) => {
+              if (params?.mes !== undefined) setMes(String(params.mes));
+              if (params?.ano !== undefined) setAno(params.ano);
+              setSection(targetSection as V2Section);
+            }}
           />
         )}
       </V2ZootWrapper>
