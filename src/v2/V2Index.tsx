@@ -22,6 +22,7 @@ import { AuditoriaTecnicaTab } from '@/pages/AuditoriaTecnicaTab';
 import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
 import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
 import { MetaGmdTab } from '@/pages/MetaGmdTab';
+import { MovimentacaoTab } from '@/pages/MovimentacaoTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
@@ -83,6 +84,9 @@ export default function V2Index() {
     );
     if (section === 'financeiro-dashboard') return (
       <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs />
+    );
+    if (section === 'lancamentos-zoot') return (
+      <MovimentacaoTab onNavigate={() => {}} />
     );
     if (section === 'meta-gmd') return (
       <MetaGmdTab />
