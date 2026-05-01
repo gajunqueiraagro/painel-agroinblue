@@ -9,7 +9,7 @@ export type V2Section =
   | 'rebanho-home' | 'pastos' | 'chuvas' | 'lancamentos-zoot'
   | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
-  | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores'
+  | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores-zoot'
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
   | 'rateio-adm' | 'importacao-extratos'
@@ -87,7 +87,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'auditoria-tecnica',  label: 'Conferência Técnica',  status: 'ready' },
           { id: 'auditoria-zoot',     label: 'Auditoria Zootécnica', status: 'ready' },
           { id: 'valor-rebanho',      label: 'Valor Rebanho',        status: 'needs-wrapper' },
-          { id: 'indicadores',        label: 'Indicadores',          status: 'needs-wrapper' },
+          { id: 'indicadores-zoot',        label: 'Indicadores',          status: 'needs-wrapper' },
         ],
       },
     ],
