@@ -81,7 +81,6 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'fechamento',                label: 'Fechamento de Pastos',       status: 'ready', primary: true },
           { id: 'conferencia-lancamentos',    label: 'Conferência de Lançamentos', status: 'ready' },
           { id: 'conferencia-mensal',         label: 'Conferência Mensal',         status: 'ready' },
-          { id: 'meta-gmd',        label: 'GMD Meta',             status: 'ready' },
           { id: 'mapa-pastos',     label: 'Mapa de Pastos',       status: 'ready' },
           { id: 'mapa-geo-pastos', label: 'Mapa Geo Pastos',      status: 'ready' },
           { id: 'resumo-pastos',   label: 'Resumo Pastos',        status: 'ready' },
@@ -170,6 +169,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'meta-cenario',      label: 'Planejamento Financeiro', status: 'ready' },
           { id: 'meta-consolidacao', label: 'Consolidação META',       status: 'ready' },
+          { id: 'meta-gmd',          label: 'GMD Meta',                status: 'ready' },
         ],
       },
       {
@@ -184,7 +184,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // rebanho
   'rebanho-home': 'rebanho', 'pastos': 'rebanho', 'chuvas': 'rebanho',
   'lancamentos-zoot': 'rebanho', 'mapa-pastos': 'rebanho', 'fechamento': 'rebanho',
-  'meta-gmd': 'rebanho', 'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho',
+  'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho',
   'evolucao-categoria': 'rebanho', 'auditoria-tecnica': 'rebanho',
   'auditoria-zoot': 'rebanho', 'valor-rebanho': 'rebanho', 'indicadores': 'rebanho',
   // financeiro
@@ -199,7 +199,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'financeiro-caixa': 'financeiro', 'fluxo-anual': 'financeiro',
   // planejamento
   'planejamento-home': 'planejamento', 'meta-cenario': 'planejamento',
-  'meta-metas': 'planejamento', 'meta-consolidacao': 'planejamento',
+  'meta-gmd': 'planejamento', 'meta-metas': 'planejamento', 'meta-consolidacao': 'planejamento',
   'painel-consultor': 'planejamento', 'auditoria-anual': 'planejamento',
   'painel-anual': 'planejamento',
 };
