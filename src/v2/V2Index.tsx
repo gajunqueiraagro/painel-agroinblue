@@ -116,6 +116,8 @@ export default function V2Index() {
           <EvolucaoTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
+            initialAno={ano}
+            ocultarFiltroAno
           />
         )}
       </V2ZootWrapper>

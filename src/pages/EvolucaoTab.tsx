@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lancamento, SaldoInicial, CATEGORIAS, isEntrada, isReclassificacao, Categoria } from '@/types/cattle';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -12,9 +12,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface Props {
   lancamentos: Lancamento[];
   saldosIniciais: SaldoInicial[];
+  initialAno?: string;
+  ocultarFiltroAno?: boolean;
 }
 
-export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
+export function EvolucaoTab({ lancamentos, saldosIniciais, initialAno, ocultarFiltroAno }: Props) {
   const { fazendaAtual } = useFazenda();
   const { bloqueado } = useRedirecionarPecuaria();
   const fazendaId = fazendaAtual?.id;
@@ -35,7 +37,11 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
     return result;
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(String(new Date().getFullYear()));
+  const [anoFiltro, setAnoFiltro] = useState(initialAno ?? String(new Date().getFullYear()));
+
+  useEffect(() => {
+    if (initialAno) setAnoFiltro(initialAno);
+  }, [initialAno]);
 
   // FONTE OFICIAL: useRebanhoOficial para saldos por categoria
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: 'realizado' });
@@ -137,6 +143,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
     <TooltipProvider>
       <div className="w-full px-4 animate-fade-in pb-20">
         {/* Filtro de ano - sticky */}
+        {!ocultarFiltroAno && (
         <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2">
           <div className="w-40">
             <Select value={anoFiltro} onValueChange={setAnoFiltro}>
@@ -151,6 +158,7 @@ export function EvolucaoTab({ lancamentos, saldosIniciais }: Props) {
             </Select>
           </div>
         </div>
+        )}
 
         <div className="p-4 space-y-4">
 
