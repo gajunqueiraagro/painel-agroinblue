@@ -91,6 +91,13 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));
   const mesDefault = filtroMesInicial || (Number(anoFiltro) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
+
+  useEffect(() => {
+    if (filtroAnoInicial !== undefined) setAnoFiltro(filtroAnoInicial);
+  }, [filtroAnoInicial]);
+  useEffect(() => {
+    if (filtroMesInicial !== undefined) setMesFiltro(filtroMesInicial);
+  }, [filtroMesInicial]);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
   const [rows, setRows] = useState<PastoMapaRow[]>([]);
@@ -265,12 +272,15 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
               )}
+              {!filtroAnoInicial && (
               <Select value={anoFiltro} onValueChange={setAnoFiltro}>
                 <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                 </SelectContent>
               </Select>
+              )}
+              {!filtroMesInicial && (
               <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
                 <SelectTrigger className="w-20 h-8 text-xs font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -279,6 +289,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
                   ))}
                 </SelectContent>
               </Select>
+              )}
               <Badge variant="secondary" className="text-xs h-6">{formatNum(totais.totalCab, 0)} cab</Badge>
               {totais.uaHaGeral !== null && (
                 <Badge variant="outline" className="text-xs h-6">{formatNum(totais.uaHaGeral, 2)} UA/ha</Badge>
