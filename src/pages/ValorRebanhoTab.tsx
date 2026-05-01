@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Save, Copy, Info, Lock, Unlock, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Save, Copy, Info, Lock, Unlock, AlertTriangle, TrendingUp, TrendingDown, Minus, ArrowLeft } from 'lucide-react';
 import { Lancamento, SaldoInicial } from '@/types/cattle';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
@@ -1110,6 +1110,11 @@ export function ValorRebanhoTab({ lancamentos, saldosIniciais, onBack, filtroAno
     <div className="p-2 w-full space-y-1.5 animate-fade-in pb-16">
       {!isGlobal && <MasterLockBanner anoMes={anoMes} />}
       <div className="flex gap-1.5 items-center flex-wrap">
+        {onBack && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="w-20 h-7 text-xs font-bold">
             <SelectValue placeholder="Ano" />
