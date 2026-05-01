@@ -8,6 +8,7 @@ export type V2Section =
   // rebanho
   | 'rebanho-home' | 'pastos' | 'chuvas' | 'lancamentos-zoot'
   | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
+  | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
   | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores-zoot'
   // financeiro — visão geral
@@ -71,14 +72,15 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Lançamentos',
         itens: [
-          { id: 'chuvas',           label: 'Chuvas',                   status: 'ready' },
-          { id: 'lancamentos-zoot', label: 'Movimentações do Rebanho', status: 'ready' },
+          { id: 'chuvas', label: 'Chuvas', status: 'ready' },
         ],
       },
       {
         titulo: 'Conferência',
         itens: [
-          { id: 'fechamento',      label: 'Fechamento de Pastos', status: 'ready', primary: true },
+          { id: 'fechamento',                label: 'Fechamento de Pastos',       status: 'ready', primary: true },
+          { id: 'conferencia-lancamentos',    label: 'Conferência de Lançamentos', status: 'ready' },
+          { id: 'conferencia-mensal',         label: 'Conferência Mensal',         status: 'ready' },
           { id: 'meta-gmd',        label: 'GMD Meta',             status: 'ready' },
           { id: 'mapa-pastos',     label: 'Mapa de Pastos',       status: 'ready' },
           { id: 'mapa-geo-pastos', label: 'Mapa Geo Pastos',      status: 'ready' },

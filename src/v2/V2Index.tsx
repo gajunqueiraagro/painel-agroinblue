@@ -23,10 +23,11 @@ import { AuditoriaTecnicaTab } from '@/pages/AuditoriaTecnicaTab';
 import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
 import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
 import { MetaGmdTab } from '@/pages/MetaGmdTab';
-import { MovimentacaoTab } from '@/pages/MovimentacaoTab';
 import { V2ZootWrapper } from './components/V2ZootWrapper';
 import { ValorRebanhoTab } from '@/pages/ValorRebanhoTab';
 import { EvolucaoTab } from '@/pages/EvolucaoTab';
+import { FinanceiroTab } from '@/pages/FinanceiroTab';
+import { EvolucaoRebanhoHubTab } from '@/pages/EvolucaoRebanhoHubTab';
 import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
@@ -128,8 +129,28 @@ export default function V2Index() {
         )}
       </V2ZootWrapper>
     );
-    if (section === 'lancamentos-zoot') return (
-      <MovimentacaoTab onNavigate={() => {}} />
+    if (section === 'conferencia-lancamentos') return (
+      <V2ZootWrapper>
+        {({ lancamentos }) => (
+          <FinanceiroTab
+            lancamentos={lancamentos}
+            filtroAnoInicial={ano}
+            filtroMesInicial={mes === '0' ? undefined : String(mes)}
+          />
+        )}
+      </V2ZootWrapper>
+    );
+    if (section === 'conferencia-mensal') return (
+      <V2ZootWrapper>
+        {({ lancamentos, saldosIniciais }) => (
+          <EvolucaoRebanhoHubTab
+            lancamentos={lancamentos}
+            saldosIniciais={saldosIniciais}
+            filtroAnoInicial={ano}
+            filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+          />
+        )}
+      </V2ZootWrapper>
     );
     if (section === 'meta-gmd') return (
       <MetaGmdTab initialAno={ano} ocultarFiltroAno />
