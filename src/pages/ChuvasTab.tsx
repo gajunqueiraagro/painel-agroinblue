@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Input } from '@/components/ui/input';
@@ -15,11 +15,15 @@ function diasNoMes(mes: number, ano: number) {
   return new Date(ano, mes, 0).getDate();
 }
 
-export function ChuvasTab() {
+export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
   const { chuvas, loading, salvarChuva } = useChuvas();
   const { isGlobal } = useFazenda();
   const currentYear = new Date().getFullYear();
   const [anoFiltro, setAnoFiltro] = useState(currentYear);
+
+  useEffect(() => {
+    if (anoInicial) setAnoFiltro(Number(anoInicial));
+  }, [anoInicial]);
 
   // Dialog state for quick entry
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -143,6 +147,7 @@ export function ChuvasTab() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <CloudRain className="h-5 w-5 text-blue-500" />
+            {!anoInicial && (
             <Select value={String(anoFiltro)} onValueChange={v => setAnoFiltro(Number(v))}>
               <SelectTrigger className="w-24 h-8 text-sm">
                 <SelectValue />
@@ -153,6 +158,7 @@ export function ChuvasTab() {
                 ))}
               </SelectContent>
             </Select>
+            )}
             <span className="text-sm font-semibold text-muted-foreground">
               Total: {yearTotal.toFixed(1)} mm
             </span>

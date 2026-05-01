@@ -153,7 +153,7 @@ export default function V2Index() {
       />
     );
     if (section === 'chuvas') return (
-      <ChuvasTab />
+      <ChuvasTab anoInicial={ano} />
     );
     if (section === 'pastos') return (
       <PastosTab />
