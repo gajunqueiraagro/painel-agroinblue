@@ -10,12 +10,15 @@ const MESES = [
   { v: '9', l: 'Set' }, { v: '10', l: 'Out' }, { v: '11', l: 'Nov' }, { v: '12', l: 'Dez' },
 ];
 
-interface V2FilterBarProps { ano: string; mes: string; onAnoChange: (v: string) => void; onMesChange: (v: string) => void; showFazenda?: boolean; className?: string; }
+interface V2FilterBarProps { ano: string; mes: string; onAnoChange: (v: string) => void; onMesChange: (v: string) => void; tipo?: 'nenhum' | 'ano' | 'ano-mes';
+  showFazenda?: boolean; className?: string; }
 
-export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, showFazenda = false, className }: V2FilterBarProps) {
+export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', showFazenda = false, className }: V2FilterBarProps) {
   const { fazendas, fazendaAtual, setFazendaAtual, isGlobal } = useFazenda();
   const { data: anosRaw = [] } = useAnosDisponiveis();
   const anos = anosRaw.length > 0 ? anosRaw.map(String) : [String(new Date().getFullYear())];
+  if (tipo === 'nenhum') return null;
+
   return (
     <div className={cn('flex items-center gap-2 px-4 py-2 bg-card border-b shrink-0', className)}>
       {showFazenda && fazendas.length > 1 && (
@@ -28,10 +31,12 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, showFazenda = 
         <SelectTrigger className="h-7 text-xs w-20 border-border"><SelectValue /></SelectTrigger>
         <SelectContent>{anos.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}</SelectContent>
       </Select>
-      <Select value={mes} onValueChange={onMesChange}>
-        <SelectTrigger className="h-7 text-xs w-28 border-border"><SelectValue /></SelectTrigger>
-        <SelectContent>{MESES.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
-      </Select>
+      {tipo === 'ano-mes' && (
+        <Select value={mes} onValueChange={onMesChange}>
+          <SelectTrigger className="h-7 text-xs w-28 border-border"><SelectValue /></SelectTrigger>
+          <SelectContent>{MESES.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+        </Select>
+      )}
       {fazendaAtual && <span className="text-xs text-muted-foreground ml-auto truncate hidden md:block">{isGlobal ? 'Todas as fazendas' : fazendaAtual.nome}</span>}
       <span className="text-[10px] text-muted-foreground/40 shrink-0 hidden md:block">/v2 fase 1</span>
     </div>

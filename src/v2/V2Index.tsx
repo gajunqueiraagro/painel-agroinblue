@@ -4,6 +4,7 @@ import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
+import { getPeriodoTipo } from './lib/periodoConfig';
 import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2ContextDrawer } from './components/V2ContextDrawer';
@@ -43,6 +44,7 @@ export default function V2Index() {
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [mes, setMes] = useState(String(new Date().getMonth() + 1));
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
+  const periodoTipo = getPeriodoTipo(section);
   const { clientes } = useCliente();
   const { fazendas } = useFazenda();
 
@@ -215,7 +217,7 @@ export default function V2Index() {
         />
         {/* Conteúdo principal — relative para ancorar o drawer overlay */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
-          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} showFazenda={false} />
+          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
           <div className="flex-1 min-h-0 overflow-y-auto">
             {renderContent()}
           </div>
@@ -246,7 +248,7 @@ export default function V2Index() {
             )}
           </div>
         </div>
-        <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} showFazenda={false} />
+        <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
         <div className="flex-1 min-h-0 overflow-y-auto pb-16">
           {renderContent()}
         </div>
