@@ -252,7 +252,9 @@ export default function V2Index() {
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
           <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
           <div className="flex-1 min-h-0 overflow-auto">
-            {renderContent()}
+            <div className="w-full max-w-full min-w-0">
+              {renderContent()}
+            </div>
           </div>
           {/* Drawer overlay — absolute sobre o conteúdo, não desloca nada */}
           <V2ContextDrawer
@@ -283,7 +285,9 @@ export default function V2Index() {
         </div>
         <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
         <div className="flex-1 min-h-0 overflow-auto pb-16">
-          {renderContent()}
+          <div className="w-full max-w-full min-w-0">
+            {renderContent()}
+          </div>
         </div>
         <V2MobileNav activeSection={section} onNavigate={setSection} />
       </div>
