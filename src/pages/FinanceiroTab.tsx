@@ -290,7 +290,7 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
   const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
   return (
-    <table className="w-full min-w-[760px] md:min-w-0 table-auto border-collapse text-[10px]">
+    <table className="w-full min-w-[760px] table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
         <tr className="border-b border-primary-foreground/15">
           <SortableHeader label="Data" align="text-left" sortKey="data" sticky {...hp} />
@@ -404,7 +404,7 @@ function AbateTable({ lancamentos, onEdit, isGlobal, fazendaMap }: { lancamentos
   const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
   return (
-    <table className="w-full min-w-[720px] md:min-w-0 table-auto border-collapse text-[10px]">
+    <table className="w-full min-w-[720px] table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
         <tr className="border-b border-primary-foreground/15">
           <SortableHeader label="Data" align="text-left" sortKey="data" sticky {...hp} />
