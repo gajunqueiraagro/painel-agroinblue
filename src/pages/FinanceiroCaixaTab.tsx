@@ -47,7 +47,8 @@ interface Props {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
-  
+  initialTab?: SubTab;
+  hideInternalTabs?: boolean;
 }
 
 const MESES_FILTRO = [
@@ -68,8 +69,8 @@ function classifySaida(l: FinanceiroLancamento): string {
   return classificarSaidaCentral(l);
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial }: Props) {
-  const [subTab, setSubTab] = useState<SubTab>('dashboard');
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false }: Props) {
+  const [subTab, setSubTab] = useState<SubTab>(initialTab ?? 'dashboard');
   const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>('realizado');
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
@@ -386,7 +387,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
           <div className="h-5 w-px bg-border shrink-0 mx-1" />
 
-          {tabs.map(t => (
+          {!hideInternalTabs && tabs.map(t => (
             <button
               key={t.id}
               onClick={() => setSubTab(t.id)}
