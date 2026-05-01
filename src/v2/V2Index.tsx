@@ -15,6 +15,13 @@ import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
+import { ChuvasTab } from '@/pages/ChuvasTab';
+import { MapaPastosTab } from '@/pages/MapaPastosTab';
+import { MapaGeoPastosTab } from '@/pages/MapaGeoPastosTab';
+import { AuditoriaTecnicaTab } from '@/pages/AuditoriaTecnicaTab';
+import { AuditoriaZootecnicaTab } from '@/pages/AuditoriaZootecnicaTab';
+import { ResumoPastosTab } from '@/pages/ResumoPastosTab';
+import { MetaGmdTab } from '@/pages/MetaGmdTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
@@ -76,6 +83,27 @@ export default function V2Index() {
     );
     if (section === 'financeiro-dashboard') return (
       <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs />
+    );
+    if (section === 'meta-gmd') return (
+      <MetaGmdTab />
+    );
+    if (section === 'resumo-pastos') return (
+      <ResumoPastosTab />
+    );
+    if (section === 'auditoria-zoot') return (
+      <AuditoriaZootecnicaTab />
+    );
+    if (section === 'auditoria-tecnica') return (
+      <AuditoriaTecnicaTab />
+    );
+    if (section === 'mapa-geo-pastos') return (
+      <MapaGeoPastosTab />
+    );
+    if (section === 'mapa-pastos') return (
+      <MapaPastosTab />
+    );
+    if (section === 'chuvas') return (
+      <ChuvasTab />
     );
     if (section === 'pastos') return (
       <PastosTab />
