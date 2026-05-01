@@ -45,7 +45,7 @@ export function FluxoFechamentoFooter({ current, onPrev, onNext, bottomOffset = 
       className="fixed left-0 right-0 z-40 bg-background/95 backdrop-blur border-t border-border shadow-[0_-2px_8px_-4px_rgba(0,0,0,0.08)]"
       style={{ bottom: bottomOffset }}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-1.5 max-w-screen-2xl mx-auto">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 max-w-full mx-auto">
         {/* Voltar */}
         <div className="flex-1 flex justify-start">
           {prevStep && onPrev ? (
