@@ -15,6 +15,12 @@ import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { PastosTab } from '@/pages/PastosTab';
+import { DividendosTab } from '@/pages/DividendosTab';
+import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
+import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
+import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
+import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
+import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
@@ -39,6 +45,24 @@ export default function V2Index() {
     );
     if (section === 'financiamentos') return (
       <FinanciamentosListaPage />
+    );
+    if (section === 'saldos-mensais') return (
+      <FinV2SaldosTab />
+    );
+    if (section === 'dividendos') return (
+      <DividendosTab />
+    );
+    if (section === 'plano-contas') return (
+      <FinV2PlanoContasTab />
+    );
+    if (section === 'fornecedores') return (
+      <FinV2FornecedoresTab />
+    );
+    if (section === 'contas-bancarias') return (
+      <FinV2ContasTab />
+    );
+    if (section === 'contratos') return (
+      <ContratosTab />
     );
     if (section === 'pastos') return (
       <PastosTab />
