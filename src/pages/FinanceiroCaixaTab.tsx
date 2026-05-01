@@ -419,7 +419,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
       ) : (
         <>
           {subTab === 'dashboard' && (
-            <div className="p-4">
+            <div className="p-4 overflow-x-auto">
               {drillMacro ? (
                 <DrillDownMacro
                   macro={drillMacro}
