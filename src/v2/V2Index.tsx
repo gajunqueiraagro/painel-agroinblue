@@ -97,6 +97,8 @@ export default function V2Index() {
           <IndicadoresTab
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
+            anoInicial={ano}
+            mesInicial={mes === '0' ? undefined : Number(mes)}
           />
         )}
       </V2ZootWrapper>
@@ -108,6 +110,8 @@ export default function V2Index() {
             lancamentos={lancamentos}
             saldosIniciais={saldosIniciais}
             onBack={() => setSection('rebanho-home')}
+            filtroAnoInicial={ano}
+            filtroMesInicial={mes === '0' ? undefined : Number(mes)}
           />
         )}
       </V2ZootWrapper>
@@ -143,7 +147,10 @@ export default function V2Index() {
       <MapaGeoPastosTab />
     );
     if (section === 'mapa-pastos') return (
-      <MapaPastosTab />
+      <MapaPastosTab
+        filtroAnoInicial={ano}
+        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+      />
     );
     if (section === 'chuvas') return (
       <ChuvasTab />
@@ -155,7 +162,10 @@ export default function V2Index() {
       <FinanceiroV2Tab />
     );
     if (section === 'fechamento') return (
-      <FechamentoTab />
+      <FechamentoTab
+        filtroAnoInicial={ano}
+        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+      />
     );
     if (section === 'evolucao-categoria') return (
       <EvolucaoCategoriaTab
