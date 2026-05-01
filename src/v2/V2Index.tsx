@@ -80,16 +80,16 @@ export default function V2Index() {
       <ContratosTab />
     );
     if (section === 'importacao-extratos') return (
-      <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs />
+      <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'rateio-adm') return (
-      <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs />
+      <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'fluxo-caixa') return (
-      <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs />
+      <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'financeiro-dashboard') return (
-      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs />
+      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'indicadores-zoot') return (
       <V2ZootWrapper>
