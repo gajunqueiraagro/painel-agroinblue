@@ -157,6 +157,7 @@ export default function V2Index() {
       <EvolucaoCategoriaTab
         initialAno={ano}
         initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
+        ocultarFiltrosPeriodo
       />
     );
     if (section === 'painel-anual') return (

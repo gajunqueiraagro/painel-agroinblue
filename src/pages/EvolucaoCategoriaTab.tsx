@@ -22,13 +22,14 @@ interface Props {
   onNavigateToMovimentacoes?: () => void;
   /** Navega para a tela de GMD Meta com o ano atual selecionado. */
   onNavigateToMetaGmd?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
+  ocultarFiltrosPeriodo?: boolean;
 }
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
-export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes, onNavigateToMetaGmd }: Props) {
+export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes, onNavigateToMetaGmd, ocultarFiltrosPeriodo }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -205,7 +206,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   return (
     <div className="p-3 w-full space-y-2 animate-fade-in pb-20">
       {/* Header: Ano + régua de meses */}
-      <div className="flex items-center gap-2">
+      {!ocultarFiltrosPeriodo && (<div className="flex items-center gap-2">
         <Select value={anoFiltro} onValueChange={setAnoFiltro}>
           <SelectTrigger className="h-7 text-xs font-bold w-20 shrink-0">
             <SelectValue placeholder="Ano" />
@@ -246,7 +247,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
             );
           })}
         </div>
-      </div>
+      </div>)}
 
       {/* Filtros: Realizado/Meta + Modo + Reclass */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
