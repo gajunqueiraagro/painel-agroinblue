@@ -1,7 +1,7 @@
 /**
  * Meta GMD — GMD meta por categoria por mês.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +22,9 @@ const MESES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 export function MetaGmdTab({ onBack, initialAno, backLabel, ocultarFiltroAno }: Props) {
   const now = new Date();
   const [ano, setAno] = useState(initialAno || String(now.getFullYear()));
+  useEffect(() => {
+    if (initialAno) setAno(initialAno);
+  }, [initialAno]);
   const { rows, loading, saving, updateCell, salvar } = useMetaGmd(ano);
 
   const anos = useMemo(() => {
