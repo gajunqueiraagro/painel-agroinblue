@@ -5,6 +5,7 @@
  * Suporta drill-down: ao clicar numa categoria no dashboard, mostra lançamentos filtrados.
  */
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { V2PageContent } from '@/v2/components/V2PageShell';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
 import { RateioADMConferenciaView } from '@/components/financeiro/RateioADMConferencia';
@@ -283,7 +284,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     const tipoLabel = drillDown.tipo === 'entrada' ? 'Entrada' : 'Saída';
 
     return (
-      <div className="max-w-full mx-auto animate-fade-in pb-20">
+      <div className="w-full min-w-0 animate-fade-in">
         {/* Header with back button and filter info */}
         <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-2.5 space-y-2">
           <button
@@ -419,7 +420,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
       ) : (
         <>
           {subTab === 'dashboard' && (
-            <div className="p-4 overflow-x-auto">
+            <V2PageContent>
               {drillMacro ? (
                 <DrillDownMacro
                   macro={drillMacro}
@@ -445,7 +446,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                   onMacroDrillDown={(macro) => setDrillMacro(macro)}
                 />
               )}
-            </div>
+            </V2PageContent>
           )}
           {subTab === 'fluxo' && (
             <>
