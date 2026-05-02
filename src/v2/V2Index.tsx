@@ -239,7 +239,7 @@ export default function V2Index() {
     <div className="h-screen bg-background overflow-hidden">
 
       {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
-      <div className="hidden md:flex h-screen">
+      <div className="hidden md:flex h-screen w-screen overflow-hidden bg-background">
         <V2Sidebar
           activeSection={section}
           onNavigate={setSection}
@@ -250,12 +250,12 @@ export default function V2Index() {
         />
         {/* Conteúdo principal — relative para ancorar o drawer overlay */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
-          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
-          <div className="flex-1 min-h-0 min-w-0 overflow-auto">
+          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} className="shrink-0" />
+          <section className="flex-1 min-h-0 min-w-0 overflow-auto">
             <div className="w-full min-w-0">
               {renderContent()}
             </div>
-          </div>
+          </section>
           {/* Drawer overlay — absolute sobre o conteúdo, não desloca nada */}
           <V2ContextDrawer
             grupoAtivo={drawerAtivo}
