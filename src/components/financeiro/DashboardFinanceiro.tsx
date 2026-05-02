@@ -281,7 +281,8 @@ export function DashboardFinanceiro({
   // =========================================================================
   const chartData = useMemo(() => {
     const monthMap = new Map<string, { entradas: number; saidas: number }>();
-    for (let m = 1; m <= mesLimite; m++) monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
+    const limite = mesLimite && mesLimite > 0 ? mesLimite : 12;
+    for (let m = 1; m <= limite; m++) monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
     for (const l of lancamentos) {
       if (!isRealizado(l)) continue;
       const am = datePagtoAnoMes(l);
