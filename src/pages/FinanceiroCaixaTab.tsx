@@ -364,7 +364,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   }
 
   return (
-    <div className="max-w-full mx-auto animate-fade-in pb-20">
+    <div className="w-full min-w-0 animate-fade-in pb-20">
       {/* ── Topo fixo: filtros + abas na mesma linha ── */}
       <div className="sticky top-0 z-20 bg-background border-b border-border/50 shadow-sm px-4 py-1.5">
         <div className="flex items-center gap-1.5 overflow-x-auto">
