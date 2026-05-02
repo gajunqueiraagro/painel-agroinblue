@@ -638,7 +638,7 @@ export function DashboardFinanceiro({
 // ---------------------------------------------------------------------------
 // Sub: Centro de Custo Ranking
 // ---------------------------------------------------------------------------
-function CentroCustoRanking({ ccMes, ccAcum, totalSaidasMes, totalSaidasAcum }: {
+function CentroCustoRanking({ ccMes, ccAcum, totalSaidasMes, totalSaidasAcum, modo }: {
   ccMes: { nome: string; valor: number }[];
   ccAcum: { nome: string; valor: number }[];
   totalSaidasMes: number;
