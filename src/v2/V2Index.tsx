@@ -244,14 +244,14 @@ export default function V2Index() {
       {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
       <div className="hidden md:flex h-screen bg-background">
         {/* SIDEBAR */}
-        <V2Sidebar
+        {!intensivo && <V2Sidebar
           activeSection={section}
           onNavigate={setSection}
           drawerAtivo={drawerAtivo}
           onDrawerToggle={setDrawerAtivo}
           clienteSelector={clienteSelector}
           fazendaSelector={fazendaSelector}
-        />
+        />}
         {/* MAIN */}
         <div className="flex-1 min-w-0 flex flex-col relative">
           {/* HEADER */}
@@ -293,7 +293,10 @@ export default function V2Index() {
             </div>
           )}
           {/* SCROLL */}
-          <section className="flex-1 min-h-0 min-w-0 overflow-auto">
+          <section className={intensivo
+            ? "flex-1 min-h-0 w-full overflow-auto bg-background"
+            : "flex-1 min-h-0 min-w-0 overflow-auto"
+          }>
             <div className="w-full min-w-0">
               {renderContent()}
             </div>
