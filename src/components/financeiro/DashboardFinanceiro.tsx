@@ -507,36 +507,15 @@ export function DashboardFinanceiro({
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieEntradas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
-                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
+                      label={false} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
                       onMouseEnter={(_, index) => setActiveEntrada(index)}
                       onMouseLeave={() => setActiveEntrada(null)}>
                       {pieEntradas.map((_, i) => <Cell key={i} fill={PIE_COLORS_ENTRADAS[i % PIE_COLORS_ENTRADAS.length]} />)}
                     </Pie>
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const { name, value, payload: p } = payload[0] as any;
-                        const pct = p?.percent != null ? ` (${(p.percent * 100).toFixed(0)}%)` : '';
-                        return (
-                          <div style={{
-                            background: 'var(--color-background-primary)',
-                            border: '0.5px solid var(--color-border-secondary)',
-                            borderRadius: 4,
-                            padding: '3px 7px',
-                            fontSize: 9,
-                            lineHeight: 1.4,
-                            boxShadow: 'none',
-                          }}>
-                            <span style={{ fontWeight: 600 }}>{name}</span>
-                            <br />
-                            <span>{formatMoeda(value as number)}{pct}</span>
-                          </div>
-                        );
-                      }}
-                    />
+
                     {activeEntrada !== null && pieEntradas[activeEntrada] && (
                       <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: 13, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
+                        style={{ fontSize: 18, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
                         {`${((pieEntradas[activeEntrada].value / pieEntradas.reduce((s,p)=>s+p.value,0))*100).toFixed(0)}%`}
                       </text>
                     )}
@@ -563,36 +542,15 @@ export function DashboardFinanceiro({
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieSaidas} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={35}
-                      label={renderPieLabel} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
+                      label={false} labelLine={false} strokeWidth={1} style={{ fontSize: 8 }}
                       onMouseEnter={(_, index) => setActiveSaida(index)}
                       onMouseLeave={() => setActiveSaida(null)}>
                       {pieSaidas.map((_, i) => <Cell key={i} fill={PIE_COLORS_SAIDAS[i % PIE_COLORS_SAIDAS.length]} />)}
                     </Pie>
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const { name, value, payload: p } = payload[0] as any;
-                        const pct = p?.percent != null ? ` (${(p.percent * 100).toFixed(0)}%)` : '';
-                        return (
-                          <div style={{
-                            background: 'var(--color-background-primary)',
-                            border: '0.5px solid var(--color-border-secondary)',
-                            borderRadius: 4,
-                            padding: '3px 7px',
-                            fontSize: 9,
-                            lineHeight: 1.4,
-                            boxShadow: 'none',
-                          }}>
-                            <span style={{ fontWeight: 600 }}>{name}</span>
-                            <br />
-                            <span>{formatMoeda(value as number)}{pct}</span>
-                          </div>
-                        );
-                      }}
-                    />
+
                     {activeSaida !== null && pieSaidas[activeSaida] && (
                       <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
-                        style={{ fontSize: 13, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
+                        style={{ fontSize: 18, fontWeight: 700, fill: 'var(--color-text-primary)' }}>
                         {`${((pieSaidas[activeSaida].value / pieSaidas.reduce((s,p)=>s+p.value,0))*100).toFixed(0)}%`}
                       </text>
                     )}
