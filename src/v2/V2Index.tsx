@@ -266,6 +266,30 @@ export default function V2Index() {
               onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
             />
           </div>
+          {/* SUB-NAV FINANCEIRO */}
+          {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
+            <div className="shrink-0 flex items-center gap-1 px-4 py-1.5 border-b border-border bg-background">
+              <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
+              {([
+                { id: 'financeiro-dashboard', label: 'Dashboard' },
+                { id: 'fluxo-caixa',          label: 'Fluxo de Caixa' },
+                { id: 'rateio-adm',            label: 'Rateio ADM' },
+                { id: 'importacao-extratos',   label: 'Importação' },
+              ] as const).map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setSection(id)}
+                  className={`px-2.5 py-0.5 rounded text-[11px] transition-colors ${
+                    section === id
+                      ? 'bg-primary text-primary-foreground font-semibold'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {/* SCROLL */}
           <section className="flex-1 min-h-0 min-w-0 overflow-auto">
             <div className="w-full min-w-0">
