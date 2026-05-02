@@ -45,6 +45,7 @@ export default function V2Index() {
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [mes, setMes] = useState(String(new Date().getMonth() + 1));
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
+  const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const periodoTipo = getPeriodoTipo(section);
   const { clientes } = useCliente();
@@ -183,7 +184,7 @@ export default function V2Index() {
       <PastosTab />
     );
     if (section === 'financeiro-lanc') return (
-      <FinanceiroV2Tab />
+      <FinanceiroV2Tab onIntensiveToggle={setIntensivo} />
     );
     if (section === 'fechamento') return (
       <FechamentoTab
@@ -234,6 +235,7 @@ export default function V2Index() {
   function handleSelect(s: V2Section) {
     setSection(s);
     setDrawerAtivo(null);
+    setIntensivo(false);
   }
 
   return (
