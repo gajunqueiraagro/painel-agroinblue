@@ -40,6 +40,9 @@ import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { V2Configuracoes } from './pages/V2Configuracoes';
+import { ClientesTab } from '@/pages/ClientesTab';
+import { AuditoriaTab } from '@/pages/AuditoriaTab';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -231,6 +234,18 @@ export default function V2Index() {
         onBack={() => setSection('home')}
         filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
       />
+    );
+    if (section === 'configuracoes') return <V2Configuracoes onNavigate={setSection} />;
+    if (section === 'config-clientes') return <ClientesTab />;
+    if (section === 'config-bancario') return <FinV2ContasTab />;
+    if (section === 'config-auditoria') return <AuditoriaTab />;
+    if (section === 'config-fazendas') return (
+      <div className="px-4 py-6">
+        <h2 className="text-sm font-semibold text-foreground mb-1">Fazendas</h2>
+        <p className="text-xs text-muted-foreground">
+          Cadastro central de fazendas será estruturado na próxima fase.
+        </p>
+      </div>
     );
     const labels: Record<string, string> = {
       financeiro: 'Financeiro', rebanho: 'Rebanho',

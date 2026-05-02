@@ -30,7 +30,11 @@ export type V2Section =
   // mobile
   | 'atalhos-campeiro' | 'atalhos-financeiro'
   // config
-  | 'configuracoes';
+  | 'configuracoes'
+  | 'config-clientes'
+  | 'config-fazendas'
+  | 'config-bancario'
+  | 'config-auditoria';
 
 export type ItemStatus = 'ready' | 'needs-wrapper';
 
@@ -202,4 +206,9 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'meta-gmd': 'planejamento', 'meta-metas': 'planejamento', 'meta-consolidacao': 'planejamento',
   'painel-consultor': 'planejamento', 'auditoria-anual': 'planejamento',
   'painel-anual': 'planejamento',
+  // config
+  'config-clientes':  'configuracoes',
+  'config-fazendas':  'configuracoes',
+  'config-bancario':  'configuracoes',
+  'config-auditoria': 'configuracoes',
 };
