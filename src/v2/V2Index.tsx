@@ -65,9 +65,11 @@ export default function V2Index() {
     (async () => {
       const { data } = await supabase
         .from('fechamento_pastos')
-        .select('ano_mes')
+        .select('ano_mes, fazendas!inner(status_operacional, tem_pecuaria)')
         .eq('cliente_id', clienteAtual.id)
         .eq('status', 'fechado')
+        .eq('fazendas.status_operacional', 'ativa')
+        .eq('fazendas.tem_pecuaria', true)
         .order('ano_mes', { ascending: false })
         .limit(1)
         .maybeSingle();

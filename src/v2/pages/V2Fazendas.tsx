@@ -30,6 +30,7 @@ interface CadastroRow {
   area_benfeitorias_ha: string;
   area_outras_ha: string;
   ie: string;
+  status_operacional: string;
 }
 
 const EMPTY: CadastroRow = {
@@ -37,6 +38,7 @@ const EMPTY: CadastroRow = {
   area_total_ha: '', area_pecuaria_ha: '', area_agricultura_ha: '',
   area_app_ha: '', area_reserva_ha: '', area_benfeitorias_ha: '', area_outras_ha: '',
   ie: '',
+  status_operacional: 'ativa',
 };
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
@@ -86,10 +88,11 @@ export function V2Fazendas() {
         area_reserva_ha: (row as any).area_reserva_ha != null ? String((row as any).area_reserva_ha) : '',
         area_benfeitorias_ha: (row as any).area_benfeitorias_ha != null ? String((row as any).area_benfeitorias_ha) : '',
         area_outras_ha: (row as any).area_outras_ha != null ? String((row as any).area_outras_ha) : '',
+        status_operacional: (fazendaAtual as any).status_operacional ?? 'ativa',
       });
       setEditing(false);
     } else {
-      setData(EMPTY);
+      setData({ ...EMPTY, status_operacional: (fazendaAtual as any).status_operacional ?? 'ativa' });
       setEditing(true);
     }
     setCodigoFazenda((fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '');
@@ -145,7 +148,7 @@ export function V2Fazendas() {
 
     const { error: fazendaError } = await supabase
       .from('fazendas')
-      .update({ codigo_importacao: codigoFazenda || null } as any)
+      .update({ codigo_importacao: codigoFazenda || null, status_operacional: data.status_operacional } as any)
       .eq('id', fazendaAtual.id);
     if (fazendaError) {
       toast.error('Erro ao salvar código da fazenda: ' + fazendaError.message);
@@ -300,6 +303,35 @@ export function V2Fazendas() {
           {textField('CAR', 'car')}
           {textField('NIRF', 'nirf')}
           {textField('IE / Inscrição Estadual', 'ie')}
+          {/* Status Operacional — fonte: tabela fazendas */}
+          <div className="space-y-0.5 col-span-2">
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Status Operacional
+            </label>
+            {editing ? (
+              <select
+                value={data.status_operacional}
+                onChange={e => setData(prev => ({ ...prev, status_operacional: e.target.value }))}
+                className="h-7 text-xs w-full rounded-md border border-input bg-background px-3"
+              >
+                <option value="ativa">Ativa</option>
+                <option value="inativa">Inativa</option>
+                <option value="arrendada">Arrendada</option>
+                <option value="suspensa">Suspensa</option>
+              </select>
+            ) : (
+              <p className={`text-xs font-medium px-2 py-1 rounded min-h-[28px] ${
+                data.status_operacional === 'ativa'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'bg-amber-50 text-amber-700'
+              }`}>
+                {data.status_operacional === 'ativa' ? '✅ Ativa'
+                  : data.status_operacional === 'arrendada' ? '⚠️ Arrendada'
+                  : data.status_operacional === 'inativa' ? '⚠️ Inativa'
+                  : '⚠️ Suspensa'}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
