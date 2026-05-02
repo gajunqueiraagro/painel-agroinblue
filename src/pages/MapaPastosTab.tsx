@@ -258,10 +258,10 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
     <TooltipProvider>
       <div
         ref={tableModuleRef}
-        className="flex min-h-0 flex-col overflow-hidden bg-background"
+        className="flex min-h-0 flex-col overflow-x-visible overflow-y-hidden bg-background"
         style={{
-          height: 'calc(100dvh - var(--mapa-pastos-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
-          maxHeight: 'calc(100dvh - var(--mapa-pastos-top-offset, 0px) - var(--bottom-nav-safe, 64px))',
+          height: '100%',
+          maxHeight: '100%',
         }}
       >
         <div className="sticky top-0 flex-shrink-0 bg-background border-b border-border/50 shadow-sm px-3 py-1.5 z-30">
