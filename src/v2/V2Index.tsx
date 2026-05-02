@@ -241,16 +241,14 @@ export default function V2Index() {
       {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
       <div className="hidden md:flex h-screen bg-background">
         {/* SIDEBAR */}
-        <aside className="w-56 shrink-0 h-full">
-          <V2Sidebar
-            activeSection={section}
-            onNavigate={setSection}
-            drawerAtivo={drawerAtivo}
-            onDrawerToggle={setDrawerAtivo}
-            clienteSelector={clienteSelector}
-            fazendaSelector={fazendaSelector}
-          />
-        </aside>
+        <V2Sidebar
+          activeSection={section}
+          onNavigate={setSection}
+          drawerAtivo={drawerAtivo}
+          onDrawerToggle={setDrawerAtivo}
+          clienteSelector={clienteSelector}
+          fazendaSelector={fazendaSelector}
+        />
         {/* MAIN */}
         <div className="flex-1 min-w-0 flex flex-col relative">
           {/* HEADER */}
