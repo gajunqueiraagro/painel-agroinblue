@@ -102,7 +102,11 @@ export function usePainelGeralOficial({ fazendaId, ano, mes }: Params): PainelGe
   const rebanhoMes = useMemo(() => {
     if (loadingRebanho || !totaisPorMes) return null;
     const mesRef = mes === 0 ? 12 : mes;
-    return totaisPorMes.find((t: { mes: number }) => t.mes === mesRef) ?? null;
+    // totaisPorMes pode ser array ou Map — normalizar
+    const arr = Array.isArray(totaisPorMes)
+      ? totaisPorMes
+      : Array.from((totaisPorMes as Map<number, unknown>).values?.() ?? []);
+    return (arr as Array<{ mes: number }>).find(t => t.mes === mesRef) ?? null;
   }, [totaisPorMes, mes, loadingRebanho]);
 
   const {
