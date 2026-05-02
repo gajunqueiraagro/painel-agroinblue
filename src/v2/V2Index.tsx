@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -53,23 +53,20 @@ export default function V2Index() {
     : String(new Date().getFullYear());
   const [ano, setAno] = useState(anoMesAnterior);
   const [mes, setMes] = useState(String(mesAnterior));
-  const filtroInicializado = useRef(false);
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const periodoTipo = getPeriodoTipo(section);
-  const { clientes } = useCliente();
+  const { clientes, clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
 
-  // Inicializar filtro no último mês fechado P1 — executa apenas uma vez
   useEffect(() => {
-    if (filtroInicializado.current || !clientes[0]?.id) return;
-    filtroInicializado.current = true;
+    if (!clienteAtual?.id) return;
     (async () => {
       const { data } = await supabase
         .from('fechamento_pastos')
         .select('ano_mes')
-        .eq('cliente_id', clientes[0].id)
+        .eq('cliente_id', clienteAtual.id)
         .eq('status', 'fechado')
         .order('ano_mes', { ascending: false })
         .limit(1)
@@ -78,9 +75,16 @@ export default function V2Index() {
         const [a, m] = data.ano_mes.split('-');
         setAno(a);
         setMes(String(Number(m)));
+      } else {
+        const hoje = new Date();
+        let mes = hoje.getMonth();
+        let ano = hoje.getFullYear();
+        if (mes === 0) { mes = 12; ano = ano - 1; }
+        setAno(String(ano));
+        setMes(String(mes));
       }
     })();
-  }, [clientes]);
+  }, [clienteAtual?.id]);
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
