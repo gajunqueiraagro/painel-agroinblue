@@ -334,10 +334,10 @@ export default function DrillDownMacro({
                         </TableRow>
 
                         {expandedCentro === centro.nome && centro.children?.map((sub) => (
-                          <TableRow key={sub.nome} className="text-muted-foreground/80">
-                            <TableCell className="pl-10 sticky left-0 bg-background z-10 text-[10px] font-normal text-muted-foreground">{sub.nome}</TableCell>
+                          <TableRow key={sub.nome} className="text-muted-foreground/80 py-0">
+                            <TableCell className="pl-10 sticky left-0 bg-background z-10 text-[9px] font-normal text-muted-foreground leading-tight py-[1px]">{sub.nome}</TableCell>
                             {renderMesesCells(sub.meses)}
-                            <TableCell className="text-right whitespace-nowrap text-[10px] font-normal text-muted-foreground">{fmtCompact(sub.total)}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap text-[9px] font-normal text-muted-foreground leading-tight py-[1px]">{fmtCompact(sub.total)}</TableCell>
                           </TableRow>
                         ))}
                       </React.Fragment>
