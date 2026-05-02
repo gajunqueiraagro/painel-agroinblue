@@ -442,6 +442,8 @@ export function DashboardFinanceiro({
         </Card>
 
         {/* Saldo líquido */}
+        <div className="relative">
+          <div className={isGlobal ? '' : 'blur-sm pointer-events-none opacity-60'}>
         <Card className="flex flex-col border-l-4" style={{ borderLeftColor: saldoLiquido >= 0 ? 'hsl(210, 60%, 48%)' : 'hsl(30, 70%, 48%)' }}>
           <CardContent className="p-2 flex flex-col flex-1">
             <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground mb-0.5">
@@ -480,6 +482,15 @@ export function DashboardFinanceiro({
             </div>
           </CardContent>
         </Card>
+          </div>
+          {!isGlobal && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/70 rounded">
+              <span className="text-xs text-muted-foreground text-center px-3">
+                Fluxo disponível apenas no modo global.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ================================================================= */}
@@ -599,6 +610,8 @@ export function DashboardFinanceiro({
         </Card>
 
         {/* Gráfico Entradas vs Saídas — preservado */}
+        <div className="relative">
+          <div className={isGlobal ? '' : 'blur-sm pointer-events-none opacity-60'}>
         <Card className="flex flex-col">
           <CardContent className="p-2">
             <div className="text-[9px] font-bold text-muted-foreground mb-1">
@@ -621,6 +634,15 @@ export function DashboardFinanceiro({
             </div>
           </CardContent>
         </Card>
+          </div>
+          {!isGlobal && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/70 rounded">
+              <span className="text-xs text-muted-foreground text-center px-3">
+                Fluxo disponível apenas no modo global.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ================================================================= */}
