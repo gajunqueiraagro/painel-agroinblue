@@ -97,19 +97,16 @@ export function usePainelGeralOficial({ fazendaId, ano, mes }: Params): PainelGe
   }, [resultadoEntradas, resultadoSaidas]);
 
   const {
-    totaisPorMes,
+    getFazendaMes,
     loading: loadingRebanho,
   } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
 
   const rebanhoMes = useMemo(() => {
-    if (loadingRebanho || !totaisPorMes) return null;
+    if (loadingRebanho || !getFazendaMes) return null;
     const mesRef = mes === 0 ? 12 : mes;
-    // totaisPorMes pode ser array ou Map — normalizar
-    // totaisPorMes pode ser array, Map, ou object — acessar via getFazendaMes se disponível
-    const arr: Array<{ mes: number; cabecasFinal?: number; pesoMedioFinalKg?: number }> =
-      Array.isArray(totaisPorMes) ? totaisPorMes : [];
-    return arr.find(t => t.mes === mesRef) ?? null;
-  }, [totaisPorMes, mes, loadingRebanho]);
+    // getFazendaMes é a API oficial do useRebanhoOficial
+    return getFazendaMes(mesRef);
+  }, [getFazendaMes, mes, loadingRebanho]);
 
   const {
     kpis: finKpis,
