@@ -293,21 +293,18 @@ export function DashboardFinanceiro({
       if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
       if (isSaida(l)) entry.saidas += Math.abs(l.valor);
     }
-    // Saldo acumulado via mesesFluxo (fonte oficial, com continuidade)
+    // Saldo acumulado via mesesFluxo (fonte oficial — totalEntradas/totalSaidas/saldoAcumulado)
     let ultimoSaldo = 0;
-
     return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => {
       const mesNum = Number(mes);
       const fluxoMes = mesesFluxo?.find(m => m.mes === mesNum);
-
       if (fluxoMes && !isNaN(fluxoMes.saldoAcumulado)) {
         ultimoSaldo = fluxoMes.saldoAcumulado;
       }
-
       return {
         mes: (MESES_NOMES[mesNum - 1] || mes).substring(0, 3),
-        Entradas: v.entradas,
-        Saídas: v.saidas,
+        Entradas: fluxoMes?.totalEntradas ?? v.entradas,
+        Saídas: fluxoMes?.totalSaidas ?? v.saidas,
         'Saldo Acum.': ultimoSaldo
       };
     });
