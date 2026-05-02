@@ -10,7 +10,7 @@
  * - Aviso de fazendas sem rebanho
  * - Diagnóstico quando rateio vazio
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,12 +23,23 @@ interface Props {
   fazendasSemRebanho: string[];
   /** Total de lançamentos ADM carregados (para diagnóstico) */
   totalLancamentosADM?: number;
+  mesInicial?: number;
 }
 
-export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, totalLancamentosADM = 0 }: Props) {
+export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, totalLancamentosADM = 0, mesInicial }: Props) {
   const meses = useMemo(() => conferencia.map(c => c.anoMes), [conferencia]);
-  const [mesSelecionado, setMesSelecionado] = useState(meses[0] || '');
+  const mesInicialStr = mesInicial && mesInicial > 0
+    ? meses.find(m => m.endsWith(`-${String(mesInicial).padStart(2, '0')}`))
+    : undefined;
+  const [mesSelecionado, setMesSelecionado] = useState(mesInicialStr ?? meses[meses.length - 1] ?? '');
   const [showAudit, setShowAudit] = useState(false);
+
+  // Sincronizar com filtro global quando mudar
+  useEffect(() => {
+    if (!mesInicial || mesInicial === 0) return;
+    const target = meses.find(m => m.endsWith(`-${String(mesInicial).padStart(2, '0')}`));
+    if (target) setMesSelecionado(target);
+  }, [mesInicial, meses]);
 
   const dados = useMemo(
     () => conferencia.find(c => c.anoMes === mesSelecionado),

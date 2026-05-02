@@ -498,6 +498,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             <div className="p-4">
               <RateioADMConferenciaView
                 conferencia={rateioConferencia}
+                mesInicial={localMes}
                 fazendasSemRebanho={fazendasSemRebanho}
                 totalLancamentosADM={totalLancamentosADM}
               />
