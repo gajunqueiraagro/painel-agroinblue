@@ -53,12 +53,13 @@ export function V2Fazendas() {
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
-    if (!fazendaAtual?.id) return;
+    if (!fazendaAtual?.id || !clienteAtual?.id) return;
     setLoading(true);
     const { data: row } = await supabase
       .from('fazenda_cadastros')
       .select('*')
       .eq('fazenda_id', fazendaAtual.id)
+      .eq('cliente_id', clienteAtual.id)
       .maybeSingle();
     if (row) {
       setData({
@@ -81,7 +82,7 @@ export function V2Fazendas() {
       setEditing(true);
     }
     setLoading(false);
-  }, [fazendaAtual?.id]);
+  }, [fazendaAtual?.id, clienteAtual?.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -147,7 +148,7 @@ export function V2Fazendas() {
 
   const pastosVal = validarAreaPastosPecuarios(
     pastos.map(p => ({
-      areaHa: Number((p as any).area || 0),
+      areaHa: Number((p as any).area_produtiva_ha || (p as any).area || 0),
       tipoUso: (p as any).tipo_uso,
       situacao: (p as any).situacao,
       ativo: p.ativo,
