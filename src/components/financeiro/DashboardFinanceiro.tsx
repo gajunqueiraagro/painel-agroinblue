@@ -82,6 +82,7 @@ interface Props {
   fazendaId?: string;
   ano: number;
   mesAte: number;
+  modo?: 'mes' | 'acum';
   onDrillDown?: (payload: DrillDownPayload) => void;
   onMacroDrillDown?: (macro: string) => void;
 }
@@ -123,10 +124,9 @@ export function DashboardFinanceiro({
   mesAte,
   onDrillDown,
   onMacroDrillDown,
+  modo,
 }: Props) {
-  const [entradaTab, setEntradaTab] = useState<'mes' | 'acum'>('mes');
-  const [saidaTab, setSaidaTab] = useState<'mes' | 'acum'>('mes');
-  const [fornTab, setFornTab] = useState<'mes' | 'acum'>('mes');
+  const resolvedModo = modo ?? 'mes';
   const [activeEntrada, setActiveEntrada] = useState<number | null>(null);
   const [activeSaida, setActiveSaida] = useState<number | null>(null);
 
@@ -296,14 +296,14 @@ export function DashboardFinanceiro({
 
   // PIE DATA
   const pieEntradas = useMemo(() => {
-    const map = entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum;
+    const map = resolvedModo === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum;
     return Array.from(map.entries()).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [ind, entradaTab]);
+  }, [ind, resolvedModo]);
 
   const pieSaidas = useMemo(() => {
-    const map = saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum;
+    const map = resolvedModo === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum;
     return Array.from(map.entries()).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [ind, saidaTab]);
+  }, [ind, resolvedModo]);
 
   // Mapas de cor por nome — garante que bullet do plano de contas use a mesma cor do slice da pizza.
   const entradaColorByName = useMemo(() => {
@@ -330,12 +330,12 @@ export function DashboardFinanceiro({
     );
   }
 
-  const totalEntradasDisplay = entradaTab === 'mes' ? ind.totalEntradas : ind.entradasAcum;
-  const totalSaidasDisplay = saidaTab === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
+  const totalEntradasDisplay = resolvedModo === 'mes' ? ind.totalEntradas : ind.entradasAcum;
+  const totalSaidasDisplay = resolvedModo === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
   const saldoLiquido = totalEntradasDisplay - totalSaidasDisplay;
 
-  const topFornecedores = fornTab === 'mes' ? ind.topFornecedoresMes : ind.topFornecedoresAcum;
-  const totalRefForn = fornTab === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
+  const topFornecedores = resolvedModo === 'mes' ? ind.topFornecedoresMes : ind.topFornecedoresAcum;
+  const totalRefForn = resolvedModo === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
 
   return (
     <div className="w-full min-w-0 space-y-2">
@@ -353,7 +353,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 1 — Cards executivos (Entradas / Saídas / Saldo) — alinhamento por items-stretch */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-stretch mb-2 min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-2 items-stretch mb-2 min-w-0 [&>*]:min-w-0">
         {/* Entradas */}
         <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
           <CardContent className="p-2 flex flex-col flex-1">
@@ -361,14 +361,13 @@ export function DashboardFinanceiro({
               <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: 'hsl(142, 50%, 35%)' }}>
                 <TrendingUp className="h-3 w-3" /> Entradas
               </div>
-              <ToggleGroup value={entradaTab} onChange={setEntradaTab} />
             </div>
             <p className="text-xl font-black tabular-nums leading-tight" style={{ color: 'hsl(142, 50%, 35%)' }}>
               {formatMoeda(totalEntradasDisplay)}
             </p>
             <div className="space-y-0 mt-1">
               {ind.categoriasEntrada.map((cat: string) => {
-                const val = (entradaTab === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0;
+                const val = (resolvedModo === 'mes' ? ind.entradaDecomp.mes : ind.entradaDecomp.acum).get(cat) || 0;
                 if (val === 0) return null;
                 const bulletColor = entradaColorByName.get(cat) ?? 'hsl(142, 35%, 50%)';
                 return (
@@ -393,14 +392,13 @@ export function DashboardFinanceiro({
               <div className="flex items-center gap-1 text-[10px] font-bold text-destructive">
                 <TrendingDown className="h-3 w-3" /> Saídas
               </div>
-              <ToggleGroup value={saidaTab} onChange={setSaidaTab} />
             </div>
             <p className="text-xl font-black text-destructive tabular-nums leading-tight">
               {formatMoeda(totalSaidasDisplay)}
             </p>
             <div className="space-y-0 mt-1">
               {ind.categoriasSaida.map((cat: string) => {
-                const val = (saidaTab === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0;
+                const val = (resolvedModo === 'mes' ? ind.saidaDecomp.mes : ind.saidaDecomp.acum).get(cat) || 0;
                 if (val === 0) return null;
                 const bulletColor = saidaColorByName.get(cat) ?? 'hsl(0, 35%, 55%)';
                 return (
@@ -414,11 +412,11 @@ export function DashboardFinanceiro({
                   </div>
                 );
               })}
-              {!isGlobal && (saidaTab === 'mes' ? ind.rateioMes : ind.rateioAcumVal) > 0 && (
+              {!isGlobal && (resolvedModo === 'mes' ? ind.rateioMes : ind.rateioAcumVal) > 0 && (
                 <div className="border-t pt-0.5 mt-0.5">
                   <div className="flex justify-between text-[9px] leading-tight">
                     <span style={{ color: 'hsl(40, 70%, 45%)' }}>Rateio ADM</span>
-                    <span className="font-mono font-bold italic" style={{ color: 'hsl(40, 70%, 45%)' }}>{formatMoeda(saidaTab === 'mes' ? ind.rateioMes : ind.rateioAcumVal)}</span>
+                    <span className="font-mono font-bold italic" style={{ color: 'hsl(40, 70%, 45%)' }}>{formatMoeda(resolvedModo === 'mes' ? ind.rateioMes : ind.rateioAcumVal)}</span>
                   </div>
                 </div>
               )}
@@ -593,7 +591,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 3. BLOCOS ANALÍTICOS — 3 colunas: CC + Custo/Rebanho + Fornecedores */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-1.5 min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-1.5 min-w-0 [&>*]:min-w-0">
         {/* Bloco A — Ranking centros de custo */}
         <CentroCustoRanking ccMes={ind.ccMes} ccAcum={ind.ccAcum} totalSaidasMes={ind.saidasComRateio} totalSaidasAcum={ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)} />
 
@@ -645,7 +643,6 @@ export function DashboardFinanceiro({
               <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">
                 <Users className="h-3 w-3" /> Maiores Desembolsos
               </div>
-              <ToggleGroup value={fornTab} onChange={setFornTab} />
             </div>
             {topFornecedores.length === 0 ? (
               <p className="text-center text-muted-foreground text-[9px] py-4">Sem saídas</p>

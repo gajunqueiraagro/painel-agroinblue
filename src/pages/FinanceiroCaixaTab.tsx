@@ -70,7 +70,7 @@ function classifySaida(l: FinanceiroLancamento): string {
   return classificarSaidaCentral(l);
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false, modo = 'mes' }: Props) {
   const [subTab, setSubTab] = useState<SubTab>(initialTab ?? 'dashboard');
   useEffect(() => {
     if (initialTab) {
@@ -444,6 +444,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                   mesAte={localMes}
                   onDrillDown={handleDrillDown}
                   onMacroDrillDown={(macro) => setDrillMacro(macro)}
+                  modo={modo}
                 />
               )}
             </V2PageContent>

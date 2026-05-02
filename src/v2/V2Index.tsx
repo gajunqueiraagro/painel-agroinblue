@@ -44,6 +44,7 @@ export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
   const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [mes, setMes] = useState(String(new Date().getMonth() + 1));
+  const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const periodoTipo = getPeriodoTipo(section);
   const { clientes } = useCliente();
@@ -90,7 +91,7 @@ export default function V2Index() {
       <FinanceiroCaixaTab initialTab="fluxo" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
     if (section === 'financeiro-dashboard') return (
-      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
+      <FinanceiroCaixaTab initialTab="dashboard" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} modo={modo} />
     );
     if (section === 'indicadores-zoot') return (
       <V2ZootWrapper>
@@ -261,6 +262,8 @@ export default function V2Index() {
               tipo={periodoTipo}
               showFazenda={false}
               className="shrink-0"
+              modo={section === 'financeiro-dashboard' ? modo : undefined}
+              onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
             />
           </div>
           {/* SCROLL */}

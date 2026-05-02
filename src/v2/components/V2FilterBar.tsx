@@ -11,9 +11,9 @@ const MESES = [
 ];
 
 interface V2FilterBarProps { ano: string; mes: string; onAnoChange: (v: string) => void; onMesChange: (v: string) => void; tipo?: 'nenhum' | 'ano' | 'ano-mes';
-  showFazenda?: boolean; className?: string; }
+  showFazenda?: boolean; className?: string; modo?: 'mes' | 'acum'; onModoChange?: (v: 'mes' | 'acum') => void; }
 
-export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', showFazenda = false, className }: V2FilterBarProps) {
+export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', showFazenda = false, className, modo, onModoChange }: V2FilterBarProps) {
   const { fazendas, fazendaAtual, setFazendaAtual, isGlobal } = useFazenda();
   const { data: anosRaw = [] } = useAnosDisponiveis();
   const anos = anosRaw.length > 0 ? anosRaw.map(String) : [String(new Date().getFullYear())];
@@ -38,6 +38,16 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', 
         </Select>
       )}
       {fazendaAtual && <span className="text-xs text-muted-foreground ml-auto truncate hidden md:block">{isGlobal ? 'Todas as fazendas' : fazendaAtual.nome}</span>}
+      {onModoChange && (
+        <select
+          value={modo ?? 'mes'}
+          onChange={(e) => onModoChange(e.target.value as 'mes' | 'acum')}
+          className="h-7 text-xs w-24 border border-border rounded px-2 bg-background"
+        >
+          <option value="mes">Mês</option>
+          <option value="acum">Acumulado</option>
+        </select>
+      )}
       <span className="text-[10px] text-muted-foreground/40 shrink-0 hidden md:block">/v2 fase 1</span>
     </div>
   );
