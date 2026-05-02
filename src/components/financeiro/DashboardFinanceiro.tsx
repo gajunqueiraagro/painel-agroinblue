@@ -280,35 +280,25 @@ export function DashboardFinanceiro({
   // CHART DATA — Jan → mesAte only (no future months)
   // =========================================================================
   const chartData = useMemo(() => {
-    const monthMap = new Map<string, { entradas: number; saidas: number }>();
+    if (!mesesFluxo || mesesFluxo.length === 0) return [];
     const limite = mesLimite && mesLimite > 0 ? mesLimite : 12;
-    for (let m = 1; m <= limite; m++) monthMap.set(String(m).padStart(2, '0'), { entradas: 0, saidas: 0 });
-    for (const l of lancamentos) {
-      if (!isRealizado(l)) continue;
-      const am = datePagtoAnoMes(l);
-      if (!am || !am.startsWith(anoFiltro)) continue;
-      const m = am.substring(5);
-      const entry = monthMap.get(m);
-      if (!entry) continue;
-      if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
-      if (isSaida(l)) entry.saidas += Math.abs(l.valor);
-    }
-    // Saldo acumulado via mesesFluxo (fonte oficial — totalEntradas/totalSaidas/saldoAcumulado)
+    const fluxoMap = new Map(mesesFluxo.map(m => [Number(m.mes), m]));
     let ultimoSaldo = 0;
-    return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => {
-      const mesNum = Number(mes);
-      const fluxoMes = mesesFluxo?.find(m => m.mes === mesNum);
-      if (fluxoMes && !isNaN(fluxoMes.saldoAcumulado)) {
-        ultimoSaldo = fluxoMes.saldoAcumulado;
+    const result: { mes: string; Entradas: number; Saídas: number; 'Saldo Acum.': number }[] = [];
+    for (let m = 1; m <= limite; m++) {
+      const fluxo = fluxoMap.get(m);
+      if (fluxo && !isNaN(fluxo.saldoAcumulado)) {
+        ultimoSaldo = fluxo.saldoAcumulado;
       }
-      return {
-        mes: (MESES_NOMES[mesNum - 1] || mes).substring(0, 3),
-        Entradas: fluxoMes?.totalEntradas ?? v.entradas,
-        Saídas: fluxoMes?.totalSaidas ?? v.saidas,
-        'Saldo Acum.': ultimoSaldo
-      };
-    });
-  }, [lancamentos, anoFiltro, mesLimite, mesesFluxo]);
+      result.push({
+        mes: (MESES_NOMES[m - 1] || String(m)).substring(0, 3),
+        Entradas: fluxo?.totalEntradas ?? 0,
+        Saídas: fluxo?.totalSaidas ?? 0,
+        'Saldo Acum.': ultimoSaldo,
+      });
+    }
+    return result;
+  }, [mesesFluxo, mesLimite]);
 
   // PIE DATA
   const pieEntradas = useMemo(() => {
