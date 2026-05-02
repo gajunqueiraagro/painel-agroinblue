@@ -284,17 +284,18 @@ export function DashboardFinanceiro({
     const limite = mesLimite && mesLimite > 0 ? mesLimite : 12;
     const fluxoMap = new Map(mesesFluxo.map(m => [Number(m.mes), m]));
     let ultimoSaldo = 0;
-    const result: { mes: string; Entradas: number; Saídas: number; 'Saldo Acum.': number }[] = [];
-    for (let m = 1; m <= limite; m++) {
+    const result: { mes: string; Entradas: number | null; Saídas: number | null; 'Saldo Acum.': number | null }[] = [];
+    for (let m = 1; m <= 12; m++) {
       const fluxo = fluxoMap.get(m);
-      if (fluxo && !isNaN(fluxo.saldoAcumulado)) {
+      const dentroDoPeriodo = m <= limite;
+      if (dentroDoPeriodo && fluxo && !isNaN(fluxo.saldoAcumulado)) {
         ultimoSaldo = fluxo.saldoAcumulado;
       }
       result.push({
         mes: (MESES_NOMES[m - 1] || String(m)).substring(0, 3),
-        Entradas: fluxo?.totalEntradas ?? 0,
-        Saídas: fluxo?.totalSaidas ?? 0,
-        'Saldo Acum.': ultimoSaldo,
+        Entradas: dentroDoPeriodo ? (fluxo?.totalEntradas ?? 0) : null,
+        Saídas: dentroDoPeriodo ? (fluxo?.totalSaidas ?? 0) : null,
+        'Saldo Acum.': dentroDoPeriodo ? ultimoSaldo : null,
       });
     }
     return result;
