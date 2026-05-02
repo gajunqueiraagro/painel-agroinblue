@@ -10,9 +10,9 @@ import { toast } from 'sonner';
 import { Save, Pencil } from 'lucide-react';
 import { PastosTab } from '@/pages/PastosTab';
 import {
-  validarComposicaoAreaFazenda,
   validarAreaPastosPecuarios,
 } from '@/lib/validacoes/areaFazenda';
+import { FazendasList } from '@/components/FazendasList';
 
 type TabKey = 'dados' | 'area' | 'pastos' | 'roteiro';
 
@@ -29,12 +29,14 @@ interface CadastroRow {
   area_reserva_ha: string;
   area_benfeitorias_ha: string;
   area_outras_ha: string;
+  ie: string;
 }
 
 const EMPTY: CadastroRow = {
   municipio: '', estado: '', car: '', nirf: '',
   area_total_ha: '', area_pecuaria_ha: '', area_agricultura_ha: '',
   area_app_ha: '', area_reserva_ha: '', area_benfeitorias_ha: '', area_outras_ha: '',
+  ie: '',
 };
 
 const n = (v: string) => (v.trim() === '' ? 0 : Number(v));
@@ -72,6 +74,7 @@ export function V2Fazendas() {
         area_reserva_ha: (row as any).area_reserva_ha != null ? String((row as any).area_reserva_ha) : '',
         area_benfeitorias_ha: (row as any).area_benfeitorias_ha != null ? String((row as any).area_benfeitorias_ha) : '',
         area_outras_ha: (row as any).area_outras_ha != null ? String((row as any).area_outras_ha) : '',
+        ie: (row as any).ie ?? '',
       });
     } else {
       setData(EMPTY);
@@ -85,23 +88,13 @@ export function V2Fazendas() {
   const handleSave = async () => {
     if (!fazendaAtual?.id || !clienteAtual?.id) return;
 
-    if (n(data.area_total_ha) > 0) {
-      const composicao = validarComposicaoAreaFazenda({
-        areaTotalHa: n(data.area_total_ha),
-        areaPecuariaHa: n(data.area_pecuaria_ha),
-        areaAgriculturaHa: n(data.area_agricultura_ha),
-        areaAppHa: n(data.area_app_ha),
-        areaReservaHa: n(data.area_reserva_ha),
-        areaBenfeitoriasHa: n(data.area_benfeitorias_ha),
-        areaOutrasHa: n(data.area_outras_ha),
-      });
-      if (!composicao.ok) {
-        toast.error(
-          `Soma dos blocos (${composicao.soma.toFixed(2)} ha) difere da área total (${n(data.area_total_ha).toFixed(2)} ha). Corrija antes de salvar.`,
-        );
-        return;
-      }
-    }
+    const areaTotalCalculada =
+      n(data.area_pecuaria_ha) +
+      n(data.area_agricultura_ha) +
+      n(data.area_app_ha) +
+      n(data.area_reserva_ha) +
+      n(data.area_benfeitorias_ha) +
+      n(data.area_outras_ha);
 
     setSaving(true);
     const payload = {
@@ -111,7 +104,8 @@ export function V2Fazendas() {
       estado: data.estado || null,
       car: data.car || null,
       nirf: data.nirf || null,
-      area_total_ha: n(data.area_total_ha) || null,
+      area_total_ha: areaTotalCalculada || null,
+      ie: data.ie || null,
       area_pecuaria_ha: n(data.area_pecuaria_ha) || null,
       area_agricultura_ha: n(data.area_agricultura_ha) || null,
       area_app_ha: n(data.area_app_ha) || null,
@@ -141,8 +135,8 @@ export function V2Fazendas() {
 
   if (!fazendaAtual || isGlobal) {
     return (
-      <div className="px-4 py-6">
-        <p className="text-sm text-muted-foreground">Selecione uma fazenda para editar o cadastro.</p>
+      <div className="px-4 py-4">
+        <FazendasList />
       </div>
     );
   }
@@ -151,15 +145,6 @@ export function V2Fazendas() {
     return <div className="px-4 py-6 text-xs text-muted-foreground">Carregando...</div>;
   }
 
-  const composicaoVal = validarComposicaoAreaFazenda({
-    areaTotalHa: n(data.area_total_ha),
-    areaPecuariaHa: n(data.area_pecuaria_ha),
-    areaAgriculturaHa: n(data.area_agricultura_ha),
-    areaAppHa: n(data.area_app_ha),
-    areaReservaHa: n(data.area_reserva_ha),
-    areaBenfeitoriasHa: n(data.area_benfeitorias_ha),
-    areaOutrasHa: n(data.area_outras_ha),
-  });
   const pastosVal = validarAreaPastosPecuarios(
     pastos.map(p => ({
       areaHa: Number((p as any).area || 0),
@@ -169,7 +154,14 @@ export function V2Fazendas() {
     })),
     n(data.area_pecuaria_ha),
   );
-  const hasAreaTotal = n(data.area_total_ha) > 0;
+
+  const areaTotalCalculada =
+    n(data.area_pecuaria_ha) +
+    n(data.area_agricultura_ha) +
+    n(data.area_app_ha) +
+    n(data.area_reserva_ha) +
+    n(data.area_benfeitorias_ha) +
+    n(data.area_outras_ha);
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'dados', label: 'Dados' },
@@ -264,12 +256,24 @@ export function V2Fazendas() {
           {textField('Estado', 'estado')}
           {textField('CAR', 'car')}
           {textField('NIRF', 'nirf')}
+          {textField('IE / Inscrição Estadual', 'ie')}
         </div>
       )}
 
       {activeTab === 'area' && (
         <div className="space-y-4">
-          <div>{areaField('Área Total (ha)', 'area_total_ha')}</div>
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Área Total Calculada
+            </p>
+            <p className="text-lg font-bold text-foreground">
+              {areaTotalCalculada.toFixed(2)} ha
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              Soma de pecuária, agricultura, APP, reserva, benfeitorias e outras.
+            </p>
+          </div>
+
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
               Composição da Área
@@ -283,22 +287,16 @@ export function V2Fazendas() {
               {areaField('Outras', 'area_outras_ha')}
             </div>
           </div>
-          {hasAreaTotal && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div className={`rounded-lg border p-3 ${composicaoVal.ok ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Blocos vs Total</p>
-                <p className="text-xs font-medium">Soma: {composicaoVal.soma.toFixed(2)} ha</p>
-                <p className={`text-xs mt-0.5 ${composicaoVal.ok ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {composicaoVal.ok ? '✅ Conciliado' : `❌ Diferença: ${composicaoVal.diferenca > 0 ? '+' : ''}${composicaoVal.diferenca.toFixed(2)} ha`}
-                </p>
-              </div>
-              <div className={`rounded-lg border p-3 ${pastosVal.ok ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Pastos vs Pecuária</p>
-                <p className="text-xs font-medium">Soma: {pastosVal.somaPastos.toFixed(2)} ha ({pastosVal.quantidadePastos} pastos)</p>
-                <p className={`text-xs mt-0.5 ${pastosVal.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {pastosVal.ok ? '✅ Conciliado' : `⚠️ Diferença: ${pastosVal.diferenca > 0 ? '+' : ''}${pastosVal.diferenca.toFixed(2)} ha`}
-                </p>
-              </div>
+
+          {areaTotalCalculada > 0 && (
+            <div className={`rounded-lg border p-3 ${pastosVal.ok ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Pastos vs Pecuária</p>
+              <p className="text-xs font-medium">
+                Soma: {pastosVal.somaPastos.toFixed(2)} ha ({pastosVal.quantidadePastos} pastos)
+              </p>
+              <p className={`text-xs mt-0.5 ${pastosVal.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {pastosVal.ok ? '✅ Conciliado' : `⚠️ Diferença: ${pastosVal.diferenca > 0 ? '+' : ''}${pastosVal.diferenca.toFixed(2)} ha`}
+              </p>
             </div>
           )}
         </div>
