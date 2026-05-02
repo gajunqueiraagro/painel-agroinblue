@@ -450,7 +450,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 2 — Pizzas (sem título/legenda) + gráfico Entradas vs Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-stretch min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 items-stretch min-w-0 [&>*]:min-w-0">
         {/* Pie Entradas — centralizada, maior, sem título/legenda */}
         <Card className="flex flex-col">
           <CardContent className="flex items-center justify-center p-3 flex-1">
@@ -591,50 +591,10 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 3. BLOCOS ANALÍTICOS — 3 colunas: CC + Custo/Rebanho + Fornecedores */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 min-w-0 [&>*]:min-w-0">
         {/* Bloco A — Ranking centros de custo */}
-        <CentroCustoRanking ccMes={ind.ccMes} ccAcum={ind.ccAcum} totalSaidasMes={ind.saidasComRateio} totalSaidasAcum={ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)} />
+        <CentroCustoRanking ccMes={ind.ccMes} ccAcum={ind.ccAcum} totalSaidasMes={ind.saidasComRateio} totalSaidasAcum={ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)} modo={resolvedModo} />
 
-        {/* Bloco B — Custo de Produção por Rebanho */}
-        <Card>
-          <CardContent className="p-2">
-            <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-              <Wallet className="h-3 w-3" /> Custo / Rebanho
-            </div>
-            {custoRebanho.rebanhoMedio > 0 ? (
-              <div className="space-y-1">
-                <div className="bg-muted/30 rounded p-1.5">
-                  <div className="text-[8px] text-muted-foreground">Rebanho Médio</div>
-                  <div className="text-sm font-black tabular-nums">{formatNum(custoRebanho.rebanhoMedio, 0)} <span className="text-[8px] font-normal text-muted-foreground">cab</span></div>
-                </div>
-                <div className="grid grid-cols-2 gap-1 min-w-0 [&>*]:min-w-0">
-                  <div className="bg-muted/20 rounded p-1">
-                    <div className="text-[7px] text-muted-foreground uppercase">Custo Mês</div>
-                    <div className="text-[10px] font-bold tabular-nums italic text-destructive">{formatMoeda(custoRebanho.desembolsoMes)}</div>
-                    <div className="text-[8px] font-mono text-muted-foreground italic">{formatMoeda(custoRebanho.custoCabMes)}/cab</div>
-                  </div>
-                  <div className="bg-muted/20 rounded p-1">
-                    <div className="text-[7px] text-muted-foreground uppercase">Custo Acum</div>
-                    <div className="text-[10px] font-bold tabular-nums italic text-destructive">{formatMoeda(custoRebanho.desembolsoAcum)}</div>
-                    <div className="text-[8px] font-mono text-muted-foreground italic">{formatMoeda(custoRebanho.custoCabAcum)}/cab</div>
-                  </div>
-                </div>
-                <div className="border-t pt-1 mt-1">
-                  <div className="flex justify-between text-[8px]">
-                    <span className="text-muted-foreground">Saldo Inicial</span>
-                    <span className="font-mono font-semibold">{formatNum(custoRebanho.totalSI, 0)} cab</span>
-                  </div>
-                  <div className="flex justify-between text-[8px]">
-                    <span className="text-muted-foreground">Rebanho Atual</span>
-                    <span className="font-mono font-semibold">{formatNum(custoRebanho.rebanhoFinal, 0)} cab</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground text-[9px] py-4">Sem dados de rebanho</p>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Bloco C — Maiores Desembolsos (com toggle Mês/Acum) */}
         <Card>
@@ -683,10 +643,10 @@ function CentroCustoRanking({ ccMes, ccAcum, totalSaidasMes, totalSaidasAcum }: 
   ccAcum: { nome: string; valor: number }[];
   totalSaidasMes: number;
   totalSaidasAcum: number;
+  modo: 'mes' | 'acum';
 }) {
-  const [tab, setTab] = useState<'mes' | 'acum'>('mes');
-  const items = tab === 'mes' ? ccMes : ccAcum;
-  const totalRef = tab === 'mes' ? totalSaidasMes : totalSaidasAcum;
+  const items = modo === 'mes' ? ccMes : ccAcum;
+  const totalRef = modo === 'mes' ? totalSaidasMes : totalSaidasAcum;
   const top = items.slice(0, 10);
 
   return (
@@ -696,7 +656,6 @@ function CentroCustoRanking({ ccMes, ccAcum, totalSaidasMes, totalSaidasAcum }: 
           <div className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
             <BarChart3 className="h-3 w-3" /> Saídas por Centro de Custo
           </div>
-          <ToggleGroup value={tab} onChange={setTab} />
         </div>
         {top.length === 0 ? (
           <p className="text-center text-muted-foreground text-[9px] py-4">Sem dados</p>

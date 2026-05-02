@@ -37,7 +37,6 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', 
           <SelectContent>{MESES.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
         </Select>
       )}
-      {fazendaAtual && <span className="text-xs text-muted-foreground ml-auto truncate hidden md:block">{isGlobal ? 'Todas as fazendas' : fazendaAtual.nome}</span>}
       {onModoChange && (
         <div className="flex items-center rounded-md border border-border overflow-hidden h-7">
           <button
@@ -64,6 +63,8 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', 
           </button>
         </div>
       )}
+      {fazendaAtual && <span className="text-xs text-muted-foreground ml-auto truncate hidden md:block">{isGlobal ? 'Todas as fazendas' : fazendaAtual.nome}</span>}
+      
       <span className="text-[10px] text-muted-foreground/40 shrink-0 hidden md:block">/v2 fase 1</span>
     </div>
   );
