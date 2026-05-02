@@ -39,14 +39,30 @@ export function V2FilterBar({ ano, mes, onAnoChange, onMesChange, tipo = 'ano', 
       )}
       {fazendaAtual && <span className="text-xs text-muted-foreground ml-auto truncate hidden md:block">{isGlobal ? 'Todas as fazendas' : fazendaAtual.nome}</span>}
       {onModoChange && (
-        <select
-          value={modo ?? 'mes'}
-          onChange={(e) => onModoChange(e.target.value as 'mes' | 'acum')}
-          className="h-7 text-xs w-24 border border-border rounded px-2 bg-background"
-        >
-          <option value="mes">Mês</option>
-          <option value="acum">Acumulado</option>
-        </select>
+        <div className="flex items-center rounded-md border border-border overflow-hidden h-7">
+          <button
+            type="button"
+            onClick={() => onModoChange('mes')}
+            className={`px-2.5 text-xs h-full transition-colors ${
+              (modo ?? 'mes') === 'mes'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'bg-background text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            Mês
+          </button>
+          <button
+            type="button"
+            onClick={() => onModoChange('acum')}
+            className={`px-2.5 text-xs h-full transition-colors ${
+              modo === 'acum'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'bg-background text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            Acum
+          </button>
+        </div>
       )}
       <span className="text-[10px] text-muted-foreground/40 shrink-0 hidden md:block">/v2 fase 1</span>
     </div>

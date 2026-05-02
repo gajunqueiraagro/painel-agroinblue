@@ -353,7 +353,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 1 — Cards executivos (Entradas / Saídas / Saldo) — alinhamento por items-stretch */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-2 items-stretch mb-2 min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 items-stretch mb-2 min-w-0 [&>*]:min-w-0">
         {/* Entradas */}
         <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
           <CardContent className="p-2 flex flex-col flex-1">
@@ -591,7 +591,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 3. BLOCOS ANALÍTICOS — 3 colunas: CC + Custo/Rebanho + Fornecedores */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-1.5 min-w-0 [&>*]:min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 min-w-0 [&>*]:min-w-0">
         {/* Bloco A — Ranking centros de custo */}
         <CentroCustoRanking ccMes={ind.ccMes} ccAcum={ind.ccAcum} totalSaidasMes={ind.saidasComRateio} totalSaidasAcum={ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)} />
 
