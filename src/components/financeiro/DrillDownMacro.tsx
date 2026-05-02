@@ -291,53 +291,53 @@ export default function DrillDownMacro({
               </TableHeader>
               <TableBody>
                 {/* total row */}
-                <TableRow className="bg-muted/40 font-semibold">
-                  <TableCell className="sticky left-0 bg-muted/40 z-10">Total {macro}</TableCell>
+                <TableRow className="bg-muted/50 border-b-2 border-border">
+                  <TableCell className="sticky left-0 bg-muted/50 z-10 text-[13px] font-black tracking-tight">Total {macro}</TableCell>
                   {mesesOrdenados.map((m) => (
                     <TableCell key={m} className="text-right whitespace-nowrap">
                       {totalMeses[m] ? fmtCompact(totalMeses[m]) : '–'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right whitespace-nowrap">{fmtCompact(grandTotal)}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap text-[13px] font-black">{fmtCompact(grandTotal)}</TableCell>
                 </TableRow>
 
                 {tableData.map((grupo) => (
                   <React.Fragment key={grupo.nome}>
                     {/* Nível 1 — Grupo */}
-                    <TableRow className="cursor-pointer hover:bg-muted/30" onClick={() => toggleGrupo(grupo.nome)}>
-                      <TableCell className="pl-3 sticky left-0 bg-background z-10">
+                    <TableRow className="cursor-pointer hover:bg-muted/30 border-t border-border/60 mt-1" onClick={() => toggleGrupo(grupo.nome)}>
+                      <TableCell className="pl-3 sticky left-0 bg-background z-10 py-1.5">
                         <span className="inline-flex items-center gap-1">
                           {expandedGrupo === grupo.nome
                             ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
                             : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                          <span className="font-medium">{grupo.nome}</span>
+                          <span className="font-semibold text-[11px] text-foreground">{grupo.nome}</span>
                         </span>
                       </TableCell>
                       {renderMesesCells(grupo.meses)}
-                      <TableCell className="text-right whitespace-nowrap font-medium">{fmtCompact(grupo.total)}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap font-semibold text-[11px]">{fmtCompact(grupo.total)}</TableCell>
                     </TableRow>
 
                     {expandedGrupo === grupo.nome && grupo.children?.map((centro) => (
                       <React.Fragment key={centro.nome}>
                         {/* Nível 2 — Centro */}
-                        <TableRow className="cursor-pointer hover:bg-muted/20" onClick={() => toggleCentro(centro.nome)}>
-                          <TableCell className="pl-8 sticky left-0 bg-background z-10">
+                        <TableRow className="cursor-pointer hover:bg-muted/20 bg-muted/5" onClick={() => toggleCentro(centro.nome)}>
+                          <TableCell className="pl-6 sticky left-0 bg-muted/5 z-10">
                             <span className="inline-flex items-center gap-1">
                               {expandedCentro === centro.nome
                                 ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
                                 : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                              <span>{centro.nome}</span>
+                              <span className="text-[10px] font-medium text-foreground/80">{centro.nome}</span>
                             </span>
                           </TableCell>
                           {renderMesesCells(centro.meses)}
-                          <TableCell className="text-right whitespace-nowrap">{fmtCompact(centro.total)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap text-[10px] font-medium">{fmtCompact(centro.total)}</TableCell>
                         </TableRow>
 
                         {expandedCentro === centro.nome && centro.children?.map((sub) => (
-                          <TableRow key={sub.nome} className="text-muted-foreground">
-                            <TableCell className="pl-14 sticky left-0 bg-background z-10">{sub.nome}</TableCell>
+                          <TableRow key={sub.nome} className="text-muted-foreground/80">
+                            <TableCell className="pl-10 sticky left-0 bg-background z-10 text-[10px] font-normal text-muted-foreground">{sub.nome}</TableCell>
                             {renderMesesCells(sub.meses)}
-                            <TableCell className="text-right whitespace-nowrap">{fmtCompact(sub.total)}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap text-[10px] font-normal text-muted-foreground">{fmtCompact(sub.total)}</TableCell>
                           </TableRow>
                         ))}
                       </React.Fragment>
