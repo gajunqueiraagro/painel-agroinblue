@@ -338,7 +338,7 @@ export function DashboardFinanceiro({
   const totalRefForn = fornTab === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
 
   return (
-    <div className="space-y-2">
+    <div className="w-full min-w-0 space-y-2">
       {/* Warning banners only */}
       {!isGlobal && fazendasSemArea && fazendasSemArea.length > 0 && (
         <div className="flex items-start gap-2 text-[10px] bg-destructive/5 border border-destructive/30 rounded px-2 py-1.5">
