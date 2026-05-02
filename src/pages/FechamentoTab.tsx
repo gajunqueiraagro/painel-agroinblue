@@ -4,6 +4,7 @@ import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRedirecionarPecuaria } from '@/hooks/useRedirecionarPecuaria';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLancamentos } from '@/hooks/useLancamentos';
@@ -121,6 +122,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { pastos, categorias } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
+  const { user } = useAuth();
 
   const anosDisp = useMemo(() => {
     const set = new Set<string>();
@@ -634,7 +636,22 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       if (errosMsgs.length > 0) {
         toast.error(`Erro(s): ${errosMsgs[0]}${errosMsgs.length > 1 ? ` (+${errosMsgs.length - 1})` : ''}`);
       } else {
-        toast.success(`${totalProcessados} pasto(s) fechado(s) com sucesso ✓`);
+        if (fazendaAtual?.id) {
+          const anoMesDate = `${anoMes}-01`;
+          const { error: snapError } = await supabase.rpc('gerar_snapshot_area', {
+            p_fazenda_id: fazendaAtual.id,
+            p_ano_mes: anoMesDate,
+            p_fechado_por: user?.id ?? null,
+          });
+          if (snapError) {
+            console.error('Snapshot área:', snapError);
+            toast.warning(`Fechamento OK, mas snapshot de área falhou: ${snapError.message}`);
+          } else {
+            toast.success(`${totalProcessados} pasto(s) fechado(s) com sucesso ✓`);
+          }
+        } else {
+          toast.success(`${totalProcessados} pasto(s) fechado(s) com sucesso ✓`);
+        }
       }
       await loadFechamentos(anoMes);
     } catch (e: any) {
