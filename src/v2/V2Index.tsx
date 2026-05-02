@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2Sidebar, type V2Section } from './components/V2Sidebar';
 import { getPeriodoTipo } from './lib/periodoConfig';
@@ -42,14 +43,40 @@ import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
-  const [ano, setAno] = useState(String(new Date().getFullYear()));
-  const [mes, setMes] = useState(String(new Date().getMonth() + 1));
+  const mesAnterior = new Date().getMonth() === 0 ? 12 : new Date().getMonth();
+  const anoMesAnterior = new Date().getMonth() === 0
+    ? String(new Date().getFullYear() - 1)
+    : String(new Date().getFullYear());
+  const [ano, setAno] = useState(anoMesAnterior);
+  const [mes, setMes] = useState(String(mesAnterior));
+  const filtroInicializado = useRef(false);
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const periodoTipo = getPeriodoTipo(section);
   const { clientes } = useCliente();
   const { fazendas } = useFazenda();
+
+  // Inicializar filtro no último mês fechado P1 — executa apenas uma vez
+  useEffect(() => {
+    if (filtroInicializado.current || !clientes[0]?.id) return;
+    filtroInicializado.current = true;
+    (async () => {
+      const { data } = await supabase
+        .from('fechamento_pastos')
+        .select('ano_mes')
+        .eq('cliente_id', clientes[0].id)
+        .eq('status', 'fechado')
+        .order('ano_mes', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.ano_mes) {
+        const [a, m] = data.ano_mes.split('-');
+        setAno(a);
+        setMes(String(Number(m)));
+      }
+    })();
+  }, [clientes]);
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} />;
