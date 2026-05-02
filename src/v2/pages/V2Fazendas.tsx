@@ -51,10 +51,12 @@ export function V2Fazendas() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [codigoFazenda, setCodigoFazenda] = useState('');
 
   const loadData = useCallback(async () => {
-    if (!fazendaAtual?.id || !clienteAtual?.id) {
+    if (isGlobal || !fazendaAtual?.id || fazendaAtual.id === '__global__' || !clienteAtual?.id) {
       setData(EMPTY);
+      setCodigoFazenda('');
       return;
     }
     setLoading(true);
@@ -90,8 +92,9 @@ export function V2Fazendas() {
       setData(EMPTY);
       setEditing(true);
     }
+    setCodigoFazenda((fazendaAtual as any).codigo_importacao ?? (fazendaAtual as any).codigo ?? '');
     setLoading(false);
-  }, [fazendaAtual?.id, clienteAtual?.id]);
+  }, [fazendaAtual, clienteAtual?.id, isGlobal]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -134,16 +137,29 @@ export function V2Fazendas() {
     if (saved) {
       setData(prev => ({ ...prev, id: (saved as any).id }));
     }
-    if (error) { toast.error('Erro ao salvar: ' + error.message); }
-    else {
-      toast.success('Área salva com sucesso!');
-      setEditing(false);
-      await loadData();
+    if (error) {
+      toast.error('Erro ao salvar: ' + error.message);
+      setSaving(false);
+      return;
     }
+
+    const { error: fazendaError } = await supabase
+      .from('fazendas')
+      .update({ codigo_importacao: codigoFazenda || null } as any)
+      .eq('id', fazendaAtual.id);
+    if (fazendaError) {
+      toast.error('Erro ao salvar código da fazenda: ' + fazendaError.message);
+      setSaving(false);
+      return;
+    }
+
+    toast.success('Área salva com sucesso!');
+    setEditing(false);
+    await loadData();
     setSaving(false);
   };
 
-  if (!fazendaAtual || isGlobal) {
+  if (!fazendaAtual || isGlobal || fazendaAtual.id === '__global__') {
     return (
       <div className="px-4 py-4">
         <FazendasList />
@@ -262,6 +278,23 @@ export function V2Fazendas() {
 
       {activeTab === 'dados' && (
         <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-0.5">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Código da Fazenda
+            </Label>
+            {editing ? (
+              <Input
+                value={codigoFazenda}
+                onChange={e => setCodigoFazenda(e.target.value)}
+                className="h-7 text-xs"
+                placeholder="Ex: BG, 3M"
+              />
+            ) : (
+              <p className="text-xs font-medium px-2 py-1 rounded bg-muted/50 min-h-[28px]">
+                {codigoFazenda || <span className="text-muted-foreground italic">—</span>}
+              </p>
+            )}
+          </div>
           {textField('Município', 'municipio')}
           {textField('Estado', 'estado')}
           {textField('CAR', 'car')}
