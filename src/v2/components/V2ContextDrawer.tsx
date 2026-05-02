@@ -66,6 +66,7 @@ export function V2ContextDrawer({
   onSelect,
   onClose,
 }: V2ContextDrawerProps) {
+  if (!grupoAtivo) return null;
   const grupo = NAV_GRUPOS.find((g) => g.id === grupoAtivo);
   const isOpen = !!grupoAtivo;
 
