@@ -35,6 +35,8 @@ export interface PainelGeralOficial {
   rebanhoAtual: {
     cabecas: number | null;
     pesoMedio: number | null;
+    gmd: number | null;
+    ua: number | null;
     loading: boolean;
   };
   endividamento: {
@@ -151,6 +153,8 @@ export function usePainelGeralOficial({ fazendaId, ano, mes }: Params): PainelGe
     rebanhoAtual: {
       cabecas: rebanhoMes ? (rebanhoMes as any).cabecasFinal ?? null : null,
       pesoMedio: rebanhoMes ? (rebanhoMes as any).pesoMedioFinalKg ?? null : null,
+      gmd: rebanhoMes ? (rebanhoMes as any).gmdKgCabDia ?? null : null,
+      ua: rebanhoMes ? (rebanhoMes as any).uaMedia ?? null : null,
       loading: loadingRebanho,
     },
     endividamento: {

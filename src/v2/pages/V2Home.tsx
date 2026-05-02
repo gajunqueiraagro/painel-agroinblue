@@ -1,46 +1,42 @@
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { cn } from '@/lib/utils';
 import { usePainelGeralOficial } from '@/v2/hooks/usePainelGeralOficial';
 
-type S = 'ok' | 'atencao' | 'fora';
-const SC: Record<S, string> = {
-  ok: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  atencao: 'text-amber-700 bg-amber-50 border-amber-200',
-  fora: 'text-red-700 bg-red-50 border-red-200',
-};
-const SI: Record<S, string> = { ok: '✓', atencao: '⚠', fora: '✕' };
+const fmt = (v: number | null | undefined, decimals = 0) =>
+  v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
-const fmt = (v: number | null) =>
-  v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const fmtR = (v: number | null | undefined) =>
+  v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const fmtCab = (v: number | null) =>
-  v == null ? '—' : `${v.toLocaleString('pt-BR')} cab.`;
+const Sk = () => <span className="inline-block w-16 h-4 bg-muted/50 rounded animate-pulse align-middle" />;
 
-const fmtKg = (v: number | null) =>
-  v == null ? '' : `${v.toFixed(0)} kg/cab`;
-
-function KpiCard({ label, valor, sub, loading, cor }: {
-  label: string; valor: string; sub?: string; loading?: boolean;
-  cor?: 'green' | 'red' | 'blue' | 'default';
-}) {
-  const corClass = cor === 'green' ? 'text-emerald-700' : cor === 'red' ? 'text-red-700' : cor === 'blue' ? 'text-primary' : 'text-foreground';
+function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className={cn('flex flex-col gap-1 p-3 rounded-lg border bg-card min-w-0 flex-1')}>
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn('text-xl font-bold leading-none', corClass)}>
-        {loading ? <span className="inline-block w-20 h-5 bg-muted/50 rounded animate-pulse" /> : valor}
-      </p>
-      {sub && !loading && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{titulo}</p>
+      <div className="space-y-0.5">{children}</div>
     </div>
   );
 }
 
-function Alert({ level, text }: { level: S; text: string }) {
+function Linha({ label, valor, loading, pendente }: {
+  label: string; valor: string; loading?: boolean; pendente?: boolean;
+}) {
   return (
-    <div className={cn('flex items-start gap-2 px-3 py-2 rounded border text-xs', SC[level])}>
-      <span className="shrink-0 mt-0.5">{SI[level]}</span>
-      <span>{text}</span>
+    <div className="flex items-baseline justify-between gap-2 py-px">
+      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
+      <span className={`text-xs font-semibold tabular-nums ${pendente ? 'text-muted-foreground/50 italic' : 'text-foreground'}`}>
+        {loading ? <Sk /> : valor}
+      </span>
+    </div>
+  );
+}
+
+function Alerta({ texto }: { texto: string }) {
+  return (
+    <div className="flex items-start gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+      <span className="shrink-0 mt-px">⚠</span>
+      <span>{texto}</span>
     </div>
   );
 }
@@ -56,27 +52,27 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
   const fazendaId = fazendaAtual?.id ?? '__global__';
   const isGlobal = fazendaId === '__global__';
 
-  const {
-    caixaAtual,
-    resultadoMes,
-    rebanhoAtual,
-    endividamento,
-    avisos,
-  } = usePainelGeralOficial({
+  const ml = mes === '0'
+    ? 'Jan–Dez ' + ano
+    : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const { caixaAtual, resultadoMes, rebanhoAtual, endividamento, avisos } = usePainelGeralOficial({
     clienteId: clienteAtual?.id ?? '',
     fazendaId,
     ano: anoNum,
     mes: mesNum,
   });
 
-  const ml = mes === '0'
-    ? 'Jan–Dez ' + ano
-    : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const loadR = rebanhoAtual.loading;
+  const loadF = resultadoMes.loading;
+  const loadC = caixaAtual.loading;
+  const loadD = endividamento.loading;
 
   return (
-    <div className="space-y-4 px-4 py-4">
+    <div className="px-4 py-4 space-y-5 max-w-2xl">
+
       <div>
-        <h2 className="text-base font-semibold text-foreground">
+        <h2 className="text-sm font-semibold text-foreground">
           {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
         </h2>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -86,44 +82,38 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
 
       {avisos.length > 0 && (
         <div className="space-y-1">
-          {avisos.map(a => (
-            <div key={a} className="text-xs text-muted-foreground bg-muted/30 rounded px-2 py-1">⚠ {a}</div>
-          ))}
+          {avisos.map(a => <Alerta key={a} texto={a} />)}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard
-          label="Caixa Atual"
-          valor={fmt(caixaAtual.valor)}
-          sub={caixaAtual.saldoInicialAno != null ? `Inicial: ${fmt(caixaAtual.saldoInicialAno)}` : undefined}
-          loading={caixaAtual.loading}
-          cor="blue"
-        />
-        <KpiCard
-          label="Resultado"
-          valor={fmt(resultadoMes.saldo)}
-          sub={resultadoMes.entradas != null ? `E ${fmt(resultadoMes.entradas)} · S ${fmt(resultadoMes.saidas)}` : undefined}
-          loading={resultadoMes.loading}
-          cor={resultadoMes.saldo != null ? (resultadoMes.saldo >= 0 ? 'green' : 'red') : 'default'}
-        />
-        <KpiCard
-          label="Rebanho"
-          valor={fmtCab(rebanhoAtual.cabecas)}
-          sub={fmtKg(rebanhoAtual.pesoMedio)}
-          loading={rebanhoAtual.loading}
-        />
-        <KpiCard
-          label="Endividamento"
-          valor={fmt(endividamento.valor)}
-          loading={endividamento.loading}
-          cor={endividamento.valor > 0 ? 'red' : 'default'}
-        />
-      </div>
+      <Bloco titulo="Produção">
+        <Linha label="Rebanho final" valor={rebanhoAtual.cabecas != null ? `${fmt(rebanhoAtual.cabecas)} cab.` : '—'} loading={loadR} />
+        <Linha label="Peso médio" valor={rebanhoAtual.pesoMedio != null ? `${fmt(rebanhoAtual.pesoMedio, 0)} kg/cab` : '—'} loading={loadR} />
+        <Linha label="GMD" valor={rebanhoAtual.gmd != null ? `${fmt(rebanhoAtual.gmd, 3)} kg/cab/dia` : '—'} loading={loadR} />
+        <Linha label="UA média" valor={rebanhoAtual.ua != null ? `${fmt(rebanhoAtual.ua, 0)} UA` : '—'} loading={loadR} />
+        <Linha label="@ produzidas" valor="—" pendente />
+        <Linha label="Desfrute" valor="—" pendente />
+      </Bloco>
 
-      <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg text-xs text-primary">
-        Ambiente /v2 — validação visual (Fase 1). App original em / sem alteração.
-      </div>
+      <div className="border-t border-border/40" />
+
+      <Bloco titulo="Financeiro Produtivo">
+        <Linha label="Receita" valor={fmtR(resultadoMes.entradas)} loading={loadF} />
+        <Linha label="Desembolso" valor={fmtR(resultadoMes.saidas)} loading={loadF} />
+        <Linha label="Resultado" valor={fmtR(resultadoMes.saldo)} loading={loadF} />
+        <Linha label="Custo/@" valor="—" pendente />
+        <Linha label="Receita/@" valor="—" pendente />
+      </Bloco>
+
+      <div className="border-t border-border/40" />
+
+      <Bloco titulo="Estrutura Financeira">
+        <Linha label="Caixa disponível" valor={fmtR(caixaAtual.valor)} loading={loadC} />
+        <Linha label="Endividamento" valor={fmtR(endividamento.valor)} loading={loadD} />
+        <Linha label="Valor do rebanho" valor="—" pendente />
+        <Linha label="Dívida / rebanho" valor="—" pendente />
+      </Bloco>
+
     </div>
   );
 }
