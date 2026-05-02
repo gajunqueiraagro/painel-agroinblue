@@ -126,20 +126,13 @@ export function V2Fazendas() {
       area_benfeitorias_ha: n(data.area_benfeitorias_ha) || null,
       area_outras_ha: n(data.area_outras_ha) || null,
     };
-    let error;
-    if (data.id) {
-      ({ error } = await supabase
-        .from('fazenda_cadastros')
-        .update(payload as any)
-        .eq('id', data.id));
-    } else {
-      const res = await supabase
-        .from('fazenda_cadastros')
-        .insert(payload as any)
-        .select()
-        .single();
-      error = res.error;
-      if (res.data) setData(prev => ({ ...prev, id: (res.data as any).id }));
+    const { data: saved, error } = await supabase
+      .from('fazenda_cadastros')
+      .upsert(payload as any, { onConflict: 'cliente_id,fazenda_id' })
+      .select()
+      .single();
+    if (saved) {
+      setData(prev => ({ ...prev, id: (saved as any).id }));
     }
     if (error) { toast.error('Erro ao salvar: ' + error.message); }
     else {
