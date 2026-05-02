@@ -240,23 +240,38 @@ export default function V2Index() {
 
       {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
       <div className="hidden md:flex h-screen bg-background">
-        <V2Sidebar
-          activeSection={section}
-          onNavigate={setSection}
-          drawerAtivo={drawerAtivo}
-          onDrawerToggle={setDrawerAtivo}
-          clienteSelector={clienteSelector}
-          fazendaSelector={fazendaSelector}
-        />
-        {/* Conteúdo principal — relative para ancorar o drawer overlay */}
-        <div className="flex-1 flex flex-col min-w-0 h-screen relative">
-          <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} className="shrink-0" />
+        {/* SIDEBAR */}
+        <aside className="w-56 shrink-0 h-full">
+          <V2Sidebar
+            activeSection={section}
+            onNavigate={setSection}
+            drawerAtivo={drawerAtivo}
+            onDrawerToggle={setDrawerAtivo}
+            clienteSelector={clienteSelector}
+            fazendaSelector={fazendaSelector}
+          />
+        </aside>
+        {/* MAIN */}
+        <div className="flex-1 min-w-0 flex flex-col relative">
+          {/* HEADER */}
+          <div className="shrink-0">
+            <V2FilterBar
+              ano={ano}
+              mes={mes}
+              onAnoChange={setAno}
+              onMesChange={setMes}
+              tipo={periodoTipo}
+              showFazenda={false}
+              className="shrink-0"
+            />
+          </div>
+          {/* SCROLL */}
           <section className="flex-1 min-h-0 min-w-0 overflow-auto">
             <div className="w-full min-w-0">
               {renderContent()}
             </div>
           </section>
-          {/* Drawer overlay — absolute sobre o conteúdo, não desloca nada */}
+          {/* Drawer overlay */}
           <V2ContextDrawer
             grupoAtivo={drawerAtivo}
             activeSection={section}
