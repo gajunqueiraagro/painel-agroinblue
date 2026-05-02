@@ -12,21 +12,42 @@ const Sk = () => <span className="inline-block w-16 h-4 bg-muted/50 rounded anim
 
 function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{titulo}</p>
-      <div className="space-y-0.5">{children}</div>
+    <div className="bg-card rounded-lg p-4 space-y-2 h-full">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/40 pb-1.5">{titulo}</p>
+      <div className="space-y-1">{children}</div>
     </div>
   );
 }
 
-function Linha({ label, valor, loading, pendente }: {
+function Linha({ label, valor, loading, pendente, destaque }: {
   label: string; valor: string; loading?: boolean; pendente?: boolean;
+  destaque?: 'primary' | 'secondary' | 'normal';
 }) {
+  const valClass =
+    destaque === 'primary' ? 'text-base font-black tabular-nums' :
+    destaque === 'secondary' ? 'text-sm font-bold tabular-nums' :
+    'text-xs font-semibold tabular-nums';
+  const labelClass =
+    destaque === 'primary' ? 'text-xs font-medium text-foreground/70 shrink-0' :
+    destaque === 'secondary' ? 'text-xs text-foreground/60 shrink-0' :
+    'text-[11px] text-muted-foreground shrink-0';
   return (
-    <div className="flex items-baseline justify-between gap-2 py-px">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-xs font-semibold tabular-nums ${pendente ? 'text-muted-foreground/50 italic' : 'text-foreground'}`}>
+    <div className="flex items-baseline justify-between gap-2 py-0.5">
+      <span className={labelClass}>{label}</span>
+      <span className={`${valClass} ${pendente ? 'text-muted-foreground/40 italic' : 'text-foreground'}`}>
         {loading ? <Sk /> : valor}
+      </span>
+    </div>
+  );
+}
+
+function LinhaResultado({ label, valor, loading }: { label: string; valor: number | null; loading?: boolean }) {
+  const cor = valor == null ? 'text-foreground' : valor >= 0 ? 'text-emerald-700' : 'text-red-700';
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-0.5 mt-1 pt-1.5 border-t border-border/30">
+      <span className="text-xs font-medium text-foreground/70 shrink-0">{label}</span>
+      <span className={`text-base font-black tabular-nums ${cor}`}>
+        {loading ? <Sk /> : fmtR(valor)}
       </span>
     </div>
   );
@@ -69,7 +90,7 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
   const loadD = endividamento.loading;
 
   return (
-    <div className="px-4 py-4 space-y-5 max-w-2xl">
+    <div className="px-4 py-4 space-y-4 max-w-6xl">
 
       <div>
         <h2 className="text-sm font-semibold text-foreground">
@@ -86,34 +107,46 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
         </div>
       )}
 
-      <Bloco titulo="Produção">
-        <Linha label="Rebanho final" valor={rebanhoAtual.cabecas != null ? `${fmt(rebanhoAtual.cabecas)} cab.` : '—'} loading={loadR} />
-        <Linha label="Peso médio" valor={rebanhoAtual.pesoMedio != null ? `${fmt(rebanhoAtual.pesoMedio, 0)} kg/cab` : '—'} loading={loadR} />
-        <Linha label="GMD" valor={rebanhoAtual.gmd != null ? `${fmt(rebanhoAtual.gmd, 3)} kg/cab/dia` : '—'} loading={loadR} />
-        <Linha label="UA média" valor={rebanhoAtual.ua != null ? `${fmt(rebanhoAtual.ua, 0)} UA` : '—'} loading={loadR} />
-        <Linha label="@ produzidas" valor="—" pendente />
-        <Linha label="Desfrute" valor="—" pendente />
-      </Bloco>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
 
-      <div className="border-t border-border/40" />
+        <Bloco titulo="Produção">
+          <Linha label="Rebanho final" destaque="secondary"
+            valor={rebanhoAtual.cabecas != null ? `${fmt(rebanhoAtual.cabecas)} cab.` : '—'}
+            loading={loadR} />
+          <Linha label="Peso médio"
+            valor={rebanhoAtual.pesoMedio != null ? `${fmt(rebanhoAtual.pesoMedio, 0)} kg/cab` : '—'}
+            loading={loadR} />
+          <Linha label="GMD"
+            valor={rebanhoAtual.gmd != null ? `${fmt(rebanhoAtual.gmd, 3)} kg/cab/dia` : '—'}
+            loading={loadR} />
+          <Linha label="UA média"
+            valor={rebanhoAtual.ua != null ? `${fmt(rebanhoAtual.ua, 0)} UA` : '—'}
+            loading={loadR} />
+          <Linha label="@ produzidas" valor="—" pendente />
+          <Linha label="Desfrute" valor="—" pendente />
+        </Bloco>
 
-      <Bloco titulo="Financeiro Produtivo">
-        <Linha label="Receita" valor={fmtR(resultadoMes.entradas)} loading={loadF} />
-        <Linha label="Desembolso" valor={fmtR(resultadoMes.saidas)} loading={loadF} />
-        <Linha label="Resultado" valor={fmtR(resultadoMes.saldo)} loading={loadF} />
-        <Linha label="Custo/@" valor="—" pendente />
-        <Linha label="Receita/@" valor="—" pendente />
-      </Bloco>
+        <Bloco titulo="Financeiro Produtivo">
+          <Linha label="Receita" destaque="normal"
+            valor={fmtR(resultadoMes.entradas)} loading={loadF} />
+          <Linha label="Desembolso"
+            valor={fmtR(resultadoMes.saidas)} loading={loadF} />
+          <LinhaResultado label="Resultado"
+            valor={resultadoMes.saldo} loading={loadF} />
+          <Linha label="Custo/@" valor="—" pendente />
+          <Linha label="Receita/@" valor="—" pendente />
+        </Bloco>
 
-      <div className="border-t border-border/40" />
+        <Bloco titulo="Estrutura Financeira">
+          <Linha label="Caixa disponível" destaque="secondary"
+            valor={fmtR(caixaAtual.valor)} loading={loadC} />
+          <Linha label="Endividamento"
+            valor={fmtR(endividamento.valor)} loading={loadD} />
+          <Linha label="Valor do rebanho" valor="—" pendente />
+          <Linha label="Dívida / rebanho" valor="—" pendente />
+        </Bloco>
 
-      <Bloco titulo="Estrutura Financeira">
-        <Linha label="Caixa disponível" valor={fmtR(caixaAtual.valor)} loading={loadC} />
-        <Linha label="Endividamento" valor={fmtR(endividamento.valor)} loading={loadD} />
-        <Linha label="Valor do rebanho" valor="—" pendente />
-        <Linha label="Dívida / rebanho" valor="—" pendente />
-      </Bloco>
-
+      </div>
     </div>
   );
 }
