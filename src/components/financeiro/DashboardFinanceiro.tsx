@@ -353,7 +353,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 1 — Cards executivos (Entradas / Saídas / Saldo) — alinhamento por items-stretch */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-stretch mb-2">
+      <div className="grid gap-2 items-stretch mb-2 min-w-0 [&>*]:min-w-0" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         {/* Entradas */}
         <Card className="flex flex-col border-l-4" style={{ borderLeftColor: 'hsl(142, 50%, 38%)' }}>
           <CardContent className="p-2 flex flex-col flex-1">
@@ -452,7 +452,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* LINHA 2 — Pizzas (sem título/legenda) + gráfico Entradas vs Saídas */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-stretch">
+      <div className="grid gap-2 items-stretch min-w-0 [&>*]:min-w-0" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
         {/* Pie Entradas — centralizada, maior, sem título/legenda */}
         <Card className="flex flex-col">
           <CardContent className="flex items-center justify-center p-3 flex-1">
@@ -593,7 +593,7 @@ export function DashboardFinanceiro({
       {/* ================================================================= */}
       {/* 3. BLOCOS ANALÍTICOS — 3 colunas: CC + Custo/Rebanho + Fornecedores */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 min-w-0 [&>*]:min-w-0">
         {/* Bloco A — Ranking centros de custo */}
         <CentroCustoRanking ccMes={ind.ccMes} ccAcum={ind.ccAcum} totalSaidasMes={ind.saidasComRateio} totalSaidasAcum={ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal)} />
 
@@ -609,7 +609,7 @@ export function DashboardFinanceiro({
                   <div className="text-[8px] text-muted-foreground">Rebanho Médio</div>
                   <div className="text-sm font-black tabular-nums">{formatNum(custoRebanho.rebanhoMedio, 0)} <span className="text-[8px] font-normal text-muted-foreground">cab</span></div>
                 </div>
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-2 gap-1 min-w-0 [&>*]:min-w-0">
                   <div className="bg-muted/20 rounded p-1">
                     <div className="text-[7px] text-muted-foreground uppercase">Custo Mês</div>
                     <div className="text-[10px] font-bold tabular-nums italic text-destructive">{formatMoeda(custoRebanho.desembolsoMes)}</div>
