@@ -452,12 +452,30 @@ export function DashboardFinanceiro({
             </p>
             <div className="mt-1 space-y-0 text-[9px] leading-tight">
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Saldo Inicial</span>
+                <span className="font-mono font-semibold italic text-muted-foreground">{
+                  (() => {
+                    const v = resolvedModo === 'mes' && mesAte
+                      ? (mesesFluxo.find(m => m.mes === mesAte)?.saldoInicial ?? NaN)
+                      : saldoInicialAno;
+                    return isNaN(v) ? '—' : formatMoeda(v);
+                  })()
+                }</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Entradas</span>
                 <span className="font-mono font-semibold italic" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(totalEntradasDisplay)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Saídas</span>
                 <span className="font-mono font-semibold italic text-destructive">{formatMoeda(totalSaidasDisplay)}</span>
+              </div>
+              <div className="flex justify-between border-t border-border/40 pt-0.5 mt-0.5">
+                <span className="font-semibold">Saldo Final</span>
+                <span className={`font-mono font-black italic ${
+                  isNaN(saldoLiquido) ? 'text-muted-foreground' :
+                  saldoLiquido >= 0 ? 'text-primary' : 'text-destructive'
+                }`}>{isNaN(saldoLiquido) ? '—' : formatMoeda(saldoLiquido)}</span>
               </div>
             </div>
           </CardContent>
