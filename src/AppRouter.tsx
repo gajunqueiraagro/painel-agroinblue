@@ -8,6 +8,7 @@ import Index from '@/pages/Index';
 import CadernoImportTab from '@/pages/CadernoImportTab';
 import ResumoOperacionalPage from '@/pages/ResumoOperacionalPage';
 import V2Index from '@/v2/V2Index';
+import V3Index from '@/v3/V3Index';
 
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
@@ -45,6 +46,8 @@ export default function AppRouter() {
       <Route path="/caderno-importacao" element={<CadernoImportTab />} />
       <Route path="/v2" element={<V2Index />} />
       <Route path="/v2/*" element={<V2Index />} />
+      <Route path="/v3" element={<V3Index />} />
+      <Route path="/v3/*" element={<V3Index />} />
       <Route path="/resumo-operacional" element={<ResumoOperacionalPage />} />
       <Route path="/" element={<Index />} />
       <Route path="*" element={<Index />} />
