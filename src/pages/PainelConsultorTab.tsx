@@ -152,7 +152,7 @@ interface MonthlyData {
   desfrute_arr: number[];
 }
 
-function buildMonthlyDataFromView(
+export function buildMonthlyDataFromView(
   viewTotals: ReturnType<typeof totalizarViewPorMes>,
   viewRows: import('@/hooks/useZootCategoriaMensal').ZootCategoriaMensal[],
   lancFin: FinanceiroLancamento[],
