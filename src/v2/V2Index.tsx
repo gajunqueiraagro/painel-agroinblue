@@ -41,6 +41,7 @@ import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { V2Configuracoes } from './pages/V2Configuracoes';
+import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 
@@ -239,14 +240,7 @@ export default function V2Index() {
     if (section === 'config-clientes') return <ClientesTab />;
     if (section === 'config-bancario') return <FinV2ContasTab />;
     if (section === 'config-auditoria') return <AuditoriaTab />;
-    if (section === 'config-fazendas') return (
-      <div className="px-4 py-6">
-        <h2 className="text-sm font-semibold text-foreground mb-1">Fazendas</h2>
-        <p className="text-xs text-muted-foreground">
-          Cadastro central de fazendas será estruturado na próxima fase.
-        </p>
-      </div>
-    );
+    if (section === 'config-fazendas') return <V2Fazendas />;
     const labels: Record<string, string> = {
       financeiro: 'Financeiro', rebanho: 'Rebanho',
       movimentacoes: 'Movimentações', indicadores: 'Indicadores',
