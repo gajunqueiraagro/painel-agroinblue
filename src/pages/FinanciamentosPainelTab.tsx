@@ -76,7 +76,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
           : 'bg-muted';
 
   return (
-    <div className="w-full max-w-6xl mx-auto flex flex-col bg-background" style={{ height: 'calc(100vh - 60px)' }}>
+    <div className="w-full min-w-0 flex flex-col bg-background h-full">
       {/* Header */}
       <div className="shrink-0 border-b shadow-sm bg-background px-4 pt-4 pb-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -129,7 +129,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* LINHA 1+2 — grid 4 cols (cards + BarChart span 2x2) */}
-          <div className="grid grid-cols-4 gap-3 auto-rows-fr">
+          <div className="grid gap-3 auto-rows-fr" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             <KpiCard
               label="Saldo devedor"
               total={fmt(kpis.saldoDevedor.total.total)}
@@ -195,7 +195,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
           </div>
 
           {/* LINHA 3 — grid 3 cols: Pizza | Evolução | Credor */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
             <Card>
               <CardContent className="p-3">
                 <p className="text-xs font-semibold">Perfil de vencimentos (Principal)</p>
@@ -265,7 +265,7 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
           </div>
 
           {/* LINHA 4 — grid 4 cols: Alavancagem card (1/4) | Histórico (3/4) */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
             <Card className="md:col-span-1">
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
