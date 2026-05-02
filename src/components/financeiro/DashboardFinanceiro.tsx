@@ -1,6 +1,7 @@
 // Dashboard financeiro — versão executiva compacta.
 // Base: somente lançamentos realizados, data_pagamento, tipo_operacao 1-Entradas / 2-Saídas.
 import { useMemo, useState } from 'react';
+import type { FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { Card, CardContent } from '@/components/ui/card';
 import { TrendingDown, TrendingUp, AlertTriangle, BarChart3, Users, Wallet } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
@@ -83,6 +84,8 @@ interface Props {
   ano: number;
   mesAte: number;
   modo?: 'mes' | 'acum';
+  saldoInicialAno?: number;
+  mesesFluxo?: FluxoMensal[];
   onDrillDown?: (payload: DrillDownPayload) => void;
   onMacroDrillDown?: (macro: string) => void;
 }
@@ -125,6 +128,8 @@ export function DashboardFinanceiro({
   onDrillDown,
   onMacroDrillDown,
   modo,
+  saldoInicialAno = 0,
+  mesesFluxo = [],
 }: Props) {
   const resolvedModo = modo ?? 'mes';
   const [activeEntrada, setActiveEntrada] = useState<number | null>(null);
@@ -332,7 +337,19 @@ export function DashboardFinanceiro({
 
   const totalEntradasDisplay = resolvedModo === 'mes' ? ind.totalEntradas : ind.entradasAcum;
   const totalSaidasDisplay = resolvedModo === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));
-  const saldoLiquido = totalEntradasDisplay - totalSaidasDisplay;
+  // Saldo Líquido — fonte oficial do Fluxo de Caixa
+  const saldoLiquido = (() => {
+    if (resolvedModo === 'mes' && mesAte && mesesFluxo.length > 0) {
+      const mesData = mesesFluxo.find(m => m.mes === mesAte);
+      if (mesData != null) return mesData.saldoFinal;
+    }
+    if (resolvedModo === 'acum' || mesAte === 0) {
+      return saldoInicialAno
+        + (ind.entradasAcum ?? 0)
+        - ((ind.saidasAcum ?? 0) + (isGlobal ? 0 : (ind.rateioAcumVal ?? 0)));
+    }
+    return NaN;
+  })();
 
   const topFornecedores = resolvedModo === 'mes' ? ind.topFornecedoresMes : ind.topFornecedoresAcum;
   const totalRefForn = resolvedModo === 'mes' ? ind.saidasComRateio : (ind.saidasAcum + (isGlobal ? 0 : ind.rateioAcumVal));

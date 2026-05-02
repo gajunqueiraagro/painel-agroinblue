@@ -13,6 +13,7 @@ import { FluxoFinanceiro } from '@/components/financeiro/FluxoFinanceiro';
 import { PlanejamentoFinanceiroTab } from '@/pages/PlanejamentoFinanceiroTab';
 import DrillDownMacro from '@/components/financeiro/DrillDownMacro';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useIndicadoresZootecnicos } from '@/hooks/useIndicadoresZootecnicos';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -203,6 +204,11 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     if (filtroAnoInicial) setLocalAno(filtroAnoInicial);
     if (filtroMesInicial) setLocalMes(filtroMesInicial);
   }, [filtroAnoInicial, filtroMesInicial]);
+
+  // Fonte oficial de saldo — mesma do Fluxo de Caixa
+  const { saldoInicialAno: saldoInicialFluxo, meses: mesesFluxo } = useFluxoCaixa(
+    lancamentos, rateioADM, Number(localAno), localMes
+  );
 
   const anoAtual = new Date().getFullYear();
   const mesAtual = new Date().getMonth() + 1;
@@ -445,6 +451,8 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                   onDrillDown={handleDrillDown}
                   onMacroDrillDown={(macro) => setDrillMacro(macro)}
                   modo={modo}
+                  saldoInicialAno={saldoInicialFluxo}
+                  mesesFluxo={mesesFluxo}
                 />
               )}
             </V2PageContent>
