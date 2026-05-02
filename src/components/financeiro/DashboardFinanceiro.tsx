@@ -293,12 +293,19 @@ export function DashboardFinanceiro({
       if (isEntrada(l)) entry.entradas += Math.abs(l.valor);
       if (isSaida(l)) entry.saidas += Math.abs(l.valor);
     }
-    let saldoAcum = 0;
+    // Saldo acumulado via mesesFluxo (fonte oficial)
     return Array.from(monthMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => {
-      saldoAcum += v.entradas - v.saidas;
-      return { mes: (MESES_NOMES[Number(mes) - 1] || mes).substring(0, 3), Entradas: v.entradas, Saídas: v.saidas, 'Saldo Acum.': saldoAcum };
+      const mesNum = Number(mes);
+      const fluxoMes = mesesFluxo?.find(m => m.mes === mesNum);
+      const saldoAcum = fluxoMes?.saldoAcumulado ?? NaN;
+      return {
+        mes: (MESES_NOMES[mesNum - 1] || mes).substring(0, 3),
+        Entradas: v.entradas,
+        Saídas: v.saidas,
+        'Saldo Acum.': saldoAcum
+      };
     });
-  }, [lancamentos, anoFiltro, mesLimite]);
+  }, [lancamentos, anoFiltro, mesLimite, mesesFluxo]);
 
   // PIE DATA
   const pieEntradas = useMemo(() => {
