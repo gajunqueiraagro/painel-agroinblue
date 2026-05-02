@@ -249,7 +249,7 @@ export default function V2Index() {
           fazendaSelector={fazendaSelector}
         />
         {/* Conteúdo principal — relative para ancorar o drawer overlay */}
-        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+        <div className="flex-1 flex flex-col min-w-0 h-screen relative">
           <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} className="shrink-0" />
           <section className="flex-1 min-h-0 min-w-0 overflow-auto">
             <div className="w-full min-w-0">
