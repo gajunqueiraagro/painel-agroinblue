@@ -53,14 +53,22 @@ export function V2Fazendas() {
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
-    if (!fazendaAtual?.id || !clienteAtual?.id) return;
+    if (!fazendaAtual?.id || !clienteAtual?.id) {
+      setData(EMPTY);
+      return;
+    }
     setLoading(true);
-    const { data: row } = await supabase
+    const { data: row, error } = await supabase
       .from('fazenda_cadastros')
       .select('*')
       .eq('fazenda_id', fazendaAtual.id)
       .eq('cliente_id', clienteAtual.id)
       .maybeSingle();
+    if (error) {
+      toast.error('Erro ao carregar cadastro da fazenda: ' + error.message);
+      setLoading(false);
+      return;
+    }
     if (row) {
       setData({
         id: row.id,
@@ -68,6 +76,7 @@ export function V2Fazendas() {
         estado: (row as any).estado ?? '',
         car: (row as any).car ?? '',
         nirf: (row as any).nirf ?? '',
+        ie: (row as any).ie ?? '',
         area_total_ha: row.area_total_ha != null ? String(row.area_total_ha) : '',
         area_pecuaria_ha: (row as any).area_pecuaria_ha != null ? String((row as any).area_pecuaria_ha) : '',
         area_agricultura_ha: (row as any).area_agricultura_ha != null ? String((row as any).area_agricultura_ha) : '',
@@ -75,8 +84,8 @@ export function V2Fazendas() {
         area_reserva_ha: (row as any).area_reserva_ha != null ? String((row as any).area_reserva_ha) : '',
         area_benfeitorias_ha: (row as any).area_benfeitorias_ha != null ? String((row as any).area_benfeitorias_ha) : '',
         area_outras_ha: (row as any).area_outras_ha != null ? String((row as any).area_outras_ha) : '',
-        ie: (row as any).ie ?? '',
       });
+      setEditing(false);
     } else {
       setData(EMPTY);
       setEditing(true);
@@ -87,7 +96,10 @@ export function V2Fazendas() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSave = async () => {
-    if (!fazendaAtual?.id || !clienteAtual?.id) return;
+    if (!fazendaAtual?.id || !clienteAtual?.id) {
+      toast.error('Cliente ou fazenda não selecionado.');
+      return;
+    }
 
     const areaTotalCalculada =
       n(data.area_pecuaria_ha) +
@@ -130,7 +142,11 @@ export function V2Fazendas() {
       if (res.data) setData(prev => ({ ...prev, id: (res.data as any).id }));
     }
     if (error) { toast.error('Erro ao salvar: ' + error.message); }
-    else { toast.success('Área salva com sucesso!'); setEditing(false); }
+    else {
+      toast.success('Área salva com sucesso!');
+      setEditing(false);
+      await loadData();
+    }
     setSaving(false);
   };
 
