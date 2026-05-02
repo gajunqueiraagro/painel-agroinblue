@@ -239,7 +239,7 @@ export default function V2Index() {
     <div className="h-screen bg-background overflow-hidden">
 
       {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
-      <div className="hidden md:flex h-screen w-screen overflow-hidden bg-background">
+      <div className="hidden md:flex h-screen bg-background">
         <V2Sidebar
           activeSection={section}
           onNavigate={setSection}
