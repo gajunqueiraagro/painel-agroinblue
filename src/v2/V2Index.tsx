@@ -225,11 +225,13 @@ export default function V2Index() {
     );
     if (section === 'conferencia-lancamentos') return (
       <V2ZootWrapper>
-        {({ lancamentos }) => (
+        {({ lancamentos, removerLancamento, editarLancamento }) => (
           <FinanceiroTab
             lancamentos={lancamentos}
             filtroAnoInicial={ano}
             filtroMesInicial={undefined}
+            onRemover={removerLancamento}
+            onEditar={editarLancamento}
           />
         )}
       </V2ZootWrapper>
