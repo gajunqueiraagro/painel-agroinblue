@@ -173,7 +173,7 @@ export default function V2Index() {
           <FinanceiroTab
             lancamentos={lancamentos}
             filtroAnoInicial={ano}
-            filtroMesInicial={mes === '0' ? undefined : String(mes)}
+            filtroMesInicial={undefined}
           />
         )}
       </V2ZootWrapper>
