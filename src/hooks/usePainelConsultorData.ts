@@ -22,6 +22,7 @@ export type StatusValidacaoArea =
   | 'sem_area'
   | 'sem_snapshot'
   | 'p1_aberto'
+  | 'p1_fechado_sem_snap'
   | 'incompleto'
   | 'carregando';
 
@@ -51,7 +52,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -108,7 +109,8 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
       return 'ok';
     }
     if ((areaMensal[idx] ?? 0) > 0) return 'ok';
-    return 'sem_snapshot';
+    if (temP1FechadoPorMes[idx]) return 'p1_fechado_sem_snap';
+    return 'p1_aberto';
   })();
 
   const faltandoCount = isGlobal

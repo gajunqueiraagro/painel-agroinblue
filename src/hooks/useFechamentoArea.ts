@@ -14,6 +14,7 @@ export interface UseSnapshotAreaAnualResult {
   totalFazendasAtivas: number;
   fazendasAtivasCarregadas: boolean;
   fazendasComSnapPorMes: number[];
+  temP1FechadoPorMes: boolean[];
   loading: boolean;
 }
 
@@ -28,6 +29,7 @@ export function useSnapshotAreaAnual(
   const [totalFazendasAtivas, setTotalFazendasAtivas] = useState(0);
   const [fazendasAtivasCarregadas, setFazendasAtivasCarregadas] = useState(false);
   const [fazendasComSnapPorMes, setFazendasComSnapPorMes] = useState<number[]>(Array(12).fill(0));
+  const [temP1FechadoPorMes, setTemP1FechadoPorMes] = useState<boolean[]>(Array(12).fill(false));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function useSnapshotAreaAnual(
       setTotalFazendasAtivas(0);
       setFazendasAtivasCarregadas(false);
       setFazendasComSnapPorMes(Array(12).fill(0));
+      setTemP1FechadoPorMes(Array(12).fill(false));
       return;
     }
 
@@ -66,6 +69,7 @@ export function useSnapshotAreaAnual(
         setTotalFazendasAtivas(0);
         setFazendasAtivasCarregadas(false);
         setFazendasComSnapPorMes(Array(12).fill(0));
+        setTemP1FechadoPorMes(Array(12).fill(false));
         setLoading(false);
         return;
       }
@@ -129,6 +133,26 @@ export function useSnapshotAreaAnual(
       }
       setTotalFazendasAtivas(totalAtivas);
       setFazendasComSnapPorMes(comSnapPorMes);
+
+      // Query de P1 para fazenda específica — distingue p1_aberto de p1_fechado_sem_snap
+      let p1Mensal = Array(12).fill(false);
+      if (!isGlobal && fazendaId) {
+        const anoStr = String(ano);
+        const { data: p1Data } = await supabase
+          .from('fechamento_pastos')
+          .select('ano_mes')
+          .eq('fazenda_id', fazendaId)
+          .eq('status', 'fechado')
+          .gte('ano_mes', `${anoStr}-01`)
+          .lte('ano_mes', `${anoStr}-12`);
+        if (p1Data) {
+          for (const row of p1Data) {
+            const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
+            if (mesIdx >= 0 && mesIdx < 12) p1Mensal[mesIdx] = true;
+          }
+        }
+      }
+      setTemP1FechadoPorMes(p1Mensal);
       setLoading(false);
     };
 
@@ -136,5 +160,5 @@ export function useSnapshotAreaAnual(
     return () => { cancelled = true; };
   }, [ano, fazendaId, isGlobal, clienteId]);
 
-  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, loading };
+  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, temP1FechadoPorMes, loading };
 }

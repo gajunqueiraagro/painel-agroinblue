@@ -91,10 +91,11 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
 
   const msgArea = (s: StatusValidacaoArea): string | null => {
     if (s === 'ok' || s === 'carregando') return null;
-    if (s === 'incompleto') return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem snapshot`;
-    if (s === 'sem_snapshot') return '⚠ Snapshot não gerado';
-    if (s === 'p1_aberto')   return '⚠ P1 não fechado';
-    if (s === 'sem_area')    return '⚠ Área não cadastrada';
+    if (s === 'incompleto')          return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem snapshot`;
+    if (s === 'p1_aberto')           return '⚠ P1 não fechado';
+    if (s === 'p1_fechado_sem_snap') return '⚠ P1 fechado sem snapshot';
+    if (s === 'sem_snapshot')        return '⚠ Snapshot não gerado';
+    if (s === 'sem_area')            return '⚠ Área não cadastrada';
     return null;
   };
 
