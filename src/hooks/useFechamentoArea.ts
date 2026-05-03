@@ -12,6 +12,7 @@ export interface UseSnapshotAreaAnualResult {
   areaMensal: number[];
   snapshots: SnapshotAreaMes[];
   totalFazendasAtivas: number;
+  fazendasAtivasCarregadas: boolean;
   fazendasComSnapPorMes: number[];
   loading: boolean;
 }
@@ -25,6 +26,7 @@ export function useSnapshotAreaAnual(
   const [areaMensal, setAreaMensal] = useState<number[]>(Array(12).fill(0));
   const [snapshots, setSnapshots] = useState<SnapshotAreaMes[]>([]);
   const [totalFazendasAtivas, setTotalFazendasAtivas] = useState(0);
+  const [fazendasAtivasCarregadas, setFazendasAtivasCarregadas] = useState(false);
   const [fazendasComSnapPorMes, setFazendasComSnapPorMes] = useState<number[]>(Array(12).fill(0));
   const [loading, setLoading] = useState(false);
 
@@ -33,6 +35,7 @@ export function useSnapshotAreaAnual(
       setAreaMensal(Array(12).fill(0));
       setSnapshots([]);
       setTotalFazendasAtivas(0);
+      setFazendasAtivasCarregadas(false);
       setFazendasComSnapPorMes(Array(12).fill(0));
       return;
     }
@@ -61,6 +64,7 @@ export function useSnapshotAreaAnual(
         setAreaMensal(Array(12).fill(0));
         setSnapshots([]);
         setTotalFazendasAtivas(0);
+        setFazendasAtivasCarregadas(false);
         setFazendasComSnapPorMes(Array(12).fill(0));
         setLoading(false);
         return;
@@ -110,6 +114,7 @@ export function useSnapshotAreaAnual(
           .eq('status_operacional', 'ativa')
           .eq('tem_pecuaria', true);
         totalAtivas = fazAtivas?.length ?? 0;
+        setFazendasAtivasCarregadas(true);
 
         // Contar fazendas distintas com snapshot por mês
         const porMes = new Map<number, Set<string>>();
@@ -131,5 +136,5 @@ export function useSnapshotAreaAnual(
     return () => { cancelled = true; };
   }, [ano, fazendaId, isGlobal, clienteId]);
 
-  return { areaMensal, snapshots, totalFazendasAtivas, fazendasComSnapPorMes, loading };
+  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, loading };
 }

@@ -51,7 +51,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, totalFazendasAtivas, fazendasComSnapPorMes, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -99,8 +99,10 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const statusArea: StatusValidacaoArea = (() => {
     if (loadingArea) return 'carregando';
     if (isGlobal) {
-      const comSnap = fazendasComSnapPorMes[idx] ?? 0;
+      // Aguardar query de fazendas ativas completar antes de julgar
+      if (!fazendasAtivasCarregadas) return 'carregando';
       if (totalFazendasAtivas === 0) return 'sem_snapshot';
+      const comSnap = fazendasComSnapPorMes[idx] ?? 0;
       if (comSnap < totalFazendasAtivas) return 'incompleto';
       if ((areaMensal[idx] ?? 0) <= 0) return 'sem_snapshot';
       return 'ok';
