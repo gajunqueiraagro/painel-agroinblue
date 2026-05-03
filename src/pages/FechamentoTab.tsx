@@ -318,9 +318,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     const map = new Map<string, number>();
     const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
     for (const cat of monthData) {
-      const movSaldo = cat.saldo_inicial + cat.entradas_externas - cat.saidas_externas
-        + cat.evol_cat_entrada - cat.evol_cat_saida;
-      map.set(cat.categoria_codigo, (map.get(cat.categoria_codigo) || 0) + movSaldo);
+      map.set(cat.categoria_codigo, Number(cat.saldo_final || 0));
     }
     return map;
   }, [viewDataForConcil, mesNum]);
