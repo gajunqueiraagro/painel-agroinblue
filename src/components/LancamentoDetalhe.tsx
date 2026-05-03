@@ -254,9 +254,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     }
   }, [lancamento.id, onCountFinanceiros]);
 
-  const handleConfirmRemover = () => {
+  const handleConfirmRemover = async () => {
     setConfirmOpen(false);
-    onRemover(lancamento.id);
+    await onRemover(lancamento.id);
     onClose();
   };
 
