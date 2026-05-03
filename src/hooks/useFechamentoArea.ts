@@ -144,7 +144,7 @@ export function useSnapshotAreaAnual(
           .eq('fazenda_id', fazendaId)
           .eq('status', 'fechado')
           .gte('ano_mes', `${anoStr}-01`)
-          .lte('ano_mes', `${anoStr}-12`);
+          .lte('ano_mes', `${anoStr}-99`);
         if (p1Data) {
           for (const row of p1Data) {
             const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
