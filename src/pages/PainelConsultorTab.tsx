@@ -12,6 +12,7 @@
  * Se não há fonte meta, a célula fica vazia.
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { calcularIndicadoresEficienciaArea } from '@/lib/calculos/eficienciaArea';
 import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
@@ -138,6 +139,9 @@ interface MonthlyData {
   prodKg: number[];
   areaProd: number;
   areaProdMensal: number[];
+  uaMedia: number[];
+  lotUaHa: number[];
+  arrHa: number[];
   valorRebIni: number[];
   valorRebFin: number[];
   entFin: number[];
@@ -270,6 +274,16 @@ export function buildMonthlyDataFromView(
       const v = areaProdutivaMensal?.[i];
       return typeof v === 'number' && !Number.isNaN(v) ? v : areaProdutiva;
     }),
+    ...(() => {
+      const areaProdMensalFinal = Array.from({ length: 12 }, (_, i) => {
+        const v = areaProdutivaMensal?.[i];
+        return typeof v === 'number' && !Number.isNaN(v) ? v : areaProdutiva;
+      });
+      return calcularIndicadoresEficienciaArea({
+        cabIni, cabFin, pesoMedioFin, arrobasProd,
+        areaProdMensal: areaProdMensalFinal,
+      });
+    })(),
     valorRebIni, valorRebFin,
     entFin: entFinArr, saiFin: saiFinArr, recPec: recPecArr,
     custOper: custOperArr, resCaixa: resCaixaArr,

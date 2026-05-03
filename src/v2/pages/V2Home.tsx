@@ -81,7 +81,7 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes,
+    areaProdutivaMes, lotUaHa, arrHa,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum });
 
@@ -127,9 +127,9 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
           <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={loadingPainel} />
-          <MetricTile label="UA/ha" value={null} pending />
+          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={loadingPainel} />
           <MetricTile label="kg/ha" value={null} pending />
-          <MetricTile label="@/ha" value={null} pending />
+          <MetricTile label="@/ha" value={fmtN(arrHa, 2)} loading={loadingPainel} />
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
