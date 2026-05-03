@@ -137,6 +137,7 @@ interface MonthlyData {
   arrobasProd: number[];
   prodKg: number[];
   areaProd: number;
+  areaProdMensal: number[];
   valorRebIni: number[];
   valorRebFin: number[];
   entFin: number[];
@@ -161,6 +162,7 @@ export function buildMonthlyDataFromView(
   areaProdutiva: number,
   valorRebanhoMes: number[],
   isGlobal = false,
+  areaProdutivaMensal?: number[],
 ): MonthlyData {
   const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
   const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
@@ -264,6 +266,10 @@ export function buildMonthlyDataFromView(
     cabIni, cabFin, entradas, saidas,
     pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin,
     gmd, arrobasProd, prodKg, areaProd: areaProdutiva,
+    areaProdMensal: Array.from({ length: 12 }, (_, i) => {
+      const v = areaProdutivaMensal?.[i];
+      return typeof v === 'number' && !Number.isNaN(v) ? v : areaProdutiva;
+    }),
     valorRebIni, valorRebFin,
     entFin: entFinArr, saiFin: saiFinArr, recPec: recPecArr,
     custOper: custOperArr, resCaixa: resCaixaArr,
@@ -496,8 +502,8 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     const pm = pesoMedioFin[i];
     return pm > 0 ? (v * pm) / 450 : NaN;
   });
-  const lotUaHa = uaMedia.map(v => d.areaProd > 0 ? v / d.areaProd : NaN);
-  const arrHa = d.arrobasProd.map(v => d.areaProd > 0 ? v / d.areaProd : NaN);
+  const lotUaHa = uaMedia.map((v, i) => (d.areaProdMensal[i] ?? 0) > 0 ? v / d.areaProdMensal[i] : NaN);
+  const arrHa = d.arrobasProd.map((v, i) => (d.areaProdMensal[i] ?? 0) > 0 ? v / d.areaProdMensal[i] : NaN);
   // Custo/@prod acumulado: custeio acumulado / arrobas produzidas acumuladas no período
   const custoPorArrAcum = (() => {
     const custAcum = cumSum(d.custOper);
