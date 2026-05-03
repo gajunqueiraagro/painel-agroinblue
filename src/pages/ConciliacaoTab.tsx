@@ -1,10 +1,13 @@
 /**
  * ConciliacaoTab — Conciliação de Categorias (Sistema × Pastos)
  *
- * Fonte oficial do "Sistema": vw_zoot_categoria_mensal (via useZootCategoriaMensal)
- * Fonte oficial do "Pastos": fechamento_pastos + fechamento_pasto_itens
+ * Fonte oficial do "Sistema": vw_zoot_categoria_mensal.saldo_sistema
+ *   (cadeia pura de lançamentos, sem override de P1)
+ * Fonte oficial do "Pastos":  vw_zoot_categoria_mensal.saldo_p1
+ *   (snapshot do fechamento de pastos)
  *
- * Regra: o front NÃO recalcula saldo final por movimentações.
+ * Regra: o front NÃO recalcula nada e NÃO usa `|| 0` / `?? 0` em saldos.
+ * Se um lado não existir (null), a divergência não é computada — exibe "—".
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -30,16 +33,17 @@ interface Props {
 interface ConciliacaoRow {
   categoriaId: string;
   categoriaNome: string;
-  qtdSistema: number;
-  qtdPastos: number;
-  diferenca: number;
-  nivel: NivelConciliacao;
+  qtdSistema: number | null;
+  qtdPastos: number | null;
+  diferenca: number | null;
+  nivel: NivelConciliacao | 'sem_dado';
+  ordem: number;
 }
 
 export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos } = usePastos();
-  const { fechamentos, loadFechamentos, loadItens } = useFechamento();
+  const { fechamentos, loadFechamentos } = useFechamento();
   const defaultAnoMes = filtroAnoInicial && filtroMesInicial
     ? `${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`
     : format(new Date(), 'yyyy-MM');
@@ -50,8 +54,6 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
       setAnoMes(`${filtroAnoInicial}-${String(filtroMesInicial).padStart(2, '0')}`);
     }
   }, [filtroAnoInicial, filtroMesInicial]);
-  const [itensPastos, setItensPastos] = useState<Map<string, number>>(new Map());
-  const [loadingItens, setLoadingItens] = useState(false);
 
   const [ano, mes] = anoMes.split('-').map(Number);
 
@@ -63,24 +65,8 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
 
   useEffect(() => { loadFechamentos(anoMes); }, [anoMes, loadFechamentos]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (fechamentos.length === 0) { setItensPastos(new Map()); return; }
-      setLoadingItens(true);
-      const allItems = await Promise.all(fechamentos.map(f => loadItens(f.id)));
-      const map = new Map<string, number>();
-      allItems.flat().forEach(item => {
-        map.set(item.categoria_id, (map.get(item.categoria_id) || 0) + item.quantidade);
-      });
-      setItensPastos(map);
-      setLoadingItens(false);
-    };
-    load();
-  }, [fechamentos, loadItens]);
-
-  // Saldo do sistema: usa saldo_sistema (cadeia pura de lançamentos, sem override de P1)
-  // Não usa saldo_final, que para meses fechados pode vir do P1.
-  // Se saldo_sistema for null (categoria sem cache), omitir — não tratar como zero silencioso.
+  // Saldo do sistema: cadeia pura de lançamentos (sem override de P1).
+  // Se saldo_sistema for null, omitir — não tratar como zero.
   const saldoSistema = useMemo(() => {
     const byMes = groupByMes(viewData);
     const catsMes = byMes[mes] || [];
@@ -92,39 +78,75 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
     return map;
   }, [viewData, mes]);
 
+  // Saldo dos pastos: snapshot do fechamento de pastos (saldo_p1).
+  // Se saldo_p1 for null, omitir — não tratar como zero.
+  const saldoPasto = useMemo(() => {
+    const byMes = groupByMes(viewData);
+    const catsMes = byMes[mes] || [];
+    const map = new Map<string, number>();
+    catsMes.forEach(c => {
+      const val = (c as any).saldo_p1;
+      if (val != null) map.set(c.categoria_id, Number(val));
+    });
+    return map;
+  }, [viewData, mes]);
+
   // Categorias da view
   const cats = useMemo(() => categoriasUnicas(viewData), [viewData]);
 
   // Conciliação: sistema × pastos
   const rows = useMemo((): ConciliacaoRow[] => {
-    // Unir categorias da view + categorias dos pastos
-    const allCatIds = new Set([...saldoSistema.keys(), ...itensPastos.keys()]);
+    const allCatIds = new Set([...saldoSistema.keys(), ...saldoPasto.keys()]);
     const catMap = new Map(cats.map(c => [c.id, c]));
 
     return Array.from(allCatIds)
       .map(catId => {
         const cat = catMap.get(catId);
-        const qtdSistema = saldoSistema.get(catId) || 0;
-        const qtdPastos = itensPastos.get(catId) || 0;
-        const diferenca = qtdPastos - qtdSistema;
+        const qtdSistema = saldoSistema.has(catId) ? saldoSistema.get(catId)! : null;
+        const qtdPastos = saldoPasto.has(catId) ? saldoPasto.get(catId)! : null;
+        const diferenca = qtdSistema != null && qtdPastos != null
+          ? qtdPastos - qtdSistema
+          : null;
+        const nivel: NivelConciliacao | 'sem_dado' = diferenca != null
+          ? classificarNivelConciliacao(diferenca)
+          : 'sem_dado';
         return {
           categoriaId: catId,
           categoriaNome: cat?.nome || catId,
           qtdSistema,
           qtdPastos,
           diferenca,
-          nivel: classificarNivelConciliacao(diferenca),
+          nivel,
           ordem: cat?.ordem ?? 999,
         };
       })
-      .filter(r => r.qtdSistema !== 0 || r.qtdPastos !== 0)
+      .filter(r =>
+        (r.qtdSistema != null && r.qtdSistema !== 0) ||
+        (r.qtdPastos != null && r.qtdPastos !== 0),
+      )
       .sort((a, b) => a.ordem - b.ordem);
-  }, [saldoSistema, itensPastos, cats]);
+  }, [saldoSistema, saldoPasto, cats]);
+
+  // Totais — só consideram linhas com dado válido em cada lado.
+  const totalSistema = useMemo(
+    () => rows.reduce((s, r) => s + (r.qtdSistema != null ? r.qtdSistema : 0), 0),
+    [rows],
+  );
+  const totalPastos = useMemo(
+    () => rows.reduce((s, r) => s + (r.qtdPastos != null ? r.qtdPastos : 0), 0),
+    [rows],
+  );
+  const totalDiferenca = useMemo(
+    () => rows.reduce((s, r) => s + r.diferenca!, 0),
+    [rows],
+  );
+  const algumSemDado = useMemo(
+    () => rows.some(r => r.nivel === 'sem_dado'),
+    [rows],
+  );
 
   const alertas = useMemo(() => {
     const msgs: string[] = [];
-    const totalSistema = rows.reduce((s, r) => s + r.qtdSistema, 0);
-    const totalPastos = rows.reduce((s, r) => s + r.qtdPastos, 0);
 
     if (totalPastos === 0 && totalSistema > 0) {
       msgs.push('Nenhum dado de fechamento de pastos encontrado para este mês. Preencha os fechamentos para comparar.');
@@ -140,23 +162,26 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
 
     for (let i = 0; i < rows.length; i++) {
       for (let j = i + 1; j < rows.length; j++) {
-        if (rows[i].diferenca < -2 && rows[j].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
+        const di = rows[i].diferenca;
+        const dj = rows[j].diferenca;
+        if (di == null || dj == null) continue;
+        if (di < -2 && dj > 2 && Math.abs(di + dj) <= 2) {
           msgs.push(`Possível evolução de categoria: ${rows[i].categoriaNome} → ${rows[j].categoriaNome} não lançada no sistema.`);
         }
-        if (rows[j].diferenca < -2 && rows[i].diferenca > 2 && Math.abs(rows[i].diferenca + rows[j].diferenca) <= 2) {
+        if (dj < -2 && di > 2 && Math.abs(di + dj) <= 2) {
           msgs.push(`Possível evolução de categoria: ${rows[j].categoriaNome} → ${rows[i].categoriaNome} não lançada no sistema.`);
         }
       }
     }
 
     return msgs;
-  }, [rows]);
+  }, [rows, totalSistema, totalPastos]);
 
   if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para conciliação.</div>;
 
   const pastosCount = pastos.filter(p => p.ativo && p.entra_conciliacao && isPastoAtivoNoMes(p, anoMes)).length;
   const fechadosCount = fechamentos.filter(f => f.status === 'fechado').length;
-  const isLoading = loadingItens || loadingView;
+  const isLoading = loadingView;
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -207,6 +232,7 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
               className={`rounded-lg border p-3 ${
                 row.nivel === 'ok' ? 'border-green-500/30 bg-green-500/5' :
                 row.nivel === 'atencao' ? 'border-yellow-500/30 bg-yellow-500/5' :
+                row.nivel === 'sem_dado' ? 'border-muted bg-muted/30' :
                 'border-red-500/30 bg-red-500/5'
               }`}
             >
@@ -215,25 +241,37 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
                 <div className="flex items-center gap-1">
                   {row.nivel === 'ok' ? <CheckCircle className="h-4 w-4 text-green-500" /> :
                    row.nivel === 'atencao' ? <Info className="h-4 w-4 text-yellow-500" /> :
+                   row.nivel === 'sem_dado' ? <Info className="h-4 w-4 text-muted-foreground" /> :
                    <AlertTriangle className="h-4 w-4 text-red-500" />}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Sistema</span>
-                  <div className="font-bold">{row.qtdSistema}</div>
+                  <div className="font-bold">{row.qtdSistema != null ? row.qtdSistema : '—'}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Pastos</span>
-                  <div className="font-bold">{row.qtdPastos}</div>
+                  <div className="font-bold">{row.qtdPastos != null ? row.qtdPastos : '—'}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Diferença</span>
-                  <div className={`font-bold ${row.diferenca > 0 ? 'text-green-600' : row.diferenca < 0 ? 'text-red-600' : ''}`}>
-                    {row.diferenca > 0 ? '+' : ''}{row.diferenca}
+                  <div className={`font-bold ${
+                    row.diferenca == null ? 'text-muted-foreground' :
+                    row.diferenca > 0 ? 'text-green-600' :
+                    row.diferenca < 0 ? 'text-red-600' : ''
+                  }`}>
+                    {row.diferenca == null
+                      ? '—'
+                      : `${row.diferenca > 0 ? '+' : ''}${row.diferenca}`}
                   </div>
                 </div>
               </div>
+              {row.nivel === 'sem_dado' && (
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Dado ausente em um dos lados — divergência não calculada.
+                </p>
+              )}
             </div>
           ))}
 
@@ -241,20 +279,27 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div>
                 <span className="text-muted-foreground">Total Sistema</span>
-                <div className="text-lg font-bold">{rows.reduce((s, r) => s + r.qtdSistema, 0)}</div>
+                <div className="text-lg font-bold">{totalSistema}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Total Pastos</span>
-                <div className="text-lg font-bold">{rows.reduce((s, r) => s + r.qtdPastos, 0)}</div>
+                <div className="text-lg font-bold">{totalPastos}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Diferença</span>
-                {(() => {
-                  const dif = rows.reduce((s, r) => s + r.diferenca, 0);
-                  return <div className={`text-lg font-bold ${dif > 0 ? 'text-green-600' : dif < 0 ? 'text-red-600' : ''}`}>{dif > 0 ? '+' : ''}{dif}</div>;
-                })()}
+                <div className={`text-lg font-bold ${
+                  totalDiferenca > 0 ? 'text-green-600' :
+                  totalDiferenca < 0 ? 'text-red-600' : ''
+                }`}>
+                  {totalDiferenca > 0 ? '+' : ''}{totalDiferenca}
+                </div>
               </div>
             </div>
+            {algumSemDado && (
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Totais excluem categorias sem dado em um dos lados.
+              </p>
+            )}
           </div>
         </div>
       )}
