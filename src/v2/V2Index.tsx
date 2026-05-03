@@ -64,6 +64,7 @@ function V2LancamentosWrapper() {
 
   const noOp = async (_id?: string) => { toast.error('Selecione uma fazenda específica para editar lançamentos.'); };
   const canEditZoo = canEdit('zootecnico') && !isGlobal;
+  const canDeleteZoo = canEdit('zootecnico');
 
   const wrappedAdicionar = canEditZoo
     ? (async (lancamento: any) => {
@@ -80,7 +81,7 @@ function V2LancamentosWrapper() {
       })
     : noOp;
 
-  const wrappedRemover = canEditZoo ? removerLancamento : noOp;
+  const wrappedRemover = canDeleteZoo ? removerLancamento : noOp;
 
   const lancamentosVisiveis = useMemo(() => {
     // Inclui realizado + programado. Exclui somente meta (cenario='meta').
