@@ -48,22 +48,47 @@ export function useSnapshotAreaAnual(
     const fetch = async () => {
       setLoading(true);
 
-      let query = supabase
+      // Montar as 3 queries em paralelo
+      let snapshotsQuery = supabase
         .from('fechamento_area_snapshot')
         .select('fazenda_id, ano_mes, area_pecuaria_ha, area_agricultura_ha, area_produtiva_ha')
         .eq('cliente_id', clienteId)
         .gte('ano_mes', `${ano}-01-01`)
-        .lte('ano_mes', `${ano}-12-01`);
+        .lte('ano_mes', `${ano}-12-31`);
 
       if (!isGlobal && fazendaId) {
-        query = query.eq('fazenda_id', fazendaId);
+        snapshotsQuery = snapshotsQuery.eq('fazenda_id', fazendaId);
       }
 
-      const { data, error } = await query;
+      const fazendasAtivasQuery = isGlobal
+        ? supabase
+            .from('fazendas')
+            .select('id')
+            .eq('cliente_id', clienteId)
+            .eq('status_operacional', 'ativa')
+            .eq('tem_pecuaria', true)
+        : Promise.resolve({ data: null as null, error: null });
+
+      const p1Query = !isGlobal && fazendaId
+        ? supabase
+            .from('fechamento_pastos')
+            .select('ano_mes')
+            .eq('fazenda_id', fazendaId)
+            .eq('status', 'fechado')
+            .gte('ano_mes', `${ano}-01`)
+            .lte('ano_mes', `${ano}-99`)
+        : Promise.resolve({ data: null as null, error: null });
+
+      const [snapRes, fazRes, p1Res] = await Promise.all([
+        snapshotsQuery,
+        fazendasAtivasQuery,
+        p1Query,
+      ]);
 
       if (cancelled) return;
 
-      if (error || !data) {
+      // Tratar erro de snapshots — crítico
+      if (snapRes.error || !snapRes.data) {
         setAreaMensal(Array(12).fill(0));
         setSnapshots([]);
         setTotalFazendasAtivas(0);
@@ -74,53 +99,40 @@ export function useSnapshotAreaAnual(
         return;
       }
 
-      // Montar array de 12 posições
+      const data = snapRes.data;
+
+      // Montar array de 12 posições a partir dos snapshots
       const arr = Array(12).fill(0);
       const snaps: SnapshotAreaMes[] = [];
 
       for (const row of data) {
-        // ano_mes vem como '2026-02-01' (DATE)
-        const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1; // 0-11
+        const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
         const pec = Number(row.area_pecuaria_ha) || 0;
         const agric = Number(row.area_agricultura_ha) || 0;
         const prod = Number(row.area_produtiva_ha) || 0;
 
-        // Global: somar fazendas do mesmo mês; específica: sobrescrever
         arr[mesIdx] = isGlobal ? arr[mesIdx] + pec : pec;
 
-        // snapshots — para global, agregar por mês
         const existing = snaps.find(s => s.mes === mesIdx + 1);
         if (existing) {
           existing.area_pecuaria_ha += pec;
           existing.area_agricultura_ha += agric;
           existing.area_produtiva_ha += prod;
         } else {
-          snaps.push({
-            mes: mesIdx + 1,
-            area_pecuaria_ha: pec,
-            area_agricultura_ha: agric,
-            area_produtiva_ha: prod,
-          });
+          snaps.push({ mes: mesIdx + 1, area_pecuaria_ha: pec, area_agricultura_ha: agric, area_produtiva_ha: prod });
         }
       }
 
       setAreaMensal(arr);
       setSnapshots(snaps);
 
-      // Busca paralela de fazendas ativas (apenas global)
+      // Processar fazendas ativas (global) — erro não-crítico
       let totalAtivas = 0;
       const comSnapPorMes = Array(12).fill(0);
       if (isGlobal) {
-        const { data: fazAtivas } = await supabase
-          .from('fazendas')
-          .select('id')
-          .eq('cliente_id', clienteId)
-          .eq('status_operacional', 'ativa')
-          .eq('tem_pecuaria', true);
-        totalAtivas = fazAtivas?.length ?? 0;
+        totalAtivas = fazRes.data?.length ?? 0;
         setFazendasAtivasCarregadas(true);
 
-        // Contar fazendas distintas com snapshot por mês
         const porMes = new Map<number, Set<string>>();
         for (const row of data) {
           const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
@@ -134,22 +146,12 @@ export function useSnapshotAreaAnual(
       setTotalFazendasAtivas(totalAtivas);
       setFazendasComSnapPorMes(comSnapPorMes);
 
-      // Query de P1 para fazenda específica — distingue p1_aberto de p1_fechado_sem_snap
-      let p1Mensal = Array(12).fill(false);
-      if (!isGlobal && fazendaId) {
-        const anoStr = String(ano);
-        const { data: p1Data } = await supabase
-          .from('fechamento_pastos')
-          .select('ano_mes')
-          .eq('fazenda_id', fazendaId)
-          .eq('status', 'fechado')
-          .gte('ano_mes', `${anoStr}-01`)
-          .lte('ano_mes', `${anoStr}-99`);
-        if (p1Data) {
-          for (const row of p1Data) {
-            const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
-            if (mesIdx >= 0 && mesIdx < 12) p1Mensal[mesIdx] = true;
-          }
+      // Processar P1 (fazenda específica) — erro não-crítico
+      const p1Mensal = Array(12).fill(false);
+      if (!isGlobal && fazendaId && p1Res.data) {
+        for (const row of p1Res.data) {
+          const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
+          if (mesIdx >= 0 && mesIdx < 12) p1Mensal[mesIdx] = true;
         }
       }
       setTemP1FechadoPorMes(p1Mensal);
