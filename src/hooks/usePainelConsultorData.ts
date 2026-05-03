@@ -22,6 +22,7 @@ export type StatusValidacaoArea =
   | 'sem_area'
   | 'sem_snapshot'
   | 'p1_aberto'
+  | 'incompleto'
   | 'carregando';
 
 export interface PainelConsultorDataResult {
@@ -38,6 +39,7 @@ export interface PainelConsultorDataResult {
   lotUaHa: number | null;
   arrHa: number | null;
   statusArea: StatusValidacaoArea;
+  faltandoCount: number;
   statusPilares: StatusPilares | null;
   loading: boolean;
 }
@@ -49,7 +51,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, totalFazendasAtivas, fazendasComSnapPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -96,9 +98,20 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
 
   const statusArea: StatusValidacaoArea = (() => {
     if (loadingArea) return 'carregando';
+    if (isGlobal) {
+      const comSnap = fazendasComSnapPorMes[idx] ?? 0;
+      if (totalFazendasAtivas === 0) return 'sem_snapshot';
+      if (comSnap < totalFazendasAtivas) return 'incompleto';
+      if ((areaMensal[idx] ?? 0) <= 0) return 'sem_snapshot';
+      return 'ok';
+    }
     if ((areaMensal[idx] ?? 0) > 0) return 'ok';
     return 'sem_snapshot';
   })();
+
+  const faltandoCount = isGlobal
+    ? Math.max(0, totalFazendasAtivas - (fazendasComSnapPorMes[idx] ?? 0))
+    : 0;
 
   const safe = (v: number | null | undefined) =>
     v == null || isNaN(Number(v)) ? null : Number(v);
@@ -122,6 +135,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
     lotUaHa: safe(monthlyData.lotUaHa[idx]),
     arrHa:   safe(monthlyData.arrHa[idx]),
     statusArea,
+    faltandoCount,
     statusPilares: statusPilares ?? null,
     loading,
   };

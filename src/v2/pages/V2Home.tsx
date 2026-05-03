@@ -85,12 +85,13 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes, lotUaHa, arrHa, statusArea,
+    areaProdutivaMes, lotUaHa, arrHa, statusArea, faltandoCount,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum });
 
   const msgArea = (s: StatusValidacaoArea): string | null => {
     if (s === 'ok' || s === 'carregando') return null;
+    if (s === 'incompleto') return `⚠ ${faltandoCount} fazenda${faltandoCount !== 1 ? 's' : ''} sem snapshot`;
     if (s === 'sem_snapshot') return '⚠ Snapshot não gerado';
     if (s === 'p1_aberto')   return '⚠ P1 não fechado';
     if (s === 'sem_area')    return '⚠ Área não cadastrada';

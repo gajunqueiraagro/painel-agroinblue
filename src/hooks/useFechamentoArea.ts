@@ -9,8 +9,10 @@ export interface SnapshotAreaMes {
 }
 
 export interface UseSnapshotAreaAnualResult {
-  areaMensal: number[];         // 12 posições — índice 0=jan, 11=dez — usa area_pecuaria_ha
+  areaMensal: number[];
   snapshots: SnapshotAreaMes[];
+  totalFazendasAtivas: number;
+  fazendasComSnapPorMes: number[];
   loading: boolean;
 }
 
@@ -22,12 +24,16 @@ export function useSnapshotAreaAnual(
 ): UseSnapshotAreaAnualResult {
   const [areaMensal, setAreaMensal] = useState<number[]>(Array(12).fill(0));
   const [snapshots, setSnapshots] = useState<SnapshotAreaMes[]>([]);
+  const [totalFazendasAtivas, setTotalFazendasAtivas] = useState(0);
+  const [fazendasComSnapPorMes, setFazendasComSnapPorMes] = useState<number[]>(Array(12).fill(0));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!clienteId) {
       setAreaMensal(Array(12).fill(0));
       setSnapshots([]);
+      setTotalFazendasAtivas(0);
+      setFazendasComSnapPorMes(Array(12).fill(0));
       return;
     }
 
@@ -54,6 +60,8 @@ export function useSnapshotAreaAnual(
       if (error || !data) {
         setAreaMensal(Array(12).fill(0));
         setSnapshots([]);
+        setTotalFazendasAtivas(0);
+        setFazendasComSnapPorMes(Array(12).fill(0));
         setLoading(false);
         return;
       }
@@ -90,6 +98,32 @@ export function useSnapshotAreaAnual(
 
       setAreaMensal(arr);
       setSnapshots(snaps);
+
+      // Busca paralela de fazendas ativas (apenas global)
+      let totalAtivas = 0;
+      const comSnapPorMes = Array(12).fill(0);
+      if (isGlobal) {
+        const { data: fazAtivas } = await supabase
+          .from('fazendas')
+          .select('id')
+          .eq('cliente_id', clienteId)
+          .eq('status_operacional', 'ativa')
+          .eq('tem_pecuaria', true);
+        totalAtivas = fazAtivas?.length ?? 0;
+
+        // Contar fazendas distintas com snapshot por mês
+        const porMes = new Map<number, Set<string>>();
+        for (const row of data) {
+          const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
+          if (!porMes.has(mesIdx)) porMes.set(mesIdx, new Set());
+          porMes.get(mesIdx)!.add(row.fazenda_id as string);
+        }
+        for (const [mes, faz] of porMes) {
+          comSnapPorMes[mes] = faz.size;
+        }
+      }
+      setTotalFazendasAtivas(totalAtivas);
+      setFazendasComSnapPorMes(comSnapPorMes);
       setLoading(false);
     };
 
@@ -97,5 +131,5 @@ export function useSnapshotAreaAnual(
     return () => { cancelled = true; };
   }, [ano, fazendaId, isGlobal, clienteId]);
 
-  return { areaMensal, snapshots, loading };
+  return { areaMensal, snapshots, totalFazendasAtivas, fazendasComSnapPorMes, loading };
 }
