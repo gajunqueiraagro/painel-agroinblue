@@ -62,13 +62,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // Isso garante paridade absoluta entre quadro anual e visão por categoria.
   const totaisPorMes = rebanhoOf.totaisPorMes;
 
-  if (isGlobal) {
-    const fazendasNasCategorias = [...new Set((rebanhoOf.rawCategorias || []).map((r: any) => r.fazenda_id))];
-    console.log('[TOTAIS_DEBUG] mes=1 saldo_inicial:', totaisPorMes[1]?.saldo_inicial,
-      'mes=12 saldo_final:', totaisPorMes[12]?.saldo_final,
-      'rawCategorias count:', rebanhoOf.rawCategorias?.length,
-      'fazendas distintas em rawCategorias:', fazendasNasCategorias);
-  }
 
   // Fallback instantâneo (<100ms): soma direta de saldos_iniciais do ano selecionado.
   // A view vw_zoot_categoria_mensal demora 3-5s; enquanto ela não chega, preenchemos
@@ -285,7 +278,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map((m) => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
-                const saldoFim = t?.saldo_final;
+                const saldoFim = t?.saldo_sistema ?? null;
                 const isNeg = saldoFim != null && saldoFim < 0;
                 return (
                   <td key={m.key} className={`px-1 py-1 text-center font-extrabold tabular-nums whitespace-nowrap ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
@@ -295,8 +288,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   </td>
                 );
               })}
-              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums whitespace-nowrap bg-primary/20 border-l border-border/60 ${(totaisPorMes[12]?.saldo_final ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
-                {fmtNum(totaisPorMes[12]?.saldo_final)}
+              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums whitespace-nowrap bg-primary/20 border-l border-border/60 ${((totaisPorMes[12]?.saldo_sistema ?? null) != null && totaisPorMes[12]!.saldo_sistema! < 0) ? 'text-destructive' : 'text-foreground'}`}>
+                {totaisPorMes[12]?.saldo_sistema != null ? fmtNum(totaisPorMes[12].saldo_sistema) : '—'}
               </td>
             </tr>
 

@@ -164,6 +164,8 @@ export function groupByCategoria(rows: ZootCategoriaMensal[]): Record<string, Zo
 export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
   saldo_inicial: number;
   saldo_final: number;
+  saldo_sistema: number | null;
+  saldo_p1: number | null;
   entradas_externas: number;
   saidas_externas: number;
   evol_cat_entrada: number;
@@ -176,9 +178,18 @@ export function totalizarPorMes(rows: ZootCategoriaMensal[]): Record<number, {
   const result: Record<number, any> = {};
 
   for (const [mes, cats] of Object.entries(byMes)) {
+    // saldo_sistema: null se qualquer categoria do mês tiver null — sem soma parcial
+    const todosSistemaValidos = cats.every(c => c.saldo_sistema != null);
+    const todosp1Validos = cats.every(c => c.saldo_p1 != null);
     result[Number(mes)] = {
       saldo_inicial: cats.reduce((s, c) => s + c.saldo_inicial, 0),
       saldo_final: cats.reduce((s, c) => s + c.saldo_final, 0),
+      saldo_sistema: todosSistemaValidos
+        ? cats.reduce((s, c) => s + c.saldo_sistema!, 0)
+        : null,
+      saldo_p1: todosp1Validos
+        ? cats.reduce((s, c) => s + c.saldo_p1!, 0)
+        : null,
       entradas_externas: cats.reduce((s, c) => s + c.entradas_externas, 0),
       saidas_externas: cats.reduce((s, c) => s + c.saidas_externas, 0),
       evol_cat_entrada: cats.reduce((s, c) => s + c.evol_cat_entrada, 0),
