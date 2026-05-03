@@ -2347,23 +2347,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // Consumo: use dedicated ConsumoFinanceiroPanel
     if (isConsumo) {
       return (
-        <ConsumoFinanceiroPanel
-          key={`consumo-${tipo}`}
-          ref={consumoFinanceiroRef}
-          quantidade={parseNumericValue(quantidade) || 0}
-          pesoKg={parseNumericValue(pesoKg) || 0}
-          categoria={categoria}
-          data={data}
-          notaFiscal={notaFiscal}
-          onNotaFiscalChange={setNotaFiscal}
-          statusOp={effectiveStatusOp}
-          lancamentoId={lastSavedLancamentoId || undefined}
-          valorBruto={calc.valorBruto}
-          valorLiquido={calc.valorLiquido}
-          onRequestRegister={handleRequestRegister}
-          registerLabel={editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
-          submitting={submitting}
-        />
+        <div className="space-y-2 self-start">
+          <div className="bg-card rounded-md border shadow-sm p-3 space-y-2">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
+            <div>
+              <Label className={`text-[11px] ${metaLabelClass}`}>Preço R$/kg</Label>
+              <Input
+                type="number"
+                value={consumoPrecoKg ?? ''}
+                onChange={e => {
+                  const raw = e.target.value;
+                  setConsumoPrecoKg(raw ? Number(raw.replace(',', '.')) : undefined);
+                }}
+                placeholder="0,00"
+                className={`h-8 text-[12px] ${metaInputClass}`}
+              />
+            </div>
+            {calc.valorBruto > 0 && (
+              <div className={`rounded-md p-2 text-[12px] ${isMeta ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Valor total</span>
+                  <strong>{formatMoeda(calc.valorBruto)}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+          <ConsumoFinanceiroPanel
+            key={`consumo-${tipo}`}
+            ref={consumoFinanceiroRef}
+            quantidade={parseNumericValue(quantidade) || 0}
+            pesoKg={parseNumericValue(pesoKg) || 0}
+            categoria={categoria}
+            data={data}
+            notaFiscal={notaFiscal}
+            onNotaFiscalChange={setNotaFiscal}
+            statusOp={effectiveStatusOp}
+            lancamentoId={lastSavedLancamentoId || undefined}
+            valorBruto={calc.valorBruto}
+            valorLiquido={calc.valorLiquido}
+            onRequestRegister={handleRequestRegister}
+            registerLabel={editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
+            submitting={submitting}
+          />
+        </div>
       );
     }
 
@@ -2419,22 +2445,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
-      {usaPrecoKg && !isConsumo && (
+      {usaPrecoKg && (
         <div>
           <Label className={`text-[11px] ${metaLabelClass}`}>R$/kg (preço base)</Label>
           <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${metaInputClass}`} />
-        </div>
-      )}
-      {isConsumo && (
-        <div>
-          <Label className={`text-[11px] ${metaLabelClass}`}>Preço R$/kg</Label>
-          <Input
-            type="number"
-            value={consumoPrecoKg ?? ''}
-            onChange={e => setConsumoPrecoKg(e.target.value ? Number(e.target.value) : undefined)}
-            placeholder="0,00"
-            className={`h-8 text-[12px] ${metaInputClass}`}
-          />
         </div>
       )}
 
