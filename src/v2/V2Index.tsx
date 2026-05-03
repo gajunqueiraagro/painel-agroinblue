@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { usePermissions } from '@/hooks/usePermissions';
-import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -48,6 +47,7 @@ import { V2Configuracoes } from './pages/V2Configuracoes';
 import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
+import { toast } from 'sonner';
 
 function V2LancamentosWrapper() {
   const { isGlobal } = useFazenda();
@@ -62,7 +62,7 @@ function V2LancamentosWrapper() {
   } = useLancamentos();
   const { loadData: metaLoadData } = useLancamentos('meta');
 
-  const noOp = () => {};
+  const noOp = async (_id?: string) => { toast.error('Selecione uma fazenda específica para editar lançamentos.'); };
   const canEditZoo = canEdit('zootecnico') && !isGlobal;
 
   const wrappedAdicionar = canEditZoo
@@ -83,7 +83,8 @@ function V2LancamentosWrapper() {
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;
 
   const lancamentosVisiveis = useMemo(() => {
-    const filtered = filtrarPorCenario(lancamentos, 'realizado');
+    // Inclui realizado + programado. Exclui somente meta (cenario='meta').
+    const filtered = lancamentos.filter(l => l.cenario !== 'meta');
     if (!isGlobal) return filtered;
     return filtered.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
