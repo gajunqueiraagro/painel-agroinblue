@@ -43,7 +43,6 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   );
   const [modo, setModo] = useState<ModoVisualizacao>('cabeca');
 
-  useEffect(() => { if (initialAno) setAnoFiltro(initialAno); }, [initialAno]);
   useEffect(() => { if (initialMes) setMesFiltro(initialMes); }, [initialMes]);
   useEffect(() => { if (initialCenario) setStatusFiltro(initialCenario === 'meta' ? 'meta' : 'realizado'); }, [initialCenario]);
 
