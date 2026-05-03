@@ -325,6 +325,10 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     }
 
     if (data) {
+      // Só adiciona ao state local se o cenário retornado pelo banco corresponde ao cenário deste hook.
+      // Ex: hook 'realizado' não deve exibir registros 'meta' e vice-versa.
+      const returnedCenario = (data as any).cenario ?? 'realizado';
+      if (returnedCenario === cenario) {
       setLancamentos(prev => [{
         id: data.id,
         data: data.data,
@@ -372,6 +376,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
         origemRegistro: (data as any).origem_registro ?? undefined,
         loteImportacaoId: (data as any).lote_importacao_id ?? undefined,
       }, ...prev]);
+      }
       await invalidateZootQueries();
       return data.id;
     }
