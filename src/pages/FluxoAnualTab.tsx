@@ -154,7 +154,7 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               Meses com divergência: {errosEquacao.map(e => `${e.mesLabel} (Δ${e.diferenca})`).join(', ')}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Equação: SI + Ent.Ext + Evol.E − Saí.Ext − Evol.S ≠ SF
+              Equação: SI + Ent.Ext + Evol.E − Saí.Ext − Evol.S ≠ saldo_sistema
             </p>
           </div>
         </div>

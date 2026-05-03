@@ -101,12 +101,13 @@ export function validarEquacaoTotal(rows: ZootCategoriaMensal[]): ValidacaoEquac
   const results: ValidacaoEquacaoResult[] = [];
 
   for (const [mes, cats] of byMes) {
+    if (cats.some(c => c.saldo_sistema == null)) continue;
     const si = cats.reduce((s, c) => s + c.saldo_inicial, 0);
     const ee = cats.reduce((s, c) => s + c.entradas_externas, 0);
     const ece = cats.reduce((s, c) => s + c.evol_cat_entrada, 0);
     const se = cats.reduce((s, c) => s + c.saidas_externas, 0);
     const ecs = cats.reduce((s, c) => s + c.evol_cat_saida, 0);
-    const sfReal = cats.reduce((s, c) => s + c.saldo_final, 0);
+    const sfReal = cats.reduce((s, c) => s + c.saldo_sistema!, 0);
     const sfEsperado = si + ee + ece - se - ecs;
     const diferenca = Math.round(sfReal - sfEsperado);
 
