@@ -100,16 +100,37 @@ export function validarEquacaoTotal(rows: ZootCategoriaMensal[]): ValidacaoEquac
 
   const results: ValidacaoEquacaoResult[] = [];
 
-  for (const [mes, cats] of byMes) {
-    if (cats.some(c => c.saldo_sistema == null)) continue;
-    const si = cats.reduce((s, c) => s + c.saldo_inicial, 0);
-    const ee = cats.reduce((s, c) => s + c.entradas_externas, 0);
+  // Iteração obrigatoriamente ordenada — necessário para propagar saldo_sistema mês a mês
+  const mesesOrdenados = [...byMes.keys()].sort((a, b) => a - b);
+  // categoria_id → saldo_sistema do mês anterior (vazio até jan ser processado)
+  let prevSistema = new Map<string, number>();
+
+  for (const mes of mesesOrdenados) {
+    const cats = byMes.get(mes)!;
+
+    // Se qualquer categoria não tem saldo_sistema, cadeia interrompida — pular sem erro e resetar
+    if (cats.some(c => c.saldo_sistema == null)) {
+      prevSistema = new Map();
+      continue;
+    }
+
+    // Jan: saldo_inicial original (âncora idêntica nos dois sistemas)
+    // Fev+: saldo_sistema do mês anterior por categoria (sem contaminação P1/overlay)
+    const si = cats.reduce((s, c) => {
+      const prev = prevSistema.get(c.categoria_id);
+      return s + (mes === 1 || prev == null ? c.saldo_inicial : prev);
+    }, 0);
+
+    const ee  = cats.reduce((s, c) => s + c.entradas_externas, 0);
     const ece = cats.reduce((s, c) => s + c.evol_cat_entrada, 0);
-    const se = cats.reduce((s, c) => s + c.saidas_externas, 0);
+    const se  = cats.reduce((s, c) => s + c.saidas_externas, 0);
     const ecs = cats.reduce((s, c) => s + c.evol_cat_saida, 0);
     const sfReal = cats.reduce((s, c) => s + c.saldo_sistema!, 0);
     const sfEsperado = si + ee + ece - se - ecs;
     const diferenca = Math.round(sfReal - sfEsperado);
+
+    // Atualizar cadeia para o próximo mês
+    prevSistema = new Map(cats.map(c => [c.categoria_id, c.saldo_sistema!]));
 
     results.push({
       mes,

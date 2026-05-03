@@ -201,8 +201,11 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               {MESES_COLS.map(m => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
-                // Janeiro tem fallback imediato via saldos_iniciais enquanto a view carrega.
-                const valor = t?.saldo_inicial ?? (mes === 1 ? saldoInicialAnoFallback : undefined);
+                // Jan: saldo_inicial (âncora base do ano)
+                // Fev+: saldo_sistema do mês anterior — sem fallback para saldo_inicial (evitar P1 contaminado)
+                const valor = mes === 1
+                  ? (t?.saldo_inicial ?? saldoInicialAnoFallback)
+                  : (totaisPorMes[mes - 1]?.saldo_sistema ?? null);
                 const isNeg = valor != null && valor < 0;
                 return (
                   <td
