@@ -27,6 +27,7 @@ export interface PainelConsultorDataResult {
   desembolso: number | null;
   resultado: number | null;
   valorRebanhoMes: number | null;
+  areaProdutivaMes: number | null;
   statusPilares: StatusPilares | null;
   loading: boolean;
 }
@@ -101,6 +102,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
     desembolso: sumOrIdx(monthlyData.custOper),
     resultado: sumOrIdx(monthlyData.resOper),
     valorRebanhoMes: safe(monthlyData.valorRebFin[idx]),
+    areaProdutivaMes: safe(areaMensal[idx]),
     statusPilares: statusPilares ?? null,
     loading,
   };
