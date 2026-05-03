@@ -313,12 +313,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   // ── Conciliation summary data ──
   const mesNum = Number(anoMes.split('-')[1]);
 
-  // FONTE OFICIAL: saldo previsto por movimentações (vw_zoot_categoria_mensal)
+  // Sistema = saldo_sistema (cadeia pura de lançamentos, sem override de P1)
+  // Não usa saldo_final. Se saldo_sistema for null, omitir — não converter para zero.
   const saldoMap = useMemo(() => {
     const map = new Map<string, number>();
     const monthData = (viewDataForConcil || []).filter(r => r.mes === mesNum);
     for (const cat of monthData) {
-      map.set(cat.categoria_codigo, Number(cat.saldo_final || 0));
+      const val = (cat as any).saldo_sistema;
+      if (val != null) {
+        map.set(cat.categoria_codigo, Number(val));
+      }
     }
     return map;
   }, [viewDataForConcil, mesNum]);
@@ -408,8 +412,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return result;
   }, [itensMap, categorias, reconciliacaoFechIds]);
 
-  const totalPasto = CAT_COLS.reduce((s, c) => s + (pastoDataByCat.get(c.codigo) || 0), 0);
-  const totalSistema = CAT_COLS.reduce((s, c) => s + (saldoMap.get(c.codigo) || 0), 0);
+  const totalPasto = CAT_COLS.reduce((s, c) => { const v = pastoDataByCat.get(c.codigo); return s + (v != null ? v : 0); }, 0);
+  const totalSistema = CAT_COLS.reduce((s, c) => { const v = saldoMap.get(c.codigo); return s + (v != null ? v : 0); }, 0);
   const totalDiferenca = totalPasto - totalSistema;
 
   // Sugestões
@@ -420,12 +424,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const sugestoes = useMemo(() => {
     const allCodigos = new Set([...saldoMap.keys(), ...pastoDataByCat.keys()]);
-    const rows: { codigo: string; nome: string; qtdSistema: number; qtdPasto: number; diferenca: number }[] = [];
+    const rows: { codigo: string; nome: string; qtdSistema: number | null; qtdPasto: number | null; diferenca: number | null }[] = [];
     allCodigos.forEach(codigo => {
-      const qtdSistema = saldoMap.get(codigo) || 0;
-      const qtdPasto = pastoDataByCat.get(codigo) || 0;
-      if (qtdSistema === 0 && qtdPasto === 0) return;
-      rows.push({ codigo, nome: catMap.get(codigo) || codigo, qtdSistema, qtdPasto, diferenca: qtdPasto - qtdSistema });
+      const qtdSistema = saldoMap.has(codigo) ? saldoMap.get(codigo)! : null;
+      const qtdPasto = pastoDataByCat.has(codigo) ? pastoDataByCat.get(codigo)! : null;
+      if (qtdSistema == null && qtdPasto == null) return;
+      const diferenca = qtdSistema != null && qtdPasto != null ? qtdPasto - qtdSistema : null;
+      rows.push({ codigo, nome: catMap.get(codigo) || codigo, qtdSistema, qtdPasto, diferenca });
     });
     return gerarSugestoes(rows, catMap);
   }, [saldoMap, pastoDataByCat, catMap]);
@@ -446,9 +451,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const hasDivergencia = useMemo(() => {
     if (totalDiferenca !== 0) return true;
     return CAT_COLS.some(c => {
-      const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
-      const qtdSistema = saldoMap.get(c.codigo) || 0;
-      return qtdPasto - qtdSistema !== 0;
+      const qtdPasto = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
+      const qtdSistema = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
+      return qtdPasto != null && qtdSistema != null ? qtdPasto - qtdSistema !== 0 : (qtdPasto != null || qtdSistema != null);
     });
   }, [totalDiferenca, pastoDataByCat, saldoMap]);
 
@@ -550,11 +555,18 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       // Detailed error
       const erros: string[] = [];
       CAT_COLS.forEach(c => {
-        const qtdPasto = pastoDataByCat.get(c.codigo) || 0;
-        const qtdSistema = saldoMap.get(c.codigo) || 0;
+        const qtdPasto = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
+        const qtdSistema = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
+        const nome = catMap.get(c.codigo) || c.sigla;
+        if (qtdSistema == null || qtdPasto == null) {
+          // Dado ausente em um dos lados — bloquear fechamento, não tratar como OK.
+          if (qtdSistema != null || qtdPasto != null) {
+            erros.push(`${nome}: dado ausente em Sistema ou Pasto`);
+          }
+          return;
+        }
         const dif = qtdPasto - qtdSistema;
         if (dif !== 0) {
-          const nome = catMap.get(c.codigo) || c.sigla;
           erros.push(`${nome}: ${dif > 0 ? '+' : ''}${dif} cab no pasto vs sistema`);
         }
       });
@@ -896,30 +908,30 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <tr className="bg-muted/30">
                   <td className="font-bold text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/50">Sistema</td>
                   {CAT_COLS.map((c, idx) => {
-                    const v = saldoMap.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
+                    const v = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
+                    return <td key={c.sigla} className={`text-center text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
                   })}
-                  <td className="text-center font-semibold text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/50">{totalSistema ? formatNum(totalSistema, 0) : ''}</td>
+                  <td className="text-center font-semibold text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/50">{formatNum(totalSistema, 0)}</td>
                 </tr>
                 {/* PASTO */}
                 <tr>
                   <td className="font-bold text-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/20">Pasto</td>
                   {CAT_COLS.map((c, idx) => {
-                    const v = pastoDataByCat.get(c.codigo) || 0;
-                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v ? formatNum(v, 0) : ''}</td>;
+                    const v = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
+                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
                   })}
-                  <td className="text-center font-bold text-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/20">{totalPasto ? formatNum(totalPasto, 0) : ''}</td>
+                  <td className="text-center font-bold text-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/20">{formatNum(totalPasto, 0)}</td>
                 </tr>
                 {/* DIFERENÇA */}
                 <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
                   <td className={`font-extrabold px-2.5 py-1 border-r-2 border-border/40 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
                   {CAT_COLS.map((c, idx) => {
-                    const pv = pastoDataByCat.get(c.codigo) || 0;
-                    const sv = saldoMap.get(c.codigo) || 0;
-                    const dif = pv - sv;
+                    const pv = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
+                    const sv = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
+                    const dif = pv != null && sv != null ? pv - sv : null;
                     return (
-                      <td key={c.sigla} className={`text-center font-extrabold px-2 py-1 tabular-nums ${difCellClass(dif)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
-                        {fmtDif(dif)}
+                      <td key={c.sigla} className={`text-center font-extrabold px-2 py-1 tabular-nums ${dif != null ? difCellClass(dif) : 'text-muted-foreground'}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
+                        {dif != null ? fmtDif(dif) : '—'}
                       </td>
                     );
                   })}
@@ -938,9 +950,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     let totalPesoAcc = 0;
                     let totalCabAcc = 0;
                     pesoMedioByCat.forEach((peso, codigo) => {
-                      const cab = pastoDataByCat.get(codigo) || 0;
-                      totalPesoAcc += peso * cab;
-                      totalCabAcc += cab;
+                      const cab = pastoDataByCat.has(codigo) ? pastoDataByCat.get(codigo)! : null;
+                      if (cab != null) {
+                        totalPesoAcc += peso * cab;
+                        totalCabAcc += cab;
+                      }
                     });
                     const pesoMedioTotal = totalCabAcc > 0 ? totalPesoAcc / totalCabAcc : null;
                     return (
