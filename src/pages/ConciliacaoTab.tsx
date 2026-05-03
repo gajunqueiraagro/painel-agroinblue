@@ -78,12 +78,17 @@ export function ConciliacaoTab({ filtroAnoInicial, filtroMesInicial }: Props = {
     load();
   }, [fechamentos, loadItens]);
 
-  // Saldo do sistema: vem da view oficial (saldo_final por categoria no mês)
+  // Saldo do sistema: usa saldo_sistema (cadeia pura de lançamentos, sem override de P1)
+  // Não usa saldo_final, que para meses fechados pode vir do P1.
+  // Se saldo_sistema for null (categoria sem cache), omitir — não tratar como zero silencioso.
   const saldoSistema = useMemo(() => {
     const byMes = groupByMes(viewData);
     const catsMes = byMes[mes] || [];
     const map = new Map<string, number>();
-    catsMes.forEach(c => map.set(c.categoria_id, c.saldo_final));
+    catsMes.forEach(c => {
+      const val = (c as any).saldo_sistema;
+      if (val != null) map.set(c.categoria_id, Number(val));
+    });
     return map;
   }, [viewData, mes]);
 
