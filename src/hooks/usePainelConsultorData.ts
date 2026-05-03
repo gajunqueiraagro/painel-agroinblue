@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import {
@@ -34,6 +36,14 @@ const ZERO_13 = Array(13).fill(0) as number[];
 export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
+  const { clienteAtual } = useCliente();
+
+  const { areaMensal, loading: loadingArea } = useSnapshotAreaAnual(
+    ano,
+    isGlobal ? undefined : fazendaId,
+    isGlobal,
+    clienteAtual?.id,
+  );
 
   const {
     rawCategorias: viewDataRealizado,
@@ -63,12 +73,13 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
         0,
         ZERO_13,
         isGlobal,
+        areaMensal,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal],
+    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaMensal],
   );
 
-  const loading = loadingRebanho || loadingLanc || loadingFin;
+  const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
 
   const idx = mesRef - 1;
 
