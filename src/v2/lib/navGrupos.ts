@@ -76,6 +76,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Lançamentos',
         itens: [
+          { id: 'lancamentos-zoot', label: 'Lançamentos Zootécnicos', status: 'ready', primary: true },
           { id: 'chuvas', label: 'Chuvas', status: 'ready' },
         ],
       },

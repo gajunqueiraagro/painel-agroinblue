@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { LancamentosTab } from '@/pages/LancamentosTab';
+import { useLancamentos } from '@/hooks/useLancamentos';
+import { usePermissions } from '@/hooks/usePermissions';
+import { filtrarPorCenario } from '@/lib/statusOperacional';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -44,6 +48,56 @@ import { V2Configuracoes } from './pages/V2Configuracoes';
 import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
+
+function V2LancamentosWrapper() {
+  const { isGlobal } = useFazenda();
+  const { canEdit } = usePermissions();
+  const {
+    lancamentos,
+    adicionarLancamento,
+    editarLancamento,
+    removerLancamento,
+    countFinanceirosVinculados,
+    loadData,
+  } = useLancamentos();
+  const { loadData: metaLoadData } = useLancamentos('meta');
+
+  const noOp = () => {};
+  const canEditZoo = canEdit('zootecnico') && !isGlobal;
+
+  const wrappedAdicionar = canEditZoo
+    ? (async (lancamento: any) => {
+        const result = await adicionarLancamento(lancamento);
+        if (result && lancamento.statusOperacional === null) metaLoadData();
+        return result;
+      })
+    : noOp;
+
+  const wrappedEditar = canEditZoo
+    ? (async (id: string, dados: any) => {
+        await editarLancamento(id, dados);
+        await Promise.all([loadData(), metaLoadData()]);
+      })
+    : noOp;
+
+  const wrappedRemover = canEditZoo ? removerLancamento : noOp;
+
+  const lancamentosVisiveis = useMemo(() => {
+    const filtered = filtrarPorCenario(lancamentos, 'realizado');
+    if (!isGlobal) return filtered;
+    return filtered.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
+  }, [lancamentos, isGlobal]);
+
+  return (
+    <LancamentosTab
+      lancamentos={lancamentosVisiveis}
+      onAdicionar={wrappedAdicionar as any}
+      onEditar={wrappedEditar as any}
+      onRemover={wrappedRemover as any}
+      onCountFinanceiros={countFinanceirosVinculados}
+    />
+  );
+}
 
 export default function V2Index() {
   const [section, setSection] = useState<V2Section>('home');
@@ -214,6 +268,7 @@ export default function V2Index() {
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
     );
+    if (section === 'lancamentos-zoot') return <V2LancamentosWrapper />;
     if (section === 'chuvas') return (
       <ChuvasTab anoInicial={ano} />
     );
