@@ -186,7 +186,11 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   };
 
   const getTotalVal = (field: 'si' | 'entExt' | 'saiExt' | 'evolOut' | 'evolIn' | 'sf') => {
-    if (modo === 'cabeca') return fmtNum(totais[field]);
+    if (modo === 'cabeca') {
+      const val = totais[field];
+      if (val == null) return '—';
+      return fmtNum(val);
+    }
     const pesoMap: Record<string, number> = {
       si: totais.pesoTotalIni,
       entExt: dadosMes.reduce((s, d) => s + d.peso_entradas_externas, 0),
