@@ -290,6 +290,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
   const [precoArroba, setPrecoArroba] = useState('');
   const [precoKg, setPrecoKg] = useState('');
+  const [consumoPrecoKg, setConsumoPrecoKg] = useState<number | undefined>(undefined);
   const [bonusPrecoce, setBonusPrecoce] = useState('');
   const [bonusQualidade, setBonusQualidade] = useState('');
   const [bonusListaTrace, setBonusListaTrace] = useState('');
@@ -506,6 +507,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
+    else if (isConsumo) {
+      if (consumoPrecoKg && qtd && peso) {
+        valorBruto = consumoPrecoKg * qtd * peso;
+      }
+    }
     else if (usaPrecoKg) { valorBruto = totalKg * (parseNumericValue(precoKg) || 0); }
     const bonusPrecoceTotal = 0;
     const bonusQualidadeTotal = 0;
@@ -533,7 +539,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes, abateCalc]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, consumoPrecoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, isConsumo, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes, abateCalc]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -588,6 +594,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const resetFinancialFields = () => {
     setPesoCarcacaKg(''); setPrecoArroba(''); setPrecoKg('');
+    setConsumoPrecoKg(undefined);
     setBonusPrecoce(''); setBonusQualidade(''); setBonusListaTrace('');
     setDescontoQualidade(''); setDescontoFunrural(''); setOutrosDescontos('');
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
@@ -2412,10 +2419,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <Separator />
       <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
 
-      {usaPrecoKg && (
+      {usaPrecoKg && !isConsumo && (
         <div>
           <Label className={`text-[11px] ${metaLabelClass}`}>R$/kg (preço base)</Label>
           <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${metaInputClass}`} />
+        </div>
+      )}
+      {isConsumo && (
+        <div>
+          <Label className={`text-[11px] ${metaLabelClass}`}>Preço R$/kg</Label>
+          <Input
+            type="number"
+            value={consumoPrecoKg ?? ''}
+            onChange={e => setConsumoPrecoKg(e.target.value ? Number(e.target.value) : undefined)}
+            placeholder="0,00"
+            className={`h-8 text-[12px] ${metaInputClass}`}
+          />
         </div>
       )}
 
