@@ -33,6 +33,8 @@ export interface ZootCategoriaMensal {
   evol_cat_entrada: number;
   evol_cat_saida: number;
   saldo_final: number;
+  saldo_sistema: number | null;  // cadeia pura de lançamentos, sem override de P1
+  saldo_p1: number | null;       // snapshot do fechamento de pastos, null se ausente
   peso_total_inicial: number;
   peso_total_final: number;
   peso_medio_inicial: number | null;

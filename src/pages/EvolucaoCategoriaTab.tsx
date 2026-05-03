@@ -82,6 +82,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         evol_cat_entrada: 0,
         evol_cat_saida: 0,
         saldo_final: 0,
+        saldo_sistema: null,
+        saldo_p1: null,
         peso_total_inicial: 0,
         peso_total_final: 0,
         peso_medio_inicial: null as number | null,
@@ -126,7 +128,10 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     const saiExt = dadosMes.reduce((s, d) => s + d.saidas_externas, 0);
     const evolIn = dadosMes.reduce((s, d) => s + d.evol_cat_entrada, 0);
     const evolOut = dadosMes.reduce((s, d) => s + d.evol_cat_saida, 0);
-    const sf = dadosMes.reduce((s, d) => s + d.saldo_final, 0);
+    const algumSistemaNulo = dadosMes.some(d => d.saldo_sistema == null);
+    const sf: number | null = algumSistemaNulo
+      ? null
+      : dadosMes.reduce((s, d) => s + d.saldo_sistema!, 0);
     const pesoTotalIni = dadosMes.reduce((s, d) => s + d.peso_total_inicial, 0);
     const pesoTotalFin = dadosMes.reduce((s, d) => s + d.peso_total_final, 0);
     const prodBio = dadosMes.reduce((s, d) => s + d.producao_biologica, 0);
@@ -393,7 +398,11 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                         {getVal(d, 'evol_cat_entrada')}
                       </td>
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
-                        {isFutureMonth ? '' : getVal(d, 'saldo_final')}
+                        {isFutureMonth ? '' :
+                          modo === 'cabeca'
+                            ? (d.saldo_sistema != null ? fmtNum(d.saldo_sistema) : '—')
+                            : getVal(d, 'saldo_final')
+                        }
                       </td>
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground">
                         {showPesoFin ? fmtPeso(d.peso_medio_final) : '–'}
@@ -449,7 +458,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
 
           <div className="grid grid-cols-4 gap-x-4 gap-y-0.5 text-[9px]">
             <div><span className="text-muted-foreground">SI:</span> <span className="font-medium text-foreground">{totais.si.toLocaleString('pt-BR')} cab</span></div>
-            <div><span className="text-muted-foreground">SF:</span> <span className="font-medium text-foreground">{totais.sf.toLocaleString('pt-BR')} cab</span></div>
+            <div><span className="text-muted-foreground">SF:</span> <span className="font-medium text-foreground">{totais.sf != null ? `${totais.sf.toLocaleString('pt-BR')} cab` : '—'}</span></div>
             <div><span className="text-muted-foreground">Cab. Méd.:</span> <span className="font-medium text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</span></div>
             <div><span className="text-muted-foreground">Dias:</span> <span className="font-medium text-foreground">{totais.diasMes}</span></div>
             <div><span className="text-muted-foreground">Peso Ini.:</span> <span className="font-medium text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
