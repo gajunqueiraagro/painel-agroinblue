@@ -263,6 +263,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialReclassCenario, abaInicial]);
+
+  // Sincronizar filtros de ano/mês com o filtro global do V2Index
+  useEffect(() => {
+    if (initialAnoFiltro) setAnoFiltro(String(initialAnoFiltro));
+  }, [initialAnoFiltro]);
+
+  useEffect(() => {
+    if (initialMesFiltro) setMesFiltro(String(initialMesFiltro));
+  }, [initialMesFiltro]);
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
