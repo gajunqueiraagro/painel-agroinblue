@@ -17,6 +17,13 @@ interface Params {
   mes: number;
 }
 
+export type StatusValidacaoArea =
+  | 'ok'
+  | 'sem_area'
+  | 'sem_snapshot'
+  | 'p1_aberto'
+  | 'carregando';
+
 export interface PainelConsultorDataResult {
   cabecas: number | null;
   pesoMedio: number | null;
@@ -30,6 +37,7 @@ export interface PainelConsultorDataResult {
   areaProdutivaMes: number | null;
   lotUaHa: number | null;
   arrHa: number | null;
+  statusArea: StatusValidacaoArea;
   statusPilares: StatusPilares | null;
   loading: boolean;
 }
@@ -86,6 +94,12 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
 
   const idx = mesRef - 1;
 
+  const statusArea: StatusValidacaoArea = (() => {
+    if (loadingArea) return 'carregando';
+    if ((areaMensal[idx] ?? 0) > 0) return 'ok';
+    return 'sem_snapshot';
+  })();
+
   const safe = (v: number | null | undefined) =>
     v == null || isNaN(Number(v)) ? null : Number(v);
 
@@ -107,6 +121,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
     areaProdutivaMes: safe(areaMensal[idx]),
     lotUaHa: safe(monthlyData.lotUaHa[idx]),
     arrHa:   safe(monthlyData.arrHa[idx]),
+    statusArea,
     statusPilares: statusPilares ?? null,
     loading,
   };

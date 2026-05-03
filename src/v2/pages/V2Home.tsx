@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
+import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
@@ -21,9 +22,10 @@ interface MetricTileProps {
   loading?: boolean;
   pending?: boolean;
   tone?: 'default' | 'positive' | 'negative' | 'blue';
+  status?: string | null;
 }
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default' }: MetricTileProps) {
+function MetricTile({ label, value, unit, loading, pending, tone = 'default', status }: MetricTileProps) {
   const valColor =
     tone === 'positive' ? 'text-emerald-700' :
     tone === 'negative' ? 'text-red-700' :
@@ -37,7 +39,9 @@ function MetricTile({ label, value, unit, loading, pending, tone = 'default' }: 
       <p className={`text-[1.4rem] font-black leading-none tabular-nums ${pending ? 'text-muted-foreground/30' : valColor}`}>
         {loading
           ? <span className="inline-block w-20 h-6 bg-muted/50 rounded animate-pulse align-middle" />
-          : <>{value ?? '—'}{unit && value ? <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span> : null}</>
+          : status
+            ? <span className="text-[0.75rem] font-semibold text-amber-600">{status}</span>
+            : <>{value ?? '—'}{unit && value ? <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span> : null}</>
         }
       </p>
       <div className="mt-1 space-y-px">
@@ -81,9 +85,17 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes, lotUaHa, arrHa,
+    areaProdutivaMes, lotUaHa, arrHa, statusArea,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum });
+
+  const msgArea = (s: StatusValidacaoArea): string | null => {
+    if (s === 'ok' || s === 'carregando') return null;
+    if (s === 'sem_snapshot') return '⚠ Snapshot não gerado';
+    if (s === 'p1_aberto')   return '⚠ P1 não fechado';
+    if (s === 'sem_area')    return '⚠ Área não cadastrada';
+    return null;
+  };
 
   const { lancamentos: lancFin, rateioADM } = useFinanceiro();
   const mesAte = mesNum === 0 ? 12 : mesNum;
@@ -126,10 +138,10 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
-          <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={loadingPainel} />
-          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={loadingPainel} />
+          <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={statusArea === 'carregando'} status={msgArea(statusArea)} />
+          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
           <MetricTile label="kg/ha" value={null} pending />
-          <MetricTile label="@/ha" value={fmtN(arrHa, 2)} loading={loadingPainel} />
+          <MetricTile label="@/ha" value={fmtN(arrHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
