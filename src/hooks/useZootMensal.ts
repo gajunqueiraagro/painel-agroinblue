@@ -75,7 +75,7 @@ export function useZootMensal({ ano, cenario }: UseZootMensalParams) {
 
       return (data as unknown as ZootMensal[]) || [];
     },
-    enabled: !!fazendaId,
+    enabled: Boolean(fazendaId) && fazendaId !== '__global__',
     staleTime: 30_000,
     // Mantém dados anteriores durante troca de fazenda/ano para evitar flash vazio
     // (react-query v5).
