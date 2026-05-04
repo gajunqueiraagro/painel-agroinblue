@@ -69,24 +69,29 @@ function SectionBlock({ title, subtitle, children }: {
   );
 }
 
-export function V2Home({ ano, mes, onMesChange }: { ano: string; mes: string; onMesChange?: (mes: string) => void }) {
+export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
+  ano: string;
+  mes: string;
+  viewMode?: 'mes' | 'periodo';
+  onViewModeChange?: (v: 'mes' | 'periodo') => void;
+}) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal } = useFazenda();
   const h = new Date().getHours();
   const g = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 
-  const mesNum = mes === '0' ? 0 : parseInt(mes);
+  const mesNum = parseInt(mes);
   const anoNum = parseInt(ano);
-  const isPeriodo = mesNum === 0;
+  const isPeriodo = viewMode === 'periodo';
 
-  const ml = mes === '0'
+  const ml = isPeriodo
     ? 'Jan–Dez ' + ano
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes, lotUaHa, kgHa, arrHa, statusArea, faltandoCount,
+    areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum });
 
@@ -101,18 +106,18 @@ export function V2Home({ ano, mes, onMesChange }: { ano: string; mes: string; on
   };
 
   const { lancamentos: lancFin, rateioADM } = useFinanceiro();
-  const mesAte = mesNum === 0 ? 12 : mesNum;
+  const mesAte = isPeriodo ? 12 : mesNum;
   const { meses: mesesFluxo, loading: loadingFluxo } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesAte);
   const caixaValor = useMemo(() => {
     if (loadingFluxo || !mesesFluxo.length) return null;
     const sorted = [...mesesFluxo].sort((a, b) => a.mes - b.mes);
-    return mesNum === 0
+    return isPeriodo
       ? sorted[sorted.length - 1]?.saldoFinal ?? null
       : sorted.find(m => m.mes === mesNum)?.saldoFinal ?? null;
-  }, [mesesFluxo, mesNum, loadingFluxo]);
+  }, [mesesFluxo, mesNum, isPeriodo, loadingFluxo]);
 
   const { kpis: finKpis, loading: loadingDivida } = useFinanciamentosPainel(
-    anoNum, 'todos', mesNum === 0 ? 'todos' : mesNum,
+    anoNum, 'todos', isPeriodo ? 'todos' : mesNum,
   );
   const endividamentoValor = loadingDivida ? null : (finKpis?.saldoDevedor?.total?.total ?? 0);
 
@@ -127,11 +132,10 @@ export function V2Home({ ano, mes, onMesChange }: { ano: string; mes: string; on
         <p className="text-xs text-muted-foreground mt-0.5">
           {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
         </p>
-        {onMesChange && (
+        {onViewModeChange && (
           <div className="flex gap-1 mt-2">
             <button
-              // TODO: guardar último mês selecionado antes de alternar para período
-              onClick={() => onMesChange(isPeriodo ? String(new Date().getMonth() + 1) : mes)}
+              onClick={() => onViewModeChange('mes')}
               className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
                 !isPeriodo
                   ? 'bg-primary text-primary-foreground border-primary'
@@ -141,7 +145,7 @@ export function V2Home({ ano, mes, onMesChange }: { ano: string; mes: string; on
               No mês
             </button>
             <button
-              onClick={() => onMesChange('0')}
+              onClick={() => onViewModeChange('periodo')}
               className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
                 isPeriodo
                   ? 'bg-primary text-primary-foreground border-primary'

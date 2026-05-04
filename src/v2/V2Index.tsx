@@ -109,6 +109,7 @@ export default function V2Index() {
     : String(new Date().getFullYear());
   const [ano, setAno] = useState(anoMesAnterior);
   const [mes, setMes] = useState(String(mesAnterior));
+  const [viewMode, setViewMode] = useState<'mes' | 'periodo'>('mes');
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
@@ -145,7 +146,7 @@ export default function V2Index() {
   }, [clienteAtual?.id]);
 
   function renderContent() {
-    if (section === 'home') return <V2Home ano={ano} mes={mes} onMesChange={setMes} />;
+    if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} />;
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     if (section === 'conciliacao') return (
