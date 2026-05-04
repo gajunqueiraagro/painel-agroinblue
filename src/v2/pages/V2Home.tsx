@@ -316,6 +316,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
           serieMeta={seriesMeta?.cabFin}
           tipoAcumulado="posicao"
+          indicadorKey="cabecas"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          anoInicio={anoNum - 6}
         />
       )}
       {modalIndicador === 'pesoMedio' && (
@@ -327,6 +331,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAnoAnt={dadosAnoAnt.seriesMensais?.pesoMedioFin}
           serieMeta={seriesMeta?.pesoMedioFin}
           tipoAcumulado="posicao"
+          indicadorKey="pesoMedio"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          anoInicio={anoNum - 6}
         />
       )}
       {modalIndicador === 'arrobas' && (
@@ -338,6 +346,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAnoAnt={dadosAnoAnt.seriesMensais?.arrobasProd}
           serieMeta={seriesMeta?.arrobasProd}
           tipoAcumulado="soma"
+          indicadorKey="arrobas"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          anoInicio={anoNum - 6}
         />
       )}
       {modalIndicador === 'gmd' && (
@@ -349,6 +361,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAnoAnt={dadosAnoAnt.seriesMensais?.gmd}
           serieMeta={seriesMeta?.gmd}
           tipoAcumulado="media"
+          indicadorKey="gmd"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          anoInicio={anoNum - 6}
         />
       )}
       {modalIndicador === 'desfrute' && (
@@ -359,6 +375,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.desfruteCab ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.desfruteCab}
           tipoAcumulado="soma"
+          indicadorKey="desfrute"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          anoInicio={anoNum - 6}
         />
       )}
       {modalIndicador === 'valorRebanho' && (
@@ -369,6 +389,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.valorRebFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.valorRebFin}
           tipoAcumulado="posicao"
+          indicadorKey="valorRebanho"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
         />
       )}
     </div>

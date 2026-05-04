@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import {
   LineChart,
@@ -11,6 +12,7 @@ import {
   Bar,
   Cell,
 } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   open: boolean;
@@ -31,6 +33,14 @@ interface Props {
   tipoAcumulado?: 'soma' | 'media' | 'posicao';
   /** Sobrescreve o label do período (default: "Jan–{mesAtual}"). */
   labelPeriodo?: string;
+  /** Identificador do indicador (gera a query histórica correta). */
+  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho';
+  /** Cliente — necessário para query histórica. */
+  clienteId?: string;
+  /** Fazenda específica; null = global (somar todas as fazendas do cliente). */
+  fazendaId?: string | null;
+  /** Ano inicial do histórico; default: anoAtual - 6. */
+  anoInicio?: number;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -54,7 +64,103 @@ export function IndicadorHistoricoModal({
   serieMeta,
   tipoAcumulado,
   labelPeriodo,
+  indicadorKey,
+  clienteId,
+  fazendaId,
+  anoInicio,
 }: Props) {
+  const [historico, setHistorico] = useState<Array<{ ano: number; valor: number | null }>>([]);
+  const [loadingHistorico, setLoadingHistorico] = useState(false);
+
+  useEffect(() => {
+    if (!open || !clienteId || indicadorKey === 'valorRebanho') return;
+
+    const inicio = anoInicio ?? anoAtual - 6;
+    let cancelled = false;
+
+    setLoadingHistorico(true);
+    (async () => {
+      try {
+        let query = supabase
+          .from('zoot_mensal_cache')
+          .select(`
+            ano,
+            mes,
+            saldo_final,
+            peso_total_final,
+            producao_biologica,
+            saidas_externas,
+            gmd,
+            fazenda:fazendas!inner(cliente_id)
+          `)
+          .eq('fazenda.cliente_id', clienteId)
+          .eq('cenario', 'realizado')
+          .gte('ano', inicio)
+          .lte('ano', anoAtual)
+          .lte('mes', mesAtual);
+
+        if (fazendaId) {
+          query = query.eq('fazenda_id', fazendaId);
+        }
+
+        const { data, error } = await query;
+        if (cancelled) return;
+        if (error || !data) {
+          setHistorico([]);
+          return;
+        }
+
+        const porAno: Record<number, any[]> = {};
+        for (const r of data as any[]) {
+          if (!porAno[r.ano]) porAno[r.ano] = [];
+          porAno[r.ano].push(r);
+        }
+
+        const resultado: Array<{ ano: number; valor: number | null }> = [];
+        for (let a = inicio; a <= anoAtual; a++) {
+          const rows = porAno[a] ?? [];
+          const rowsMes = rows.filter((r: any) => r.mes === mesAtual);
+          const rowsPer = rows;
+
+          let valor: number | null = null;
+
+          if (indicadorKey === 'cabecas') {
+            const s = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
+            valor = s > 0 ? s : null;
+
+          } else if (indicadorKey === 'pesoMedio') {
+            const ptf = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.peso_total_final) || 0), 0);
+            const sf  = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
+            valor = sf > 0 ? ptf / sf : null;
+
+          } else if (indicadorKey === 'arrobas') {
+            const pb = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.producao_biologica) || 0), 0);
+            valor = pb > 0 ? pb / 30 : null;
+
+          } else if (indicadorKey === 'gmd') {
+            // TODO: refinar para ponderação por cabeças médias quando disponível
+            const vals = rowsPer
+              .map((r: any) => Number(r.gmd))
+              .filter((v: number) => !isNaN(v) && v > 0);
+            valor = vals.length > 0 ? vals.reduce((s: number, v: number) => s + v, 0) / vals.length : null;
+
+          } else if (indicadorKey === 'desfrute') {
+            const s = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.saidas_externas) || 0), 0);
+            valor = s > 0 ? s : null;
+          }
+
+          resultado.push({ ano: a, valor });
+        }
+
+        if (!cancelled) setHistorico(resultado);
+      } finally {
+        if (!cancelled) setLoadingHistorico(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [open, clienteId, fazendaId, indicadorKey, anoAtual, anoInicio, mesAtual]);
+
   if (!open) return null;
 
   const fmtValor = (v: number | null | undefined): string => {
@@ -99,16 +205,19 @@ export function IndicadorHistoricoModal({
     return v != null && !isNaN(v) ? v : null;
   };
 
-  const resumoAtual  = calcResumo(serieAno);
-  const resumoAnoAnt = calcResumo(serieAnoAnt);
-  const resumoMeta   = calcResumo(serieMeta);
+  const metaVal = calcResumo(serieMeta);
 
   const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
 
   const barDados = [
-    { nome: String(anoAtual),        valor: resumoAtual,  cor: '#185FA5' },
-    ...(serieAnoAnt ? [{ nome: String(anoAtual - 1), valor: resumoAnoAnt, cor: '#B4B2A9' }] : []),
-    ...(serieMeta   ? [{ nome: `Meta ${anoAtual}`,   valor: resumoMeta,  cor: '#3B6D11' }] : []),
+    ...historico.map(h => ({
+      nome: String(h.ano),
+      valor: h.valor,
+      cor: h.ano === anoAtual ? '#185FA5' : '#B4B2A9',
+    })),
+    ...(serieMeta && metaVal != null && !isNaN(metaVal)
+      ? [{ nome: `Meta ${anoAtual}`, valor: metaVal, cor: '#F97316' }]
+      : []),
   ].filter(b => b.valor != null && !isNaN(b.valor as number));
 
   return (
@@ -159,7 +268,7 @@ export function IndicadorHistoricoModal({
           )}
           {hasMeta && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-4 h-[1.5px] border-t-[1.5px] border-dashed border-[#3B6D11]" />
+              <span className="inline-block w-4 h-[1.5px] border-t-[1.5px] border-dashed border-[#F97316]" />
               Meta {anoAtual}
             </span>
           )}
@@ -192,10 +301,10 @@ export function IndicadorHistoricoModal({
                 <Line
                   type="monotone"
                   dataKey="meta"
-                  stroke="#3B6D11"
+                  stroke="#F97316"
                   strokeWidth={1.5}
                   strokeDasharray="6 3"
-                  dot={{ r: 2, fill: '#3B6D11' }}
+                  dot={{ r: 2, fill: '#F97316' }}
                   connectNulls={false}
                   isAnimationActive={false}
                 />
@@ -218,8 +327,8 @@ export function IndicadorHistoricoModal({
           </ResponsiveContainer>
         </div>
 
-        {/* Resumo do período */}
-        {barDados.length > 0 && (
+        {/* Resumo do período (histórico multi-ano) */}
+        {indicadorKey !== 'valorRebanho' && (
           <div style={{ padding: '0 1.25rem', marginTop: '0.5rem' }}>
             <div style={{
               borderTop: '0.5px solid var(--color-border-tertiary)',
@@ -232,36 +341,33 @@ export function IndicadorHistoricoModal({
                 {labelPer}
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={120}>
-              <BarChart
-                data={barDados}
-                margin={{ top: 20, right: 8, left: 8, bottom: 0 }}
-                barCategoryGap="30%"
-              >
-                <XAxis
-                  dataKey="nome"
-                  tick={{ fontSize: 11, fill: '#888780' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis hide />
-                <Bar
-                  dataKey="valor"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  label={{
-                    position: 'top',
-                    fontSize: 11,
-                    fill: 'var(--color-text-secondary)',
-                    formatter: (v: number) => fmtValor(v),
-                  }}
-                >
-                  {barDados.map((entry, i) => (
-                    <Cell key={i} fill={entry.cor} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {loadingHistorico ? (
+              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
+            ) : barDados.length > 0 ? (
+              <ResponsiveContainer width="100%" height={130}>
+                <BarChart data={barDados} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
+                  <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Bar
+                    dataKey="valor"
+                    radius={[3, 3, 0, 0]}
+                    isAnimationActive={false}
+                    label={{
+                      position: 'top',
+                      fontSize: 10,
+                      fill: 'var(--color-text-secondary)',
+                      formatter: (v: number) => fmtValor(v),
+                    }}
+                  >
+                    {barDados.map((entry, i) => (
+                      <Cell key={i} fill={entry.cor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '0.5rem 0' }}>Sem dados históricos</p>
+            )}
           </div>
         )}
 
