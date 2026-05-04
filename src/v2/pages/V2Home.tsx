@@ -84,14 +84,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   const anoNum = parseInt(ano);
   const isPeriodo = viewMode === 'periodo';
 
+  const MES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const ml = isPeriodo
-    ? 'Jan–Dez ' + ano
+    ? `Jan–${MES_ABREV[mesNum - 1]} ${ano}`
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
+    dadosCompletos,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode });
 
@@ -157,6 +159,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           </div>
         )}
       </div>
+
+      {!dadosCompletos && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
+          ⚠️ Dados zootécnicos incompletos no Global. Reprocesse o cache/fechamento das fazendas antes de analisar.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 

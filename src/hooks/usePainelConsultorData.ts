@@ -45,11 +45,13 @@ export interface PainelConsultorDataResult {
   statusArea: StatusValidacaoArea;
   faltandoCount: number;
   statusPilares: StatusPilares | null;
+  /** False quando GLOBAL e zoot_mensal_cache não tem todas as fazendas pec do mês. */
+  dadosCompletos: boolean;
   loading: boolean;
 }
 
 export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): PainelConsultorDataResult {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
@@ -202,6 +204,37 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
 
   const isPeriodo = viewMode === 'periodo';
 
+  // ── Integridade do GLOBAL ──
+  // Em modo global, exigir que TODAS as fazendas pecuárias do cliente tenham
+  // linhas no zoot_mensal_cache para o(s) mês(es) avaliado(s). Sem isso, o
+  // somatório seria parcial — preferível mostrar vazio + alerta a iludir o usuário.
+  const fazendasPecuariaIds = new Set(
+    fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id),
+  );
+  const checkMesCompleto = (m: number): boolean => {
+    if (fazendasPecuariaIds.size === 0) return true;
+    const presentes = new Set<string>();
+    for (const r of viewDataRealizado ?? []) {
+      if (r.mes === m) presentes.add(r.fazenda_id);
+    }
+    for (const id of fazendasPecuariaIds) {
+      if (!presentes.has(id)) return false;
+    }
+    return true;
+  };
+  const dadosCompletos = (() => {
+    if (!isGlobal) return true;
+    if (loading) return true; // Não julgar durante carregamento
+    if (isPeriodo) {
+      for (let i = 0; i <= idx; i++) {
+        if (!checkMesCompleto(i + 1)) return false;
+      }
+      return true;
+    }
+    return checkMesCompleto(mesRef);
+  })();
+  const incompletoOverride = isGlobal && !dadosCompletos && !loading;
+
   const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) =>
     p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
   );
@@ -209,7 +242,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
     ? meanArr(sliceUpTo(kgHaPorMes, idx))
     : (!isNaN(kgHaPorMes[idx]) ? kgHaPorMes[idx] : null);
 
-  return {
+  const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
       : safe(monthlyData.cabFin[idx]),
@@ -262,6 +295,24 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
     statusArea,
     faltandoCount,
     statusPilares: statusPilares ?? null,
+    dadosCompletos,
     loading,
   };
+
+  if (incompletoOverride) {
+    return {
+      ...baseReturn,
+      cabecas: null,
+      pesoMedio: null,
+      gmd: null,
+      arrobas: null,
+      desfrute: null,
+      lotUaHa: null,
+      kgHa: null,
+      areaProdutivaMes: null,
+      dadosCompletos: false,
+    };
+  }
+
+  return baseReturn;
 }
