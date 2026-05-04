@@ -120,12 +120,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   const dadosMesAnt = usePainelConsultorData({
     ano: anoNum,
     mes: mesAntNum ?? mesNum,
-    viewMode: 'mes',
+    viewMode,
   });
   const dadosAnoAnt = usePainelConsultorData({
     ano: anoNum - 1,
     mes: mesNum,
-    viewMode: 'mes',
+    viewMode,
   });
 
   const calcVar = (atual: number | null, base: number | null): number | null => {
