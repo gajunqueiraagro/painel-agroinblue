@@ -286,6 +286,25 @@ export default function V2Index() {
       <FechamentoTab
         filtroAnoInicial={ano}
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+        onNavigateToReclass={(filtro) => {
+          if (filtro) { setAno(filtro.ano); setMes(String(filtro.mes)); }
+          setSection('lancamentos-zoot');
+        }}
+        onNavigateToValorRebanho={(filtro) => {
+          setAno(filtro.ano);
+          setMes(String(filtro.mes));
+          setSection('valor-rebanho');
+        }}
+        onNavigateToConferenciaGmd={(filtro) => {
+          setAno(filtro.ano);
+          setMes(String(filtro.mes));
+          setSection('conferencia-mensal');
+        }}
+        onNavigateToMapaPastos={(filtro) => {
+          setAno(filtro.ano);
+          setMes(String(filtro.mes));
+          setSection('resumo-pastos');
+        }}
       />
     );
     if (section === 'evolucao-categoria') return (
