@@ -17,6 +17,8 @@ interface Params {
   ano: number;
   mes: number;
   viewMode?: 'mes' | 'periodo';
+  /** Quando false (default), o hook NÃO carrega/processa dados de meta — economiza N queries e o pesado buildMonthlyDataFromView. */
+  carregarMeta?: boolean;
 }
 
 export type StatusValidacaoArea =
@@ -66,7 +68,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -84,8 +86,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
   } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
 
   const {
-    rawCategorias: viewDataMeta,
-  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal });
+    rawCategorias: viewDataMetaRaw,
+  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: carregarMeta });
+
+  const viewDataMeta = carregarMeta ? viewDataMetaRaw : null;
 
   const viewTotals = useMemo(
     () => totalizarViewPorMes(viewDataRealizado ?? []),
@@ -93,8 +97,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
   );
 
   const viewTotalsMeta = useMemo(
-    () => totalizarViewPorMes(viewDataMeta ?? []),
-    [viewDataMeta],
+    () => carregarMeta ? totalizarViewPorMes(viewDataMeta ?? []) : ({} as ReturnType<typeof totalizarViewPorMes>),
+    [viewDataMeta, carregarMeta],
   );
 
   const { lancamentos: lancPec, loading: loadingLanc } = useLancamentos();
@@ -188,7 +192,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
 
   const monthlyDataMeta = useMemo(
     () =>
-      viewDataMeta && viewDataMeta.length > 0
+      carregarMeta && viewDataMeta && viewDataMeta.length > 0
         ? buildMonthlyDataFromView(
             viewTotalsMeta,
             viewDataMeta,
@@ -202,7 +206,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotalsMeta, viewDataMeta, ano, isGlobal, areaMensal],
+    [viewTotalsMeta, viewDataMeta, carregarMeta, ano, isGlobal, areaMensal],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;

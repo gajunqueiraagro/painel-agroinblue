@@ -342,9 +342,10 @@ interface UseRebanhoOficialParams {
   ano: number;
   cenario: 'realizado' | 'meta';
   global?: boolean;
+  enabled?: boolean;
 }
 
-export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialParams) {
+export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseRebanhoOficialParams) {
   const { fazendaAtual, isGlobal: isGlobalContext } = useFazenda();
   const { clienteAtual } = useCliente();
   const resolvedGlobal = global ?? isGlobalContext;
@@ -416,7 +417,7 @@ export function useRebanhoOficial({ ano, cenario, global }: UseRebanhoOficialPar
       }
       return result;
     },
-    enabled: cenario === 'realizado' && (resolvedGlobal ? !!clienteId : !!fazendaId),
+    enabled: enabled && cenario === 'realizado' && (resolvedGlobal ? !!clienteId : !!fazendaId),
     staleTime: 30_000,
     gcTime: 60_000,
     // Mantém overlay anterior visível enquanto nova query resolve — sem piscar.
