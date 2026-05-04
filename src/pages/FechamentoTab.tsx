@@ -793,7 +793,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   // Determine main action
   const allClosed = fechadosCount === pastosAtivos.length && pastosAtivos.length > 0;
-  const showCloseButton = !hasDivergencia && !allClosed && canBulkClose;
+  const showCloseButton = !allClosed && canBulkClose;
   const showAdjustButton = hasDivergencia;
 
   if (bloqueado) {
@@ -845,14 +845,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Button>
             )}
             {showCloseButton && (
-              <Button
-                size="sm"
-                className="w-full h-8 text-xs font-bold gap-1"
-                onClick={handleCloseClick}
-                disabled={verificandoVazios}
-              >
-                <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
-              </Button>
+              <>
+                {hasDivergencia && (
+                  <div className="text-xs text-red-500 text-center px-1">
+                    Existem divergências entre Sistema e Pasto. Corrija antes de fechar o mês.
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs font-bold gap-1"
+                  onClick={handleCloseClick}
+                  disabled={verificandoVazios || hasDivergencia}
+                >
+                  <Lock className="h-3.5 w-3.5" /> {verificandoVazios ? 'Verificando…' : 'Fechar Mês'}
+                </Button>
+              </>
             )}
             {allClosed && onNavigateToValorRebanho && (
               <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 font-bold w-fit mt-1" onClick={() => onNavigateToValorRebanho({ ano: anoFiltro, mes: mesFiltro })}>
