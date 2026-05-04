@@ -597,7 +597,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
         if (fazendaAtual?.id) {
           const { error: snapError } = await supabase.rpc('gerar_snapshot_area', {
             p_fazenda_id: fazendaAtual.id,
-            p_ano_mes: `${anoMes}-01`,
+            p_ano_mes: new Date(`${anoMes}-01`),
             p_fechado_por: user?.id ?? null,
           });
           if (snapError) {
