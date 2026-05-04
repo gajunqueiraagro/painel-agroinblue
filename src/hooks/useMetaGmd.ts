@@ -22,7 +22,7 @@ export function useMetaGmd(ano: string) {
   const { data: queryData, isLoading: loading, refetch } = useQuery({
     queryKey: ['meta-gmd', clienteId, fazendaId ?? 'global', ano],
     enabled: !!clienteId,
-    staleTime: 30_000,
+    staleTime: 5 * 60 * 1000,
     // Mantém dados anteriores na troca de fazenda/cliente/ano para evitar flash vazio
     // (react-query v5).
     placeholderData: (previousData) => previousData,
