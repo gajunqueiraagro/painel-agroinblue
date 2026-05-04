@@ -52,7 +52,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -103,8 +103,10 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
       // Aguardar query de fazendas ativas completar antes de julgar
       if (!fazendasAtivasCarregadas) return 'carregando';
       if (totalFazendasAtivas === 0) return 'sem_snapshot';
+      const comP1  = fazendasComP1PorMes[idx] ?? 0;
       const comSnap = fazendasComSnapPorMes[idx] ?? 0;
-      if (comSnap < totalFazendasAtivas) return 'incompleto';
+      if (comP1 === 0) return 'ok';
+      if (comSnap < comP1) return 'incompleto';
       if ((areaMensal[idx] ?? 0) <= 0) return 'sem_snapshot';
       return 'ok';
     }
@@ -114,7 +116,7 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   })();
 
   const faltandoCount = isGlobal
-    ? Math.max(0, totalFazendasAtivas - (fazendasComSnapPorMes[idx] ?? 0))
+    ? Math.max(0, (fazendasComP1PorMes[idx] ?? 0) - (fazendasComSnapPorMes[idx] ?? 0))
     : 0;
 
   const safe = (v: number | null | undefined) =>

@@ -14,6 +14,7 @@ export interface UseSnapshotAreaAnualResult {
   totalFazendasAtivas: number;
   fazendasAtivasCarregadas: boolean;
   fazendasComSnapPorMes: number[];
+  fazendasComP1PorMes: number[];
   temP1FechadoPorMes: boolean[];
   loading: boolean;
 }
@@ -29,6 +30,7 @@ export function useSnapshotAreaAnual(
   const [totalFazendasAtivas, setTotalFazendasAtivas] = useState(0);
   const [fazendasAtivasCarregadas, setFazendasAtivasCarregadas] = useState(false);
   const [fazendasComSnapPorMes, setFazendasComSnapPorMes] = useState<number[]>(Array(12).fill(0));
+  const [fazendasComP1PorMes, setFazendasComP1PorMes] = useState<number[]>(Array(12).fill(0));
   const [temP1FechadoPorMes, setTemP1FechadoPorMes] = useState<boolean[]>(Array(12).fill(false));
   const [loading, setLoading] = useState(false);
 
@@ -39,6 +41,7 @@ export function useSnapshotAreaAnual(
       setTotalFazendasAtivas(0);
       setFazendasAtivasCarregadas(false);
       setFazendasComSnapPorMes(Array(12).fill(0));
+      setFazendasComP1PorMes(Array(12).fill(0));
       setTemP1FechadoPorMes(Array(12).fill(false));
       return;
     }
@@ -69,21 +72,32 @@ export function useSnapshotAreaAnual(
             .eq('tem_pecuaria', true)
         : Promise.resolve({ data: null as null, error: null });
 
-      const p1Query = !isGlobal && fazendaId
-        ? supabase
-            .from('fechamento_pastos')
-            .select('ano_mes')
-            .eq('fazenda_id', fazendaId)
-            .eq('status', 'fechado')
-            .gte('ano_mes', `${ano}-01`)
-            .lte('ano_mes', `${ano}-99`)
-        : Promise.resolve({ data: null as null, error: null });
-
-      const [snapRes, fazRes, p1Res] = await Promise.all([
+      const [snapRes, fazRes] = await Promise.all([
         snapshotsQuery,
         fazendasAtivasQuery,
-        p1Query,
       ]);
+
+      const fazendaIdsGlobal = isGlobal ? (fazRes.data ?? []).map((f: any) => f.id) : [];
+
+      const p1Res = await (
+        isGlobal && fazendaIdsGlobal.length > 0
+          ? supabase
+              .from('fechamento_pastos')
+              .select('fazenda_id, ano_mes')
+              .in('fazenda_id', fazendaIdsGlobal)
+              .eq('status', 'fechado')
+              .gte('ano_mes', `${ano}-01`)
+              .lte('ano_mes', `${ano}-99`)
+          : !isGlobal && fazendaId
+            ? supabase
+                .from('fechamento_pastos')
+                .select('ano_mes')
+                .eq('fazenda_id', fazendaId)
+                .eq('status', 'fechado')
+                .gte('ano_mes', `${ano}-01`)
+                .lte('ano_mes', `${ano}-99`)
+            : Promise.resolve({ data: null as null, error: null })
+      );
 
       if (cancelled) return;
 
@@ -146,6 +160,23 @@ export function useSnapshotAreaAnual(
       setTotalFazendasAtivas(totalAtivas);
       setFazendasComSnapPorMes(comSnapPorMes);
 
+      // Processar fazendas com P1 fechado por mês (global)
+      const comP1PorMes = Array(12).fill(0);
+      if (isGlobal && p1Res.data) {
+        const p1PorMes = new Map<number, Set<string>>();
+        for (const row of p1Res.data as any[]) {
+          const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
+          if (mesIdx >= 0 && mesIdx < 12) {
+            if (!p1PorMes.has(mesIdx)) p1PorMes.set(mesIdx, new Set());
+            p1PorMes.get(mesIdx)!.add(row.fazenda_id as string);
+          }
+        }
+        for (const [mes, faz] of p1PorMes) {
+          comP1PorMes[mes] = faz.size;
+        }
+      }
+      setFazendasComP1PorMes(comP1PorMes);
+
       // Processar P1 (fazenda específica) — erro não-crítico
       const p1Mensal = Array(12).fill(false);
       if (!isGlobal && fazendaId && p1Res.data) {
@@ -162,5 +193,5 @@ export function useSnapshotAreaAnual(
     return () => { cancelled = true; };
   }, [ano, fazendaId, isGlobal, clienteId]);
 
-  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, temP1FechadoPorMes, loading };
+  return { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading };
 }
