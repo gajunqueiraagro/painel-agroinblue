@@ -5,6 +5,8 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
+import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import type { Lancamento } from '@/types/cattle';
 import {
   useRebanhoOficial,
   totalizarPorMes as totalizarViewPorMes,
@@ -19,6 +21,10 @@ interface Params {
   viewMode?: 'mes' | 'periodo';
   /** Quando false (default), o hook NÃO carrega/processa dados de meta — economiza N queries e o pesado buildMonthlyDataFromView. */
   carregarMeta?: boolean;
+  /** Lançamentos pecuários compartilhados — quando fornecido, o hook NÃO carrega via useLancamentos. */
+  lancPecExterno?: Lancamento[];
+  /** Lançamentos financeiros compartilhados — quando fornecido, o hook NÃO carrega via useFinanceiro. */
+  lancFinExterno?: FinanceiroLancamento[];
 }
 
 export type StatusValidacaoArea =
@@ -68,7 +74,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, lancPecExterno, lancFinExterno }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -101,8 +107,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     [viewDataMeta, carregarMeta],
   );
 
-  const { lancamentos: lancPec, loading: loadingLanc } = useLancamentos();
-  const { lancamentos: lancFin, loading: loadingFin } = useFinanceiro();
+  const { lancamentos: lancPecInterno, loading: loadingLancInterno } =
+    useLancamentos({ enabled: !Array.isArray(lancPecExterno) });
+
+  const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
+    useFinanceiro({ enabled: !Array.isArray(lancFinExterno) });
+
+  const lancPec    = Array.isArray(lancPecExterno) ? lancPecExterno : lancPecInterno;
+  const lancFin    = Array.isArray(lancFinExterno) ? lancFinExterno : lancFinInterno;
+  const loadingLanc = Array.isArray(lancPecExterno) ? false : loadingLancInterno;
+  const loadingFin  = Array.isArray(lancFinExterno) ? false : loadingFinInterno;
 
   // Valor do Rebanho oficial — mesma fonte do PainelConsultorTab (sem fallback).
   // Array 13 posições: [0] = Dez ano anterior, [1..12] = Jan..Dez do ano.

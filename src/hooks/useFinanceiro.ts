@@ -335,7 +335,12 @@ function isFazendaAtivaMes(rebanhoMap: Map<string, Map<string, number>>, fazenda
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useFinanceiro() {
+interface UseFinanceiroOptions {
+  enabled?: boolean;
+}
+
+export function useFinanceiro(options: UseFinanceiroOptions = {}) {
+  const enabled = options.enabled ?? true;
   const { fazendaAtual, fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
@@ -474,7 +479,7 @@ export function useFinanceiro() {
     }
   }, [fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (enabled) loadData(); }, [loadData, enabled]);
 
   // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
   const rebanhoMedioPorFazendaMes = useMemo(() => {

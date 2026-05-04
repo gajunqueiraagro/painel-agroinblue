@@ -56,13 +56,21 @@ async function fetchLancamentosPaginated(params: {
   return rows;
 }
 
-export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
+type UseLancamentosArg =
+  | 'realizado'
+  | 'meta'
+  | { cenario?: 'realizado' | 'meta'; enabled?: boolean };
+
+export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
+  const cenario = typeof arg === 'string' ? arg : (arg.cenario ?? 'realizado');
+  const enabled = typeof arg === 'string' ? true : (arg.enabled ?? true);
+
   const queryClient = useQueryClient();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
   const [saldosIniciais, setSaldosIniciais] = useState<SaldoInicial[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [migrated, setMigrated] = useState(false);
 
   const fazendaId = fazendaAtual?.id;
@@ -192,7 +200,7 @@ export function useLancamentos(cenario: 'realizado' | 'meta' = 'realizado') {
     }
   }, [fazendaId, isGlobal, fazendas, cenario, clienteId]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (enabled) loadData(); }, [loadData, enabled]);
 
   // Migrate localStorage data on first load
   useEffect(() => {

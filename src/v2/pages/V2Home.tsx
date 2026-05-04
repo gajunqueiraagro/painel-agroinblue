@@ -3,6 +3,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
+import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
@@ -114,6 +115,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   const [modalIndicador, setModalIndicador] = useState<string | null>(null);
 
+  // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
+  const { lancamentos: lancPecShared } = useLancamentos();
+  const { lancamentos: lancFinShared, rateioADM } = useFinanceiro();
+  const sharedLanc = {
+    lancPecExterno: lancPecShared,
+    lancFinExterno: lancFinShared,
+  };
+
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
@@ -121,7 +130,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     dadosCompletos,
     seriesMensais, seriesMeta,
     loading: loadingPainel,
-  } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode });
+  } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, ...sharedLanc });
 
   // Comparativos — sempre modo 'mes', nunca 'periodo'
   const mesAntNum = mesNum > 1 ? mesNum - 1 : null;
@@ -129,11 +138,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     ano: anoNum,
     mes: mesAntNum ?? mesNum,
     viewMode,
+    ...sharedLanc,
   });
   const dadosAnoAnt = usePainelConsultorData({
     ano: anoNum - 1,
     mes: mesNum,
     viewMode,
+    ...sharedLanc,
   });
 
   const calcVar = (atual: number | null, base: number | null): number | null => {
@@ -161,9 +172,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     return null;
   };
 
-  const { lancamentos: lancFin, rateioADM } = useFinanceiro();
   const mesAte = isPeriodo ? 12 : mesNum;
-  const { meses: mesesFluxo, loading: loadingFluxo } = useFluxoCaixa(lancFin, rateioADM, anoNum, mesAte);
+  const { meses: mesesFluxo, loading: loadingFluxo } = useFluxoCaixa(lancFinShared, rateioADM, anoNum, mesAte);
   const caixaValor = useMemo(() => {
     if (loadingFluxo || !mesesFluxo.length) return null;
     const sorted = [...mesesFluxo].sort((a, b) => a.mes - b.mes);
