@@ -23,9 +23,12 @@ interface MetricTileProps {
   pending?: boolean;
   tone?: 'default' | 'positive' | 'negative' | 'blue';
   status?: string | null;
+  deltaMes?: number | null;
+  deltaAno?: number | null;
+  deltaMeta?: number | null;
 }
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default', status }: MetricTileProps) {
+function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta }: MetricTileProps) {
   const valColor =
     tone === 'positive' ? 'text-emerald-700' :
     tone === 'negative' ? 'text-red-700' :
@@ -45,9 +48,24 @@ function MetricTile({ label, value, unit, loading, pending, tone = 'default', st
         }
       </p>
       <div className="mt-1 space-y-px">
-        <p className="text-[10px] text-muted-foreground/60">↕ vs mês</p>
-        <p className="text-[10px] text-muted-foreground/60">↕ vs ano ant.</p>
-        <p className="text-[10px] text-muted-foreground/60">↕ vs META</p>
+        {deltaMes != null
+          ? <p className={`text-[10px] font-medium ${deltaMes >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {deltaMes >= 0 ? '↑' : '↓'} {Math.abs(deltaMes).toFixed(1)}% vs mês
+            </p>
+          : <p className="text-[10px] text-muted-foreground/40">— vs mês</p>
+        }
+        {deltaAno != null
+          ? <p className={`text-[10px] font-medium ${deltaAno >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {deltaAno >= 0 ? '↑' : '↓'} {Math.abs(deltaAno).toFixed(1)}% vs ano ant.
+            </p>
+          : <p className="text-[10px] text-muted-foreground/40">— vs ano ant.</p>
+        }
+        {deltaMeta != null
+          ? <p className={`text-[10px] font-medium ${deltaMeta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              {deltaMeta >= 0 ? '↑' : '↓'} {Math.abs(deltaMeta).toFixed(1)}% vs META
+            </p>
+          : <p className="text-[10px] text-muted-foreground/40">— vs META</p>
+        }
       </div>
     </div>
   );
@@ -96,6 +114,34 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     dadosCompletos,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode });
+
+  // Comparativos — sempre modo 'mes', nunca 'periodo'
+  const mesAntNum = mesNum > 1 ? mesNum - 1 : null;
+  const dadosMesAnt = usePainelConsultorData({
+    ano: anoNum,
+    mes: mesAntNum ?? mesNum,
+    viewMode: 'mes',
+  });
+  const dadosAnoAnt = usePainelConsultorData({
+    ano: anoNum - 1,
+    mes: mesNum,
+    viewMode: 'mes',
+  });
+
+  const calcVar = (atual: number | null, base: number | null): number | null => {
+    if (atual == null || base == null || base === 0) return null;
+    return ((atual - base) / base) * 100;
+  };
+
+  // Só usar comparativo de mês anterior se existir mês anterior real
+  // E só exibir comparativos zootécnicos se dados atuais estiverem completos
+  const dadosZootCompletos = !loadingPainel && cabecas != null && cabecas > 0;
+
+  const vsMes = (campo: number | null, baseCampo: number | null) =>
+    dadosZootCompletos && mesAntNum != null ? calcVar(campo, baseCampo) : null;
+
+  const vsAno = (campo: number | null, baseCampo: number | null) =>
+    dadosZootCompletos ? calcVar(campo, baseCampo) : null;
 
   const msgArea = (s: StatusValidacaoArea): string | null => {
     if (s === 'ok' || s === 'carregando') return null;
@@ -169,24 +215,42 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
-          <MetricTile label="Cabeças" value={fmtN(cabecas)} unit="cab" loading={loadingPainel} />
-          <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel} />
-          <MetricTile label="@ produzidas" value={fmtN(arrobas, 1)} unit="@" loading={loadingPainel} />
-          <MetricTile label="Desfrute cab." value={fmtN(desfrute)} unit="cab" loading={loadingPainel} />
-          <MetricTile label="GMD" value={fmtN(gmd, 3)} unit="kg/dia" loading={loadingPainel} />
+          <MetricTile label="Cabeças" value={fmtN(cabecas)} unit="cab" loading={loadingPainel}
+            deltaMes={vsMes(cabecas, dadosMesAnt.cabecas)}
+            deltaAno={vsAno(cabecas, dadosAnoAnt.cabecas)} />
+          <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
+            deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
+            deltaAno={vsAno(pesoMedio, dadosAnoAnt.pesoMedio)} />
+          <MetricTile label="@ produzidas" value={fmtN(arrobas, 1)} unit="@" loading={loadingPainel}
+            deltaMes={vsMes(arrobas, dadosMesAnt.arrobas)}
+            deltaAno={vsAno(arrobas, dadosAnoAnt.arrobas)} />
+          <MetricTile label="Desfrute cab." value={fmtN(desfrute)} unit="cab" loading={loadingPainel}
+            deltaMes={vsMes(desfrute, dadosMesAnt.desfrute)}
+            deltaAno={vsAno(desfrute, dadosAnoAnt.desfrute)} />
+          <MetricTile label="GMD" value={fmtN(gmd, 3)} unit="kg/dia" loading={loadingPainel}
+            deltaMes={vsMes(gmd, dadosMesAnt.gmd)}
+            deltaAno={vsAno(gmd, dadosAnoAnt.gmd)} />
           <MetricTile label="Valor rebanho" value={fmtR(valorReb)} loading={loadingPainel} />
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
           <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={statusArea === 'carregando'} status={msgArea(statusArea)} />
-          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
-          <MetricTile label="kg/ha" value={fmtN(kgHa, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
+          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+            deltaMes={vsMes(lotUaHa, dadosMesAnt.lotUaHa)}
+            deltaAno={vsAno(lotUaHa, dadosAnoAnt.lotUaHa)} />
+          <MetricTile label="kg/ha" value={fmtN(kgHa, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+            deltaMes={vsMes(kgHa, dadosMesAnt.kgHa)}
+            deltaAno={vsAno(kgHa, dadosAnoAnt.kgHa)} />
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
-          <MetricTile label="Receita pecuária" value={fmtR(receita)} loading={loadingPainel} />
+          <MetricTile label="Receita pecuária" value={fmtR(receita)} loading={loadingPainel}
+            deltaMes={vsMes(receita, dadosMesAnt.receita)}
+            deltaAno={vsAno(receita, dadosAnoAnt.receita)} />
           <MetricTile label="Desembolso total" value={fmtR(desembolso)} loading={loadingPainel} />
-          <MetricTile label="Resultado operacional" value={fmtR(resultado)} loading={loadingPainel} tone={resultadoTone} />
+          <MetricTile label="Resultado operacional" value={fmtR(resultado)} loading={loadingPainel} tone={resultadoTone}
+            deltaMes={vsMes(resultado, dadosMesAnt.resultado)}
+            deltaAno={vsAno(resultado, dadosAnoAnt.resultado)} />
           <MetricTile label="Preço de Venda R$/@" value={null} unit="R$/@" pending />
           <MetricTile label="Custo Produtivo R$/@" value={null} unit="R$/@" pending />
           <MetricTile label="Margem por @" value={null} unit="R$/@" pending />
