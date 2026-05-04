@@ -45,13 +45,13 @@ export interface PainelConsultorDataResult {
   statusArea: StatusValidacaoArea;
   faltandoCount: number;
   statusPilares: StatusPilares | null;
-  /** False quando GLOBAL e zoot_mensal_cache não tem todas as fazendas pec do mês. */
+  /** False quando GLOBAL e nem todas as fazendas pec do cliente têm P1 fechado no(s) mês(es) avaliado(s). */
   dadosCompletos: boolean;
   loading: boolean;
 }
 
 export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): PainelConsultorDataResult {
-  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
@@ -205,33 +205,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
   const isPeriodo = viewMode === 'periodo';
 
   // ── Integridade do GLOBAL ──
-  // Em modo global, exigir que TODAS as fazendas pecuárias do cliente tenham
-  // linhas no zoot_mensal_cache para o(s) mês(es) avaliado(s). Sem isso, o
-  // somatório seria parcial — preferível mostrar vazio + alerta a iludir o usuário.
-  const fazendasPecuariaIds = new Set(
-    fazendas.filter(f => f.tem_pecuaria !== false).map(f => f.id),
-  );
-  const checkMesCompleto = (m: number): boolean => {
-    if (fazendasPecuariaIds.size === 0) return true;
-    const presentes = new Set<string>();
-    for (const r of viewDataRealizado ?? []) {
-      if (r.mes === m) presentes.add(r.fazenda_id);
-    }
-    for (const id of fazendasPecuariaIds) {
-      if (!presentes.has(id)) return false;
-    }
-    return true;
-  };
+  // dadosCompletos: no modo global, verificar se todas as fazendas pecuárias
+  // possuem P1 fechado no(s) mês(es) avaliado(s).
+  // Usa fazendasComP1PorMes (fonte: fechamento_pastos) — não depende do cache.
   const dadosCompletos = (() => {
     if (!isGlobal) return true;
-    if (loading) return true; // Não julgar durante carregamento
+    if (loading || !fazendasAtivasCarregadas) return true; // não julgar durante carregamento
+    if (totalFazendasAtivas === 0) return true;
     if (isPeriodo) {
       for (let i = 0; i <= idx; i++) {
-        if (!checkMesCompleto(i + 1)) return false;
+        const comP1 = fazendasComP1PorMes[i] ?? 0;
+        if (comP1 < totalFazendasAtivas) return false;
       }
       return true;
     }
-    return checkMesCompleto(mesRef);
+    const comP1 = fazendasComP1PorMes[idx] ?? 0;
+    return comP1 >= totalFazendasAtivas;
   })();
   const incompletoOverride = isGlobal && !dadosCompletos && !loading;
 
