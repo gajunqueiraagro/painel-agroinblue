@@ -315,6 +315,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.cabFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
           serieMeta={seriesMeta?.cabFin}
+          tipoAcumulado="posicao"
         />
       )}
       {modalIndicador === 'pesoMedio' && (
@@ -325,6 +326,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.pesoMedioFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.pesoMedioFin}
           serieMeta={seriesMeta?.pesoMedioFin}
+          tipoAcumulado="posicao"
         />
       )}
       {modalIndicador === 'arrobas' && (
@@ -335,6 +337,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.arrobasProd ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.arrobasProd}
           serieMeta={seriesMeta?.arrobasProd}
+          tipoAcumulado="soma"
         />
       )}
       {modalIndicador === 'gmd' && (
@@ -345,6 +348,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           serieAno={seriesMensais?.gmd ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.gmd}
           serieMeta={seriesMeta?.gmd}
+          tipoAcumulado="media"
         />
       )}
       {modalIndicador === 'desfrute' && (
@@ -354,6 +358,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.desfruteCab ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.desfruteCab}
+          tipoAcumulado="soma"
         />
       )}
       {modalIndicador === 'valorRebanho' && (
@@ -363,6 +368,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.valorRebFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.valorRebFin}
+          tipoAcumulado="posicao"
         />
       )}
     </div>

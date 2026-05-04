@@ -7,6 +7,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  BarChart,
+  Bar,
+  Cell,
 } from 'recharts';
 
 interface Props {
@@ -24,6 +27,10 @@ interface Props {
   serieAnoAnt?: number[];
   /** Série de 13 posições da meta. */
   serieMeta?: number[];
+  /** Como agregar Jan→mesAtual no bloco "Resumo do período". */
+  tipoAcumulado?: 'soma' | 'media' | 'posicao';
+  /** Sobrescreve o label do período (default: "Jan–{mesAtual}"). */
+  labelPeriodo?: string;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -45,6 +52,8 @@ export function IndicadorHistoricoModal({
   serieAno,
   serieAnoAnt,
   serieMeta,
+  tipoAcumulado,
+  labelPeriodo,
 }: Props) {
   if (!open) return null;
 
@@ -72,6 +81,35 @@ export function IndicadorHistoricoModal({
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
   const hasMeta = serieMeta != null && serieMeta.some(v => v != null && !isNaN(v));
+
+  // ── Resumo do período (Jan→mesAtual) ──
+  const calcResumo = (serie: number[] | undefined): number | null => {
+    if (!serie) return null;
+    const vals = MESES_LABELS.slice(0, mesAtual)
+      .map((_, i) => serie[i + 1])
+      .filter(v => v != null && !isNaN(v));
+    if (vals.length === 0) return null;
+    if (tipoAcumulado === 'soma')  return vals.reduce((s, v) => s + v, 0);
+    if (tipoAcumulado === 'media') return vals.reduce((s, v) => s + v, 0) / vals.length;
+    if (tipoAcumulado === 'posicao') {
+      const v = serie[mesAtual];
+      return v != null && !isNaN(v) ? v : null;
+    }
+    const v = serie[mesAtual];
+    return v != null && !isNaN(v) ? v : null;
+  };
+
+  const resumoAtual  = calcResumo(serieAno);
+  const resumoAnoAnt = calcResumo(serieAnoAnt);
+  const resumoMeta   = calcResumo(serieMeta);
+
+  const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
+
+  const barDados = [
+    { nome: String(anoAtual),        valor: resumoAtual,  cor: '#185FA5' },
+    ...(serieAnoAnt ? [{ nome: String(anoAtual - 1), valor: resumoAnoAnt, cor: '#B4B2A9' }] : []),
+    ...(serieMeta   ? [{ nome: `Meta ${anoAtual}`,   valor: resumoMeta,  cor: '#3B6D11' }] : []),
+  ].filter(b => b.valor != null && !isNaN(b.valor as number));
 
   return (
     <div
@@ -179,6 +217,53 @@ export function IndicadorHistoricoModal({
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Resumo do período */}
+        {barDados.length > 0 && (
+          <div style={{ padding: '0 1.25rem', marginTop: '0.5rem' }}>
+            <div style={{
+              borderTop: '0.5px solid var(--color-border-tertiary)',
+              paddingTop: '0.75rem', marginBottom: '0.25rem'
+            }}>
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
+                Resumo do período
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
+                {labelPer}
+              </p>
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart
+                data={barDados}
+                margin={{ top: 20, right: 8, left: 8, bottom: 0 }}
+                barCategoryGap="30%"
+              >
+                <XAxis
+                  dataKey="nome"
+                  tick={{ fontSize: 11, fill: '#888780' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis hide />
+                <Bar
+                  dataKey="valor"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
+                  label={{
+                    position: 'top',
+                    fontSize: 11,
+                    fill: 'var(--color-text-secondary)',
+                    formatter: (v: number) => fmtValor(v),
+                  }}
+                >
+                  {barDados.map((entry, i) => (
+                    <Cell key={i} fill={entry.cor} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Rodapé */}
         <div className="px-5 pb-4 text-[12px] text-muted-foreground text-center">
