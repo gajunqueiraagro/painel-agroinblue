@@ -38,6 +38,7 @@ export interface PainelConsultorDataResult {
   valorRebanhoMes: number | null;
   areaProdutivaMes: number | null;
   lotUaHa: number | null;
+  kgHa: number | null;
   arrHa: number | null;
   statusArea: StatusValidacaoArea;
   faltandoCount: number;
@@ -127,10 +128,29 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
     return safe(arr[idx]);
   };
 
+  const meanArr = (arr: number[]): number | null => {
+    const valid = arr.filter(v => v != null && !isNaN(v));
+    return valid.length > 0
+      ? valid.reduce((s, v) => s + v, 0) / valid.length
+      : null;
+  };
+
+  const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) =>
+    p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
+  );
+  const kgHa = mes === 0
+    ? meanArr(kgHaPorMes)
+    : (!isNaN(kgHaPorMes[idx]) ? kgHaPorMes[idx] : null);
+
   return {
-    cabecas: safe(monthlyData.cabFin[idx]),
+    // Cabeças: média simples no período (aproximação — TODO: ponderar por dias)
+    cabecas: mes === 0
+      ? meanArr(monthlyData.cabFin)
+      : safe(monthlyData.cabFin[idx]),
     pesoMedio: safe(monthlyData.pesoMedioFin[idx]),
-    gmd: safe(monthlyData.gmd[idx]),
+    gmd: mes === 0
+      ? meanArr(monthlyData.gmd)
+      : safe(monthlyData.gmd[idx]),
     arrobas: sumOrIdx(monthlyData.arrobasProd),
     desfrute: safe(monthlyData.desfruteCab[idx]),
     receita: sumOrIdx(monthlyData.recPecComp),
@@ -138,8 +158,13 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
     resultado: sumOrIdx(monthlyData.resOper),
     valorRebanhoMes: safe(monthlyData.valorRebFin[idx]),
     areaProdutivaMes: safe(areaMensal[idx]),
-    lotUaHa: safe(monthlyData.lotUaHa[idx]),
-    arrHa:   safe(monthlyData.arrHa[idx]),
+    lotUaHa: mes === 0
+      ? meanArr(monthlyData.lotUaHa)
+      : safe(monthlyData.lotUaHa[idx]),
+    arrHa: mes === 0
+      ? meanArr(monthlyData.arrHa)
+      : safe(monthlyData.arrHa[idx]),
+    kgHa,
     statusArea,
     faltandoCount,
     statusPilares: statusPilares ?? null,
