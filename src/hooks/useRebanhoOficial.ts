@@ -297,7 +297,10 @@ function buildFazendaRowsFromCategories(rows: ZootCategoriaMensal[]): ZootMensal
     const uaMedia = pesoMedioFinalKg !== null
       ? roundNumber((cabMedias * pesoMedioFinalKg) / 450, 2) : null;
 
-    const fonte = cats.some(c => c.fonte_oficial_mes === 'fechamento') ? 'fechamento'
+    const totalCats = cats.length;
+    const fechadas = cats.filter(c => c.fonte_oficial_mes === 'fechamento').length;
+    const fonte = fechadas === totalCats ? 'fechamento'
+      : fechadas > 0 ? 'parcial'
       : cats.some(c => c.fonte_oficial_mes === 'fallback_movimentacao') ? 'fallback_movimentacao'
       : 'projecao';
 

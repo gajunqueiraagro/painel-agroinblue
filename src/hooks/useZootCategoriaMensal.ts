@@ -46,7 +46,7 @@ export interface ZootCategoriaMensal {
   dias_mes: number;
   gmd: number | null;
   producao_biologica: number;
-  fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao';
+  fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
 }
 
 interface UseZootCategoriaMensalParams {

@@ -37,7 +37,7 @@ export interface ZootMensal {
   ua_media: number | null;
   area_produtiva_ha: number;
   lotacao_ua_ha: number | null;
-  fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao';
+  fonte_oficial_mes: 'fechamento' | 'fallback_movimentacao' | 'projecao' | 'parcial';
 }
 
 interface UseZootMensalParams {
