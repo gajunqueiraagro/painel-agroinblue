@@ -145,7 +145,7 @@ export default function V2Index() {
   }, [clienteAtual?.id]);
 
   function renderContent() {
-    if (section === 'home') return <V2Home ano={ano} mes={mes} />;
+    if (section === 'home') return <V2Home ano={ano} mes={mes} onMesChange={setMes} />;
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     if (section === 'conciliacao') return (

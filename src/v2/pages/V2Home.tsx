@@ -69,7 +69,7 @@ function SectionBlock({ title, subtitle, children }: {
   );
 }
 
-export function V2Home({ ano, mes }: { ano: string; mes: string }) {
+export function V2Home({ ano, mes, onMesChange }: { ano: string; mes: string; onMesChange?: (mes: string) => void }) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal } = useFazenda();
   const h = new Date().getHours();
@@ -77,6 +77,7 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
 
   const mesNum = mes === '0' ? 0 : parseInt(mes);
   const anoNum = parseInt(ano);
+  const isPeriodo = mesNum === 0;
 
   const ml = mes === '0'
     ? 'Jan–Dez ' + ano
@@ -126,6 +127,31 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
         <p className="text-xs text-muted-foreground mt-0.5">
           {isGlobal ? 'Todas as fazendas' : fazendaAtual?.nome} · {ml}
         </p>
+        {onMesChange && (
+          <div className="flex gap-1 mt-2">
+            <button
+              // TODO: guardar último mês selecionado antes de alternar para período
+              onClick={() => onMesChange(isPeriodo ? String(new Date().getMonth() + 1) : mes)}
+              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                !isPeriodo
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              No mês
+            </button>
+            <button
+              onClick={() => onMesChange('0')}
+              className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                isPeriodo
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              No período
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -143,7 +169,6 @@ export function V2Home({ ano, mes }: { ano: string; mes: string }) {
           <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={statusArea === 'carregando'} status={msgArea(statusArea)} />
           <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
           <MetricTile label="kg/ha" value={fmtN(kgHa, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
-          <MetricTile label="@/ha" value={fmtN(arrHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null} />
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
