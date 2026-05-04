@@ -490,7 +490,10 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   // Cabeças: snapshot validado sobrescreve view quando disponível
   const hasCabSnap = hasSnap && pesoSnap!.cabecas.some(v => v > 0);
   const cabFin = hasCabSnap
-    ? pesoSnap!.cabecas.map((c, i) => c > 0 ? c : d.cabFin[i])
+    ? d.cabFin.map((_, i) => {
+        const c = pesoSnap!.cabecas[i];
+        return c && c > 0 ? c : NaN;
+      })
     : d.cabFin;
   // Cab inicial: Dez do ano anterior vem do snapshot[0] do array de 13; Fev+ = cabFin do mês anterior
   const cabIni = hasCabSnap
