@@ -234,7 +234,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
-          <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha" loading={statusArea === 'carregando'} status={msgArea(statusArea)} />
+          <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha"
+            loading={statusArea === 'carregando'} status={msgArea(statusArea)}
+            deltaMes={vsMes(areaProdutivaMes, dadosMesAnt.areaProdutivaMes)}
+            deltaAno={vsAno(areaProdutivaMes, dadosAnoAnt.areaProdutivaMes)} />
           <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={vsMes(lotUaHa, dadosMesAnt.lotUaHa)}
             deltaAno={vsAno(lotUaHa, dadosAnoAnt.lotUaHa)} />
@@ -259,8 +262,33 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
           <MetricTile label="Caixa disponível" value={fmtR(caixaValor)} loading={loadingFluxo} tone="blue" />
           <MetricTile label="Endividamento" value={fmtR(endividamentoValor)} loading={loadingDivida} tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'} />
-          <MetricTile label="Dívida / rebanho" value={null} pending />
-          <MetricTile label="Curto vs longo prazo" value={null} pending />
+          <MetricTile
+            label="Dívida / rebanho"
+            value={loadingDivida ? null : fmtN(finKpis?.alavancagem?.percentual ?? null, 1)}
+            unit="%"
+            loading={loadingDivida}
+            tone={
+              finKpis?.alavancagem?.status === 'critico' ? 'negative'
+              : finKpis?.alavancagem?.status === 'atencao' ? 'negative'
+              : 'default'
+            }
+          />
+          {(() => {
+            const pizza = finKpis?.pizzaVencimentos ?? [];
+            const curto = pizza.find(p => p.nome?.toLowerCase().includes('curto'));
+            const longo = pizza.find(p => p.nome?.toLowerCase().includes('longo'));
+            const total = (curto?.valor ?? 0) + (longo?.valor ?? 0);
+            const pctCurto = total > 0 ? (curto?.valor ?? 0) / total * 100 : null;
+            return (
+              <MetricTile
+                label="Curto vs longo prazo"
+                value={pctCurto != null
+                  ? `${fmtN(pctCurto, 0)}% curto / ${fmtN(100 - pctCurto, 0)}% longo`
+                  : null}
+                loading={loadingDivida}
+              />
+            );
+          })()}
         </SectionBlock>
 
       </div>
