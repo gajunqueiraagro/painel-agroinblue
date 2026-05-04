@@ -33,8 +33,8 @@ interface CadastroData {
   telefone: string;
   banco: string;
   pix: string;
-  area_total: string;
-  area_produtiva: string;
+  area_pecuaria_ha: string;
+  area_agricultura_ha: string;
   inscricao_rural: string;
   roteiro: string;
 }
@@ -42,7 +42,7 @@ interface CadastroData {
 const EMPTY: CadastroData = {
   municipio: '', ie: '', proprietario_nome: '', cpf_cnpj: '', endereco: '',
   email: '', telefone: '', banco: '', pix: '',
-  area_total: '', area_produtiva: '', inscricao_rural: '', roteiro: '',
+  area_pecuaria_ha: '', area_agricultura_ha: '', inscricao_rural: '', roteiro: '',
 };
 
 type ModuleKey = 'clientes' | 'fazendas' | 'dados' | 'contato' | 'bancario' | 'roteiro' | 'pastos' | 'acessos' | 'dividendos' | 'auditoria' | 'ajustes';
@@ -134,8 +134,8 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
         telefone: row.telefone || '',
         banco: row.banco || '',
         pix: row.pix || '',
-        area_total: row.area_total ? String(row.area_total) : '',
-        area_produtiva: row.area_produtiva ? String(row.area_produtiva) : '',
+        area_pecuaria_ha: row.area_pecuaria_ha ? String(row.area_pecuaria_ha) : '',
+        area_agricultura_ha: row.area_agricultura_ha ? String(row.area_agricultura_ha) : '',
         inscricao_rural: row.inscricao_rural || '',
         roteiro: row.roteiro || '',
       });
@@ -166,8 +166,9 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
       telefone: data.telefone || null,
       banco: data.banco || null,
       pix: data.pix || null,
-      area_total: data.area_total ? Number(data.area_total) : null,
-      area_produtiva: data.area_produtiva ? Number(data.area_produtiva) : null,
+      area_pecuaria_ha: data.area_pecuaria_ha ? Number(data.area_pecuaria_ha) : null,
+      area_agricultura_ha: data.area_agricultura_ha ? Number(data.area_agricultura_ha) : null,
+      area_produtiva_ha: (Number(data.area_pecuaria_ha || 0) + Number(data.area_agricultura_ha || 0)) || null,
       inscricao_rural: data.inscricao_rural || null,
       roteiro: data.roteiro || null,
     };
@@ -309,8 +310,15 @@ export function CadastrosTab({ onTabChange }: { onTabChange?: (tab: string) => v
           {field('Inscrição Estadual (IE)', 'ie')}
           {field('Nome do Proprietário', 'proprietario_nome')}
           {field('CPF ou CNPJ', 'cpf_cnpj')}
-          {field('Área Total (ha)', 'area_total', 'number', 'Hectares')}
-          {field('Área Produtiva (ha)', 'area_produtiva', 'number', 'Hectares')}
+          {field('Área Pecuária (ha)', 'area_pecuaria_ha', 'number', 'Hectares')}
+          {field('Área Agricultura (ha)', 'area_agricultura_ha', 'number', 'Hectares')}
+          <div>
+            <Label className="text-[11px] text-muted-foreground">Área Produtiva (ha)</Label>
+            <div className="h-9 px-3 py-2 text-sm border rounded-md bg-muted/40 text-muted-foreground">
+              {(Number(data.area_pecuaria_ha || 0) + Number(data.area_agricultura_ha || 0)).toFixed(2) || '—'}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Calculado: Pecuária + Agricultura</p>
+          </div>
           {field('Inscrição Rural (IR)', 'inscricao_rural')}
         </div>
       );
