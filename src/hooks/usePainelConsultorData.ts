@@ -15,6 +15,7 @@ import type { StatusPilares } from '@/hooks/useStatusPilares';
 interface Params {
   ano: number;
   mes: number;
+  viewMode?: 'mes' | 'periodo';
 }
 
 export type StatusValidacaoArea =
@@ -48,7 +49,7 @@ export interface PainelConsultorDataResult {
 
 const ZERO_13 = Array(13).fill(0) as number[];
 
-export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -123,11 +124,6 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
   const safe = (v: number | null | undefined) =>
     v == null || isNaN(Number(v)) ? null : Number(v);
 
-  const sumOrIdx = (arr: number[]): number | null => {
-    if (mes === 0) return arr.reduce((s, v) => s + (isNaN(v) ? 0 : v), 0);
-    return safe(arr[idx]);
-  };
-
   const meanArr = (arr: number[]): number | null => {
     const valid = arr.filter(v => v != null && !isNaN(v));
     return valid.length > 0
@@ -135,35 +131,69 @@ export function usePainelConsultorData({ ano, mes }: Params): PainelConsultorDat
       : null;
   };
 
+  const sumArr = (arr: number[]): number =>
+    arr.reduce((s, v) => s + (v == null || isNaN(v) ? 0 : v), 0);
+
+  const sliceUpTo = (arr: number[], i: number): number[] => arr.slice(0, i + 1);
+
+  const isPeriodo = viewMode === 'periodo';
+
   const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) =>
     p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
   );
-  const kgHa = mes === 0
-    ? meanArr(kgHaPorMes)
+  const kgHa = isPeriodo
+    ? meanArr(sliceUpTo(kgHaPorMes, idx))
     : (!isNaN(kgHaPorMes[idx]) ? kgHaPorMes[idx] : null);
 
   return {
-    // Cabeças: média simples no período (aproximação — TODO: ponderar por dias)
-    cabecas: mes === 0
-      ? meanArr(monthlyData.cabFin)
+    cabecas: isPeriodo
+      ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
       : safe(monthlyData.cabFin[idx]),
-    pesoMedio: safe(monthlyData.pesoMedioFin[idx]),
-    gmd: mes === 0
-      ? meanArr(monthlyData.gmd)
+
+    pesoMedio: isPeriodo
+      ? (() => {
+          const totalPeso = sumArr(sliceUpTo(monthlyData.pesoTotalFin, idx));
+          const totalCab  = sumArr(sliceUpTo(monthlyData.cabFin, idx));
+          return totalCab > 0 ? totalPeso / totalCab : null;
+        })()
+      : safe(monthlyData.pesoMedioFin[idx]),
+
+    gmd: isPeriodo
+      ? meanArr(sliceUpTo(monthlyData.gmd, idx))
       : safe(monthlyData.gmd[idx]),
-    arrobas: sumOrIdx(monthlyData.arrobasProd),
-    desfrute: safe(monthlyData.desfruteCab[idx]),
-    receita: sumOrIdx(monthlyData.recPecComp),
-    desembolso: sumOrIdx(monthlyData.custOper),
-    resultado: sumOrIdx(monthlyData.resOper),
+
+    arrobas: isPeriodo
+      ? sumArr(sliceUpTo(monthlyData.arrobasProd, idx))
+      : safe(monthlyData.arrobasProd[idx]),
+
+    desfrute: isPeriodo
+      ? sumArr(sliceUpTo(monthlyData.desfruteCab, idx))
+      : safe(monthlyData.desfruteCab[idx]),
+
+    receita: isPeriodo
+      ? sumArr(sliceUpTo(monthlyData.recPecComp, idx))
+      : safe(monthlyData.recPecComp[idx]),
+
+    desembolso: isPeriodo
+      ? sumArr(sliceUpTo(monthlyData.custOper, idx))
+      : safe(monthlyData.custOper[idx]),
+
+    resultado: isPeriodo
+      ? sumArr(sliceUpTo(monthlyData.resOper, idx))
+      : safe(monthlyData.resOper[idx]),
+
+    // Valor Rebanho e areaProdutivaMes: posição do mês selecionado — não soma, não média
     valorRebanhoMes: safe(monthlyData.valorRebFin[idx]),
     areaProdutivaMes: safe(areaMensal[idx]),
-    lotUaHa: mes === 0
-      ? meanArr(monthlyData.lotUaHa)
+
+    lotUaHa: isPeriodo
+      ? meanArr(sliceUpTo(monthlyData.lotUaHa, idx))
       : safe(monthlyData.lotUaHa[idx]),
-    arrHa: mes === 0
-      ? meanArr(monthlyData.arrHa)
+
+    arrHa: isPeriodo
+      ? meanArr(sliceUpTo(monthlyData.arrHa, idx))
       : safe(monthlyData.arrHa[idx]),
+
     kgHa,
     statusArea,
     faltandoCount,

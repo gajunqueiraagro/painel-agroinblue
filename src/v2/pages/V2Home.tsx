@@ -93,7 +93,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     loading: loadingPainel,
-  } = usePainelConsultorData({ ano: anoNum, mes: mesNum });
+  } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode });
 
   const msgArea = (s: StatusValidacaoArea): string | null => {
     if (s === 'ok' || s === 'carregando') return null;
