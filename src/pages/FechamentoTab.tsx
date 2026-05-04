@@ -594,7 +594,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       }
 
       if (pastosParaCriar.length === 0 && idsParaAtualizar.length === 0) {
-        toast.info('Todos os pastos já estão fechados.');
+        if (fazendaAtual?.id) {
+          const { error: snapError } = await supabase.rpc('gerar_snapshot_area', {
+            p_fazenda_id: fazendaAtual.id,
+            p_ano_mes: `${anoMes}-01`,
+            p_fechado_por: user?.id ?? null,
+          });
+          if (snapError) {
+            console.error('Snapshot área:', snapError);
+            toast.error(`Erro ao gerar snapshot de área: ${snapError.message}`);
+            setBulkClosing(false);
+            setConfirmBulkOpen(false);
+            return;
+          }
+        }
+        toast.info('Todos os pastos já estão fechados. Snapshot de área verificado.');
         setBulkClosing(false);
         setConfirmBulkOpen(false);
         return;
