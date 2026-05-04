@@ -253,18 +253,20 @@ export function FechamentoPastoDialog({
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    await atualizarCamposMensais(fechamento.id, {
-      lote_mes: loteMes || null,
-      tipo_uso_mes: tipoUsoMes || null,
-      qualidade_mes: qualidadeMes,
-      observacao_mes: observacaoMes || null,
-    });
-    await onSave(itens);
-    await onFechar();
-    setStatus('fechado');
-    setSaving(false);
-    onOpenChange(false);
+    try {
+      setSaving(true);
+      await atualizarCamposMensais(fechamento.id, {
+        lote_mes: loteMes || null,
+        tipo_uso_mes: tipoUsoMes || null,
+        qualidade_mes: qualidadeMes,
+        observacao_mes: observacaoMes || null,
+      });
+      await onSave(itens);
+      // Não fechar o pasto aqui. O fechamento oficial ocorre via "Fechar Mês".
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCopiar = async () => {
