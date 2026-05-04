@@ -942,7 +942,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   {CAT_COLS.map((c, idx) => {
                     const pv = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
                     const sv = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
-                    const dif = pv != null && sv != null ? pv - sv : null;
+                    const dif = (pv != null || sv != null) ? (pv ?? 0) - (sv ?? 0) : null;
                     return (
                       <td key={c.sigla} className={`text-center font-extrabold px-2 py-1 tabular-nums ${dif != null ? difCellClass(dif) : 'text-muted-foreground'}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
                         {dif != null ? fmtDif(dif) : '—'}
