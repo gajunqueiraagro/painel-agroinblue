@@ -449,13 +449,13 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   }, [rebanhoRows, mesNum]);
 
   const hasDivergencia = useMemo(() => {
-    if (totalDiferenca !== 0) return true;
     return CAT_COLS.some(c => {
-      const qtdPasto = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
-      const qtdSistema = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
-      return qtdPasto != null && qtdSistema != null ? qtdPasto - qtdSistema !== 0 : (qtdPasto != null || qtdSistema != null);
+      const pv = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
+      const sv = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
+      if (pv == null && sv == null) return false;
+      return (pv ?? 0) - (sv ?? 0) !== 0;
     });
-  }, [totalDiferenca, pastoDataByCat, saldoMap]);
+  }, [pastoDataByCat, saldoMap]);
 
   /* ── Handlers ── */
   const handleOpenPasto = async (pasto: Pasto) => {
