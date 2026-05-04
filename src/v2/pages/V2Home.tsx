@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
@@ -6,6 +6,7 @@ import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
+import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -26,16 +27,20 @@ interface MetricTileProps {
   deltaMes?: number | null;
   deltaAno?: number | null;
   deltaMeta?: number | null;
+  onClick?: () => void;
 }
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta }: MetricTileProps) {
+function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, onClick }: MetricTileProps) {
   const valColor =
     tone === 'positive' ? 'text-emerald-700' :
     tone === 'negative' ? 'text-red-700' :
     tone === 'blue'     ? 'text-primary' :
     'text-foreground';
   return (
-    <div className="min-w-0">
+    <div
+      onClick={onClick}
+      className={`min-w-0${onClick ? ' cursor-pointer' : ''}`}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
         {label}
       </p>
@@ -107,11 +112,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     ? `Jan–${MES_ABREV[mesNum - 1]} ${ano}`
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
+  const [modalIndicador, setModalIndicador] = useState<string | null>(null);
+
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
+    seriesMensais, seriesMeta,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode });
 
@@ -217,20 +225,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
           <MetricTile label="Cabeças" value={fmtN(cabecas)} unit="cab" loading={loadingPainel}
             deltaMes={vsMes(cabecas, dadosMesAnt.cabecas)}
-            deltaAno={vsAno(cabecas, dadosAnoAnt.cabecas)} />
+            deltaAno={vsAno(cabecas, dadosAnoAnt.cabecas)}
+            onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
             deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
-            deltaAno={vsAno(pesoMedio, dadosAnoAnt.pesoMedio)} />
+            deltaAno={vsAno(pesoMedio, dadosAnoAnt.pesoMedio)}
+            onClick={() => setModalIndicador('pesoMedio')} />
           <MetricTile label="@ produzidas" value={fmtN(arrobas, 1)} unit="@" loading={loadingPainel}
             deltaMes={vsMes(arrobas, dadosMesAnt.arrobas)}
-            deltaAno={vsAno(arrobas, dadosAnoAnt.arrobas)} />
+            deltaAno={vsAno(arrobas, dadosAnoAnt.arrobas)}
+            onClick={() => setModalIndicador('arrobas')} />
           <MetricTile label="Desfrute cab." value={fmtN(desfrute)} unit="cab" loading={loadingPainel}
             deltaMes={vsMes(desfrute, dadosMesAnt.desfrute)}
-            deltaAno={vsAno(desfrute, dadosAnoAnt.desfrute)} />
+            deltaAno={vsAno(desfrute, dadosAnoAnt.desfrute)}
+            onClick={() => setModalIndicador('desfrute')} />
           <MetricTile label="GMD" value={fmtN(gmd, 3)} unit="kg/dia" loading={loadingPainel}
             deltaMes={vsMes(gmd, dadosMesAnt.gmd)}
-            deltaAno={vsAno(gmd, dadosAnoAnt.gmd)} />
-          <MetricTile label="Valor rebanho" value={fmtR(valorReb)} loading={loadingPainel} />
+            deltaAno={vsAno(gmd, dadosAnoAnt.gmd)}
+            onClick={() => setModalIndicador('gmd')} />
+          <MetricTile label="Valor rebanho" value={fmtR(valorReb)} loading={loadingPainel}
+            onClick={() => setModalIndicador('valorRebanho')} />
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
@@ -292,6 +306,65 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
       </div>
+
+      {modalIndicador === 'cabecas' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Cabeças" unidade="cab" formatoValor="inteiro"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.cabFin ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
+          serieMeta={seriesMeta?.cabFin}
+        />
+      )}
+      {modalIndicador === 'pesoMedio' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Peso médio final" unidade="kg" formatoValor="decimal1"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.pesoMedioFin ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.pesoMedioFin}
+          serieMeta={seriesMeta?.pesoMedioFin}
+        />
+      )}
+      {modalIndicador === 'arrobas' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="@ Produzidas" unidade="@" formatoValor="decimal1"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.arrobasProd ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.arrobasProd}
+          serieMeta={seriesMeta?.arrobasProd}
+        />
+      )}
+      {modalIndicador === 'gmd' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="GMD" unidade="kg/dia" formatoValor="decimal3"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.gmd ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.gmd}
+          serieMeta={seriesMeta?.gmd}
+        />
+      )}
+      {modalIndicador === 'desfrute' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Desfrute cab." unidade="cab" formatoValor="inteiro"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.desfruteCab ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.desfruteCab}
+        />
+      )}
+      {modalIndicador === 'valorRebanho' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Valor Rebanho" formatoValor="moeda"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={seriesMensais?.valorRebFin ?? []}
+          serieAnoAnt={dadosAnoAnt.seriesMensais?.valorRebFin}
+        />
+      )}
     </div>
   );
 }

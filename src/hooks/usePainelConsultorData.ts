@@ -47,6 +47,22 @@ export interface PainelConsultorDataResult {
   statusPilares: StatusPilares | null;
   /** False quando GLOBAL e nem todas as fazendas pec do cliente têm P1 fechado no(s) mês(es) avaliado(s). */
   dadosCompletos: boolean;
+  /** Séries mensais Jan–Dez do cenário REALIZADO. null durante loading ou em incompletoOverride. */
+  seriesMensais: {
+    cabFin:       number[];
+    pesoMedioFin: number[];
+    arrobasProd:  number[];
+    gmd:          number[];
+    desfruteCab:  number[];
+    valorRebFin:  number[];
+  } | null;
+  /** Séries mensais Jan–Dez do cenário META. null se não houver meta carregada. */
+  seriesMeta: {
+    cabFin:       number[];
+    pesoMedioFin: number[];
+    arrobasProd:  number[];
+    gmd:          number[];
+  } | null;
   loading: boolean;
 }
 
@@ -67,9 +83,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
     loading: loadingRebanho,
   } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
 
+  const {
+    rawCategorias: viewDataMeta,
+  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal });
+
   const viewTotals = useMemo(
     () => totalizarViewPorMes(viewDataRealizado ?? []),
     [viewDataRealizado],
+  );
+
+  const viewTotalsMeta = useMemo(
+    () => totalizarViewPorMes(viewDataMeta ?? []),
+    [viewDataMeta],
   );
 
   const { lancamentos: lancPec, loading: loadingLanc } = useLancamentos();
@@ -159,6 +184,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaMensal, valorRebanhoMes],
+  );
+
+  const monthlyDataMeta = useMemo(
+    () =>
+      viewDataMeta && viewDataMeta.length > 0
+        ? buildMonthlyDataFromView(
+            viewTotalsMeta,
+            viewDataMeta,
+            [],
+            [],
+            ano,
+            0,
+            Array(13).fill(NaN),
+            isGlobal,
+            areaMensal,
+          )
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewTotalsMeta, viewDataMeta, ano, isGlobal, areaMensal],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
@@ -285,6 +329,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
     faltandoCount,
     statusPilares: statusPilares ?? null,
     dadosCompletos,
+    seriesMensais: monthlyData ? {
+      cabFin:       monthlyData.cabFin,
+      pesoMedioFin: monthlyData.pesoMedioFin,
+      arrobasProd:  monthlyData.arrobasProd,
+      gmd:          monthlyData.gmd,
+      desfruteCab:  monthlyData.desfruteCab,
+      valorRebFin:  monthlyData.valorRebFin,
+    } : null,
+    seriesMeta: monthlyDataMeta ? {
+      cabFin:       monthlyDataMeta.cabFin,
+      pesoMedioFin: monthlyDataMeta.pesoMedioFin,
+      arrobasProd:  monthlyDataMeta.arrobasProd,
+      gmd:          monthlyDataMeta.gmd,
+    } : null,
     loading,
   };
 
@@ -300,6 +358,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
       kgHa: null,
       areaProdutivaMes: null,
       dadosCompletos: false,
+      seriesMensais: null,
+      seriesMeta: null,
     };
   }
 
