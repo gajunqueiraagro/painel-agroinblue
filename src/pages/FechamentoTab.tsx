@@ -847,8 +847,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             {showCloseButton && (
               <>
                 {hasDivergencia && (
-                  <div className="text-xs text-red-500 text-center px-1">
-                    Existem divergências entre Sistema e Pasto. Corrija antes de fechar o mês.
+                  <div className="w-full max-w-[220px] rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-tight text-red-700">
+                    ⚠ Corrija as divergências antes de fechar.
                   </div>
                 )}
                 <Button
