@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
@@ -47,8 +48,6 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-const ZERO_13 = Array(13).fill(0) as number[];
-
 export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
@@ -74,6 +73,71 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
   const { lancamentos: lancPec, loading: loadingLanc } = useLancamentos();
   const { lancamentos: lancFin, loading: loadingFin } = useFinanceiro();
 
+  // Valor do Rebanho oficial — mesma fonte do PainelConsultorTab (sem fallback).
+  // Array 13 posições: [0] = Dez ano anterior, [1..12] = Jan..Dez do ano.
+  // Ausência de validado → NaN (propaga como null no consumidor via safe()).
+  const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(() => Array(13).fill(NaN));
+
+  useEffect(() => {
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+
+    const load = async () => {
+      const dezAnoAnterior = `${ano - 1}-12`;
+      const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+      const todasMeses = [dezAnoAnterior, ...meses];
+
+      if (isGlobal) {
+        if (!cid) {
+          if (!cancelled) setValorRebanhoMes(Array(13).fill(NaN));
+          return;
+        }
+        const { data, error } = await supabase
+          .from('vw_valor_rebanho_realizado_global_mensal' as any)
+          .select('ano_mes, valor_total')
+          .eq('cliente_id', cid)
+          .in('ano_mes', todasMeses);
+        if (cancelled) return;
+        if (error || !data?.length) {
+          setValorRebanhoMes(Array(13).fill(NaN));
+          return;
+        }
+        const byMes = Object.fromEntries(
+          (data as any[]).map(r => [r.ano_mes, Number(r.valor_total)]),
+        );
+        setValorRebanhoMes(
+          todasMeses.map(m => (byMes[m] != null && !isNaN(byMes[m]) ? byMes[m] : NaN)),
+        );
+        return;
+      }
+
+      if (!fazendaId || fazendaId === '__global__') {
+        if (!cancelled) setValorRebanhoMes(Array(13).fill(NaN));
+        return;
+      }
+      const { data, error } = await supabase
+        .from('valor_rebanho_realizado_validado' as any)
+        .select('ano_mes, valor_total, status')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', todasMeses);
+      if (cancelled) return;
+      if (error || !data?.length) {
+        setValorRebanhoMes(Array(13).fill(NaN));
+        return;
+      }
+      const byMes = new Map<string, number>();
+      for (const row of data as any[]) {
+        if (row.status === 'validado') {
+          byMes.set(row.ano_mes, Number(row.valor_total));
+        }
+      }
+      setValorRebanhoMes(todasMeses.map(m => (byMes.has(m) ? byMes.get(m)! : NaN)));
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+
   const mesRef = mes === 0 ? 12 : mes;
   const mesStr = `${ano}-${String(mesRef).padStart(2, '0')}`;
   const { status: statusPilares } = useStatusPilares(fazendaId, mesStr);
@@ -87,12 +151,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes' }: Params): 
         lancPec,
         ano,
         0,
-        ZERO_13,
+        valorRebanhoMes,
         isGlobal,
         areaMensal,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaMensal],
+    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaMensal, valorRebanhoMes],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
