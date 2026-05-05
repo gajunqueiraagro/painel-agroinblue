@@ -354,9 +354,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dadosCompletos,
     seriesMensais: monthlyData ? {
       cabFin:       monthlyData.cabFin,
-      cabMediaAcumulada: Array.from({ length: 13 }, (_, i) =>
-        i === 0 ? NaN : (meanArr(sliceUpTo(monthlyData.cabFin, i - 1)) ?? NaN)
-      ),
+      cabMediaAcumulada: Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const vals = monthlyData.cabMediaMes
+          .slice(0, i)
+          .filter(v => !isNaN(v) && v > 0);
+        return vals.length > 0
+          ? vals.reduce((s, v) => s + v, 0) / vals.length
+          : NaN;
+      }),
       pesoMedioFin: monthlyData.pesoMedioFin,
       arrobasProd:  monthlyData.arrobasProd,
       gmd:          monthlyData.gmd,

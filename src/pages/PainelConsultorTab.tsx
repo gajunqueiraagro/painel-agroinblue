@@ -128,6 +128,7 @@ const TIPOS_DESFRUTE = new Set(['abate', 'venda', 'consumo']);
 interface MonthlyData {
   cabIni: number[];
   cabFin: number[];
+  cabMediaMes: number[];
   entradas: number[];
   saidas: number[];
   pesoTotalIni: number[];
@@ -175,6 +176,12 @@ export function buildMonthlyDataFromView(
   // Zootechnical data from official view
   const cabIni = mk(m => viewTotals[m]?.saldo_inicial ?? 0);
   const cabFin = mk(m => viewTotals[m]?.saldo_final ?? 0);
+  const cabMediaMes = mk(m => {
+    const ini = cabIni[m - 1];
+    const fin = cabFin[m - 1];
+    if (isNaN(ini) || isNaN(fin)) return NaN;
+    return (ini + fin) / 2;
+  });
   // REGRA OFICIAL: entradas/saídas = apenas fluxo externo real da fazenda
   // Evol. Cat. (reclassificação interna) NÃO entra nos indicadores de fluxo
   let entradas = mk(m => viewTotals[m]?.entradas_externas ?? 0);
@@ -267,7 +274,7 @@ export function buildMonthlyDataFromView(
   });
 
   return {
-    cabIni, cabFin, entradas, saidas,
+    cabIni, cabFin, cabMediaMes, entradas, saidas,
     pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin,
     gmd, arrobasProd, prodKg, areaProd: areaProdutiva,
     areaProdMensal: Array.from({ length: 12 }, (_, i) => {
