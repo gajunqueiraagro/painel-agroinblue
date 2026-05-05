@@ -36,7 +36,7 @@ interface Props {
   onClose: () => void;
   titulo: string;
   unidade?: string;
-  formatoValor?: 'inteiro' | 'decimal1' | 'decimal2' | 'decimal3' | 'moeda';
+  formatoValor?: 'inteiro' | 'decimal1' | 'decimal2' | 'decimal3' | 'moeda' | 'moedaAbreviada';
   /** Mês selecionado (1–12) — usado para destacar o ponto no gráfico. */
   mesAtual: number;
   anoAtual: number;
@@ -86,6 +86,17 @@ const fmtN = (v: number | null | undefined, casas: number) =>
 const fmtR = (v: number | null | undefined) =>
   v == null || isNaN(v) ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// R$ 22.300.000 → "R$ 22,3M". Sem alterar cálculo do valor.
+const fmtRAbreviado = (v: number | null | undefined): string => {
+  if (v == null || isNaN(v)) return '—';
+  const abs = Math.abs(v);
+  const fmt = (n: number, suf: string) => `R$ ${n.toFixed(1).replace('.', ',')}${suf}`;
+  if (abs >= 1e9) return fmt(v / 1e9, 'B');
+  if (abs >= 1e6) return fmt(v / 1e6, 'M');
+  if (abs >= 1e3) return fmt(v / 1e3, 'K');
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+};
+
 export function IndicadorHistoricoModal({
   open,
   onClose,
@@ -120,11 +131,12 @@ export function IndicadorHistoricoModal({
   if (!open) return null;
 
   const fmtValor = (v: number | null | undefined): string => {
-    if (formatoValor === 'inteiro')  return fmtN(v, 0) + (unidade ? ' ' + unidade : '');
-    if (formatoValor === 'decimal1') return fmtN(v, 1) + (unidade ? ' ' + unidade : '');
-    if (formatoValor === 'decimal2') return fmtN(v, 2) + (unidade ? ' ' + unidade : '');
-    if (formatoValor === 'decimal3') return fmtN(v, 3) + (unidade ? ' ' + unidade : '');
-    if (formatoValor === 'moeda')    return fmtR(v);
+    if (formatoValor === 'inteiro')         return fmtN(v, 0) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'decimal1')        return fmtN(v, 1) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'decimal2')        return fmtN(v, 2) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'decimal3')        return fmtN(v, 3) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'moeda')           return fmtR(v);
+    if (formatoValor === 'moedaAbreviada')  return fmtRAbreviado(v);
     return String(v ?? '—');
   };
 

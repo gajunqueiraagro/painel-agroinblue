@@ -450,6 +450,62 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return () => { cancelled = true; };
   }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
+  // Desfrute META — query direta a 'lancamentos' (cenario='meta') filtrada por TIPOS_DESFRUTE_OFICIAL.
+  // Mantém a invariante (abate+venda+consumo, sem morte/transfer) — divergente do PC-100 que usa
+  // saidas externas META (inclui morte/transfer).
+  const [desfruteMetaMes12, setDesfruteMetaMes12] = useState<number[]>(() => Array(12).fill(0));
+  useEffect(() => {
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    if (!cid && !fazendaId) {
+      setDesfruteMetaMes12(Array(12).fill(0));
+      return;
+    }
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from('lancamentos')
+          .select('tipo, quantidade, data')
+          .eq('cancelado', false)
+          .eq('cenario', 'meta')
+          .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+          .gte('data', `${ano}-01-01`)
+          .lte('data', `${ano}-12-31`);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setDesfruteMetaMes12(Array(12).fill(0));
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setDesfruteMetaMes12(Array(12).fill(0));
+          return;
+        }
+        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const lite = allRows.map((r: any) => ({
+        tipo: r.tipo,
+        quantidade: Number(r.quantidade) || 0,
+        data: r.data,
+        cenario: 'realizado',  // bypass: já filtramos cenario=meta no SQL acima
+      }));
+      setDesfruteMetaMes12(buildDesfruteCabMensal(lite, ano));
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+
   // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
   useEffect(() => {
@@ -1184,6 +1240,29 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - ant) / ant) * 100;
   })();
 
+  // Meta — Desfrute: 'lancamentos' cenario='meta' filtrado pelos mesmos tipos oficiais.
+  const desfruteMetaPossui = desfruteMetaMes12.some(v => v > 0);
+
+  const desfruteMesMetaSerie13 = desfruteMetaPossui
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (desfruteMetaMes12[i - 1] ?? NaN)
+      )
+    : null;
+
+  const desfrutePeriodoMetaSerie13 = desfruteMetaPossui
+    ? cumSumTo13(desfruteMetaMes12)
+    : null;
+
+  const desfruteSerieMeta = isPeriodo ? desfrutePeriodoMetaSerie13 : desfruteMesMetaSerie13;
+
+  const desfruteDeltaMeta = (() => {
+    if (!desfruteSerieMeta) return null;
+    const curr = safe(desfruteSerie[mesIdx]);
+    const meta = safe(desfruteSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   // ─────────────────────────────────────────────────────────────
   // ── Valor do Rebanho oficial — patrimônio/estoque (1-based, length 13) ──
   // mes = posição do mês. periodo = MESMO valor (estoque, sem soma/média).
@@ -1390,10 +1469,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       valor:     desfruteValor,
       deltaMes:  desfruteDeltaMes,
       deltaAno:  desfruteDeltaAno,
-      deltaMeta: null,                          // sem fonte oficial de meta para desfrute
+      deltaMeta: desfruteDeltaMeta,
       serieAno:    desfruteSerie,
       serieAnoAnt: desfruteSerieAnoAnt ?? undefined,
-      serieMeta:   undefined,
+      serieMeta:   desfruteSerieMeta ?? undefined,
     } : null,
     valorRebanhoIndicador: monthlyData ? {
       label:     isPeriodo ? 'VALOR DO REBANHO NO PERÍODO' : 'VALOR DO REBANHO NO MÊS',

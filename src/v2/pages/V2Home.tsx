@@ -19,6 +19,17 @@ const fmtR = (v: number | null | undefined) =>
   v == null || isNaN(v) ? null
   : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
+// R$ 22.300.000 → "R$ 22,3M". Para valores grandes onde a precisão centavos não importa.
+const fmtRAbreviado = (v: number | null | undefined): string | null => {
+  if (v == null || isNaN(v)) return null;
+  const abs = Math.abs(v);
+  const fmt = (n: number, suf: string) => `R$ ${n.toFixed(1).replace('.', ',')}${suf}`;
+  if (abs >= 1e9) return fmt(v / 1e9, 'B');
+  if (abs >= 1e6) return fmt(v / 1e6, 'M');
+  if (abs >= 1e3) return fmt(v / 1e3, 'K');
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+};
+
 interface MetricTileProps {
   label: string;
   value: string | null;
@@ -345,7 +356,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={gmdIndicador?.deltaAno ?? null}
             deltaMeta={gmdIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('gmd')} />
-          <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtR(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
+          <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtRAbreviado(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
             deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
             deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
             deltaMeta={valorRebanhoIndicador?.deltaMeta ?? null}
@@ -577,7 +588,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo={valorRebanhoIndicador?.titulo ?? ''}
-          formatoValor="moeda"
+          formatoValor="moedaAbreviada"
           subtitulo={valorRebanhoIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={valorRebanhoIndicador?.serieAno ?? []}
