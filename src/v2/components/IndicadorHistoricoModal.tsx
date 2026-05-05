@@ -246,15 +246,23 @@ export function IndicadorHistoricoModal({
 
   const deltaMetaInterno = calcDelta(valorAtual, getMesValue(metaSerieFinal, mesAtual));
 
-  const dados = MESES_LABELS.map((mes, idx) => ({
-    mes,
+  const dados = MESES_LABELS.map((mes, idx) => {
     // Realizado: corta no mês atual (Jan→mesAtual)
-    atual:       idx + 1 <= mesAtual ? getMesValue(serieAno, idx + 1) : null,
+    const atual       = idx + 1 <= mesAtual ? getMesValue(serieAno, idx + 1) : null;
     // Ano anterior: série completa Jan–Dez
-    anoAnterior: getMesValue(serieAnoAnt, idx + 1),
+    const anoAnterior = getMesValue(serieAnoAnt, idx + 1);
     // Meta: série completa Jan–Dez (nunca cortar)
-    meta:        getMesValue(metaSerieFinal, idx + 1),
-  }));
+    const meta        = getMesValue(metaSerieFinal, idx + 1);
+    return {
+      mes,
+      atual,
+      anoAnterior,
+      meta,
+      // Auxiliares para Areas — mesmos valores, dataKey separado p/ não duplicar no tooltip
+      atualArea:       atual,
+      anoAnteriorArea: anoAnterior,
+    };
+  });
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
   const hasMeta = metaSerieFinal != null && metaSerieFinal.some(v => v != null && !isNaN(v as number));
@@ -296,6 +304,7 @@ export function IndicadorHistoricoModal({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
     const order = ['atual', 'anoAnterior', 'meta'];
+    const allowedKeys = new Set(order);
     const displayName = (key: string): string => {
       if (key === 'atual')        return String(anoAtual);
       if (key === 'anoAnterior')  return String(anoAtual - 1);
@@ -303,7 +312,7 @@ export function IndicadorHistoricoModal({
       return key;
     };
     const entries = payload
-      .filter((e: any) => e.value != null)
+      .filter((e: any) => allowedKeys.has(String(e.dataKey)) && e.value != null)
       .sort((a: any, b: any) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey));
     return (
       <div className="rounded-md border border-border/40 bg-background px-3 py-2 shadow-md text-sm">
@@ -378,11 +387,11 @@ export function IndicadorHistoricoModal({
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
               <YAxis tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
               <Tooltip content={<CustomTooltip />} />
-              {/* Areas (sob as linhas) — fill cinza, sem stroke */}
+              {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
               {hasAnoAnt && (
                 <Area
                   type="monotone"
-                  dataKey="anoAnterior"
+                  dataKey="anoAnteriorArea"
                   stroke="none"
                   fill="#000000"
                   fillOpacity={0.04}
@@ -394,7 +403,7 @@ export function IndicadorHistoricoModal({
               )}
               <Area
                 type="monotone"
-                dataKey="atual"
+                dataKey="atualArea"
                 stroke="none"
                 fill="#000000"
                 fillOpacity={0.09}
