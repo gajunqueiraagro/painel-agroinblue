@@ -242,9 +242,11 @@ export function buildMonthlyDataFromView(
   const prodKg = mk(m => viewTotals[m]?.producao_biologica ?? 0);
 
   // ── Desfrute: apenas abate + venda + consumo (REGRA OFICIAL) ──
-  // Filtragem de desfruteLancs ainda usada para desfrute_arr e recPecCompMes (peso/valor).
+  // Filtragem de desfruteLancs usada para desfrute_arr e recPecCompMes (peso/valor) — financeiros.
+  // Filtro statusOperacional='realizado' aplica APENAS para cenario realizado;
+  // não afeta desfruteCab (zoot, calculado via buildDesfruteCabMensal direto sobre lancPec).
   const desfruteLancs = lancPec.filter(l =>
-    TIPOS_DESFRUTE.has(l.tipo) && l.cenario !== 'meta',
+    TIPOS_DESFRUTE.has(l.tipo) && l.cenario !== 'meta' && l.statusOperacional === 'realizado',
   );
   // mesPrefix already defined above
   // desfruteCab oficial — vem do helper compartilhado.

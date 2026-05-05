@@ -632,6 +632,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           .select('tipo, quantidade, peso_medio_kg, valor_total, data')
           .eq('cancelado', false)
           .eq('cenario', 'realizado')
+          .eq('status_operacional', 'realizado')
           .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
           .gte('data', `${anoAnt}-01-01`)
           .lte('data', `${anoAnt}-12-31`);

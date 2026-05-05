@@ -406,7 +406,7 @@ export function useHistoricoIndicador({
           while (true) {
             let q = supabase
               .from('lancamentos')
-              .select('tipo, quantidade, peso_medio_kg, valor_total, data, cenario')
+              .select('tipo, quantidade, peso_medio_kg, valor_total, data, cenario, status_operacional')
               .eq('cancelado', false)
               .in('cenario', ['realizado', 'meta'])
               .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
@@ -427,14 +427,18 @@ export function useHistoricoIndicador({
             from += PAGE;
           }
 
-          // Agrupa por (ano, cenario)
+          // Agrupa por (ano, cenario). Realizado exige status_operacional='realizado';
+          // meta tem status_operacional=null por design — não filtrar.
           const rowsR: Record<number, any[]> = {};
           const rowsM: Record<number, any[]> = {};
           for (const r of allRows) {
             const a = Number(String(r.data ?? '').slice(0, 4));
             if (isNaN(a)) continue;
-            const bucket = r.cenario === 'meta' ? rowsM : rowsR;
-            (bucket[a] ??= []).push(r);
+            if (r.cenario === 'meta') {
+              (rowsM[a] ??= []).push(r);
+            } else if (r.status_operacional === 'realizado') {
+              (rowsR[a] ??= []).push(r);
+            }
           }
 
           const calcAgregado = (rowsDoAno: any[]): { rec: number[]; desfArr: number[] } => {
