@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
@@ -61,15 +61,24 @@ export function usePastos() {
   const [categorias, setCategorias] = useState<CategoriaRebanho[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Cache por chave (categorias='categorias', pastos=fazendaId|'__global__').
+  // Limpado em mutações (criar/editar/toggle/reorder) para forçar refetch.
+  const cacheRef = useRef<Record<string, boolean>>({});
+
   const isGlobal = fazendaAtual?.id === '__global__';
   const fazendaId = isGlobal ? undefined : fazendaAtual?.id;
 
   const loadCategorias = useCallback(async () => {
+    const cacheKey = 'categorias';
+    if (cacheRef.current[cacheKey]) return;
     const { data } = await supabase
       .from('categorias_rebanho')
       .select('*')
       .order('ordem_exibicao');
-    if (data) setCategorias(data);
+    if (data) {
+      setCategorias(data);
+      cacheRef.current[cacheKey] = true;
+    }
   }, []);
 
   const globalFazendaIds = useMemo(() => {
@@ -78,6 +87,14 @@ export function usePastos() {
   }, [isGlobal, todasFazendas]);
 
   const loadPastos = useCallback(async () => {
+    const cacheKey = isGlobal ? '__global__' : (fazendaId ?? '');
+    if (!cacheKey) {
+      setPastos([]);
+      setLoading(false);
+      return;
+    }
+    if (cacheRef.current[cacheKey]) return;
+
     if (isGlobal) {
       if (globalFazendaIds.length === 0) { setPastos([]); setLoading(false); return; }
       setLoading(true);
@@ -88,20 +105,25 @@ export function usePastos() {
         .order('ordem_exibicao')
         .order('nome');
       if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
-      else setPastos(data || []);
+      else {
+        setPastos(data || []);
+        cacheRef.current[cacheKey] = true;
+      }
       setLoading(false);
       return;
     }
-    if (!fazendaId) { setPastos([]); setLoading(false); return; }
     setLoading(true);
     const { data, error } = await supabase
       .from('pastos')
       .select('*')
-      .eq('fazenda_id', fazendaId)
+      .eq('fazenda_id', fazendaId!)
       .order('ordem_exibicao')
       .order('nome');
     if (error) { toast.error('Erro ao carregar pastos'); console.error(error); }
-    else setPastos(data || []);
+    else {
+      setPastos(data || []);
+      cacheRef.current[cacheKey] = true;
+    }
     setLoading(false);
   }, [fazendaId, isGlobal, globalFazendaIds]);
 
@@ -109,6 +131,7 @@ export function usePastos() {
   useEffect(() => { loadPastos(); }, [loadPastos]);
 
   const criarPasto = useCallback(async (pasto: Omit<Pasto, 'id' | 'created_at' | 'updated_at'>) => {
+    cacheRef.current = {};
     const maxOrdem = pastos.length > 0 ? Math.max(...pastos.map(p => p.ordem_exibicao || 0)) : 0;
     const { error } = await supabase.from('pastos').insert({
       ...pasto,
@@ -122,6 +145,7 @@ export function usePastos() {
   }, [loadPastos, pastos, fazendaAtual]);
 
   const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>) => {
+    cacheRef.current = {};
     const { error } = await supabase.from('pastos').update(updates).eq('id', id);
     if (error) { toast.error('Erro ao atualizar pasto'); console.error(error); return false; }
     toast.success('Pasto atualizado');
@@ -130,6 +154,7 @@ export function usePastos() {
   }, [loadPastos]);
 
   const toggleAtivo = useCallback(async (id: string, ativo: boolean) => {
+    cacheRef.current = {};
     return editarPasto(id, { ativo });
   }, [editarPasto]);
 
