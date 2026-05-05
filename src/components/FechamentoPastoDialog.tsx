@@ -316,10 +316,9 @@ export function FechamentoPastoDialog({
   if (total === 0 && !exigeRebanho && !isDivergencia) avisos.push('Pasto sem rebanho (conforme tipo de uso selecionado)');
   if (itensComQtd.length > 0 && itensComQtd.some(i => !i.peso_medio_kg)) avisos.push('Peso médio não informado em alguma categoria');
   if (!qualidadeMes && !isDivergencia) avisos.push('Qualidade do pasto não preenchida');
-  if (isDivergencia && !observacaoMes.trim()) avisos.push('Observação da divergência é obrigatória');
 
   const podeFechar = isDivergencia
-    ? observacaoMes.trim().length > 0
+    ? true
     : exigeRebanho
     ? total > 0 && itensComQtd.some(i => i.peso_medio_kg)
     : true;
@@ -404,16 +403,16 @@ export function FechamentoPastoDialog({
             </div>
             <div className="flex-1 min-w-0">
               <Label className="text-[10px] text-white/50 leading-none">
-                {isDivergencia ? 'Obs. da divergência *' : 'Obs.'}
+                {isDivergencia ? 'Obs. da divergência' : 'Obs.'}
               </Label>
               {/* Observação permanece editável mesmo em mês locked (regra: exceto observacao_mes) */}
               <Input
                 value={observacaoMes}
                 onChange={e => setObservacaoMes(e.target.value)}
                 disabled={isFechado}
-                placeholder={isDivergencia ? 'Descreva a divergência (obrigatório)' : 'Observação...'}
+                placeholder={isDivergencia ? 'Observação (opcional)' : 'Observação...'}
                 className={`h-7 text-xs px-2 bg-white/10 border-white/15 text-white placeholder:text-white/30 ${
-                  isDivergencia && !observacaoMes.trim() ? 'ring-1 ring-amber-400' : ''
+                  ''
                 }`}
               />
             </div>
