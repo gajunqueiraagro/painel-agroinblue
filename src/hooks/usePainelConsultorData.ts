@@ -169,6 +169,24 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];       // ausente nesta fase
   } | null;
+  /**
+   * Indicador Valor do Rebanho — patrimônio (estoque).
+   * Mês = posição final do mês. Período = MESMO VALOR (não soma, não média).
+   * Fonte: valor_rebanho_realizado_validado (Fazenda) / vw_valor_rebanho_realizado_global_mensal (Global).
+   * Meta: valor_rebanho_meta_validada (somente Fazenda — não há fonte Global).
+   */
+  valorRebanhoIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
   loading: boolean;
 }
 
@@ -304,6 +322,82 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     load();
     return () => { cancelled = true; };
   }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Valor do Rebanho ano anterior (apenas quando incluirComparativos=true).
+  const [valorRebanhoMesAnoAnt, setValorRebanhoMesAnoAnt] = useState<number[]>(() => Array(13).fill(NaN));
+  useEffect(() => {
+    if (!incluirComparativos) {
+      setValorRebanhoMesAnoAnt(Array(13).fill(NaN));
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const anoAnt = ano - 1;
+    const load = async () => {
+      const dezAnoAnterior = `${anoAnt - 1}-12`;
+      const meses = Array.from({ length: 12 }, (_, i) => `${anoAnt}-${String(i + 1).padStart(2, '0')}`);
+      const todasMeses = [dezAnoAnterior, ...meses];
+
+      if (isGlobal) {
+        if (!cid) {
+          if (!cancelled) setValorRebanhoMesAnoAnt(Array(13).fill(NaN));
+          return;
+        }
+        const { data, error } = await supabase
+          .from('vw_valor_rebanho_realizado_global_mensal' as any)
+          .select('ano_mes, valor_total')
+          .eq('cliente_id', cid)
+          .in('ano_mes', todasMeses);
+        if (cancelled) return;
+        if (error || !data?.length) { setValorRebanhoMesAnoAnt(Array(13).fill(NaN)); return; }
+        const byMes = Object.fromEntries((data as any[]).map(r => [r.ano_mes, Number(r.valor_total)]));
+        setValorRebanhoMesAnoAnt(todasMeses.map(m => (byMes[m] != null && !isNaN(byMes[m]) ? byMes[m] : NaN)));
+        return;
+      }
+
+      if (!fazendaId || fazendaId === '__global__') {
+        if (!cancelled) setValorRebanhoMesAnoAnt(Array(13).fill(NaN));
+        return;
+      }
+      const { data, error } = await supabase
+        .from('valor_rebanho_realizado_validado' as any)
+        .select('ano_mes, valor_total, status')
+        .eq('fazenda_id', fazendaId)
+        .in('ano_mes', todasMeses);
+      if (cancelled) return;
+      if (error || !data?.length) { setValorRebanhoMesAnoAnt(Array(13).fill(NaN)); return; }
+      const byMes = new Map<string, number>();
+      for (const row of data as any[]) {
+        if (row.status === 'validado') byMes.set(row.ano_mes, Number(row.valor_total));
+      }
+      setValorRebanhoMesAnoAnt(todasMeses.map(m => (byMes.has(m) ? byMes.get(m)! : NaN)));
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
+  const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
+  useEffect(() => {
+    if (isGlobal || !fazendaId || fazendaId === '__global__') {
+      setValorRebanhoMetaMes(Array(12).fill(NaN));
+      return;
+    }
+    let cancelled = false;
+    const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+    supabase
+      .from('valor_rebanho_meta_validada' as any)
+      .select('ano_mes, valor_total')
+      .eq('fazenda_id', fazendaId)
+      .in('ano_mes', meses)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
+        const byMes = Object.fromEntries((data as any[]).map(r => [r.ano_mes, Number(r.valor_total)]));
+        setValorRebanhoMetaMes(meses.map(m => (byMes[m] != null && !isNaN(byMes[m]) ? byMes[m] : NaN)));
+      });
+    return () => { cancelled = true; };
+  }, [ano, isGlobal, fazendaId]);
 
   const mesRef = mes === 0 ? 12 : mes;
   const mesStr = `${ano}-${String(mesRef).padStart(2, '0')}`;
@@ -914,6 +1008,54 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── Valor do Rebanho oficial — patrimônio/estoque (1-based, length 13) ──
+  // mes = posição do mês. periodo = MESMO valor (estoque, sem soma/média).
+  // Fonte: valor_rebanho_realizado_validado / vw_valor_rebanho_realizado_global_mensal.
+  // ─────────────────────────────────────────────────────────────
+  // valorRebanhoMes é 1-based (length 13): [0]=Dez ano-1, [1..12]=Jan..Dez.
+  // serieAno é a mesma em mes/periodo (regra: período = posição do mês selecionado).
+  const valorRebanhoSerie = valorRebanhoMes;
+  const valorRebanhoValor = safe(valorRebanhoSerie[mesIdx]);
+
+  const valorRebanhoDeltaMes = (() => {
+    if (mesIdx < 1) return null;
+    const curr = safe(valorRebanhoSerie[mesIdx]);
+    // mesIdx-1 é Dez ano-1 quando mesIdx=1 — fonte oficial inclui esse valor
+    const prev = safe(valorRebanhoSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — vem de valorRebanhoMesAnoAnt (carregado quando incluirComparativos=true).
+  const valorRebanhoSerieAnoAnt = valorRebanhoMesAnoAnt.some(v => !isNaN(v))
+    ? valorRebanhoMesAnoAnt
+    : null;
+
+  const valorRebanhoDeltaAno = (() => {
+    if (!valorRebanhoSerieAnoAnt) return null;
+    const curr = safe(valorRebanhoSerie[mesIdx]);
+    const ant  = safe(valorRebanhoSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  // Meta — só Fazenda. valorRebanhoMetaMes é 0-based (length 12).
+  // Convertemos para 1-based length 13 para padronizar com as outras séries.
+  const valorRebanhoSerieMeta = valorRebanhoMetaMes.some(v => !isNaN(v))
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (valorRebanhoMetaMes[i - 1] ?? NaN)
+      )
+    : null;
+
+  const valorRebanhoDeltaMeta = (() => {
+    if (!valorRebanhoSerieMeta) return null;
+    const curr = safe(valorRebanhoSerie[mesIdx]);
+    const meta = safe(valorRebanhoSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -1077,6 +1219,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: undefined,
       serieMeta:   undefined,
     } : null,
+    valorRebanhoIndicador: monthlyData ? {
+      label:     isPeriodo ? 'VALOR DO REBANHO NO PERÍODO' : 'VALOR DO REBANHO NO MÊS',
+      titulo:    isPeriodo ? 'Valor do Rebanho no período' : 'Valor do Rebanho no mês',
+      subtitulo: 'Valor patrimonial do rebanho no final do mês selecionado',
+      valor:     valorRebanhoValor,
+      deltaMes:  valorRebanhoDeltaMes,
+      deltaAno:  valorRebanhoDeltaAno,
+      deltaMeta: valorRebanhoDeltaMeta,
+      serieAno:    valorRebanhoSerie,
+      serieAnoAnt: valorRebanhoSerieAnoAnt ?? undefined,
+      serieMeta:   valorRebanhoSerieMeta ?? undefined,
+    } : null,
     loading,
   };
 
@@ -1101,6 +1255,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       kgHaIndicador: null,
       arrobasIndicador: null,
       desfruteIndicador: null,
+      valorRebanhoIndicador: null,
     };
   }
 

@@ -159,23 +159,24 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
   // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute'];
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
   // ao histórico p/ que a barra do anoAtual bata 100% com o topo do modal.
   const valorOficialAnoAtual: number | null = histAtivo
-    ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.valor   ?? null)
-     : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.valor ?? null)
-     : modalIndicador === 'gmd'       ? (gmdIndicador?.valor       ?? null)
-     : modalIndicador === 'arrobas'   ? (arrobasIndicador?.valor   ?? null)
-     : modalIndicador === 'desfrute'  ? (desfruteIndicador?.valor  ?? null)
+    ? (modalIndicador === 'cabecas'      ? (cabecasIndicador?.valor      ?? null)
+     : modalIndicador === 'pesoMedio'    ? (pesoMedioIndicador?.valor    ?? null)
+     : modalIndicador === 'gmd'          ? (gmdIndicador?.valor          ?? null)
+     : modalIndicador === 'arrobas'      ? (arrobasIndicador?.valor      ?? null)
+     : modalIndicador === 'desfrute'     ? (desfruteIndicador?.valor     ?? null)
+     : modalIndicador === 'valorRebanho' ? (valorRebanhoIndicador?.valor ?? null)
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
@@ -344,7 +345,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={gmdIndicador?.deltaAno ?? null}
             deltaMeta={gmdIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('gmd')} />
-          <MetricTile label="Valor rebanho" value={fmtR(valorReb)} loading={loadingPainel}
+          <MetricTile label={valorRebanhoIndicador?.label ?? 'VALOR DO REBANHO NO MÊS'} value={fmtR(valorRebanhoIndicador?.valor ?? null)} loading={loadingPainel}
+            deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
+            deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
+            deltaMeta={valorRebanhoIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('valorRebanho')} />
         </SectionBlock>
 
@@ -572,18 +576,24 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'valorRebanho' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="Valor Rebanho" formatoValor="moeda"
-          subtitulo="Valor financeiro estimado do rebanho"
+          titulo={valorRebanhoIndicador?.titulo ?? ''}
+          formatoValor="moeda"
+          subtitulo={valorRebanhoIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.valorRebFin ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.valorRebFin}
+          serieAno={valorRebanhoIndicador?.serieAno ?? []}
+          serieAnoAnt={valorRebanhoIndicador?.serieAnoAnt}
+          serieMeta={valorRebanhoIndicador?.serieMeta}
           tipoAcumulado="posicao"
           indicadorKey="valorRebanho"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
-          deltaMes={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], seriesMensais?.valorRebFin?.[mesNum === 1 ? 0 : mesNum - 1])}
-          deltaAno={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], dadosAnoAnt.seriesMensais?.valorRebFin?.[mesNum])}
+          anoInicio={anoNum - 6}
+          deltaMes={valorRebanhoIndicador?.deltaMes ?? null}
+          deltaAno={valorRebanhoIndicador?.deltaAno ?? null}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
     </div>

@@ -30,12 +30,14 @@ import {
 
 // Desfrute usa fonte separada (lancamentos), pois zoot_mensal_cache.saidas_externas
 // inclui mortes — divergente da definição oficial (abate + venda + consumo).
+// valorRebanho usa fonte oficial separada (valor_rebanho_realizado_validado / view global).
 export type HistoricoIndicadorKey =
   | 'cabecas'
   | 'pesoMedio'
   | 'arrobas'
   | 'gmd'
-  | 'desfrute';
+  | 'desfrute'
+  | 'valorRebanho';
 
 export interface AnoValor {
   ano: number;
@@ -99,6 +101,82 @@ export function useHistoricoIndicador({
 
     (async () => {
       try {
+        // ───── Branch VALOR REBANHO — fonte oficial (validado), sem cálculo no front ─────
+        if (indicadorKey === 'valorRebanho') {
+          if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
+            if (!cancelled) {
+              setHistorico([]); setHistoricoMeta([]); setLoading(false);
+            }
+            return;
+          }
+
+          const isGlobal = !fazendaId && (fazendaIds?.length ?? 0) > 0;
+          const mesesAlvo: { ano: number; ano_mes: string }[] = [];
+          for (let a = inicio; a <= anoAtual; a++) {
+            mesesAlvo.push({
+              ano: a,
+              ano_mes: `${a}-${String(mesAtual).padStart(2, '0')}`,
+            });
+          }
+
+          let q;
+          if (isGlobal) {
+            // Global precisa de cliente_id; vamos derivar do conjunto de fazendaIds (não temos clienteId aqui).
+            // A view filtra por cliente_id; pegamos via 'in' nos ano_mes alvo + filtragem por ids depois? Não.
+            // A view é por cliente — sem clienteId não dá. Para Global, precisamos do clienteId no parâmetro.
+            // Solução: para Global, usar fazendaIds para filtrar via tabela base — mas a view é agregada por cliente.
+            // Sem clienteId, não conseguimos. Retornar vazio.
+            if (!clienteId) {
+              if (!cancelled) {
+                setHistorico([]); setHistoricoMeta([]); setLoading(false);
+              }
+              return;
+            }
+            q = supabase
+              .from('vw_valor_rebanho_realizado_global_mensal' as any)
+              .select('ano_mes, valor_total')
+              .eq('cliente_id', clienteId)
+              .in('ano_mes', mesesAlvo.map(m => m.ano_mes));
+          } else {
+            q = supabase
+              .from('valor_rebanho_realizado_validado' as any)
+              .select('ano_mes, valor_total, status')
+              .eq('fazenda_id', fazendaId!)
+              .eq('status', 'validado')
+              .in('ano_mes', mesesAlvo.map(m => m.ano_mes));
+          }
+
+          const { data, error } = await q;
+          if (cancelled) return;
+          if (error || !data) {
+            setHistorico([]); setHistoricoMeta([]);
+            return;
+          }
+
+          const byMes = new Map<string, number>();
+          for (const r of data as any[]) {
+            byMes.set(r.ano_mes, Number(r.valor_total));
+          }
+
+          const resR: AnoValor[] = [];
+          const resM: AnoValor[] = []; // sem meta multi-ano nesta fase
+          for (const { ano: a, ano_mes } of mesesAlvo) {
+            if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+              resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+            } else {
+              const v = byMes.get(ano_mes);
+              resR.push({ ano: a, valor: (v != null && !isNaN(v) ? v : null) });
+            }
+            resM.push({ ano: a, valor: null });
+          }
+
+          if (!cancelled) {
+            setHistorico(resR);
+            setHistoricoMeta(resM);
+          }
+          return;
+        }
+
         // ───── Branch DESFRUTE — fonte oficial: lancamentos (abate + venda + consumo) ─────
         if (indicadorKey === 'desfrute') {
           if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
@@ -287,7 +365,7 @@ export function useHistoricoIndicador({
             return cm > 0 && d > 0 ? pb / cm / d : null;
           }
 
-          // 'desfrute' é tratado em branch separado acima (query a 'lancamentos').
+          // 'desfrute' e 'valorRebanho' são tratados em branches separados acima.
 
           return null;
         };
