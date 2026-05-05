@@ -176,7 +176,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
   // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho'];
+  // uaHa/kgHa: branch específico que cruza fechamento_area_snapshot + zoot_mensal_cache.
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
@@ -188,6 +189,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'arrobas'      ? (arrobasIndicador?.valor      ?? null)
      : modalIndicador === 'desfrute'     ? (desfruteIndicador?.valor     ?? null)
      : modalIndicador === 'valorRebanho' ? (valorRebanhoIndicador?.valor ?? null)
+     : modalIndicador === 'uaHa'         ? (uaHaIndicador?.valor         ?? null)
+     : modalIndicador === 'kgHa'         ? (kgHaIndicador?.valor         ?? null)
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
@@ -539,6 +542,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={uaHaIndicador?.deltaMes ?? null}
           deltaAno={uaHaIndicador?.deltaAno ?? null}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'kgHa' && (
@@ -559,6 +565,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={kgHaIndicador?.deltaMes ?? null}
           deltaAno={kgHaIndicador?.deltaAno ?? null}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'desfrute' && (

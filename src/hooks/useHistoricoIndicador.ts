@@ -24,6 +24,7 @@ import {
   cabecasMediaPeriodoFromRows,
   pesoMedioPonderadoFromRows,
   computePeriodGmd,
+  rollingAvg,
   buildDesfruteCabMensal,
   TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
@@ -31,13 +32,16 @@ import {
 // Desfrute usa fonte separada (lancamentos), pois zoot_mensal_cache.saidas_externas
 // inclui mortes — divergente da definição oficial (abate + venda + consumo).
 // valorRebanho usa fonte oficial separada (valor_rebanho_realizado_validado / view global).
+// uaHa e kgHa cruzam zoot_mensal_cache + fechamento_area_snapshot por ano.
 export type HistoricoIndicadorKey =
   | 'cabecas'
   | 'pesoMedio'
   | 'arrobas'
   | 'gmd'
   | 'desfrute'
-  | 'valorRebanho';
+  | 'valorRebanho'
+  | 'uaHa'
+  | 'kgHa';
 
 export interface AnoValor {
   ano: number;
@@ -101,6 +105,128 @@ export function useHistoricoIndicador({
 
     (async () => {
       try {
+        // ───── Branch UA/HA e KG VIVO/HA — cruza fechamento_area_snapshot + zoot_mensal_cache ─────
+        if (indicadorKey === 'uaHa' || indicadorKey === 'kgHa') {
+          if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
+            if (!cancelled) {
+              setHistorico([]); setHistoricoMeta([]); setLoading(false);
+            }
+            return;
+          }
+
+          // Query 1: fechamento_area_snapshot (range completo)
+          let areaQuery = supabase
+            .from('fechamento_area_snapshot')
+            .select('fazenda_id, ano_mes, area_pecuaria_ha')
+            .eq('cliente_id', clienteId)
+            .gte('ano_mes', `${inicio}-01-01`)
+            .lte('ano_mes', `${anoAtual}-12-31`);
+          if (fazendaId) areaQuery = areaQuery.eq('fazenda_id', fazendaId);
+
+          // Query 2: zoot_mensal_cache (range completo, paginado)
+          const PAGE = 1000;
+          const zootRows: any[] = [];
+          let zfrom = 0;
+          while (true) {
+            let zq = supabase
+              .from('zoot_mensal_cache')
+              .select('fazenda_id, ano, mes, saldo_inicial, saldo_final, peso_total_final')
+              .eq('cenario', 'realizado')
+              .gte('ano', inicio)
+              .lte('ano', anoAtual);
+            if (fazendaId) zq = zq.eq('fazenda_id', fazendaId);
+            else if (fazendaIds && fazendaIds.length > 0) zq = zq.in('fazenda_id', fazendaIds);
+            const { data, error } = await zq.range(zfrom, zfrom + PAGE - 1);
+            if (cancelled) return;
+            if (error) {
+              setHistorico([]); setHistoricoMeta([]);
+              return;
+            }
+            if (!data || data.length === 0) break;
+            zootRows.push(...data);
+            if (data.length < PAGE) break;
+            zfrom += PAGE;
+          }
+
+          const areaRes = await areaQuery;
+          if (cancelled) return;
+          if (areaRes.error) {
+            setHistorico([]); setHistoricoMeta([]);
+            return;
+          }
+          const areaRows = areaRes.data ?? [];
+
+          // Agrupa: por ano → array 12 com soma area_pecuaria_ha
+          const areaPorAnoMes: Record<number, number[]> = {};
+          for (const r of areaRows as any[]) {
+            const [yyyy, mm] = String(r.ano_mes).split('-');
+            const a = Number(yyyy);
+            const mIdx = Number(mm) - 1;
+            if (!areaPorAnoMes[a]) areaPorAnoMes[a] = Array(12).fill(0);
+            areaPorAnoMes[a][mIdx] += Number(r.area_pecuaria_ha) || 0;
+          }
+
+          // Agrupa: por ano e mês → soma cabIni, cabFin, peso_total_final
+          type ZootCell = { cabIni: number; cabFin: number; ptf: number };
+          const zootPorAnoMes: Record<number, ZootCell[]> = {};
+          for (const r of zootRows as any[]) {
+            const a = Number(r.ano);
+            const mIdx = Number(r.mes) - 1;
+            if (!zootPorAnoMes[a]) {
+              zootPorAnoMes[a] = Array.from({ length: 12 }, () => ({ cabIni: 0, cabFin: 0, ptf: 0 }));
+            }
+            zootPorAnoMes[a][mIdx].cabIni += Number(r.saldo_inicial) || 0;
+            zootPorAnoMes[a][mIdx].cabFin += Number(r.saldo_final) || 0;
+            zootPorAnoMes[a][mIdx].ptf += Number(r.peso_total_final) || 0;
+          }
+
+          const calcAno = (a: number): number | null => {
+            const area12 = areaPorAnoMes[a] ?? Array(12).fill(0);
+            const zoot12 = zootPorAnoMes[a]
+              ?? Array.from({ length: 12 }, () => ({ cabIni: 0, cabFin: 0, ptf: 0 }));
+
+            if (indicadorKey === 'uaHa') {
+              // Mesma fórmula de calcularIndicadoresEficienciaArea
+              const lotUaHa12 = Array.from({ length: 12 }, (_, i) => {
+                const z = zoot12[i];
+                const cabMed = (z.cabIni + z.cabFin) / 2;
+                const pm = z.cabFin > 0 ? z.ptf / z.cabFin : NaN;
+                const uaMed = cabMed > 0 && pm > 0 ? (cabMed * pm) / 450 : NaN;
+                return area12[i] > 0 ? uaMed / area12[i] : NaN;
+              });
+              const arr = viewMode === 'periodo' ? rollingAvg(lotUaHa12) : lotUaHa12;
+              const v = arr[mesAtual - 1];
+              return v != null && !isNaN(v) ? v : null;
+            }
+            // kgHa: peso_total_final / area_pecuaria_ha
+            const kgHa12 = Array.from({ length: 12 }, (_, i) => {
+              const ptf = zoot12[i].ptf;
+              const area = area12[i];
+              return ptf > 0 && area > 0 ? ptf / area : NaN;
+            });
+            const arr = viewMode === 'periodo' ? rollingAvg(kgHa12) : kgHa12;
+            const v = arr[mesAtual - 1];
+            return v != null && !isNaN(v) ? v : null;
+          };
+
+          const resR: AnoValor[] = [];
+          const resM: AnoValor[] = [];   // sem meta multi-ano para uaHa/kgHa nesta fase
+          for (let a = inicio; a <= anoAtual; a++) {
+            if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+              resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+            } else {
+              resR.push({ ano: a, valor: calcAno(a) });
+            }
+            resM.push({ ano: a, valor: null });
+          }
+
+          if (!cancelled) {
+            setHistorico(resR);
+            setHistoricoMeta(resM);
+          }
+          return;
+        }
+
         // ───── Branch VALOR REBANHO — fonte oficial (validado), sem cálculo no front ─────
         if (indicadorKey === 'valorRebanho') {
           if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
@@ -365,7 +491,7 @@ export function useHistoricoIndicador({
             return cm > 0 && d > 0 ? pb / cm / d : null;
           }
 
-          // 'desfrute' e 'valorRebanho' são tratados em branches separados acima.
+          // 'desfrute', 'valorRebanho', 'uaHa' e 'kgHa' têm branches separados acima.
 
           return null;
         };
