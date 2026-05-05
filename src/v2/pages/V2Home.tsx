@@ -394,6 +394,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
             value={fmtR(receitaPecIndicador?.valor ?? null)}
             loading={loadingPainel}
+            tone="blue"
             deltaMes={receitaPecIndicador?.deltaMes ?? null}
             deltaAno={receitaPecIndicador?.deltaAno ?? null}
             deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
@@ -402,6 +403,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             label={custeioPecIndicador?.label ?? 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS'}
             value={fmtR(custeioPecIndicador?.valor ?? null)}
             loading={loadingPainel}
+            tone="negative"
             deltaMes={custeioPecIndicador?.deltaMes ?? null}
             deltaAno={custeioPecIndicador?.deltaAno ?? null}
             deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
@@ -411,6 +413,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             value={fmtR(custoArrIndicador?.valor ?? null)}
             unit="R$/@"
             loading={loadingPainel}
+            tone="negative"
             deltaMes={custoArrIndicador?.deltaMes ?? null}
             deltaAno={custoArrIndicador?.deltaAno ?? null}
             deltaMeta={custoArrIndicador?.deltaMeta ?? null}
@@ -420,6 +423,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             value={fmtR(precoArrIndicador?.valor ?? null)}
             unit="R$/@"
             loading={loadingPainel}
+            tone="blue"
             deltaMes={precoArrIndicador?.deltaMes ?? null}
             deltaAno={precoArrIndicador?.deltaAno ?? null}
             deltaMeta={precoArrIndicador?.deltaMeta ?? null}
@@ -429,6 +433,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             value={fmtR(custoCabIndicador?.valor ?? null)}
             unit="R$/cab."
             loading={loadingPainel}
+            tone="negative"
             deltaMes={custoCabIndicador?.deltaMes ?? null}
             deltaAno={custoCabIndicador?.deltaAno ?? null}
             deltaMeta={custoCabIndicador?.deltaMeta ?? null}
@@ -438,7 +443,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             value={fmtR(margemArrIndicador?.valor ?? null)}
             unit="R$/@"
             loading={loadingPainel}
-            tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'positive' : 'negative'}
+            tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'blue' : 'negative'}
             deltaMes={margemArrIndicador?.deltaMes ?? null}
             deltaAno={margemArrIndicador?.deltaAno ?? null}
             deltaMeta={margemArrIndicador?.deltaMeta ?? null}
@@ -688,6 +693,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           historicoAno={historicoAno}
           historicoMeta={historicoAnoMeta}
           loadingHistorico={loadingHistorico}
+          corPrincipal="azul"
         />
       )}
       {modalIndicador === 'custeioPec' && (
@@ -709,6 +715,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custeioPecIndicador?.deltaMes ?? null}
           deltaAno={custeioPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          corPrincipal="vermelho"
         />
       )}
       {modalIndicador === 'custoArr' && (
@@ -730,6 +737,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoArrIndicador?.deltaMes ?? null}
           deltaAno={custoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          corPrincipal="vermelho"
         />
       )}
       {modalIndicador === 'precoArr' && (
@@ -754,6 +762,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           historicoAno={historicoAno}
           historicoMeta={historicoAnoMeta}
           loadingHistorico={loadingHistorico}
+          corPrincipal="azul"
         />
       )}
       {modalIndicador === 'custoCab' && (
@@ -775,6 +784,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoCabIndicador?.deltaMes ?? null}
           deltaAno={custoCabIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          corPrincipal="vermelho"
         />
       )}
       {modalIndicador === 'margemArr' && (
@@ -796,6 +806,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={margemArrIndicador?.deltaMes ?? null}
           deltaAno={margemArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
         />
       )}
     </div>

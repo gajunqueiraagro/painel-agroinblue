@@ -80,6 +80,14 @@ interface Props {
   historicoAno?: Array<{ ano: number; valor: number | null }>;
   historicoMeta?: Array<{ ano: number; valor: number | null }>;
   loadingHistorico?: boolean;
+  /**
+   * Cor principal do indicador (semântica financeira):
+   *   'azul'     → receitas/preços/margem positiva (default)
+   *   'vermelho' → custos/margem negativa
+   * Aplica à linha do ano atual, dot selecionado, valor topo e legenda.
+   * NÃO afeta ano anterior (cinza) nem meta (laranja).
+   */
+  corPrincipal?: 'azul' | 'vermelho';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -126,7 +134,12 @@ export function IndicadorHistoricoModal({
   historicoAno,
   historicoMeta,
   loadingHistorico = false,
+  corPrincipal = 'azul',
 }: Props) {
+  // Paleta da linha/valor do ano atual — ano anterior e meta ficam intocados.
+  const COR_ATUAL = corPrincipal === 'vermelho'
+    ? { stroke: '#DC2626', dotLight: '#FCA5A5', text: 'text-red-700' }
+    : { stroke: '#185FA5', dotLight: '#B5D4F4', text: 'text-primary' };
   // Props de roteamento (clienteId, fazendaId, fazendaIds, anoInicio, viewMode, tipoAcumulado)
   // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
   void clienteId; void fazendaId; void fazendaIds; void anoInicio;
@@ -200,7 +213,7 @@ export function IndicadorHistoricoModal({
         ...historicoAno.map(h => ({
           nome: String(h.ano),
           valor: h.valor,
-          cor: h.ano === anoAtual ? '#185FA5' : '#B4B2A9',
+          cor: h.ano === anoAtual ? COR_ATUAL.stroke : '#B4B2A9',
         })),
         ...(metaAtualValor != null && !isNaN(metaAtualValor)
           ? [{ nome: `Meta ${anoAtual}`, valor: metaAtualValor, cor: '#F97316' }]
@@ -257,7 +270,7 @@ export function IndicadorHistoricoModal({
           {/* Direita — valor + variações */}
           <div className="text-right shrink-0">
             <div className="flex items-baseline gap-1.5 justify-end">
-              <span className="text-3xl font-bold text-foreground">{fmtValor(valorAtual)}</span>
+              <span className={`text-3xl font-bold ${COR_ATUAL.text}`}>{fmtValor(valorAtual)}</span>
               <span className="text-sm text-muted-foreground">
                 {MESES_LABELS[mesAtual - 1]} {anoAtual}
               </span>
@@ -347,15 +360,15 @@ export function IndicadorHistoricoModal({
               <Line
                 type="monotone"
                 dataKey="atual"
-                stroke="#185FA5"
+                stroke={COR_ATUAL.stroke}
                 strokeWidth={2}
                 connectNulls={false}
                 isAnimationActive={false}
                 dot={(props: any) => {
                   const isSel = props.index === mesAtual - 1;
                   return isSel
-                    ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill="#185FA5" />
-                    : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill="#B5D4F4" />;
+                    ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                    : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
                 }}
               />
             </ComposedChart>
@@ -364,7 +377,7 @@ export function IndicadorHistoricoModal({
           {/* Legenda — abaixo do gráfico */}
           <div className="flex gap-5 px-1 mt-3 flex-wrap">
             <div className="flex items-center gap-1.5">
-              <div className="w-6 h-[2px] rounded bg-[#185FA5]" />
+              <div className="w-6 h-[2px] rounded" style={{ background: COR_ATUAL.stroke }} />
               <span className="text-xs text-muted-foreground">{anoAtual}</span>
             </div>
             {hasAnoAnt && (
@@ -405,7 +418,7 @@ export function IndicadorHistoricoModal({
                   <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   {refValAnoAtual != null && !isNaN(refValAnoAtual) && (
-                    <ReferenceLine y={refValAnoAtual} stroke="#185FA5" strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                    <ReferenceLine y={refValAnoAtual} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
                   )}
                   <Bar
                     dataKey="valor"
