@@ -160,7 +160,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     dadosCompletos,
     seriesMensais, seriesMeta, cabecasIndicador,
     loading: loadingPainel,
-  } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, ...sharedLanc });
+  } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
   // Comparativos — sempre modo 'mes', nunca 'periodo'
   const mesAntNum = mesNum > 1 ? mesNum - 1 : null;
@@ -224,13 +224,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
-  const deltaAnoCab = (() => {
-    const curr = cabecasIndicador?.serieAno?.[mesNum] ?? null;
-    const ant  = dadosAnoAnt.cabecasIndicador?.serieAno?.[mesNum] ?? null;
-    if (curr == null || isNaN(curr) || ant == null || isNaN(ant) || ant === 0) return null;
-    return ((curr - ant) / ant) * 100;
-  })();
-
   return (
     <div className="px-4 py-5 space-y-4 max-w-7xl">
       <div>
@@ -287,7 +280,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
             deltaMes={cabecasIndicador?.deltaMes ?? null}
-            deltaAno={deltaAnoCab}
+            deltaAno={cabecasIndicador?.deltaAno ?? null}
             onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
             deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
@@ -377,7 +370,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           subtitulo={cabecasIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={cabecasIndicador?.serieAno ?? []}
-          serieAnoAnt={dadosAnoAnt.cabecasIndicador?.serieAno}
+          serieAnoAnt={cabecasIndicador?.serieAnoAnt}
           serieMeta={seriesMeta?.cabFin}
           tipoAcumulado="posicao"
           indicadorKey="cabecas"
@@ -386,7 +379,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
           deltaMes={cabecasIndicador?.deltaMes ?? null}
-          deltaAno={deltaAnoCab}
+          deltaAno={cabecasIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'pesoMedio' && (

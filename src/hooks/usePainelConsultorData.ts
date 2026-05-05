@@ -21,6 +21,8 @@ interface Params {
   viewMode?: 'mes' | 'periodo';
   /** Quando false (default), o hook NÃO carrega/processa dados de meta — economiza N queries e o pesado buildMonthlyDataFromView. */
   carregarMeta?: boolean;
+  /** Quando true, hook carrega ano-1 e calcula deltas/séries comparativas internamente (Cabeças). Default: false. */
+  incluirComparativos?: boolean;
   /** Lançamentos pecuários compartilhados — quando fornecido, o hook NÃO carrega via useLancamentos. */
   lancPecExterno?: Lancamento[];
   /** Lançamentos financeiros compartilhados — quando fornecido, o hook NÃO carrega via useFinanceiro. */
@@ -81,11 +83,12 @@ export interface PainelConsultorDataResult {
     deltaMes:  number | null;
     deltaAno:  number | null;
     serieAno:  number[];   // tamanho 13, índice 1=Jan…12=Dez (índice 0 = NaN)
+    serieAnoAnt?: number[];
   } | null;
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, lancPecExterno, lancFinExterno }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, lancPecExterno, lancFinExterno }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -107,6 +110,22 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: carregarMeta });
 
   const viewDataMeta = carregarMeta ? viewDataMetaRaw : null;
+
+  const {
+    rawCategorias: viewDataAnoAnt,
+  } = useRebanhoOficial({
+    ano: ano - 1,
+    cenario: 'realizado',
+    global: isGlobal,
+    enabled: incluirComparativos === true,
+  });
+
+  const viewTotalsAnoAnt = useMemo(
+    () => incluirComparativos && viewDataAnoAnt
+      ? totalizarViewPorMes(viewDataAnoAnt)
+      : null,
+    [viewDataAnoAnt, incluirComparativos],
+  );
 
   const viewTotals = useMemo(
     () => totalizarViewPorMes(viewDataRealizado ?? []),
@@ -338,6 +357,48 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
+  // ── Séries do ano anterior (somente quando incluirComparativos=true) ──
+  // cabFin do ano anterior — 1-based (índice 0 = NaN, 1=Jan … 12=Dez)
+  const cabFinAnoAntSerie = viewTotalsAnoAnt
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (viewTotalsAnoAnt[i]?.saldo_final ?? NaN)
+      )
+    : null;
+
+  // cabIni do ano anterior — para calcular cabMedia do ano anterior
+  const cabIniAnoAntSerie = viewTotalsAnoAnt
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (viewTotalsAnoAnt[i]?.saldo_inicial ?? NaN)
+      )
+    : null;
+
+  // cabMediaAcumulada do ano anterior — rolling avg de cabMedia[m] = (cabIni[m] + cabFin[m]) / 2
+  const cabMediaAcumAnoAnt = (() => {
+    if (!cabFinAnoAntSerie || !cabIniAnoAntSerie) return null;
+    const result = Array(13).fill(NaN) as number[];
+    let sum = 0, n = 0;
+    for (let m = 1; m <= 12; m++) {
+      const ini = cabIniAnoAntSerie[m];
+      const fin = cabFinAnoAntSerie[m];
+      if (!isNaN(ini) && !isNaN(fin)) {
+        sum += (ini + fin) / 2;
+        n++;
+        result[m] = sum / n;
+      }
+    }
+    return result;
+  })();
+
+  const cabSerieAnoAnt = isPeriodo ? cabMediaAcumAnoAnt : cabFinAnoAntSerie;
+
+  const cabDeltaAno = (() => {
+    if (!cabSerieAnoAnt) return null;
+    const curr = cabSerie[mesIdx];
+    const ant  = cabSerieAnoAnt[mesIdx];
+    if (curr == null || isNaN(curr) || ant == null || isNaN(ant) || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -415,8 +476,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Quantidade de cabeças no final do mês',
       valor:    cabValor,
       deltaMes: cabDeltaMes,
-      deltaAno: null,   // preenchido pela V2Home via dadosAnoAnt temporariamente
+      deltaAno: cabDeltaAno,
       serieAno: cabSerie,
+      serieAnoAnt: cabSerieAnoAnt ?? undefined,
     } : null,
     loading,
   };
