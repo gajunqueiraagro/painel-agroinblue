@@ -324,30 +324,55 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
       </div>
 
-      {modalIndicador === 'cabecas' && (
-        <IndicadorHistoricoModal
-          open onClose={() => setModalIndicador(null)}
-          titulo={viewMode === 'periodo' ? 'Rebanho Médio no período' : 'Rebanho Final do mês'}
-          unidade="cab" formatoValor="inteiro"
-          subtitulo={viewMode === 'periodo'
-            ? 'Quantidade média de cabeças no período selecionado'
-            : 'Quantidade de cabeças no final do mês'}
-          mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.cabFin ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
-          serieMeta={seriesMeta?.cabFin}
-          tipoAcumulado="posicao"
-          indicadorKey="cabecas"
-          clienteId={clienteAtual?.id}
-          fazendaId={isGlobal ? null : fazendaAtual?.id}
-          anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(
-            seriesMensais?.cabFin?.[mesNum] ?? null,
-            mesNum > 1 ? (seriesMensais?.cabFin?.[mesNum - 1] ?? null) : null
-          )}
-          deltaAno={calcDeltaV(cabecas, dadosAnoAnt.cabecas)}
-        />
-      )}
+      {modalIndicador === 'cabecas' && (() => {
+        const serieCabModal =
+          viewMode === 'periodo'
+            ? (seriesMensais?.cabMediaAcumulada ?? [])
+            : (seriesMensais?.cabFin ?? []);
+
+        const serieCabAnoAntModal =
+          viewMode === 'periodo'
+            ? dadosAnoAnt.seriesMensais?.cabMediaAcumulada
+            : dadosAnoAnt.seriesMensais?.cabFin;
+
+        const deltaMesCab = calcDeltaV(
+          viewMode === 'periodo'
+            ? (seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null)
+            : (seriesMensais?.cabFin?.[mesNum] ?? null),
+          mesNum > 1
+            ? (viewMode === 'periodo'
+                ? (seriesMensais?.cabMediaAcumulada?.[mesNum - 1] ?? null)
+                : (seriesMensais?.cabFin?.[mesNum - 1] ?? null))
+            : null
+        );
+
+        const deltaAnoCab = calcDeltaV(
+          serieCabModal[mesNum] ?? null,
+          serieCabAnoAntModal?.[mesNum] ?? null
+        );
+
+        return (
+          <IndicadorHistoricoModal
+            open onClose={() => setModalIndicador(null)}
+            titulo={viewMode === 'periodo' ? 'Rebanho Médio no período' : 'Rebanho Final do mês'}
+            unidade="cab" formatoValor="inteiro"
+            subtitulo={viewMode === 'periodo'
+              ? 'Quantidade média de cabeças no período selecionado'
+              : 'Quantidade de cabeças no final do mês'}
+            mesAtual={mesNum} anoAtual={anoNum}
+            serieAno={serieCabModal}
+            serieAnoAnt={serieCabAnoAntModal}
+            serieMeta={seriesMeta?.cabFin}
+            tipoAcumulado="posicao"
+            indicadorKey="cabecas"
+            clienteId={clienteAtual?.id}
+            fazendaId={isGlobal ? null : fazendaAtual?.id}
+            anoInicio={anoNum - 6}
+            deltaMes={deltaMesCab}
+            deltaAno={deltaAnoCab}
+          />
+        );
+      })()}
       {modalIndicador === 'pesoMedio' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}

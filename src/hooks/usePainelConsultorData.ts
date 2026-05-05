@@ -57,12 +57,13 @@ export interface PainelConsultorDataResult {
   dadosCompletos: boolean;
   /** Séries mensais Jan–Dez do cenário REALIZADO. null durante loading ou em incompletoOverride. */
   seriesMensais: {
-    cabFin:       number[];
-    pesoMedioFin: number[];
-    arrobasProd:  number[];
-    gmd:          number[];
-    desfruteCab:  number[];
-    valorRebFin:  number[];
+    cabFin:             number[];
+    cabMediaAcumulada:  number[];   // média Jan→mes, índice 1=Jan…12=Dez
+    pesoMedioFin:       number[];
+    arrobasProd:        number[];
+    gmd:                number[];
+    desfruteCab:        number[];
+    valorRebFin:        number[];
   } | null;
   /** Séries mensais Jan–Dez do cenário META. null se não houver meta carregada. */
   seriesMeta: {
@@ -353,6 +354,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dadosCompletos,
     seriesMensais: monthlyData ? {
       cabFin:       monthlyData.cabFin,
+      cabMediaAcumulada: Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (meanArr(sliceUpTo(monthlyData.cabFin, i - 1)) ?? NaN)
+      ),
       pesoMedioFin: monthlyData.pesoMedioFin,
       arrobasProd:  monthlyData.arrobasProd,
       gmd:          monthlyData.gmd,
