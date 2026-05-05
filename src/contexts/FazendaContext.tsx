@@ -54,9 +54,10 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       return;
     }
     const cacheKey = `${clienteAtual.id}-${user.id}`;
-    if (loadedForRef.current === cacheKey) return;
-    // Marcar como carregado ANTES do fetch (otimista — evita race condition)
-    loadedForRef.current = cacheKey;
+    if (loadedForRef.current === cacheKey) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -94,12 +95,15 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
         setFazendas([]);
         setFazendaAtualState(null);
       }
+      // Marca cache somente após fetch bem-sucedido
+      loadedForRef.current = cacheKey;
     } catch {
       // Em caso de erro, limpar cache para permitir retry
       loadedForRef.current = null;
       setFazendas([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, clienteAtual]);
 
   const reloadFazendas = useCallback(async () => {
