@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 import { useCliente } from './ClienteContext';
@@ -42,6 +42,10 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   const [fazendaAtual, setFazendaAtualState] = useState<Fazenda | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Cache: chave = `${clienteId}-${userId}`. Evita refetch quando loadFazendas é
+  // recriado (deps user/clienteAtual mudam de referência mas valores idênticos).
+  const loadedForRef = useRef<string | null>(null);
+
   const loadFazendas = useCallback(async () => {
     if (!user || !clienteAtual?.id) {
       setFazendas([]);
@@ -49,6 +53,11 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    const cacheKey = `${clienteAtual.id}-${user.id}`;
+    if (loadedForRef.current === cacheKey) return;
+    // Marcar como carregado ANTES do fetch (otimista — evita race condition)
+    loadedForRef.current = cacheKey;
+
     setLoading(true);
     try {
       const { data: fazendasCliente } = await supabase
@@ -86,10 +95,17 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
         setFazendaAtualState(null);
       }
     } catch {
+      // Em caso de erro, limpar cache para permitir retry
+      loadedForRef.current = null;
       setFazendas([]);
     }
     setLoading(false);
   }, [user, clienteAtual]);
+
+  const reloadFazendas = useCallback(async () => {
+    loadedForRef.current = null;
+    await loadFazendas();
+  }, [loadFazendas]);
 
   useEffect(() => {
     setFazendas([]);
@@ -117,6 +133,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     if (error) { toast.error('Erro ao criar fazenda: ' + error.message); return null; }
 
     const fazenda = { ...data, papel: 'dono' };
+    loadedForRef.current = null;
     await loadFazendas();
     setFazendaAtual(fazenda);
     return fazenda;
@@ -130,7 +147,7 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <FazendaContext.Provider value={{ fazendas, fazendasComPecuaria, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas: loadFazendas, isGlobal }}>
+    <FazendaContext.Provider value={{ fazendas, fazendasComPecuaria, fazendaAtual, setFazendaAtual, criarFazenda, loading, reloadFazendas, isGlobal }}>
       {children}
     </FazendaContext.Provider>
   );
