@@ -196,6 +196,29 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
+  const cabecasCardLabel = viewMode === 'periodo' ? 'REBANHO MÉDIO' : 'CABEÇAS';
+
+  const cabecasCardValor =
+    viewMode === 'periodo'
+      ? (seriesMensais?.cabMediaAcumulada?.[mesNum] ?? cabecas)
+      : cabecas;
+
+  const cabecasCardDeltaMes =
+    viewMode === 'periodo'
+      ? calcDeltaV(
+          seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null,
+          mesNum > 1 ? (seriesMensais?.cabMediaAcumulada?.[mesNum - 1] ?? null) : null
+        )
+      : calcDeltaV(cabecas, dadosMesAnt.cabecas);
+
+  const cabecasCardDeltaAno =
+    viewMode === 'periodo'
+      ? calcDeltaV(
+          seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null,
+          dadosAnoAnt.seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null
+        )
+      : calcDeltaV(cabecas, dadosAnoAnt.cabecas);
+
   return (
     <div className="px-4 py-5 space-y-4 max-w-7xl">
       <div>
@@ -240,9 +263,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
-          <MetricTile label="Cabeças" value={fmtN(cabecas)} unit="cab" loading={loadingPainel}
-            deltaMes={vsMes(cabecas, dadosMesAnt.cabecas)}
-            deltaAno={vsAno(cabecas, dadosAnoAnt.cabecas)}
+          <MetricTile label={cabecasCardLabel} value={fmtN(cabecasCardValor)} unit="cab" loading={loadingPainel}
+            deltaMes={cabecasCardDeltaMes}
+            deltaAno={cabecasCardDeltaAno}
             onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
             deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
