@@ -68,6 +68,14 @@ interface Props {
   deltaAno?: number | null;
   /** Modo de visualização — afeta o cálculo do histórico inferior multi-ano. */
   viewMode?: 'mes' | 'periodo';
+  /**
+   * Histórico multi-ano (auxiliar legado de zoot_mensal_cache).
+   * Vem de useHistoricoIndicador no V2Home — modal só renderiza.
+   * Quando undefined: bloco de histórico fica oculto.
+   */
+  historicoAno?: Array<{ ano: number; valor: number | null }>;
+  historicoMeta?: Array<{ ano: number; valor: number | null }>;
+  loadingHistorico?: boolean;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -100,6 +108,9 @@ export function IndicadorHistoricoModal({
   deltaMes,
   deltaAno,
   viewMode: _viewMode = 'mes',
+  historicoAno,
+  historicoMeta,
+  loadingHistorico = false,
 }: Props) {
   // Props de roteamento (clienteId, fazendaId, fazendaIds, anoInicio, viewMode, tipoAcumulado)
   // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
@@ -161,18 +172,24 @@ export function IndicadorHistoricoModal({
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
   const hasMeta = serieMeta != null && serieMeta.some(v => v != null && !isNaN(v as number));
 
-  // ── Histórico inferior — barras mês a mês de serieAno (Jan→mesAtual) ──
-  // serieAno já vem do hook com o modo correto (mês/período) aplicado.
-  // Modal NÃO calcula nada aqui.
+  // ── Histórico inferior — barras multi-ano (legado, auxiliar) ──
+  // Dados vêm prontos via prop historicoAno/historicoMeta de useHistoricoIndicador.
+  // Modal NÃO calcula nada aqui. Bloco fica oculto se historicoAno for undefined.
   const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
-  const barDados = MESES_LABELS.slice(0, mesAtual).map((mes, idx) => {
-    const m = idx + 1;
-    return {
-      nome: mes,
-      valor: getMesValue(serieAno, m),
-      cor: m === mesAtual ? '#185FA5' : '#B4B2A9',
-    };
-  }).filter(b => b.valor != null && !isNaN(b.valor as number));
+  const metaAtualValor = historicoMeta?.find(h => h.ano === anoAtual)?.valor ?? null;
+  const refValAnoAtual = historicoAno?.find(h => h.ano === anoAtual)?.valor ?? null;
+  const barDados = historicoAno != null
+    ? [
+        ...historicoAno.map(h => ({
+          nome: String(h.ano),
+          valor: h.valor,
+          cor: h.ano === anoAtual ? '#185FA5' : '#B4B2A9',
+        })),
+        ...(metaAtualValor != null && !isNaN(metaAtualValor)
+          ? [{ nome: `Meta ${anoAtual}`, valor: metaAtualValor, cor: '#F97316' }]
+          : []),
+      ].filter(b => b.valor != null && !isNaN(b.valor as number))
+    : [];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -349,12 +366,12 @@ export function IndicadorHistoricoModal({
         </div>
 
         {/* Separador antes do bloco resumo */}
-        {indicadorKey !== 'valorRebanho' && (
+        {historicoAno != null && (
           <div className="border-t border-border/30 mx-0 mt-4" />
         )}
 
-        {/* Resumo do período (histórico multi-ano) */}
-        {indicadorKey !== 'valorRebanho' && (
+        {/* Resumo do período (histórico multi-ano — auxiliar legado de zoot_mensal_cache) */}
+        {historicoAno != null && (
           <div style={{ padding: '0 1.25rem', marginTop: '0.5rem' }}>
             <div style={{
               borderTop: '0.5px solid var(--color-border-tertiary)',
@@ -363,17 +380,16 @@ export function IndicadorHistoricoModal({
               <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico do período</p>
               <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{labelPer}</p>
             </div>
-            {barDados.length > 0 ? (
+            {loadingHistorico ? (
+              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
+            ) : barDados.length > 0 ? (
               <ResponsiveContainer width="100%" height={130}>
                 <BarChart data={barDados} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
                   <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
                   <YAxis hide />
-                  {(() => {
-                    const metaRef = getMesValue(serieMeta, mesAtual);
-                    return metaRef != null && !isNaN(metaRef) ? (
-                      <ReferenceLine y={metaRef} stroke="#F97316" strokeDasharray="4 3" strokeWidth={1} opacity={0.6} />
-                    ) : null;
-                  })()}
+                  {refValAnoAtual != null && !isNaN(refValAnoAtual) && (
+                    <ReferenceLine y={refValAnoAtual} stroke="#185FA5" strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                  )}
                   <Bar
                     dataKey="valor"
                     radius={[3, 3, 0, 0]}

@@ -8,6 +8,7 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
+import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
@@ -161,6 +162,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
+
+  // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute'];
+  const histAtivo = modalIndicador != null
+    && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
+  const {
+    historico: historicoAno,
+    historicoMeta: historicoAnoMeta,
+    loading: loadingHistorico,
+  } = useHistoricoIndicador({
+    enabled: histAtivo,
+    clienteId: clienteAtual?.id,
+    fazendaId: isGlobal ? null : fazendaAtual?.id,
+    fazendaIds: fazendaIdsPecuaria,
+    indicadorKey: (histAtivo ? modalIndicador : 'cabecas') as HistoricoIndicadorKey,
+    mesAtual: mesNum,
+    viewMode,
+    anoAtual: anoNum,
+    anoInicio: anoNum - 6,
+  });
 
   // Comparativos — sempre modo 'mes', nunca 'periodo'
   const mesAntNum = mesNum > 1 ? mesNum - 1 : null;
@@ -388,6 +409,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={cabecasIndicador?.deltaMes ?? null}
           deltaAno={cabecasIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'pesoMedio' && (
@@ -409,6 +433,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={pesoMedioIndicador?.deltaMes ?? null}
           deltaAno={pesoMedioIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'arrobas' && (
@@ -428,6 +455,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(arrobas, dadosMesAnt.arrobas)}
           deltaAno={calcDeltaV(arrobas, dadosAnoAnt.arrobas)}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'gmd' && (
@@ -448,6 +478,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={gmdIndicador?.deltaMes ?? null}
           deltaAno={gmdIndicador?.deltaAno ?? null}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'uaHa' && (
@@ -506,6 +539,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(desfrute, dadosMesAnt.desfrute)}
           deltaAno={calcDeltaV(desfrute, dadosAnoAnt.desfrute)}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'valorRebanho' && (

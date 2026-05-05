@@ -2,6 +2,47 @@
 // entre o PainelConsultorTab e a V2Home (usePainelConsultorData).
 // Não duplicar a fórmula em outros arquivos. Importar daqui.
 
+interface CacheRowZoot {
+  ano: number;
+  mes: number;
+  saldo_inicial?: number | null;
+  saldo_final?: number | null;
+  peso_total_final?: number | null;
+  producao_biologica?: number | null;
+  saidas_externas?: number | null;
+  gmd?: number | null;
+}
+
+/**
+ * Cabeças — média no período (Jan→upToMes) a partir de rows do zoot_mensal_cache.
+ * Replica a fórmula oficial: para cada mês, cabMedia[m] = (Σ saldo_inicial + Σ saldo_final) / 2.
+ * Retorna a média aritmética dos cabMedia[m] válidos (m=1..upToMes).
+ */
+export function cabecasMediaPeriodoFromRows(rows: CacheRowZoot[], upToMes: number): number | null {
+  const monthMedias: number[] = [];
+  for (let m = 1; m <= upToMes; m++) {
+    const rowsM = rows.filter(r => r.mes === m);
+    if (rowsM.length === 0) continue;
+    const ini = rowsM.reduce((s, r) => s + (Number(r.saldo_inicial) || 0), 0);
+    const fin = rowsM.reduce((s, r) => s + (Number(r.saldo_final) || 0), 0);
+    const cm = (ini + fin) / 2;
+    if (cm > 0) monthMedias.push(cm);
+  }
+  return monthMedias.length > 0
+    ? monthMedias.reduce((s, v) => s + v, 0) / monthMedias.length
+    : null;
+}
+
+/**
+ * Peso médio ponderado a partir de rows do zoot_mensal_cache: Σ peso_total_final / Σ saldo_final.
+ * Use rowsMes (somente mês atual) para "mes" ou rowsPer (Jan→m) para "período" — mesma fórmula.
+ */
+export function pesoMedioPonderadoFromRows(rows: CacheRowZoot[]): number | null {
+  const ptf = rows.reduce((acc, r) => acc + (Number(r.peso_total_final) || 0), 0);
+  const sf  = rows.reduce((acc, r) => acc + (Number(r.saldo_final) || 0), 0);
+  return sf > 0 ? ptf / sf : null;
+}
+
 /**
  * Média acumulada (Jan → N) — usada pelo PC-100 em "media_periodo".
  *
