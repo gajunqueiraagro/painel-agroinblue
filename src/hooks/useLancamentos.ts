@@ -86,6 +86,10 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   }, [queryClient]);
 
   const loadData = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (!fazendaId || (isGlobal && (!clienteId || fazendas.length === 0))) {
       setLancamentos([]);
       setSaldosIniciais([]);
@@ -198,12 +202,13 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, isGlobal, fazendas, cenario, clienteId]);
+  }, [enabled, fazendaId, isGlobal, fazendas, cenario, clienteId]);
 
-  useEffect(() => { if (enabled) loadData(); }, [loadData, enabled]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   // Migrate localStorage data on first load
   useEffect(() => {
+    if (!enabled) return;
     if (!fazendaId || fazendaId === '__global__' || migrated) return;
     const migrateKey = `migrated-${fazendaId}`;
     if (localStorage.getItem(migrateKey)) { setMigrated(true); return; }
@@ -254,7 +259,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     };
 
     doMigrate();
-  }, [fazendaId, migrated, loadData]);
+  }, [enabled, fazendaId, migrated, loadData]);
 
   const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>): Promise<string | undefined> => {
     if (!fazendaId || fazendaId === '__global__') return undefined;

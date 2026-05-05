@@ -379,6 +379,10 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
 
   // --- Load data ---
   const loadData = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (!fazendaId) {
       setImportacoes([]);
       setLancamentos([]);
@@ -477,9 +481,9 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
+  }, [enabled, fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
 
-  useEffect(() => { if (enabled) loadData(); }, [loadData, enabled]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
   const rebanhoMedioPorFazendaMes = useMemo(() => {
