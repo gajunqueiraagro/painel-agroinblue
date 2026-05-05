@@ -337,10 +337,12 @@ function isFazendaAtivaMes(rebanhoMap: Map<string, Map<string, number>>, fazenda
 
 interface UseFinanceiroOptions {
   enabled?: boolean;
+  ano?: number;
 }
 
 export function useFinanceiro(options: UseFinanceiroOptions = {}) {
   const enabled = options.enabled ?? true;
+  const anoFiltro = options.ano;
   const { fazendaAtual, fazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
@@ -404,10 +406,12 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         }
 
         const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
-          fetchAllPaginated<any>((from, to) =>
-            (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado').order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to),
-          ),
+          fetchAllPaginated<any>((from, to) => {
+            let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
+            if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+            return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+          }),
           supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
           supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
           supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId!).eq('ativa', true),
@@ -432,16 +436,20 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         // Per-fazenda — use paginated fetch for lancamentos
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
-        const lancPromise = fetchAllPaginated<any>((from, to) =>
-          (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado').order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to),
-        ).then(rows => rows.map(mapV2ToLancamento));
+        const lancPromise = fetchAllPaginated<any>((from, to) => {
+          let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
+          if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+          return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+        }).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
-          ? fetchAllPaginated<any>((from, to) =>
-              (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado').order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to),
-            ).then(rows => rows.map(mapV2ToLancamento))
+          ? fetchAllPaginated<any>((from, to) => {
+              let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
+              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
+              if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+              return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+            }).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
         const [lancData, ccResult, impResult, contasResult, admData, saldoResult, lancPecResult] = await Promise.all([
@@ -478,7 +486,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [enabled, fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais]);
+  }, [enabled, fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais, anoFiltro]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

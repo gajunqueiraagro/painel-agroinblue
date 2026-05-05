@@ -17,8 +17,9 @@ async function fetchLancamentosPaginated(params: {
   clienteId?: string;
   fazendaId?: string;
   fazendaIds?: string[];
+  ano?: number;
 }) {
-  const { cenario, clienteId, fazendaId, fazendaIds } = params;
+  const { cenario, clienteId, fazendaId, fazendaIds, ano } = params;
   const rows: any[] = [];
   let from = 0;
 
@@ -37,6 +38,12 @@ async function fetchLancamentosPaginated(params: {
       query = query.in('fazenda_id', fazendaIds);
     } else if (fazendaId) {
       query = query.eq('fazenda_id', fazendaId);
+    }
+
+    if (ano) {
+      query = query
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`);
     }
 
     const { data, error } = await query
@@ -59,11 +66,12 @@ async function fetchLancamentosPaginated(params: {
 type UseLancamentosArg =
   | 'realizado'
   | 'meta'
-  | { cenario?: 'realizado' | 'meta'; enabled?: boolean };
+  | { cenario?: 'realizado' | 'meta'; enabled?: boolean; ano?: number };
 
 export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   const cenario = typeof arg === 'string' ? arg : (arg.cenario ?? 'realizado');
   const enabled = typeof arg === 'string' ? true : (arg.enabled ?? true);
+  const anoFiltro = typeof arg === 'string' ? undefined : arg.ano;
 
   const queryClient = useQueryClient();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
@@ -98,14 +106,19 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     try {
       const fazendaIds = fazendas.map(f => f.id).filter(id => id !== '__global__');
 
+      let saldosQueryGlobal = supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds).eq('cliente_id', clienteId!);
+      if (anoFiltro) saldosQueryGlobal = saldosQueryGlobal.eq('ano', anoFiltro);
+      let saldosQueryFazenda = supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId!).eq('cliente_id', clienteId!);
+      if (anoFiltro) saldosQueryFazenda = saldosQueryFazenda.eq('ano', anoFiltro);
+
       const [lancData, saldoRes] = isGlobal
         ? await Promise.all([
-            fetchLancamentosPaginated({ fazendaIds, clienteId, cenario }),
-            supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds).eq('cliente_id', clienteId!),
+            fetchLancamentosPaginated({ fazendaIds, clienteId, cenario, ano: anoFiltro }),
+            saldosQueryGlobal,
           ])
         : await Promise.all([
-            fetchLancamentosPaginated({ fazendaId, clienteId, cenario }),
-            supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId).eq('cliente_id', clienteId!),
+            fetchLancamentosPaginated({ fazendaId, clienteId, cenario, ano: anoFiltro }),
+            saldosQueryFazenda,
           ]);
 
       const userIds = new Set<string>();
@@ -199,7 +212,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     } finally {
       setLoading(false);
     }
-  }, [enabled, fazendaId, isGlobal, fazendas, cenario, clienteId]);
+  }, [enabled, fazendaId, isGlobal, fazendas, cenario, clienteId, anoFiltro]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
