@@ -1397,38 +1397,48 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [metaPesoSnap, setMetaPesoSnap] = useState<PesoSnapshot>({ cabecas: Array(12).fill(0), pesoMedio: Array(12).fill(0), arrobas: Array(12).fill(0) });
 
   useEffect(() => {
-    if (!fazendaId || fazendaId === '__global__') return;
+    const cid = clienteAtual?.id;
+    if (!cid) return;
+    if (!isGlobal && (!fazendaId || fazendaId === '__global__')) return;
+
     const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
-    supabase
+    let q = supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
-      .eq('fazenda_id', fazendaId)
-      .in('ano_mes', meses)
-      .then(({ data, error }) => {
-        if (error || !data) return;
-        const vrm = Array(12).fill(0);
-        const vcm = Array(12).fill(0);
-        const vam = Array(12).fill(0);
-        const cab = Array(12).fill(0);
-        const pm = Array(12).fill(0);
-        const arr = Array(12).fill(0);
-        (data as any[]).forEach((row: any) => {
-          const idx = meses.indexOf(row.ano_mes);
-          if (idx >= 0) {
-            vrm[idx] = Number(row.valor_total) || 0;
-            vcm[idx] = Number(row.valor_cabeca_medio) || 0;
-            vam[idx] = Number(row.preco_arroba_medio) || 0;
-            cab[idx] = Number(row.cabecas) || 0;
-            pm[idx] = Number(row.peso_medio_kg) || 0;
-            arr[idx] = Number(row.arrobas_total) || 0;
-          }
-        });
-        setValorRebanhoMetaMes(vrm);
-        setMetaValorCabMes(vcm);
-        setMetaPrecoArrMes(vam);
-        setMetaPesoSnap({ cabecas: cab, pesoMedio: pm, arrobas: arr });
+      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total, status')
+      .eq('cliente_id', cid)
+      .eq('status', 'validado')
+      .in('ano_mes', meses);
+    if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+
+    q.then(({ data, error }) => {
+      if (error || !data) return;
+      // Agregação por ano_mes — soma de fazendas validadas no Global; 1 só registro p/ Fazenda.
+      const valor = Array(12).fill(0);
+      const cab   = Array(12).fill(0);
+      const arr   = Array(12).fill(0);
+      const pTot  = Array(12).fill(0);   // peso_total ponderado p/ derivar peso_medio
+      (data as any[]).forEach((row: any) => {
+        const idx = meses.indexOf(row.ano_mes);
+        if (idx < 0) return;
+        const v   = Number(row.valor_total)     || 0;
+        const c   = Number(row.cabecas)         || 0;
+        const a   = Number(row.arrobas_total)   || 0;
+        const pm0 = Number(row.peso_medio_kg)   || 0;
+        valor[idx] += v;
+        cab[idx]   += c;
+        arr[idx]   += a;
+        pTot[idx]  += pm0 * c;   // peso total estimado = peso_medio × cabecas
       });
-  }, [fazendaId, anoNum]);
+      const pm  = pTot.map((pt, i)  => cab[i]  > 0 ? pt / cab[i]  : 0);
+      const vcm = valor.map((v, i)  => cab[i]  > 0 ? v  / cab[i]  : 0);
+      const vam = valor.map((v, i)  => arr[i]  > 0 ? v  / arr[i]  : 0);
+
+      setValorRebanhoMetaMes(valor);
+      setMetaValorCabMes(vcm);
+      setMetaPrecoArrMes(vam);
+      setMetaPesoSnap({ cabecas: cab, pesoMedio: pm, arrobas: arr });
+    });
+  }, [fazendaId, isGlobal, clienteAtual?.id, anoNum]);
   // FONTE OFICIAL: useRebanhoOficial (camada única obrigatória)
   const { rawCategorias: viewDataRealizado } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 

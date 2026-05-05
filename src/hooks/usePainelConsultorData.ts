@@ -509,25 +509,39 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
   useEffect(() => {
-    if (isGlobal || !fazendaId || fazendaId === '__global__') {
+    const cid = clienteAtual?.id;
+    if (!cid) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
+    if (!isGlobal && (!fazendaId || fazendaId === '__global__')) {
       setValorRebanhoMetaMes(Array(12).fill(NaN));
       return;
     }
     let cancelled = false;
     const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
-    supabase
+    let q = supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total')
-      .eq('fazenda_id', fazendaId)
-      .in('ano_mes', meses)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error || !data) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
-        const byMes = Object.fromEntries((data as any[]).map(r => [r.ano_mes, Number(r.valor_total)]));
-        setValorRebanhoMetaMes(meses.map(m => (byMes[m] != null && !isNaN(byMes[m]) ? byMes[m] : NaN)));
-      });
+      .select('ano_mes, valor_total, status')
+      .eq('cliente_id', cid)
+      .eq('status', 'validado')
+      .in('ano_mes', meses);
+    if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+    q.then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
+      // Agregação por ano_mes — soma de fazendas validadas no Global; 1 só registro p/ Fazenda.
+      const valor = Array(12).fill(0);
+      const tem   = Array(12).fill(false);
+      for (const r of data as any[]) {
+        const idx = meses.indexOf(r.ano_mes);
+        if (idx < 0) continue;
+        const v = Number(r.valor_total) || 0;
+        valor[idx] += v;
+        tem[idx] = true;
+      }
+      // Mês sem nenhum registro → NaN (não 0); preserva semântica "sem meta".
+      setValorRebanhoMetaMes(valor.map((v, i) => tem[i] ? v : NaN));
+    });
     return () => { cancelled = true; };
-  }, [ano, isGlobal, fazendaId]);
+  }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
 
   const mesRef = mes === 0 ? 12 : mes;
   const mesStr = `${ano}-${String(mesRef).padStart(2, '0')}`;
