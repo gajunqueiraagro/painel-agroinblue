@@ -1751,6 +1751,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
 
   // === 5) Custo Cab. R$/cab — custeioPec / cabMedia (mesma base GMD) ===
+  // Mês:     custeioPec[m] / cabMediaMes[m]
+  // Período: (Σ custeioPec Jan→m / cabMediaAcumulada[m]) / m
+  //          onde m = número de meses considerados no período (1..12).
+  // Não somar custo/cab mês a mês — a divisão pelo nº de meses garante R$/cab.mês médio.
   const custoCabMes12 = monthlyData.custeioPec.map((c, i) => {
     const cm = monthlyData.cabMediaMes[i];
     return cm != null && cm > 0 ? c / cm : NaN;
@@ -1759,7 +1763,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     if (i === 0) return NaN;
     const cAcum = sumArr(sliceUpTo(monthlyData.custeioPec, i - 1));
     const cmAcum = cabMediaAcumulada[i];
-    return cmAcum > 0 ? cAcum / cmAcum : NaN;
+    if (!(cmAcum > 0)) return NaN;
+    return (cAcum / cmAcum) / i;
   });
   const custoCabMesSerie13 = Array.from({ length: 13 }, (_, i) =>
     i === 0 ? NaN : (custoCabMes12[i - 1] ?? NaN)
