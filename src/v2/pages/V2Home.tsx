@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
@@ -8,6 +8,7 @@ import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
 import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
+import { supabase } from '@/integrations/supabase/client';
 
 const fmtN = (v: number | null | undefined, dec = 0) =>
   v == null || isNaN(v) ? null
@@ -118,6 +119,29 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     : new Date(anoNum, mesNum - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
   const [modalIndicador, setModalIndicador] = useState<string | null>(null);
+
+  const [globalParcial, setGlobalParcial] = useState(false);
+  const gapCheckedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isGlobal || !clienteAtual?.id) {
+      setGlobalParcial(false);
+      gapCheckedRef.current = null;
+      return;
+    }
+    const key = `${clienteAtual.id}-${anoNum}`;
+    if (gapCheckedRef.current === key) return;
+    gapCheckedRef.current = key;
+
+    let cancelled = false;
+    supabase.rpc('fn_zoot_cache_has_gap' as any, {
+      p_cliente_id: clienteAtual.id,
+      p_ano: anoNum,
+    }).then(({ data }) => {
+      if (!cancelled) setGlobalParcial(!!data);
+    });
+    return () => { cancelled = true; };
+  }, [isGlobal, clienteAtual?.id, anoNum]);
 
   // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
   const { lancamentos: lancPecShared } = useLancamentos({ ano: anoNum });
@@ -261,6 +285,16 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {!dadosCompletos && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
           ⚠️ Dados zootécnicos incompletos no Global. Reprocesse o cache/fechamento das fazendas antes de analisar.
+        </div>
+      )}
+
+      {globalParcial && isGlobal && (
+        <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-yellow-400/60 bg-yellow-50/80 px-4 py-2.5 text-sm text-yellow-800 dark:border-yellow-500/40 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <span>
+            Dados globais podem estar incompletos — existem fazendas pecuárias sem
+            fechamento ou cache zootécnico no ano {anoNum}.
+          </span>
         </div>
       )}
 
