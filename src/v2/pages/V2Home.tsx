@@ -171,6 +171,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
+    receitaPecIndicador, desembolsoProdIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -384,16 +385,59 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
-          <MetricTile label="Receita pecuária" value={fmtR(receita)} loading={loadingPainel}
-            deltaMes={vsMes(receita, dadosMesAnt.receita)}
-            deltaAno={vsAno(receita, dadosAnoAnt.receita)} />
-          <MetricTile label="Desembolso total" value={fmtR(desembolso)} loading={loadingPainel} />
-          <MetricTile label="Resultado operacional" value={fmtR(resultado)} loading={loadingPainel} tone={resultadoTone}
-            deltaMes={vsMes(resultado, dadosMesAnt.resultado)}
-            deltaAno={vsAno(resultado, dadosAnoAnt.resultado)} />
-          <MetricTile label="Preço de Venda R$/@" value={null} unit="R$/@" pending />
-          <MetricTile label="Custo Produtivo R$/@" value={null} unit="R$/@" pending />
-          <MetricTile label="Margem por @" value={null} unit="R$/@" pending />
+          <MetricTile
+            label={receitaPecIndicador?.label ?? 'RECEITAS PECUÁRIAS COMPETÊNCIA NO MÊS'}
+            value={fmtR(receitaPecIndicador?.valor ?? null)}
+            loading={loadingPainel}
+            deltaMes={receitaPecIndicador?.deltaMes ?? null}
+            deltaAno={receitaPecIndicador?.deltaAno ?? null}
+            deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('receitaPec')} />
+          <MetricTile
+            label={desembolsoProdIndicador?.label ?? 'DESEMBOLSO PRODUÇÃO PECUÁRIA NO MÊS'}
+            value={fmtR(desembolsoProdIndicador?.valor ?? null)}
+            loading={loadingPainel}
+            deltaMes={desembolsoProdIndicador?.deltaMes ?? null}
+            deltaAno={desembolsoProdIndicador?.deltaAno ?? null}
+            deltaMeta={desembolsoProdIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('desembolsoProd')} />
+          <MetricTile
+            label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
+            value={fmtR(custoArrIndicador?.valor ?? null)}
+            unit="R$/@"
+            loading={loadingPainel}
+            deltaMes={custoArrIndicador?.deltaMes ?? null}
+            deltaAno={custoArrIndicador?.deltaAno ?? null}
+            deltaMeta={custoArrIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('custoArr')} />
+          <MetricTile
+            label={precoArrIndicador?.label ?? 'PREÇO DE VENDA R$/@'}
+            value={fmtR(precoArrIndicador?.valor ?? null)}
+            unit="R$/@"
+            loading={loadingPainel}
+            deltaMes={precoArrIndicador?.deltaMes ?? null}
+            deltaAno={precoArrIndicador?.deltaAno ?? null}
+            deltaMeta={precoArrIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('precoArr')} />
+          <MetricTile
+            label={custoCabIndicador?.label ?? 'CUSTO CAB. MÊS R$/CAB.'}
+            value={fmtR(custoCabIndicador?.valor ?? null)}
+            unit="R$/cab."
+            loading={loadingPainel}
+            deltaMes={custoCabIndicador?.deltaMes ?? null}
+            deltaAno={custoCabIndicador?.deltaAno ?? null}
+            deltaMeta={custoCabIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('custoCab')} />
+          <MetricTile
+            label={margemArrIndicador?.label ?? 'MARGEM POR @'}
+            value={fmtR(margemArrIndicador?.valor ?? null)}
+            unit="R$/@"
+            loading={loadingPainel}
+            tone={margemArrIndicador?.valor == null ? 'default' : margemArrIndicador.valor >= 0 ? 'positive' : 'negative'}
+            deltaMes={margemArrIndicador?.deltaMes ?? null}
+            deltaAno={margemArrIndicador?.deltaAno ?? null}
+            deltaMeta={margemArrIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('margemArr')} />
         </SectionBlock>
 
         <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
@@ -614,6 +658,132 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           historicoAno={historicoAno}
           historicoMeta={historicoAnoMeta}
           loadingHistorico={loadingHistorico}
+        />
+      )}
+      {modalIndicador === 'receitaPec' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={receitaPecIndicador?.titulo ?? ''}
+          formatoValor="moedaAbreviada"
+          subtitulo={receitaPecIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={receitaPecIndicador?.serieAno ?? []}
+          serieAnoAnt={receitaPecIndicador?.serieAnoAnt}
+          serieMeta={receitaPecIndicador?.serieMeta}
+          tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
+          indicadorKey="receitaPec"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={receitaPecIndicador?.deltaMes ?? null}
+          deltaAno={receitaPecIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'desembolsoProd' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={desembolsoProdIndicador?.titulo ?? ''}
+          formatoValor="moedaAbreviada"
+          subtitulo={desembolsoProdIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={desembolsoProdIndicador?.serieAno ?? []}
+          serieAnoAnt={desembolsoProdIndicador?.serieAnoAnt}
+          serieMeta={desembolsoProdIndicador?.serieMeta}
+          tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
+          indicadorKey="desembolsoProd"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={desembolsoProdIndicador?.deltaMes ?? null}
+          deltaAno={desembolsoProdIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'custoArr' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={custoArrIndicador?.titulo ?? ''}
+          unidade="R$/@" formatoValor="decimal2"
+          subtitulo={custoArrIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={custoArrIndicador?.serieAno ?? []}
+          serieAnoAnt={custoArrIndicador?.serieAnoAnt}
+          serieMeta={custoArrIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="custoArr"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={custoArrIndicador?.deltaMes ?? null}
+          deltaAno={custoArrIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'precoArr' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={precoArrIndicador?.titulo ?? ''}
+          unidade="R$/@" formatoValor="decimal2"
+          subtitulo={precoArrIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={precoArrIndicador?.serieAno ?? []}
+          serieAnoAnt={precoArrIndicador?.serieAnoAnt}
+          serieMeta={precoArrIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="precoArr"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={precoArrIndicador?.deltaMes ?? null}
+          deltaAno={precoArrIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'custoCab' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={custoCabIndicador?.titulo ?? ''}
+          unidade="R$/cab" formatoValor="decimal2"
+          subtitulo={custoCabIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={custoCabIndicador?.serieAno ?? []}
+          serieAnoAnt={custoCabIndicador?.serieAnoAnt}
+          serieMeta={custoCabIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="custoCab"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={custoCabIndicador?.deltaMes ?? null}
+          deltaAno={custoCabIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'margemArr' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={margemArrIndicador?.titulo ?? ''}
+          unidade="R$/@" formatoValor="decimal2"
+          subtitulo={margemArrIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={margemArrIndicador?.serieAno ?? []}
+          serieAnoAnt={margemArrIndicador?.serieAnoAnt}
+          serieMeta={margemArrIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="margemArr"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={margemArrIndicador?.deltaMes ?? null}
+          deltaAno={margemArrIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
         />
       )}
     </div>

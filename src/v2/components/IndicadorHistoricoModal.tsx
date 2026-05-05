@@ -50,8 +50,12 @@ interface Props {
   tipoAcumulado?: 'soma' | 'media' | 'posicao';
   /** Sobrescreve o label do período (default: "Jan–{mesAtual}"). */
   labelPeriodo?: string;
-  /** Identificador do indicador (gera a query histórica correta). */
-  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa' | 'kgHa';
+  /** Identificador do indicador (gera a query histórica correta).
+   *  Indicadores financeiros (receitaPec/desembolsoProd/custoArr/precoArr/custoCab/margemArr)
+   *  não têm histórico multi-ano — V2Home não chama useHistoricoIndicador para eles. */
+  indicadorKey:
+    | 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa' | 'kgHa'
+    | 'receitaPec' | 'desembolsoProd' | 'custoArr' | 'precoArr' | 'custoCab' | 'margemArr';
   /** Cliente — mantido por compatibilidade; não usado na query. */
   clienteId?: string;
   /** Fazenda específica; null = global (somar todas as fazendas do cliente). */
@@ -126,7 +130,8 @@ export function IndicadorHistoricoModal({
   // Props de roteamento (clienteId, fazendaId, fazendaIds, anoInicio, viewMode, tipoAcumulado)
   // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
   void clienteId; void fazendaId; void fazendaIds; void anoInicio;
-  void tipoAcumulado; void labelPeriodo; void _viewMode;
+  void tipoAcumulado; void _viewMode; void indicadorKey;
+  // labelPeriodo é usado abaixo no bloco de histórico inferior
 
   if (!open) return null;
 
