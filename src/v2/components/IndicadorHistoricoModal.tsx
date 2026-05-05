@@ -35,10 +35,12 @@ interface Props {
   labelPeriodo?: string;
   /** Identificador do indicador (gera a query histórica correta). */
   indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho';
-  /** Cliente — necessário para query histórica. */
+  /** Cliente — mantido por compatibilidade; não usado na query. */
   clienteId?: string;
   /** Fazenda específica; null = global (somar todas as fazendas do cliente). */
   fazendaId?: string | null;
+  /** Fazendas do cliente para modo global (filtro direto sem join). */
+  fazendaIds?: string[];
   /** Ano inicial do histórico; default: anoAtual - 6. */
   anoInicio?: number;
   /** Subtítulo opcional exibido abaixo do título. */
@@ -73,6 +75,7 @@ export function IndicadorHistoricoModal({
   indicadorKey,
   clienteId,
   fazendaId,
+  fazendaIds,
   anoInicio,
   subtitulo,
   deltaMes,
@@ -116,27 +119,29 @@ export function IndicadorHistoricoModal({
 
     (async () => {
       try {
+        // Sem join — filtrar por fazenda_id diretamente
         let query = supabase
           .from('zoot_mensal_cache')
-          .select(`
-            ano,
-            mes,
-            cenario,
-            saldo_final,
-            peso_total_final,
-            producao_biologica,
-            saidas_externas,
-            gmd,
-            fazenda:fazendas!inner(cliente_id)
-          `)
-          .eq('fazenda.cliente_id', clienteId)
+          .select('ano, mes, cenario, saldo_final, peso_total_final, producao_biologica, saidas_externas, gmd')
           .in('cenario', ['realizado', 'meta'])
           .gte('ano', inicio)
           .lte('ano', anoAtual)
           .lte('mes', mesAtual);
 
         if (fazendaId) {
+          // Fazenda específica
           query = query.eq('fazenda_id', fazendaId);
+        } else if (fazendaIds && fazendaIds.length > 0) {
+          // Global: filtrar pelas fazendas do cliente
+          query = query.in('fazenda_id', fazendaIds);
+        } else {
+          // Sem filtro de fazenda — abortar para não retornar todos os dados do banco
+          if (!cancelled) {
+            setHistorico([]);
+            setHistoricoMeta([]);
+            setLoadingHistorico(false);
+          }
+          return;
         }
 
         const { data, error } = await query;
@@ -191,7 +196,7 @@ export function IndicadorHistoricoModal({
     })();
 
     return () => { cancelled = true; };
-  }, [open, clienteId, fazendaId, indicadorKey, anoAtual, anoInicio, mesAtual]);
+  }, [open, clienteId, fazendaId, fazendaIds?.join(','), indicadorKey, anoAtual, anoInicio, mesAtual]);
 
   if (!open) return null;
 

@@ -100,7 +100,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   onViewModeChange?: (v: 'mes' | 'periodo') => void;
 }) {
   const { clienteAtual } = useCliente();
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
+  const fazendaIdsPecuaria = useMemo(
+    () => fazendasComPecuaria.map(f => f.id),
+    [fazendasComPecuaria],
+  );
   const h = new Date().getHours();
   const g = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
 
@@ -390,6 +394,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             indicadorKey="cabecas"
             clienteId={clienteAtual?.id}
             fazendaId={isGlobal ? null : fazendaAtual?.id}
+            fazendaIds={fazendaIdsPecuaria}
             anoInicio={anoNum - 6}
             deltaMes={deltaMesCab}
             deltaAno={deltaAnoCab}
@@ -409,6 +414,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="pesoMedio"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(pesoMedio, dadosMesAnt.pesoMedio)}
           deltaAno={calcDeltaV(pesoMedio, dadosAnoAnt.pesoMedio)}
@@ -427,6 +433,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="arrobas"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(arrobas, dadosMesAnt.arrobas)}
           deltaAno={calcDeltaV(arrobas, dadosAnoAnt.arrobas)}
@@ -445,6 +452,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="gmd"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(gmd, dadosMesAnt.gmd)}
           deltaAno={calcDeltaV(gmd, dadosAnoAnt.gmd)}
@@ -462,6 +470,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="desfrute"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
           deltaMes={calcDeltaV(desfrute, dadosMesAnt.desfrute)}
           deltaAno={calcDeltaV(desfrute, dadosAnoAnt.desfrute)}
@@ -479,6 +488,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="valorRebanho"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
           deltaMes={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], seriesMensais?.valorRebFin?.[mesNum === 1 ? 0 : mesNum - 1])}
           deltaAno={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], dadosAnoAnt.seriesMensais?.valorRebFin?.[mesNum])}
         />
