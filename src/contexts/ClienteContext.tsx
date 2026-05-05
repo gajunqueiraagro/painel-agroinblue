@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -29,6 +29,11 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Cache de is_admin_agroinblue por userId (1 RPC por sessão).
+  // TODO: limpar adminCheckedRef/adminResultRef no logout se necessário
+  const adminCheckedRef = useRef<string | null>(null);
+  const adminResultRef = useRef<boolean | null>(null);
+
   const loadClientes = useCallback(async () => {
     if (!user) {
       setClientes([]);
@@ -39,9 +44,16 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      // Check if user is admin
-      const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: user.id });
-      const userIsAdmin = !!adminCheck;
+      // Check if user is admin (cache por userId — 1 RPC por sessão)
+      let userIsAdmin: boolean;
+      if (adminCheckedRef.current === user.id && adminResultRef.current !== null) {
+        userIsAdmin = adminResultRef.current;
+      } else {
+        const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: user.id });
+        userIsAdmin = !!adminCheck;
+        adminCheckedRef.current = user.id;
+        adminResultRef.current = userIsAdmin;
+      }
       setIsAdmin(userIsAdmin);
 
       if (userIsAdmin) {
