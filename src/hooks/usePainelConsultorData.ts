@@ -13,7 +13,13 @@ import {
 } from '@/hooks/useRebanhoOficial';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/pages/PainelConsultorTab';
-import { computePeriodGmd, rollingAvg } from '@/lib/calculos/painelConsultorIndicadores';
+import {
+  computePeriodGmd,
+  rollingAvg,
+  buildDesfruteCabMensal,
+  TIPOS_DESFRUTE_OFICIAL,
+} from '@/lib/calculos/painelConsultorIndicadores';
+import { calcularIndicadoresEficienciaArea } from '@/lib/calculos/eficienciaArea';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
 interface Params {
@@ -202,6 +208,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     clienteAtual?.id,
   );
 
+  // Área do ano anterior — necessária para deltaAno de UA/ha e kg vivo/ha.
+  // useSnapshotAreaAnual não tem param `enabled`; carrega incondicionalmente.
+  // Custo: +3 queries leves; aceitável conforme decisão D1 prévia.
+  const { areaMensal: areaMensalAnoAnt } = useSnapshotAreaAnual(
+    ano - 1,
+    isGlobal ? undefined : fazendaId,
+    isGlobal,
+    clienteAtual?.id,
+  );
+
   const {
     rawCategorias: viewDataRealizado,
     loading: loadingRebanho,
@@ -371,6 +387,64 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         if (row.status === 'validado') byMes.set(row.ano_mes, Number(row.valor_total));
       }
       setValorRebanhoMesAnoAnt(todasMeses.map(m => (byMes.has(m) ? byMes.get(m)! : NaN)));
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Desfrute ano-1 — query direta a 'lancamentos' filtrada por TIPOS_DESFRUTE_OFICIAL.
+  // Carregado apenas quando incluirComparativos=true (chamada principal do hook).
+  const [desfruteAnoAnt12, setDesfruteAnoAnt12] = useState<number[]>(() => Array(12).fill(0));
+  useEffect(() => {
+    if (!incluirComparativos) {
+      setDesfruteAnoAnt12(Array(12).fill(0));
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const anoAnt = ano - 1;
+
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from('lancamentos')
+          .select('tipo, quantidade, data')
+          .eq('cancelado', false)
+          .eq('cenario', 'realizado')
+          .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+          .gte('data', `${anoAnt}-01-01`)
+          .lte('data', `${anoAnt}-12-31`);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setDesfruteAnoAnt12(Array(12).fill(0));
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setDesfruteAnoAnt12(Array(12).fill(0));
+          return;
+        }
+
+        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const lite = allRows.map((r: any) => ({
+        tipo: r.tipo,
+        quantidade: Number(r.quantidade) || 0,
+        data: r.data,
+        cenario: 'realizado',
+      }));
+      setDesfruteAnoAnt12(buildDesfruteCabMensal(lite, anoAnt));
     };
     load();
     return () => { cancelled = true; };
@@ -853,6 +927,51 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ── Ano anterior — UA/ha (e kg vivo/ha): exige área ano-1 + viewTotalsAnoAnt ──
+  // Reusa calcularIndicadoresEficienciaArea (helper compartilhado).
+  const eficienciaAreaAnoAnt = (() => {
+    if (!viewTotalsAnoAnt || !areaMensalAnoAnt) return null;
+    const cabIni = Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt[i + 1]?.saldo_inicial ?? 0);
+    const cabFin = Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt[i + 1]?.saldo_final ?? 0);
+    const pesoMedioFin = Array.from({ length: 12 }, (_, i) => {
+      const c = cabFin[i];
+      const ptf = viewTotalsAnoAnt[i + 1]?.peso_total_final ?? 0;
+      return c > 0 ? ptf / c : NaN;
+    });
+    const arrobasProd = Array.from({ length: 12 }, (_, i) =>
+      (viewTotalsAnoAnt[i + 1]?.producao_biologica ?? 0) / 30
+    );
+    return calcularIndicadoresEficienciaArea({
+      cabIni, cabFin, pesoMedioFin, arrobasProd,
+      areaProdMensal: areaMensalAnoAnt,
+    });
+  })();
+
+  const uaHaMesAnoAntSerie13 = eficienciaAreaAnoAnt
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (eficienciaAreaAnoAnt.lotUaHa[i - 1] ?? NaN)
+      )
+    : null;
+
+  const uaHaPeriodoAnoAntSerie13 = eficienciaAreaAnoAnt
+    ? (() => {
+        const arr12 = rollingAvg(eficienciaAreaAnoAnt.lotUaHa);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const uaHaSerieAnoAnt = isPeriodo ? uaHaPeriodoAnoAntSerie13 : uaHaMesAnoAntSerie13;
+
+  const uaHaDeltaAno = (() => {
+    if (!uaHaSerieAnoAnt) return null;
+    const curr = safe(uaHaSerie[mesIdx]);
+    const ant  = safe(uaHaSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
   // ─────────────────────────────────────────────────────────────
   // ── kg vivo/ha oficial (1-based, length 13) ──
   // peso vivo total do rebanho ÷ área produtiva (estoque, NÃO produção).
@@ -908,6 +1027,40 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const meta = safe(kgHaSerieMeta[mesIdx]);
     if (curr == null || meta == null || meta === 0) return null;
     return ((curr - meta) / meta) * 100;
+  })();
+
+  // Ano anterior — kg vivo/ha: pesoTotalFin ano-1 / area ano-1.
+  const kgHaPorMesAnoAnt = (viewTotalsAnoAnt && areaMensalAnoAnt)
+    ? Array.from({ length: 12 }, (_, i) => {
+        const ptf = viewTotalsAnoAnt[i + 1]?.peso_total_final ?? 0;
+        const area = areaMensalAnoAnt[i] ?? 0;
+        return ptf > 0 && area > 0 ? ptf / area : NaN;
+      })
+    : null;
+
+  const kgHaMesAnoAntSerie13 = kgHaPorMesAnoAnt
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (kgHaPorMesAnoAnt[i - 1] ?? NaN)
+      )
+    : null;
+
+  const kgHaPeriodoAnoAntSerie13 = kgHaPorMesAnoAnt
+    ? (() => {
+        const arr12 = rollingAvg(kgHaPorMesAnoAnt);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const kgHaSerieAnoAnt = isPeriodo ? kgHaPeriodoAnoAntSerie13 : kgHaMesAnoAntSerie13;
+
+  const kgHaDeltaAno = (() => {
+    if (!kgHaSerieAnoAnt) return null;
+    const curr = safe(kgHaSerie[mesIdx]);
+    const ant  = safe(kgHaSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
   })();
 
   // ─────────────────────────────────────────────────────────────
@@ -1006,6 +1159,29 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const prev = safe(desfruteSerie[mesIdx - 1]);
     if (curr == null || prev == null || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — Desfrute: query a 'lancamentos' (TIPOS_DESFRUTE_OFICIAL).
+  const desfruteAnoAntPossui = desfruteAnoAnt12.some(v => v > 0);
+
+  const desfruteMesAnoAntSerie13 = desfruteAnoAntPossui
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (desfruteAnoAnt12[i - 1] ?? NaN)
+      )
+    : null;
+
+  const desfrutePeriodoAnoAntSerie13 = desfruteAnoAntPossui
+    ? cumSumTo13(desfruteAnoAnt12)
+    : null;
+
+  const desfruteSerieAnoAnt = isPeriodo ? desfrutePeriodoAnoAntSerie13 : desfruteMesAnoAntSerie13;
+
+  const desfruteDeltaAno = (() => {
+    if (!desfruteSerieAnoAnt) return null;
+    const curr = safe(desfruteSerie[mesIdx]);
+    const ant  = safe(desfruteSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
   })();
 
   // ─────────────────────────────────────────────────────────────
@@ -1171,10 +1347,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Taxa de lotação no mês',
       valor:     uaHaValor,
       deltaMes:  uaHaDeltaMes,
-      deltaAno:  null,                 // sem ano anterior nesta fase
+      deltaAno:  uaHaDeltaAno,
       deltaMeta: uaHaDeltaMeta,
       serieAno:    uaHaSerie,
-      serieAnoAnt: undefined,
+      serieAnoAnt: uaHaSerieAnoAnt ?? undefined,
       serieMeta:   uaHaSerieMeta ?? undefined,
     } : null,
     kgHaIndicador: monthlyData ? {
@@ -1185,10 +1361,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Peso vivo do rebanho por hectare no final do mês',
       valor:     kgHaValor,
       deltaMes:  kgHaDeltaMes,
-      deltaAno:  null,                 // sem ano anterior nesta fase
+      deltaAno:  kgHaDeltaAno,
       deltaMeta: kgHaDeltaMeta,
       serieAno:    kgHaSerie,
-      serieAnoAnt: undefined,
+      serieAnoAnt: kgHaSerieAnoAnt ?? undefined,
       serieMeta:   kgHaSerieMeta ?? undefined,
     } : null,
     arrobasIndicador: monthlyData ? {
@@ -1213,10 +1389,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Animais abatidos, vendidos em pé e consumidos no mês',
       valor:     desfruteValor,
       deltaMes:  desfruteDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  desfruteDeltaAno,
+      deltaMeta: null,                          // sem fonte oficial de meta para desfrute
       serieAno:    desfruteSerie,
-      serieAnoAnt: undefined,
+      serieAnoAnt: desfruteSerieAnoAnt ?? undefined,
       serieMeta:   undefined,
     } : null,
     valorRebanhoIndicador: monthlyData ? {
