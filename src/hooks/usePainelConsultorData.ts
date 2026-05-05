@@ -82,8 +82,10 @@ export interface PainelConsultorDataResult {
     valor:     number | null;
     deltaMes:  number | null;
     deltaAno:  number | null;
+    deltaMeta: number | null;
     serieAno:  number[];   // tamanho 13, índice 1=Jan…12=Dez (índice 0 = NaN)
     serieAnoAnt?: number[];
+    serieMetaIndicador?: number[];
   } | null;
   loading: boolean;
 }
@@ -105,11 +107,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     loading: loadingRebanho,
   } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
 
+  // Meta é carregada quando carregarMeta=true OU incluirComparativos=true
+  // (cabecasIndicador.deltaMeta precisa de seriesMeta).
+  const carregarMetaEffective = carregarMeta || incluirComparativos;
+
   const {
     rawCategorias: viewDataMetaRaw,
-  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: carregarMeta });
+  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: carregarMetaEffective });
 
-  const viewDataMeta = carregarMeta ? viewDataMetaRaw : null;
+  const viewDataMeta = carregarMetaEffective ? viewDataMetaRaw : null;
 
   const {
     rawCategorias: viewDataAnoAnt,
@@ -133,8 +139,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   );
 
   const viewTotalsMeta = useMemo(
-    () => carregarMeta ? totalizarViewPorMes(viewDataMeta ?? []) : ({} as ReturnType<typeof totalizarViewPorMes>),
-    [viewDataMeta, carregarMeta],
+    () => carregarMetaEffective ? totalizarViewPorMes(viewDataMeta ?? []) : ({} as ReturnType<typeof totalizarViewPorMes>),
+    [viewDataMeta, carregarMetaEffective],
   );
 
   // Só usar externo quando tiver dado real — array vazio [] = ainda carregando
@@ -240,7 +246,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const monthlyDataMeta = useMemo(
     () =>
-      carregarMeta && viewDataMeta && viewDataMeta.length > 0
+      carregarMetaEffective && viewDataMeta && viewDataMeta.length > 0
         ? buildMonthlyDataFromView(
             viewTotalsMeta,
             viewDataMeta,
@@ -254,7 +260,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotalsMeta, viewDataMeta, carregarMeta, ano, isGlobal, areaMensal],
+    [viewTotalsMeta, viewDataMeta, carregarMetaEffective, ano, isGlobal, areaMensal],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
@@ -399,6 +405,38 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - ant) / ant) * 100;
   })();
 
+  // ── Séries da META para o ano corrente (carregadas se carregarMeta || incluirComparativos) ──
+  const cabFinMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (monthlyDataMeta.cabFin[i - 1] ?? NaN)
+      )
+    : null;
+
+  const cabMediaAcumMeta = (() => {
+    if (!monthlyDataMeta) return null;
+    const result = Array(13).fill(NaN) as number[];
+    let sum = 0, n = 0;
+    for (let m = 1; m <= 12; m++) {
+      const v = monthlyDataMeta.cabMediaMes[m - 1];
+      if (!isNaN(v) && v > 0) {
+        sum += v;
+        n++;
+        result[m] = sum / n;
+      }
+    }
+    return result;
+  })();
+
+  const cabSerieMeta = isPeriodo ? cabMediaAcumMeta : cabFinMetaSerie13;
+
+  const cabDeltaMeta = (() => {
+    if (!cabSerieMeta) return null;
+    const curr = cabSerie[mesIdx];
+    const meta = cabSerieMeta[mesIdx];
+    if (curr == null || isNaN(curr) || meta == null || isNaN(meta) || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -474,11 +512,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       subtitulo: isPeriodo
         ? 'Quantidade média de cabeças no período selecionado'
         : 'Quantidade de cabeças no final do mês',
-      valor:    cabValor,
-      deltaMes: cabDeltaMes,
-      deltaAno: cabDeltaAno,
-      serieAno: cabSerie,
+      valor:     cabValor,
+      deltaMes:  cabDeltaMes,
+      deltaAno:  cabDeltaAno,
+      deltaMeta: cabDeltaMeta,
+      serieAno:  cabSerie,
       serieAnoAnt: cabSerieAnoAnt ?? undefined,
+      serieMetaIndicador: cabSerieMeta ?? undefined,
     } : null,
     loading,
   };

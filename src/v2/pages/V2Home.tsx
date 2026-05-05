@@ -281,6 +281,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
             deltaMes={cabecasIndicador?.deltaMes ?? null}
             deltaAno={cabecasIndicador?.deltaAno ?? null}
+            deltaMeta={cabecasIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
             deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
@@ -371,7 +372,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={cabecasIndicador?.serieAno ?? []}
           serieAnoAnt={cabecasIndicador?.serieAnoAnt}
-          serieMeta={seriesMeta?.cabFin}
+          serieMeta={cabecasIndicador?.serieMetaIndicador}
           tipoAcumulado="posicao"
           indicadorKey="cabecas"
           clienteId={clienteAtual?.id}

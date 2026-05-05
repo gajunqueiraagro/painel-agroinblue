@@ -11,6 +11,7 @@ import {
   Bar,
   Cell,
   ReferenceArea,
+  ReferenceLine,
 } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -285,17 +286,25 @@ export function IndicadorHistoricoModal({
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
+    const order = ['atual', 'anoAnterior', 'meta'];
+    const displayName = (key: string): string => {
+      if (key === 'atual')        return String(anoAtual);
+      if (key === 'anoAnterior')  return String(anoAtual - 1);
+      if (key === 'meta')         return `Meta ${anoAtual}`;
+      return key;
+    };
+    const entries = payload
+      .filter((e: any) => e.value != null)
+      .sort((a: any, b: any) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey));
     return (
       <div className="rounded-md border border-border/40 bg-background px-3 py-2 shadow-md text-sm">
         <p className="font-medium text-foreground mb-1">{label}</p>
-        {payload.map((entry: any, i: number) => (
-          entry.value != null && (
-            <div key={i} className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
-              <span className="text-foreground">{fmtValor(entry.value)}</span>
-              <span className="text-muted-foreground text-xs">{entry.name}</span>
-            </div>
-          )
+        {entries.map((entry: any, i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
+            <span className="text-foreground">{fmtValor(entry.value)}</span>
+            <span className="text-muted-foreground text-xs">{displayName(entry.dataKey)}</span>
+          </div>
         ))}
       </div>
     );
@@ -329,19 +338,19 @@ export function IndicadorHistoricoModal({
               </span>
             </div>
             {deltaMes != null && (
-              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaMes >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaMes >= 0 ? '+' : ''}{deltaMes.toFixed(1)}% vs mês</span>
               </div>
             )}
             {deltaAno != null && (
-              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaAno >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaAno >= 0 ? '+' : ''}{deltaAno.toFixed(1)}% vs ano ant.</span>
               </div>
             )}
             {deltaMetaInterno != null && (
-              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaMetaInterno >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaMetaInterno >= 0 ? '+' : ''}{deltaMetaInterno.toFixed(1)}% vs META</span>
               </div>
@@ -360,7 +369,7 @@ export function IndicadorHistoricoModal({
               <ReferenceArea
                 x1={MESES_LABELS[0]}
                 x2={MESES_LABELS[mesAtual - 1]}
-                fill="rgba(0,0,0,0.05)"
+                fill="rgba(0,0,0,0.09)"
                 strokeOpacity={0}
               />
               {hasAnoAnt && (
@@ -447,6 +456,12 @@ export function IndicadorHistoricoModal({
                 <BarChart data={barDados} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
                   <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
                   <YAxis hide />
+                  {(() => {
+                    const refVal = historico.find(h => h.ano === anoAtual)?.valor;
+                    return refVal != null && !isNaN(refVal) ? (
+                      <ReferenceLine y={refVal} stroke="#185FA5" strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                    ) : null;
+                  })()}
                   <Bar
                     dataKey="valor"
                     radius={[3, 3, 0, 0]}
@@ -455,7 +470,7 @@ export function IndicadorHistoricoModal({
                       position: 'top',
                       fontSize: 10,
                       fill: 'var(--color-text-secondary)',
-                      formatter: (v: number) => fmtValor(v),
+                      formatter: (v: number) => fmtN(v, formatoValor === 'inteiro' ? 0 : 1),
                     }}
                   >
                     {barDados.map((entry, i) => (
