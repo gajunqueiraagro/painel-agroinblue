@@ -72,6 +72,16 @@ export interface PainelConsultorDataResult {
     arrobasProd:  number[];
     gmd:          number[];
   } | null;
+  /** Indicador de Cabeças/Rebanho com tudo pronto para o card e o modal. */
+  cabecasIndicador: {
+    label:     string;
+    titulo:    string;
+    subtitulo: string;
+    valor:     number | null;
+    deltaMes:  number | null;
+    deltaAno:  number | null;
+    serieAno:  number[];   // tamanho 13, índice 1=Jan…12=Dez (índice 0 = NaN)
+  } | null;
   loading: boolean;
 }
 
@@ -298,6 +308,36 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     ? meanArr(sliceUpTo(kgHaPorMes, idx))
     : (!isNaN(kgHaPorMes[idx]) ? kgHaPorMes[idx] : null);
 
+  // ── Cabeças/Rebanho oficial (1-based, length 13) ──
+  // monthlyData.cabFin é 0-based (índice 0=Jan); converter para 1-based.
+  const cabFinSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.cabFin[i - 1] ?? NaN)
+  );
+
+  // Média acumulada Jan→m baseada em cabMediaMes = (cabIni+cabFin)/2
+  const cabMediaAcumulada = Array.from({ length: 13 }, (_, i) => {
+    if (i === 0) return NaN;
+    const vals = monthlyData.cabMediaMes
+      .slice(0, i)
+      .filter(v => !isNaN(v) && v > 0);
+    return vals.length > 0
+      ? vals.reduce((s, v) => s + v, 0) / vals.length
+      : NaN;
+  });
+
+  const cabSerie = isPeriodo ? cabMediaAcumulada : cabFinSerie13;
+  const mesIdx = mes;
+  const cabValorRaw = cabSerie[mesIdx];
+  const cabValor = (cabValorRaw == null || isNaN(cabValorRaw)) ? null : cabValorRaw;
+
+  const cabDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = cabSerie[mesIdx];
+    const prev = cabSerie[mesIdx - 1];
+    if (curr == null || isNaN(curr) || prev == null || isNaN(prev) || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -354,15 +394,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dadosCompletos,
     seriesMensais: monthlyData ? {
       cabFin:       monthlyData.cabFin,
-      cabMediaAcumulada: Array.from({ length: 13 }, (_, i) => {
-        if (i === 0) return NaN;
-        const vals = monthlyData.cabMediaMes
-          .slice(0, i)
-          .filter(v => !isNaN(v) && v > 0);
-        return vals.length > 0
-          ? vals.reduce((s, v) => s + v, 0) / vals.length
-          : NaN;
-      }),
+      cabMediaAcumulada,
       pesoMedioFin: monthlyData.pesoMedioFin,
       arrobasProd:  monthlyData.arrobasProd,
       gmd:          monthlyData.gmd,
@@ -374,6 +406,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       pesoMedioFin: monthlyDataMeta.pesoMedioFin,
       arrobasProd:  monthlyDataMeta.arrobasProd,
       gmd:          monthlyDataMeta.gmd,
+    } : null,
+    cabecasIndicador: monthlyData ? {
+      label:     isPeriodo ? 'REBANHO MÉDIO' : 'CABEÇAS',
+      titulo:    isPeriodo ? 'Rebanho Médio no período' : 'Rebanho Final do mês',
+      subtitulo: isPeriodo
+        ? 'Quantidade média de cabeças no período selecionado'
+        : 'Quantidade de cabeças no final do mês',
+      valor:    cabValor,
+      deltaMes: cabDeltaMes,
+      deltaAno: null,   // preenchido pela V2Home via dadosAnoAnt temporariamente
+      serieAno: cabSerie,
     } : null,
     loading,
   };
@@ -392,6 +435,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dadosCompletos: false,
       seriesMensais: null,
       seriesMeta: null,
+      cabecasIndicador: null,
     };
   }
 

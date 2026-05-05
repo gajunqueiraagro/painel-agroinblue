@@ -158,7 +158,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta,
+    seriesMensais, seriesMeta, cabecasIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, ...sharedLanc });
 
@@ -224,28 +224,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
-  const cabecasCardLabel = viewMode === 'periodo' ? 'REBANHO MÉDIO' : 'CABEÇAS';
-
-  const cabecasCardValor =
-    viewMode === 'periodo'
-      ? (seriesMensais?.cabMediaAcumulada?.[mesNum] ?? cabecas)
-      : cabecas;
-
-  const cabecasCardDeltaMes =
-    viewMode === 'periodo'
-      ? calcDeltaV(
-          seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null,
-          mesNum > 1 ? (seriesMensais?.cabMediaAcumulada?.[mesNum - 1] ?? null) : null
-        )
-      : calcDeltaV(cabecas, dadosMesAnt.cabecas);
-
-  const cabecasCardDeltaAno =
-    viewMode === 'periodo'
-      ? calcDeltaV(
-          seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null,
-          dadosAnoAnt.seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null
-        )
-      : calcDeltaV(cabecas, dadosAnoAnt.cabecas);
+  const deltaAnoCab = (() => {
+    const curr = cabecasIndicador?.serieAno?.[mesNum] ?? null;
+    const ant  = dadosAnoAnt.cabecasIndicador?.serieAno?.[mesNum] ?? null;
+    if (curr == null || isNaN(curr) || ant == null || isNaN(ant) || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
 
   return (
     <div className="px-4 py-5 space-y-4 max-w-7xl">
@@ -301,9 +285,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         <SectionBlock title="Produção" subtitle="o que a fazenda entregou">
-          <MetricTile label={cabecasCardLabel} value={fmtN(cabecasCardValor)} unit="cab" loading={loadingPainel}
-            deltaMes={cabecasCardDeltaMes}
-            deltaAno={cabecasCardDeltaAno}
+          <MetricTile label={cabecasIndicador?.label ?? 'CABEÇAS'} value={fmtN(cabecasIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
+            deltaMes={cabecasIndicador?.deltaMes ?? null}
+            deltaAno={deltaAnoCab}
             onClick={() => setModalIndicador('cabecas')} />
           <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
             deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
@@ -385,56 +369,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
 
       </div>
 
-      {modalIndicador === 'cabecas' && (() => {
-        const serieCabModal =
-          viewMode === 'periodo'
-            ? (seriesMensais?.cabMediaAcumulada ?? [])
-            : (seriesMensais?.cabFin ?? []);
-
-        const serieCabAnoAntModal =
-          viewMode === 'periodo'
-            ? dadosAnoAnt.seriesMensais?.cabMediaAcumulada
-            : dadosAnoAnt.seriesMensais?.cabFin;
-
-        const deltaMesCab = calcDeltaV(
-          viewMode === 'periodo'
-            ? (seriesMensais?.cabMediaAcumulada?.[mesNum] ?? null)
-            : (seriesMensais?.cabFin?.[mesNum] ?? null),
-          mesNum > 1
-            ? (viewMode === 'periodo'
-                ? (seriesMensais?.cabMediaAcumulada?.[mesNum - 1] ?? null)
-                : (seriesMensais?.cabFin?.[mesNum - 1] ?? null))
-            : null
-        );
-
-        const deltaAnoCab = calcDeltaV(
-          serieCabModal[mesNum] ?? null,
-          serieCabAnoAntModal?.[mesNum] ?? null
-        );
-
-        return (
-          <IndicadorHistoricoModal
-            open onClose={() => setModalIndicador(null)}
-            titulo={viewMode === 'periodo' ? 'Rebanho Médio no período' : 'Rebanho Final do mês'}
-            unidade="cab" formatoValor="inteiro"
-            subtitulo={viewMode === 'periodo'
-              ? 'Quantidade média de cabeças no período selecionado'
-              : 'Quantidade de cabeças no final do mês'}
-            mesAtual={mesNum} anoAtual={anoNum}
-            serieAno={serieCabModal}
-            serieAnoAnt={serieCabAnoAntModal}
-            serieMeta={seriesMeta?.cabFin}
-            tipoAcumulado="posicao"
-            indicadorKey="cabecas"
-            clienteId={clienteAtual?.id}
-            fazendaId={isGlobal ? null : fazendaAtual?.id}
-            fazendaIds={fazendaIdsPecuaria}
-            anoInicio={anoNum - 6}
-            deltaMes={deltaMesCab}
-            deltaAno={deltaAnoCab}
-          />
-        );
-      })()}
+      {modalIndicador === 'cabecas' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={cabecasIndicador?.titulo ?? ''}
+          unidade="cab" formatoValor="inteiro"
+          subtitulo={cabecasIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={cabecasIndicador?.serieAno ?? []}
+          serieAnoAnt={dadosAnoAnt.cabecasIndicador?.serieAno}
+          serieMeta={seriesMeta?.cabFin}
+          tipoAcumulado="posicao"
+          indicadorKey="cabecas"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={cabecasIndicador?.deltaMes ?? null}
+          deltaAno={deltaAnoCab}
+        />
+      )}
       {modalIndicador === 'pesoMedio' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
