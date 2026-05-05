@@ -153,6 +153,22 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];
     serieMeta?:  number[];
   } | null;
+  /**
+   * Indicador Desfrute (cab.) — fluxo (mês = abate+venda+consumo do mês;
+   * período = acumulado Jan→mês). Sem ano anterior nem meta (PC-100 também não expõe).
+   */
+  desfruteIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;   // sempre null nesta fase
+    deltaMeta:  number | null;   // sempre null nesta fase
+    serieAno:   number[];
+    serieAnoAnt?: number[];      // ausente nesta fase
+    serieMeta?:  number[];       // ausente nesta fase
+  } | null;
   loading: boolean;
 }
 
@@ -878,6 +894,26 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── Desfrute (cab.) oficial — fluxo (1-based, length 13) ──
+  // mes = abate+venda+consumo do mês (já em monthlyData.desfruteCab via lancPec).
+  // periodo = soma acumulada Jan→m. Sem média/rollingAvg, sem mortes.
+  // ─────────────────────────────────────────────────────────────
+  const desfruteMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.desfruteCab[i - 1] ?? NaN)
+  );
+  const desfrutePeriodoSerie13 = cumSumTo13(monthlyData.desfruteCab);
+  const desfruteSerie = isPeriodo ? desfrutePeriodoSerie13 : desfruteMesSerie13;
+  const desfruteValor = safe(desfruteSerie[mesIdx]);
+
+  const desfruteDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(desfruteSerie[mesIdx]);
+    const prev = safe(desfruteSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -897,9 +933,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // @ produzidas: série oficial (mês = valor do mês; período = acumulado Jan→m)
     arrobas: arrobasValor,
 
-    desfrute: isPeriodo
-      ? sumArr(sliceUpTo(monthlyData.desfruteCab, idx))
-      : safe(monthlyData.desfruteCab[idx]),
+    // Desfrute (cab.): série oficial (mês = valor do mês; período = acumulado Jan→m)
+    desfrute: desfruteValor,
 
     receita: isPeriodo
       ? sumArr(sliceUpTo(monthlyData.recPecComp, idx))
@@ -1028,6 +1063,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: arrobasSerieAnoAnt ?? undefined,
       serieMeta:   arrobasSerieMeta ?? undefined,
     } : null,
+    desfruteIndicador: monthlyData ? {
+      label:     isPeriodo ? 'DESFRUTE (CAB.) NO PERÍODO' : 'DESFRUTE (CAB.) NO MÊS',
+      titulo:    isPeriodo ? 'Desfrute no período' : 'Desfrute no mês',
+      subtitulo: isPeriodo
+        ? 'Animais abatidos, vendidos em pé e consumidos no período'
+        : 'Animais abatidos, vendidos em pé e consumidos no mês',
+      valor:     desfruteValor,
+      deltaMes:  desfruteDeltaMes,
+      deltaAno:  null,
+      deltaMeta: null,
+      serieAno:    desfruteSerie,
+      serieAnoAnt: undefined,
+      serieMeta:   undefined,
+    } : null,
     loading,
   };
 
@@ -1051,6 +1100,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       uaHaIndicador: null,
       kgHaIndicador: null,
       arrobasIndicador: null,
+      desfruteIndicador: null,
     };
   }
 

@@ -159,12 +159,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute'];
+  // Desfrute fora: histórico multi-ano via cache (saidas_externas) inclui mortes — divergente do oficial.
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
@@ -174,7 +175,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.valor ?? null)
      : modalIndicador === 'gmd'       ? (gmdIndicador?.valor       ?? null)
      : modalIndicador === 'arrobas'   ? (arrobasIndicador?.valor   ?? null)
-     : modalIndicador === 'desfrute'  ? desfrute
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
@@ -333,9 +333,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={arrobasIndicador?.deltaAno ?? null}
             deltaMeta={arrobasIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('arrobas')} />
-          <MetricTile label="Desfrute cab." value={fmtN(desfrute)} unit="cab" loading={loadingPainel}
-            deltaMes={vsMes(desfrute, dadosMesAnt.desfrute)}
-            deltaAno={vsAno(desfrute, dadosAnoAnt.desfrute)}
+          <MetricTile label={desfruteIndicador?.label ?? 'DESFRUTE (CAB.) NO MÊS'} value={fmtN(desfruteIndicador?.valor ?? null)} unit="cab" loading={loadingPainel}
+            deltaMes={desfruteIndicador?.deltaMes ?? null}
+            deltaAno={desfruteIndicador?.deltaAno ?? null}
+            deltaMeta={desfruteIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('desfrute')} />
           <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
             deltaMes={gmdIndicador?.deltaMes ?? null}
@@ -547,22 +548,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'desfrute' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="Desfrute cab." unidade="cab" formatoValor="inteiro"
-          subtitulo="Cabeças vendidas/saídas no mês"
+          titulo={desfruteIndicador?.titulo ?? ''}
+          unidade="cab" formatoValor="inteiro"
+          subtitulo={desfruteIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.desfruteCab ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.desfruteCab}
+          serieAno={desfruteIndicador?.serieAno ?? []}
+          serieAnoAnt={desfruteIndicador?.serieAnoAnt}
+          serieMeta={desfruteIndicador?.serieMeta}
           tipoAcumulado="soma"
           indicadorKey="desfrute"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(desfrute, dadosMesAnt.desfrute)}
-          deltaAno={calcDeltaV(desfrute, dadosAnoAnt.desfrute)}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          deltaMes={desfruteIndicador?.deltaMes ?? null}
+          deltaAno={desfruteIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'valorRebanho' && (

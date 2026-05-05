@@ -26,12 +26,14 @@ import {
   computePeriodGmd,
 } from '@/lib/calculos/painelConsultorIndicadores';
 
+// Desfrute foi removido daqui: a única fonte de histórico multi-ano disponível
+// (zoot_mensal_cache.saidas_externas) inclui mortes e diverge da definição oficial
+// (abate + venda + consumo). Histórico de Desfrute fica oculto no modal.
 export type HistoricoIndicadorKey =
   | 'cabecas'
   | 'pesoMedio'
   | 'arrobas'
-  | 'gmd'
-  | 'desfrute';
+  | 'gmd';
 
 export interface AnoValor {
   ano: number;
@@ -200,11 +202,7 @@ export function useHistoricoIndicador({
             return cm > 0 && d > 0 ? pb / cm / d : null;
           }
 
-          if (indicadorKey === 'desfrute') {
-            const s = rowsPer.reduce((acc: number, r: any) =>
-              acc + (Number(r.saidas_externas) || 0), 0);
-            return s > 0 ? s : null;
-          }
+          // Desfrute removido: cache.saidas_externas inclui mortes (não é o oficial).
 
           return null;
         };
