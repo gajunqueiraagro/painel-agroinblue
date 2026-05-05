@@ -118,9 +118,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // Lançamentos compartilhados — carregados uma única vez, reutilizados pelas 3 chamadas de usePainelConsultorData abaixo.
   const { lancamentos: lancPecShared } = useLancamentos();
   const { lancamentos: lancFinShared, rateioADM } = useFinanceiro();
+  // Não passar externo enquanto ainda está carregando (length = 0)
+  // Undefined = hook interno roda; array com dados = hook interno desligado
   const sharedLanc = {
-    lancPecExterno: lancPecShared,
-    lancFinExterno: lancFinShared,
+    lancPecExterno: lancPecShared.length > 0 ? lancPecShared : undefined,
+    lancFinExterno: lancFinShared.length > 0 ? lancFinShared : undefined,
   };
 
   const {

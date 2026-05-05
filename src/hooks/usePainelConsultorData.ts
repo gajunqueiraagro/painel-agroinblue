@@ -107,16 +107,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     [viewDataMeta, carregarMeta],
   );
 
+  // Só usar externo quando tiver dado real — array vazio [] = ainda carregando
+  const usarLancPecExterno = Array.isArray(lancPecExterno) && lancPecExterno.length > 0;
+  const usarLancFinExterno = Array.isArray(lancFinExterno) && lancFinExterno.length > 0;
+
   const { lancamentos: lancPecInterno, loading: loadingLancInterno } =
-    useLancamentos({ enabled: !Array.isArray(lancPecExterno) });
+    useLancamentos({ enabled: !usarLancPecExterno });
 
   const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
-    useFinanceiro({ enabled: !Array.isArray(lancFinExterno) });
+    useFinanceiro({ enabled: !usarLancFinExterno });
 
-  const lancPec    = Array.isArray(lancPecExterno) ? lancPecExterno : lancPecInterno;
-  const lancFin    = Array.isArray(lancFinExterno) ? lancFinExterno : lancFinInterno;
-  const loadingLanc = Array.isArray(lancPecExterno) ? false : loadingLancInterno;
-  const loadingFin  = Array.isArray(lancFinExterno) ? false : loadingFinInterno;
+  const lancPec    = usarLancPecExterno ? lancPecExterno! : lancPecInterno;
+  const lancFin    = usarLancFinExterno ? lancFinExterno! : lancFinInterno;
+  const loadingLanc = usarLancPecExterno ? false : loadingLancInterno;
+  const loadingFin  = usarLancFinExterno ? false : loadingFinInterno;
 
   // Valor do Rebanho oficial — mesma fonte do PainelConsultorTab (sem fallback).
   // Array 13 posições: [0] = Dez ano anterior, [1..12] = Jan..Dez do ano.
