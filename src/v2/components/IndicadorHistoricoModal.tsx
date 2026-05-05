@@ -51,7 +51,7 @@ interface Props {
   /** Sobrescreve o label do período (default: "Jan–{mesAtual}"). */
   labelPeriodo?: string;
   /** Identificador do indicador (gera a query histórica correta). */
-  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa';
+  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa' | 'kgHa';
   /** Cliente — mantido por compatibilidade; não usado na query. */
   clienteId?: string;
   /** Fazenda específica; null = global (somar todas as fazendas do cliente). */

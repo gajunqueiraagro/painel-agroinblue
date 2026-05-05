@@ -127,6 +127,19 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];
   } | null;
+  /** Indicador kg vivo/ha (peso total do rebanho / área) — sem ano anterior nesta fase. */
+  kgHaIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;   // sempre null nesta fase
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];      // ausente nesta fase
+    serieMeta?:  number[];
+  } | null;
   loading: boolean;
 }
 
@@ -366,12 +379,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
   const incompletoOverride = isGlobal && !dadosCompletos && !loading;
 
+  // kgHaPorMes (mensal): peso vivo total do rebanho / área produtiva
+  // Mantido aqui por ser usado abaixo no bloco kgHaIndicador (oficial PC-100).
   const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) =>
     p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
   );
-  const kgHa = isPeriodo
-    ? meanArr(sliceUpTo(kgHaPorMes, idx))
-    : (!isNaN(kgHaPorMes[idx]) ? kgHaPorMes[idx] : null);
 
   // ── Cabeças/Rebanho oficial (1-based, length 13) ──
   // monthlyData.cabFin é 0-based (índice 0=Jan); converter para 1-based.
@@ -718,6 +730,63 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── kg vivo/ha oficial (1-based, length 13) ──
+  // peso vivo total do rebanho ÷ área produtiva (estoque, NÃO produção).
+  // Período = rollingAvg PC-100. Sem ano anterior nesta fase.
+  // ─────────────────────────────────────────────────────────────
+  const kgHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (kgHaPorMes[i - 1] ?? NaN)
+  );
+
+  const kgHaPeriodo12 = rollingAvg(kgHaPorMes);
+  const kgHaPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (kgHaPeriodo12[i - 1] ?? NaN)
+  );
+
+  const kgHaSerie = isPeriodo ? kgHaPeriodoSerie13 : kgHaMesSerie13;
+  const kgHaValor = safe(kgHaSerie[mesIdx]);
+
+  const kgHaDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(kgHaSerie[mesIdx]);
+    const prev = safe(kgHaSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Meta — monthlyDataMeta.pesoTotalFin / areaMensal (mesma área do realizado).
+  const kgHaPorMesMeta = monthlyDataMeta
+    ? (monthlyDataMeta.pesoTotalFin ?? []).map((p, i) =>
+        p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
+      )
+    : null;
+
+  const kgHaMesMetaSerie13 = kgHaPorMesMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (kgHaPorMesMeta[i - 1] ?? NaN)
+      )
+    : null;
+
+  const kgHaPeriodoMetaSerie13 = kgHaPorMesMeta
+    ? (() => {
+        const arr12 = rollingAvg(kgHaPorMesMeta);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const kgHaSerieMeta = isPeriodo ? kgHaPeriodoMetaSerie13 : kgHaMesMetaSerie13;
+
+  const kgHaDeltaMeta = (() => {
+    if (!kgHaSerieMeta) return null;
+    const curr = safe(kgHaSerie[mesIdx]);
+    const meta = safe(kgHaSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -765,7 +834,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       ? meanArr(sliceUpTo(monthlyData.arrHa, idx))
       : safe(monthlyData.arrHa[idx]),
 
-    kgHa,
+    kgHa: kgHaValor,
     statusArea,
     faltandoCount,
     statusPilares: statusPilares ?? null,
@@ -841,6 +910,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: undefined,
       serieMeta:   uaHaSerieMeta ?? undefined,
     } : null,
+    kgHaIndicador: monthlyData ? {
+      label:     isPeriodo ? 'KG VIVO/HA MÉDIO NO PERÍODO' : 'KG VIVO/HA NO MÊS',
+      titulo:    isPeriodo ? 'kg vivo/ha no período' : 'kg vivo/ha no mês',
+      subtitulo: isPeriodo
+        ? 'Peso vivo médio do rebanho por hectare no período'
+        : 'Peso vivo do rebanho por hectare no final do mês',
+      valor:     kgHaValor,
+      deltaMes:  kgHaDeltaMes,
+      deltaAno:  null,                 // sem ano anterior nesta fase
+      deltaMeta: kgHaDeltaMeta,
+      serieAno:    kgHaSerie,
+      serieAnoAnt: undefined,
+      serieMeta:   kgHaSerieMeta ?? undefined,
+    } : null,
     loading,
   };
 
@@ -862,6 +945,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       pesoMedioIndicador: null,
       gmdIndicador: null,
       uaHaIndicador: null,
+      kgHaIndicador: null,
     };
   }
 

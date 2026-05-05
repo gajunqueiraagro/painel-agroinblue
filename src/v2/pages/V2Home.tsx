@@ -158,7 +158,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -315,9 +315,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={uaHaIndicador?.deltaAno ?? null}
             deltaMeta={uaHaIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('uaHa')} />
-          <MetricTile label="kg/ha" value={fmtN(kgHa, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={vsMes(kgHa, dadosMesAnt.kgHa)}
-            deltaAno={vsAno(kgHa, dadosAnoAnt.kgHa)} />
+          <MetricTile label={kgHaIndicador?.label ?? 'KG VIVO/HA NO MÊS'} value={fmtN(kgHaIndicador?.valor ?? null, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+            deltaMes={kgHaIndicador?.deltaMes ?? null}
+            deltaAno={kgHaIndicador?.deltaAno ?? null}
+            deltaMeta={kgHaIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('kgHa')} />
         </SectionBlock>
 
         <SectionBlock title="Financeiro Produtivo" subtitle="receita × custo por @">
@@ -466,6 +468,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={uaHaIndicador?.deltaMes ?? null}
           deltaAno={uaHaIndicador?.deltaAno ?? null}
+        />
+      )}
+      {modalIndicador === 'kgHa' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={kgHaIndicador?.titulo ?? ''}
+          unidade="kg/ha" formatoValor="decimal1"
+          subtitulo={kgHaIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={kgHaIndicador?.serieAno ?? []}
+          serieAnoAnt={kgHaIndicador?.serieAnoAnt}
+          serieMeta={kgHaIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="kgHa"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={kgHaIndicador?.deltaMes ?? null}
+          deltaAno={kgHaIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'desfrute' && (
