@@ -2,6 +2,38 @@
 // entre o PainelConsultorTab e a V2Home (usePainelConsultorData).
 // Não duplicar a fórmula em outros arquivos. Importar daqui.
 
+/**
+ * Tipos de lançamento que entram em Desfrute (cab.) — definição GLOBAL do PC-100.
+ * NÃO inclui: morte, transferencia_saida, nascimentos.
+ */
+export const TIPOS_DESFRUTE_OFICIAL = ['abate', 'venda', 'consumo'] as const;
+
+interface LancPecLite {
+  tipo: string;
+  quantidade: number;
+  data: string;
+  cenario?: string;
+}
+
+/**
+ * Desfrute (cab.) mensal — fórmula oficial PC-100.
+ * Retorna array de 12 posições (0-based: [0]=Jan…[11]=Dez) com soma de quantidade
+ * de lançamentos cujo tipo está em TIPOS_DESFRUTE_OFICIAL e cenario != 'meta'.
+ *
+ * Usado pelo PainelConsultorTab e pelo histórico multi-ano (useHistoricoIndicador).
+ * Não duplicar.
+ */
+export function buildDesfruteCabMensal(lancPec: LancPecLite[], ano: number): number[] {
+  const set = new Set<string>(TIPOS_DESFRUTE_OFICIAL);
+  const filtrados = lancPec.filter(l => set.has(l.tipo) && l.cenario !== 'meta');
+  return Array.from({ length: 12 }, (_, i) => {
+    const prefix = `${ano}-${String(i + 1).padStart(2, '0')}`;
+    return filtrados
+      .filter(l => l.data.startsWith(prefix))
+      .reduce((s, l) => s + l.quantidade, 0);
+  });
+}
+
 interface CacheRowZoot {
   ano: number;
   mes: number;

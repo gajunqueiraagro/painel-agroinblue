@@ -24,16 +24,18 @@ import {
   cabecasMediaPeriodoFromRows,
   pesoMedioPonderadoFromRows,
   computePeriodGmd,
+  buildDesfruteCabMensal,
+  TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
 
-// Desfrute foi removido daqui: a única fonte de histórico multi-ano disponível
-// (zoot_mensal_cache.saidas_externas) inclui mortes e diverge da definição oficial
-// (abate + venda + consumo). Histórico de Desfrute fica oculto no modal.
+// Desfrute usa fonte separada (lancamentos), pois zoot_mensal_cache.saidas_externas
+// inclui mortes — divergente da definição oficial (abate + venda + consumo).
 export type HistoricoIndicadorKey =
   | 'cabecas'
   | 'pesoMedio'
   | 'arrobas'
-  | 'gmd';
+  | 'gmd'
+  | 'desfrute';
 
 export interface AnoValor {
   ano: number;
@@ -97,6 +99,89 @@ export function useHistoricoIndicador({
 
     (async () => {
       try {
+        // ───── Branch DESFRUTE — fonte oficial: lancamentos (abate + venda + consumo) ─────
+        if (indicadorKey === 'desfrute') {
+          if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
+            if (!cancelled) {
+              setHistorico([]);
+              setHistoricoMeta([]);
+              setLoading(false);
+            }
+            return;
+          }
+
+          // Paginação simples — lancamentos pode ter > 1000 registros em N anos.
+          const PAGE = 1000;
+          const allRows: any[] = [];
+          let from = 0;
+          while (true) {
+            let q = supabase
+              .from('lancamentos')
+              .select('tipo, quantidade, data')
+              .eq('cancelado', false)
+              .eq('cenario', 'realizado')
+              .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+              .gte('data', `${inicio}-01-01`)
+              .lte('data', `${anoAtual}-12-31`);
+            if (fazendaId) q = q.eq('fazenda_id', fazendaId);
+            else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
+
+            const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+            if (cancelled) return;
+            if (error) {
+              setHistorico([]); setHistoricoMeta([]);
+              return;
+            }
+            if (!data || data.length === 0) break;
+            allRows.push(...data);
+            if (data.length < PAGE) break;
+            from += PAGE;
+          }
+
+          // Agrupa por ano
+          const rowsPorAno: Record<number, any[]> = {};
+          for (const r of allRows) {
+            const a = Number(String(r.data ?? '').slice(0, 4));
+            if (isNaN(a)) continue;
+            (rowsPorAno[a] ??= []).push(r);
+          }
+
+          const calcDesfrute = (rowsDoAno: any[], ano: number): number | null => {
+            const lancsLite = rowsDoAno.map(r => ({
+              tipo: r.tipo,
+              quantidade: Number(r.quantidade) || 0,
+              data: r.data,
+              cenario: 'realizado',
+            }));
+            const mensal12 = buildDesfruteCabMensal(lancsLite, ano);
+            if (viewMode === 'periodo') {
+              let acc = 0;
+              for (let i = 0; i < mesAtual; i++) acc += (mensal12[i] || 0);
+              return acc > 0 ? acc : null;
+            }
+            const v = mensal12[mesAtual - 1];
+            return v > 0 ? v : null;
+          };
+
+          const resR: AnoValor[] = [];
+          const resM: AnoValor[] = [];   // PC-100 não expõe meta para Desfrute → sempre null
+          for (let a = inicio; a <= anoAtual; a++) {
+            if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+              resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+            } else {
+              resR.push({ ano: a, valor: calcDesfrute(rowsPorAno[a] ?? [], a) });
+            }
+            resM.push({ ano: a, valor: null });
+          }
+
+          if (!cancelled) {
+            setHistorico(resR);
+            setHistoricoMeta(resM);
+          }
+          return;
+        }
+
+        // ───── Branch padrão — zoot_mensal_cache (cabecas/pesoMedio/arrobas/gmd) ─────
         let query = supabase
           .from('zoot_mensal_cache')
           .select('ano, mes, cenario, saldo_inicial, saldo_final, peso_total_final, producao_biologica, saidas_externas, gmd')
@@ -202,7 +287,7 @@ export function useHistoricoIndicador({
             return cm > 0 && d > 0 ? pb / cm / d : null;
           }
 
-          // Desfrute removido: cache.saidas_externas inclui mortes (não é o oficial).
+          // 'desfrute' é tratado em branch separado acima (query a 'lancamentos').
 
           return null;
         };

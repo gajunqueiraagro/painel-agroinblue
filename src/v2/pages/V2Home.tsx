@@ -164,8 +164,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
-  // Desfrute fora: histórico multi-ano via cache (saidas_externas) inclui mortes — divergente do oficial.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd'];
+  // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
@@ -175,6 +175,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.valor ?? null)
      : modalIndicador === 'gmd'       ? (gmdIndicador?.valor       ?? null)
      : modalIndicador === 'arrobas'   ? (arrobasIndicador?.valor   ?? null)
+     : modalIndicador === 'desfrute'  ? (desfruteIndicador?.valor  ?? null)
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
@@ -563,6 +564,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={desfruteIndicador?.deltaMes ?? null}
           deltaAno={desfruteIndicador?.deltaAno ?? null}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'valorRebanho' && (

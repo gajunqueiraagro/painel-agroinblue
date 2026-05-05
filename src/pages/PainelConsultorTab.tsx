@@ -13,7 +13,12 @@
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { calcularIndicadoresEficienciaArea } from '@/lib/calculos/eficienciaArea';
-import { computePeriodGmd, rollingAvg } from '@/lib/calculos/painelConsultorIndicadores';
+import {
+  computePeriodGmd,
+  rollingAvg,
+  buildDesfruteCabMensal,
+  TIPOS_DESFRUTE_OFICIAL,
+} from '@/lib/calculos/painelConsultorIndicadores';
 import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
@@ -123,7 +128,8 @@ function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[]
 }
 
 
-const TIPOS_DESFRUTE = new Set(['abate', 'venda', 'consumo']);
+// TIPOS_DESFRUTE migrado para src/lib/calculos/painelConsultorIndicadores.ts (TIPOS_DESFRUTE_OFICIAL).
+const TIPOS_DESFRUTE = new Set<string>(TIPOS_DESFRUTE_OFICIAL);
 
 // ─── Monthly raw data struct ───
 interface MonthlyData {
@@ -229,13 +235,13 @@ export function buildMonthlyDataFromView(
   const prodKg = mk(m => viewTotals[m]?.producao_biologica ?? 0);
 
   // ── Desfrute: apenas abate + venda + consumo (REGRA OFICIAL) ──
+  // Filtragem de desfruteLancs ainda usada para desfrute_arr e recPecCompMes (peso/valor).
   const desfruteLancs = lancPec.filter(l =>
     TIPOS_DESFRUTE.has(l.tipo) && l.cenario !== 'meta',
   );
   // mesPrefix already defined above
-  const desfruteCab = mk(m => desfruteLancs
-    .filter(l => l.data.startsWith(mesPrefix(m)))
-    .reduce((s, l) => s + l.quantidade, 0));
+  // desfruteCab oficial — vem do helper compartilhado.
+  const desfruteCab = buildDesfruteCabMensal(lancPec, ano);
   const desfrute_arr = mk(m => desfruteLancs
     .filter(l => l.data.startsWith(mesPrefix(m)))
     .reduce((s, l) => s + (l.quantidade * (l.pesoMedioKg || 0)) / 30, 0));
