@@ -150,8 +150,10 @@ export function statusPastos(input: StatusPastosInput): StatusCor {
   if (totalPastos === 0) return 'aberto';
 
   if (pastosFechados >= totalPastos) {
-    // Todos fechados operacionalmente — mas só verde se categorias OK
-    return stCats === 'fechado' ? 'fechado' : 'parcial';
+    // 'parcial' = total fecha mas distribuição interna diverge → não contamina status global
+    // Só retorna 'parcial' se categorias estão abertas (total não fecha)
+    if (stCats === 'fechado' || stCats === 'parcial') return 'fechado';
+    return 'parcial';
   }
 
   if (pastosFechados > 0 || pastosComRegistro > 0) return 'parcial';
