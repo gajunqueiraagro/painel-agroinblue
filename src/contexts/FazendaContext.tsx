@@ -114,6 +114,8 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setFazendas([]);
     setFazendaAtualState(null);
+    loadedForRef.current = null;               // invalida cache → força refetch
+    setLoading(!!clienteAtual?.id);            // loading true só se há cliente para buscar
   }, [clienteAtual?.id]);
 
   useEffect(() => { loadFazendas(); }, [loadFazendas]);
