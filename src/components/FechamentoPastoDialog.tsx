@@ -15,11 +15,8 @@ import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 
 const TIPOS_USO_OPTIONS = [
-  { value: 'cria', label: 'Cria' },
-  { value: 'recria', label: 'Recria' },
-  { value: 'engorda', label: 'Engorda' },
+  { value: 'pecuaria', label: 'Pecuária' },
   { value: 'vedado', label: 'Vedado' },
-  { value: 'reforma_pecuaria', label: 'Reforma Pecuária' },
   { value: 'agricultura', label: 'Agricultura' },
   { value: 'app', label: 'APP' },
   { value: 'reserva_legal', label: 'Reserva Legal' },
@@ -27,7 +24,7 @@ const TIPOS_USO_OPTIONS = [
   { value: 'divergencia', label: '⚠️ Divergência do Campeiro' },
 ];
 
-const TIPOS_USO_EXIGEM_REBANHO = ['cria', 'recria', 'engorda'];
+const TIPOS_USO_EXIGEM_REBANHO = ['pecuaria'];
 const QUALIDADE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
 
 // ── Regra definitiva de separação MACHOS x FÊMEAS ──
