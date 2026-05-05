@@ -87,6 +87,19 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];
     serieMetaIndicador?: number[];
   } | null;
+  /** Indicador de Peso Médio com tudo pronto para o card e o modal. */
+  pesoMedioIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
   loading: boolean;
 }
 
@@ -437,6 +450,95 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── Peso Médio oficial (1-based, length 13) ──
+  // ─────────────────────────────────────────────────────────────
+  // Realizado mensal — pesoMedioFin já é 0-based; converter para 1-based.
+  const pesoMedioFinSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.pesoMedioFin[i - 1] ?? NaN)
+  );
+
+  // Realizado período — média ponderada Σ pesoTotalFin / Σ cabFin (idêntico à fórmula
+  // oficial do PainelConsultor já presente no escalar `pesoMedio` deste hook).
+  const pesoMedioPeriodoSerie13 = Array.from({ length: 13 }, (_, i) => {
+    if (i === 0) return NaN;
+    const totalPeso = monthlyData.pesoTotalFin.slice(0, i)
+      .reduce((s, v) => s + (Number.isNaN(v) ? 0 : v), 0);
+    const totalCab = monthlyData.cabFin.slice(0, i)
+      .reduce((s, v) => s + (Number.isNaN(v) ? 0 : v), 0);
+    return totalCab > 0 ? totalPeso / totalCab : NaN;
+  });
+
+  const pesoSerie = isPeriodo ? pesoMedioPeriodoSerie13 : pesoMedioFinSerie13;
+
+  const pesoDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(pesoSerie[mesIdx]);
+    const prev = safe(pesoSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — usa viewTotalsAnoAnt (carregado quando incluirComparativos=true)
+  const pesoMedioFinAnoAnt13 = viewTotalsAnoAnt
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const ptf = viewTotalsAnoAnt[i]?.peso_total_final ?? 0;
+        const cab = viewTotalsAnoAnt[i]?.saldo_final ?? 0;
+        return cab > 0 ? ptf / cab : NaN;
+      })
+    : null;
+
+  const pesoMedioPeriodoAnoAnt13 = viewTotalsAnoAnt
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        let totalPeso = 0, totalCab = 0;
+        for (let m = 1; m <= i; m++) {
+          totalPeso += viewTotalsAnoAnt[m]?.peso_total_final ?? 0;
+          totalCab  += viewTotalsAnoAnt[m]?.saldo_final ?? 0;
+        }
+        return totalCab > 0 ? totalPeso / totalCab : NaN;
+      })
+    : null;
+
+  const pesoSerieAnoAnt = isPeriodo ? pesoMedioPeriodoAnoAnt13 : pesoMedioFinAnoAnt13;
+
+  // Meta — usa monthlyDataMeta (gate carregarMetaEffective já existente)
+  const pesoMedioMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (monthlyDataMeta.pesoMedioFin[i - 1] ?? NaN)
+      )
+    : null;
+
+  const pesoMedioPeriodoMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const totalPeso = (monthlyDataMeta.pesoTotalFin ?? []).slice(0, i)
+          .reduce((s, v) => s + (Number.isNaN(v) ? 0 : v), 0);
+        const totalCab = (monthlyDataMeta.cabFin ?? []).slice(0, i)
+          .reduce((s, v) => s + (Number.isNaN(v) ? 0 : v), 0);
+        return totalCab > 0 ? totalPeso / totalCab : NaN;
+      })
+    : null;
+
+  const pesoMetaSerie = isPeriodo ? pesoMedioPeriodoMetaSerie13 : pesoMedioMetaSerie13;
+
+  const pesoDeltaAno = (() => {
+    if (!pesoSerieAnoAnt) return null;
+    const curr = safe(pesoSerie[mesIdx]);
+    const ant  = safe(pesoSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const pesoDeltaMeta = (() => {
+    if (!pesoMetaSerie) return null;
+    const curr = safe(pesoSerie[mesIdx]);
+    const meta = safe(pesoMetaSerie[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -520,6 +622,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: cabSerieAnoAnt ?? undefined,
       serieMetaIndicador: cabSerieMeta ?? undefined,
     } : null,
+    pesoMedioIndicador: monthlyData ? {
+      label:     isPeriodo ? 'PESO MÉDIO PERÍODO' : 'PESO MÉDIO FINAL',
+      titulo:    isPeriodo ? 'Peso Médio Período' : 'Peso Médio Final',
+      subtitulo: isPeriodo
+        ? 'Peso médio do rebanho na média do período'
+        : 'Peso médio do rebanho no final do mês',
+      valor:     safe(pesoSerie[mesIdx]),
+      deltaMes:  pesoDeltaMes,
+      deltaAno:  pesoDeltaAno,
+      deltaMeta: pesoDeltaMeta,
+      serieAno:    pesoSerie,
+      serieAnoAnt: pesoSerieAnoAnt ?? undefined,
+      serieMeta:   pesoMetaSerie ?? undefined,
+    } : null,
     loading,
   };
 
@@ -538,6 +654,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       seriesMensais: null,
       seriesMeta: null,
       cabecasIndicador: null,
+      pesoMedioIndicador: null,
     };
   }
 

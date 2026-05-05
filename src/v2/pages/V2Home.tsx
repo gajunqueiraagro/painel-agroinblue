@@ -158,7 +158,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -283,9 +283,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={cabecasIndicador?.deltaAno ?? null}
             deltaMeta={cabecasIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('cabecas')} />
-          <MetricTile label="Peso médio final" value={fmtN(pesoMedio, 1)} unit="kg" loading={loadingPainel}
-            deltaMes={vsMes(pesoMedio, dadosMesAnt.pesoMedio)}
-            deltaAno={vsAno(pesoMedio, dadosAnoAnt.pesoMedio)}
+          <MetricTile label={pesoMedioIndicador?.label ?? 'PESO MÉDIO FINAL'} value={fmtN(pesoMedioIndicador?.valor ?? null, 1)} unit="kg" loading={loadingPainel}
+            deltaMes={pesoMedioIndicador?.deltaMes ?? null}
+            deltaAno={pesoMedioIndicador?.deltaAno ?? null}
+            deltaMeta={pesoMedioIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('pesoMedio')} />
           <MetricTile label="@ produzidas" value={fmtN(arrobas, 1)} unit="@" loading={loadingPainel}
             deltaMes={vsMes(arrobas, dadosMesAnt.arrobas)}
@@ -386,20 +387,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'pesoMedio' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="Peso médio final" unidade="kg" formatoValor="decimal1"
-          subtitulo="Peso médio do rebanho no final do mês"
+          titulo={pesoMedioIndicador?.titulo ?? ''}
+          unidade="kg" formatoValor="decimal1"
+          subtitulo={pesoMedioIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.pesoMedioFin ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.pesoMedioFin}
-          serieMeta={seriesMeta?.pesoMedioFin}
+          serieAno={pesoMedioIndicador?.serieAno ?? []}
+          serieAnoAnt={pesoMedioIndicador?.serieAnoAnt}
+          serieMeta={pesoMedioIndicador?.serieMeta}
           tipoAcumulado="posicao"
           indicadorKey="pesoMedio"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(pesoMedio, dadosMesAnt.pesoMedio)}
-          deltaAno={calcDeltaV(pesoMedio, dadosAnoAnt.pesoMedio)}
+          deltaMes={pesoMedioIndicador?.deltaMes ?? null}
+          deltaAno={pesoMedioIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'arrobas' && (
