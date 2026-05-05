@@ -158,7 +158,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -296,9 +296,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaMes={vsMes(desfrute, dadosMesAnt.desfrute)}
             deltaAno={vsAno(desfrute, dadosAnoAnt.desfrute)}
             onClick={() => setModalIndicador('desfrute')} />
-          <MetricTile label="GMD" value={fmtN(gmd, 3)} unit="kg/dia" loading={loadingPainel}
-            deltaMes={vsMes(gmd, dadosMesAnt.gmd)}
-            deltaAno={vsAno(gmd, dadosAnoAnt.gmd)}
+          <MetricTile label={gmdIndicador?.label ?? 'GMD'} value={fmtN(gmdIndicador?.valor ?? null, 3)} unit="kg/dia" loading={loadingPainel}
+            deltaMes={gmdIndicador?.deltaMes ?? null}
+            deltaAno={gmdIndicador?.deltaAno ?? null}
+            deltaMeta={gmdIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('gmd')} />
           <MetricTile label="Valor rebanho" value={fmtR(valorReb)} loading={loadingPainel}
             onClick={() => setModalIndicador('valorRebanho')} />
@@ -428,20 +429,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'gmd' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="GMD" unidade="kg/dia" formatoValor="decimal3"
-          subtitulo="Ganho médio diário no período"
+          titulo={gmdIndicador?.titulo ?? ''}
+          unidade="kg/dia" formatoValor="decimal3"
+          subtitulo={gmdIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.gmd ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.gmd}
-          serieMeta={seriesMeta?.gmd}
+          serieAno={gmdIndicador?.serieAno ?? []}
+          serieAnoAnt={gmdIndicador?.serieAnoAnt}
+          serieMeta={gmdIndicador?.serieMeta}
           tipoAcumulado="media"
           indicadorKey="gmd"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(gmd, dadosMesAnt.gmd)}
-          deltaAno={calcDeltaV(gmd, dadosAnoAnt.gmd)}
+          deltaMes={gmdIndicador?.deltaMes ?? null}
+          deltaAno={gmdIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'desfrute' && (

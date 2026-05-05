@@ -13,6 +13,7 @@ import {
 } from '@/hooks/useRebanhoOficial';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/pages/PainelConsultorTab';
+import { computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
 interface Params {
@@ -89,6 +90,19 @@ export interface PainelConsultorDataResult {
   } | null;
   /** Indicador de Peso Médio com tudo pronto para o card e o modal. */
   pesoMedioIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
+  /** Indicador de GMD com tudo pronto para o card e o modal. */
+  gmdIndicador: {
     label:      string;
     titulo:     string;
     subtitulo:  string;
@@ -539,6 +553,108 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── GMD oficial (1-based, length 13) ──
+  // Fórmula período = computePeriodGmd (PC-100), helper compartilhado.
+  // ─────────────────────────────────────────────────────────────
+  const diasNoMesAno = (anoRef: number) =>
+    Array.from({ length: 12 }, (_, i) => new Date(anoRef, i + 1, 0).getDate());
+
+  const diasAno = diasNoMesAno(ano);
+
+  // GMD mensal (oficial): monthlyData.gmd já é prodBio/cabMedia/dias por mês.
+  const gmdMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.gmd[i - 1] ?? NaN)
+  );
+
+  // GMD período (oficial PC-100): computePeriodGmd(prodKg, cabMediaMes, dias).
+  const gmdPeriodo12 = computePeriodGmd(monthlyData.prodKg, monthlyData.cabMediaMes, diasAno);
+  const gmdPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (gmdPeriodo12[i - 1] ?? NaN)
+  );
+
+  const gmdSerie = isPeriodo ? gmdPeriodoSerie13 : gmdMesSerie13;
+  const gmdValor = safe(gmdSerie[mesIdx]);
+
+  const gmdDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(gmdSerie[mesIdx]);
+    const prev = safe(gmdSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — derivar prodKg, cabMediaMes, gmdMensal a partir de viewTotalsAnoAnt.
+  const prodKgAnoAnt = viewTotalsAnoAnt
+    ? Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt[i + 1]?.producao_biologica ?? 0)
+    : null;
+
+  const cabMediaMesAnoAnt = viewTotalsAnoAnt
+    ? Array.from({ length: 12 }, (_, i) => {
+        const ini = viewTotalsAnoAnt[i + 1]?.saldo_inicial ?? 0;
+        const fin = viewTotalsAnoAnt[i + 1]?.saldo_final ?? 0;
+        return (ini + fin) / 2;
+      })
+    : null;
+
+  const diasAnoAnt = diasNoMesAno(ano - 1);
+
+  const gmdMesAnoAntSerie13 = (prodKgAnoAnt && cabMediaMesAnoAnt)
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const m = i;
+        const cm = cabMediaMesAnoAnt[m - 1];
+        const pb = prodKgAnoAnt[m - 1];
+        const d = diasAnoAnt[m - 1];
+        return cm > 0 && d > 0 ? pb / cm / d : NaN;
+      })
+    : null;
+
+  const gmdPeriodoAnoAntSerie13 = (prodKgAnoAnt && cabMediaMesAnoAnt)
+    ? (() => {
+        const arr12 = computePeriodGmd(prodKgAnoAnt, cabMediaMesAnoAnt, diasAnoAnt);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const gmdSerieAnoAnt = isPeriodo ? gmdPeriodoAnoAntSerie13 : gmdMesAnoAntSerie13;
+
+  const gmdDeltaAno = (() => {
+    if (!gmdSerieAnoAnt) return null;
+    const curr = safe(gmdSerie[mesIdx]);
+    const ant  = safe(gmdSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  // Meta — monthlyDataMeta já tem gmd mensal, prodKg e cabMediaMes.
+  const gmdMesMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (monthlyDataMeta.gmd[i - 1] ?? NaN)
+      )
+    : null;
+
+  const gmdPeriodoMetaSerie13 = monthlyDataMeta
+    ? (() => {
+        const arr12 = computePeriodGmd(monthlyDataMeta.prodKg, monthlyDataMeta.cabMediaMes, diasAno);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const gmdSerieMeta = isPeriodo ? gmdPeriodoMetaSerie13 : gmdMesMetaSerie13;
+
+  const gmdDeltaMeta = (() => {
+    if (!gmdSerieMeta) return null;
+    const curr = safe(gmdSerie[mesIdx]);
+    const meta = safe(gmdSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -552,9 +668,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         })()
       : safe(monthlyData.pesoMedioFin[idx]),
 
-    gmd: isPeriodo
-      ? meanArr(sliceUpTo(monthlyData.gmd, idx))
-      : safe(monthlyData.gmd[idx]),
+    // GMD: série oficial (mês = monthlyData.gmd; período = computePeriodGmd PC-100)
+    gmd: gmdValor,
 
     arrobas: isPeriodo
       ? sumArr(sliceUpTo(monthlyData.arrobasProd, idx))
@@ -636,6 +751,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: pesoSerieAnoAnt ?? undefined,
       serieMeta:   pesoMetaSerie ?? undefined,
     } : null,
+    gmdIndicador: monthlyData ? {
+      label:     isPeriodo ? 'GMD MÉDIO NO PERÍODO' : 'GMD NO MÊS',
+      titulo:    isPeriodo ? 'GMD no Período' : 'GMD no mês',
+      subtitulo: isPeriodo
+        ? 'Ganho médio diário no período'
+        : 'Ganho médio diário no mês',
+      valor:     gmdValor,
+      deltaMes:  gmdDeltaMes,
+      deltaAno:  gmdDeltaAno,
+      deltaMeta: gmdDeltaMeta,
+      serieAno:    gmdSerie,
+      serieAnoAnt: gmdSerieAnoAnt ?? undefined,
+      serieMeta:   gmdSerieMeta ?? undefined,
+    } : null,
     loading,
   };
 
@@ -655,6 +784,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       seriesMeta: null,
       cabecasIndicador: null,
       pesoMedioIndicador: null,
+      gmdIndicador: null,
     };
   }
 

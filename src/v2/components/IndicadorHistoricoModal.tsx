@@ -381,7 +381,12 @@ export function IndicadorHistoricoModal({
                       position: 'top',
                       fontSize: 10,
                       fill: 'var(--color-text-secondary)',
-                      formatter: (v: number) => fmtN(v, formatoValor === 'inteiro' ? 0 : 1),
+                      formatter: (v: number) => fmtN(
+                        v,
+                        formatoValor === 'inteiro' ? 0
+                          : formatoValor === 'decimal3' ? 3
+                          : 1,
+                      ),
                     }}
                   >
                     {barDados.map((entry, i) => (
