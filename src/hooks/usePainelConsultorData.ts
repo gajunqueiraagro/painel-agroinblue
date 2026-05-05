@@ -211,10 +211,11 @@ export interface PainelConsultorDataResult {
     serieMeta?:  number[];
   } | null;
   /**
-   * Custeio Produção Pecuária — fonte: monthlyData.custeioPec (lancFin macro='custeio produtivo' + escopo!='agri').
+   * Custeio Produção Pecuária — fonte: monthlyData.custeioPec
+   *   (lancFin grupo_custo IN ('Custo Fixo Pecuária', 'Custo Variável Pecuária')).
    * Mês = custeioPec[m]. Período = Σ custeioPec Jan→m.
-   * NÃO inclui investimento na fazenda, investimento em bovinos, juros, amortização nem agricultura.
-   * Sem ano-1 nem meta — useFinanceiro hardcoded cenario='realizado' do ano corrente.
+   * Ano-1: query direta a financeiro_lancamentos_v2 (status='realizado').
+   * Meta: query direta a planejamento_financeiro (cenario='meta').
    */
   custeioPecIndicador: {
     label:      string;
@@ -229,9 +230,9 @@ export interface PainelConsultorDataResult {
     serieMeta?:  number[];
   } | null;
   /**
-   * Custo Produtivo R$/@ — derivado: custOper / arrobasProd.
-   * Mês = custOper[m]/arrobasProd[m]. Período = Σ custOper / Σ arrobasProd (cumSum/cumSum).
-   * Equivale ao custoPorArrAcum do PC-100. Sem ano-1 nem meta.
+   * Custo Produtivo R$/@ — derivado: custeioPec / arrobasProd.
+   * Mês = custeioPec[m]/arrobasProd[m]. Período = Σ custeioPec / Σ arrobasProd.
+   * Ano-1 e meta: derivados das séries custeioPec ano-1/meta e arrobasProd ano-1/meta.
    */
   custoArrIndicador: {
     label:      string;
@@ -263,9 +264,9 @@ export interface PainelConsultorDataResult {
     serieMeta?:  number[];
   } | null;
   /**
-   * Custo por Cabeça R$/cab — derivado: custOper / cabMedia.
-   * Mês = custOper[m]/cabMediaMes[m]. Período = Σ custOper / cabMediaAcumulada (mesma base GMD).
-   * Sem ano-1 nem meta.
+   * Custo por Cabeça R$/cab — derivado: custeioPec / cabMedia.
+   * Mês = custeioPec[m]/cabMediaMes[m]. Período = (Σ custeioPec / cabMediaAcumulada) / numMeses.
+   * Ano-1 e meta: derivados de custeioPec ano-1/meta e cabMedia ano-1/meta.
    */
   custoCabIndicador: {
     label:      string;
@@ -282,7 +283,7 @@ export interface PainelConsultorDataResult {
   /**
    * Margem por @ — derivado: precoArr − custoArr.
    * Mês = precoArrMes − custoArrMes. Período = precoArrPeriodo − custoArrPeriodo.
-   * Sem ano-1 nem meta.
+   * Ano-1 e meta: derivados das séries de Preço de Venda e Custo R$/@.
    */
   margemArrIndicador: {
     label:      string;
@@ -729,6 +730,118 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         desfArr[m - 1] += (qtd * pmk) / 30;
       }
       setPecMeta12({ rec, desfArr });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [carregarMetaEffective, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Custeio Produção Pecuária ANO-1 — financeiro_lancamentos_v2 do ano-1.
+  // Filtros SQL: status_transacao='realizado', cenario='realizado', cancelado=false,
+  //              sem_movimentacao_caixa=false, grupo_custo IN (Custo Fixo/Var Pec).
+  const [custeioPecAnoAnt12, setCusteioPecAnoAnt12] = useState<number[]>(() => Array(12).fill(0));
+  useEffect(() => {
+    if (!incluirComparativos) {
+      setCusteioPecAnoAnt12(Array(12).fill(0));
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const anoAnt = ano - 1;
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = (supabase
+          .from('financeiro_lancamentos_v2')
+          .select('data_pagamento, valor, grupo_custo') as any)
+          .eq('cancelado', false)
+          .eq('sem_movimentacao_caixa', false)
+          .eq('status_transacao', 'realizado')
+          .eq('cenario', 'realizado')
+          .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária'])
+          .gte('data_pagamento', `${anoAnt}-01-01`)
+          .lte('data_pagamento', `${anoAnt}-12-31`);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setCusteioPecAnoAnt12(Array(12).fill(0));
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setCusteioPecAnoAnt12(Array(12).fill(0));
+          return;
+        }
+        const { data, error } = await q.range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const out = Array(12).fill(0);
+      for (const r of allRows) {
+        const m = parseInt(String(r.data_pagamento ?? '').slice(5, 7));
+        if (isNaN(m) || m < 1 || m > 12) continue;
+        out[m - 1] += Math.abs(Number(r.valor) || 0);
+      }
+      setCusteioPecAnoAnt12(out);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Custeio Produção Pecuária META — planejamento_financeiro cenario='meta'.
+  // Sem status_transacao (planejamento não tem). Soma valor_planejado por mes.
+  const [custeioPecMeta12, setCusteioPecMeta12] = useState<number[]>(() => Array(12).fill(0));
+  useEffect(() => {
+    if (!carregarMetaEffective) {
+      setCusteioPecMeta12(Array(12).fill(0));
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = (supabase
+          .from('planejamento_financeiro' as any)
+          .select('mes, valor_planejado, grupo_custo') as any)
+          .eq('ano', ano)
+          .eq('cenario', 'meta')
+          .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária']);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setCusteioPecMeta12(Array(12).fill(0));
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setCusteioPecMeta12(Array(12).fill(0));
+          return;
+        }
+        const { data, error } = await q.range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const out = Array(12).fill(0);
+      for (const r of allRows) {
+        const m = Number(r.mes);
+        if (!Number.isInteger(m) || m < 1 || m > 12) continue;
+        out[m - 1] += Number(r.valor_planejado) || 0;
+      }
+      setCusteioPecMeta12(out);
     };
     load();
     return () => { cancelled = true; };
@@ -1640,6 +1753,39 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
+  // Custeio Pec — ano-1 (custeioPecAnoAnt12) e meta (custeioPecMeta12).
+  const custeioPecAnoAntPossui = custeioPecAnoAnt12.some(v => v > 0);
+  const custeioPecMesAnoAntSerie13 = custeioPecAnoAntPossui
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const custeioPecPeriodoAnoAntSerie13 = custeioPecAnoAntPossui
+    ? cumSumTo13(custeioPecAnoAnt12)
+    : null;
+  const custeioPecSerieAnoAnt = isPeriodo ? custeioPecPeriodoAnoAntSerie13 : custeioPecMesAnoAntSerie13;
+  const custeioPecDeltaAno = (() => {
+    if (!custeioPecSerieAnoAnt) return null;
+    const curr = safe(custeioPecSerie[mesIdx]);
+    const ant  = safe(custeioPecSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const custeioPecMetaPossui = custeioPecMeta12.some(v => v > 0);
+  const custeioPecMesMetaSerie13 = custeioPecMetaPossui
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecMeta12[i - 1] ?? NaN))
+    : null;
+  const custeioPecPeriodoMetaSerie13 = custeioPecMetaPossui
+    ? cumSumTo13(custeioPecMeta12)
+    : null;
+  const custeioPecSerieMeta = isPeriodo ? custeioPecPeriodoMetaSerie13 : custeioPecMesMetaSerie13;
+  const custeioPecDeltaMeta = (() => {
+    if (!custeioPecSerieMeta) return null;
+    const curr = safe(custeioPecSerie[mesIdx]);
+    const meta = safe(custeioPecSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   // === 3) Custo Produtivo R$/@ — custeioPec / arrobasProd ===
   const custoArrMes12 = monthlyData.custeioPec.map((c, i) => {
     const a = monthlyData.arrobasProd[i];
@@ -1664,6 +1810,67 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const prev = safe(custoArrSerie[mesIdx - 1]);
     if (curr == null || prev == null || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
+  })();
+
+  // Custo R$/@ — ano-1 e meta. Possui se custeio E arrobas ano-1/meta possuírem.
+  const custoArrAnoAntPossui = custeioPecAnoAntPossui
+    && !!arrobasProdAnoAnt12 && arrobasProdAnoAnt12.some(v => v > 0);
+  const custoArrMesAnoAnt12 = custoArrAnoAntPossui && arrobasProdAnoAnt12
+    ? custeioPecAnoAnt12.map((c, i) => {
+        const a = arrobasProdAnoAnt12[i];
+        return a > 0 ? c / a : NaN;
+      })
+    : null;
+  const custoArrPeriodoAnoAnt12 = custoArrAnoAntPossui && arrobasProdAnoAnt12
+    ? (() => {
+        const cAcum = cumSumArr(custeioPecAnoAnt12);
+        const aAcum = cumSumArr(arrobasProdAnoAnt12);
+        return cAcum.map((c, i) => aAcum[i] > 0 ? c / aAcum[i] : NaN);
+      })()
+    : null;
+  const custoArrMesAnoAntSerie13 = custoArrMesAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoArrMesAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const custoArrPeriodoAnoAntSerie13 = custoArrPeriodoAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoArrPeriodoAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const custoArrSerieAnoAnt = isPeriodo ? custoArrPeriodoAnoAntSerie13 : custoArrMesAnoAntSerie13;
+  const custoArrDeltaAno = (() => {
+    if (!custoArrSerieAnoAnt) return null;
+    const curr = safe(custoArrSerie[mesIdx]);
+    const ant  = safe(custoArrSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const custoArrMetaPossui = custeioPecMetaPossui
+    && !!monthlyDataMeta && monthlyDataMeta.arrobasProd.some(v => v > 0);
+  const custoArrMesMeta12 = custoArrMetaPossui && monthlyDataMeta
+    ? custeioPecMeta12.map((c, i) => {
+        const a = monthlyDataMeta.arrobasProd[i];
+        return a > 0 ? c / a : NaN;
+      })
+    : null;
+  const custoArrPeriodoMeta12 = custoArrMetaPossui && monthlyDataMeta
+    ? (() => {
+        const cAcum = cumSumArr(custeioPecMeta12);
+        const aAcum = cumSumArr(monthlyDataMeta.arrobasProd);
+        return cAcum.map((c, i) => aAcum[i] > 0 ? c / aAcum[i] : NaN);
+      })()
+    : null;
+  const custoArrMesMetaSerie13 = custoArrMesMeta12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoArrMesMeta12[i - 1] ?? NaN))
+    : null;
+  const custoArrPeriodoMetaSerie13 = custoArrPeriodoMeta12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoArrPeriodoMeta12[i - 1] ?? NaN))
+    : null;
+  const custoArrSerieMeta = isPeriodo ? custoArrPeriodoMetaSerie13 : custoArrMesMetaSerie13;
+  const custoArrDeltaMeta = (() => {
+    if (!custoArrSerieMeta) return null;
+    const curr = safe(custoArrSerie[mesIdx]);
+    const meta = safe(custoArrSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
   })();
 
   // === 4) Preço de Venda R$/@ — recPecComp / desfrute_arr ===
@@ -1780,6 +1987,67 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
+  // Custo Cab. — ano-1 e meta. Mesma fórmula: mês = c/cm; per = (Σc/cmAcum)/numMeses.
+  const custoCabAnoAntPossui = custeioPecAnoAntPossui
+    && !!cabMediaMesAnoAnt && cabMediaMesAnoAnt.some(v => v > 0)
+    && !!cabMediaAcumAnoAnt;
+  const custoCabMesAnoAnt12 = custoCabAnoAntPossui && cabMediaMesAnoAnt
+    ? custeioPecAnoAnt12.map((c, i) => {
+        const cm = cabMediaMesAnoAnt[i];
+        return cm > 0 ? c / cm : NaN;
+      })
+    : null;
+  const custoCabMesAnoAntSerie13 = custoCabMesAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoCabMesAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const custoCabPeriodoAnoAntSerie13 = custoCabAnoAntPossui && cabMediaAcumAnoAnt
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const cAcum = sumArr(sliceUpTo(custeioPecAnoAnt12, i - 1));
+        const cmAcum = cabMediaAcumAnoAnt[i];
+        if (!(cmAcum > 0)) return NaN;
+        return (cAcum / cmAcum) / i;
+      })
+    : null;
+  const custoCabSerieAnoAnt = isPeriodo ? custoCabPeriodoAnoAntSerie13 : custoCabMesAnoAntSerie13;
+  const custoCabDeltaAno = (() => {
+    if (!custoCabSerieAnoAnt) return null;
+    const curr = safe(custoCabSerie[mesIdx]);
+    const ant  = safe(custoCabSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const custoCabMetaPossui = custeioPecMetaPossui
+    && !!monthlyDataMeta && monthlyDataMeta.cabMediaMes.some(v => v > 0)
+    && !!cabMediaAcumMeta;
+  const custoCabMesMeta12 = custoCabMetaPossui && monthlyDataMeta
+    ? custeioPecMeta12.map((c, i) => {
+        const cm = monthlyDataMeta.cabMediaMes[i];
+        return cm > 0 ? c / cm : NaN;
+      })
+    : null;
+  const custoCabMesMetaSerie13 = custoCabMesMeta12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custoCabMesMeta12[i - 1] ?? NaN))
+    : null;
+  const custoCabPeriodoMetaSerie13 = custoCabMetaPossui && cabMediaAcumMeta
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const cAcum = sumArr(sliceUpTo(custeioPecMeta12, i - 1));
+        const cmAcum = cabMediaAcumMeta[i];
+        if (!(cmAcum > 0)) return NaN;
+        return (cAcum / cmAcum) / i;
+      })
+    : null;
+  const custoCabSerieMeta = isPeriodo ? custoCabPeriodoMetaSerie13 : custoCabMesMetaSerie13;
+  const custoCabDeltaMeta = (() => {
+    if (!custoCabSerieMeta) return null;
+    const curr = safe(custoCabSerie[mesIdx]);
+    const meta = safe(custoCabSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   // === 6) Margem por @ — preçoArr − custoArr ===
   const margemArrMesSerie13 = Array.from({ length: 13 }, (_, i) => {
     if (i === 0) return NaN;
@@ -1803,6 +2071,41 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const prev = safe(margemArrSerie[mesIdx - 1]);
     if (curr == null || prev == null || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
+  })();
+
+  // Margem por @ — ano-1 e meta. Deriva: precoArr − custoArr (mesma série/modo).
+  const margemArrSerieAnoAnt = (precoArrSerieAnoAnt && custoArrSerieAnoAnt)
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const p = precoArrSerieAnoAnt[i];
+        const c = custoArrSerieAnoAnt[i];
+        if (isNaN(p) || isNaN(c)) return NaN;
+        return p - c;
+      })
+    : null;
+  const margemArrDeltaAno = (() => {
+    if (!margemArrSerieAnoAnt) return null;
+    const curr = safe(margemArrSerie[mesIdx]);
+    const ant  = safe(margemArrSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const margemArrSerieMeta = (precoArrSerieMeta && custoArrSerieMeta)
+    ? Array.from({ length: 13 }, (_, i) => {
+        if (i === 0) return NaN;
+        const p = precoArrSerieMeta[i];
+        const c = custoArrSerieMeta[i];
+        if (isNaN(p) || isNaN(c)) return NaN;
+        return p - c;
+      })
+    : null;
+  const margemArrDeltaMeta = (() => {
+    if (!margemArrSerieMeta) return null;
+    const curr = safe(margemArrSerie[mesIdx]);
+    const meta = safe(margemArrSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
   })();
 
   const baseReturn: PainelConsultorDataResult = {
@@ -2002,11 +2305,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Custo Fixo + Custo Variável Pecuária no mês (caixa)',
       valor:     custeioPecValor,
       deltaMes:  custeioPecDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  custeioPecDeltaAno,
+      deltaMeta: custeioPecDeltaMeta,
       serieAno:    custeioPecSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: custeioPecSerieAnoAnt ?? undefined,
+      serieMeta:   custeioPecSerieMeta ?? undefined,
     } : null,
     custoArrIndicador: monthlyData ? {
       label:     'CUSTO PRODUTIVO R$/@',
@@ -2016,11 +2319,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Custo produtivo pecuário por @ produzida no mês',
       valor:     custoArrValor,
       deltaMes:  custoArrDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  custoArrDeltaAno,
+      deltaMeta: custoArrDeltaMeta,
       serieAno:    custoArrSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: custoArrSerieAnoAnt ?? undefined,
+      serieMeta:   custoArrSerieMeta ?? undefined,
     } : null,
     precoArrIndicador: monthlyData ? {
       label:     'PREÇO DE VENDA R$/@',
@@ -2040,15 +2343,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       label:     isPeriodo ? 'CUSTO CAB. PERÍODO R$/CAB.' : 'CUSTO CAB. MÊS R$/CAB.',
       titulo:    isPeriodo ? 'Custo Cab. período R$/cab.' : 'Custo Cab. mês R$/cab.',
       subtitulo: isPeriodo
-        ? 'Desembolso pecuário por cabeça média (acumulado Jan→mês)'
-        : 'Desembolso pecuário por cabeça média no mês',
+        ? 'Custeio pecuário por cabeça média (acumulado Jan→mês, R$/cab.mês)'
+        : 'Custeio pecuário por cabeça média no mês',
       valor:     custoCabValor,
       deltaMes:  custoCabDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  custoCabDeltaAno,
+      deltaMeta: custoCabDeltaMeta,
       serieAno:    custoCabSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: custoCabSerieAnoAnt ?? undefined,
+      serieMeta:   custoCabSerieMeta ?? undefined,
     } : null,
     margemArrIndicador: monthlyData ? {
       label:     'MARGEM POR @',
@@ -2058,11 +2361,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Preço de venda R$/@ menos custo produtivo R$/@ no mês',
       valor:     margemArrValor,
       deltaMes:  margemArrDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  margemArrDeltaAno,
+      deltaMeta: margemArrDeltaMeta,
       serieAno:    margemArrSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: margemArrSerieAnoAnt ?? undefined,
+      serieMeta:   margemArrSerieMeta ?? undefined,
     } : null,
     loading,
   };
