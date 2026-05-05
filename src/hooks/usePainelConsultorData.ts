@@ -986,7 +986,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // ── Ano anterior — UA/ha (e kg vivo/ha): exige área ano-1 + viewTotalsAnoAnt ──
   // Reusa calcularIndicadoresEficienciaArea (helper compartilhado).
   const eficienciaAreaAnoAnt = (() => {
-    if (!viewTotalsAnoAnt || !areaMensalAnoAnt) return null;
+    const temAreaValidaAnoAnt =
+      Array.isArray(areaMensalAnoAnt) &&
+      areaMensalAnoAnt.some(v => v > 0);
+
+    const temRebanhoAnoAnt =
+      viewTotalsAnoAnt &&
+      Object.keys(viewTotalsAnoAnt).length > 0;
+
+    if (!temAreaValidaAnoAnt || !temRebanhoAnoAnt) return null;
     const cabIni = Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt[i + 1]?.saldo_inicial ?? 0);
     const cabFin = Array.from({ length: 12 }, (_, i) => viewTotalsAnoAnt[i + 1]?.saldo_final ?? 0);
     const pesoMedioFin = Array.from({ length: 12 }, (_, i) => {
