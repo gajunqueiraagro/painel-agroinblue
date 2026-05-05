@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { MetaLancamentoPanel, useMetaValidacaoBloqueios, type EvolucaoSugestao, type MetaStepState } from '@/components/MetaLancamentoPanel';
 import { EvolucaoAssistidaDialog } from '@/components/EvolucaoAssistidaDialog';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   Lancamento,
@@ -111,6 +110,40 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
   { id: 'reclassificacao', label: 'Reclass.', icon: <RefreshCw className="h-4 w-4" /> },
 ];
 
+interface TipoCardItem {
+  value: TipoMovimentacao;
+  aba: Aba;
+  label: string;
+  icon: string;
+  desc: string;
+}
+interface TipoCardGroup { grupo: 'entradas' | 'saidas' | 'outros'; label: string; items: TipoCardItem[]; }
+
+// Grupos de tipos para o seletor de cards superiores.
+// onClick replica EXATAMENTE a mesma transição de aba/tipo da navegação antiga.
+const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
+  {
+    grupo: 'entradas', label: 'Entradas', items: [
+      { value: 'nascimento', aba: 'entrada', label: 'Nascimento',           icon: '🐄', desc: 'Crias nascidas no rebanho' },
+      { value: 'compra',     aba: 'entrada', label: 'Compra',               icon: '🛒', desc: 'Aquisição de animais' },
+    ],
+  },
+  {
+    grupo: 'saidas', label: 'Saídas', items: [
+      { value: 'abate',                aba: 'saida', label: 'Abate',                icon: '🔪', desc: 'Envio ao frigorífico' },
+      { value: 'venda',                aba: 'saida', label: 'Venda em Pé',          icon: '💰', desc: 'Venda direta de animais' },
+      { value: 'transferencia_saida',  aba: 'saida', label: 'Transferência (saída)',icon: '📤', desc: 'Movimentação para outra fazenda' },
+      { value: 'consumo',              aba: 'saida', label: 'Consumo',              icon: '🍖', desc: 'Animais consumidos internamente' },
+      { value: 'morte',                aba: 'saida', label: 'Morte',                icon: '💀', desc: 'Perdas no rebanho' },
+    ],
+  },
+  {
+    grupo: 'outros', label: 'Outros', items: [
+      { value: 'reclassificacao', aba: 'reclassificacao', label: 'Evoluir Categoria', icon: '🔄', desc: 'Mudar a categoria do animal' },
+    ],
+  },
+];
+
 const STATUS_DESCRIPTIONS_DEFAULT: Partial<Record<StatusOperacional | 'meta', string>> = {
   meta: META_VISUAL.description,
   programado: 'Operação definida, ainda não executada.',
@@ -202,7 +235,6 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
 
 export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
-  const isMobile = useIsMobile();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
   const isAdministrativo = fazendaAtual?.tem_pecuaria === false;
@@ -2092,8 +2124,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     return result;
   };
 
-  const tiposDisponiveis = aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA;
-
   const metaInputClass = isCenarioMeta ? 'border-orange-400 text-orange-800 dark:text-orange-300' : '';
   const metaLabelClass = isCenarioMeta ? 'text-orange-700 dark:text-orange-400' : '';
 
@@ -2110,96 +2140,76 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ===== BLOCKED VIEW =====
   if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
     return (
-      <div className="p-3 animate-fade-in pb-20">
+      <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
         {onBackToConciliacao && (
-          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20 mb-2">
-            <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-md py-2 transition-colors hover:bg-primary/20 mb-3">
+            <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
           </button>
         )}
-        <div className="flex gap-3">
-          {/* Sidebar nav */}
-          <div className="w-48 shrink-0 space-y-1">
-            {ABA_CONFIG.map(a => (
-              <button key={a.id} onClick={() => { const t = a.id === 'entrada' ? 'nascimento' : 'abate'; setAba(a.id); setTipo(t as TipoMovimentacao); resetAllFields(); }}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-[12px] font-bold transition-all ${aba === a.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'}`}>
-                {a.icon} {a.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex-1 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-4 text-center space-y-2">
-            <AlertTriangle className="h-8 w-8 text-orange-500 mx-auto" />
-            <h3 className="font-bold text-foreground text-sm">Lançamento bloqueado</h3>
-            <p className="text-[12px] text-muted-foreground">
-              {isGlobal
-                ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
-                : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
-            </p>
-          </div>
+        {renderTipoCards()}
+        <div className="bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-200 dark:border-orange-800 rounded-md p-6 text-center space-y-3">
+          <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto" />
+          <h3 className="font-bold text-foreground text-lg">Lançamento bloqueado</h3>
+          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+            {isGlobal
+              ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
+              : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
+          </p>
         </div>
       </div>
     );
   }
 
-  // ===== LEFT SIDEBAR NAV =====
+  // ===== TOP TYPE-CARDS NAVIGATION =====
+  // Substitui o sidebar lateral antigo. Onclick replica a mesma transição de
+  // aba/tipo + resetAllFields que existia na navegação anterior.
   const isEditing = !!editingAbateId;
-  const renderSidebar = () => {
-    const parentCls = (active: boolean) =>
-      `w-full flex items-center gap-1 px-2 py-0.5 rounded-md text-[12px] font-bold transition-all ${
-        isEditing && !active ? 'opacity-20 cursor-not-allowed pointer-events-none grayscale text-muted-foreground/50 shadow-none' :
-        active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/60'
-      }`;
-    const childCls = (active: boolean) =>
-      `w-full flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-semibold transition-all text-left ${
-        isEditing && !active ? 'opacity-20 cursor-not-allowed pointer-events-none grayscale text-muted-foreground/50 shadow-none border-transparent' :
-        active ? 'bg-primary/15 text-foreground border border-primary/40' : 'text-muted-foreground hover:bg-muted/40 border border-transparent'
-      }`;
-    const childWrap = "ml-2.5 mt-px border-l-2 border-primary/30 pl-1 space-y-px";
-
-    const handleNavClick = (cb: () => void) => {
-      if (isEditing) return; // Block navigation during edit
-      cb();
+  const renderTipoCards = () => {
+    const handleClick = (it: TipoCardItem) => {
+      if (isEditing) return; // Bloqueia navegação durante edição
+      setAba(it.aba);
+      setTipo(it.value);
+      resetAllFields();
     };
+    const isItemActive = (it: TipoCardItem) =>
+      it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
 
     return (
-      <div className="shrink-0 space-y-1">
-        {/* Entradas */}
-        <div>
-          <button onClick={() => handleNavClick(() => { setAba('entrada'); setTipo('nascimento'); resetAllFields(); })} className={parentCls(aba === 'entrada')} disabled={isEditing && aba !== 'entrada'}>
-            <LogIn className="h-3.5 w-3.5" /> Entradas
-          </button>
-          <div className={childWrap}>
-            {TIPOS_ENTRADA.map(t => (
-              <button key={t.value} type="button"
-                onClick={() => handleNavClick(() => { setAba('entrada'); setTipo(t.value); resetAllFields(); })}
-                className={childCls(aba === 'entrada' && tipo === t.value)}
-                disabled={isEditing && !(aba === 'entrada' && tipo === t.value)}>
-                <span className="text-[12px]">{t.icon}</span> {t.label}
-              </button>
-            ))}
+      <div className="space-y-3 mb-4">
+        {TIPO_CARDS_GROUPS.map(g => (
+          <div key={g.grupo}>
+            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+              {g.label}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+              {g.items.map(it => {
+                const active = isItemActive(it);
+                const disabled = isEditing && !active;
+                return (
+                  <button
+                    key={it.value}
+                    type="button"
+                    onClick={() => handleClick(it)}
+                    disabled={disabled}
+                    className={`flex items-start gap-2.5 p-3 rounded-lg border-2 transition-all text-left ${
+                      active
+                        ? 'border-primary bg-primary/10 shadow-sm'
+                        : disabled
+                          ? 'opacity-25 pointer-events-none border-transparent bg-muted/10'
+                          : 'border-border hover:border-primary/40 hover:bg-muted/40'
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0 leading-none mt-0.5">{it.icon}</span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold leading-tight text-foreground">{it.label}</div>
+                      <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">{it.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-
-        {/* Saídas */}
-        <div>
-          <button onClick={() => handleNavClick(() => { setAba('saida'); setTipo('abate'); resetAllFields(); })} className={parentCls(aba === 'saida')} disabled={isEditing && aba !== 'saida'}>
-            <LogOut className="h-3.5 w-3.5" /> Saídas
-          </button>
-          <div className={childWrap}>
-            {TIPOS_SAIDA.map(t => (
-              <button key={t.value} type="button"
-                onClick={() => handleNavClick(() => { setAba('saida'); setTipo(t.value); resetAllFields(); })}
-                className={childCls(aba === 'saida' && tipo === t.value)}
-                disabled={isEditing && !(aba === 'saida' && tipo === t.value)}>
-                <span className="text-[12px]">{t.icon}</span> {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Evoluir Categoria Animal */}
-        <button onClick={() => handleNavClick(() => setAba('reclassificacao'))} className={parentCls(aba === 'reclassificacao')} disabled={isEditing && aba !== 'reclassificacao'}>
-          <RefreshCw className="h-3.5 w-3.5" /> Evoluir Categoria
-        </button>
+        ))}
       </div>
     );
   };
@@ -2628,44 +2638,44 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {/* Título da movimentação */}
-      <div className="flex items-center gap-2">
-        <span className="text-base">{currentTipoIcon}</span>
-        <h2 className="text-[15px] font-semibold text-foreground">{editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}</h2>
+      {/* Título grande do tipo de lançamento ativo */}
+      <div className="flex items-center gap-3 pb-1">
+        <span className="text-3xl leading-none">{currentTipoIcon}</span>
+        <h2 className="text-2xl font-bold text-foreground leading-tight">
+          {editingAbateId ? (tipo === 'venda' ? 'Editar Venda' : tipo === 'abate' ? 'Editar Abate' : 'Editar Registro') : currentTipoLabel}
+        </h2>
       </div>
 
-      {/* STATUS — inline label + cards (Zootécnico: Realizado, Programado, META) */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide shrink-0">Status</span>
-          <div className="grid grid-cols-3 gap-1 flex-1">
-            {([
-              { value: 'realizado' as const, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-400', activeBg: 'bg-green-50 dark:bg-green-950/30' },
-              { value: 'programado' as const, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-400', activeBg: 'bg-blue-50 dark:bg-blue-950/30' },
-              { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg },
-            ]).map(s => {
-              const selected = statusOp === s.value;
-              const disabled = s.value === 'meta' && !canEditMeta;
-              return (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => !disabled && setStatusOp(s.value)}
-                  disabled={disabled}
-                  className={`flex items-center justify-center gap-1 h-6 rounded-md border transition-all ${
-                    disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10' :
-                    selected ? `${s.activeBg} ${s.activeBorder}` : 'border-border bg-muted/10 hover:bg-muted/30'
-                  }`}
-                  title={disabled ? 'Somente consultores podem criar registros META' : undefined}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
-                  <span className={`text-[10px] font-bold ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-                </button>
-              );
-            })}
-          </div>
+      {/* STATUS — destaque forte: Realizado / Programado / META */}
+      <div className="space-y-2">
+        <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status</div>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { value: 'realizado' as const, label: STATUS_LABEL.realizado, dot: 'bg-green-600', activeBorder: 'border-green-500', activeBg: 'bg-green-50 dark:bg-green-950/30', activeText: 'text-green-800 dark:text-green-300' },
+            { value: 'programado' as const, label: STATUS_LABEL.programado, dot: 'bg-blue-500', activeBorder: 'border-blue-500', activeBg: 'bg-blue-50 dark:bg-blue-950/30', activeText: 'text-blue-800 dark:text-blue-300' },
+            { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg, activeText: 'text-orange-800 dark:text-orange-300' },
+          ]).map(s => {
+            const selected = statusOp === s.value;
+            const disabled = s.value === 'meta' && !canEditMeta;
+            return (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => !disabled && setStatusOp(s.value)}
+                disabled={disabled}
+                className={`flex items-center justify-center gap-2 h-10 rounded-lg border-2 transition-all font-bold text-sm ${
+                  disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10 text-muted-foreground' :
+                  selected ? `${s.activeBg} ${s.activeBorder} ${s.activeText} shadow-sm` : 'border-border bg-muted/10 text-muted-foreground hover:bg-muted/30'
+                }`}
+                title={disabled ? 'Somente consultores podem criar registros META' : undefined}
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <div className={`rounded-md border px-2 py-1 text-[9px] leading-snug ${
+        <div className={`rounded-md border-2 px-3 py-2 text-xs leading-relaxed ${
           statusOp === 'realizado' ? 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 text-green-800 dark:text-green-300'
           : statusOp === 'meta' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800 text-orange-800 dark:text-orange-300'
           : 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300'
@@ -3006,10 +3016,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   );
 
   return (
-    <div className="p-3 animate-fade-in pb-20">
+    <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
       {onBackToConciliacao && aba !== 'reclassificacao' && (
-        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-[12px] font-bold text-primary bg-primary/10 rounded-md py-1.5 transition-colors hover:bg-primary/20 mb-2">
-          <ArrowLeft className="h-3.5 w-3.5" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+        <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-md py-2 transition-colors hover:bg-primary/20 mb-3">
+          <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
         </button>
       )}
 
@@ -3044,62 +3054,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
-      {/* ── Mobile nav strip ── */}
-      {isMobile && (
-        <div className="flex gap-1 overflow-x-auto pb-2 mb-1 -mx-1 px-1">
-          {[
-            { aba: 'entrada' as Aba, label: 'Entradas', icon: <LogIn className="h-3 w-3" /> },
-            { aba: 'saida' as Aba, label: 'Saídas', icon: <LogOut className="h-3 w-3" /> },
-            { aba: 'reclassificacao' as Aba, label: 'Evoluir', icon: <RefreshCw className="h-3 w-3" /> },
-          ].map(nav => (
-            <button
-              key={nav.aba}
-              onClick={() => {
-                if (isEditing && aba !== nav.aba) return;
-                setAba(nav.aba);
-                if (nav.aba === 'entrada') setTipo('nascimento');
-                if (nav.aba === 'saida') setTipo('abate');
-              }}
-              disabled={isEditing && aba !== nav.aba}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold whitespace-nowrap transition-all shrink-0 ${
-                aba === nav.aba
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground bg-muted/30 hover:bg-muted/60'
-              } ${isEditing && aba !== nav.aba ? 'opacity-20 pointer-events-none' : ''}`}
-            >
-              {nav.icon} {nav.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* ── Cards superiores de tipo (substitui sidebar e strip mobile) ── */}
+      {renderTipoCards()}
 
-      {/* ── Mobile sub-nav for entrada/saida types ── */}
-      {isMobile && (aba === 'entrada' || aba === 'saida') && (
-        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1">
-          {(aba === 'entrada' ? TIPOS_ENTRADA : TIPOS_SAIDA).map(t => (
-            <button
-              key={t.value}
-              onClick={() => { setTipo(t.value); resetAllFields(); }}
-              disabled={isEditing && tipo !== t.value}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold whitespace-nowrap transition-all shrink-0 border ${
-                tipo === t.value
-                  ? 'bg-primary/15 text-foreground border-primary/40'
-                  : 'text-muted-foreground border-transparent hover:bg-muted/40'
-              } ${isEditing && tipo !== t.value ? 'opacity-20 pointer-events-none' : ''}`}
-            >
-              <span className="text-[11px]">{t.icon}</span> {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className={isMobile
-        ? 'flex flex-col gap-3'
-        : 'grid grid-cols-[11rem_minmax(0,1fr)_20rem] gap-3 items-start overflow-visible'
-      }>
-        {/* Left: Navigation sidebar (desktop only) */}
-        {!isMobile && renderSidebar()}
-
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
           <>
