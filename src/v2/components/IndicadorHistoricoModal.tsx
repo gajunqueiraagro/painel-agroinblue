@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -10,10 +11,18 @@ import {
   BarChart,
   Bar,
   Cell,
-  ReferenceArea,
   ReferenceLine,
 } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
+
+// Padrão visual dos modais executivos:
+// - realizado: parar no mês filtrado
+// - ano anterior: completo Jan–Dez
+// - meta: completo Jan–Dez (nunca cortar)
+// - Area sob ano anterior: cinza claro
+// - Area sob realizado: cinza moderado
+// - meta: sem Area preenchida
+// - corpo do modal rolável abaixo do header
 
 interface Props {
   open: boolean;
@@ -243,8 +252,8 @@ export function IndicadorHistoricoModal({
     atual:       idx + 1 <= mesAtual ? getMesValue(serieAno, idx + 1) : null,
     // Ano anterior: série completa Jan–Dez
     anoAnterior: getMesValue(serieAnoAnt, idx + 1),
-    // Meta: corta no mês atual (Jan→mesAtual)
-    meta:        idx + 1 <= mesAtual ? getMesValue(metaSerieFinal, idx + 1) : null,
+    // Meta: série completa Jan–Dez (nunca cortar)
+    meta:        getMesValue(metaSerieFinal, idx + 1),
   }));
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
@@ -316,11 +325,11 @@ export function IndicadorHistoricoModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl"
+        className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[85vh]"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header executivo (two-column) */}
-        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border/40">
+        {/* Header executivo (two-column) — fixo, fora do scroll */}
+        <div className="shrink-0 flex items-start justify-between gap-4 px-5 py-3 border-b border-border/40">
           {/* Esquerda — título + subtítulo */}
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
@@ -358,20 +367,43 @@ export function IndicadorHistoricoModal({
           </div>
         </div>
 
+        {/* Corpo rolável — gráfico + histórico + rodapé */}
+        <div className="flex-1 overflow-y-auto">
+
         {/* Gráfico */}
-        <div className="px-3 pb-3">
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+        <div className="px-3 pb-2">
+          <ResponsiveContainer width="100%" height={190}>
+            <ComposedChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
               <YAxis tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceArea
-                x1={MESES_LABELS[0]}
-                x2={MESES_LABELS[mesAtual - 1]}
-                fill="rgba(0,0,0,0.09)"
-                strokeOpacity={0}
+              {/* Areas (sob as linhas) — fill cinza, sem stroke */}
+              {hasAnoAnt && (
+                <Area
+                  type="monotone"
+                  dataKey="anoAnterior"
+                  stroke="none"
+                  fill="#000000"
+                  fillOpacity={0.04}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                  legendType="none"
+                  activeDot={false}
+                />
+              )}
+              <Area
+                type="monotone"
+                dataKey="atual"
+                stroke="none"
+                fill="#000000"
+                fillOpacity={0.09}
+                isAnimationActive={false}
+                connectNulls={false}
+                legendType="none"
+                activeDot={false}
               />
+              {/* Lines (por cima das áreas) */}
               {hasAnoAnt && (
                 <Line
                   type="monotone"
@@ -410,7 +442,7 @@ export function IndicadorHistoricoModal({
                     : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill="#B5D4F4" />;
                 }}
               />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
 
           {/* Legenda — abaixo do gráfico */}
@@ -486,8 +518,10 @@ export function IndicadorHistoricoModal({
         )}
 
         {/* Rodapé */}
-        <div className="px-5 pb-4 text-[12px] text-muted-foreground text-center">
+        <div className="px-5 pb-3 pt-2 text-[11px] text-muted-foreground text-center">
           Clique fora para fechar
+        </div>
+
         </div>
       </div>
     </div>
