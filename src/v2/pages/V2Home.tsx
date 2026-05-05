@@ -382,6 +382,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={cabecasIndicador?.deltaMes ?? null}
           deltaAno={cabecasIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
         />
       )}
       {modalIndicador === 'pesoMedio' && (
@@ -402,6 +403,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={pesoMedioIndicador?.deltaMes ?? null}
           deltaAno={pesoMedioIndicador?.deltaAno ?? null}
+          viewMode={viewMode}
         />
       )}
       {modalIndicador === 'arrobas' && (

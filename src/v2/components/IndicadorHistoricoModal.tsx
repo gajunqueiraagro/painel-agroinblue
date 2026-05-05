@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import {
   ComposedChart,
   Line,
@@ -13,8 +12,13 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
 
+// REGRA ARQUITETURAL — modal puro de renderização:
+// - Modal NÃO calcula
+// - Modal NÃO replica fórmula
+// - Modal NÃO decide regra de negócio
+// - Modal APENAS renderiza séries oficiais vindas do hook (usePainelConsultorData)
+//
 // Padrão visual dos modais executivos:
 // - realizado: parar no mês filtrado
 // - ano anterior: completo Jan–Dez
@@ -23,6 +27,9 @@ import { supabase } from '@/integrations/supabase/client';
 // - Area sob realizado: cinza moderado
 // - meta: sem Area preenchida
 // - corpo do modal rolável abaixo do header
+//
+// Histórico inferior usa serieAno mês a mês — a série já vem com o modo
+// (mês ou período) aplicado pelo hook. Nunca recalcular nada aqui.
 
 interface Props {
   open: boolean;
@@ -59,6 +66,8 @@ interface Props {
   deltaMes?: number | null;
   /** Variação % vs ano anterior — calculado fora; null oculta a linha. */
   deltaAno?: number | null;
+  /** Modo de visualização — afeta o cálculo do histórico inferior multi-ano. */
+  viewMode?: 'mes' | 'periodo';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -90,123 +99,12 @@ export function IndicadorHistoricoModal({
   subtitulo,
   deltaMes,
   deltaAno,
+  viewMode: _viewMode = 'mes',
 }: Props) {
-  const [historico, setHistorico] = useState<Array<{ ano: number; valor: number | null }>>([]);
-  const [historicoMeta, setHistoricoMeta] = useState<Array<{ ano: number; valor: number | null }>>([]);
-  const [serieMetaLocal, setSerieMetaLocal] = useState<(number | null)[]>([]);
-  const [loadingHistorico, setLoadingHistorico] = useState(false);
-
-  useEffect(() => {
-    if (!open || !clienteId || indicadorKey === 'valorRebanho') return;
-
-    const inicio = anoInicio ?? anoAtual - 6;
-    let cancelled = false;
-
-    setHistoricoMeta([]);
-    setSerieMetaLocal([]);
-    setLoadingHistorico(true);
-
-    const calcValorRows = (rowsMes: any[], rowsPer: any[]): number | null => {
-      if (indicadorKey === 'cabecas') {
-        const s = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
-        return s > 0 ? s : null;
-      } else if (indicadorKey === 'pesoMedio') {
-        const ptf = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.peso_total_final) || 0), 0);
-        const sf  = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
-        return sf > 0 ? ptf / sf : null;
-      } else if (indicadorKey === 'arrobas') {
-        const pb = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.producao_biologica) || 0), 0);
-        return pb > 0 ? pb / 30 : null;
-      } else if (indicadorKey === 'gmd') {
-        const vals = rowsPer.map((r: any) => Number(r.gmd)).filter((v: number) => !isNaN(v) && v > 0);
-        return vals.length > 0 ? vals.reduce((s: number, v: number) => s + v, 0) / vals.length : null;
-      } else if (indicadorKey === 'desfrute') {
-        const s = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.saidas_externas) || 0), 0);
-        return s > 0 ? s : null;
-      }
-      return null;
-    };
-
-    (async () => {
-      try {
-        // Sem join — filtrar por fazenda_id diretamente
-        let query = supabase
-          .from('zoot_mensal_cache')
-          .select('ano, mes, cenario, saldo_final, peso_total_final, producao_biologica, saidas_externas, gmd')
-          .in('cenario', ['realizado', 'meta'])
-          .gte('ano', inicio)
-          .lte('ano', anoAtual)
-          .lte('mes', mesAtual);
-
-        if (fazendaId) {
-          // Fazenda específica
-          query = query.eq('fazenda_id', fazendaId);
-        } else if (fazendaIds && fazendaIds.length > 0) {
-          // Global: filtrar pelas fazendas do cliente
-          query = query.in('fazenda_id', fazendaIds);
-        } else {
-          // Sem filtro de fazenda — abortar para não retornar todos os dados do banco
-          if (!cancelled) {
-            setHistorico([]);
-            setHistoricoMeta([]);
-            setLoadingHistorico(false);
-          }
-          return;
-        }
-
-        const { data, error } = await query;
-        if (cancelled) return;
-        if (error || !data) {
-          setHistorico([]);
-          return;
-        }
-
-        const porAnoRealizado: Record<number, any[]> = {};
-        const porAnoMeta: Record<number, any[]> = {};
-        for (const r of data as any[]) {
-          if ((r as any).cenario === 'meta') {
-            if (!porAnoMeta[r.ano]) porAnoMeta[r.ano] = [];
-            porAnoMeta[r.ano].push(r);
-          } else {
-            if (!porAnoRealizado[r.ano]) porAnoRealizado[r.ano] = [];
-            porAnoRealizado[r.ano].push(r);
-          }
-        }
-
-        const resultadoRealizado: Array<{ ano: number; valor: number | null }> = [];
-        const resultadoMeta: Array<{ ano: number; valor: number | null }> = [];
-
-        for (let a = inicio; a <= anoAtual; a++) {
-          const rowsR = porAnoRealizado[a] ?? [];
-          const rowsM = porAnoMeta[a] ?? [];
-          const rowsRMes = rowsR.filter((r: any) => r.mes === mesAtual);
-          const rowsMMes = rowsM.filter((r: any) => r.mes === mesAtual);
-
-          resultadoRealizado.push({ ano: a, valor: calcValorRows(rowsRMes, rowsR) });
-          resultadoMeta.push({ ano: a, valor: calcValorRows(rowsMMes, rowsM) });
-        }
-
-        // Série mensal meta do anoAtual — agrupa por mês, correto para indicadores com múltiplas categorias
-        const metaDoAnoAtual = porAnoMeta[anoAtual] ?? [];
-        const serieMetaNova = Array(13).fill(null) as (number | null)[];
-        for (let m = 1; m <= 12; m++) {
-          const rowsMes = metaDoAnoAtual.filter((r: any) => r.mes === m);
-          const rowsPer = metaDoAnoAtual.filter((r: any) => r.mes <= m);
-          serieMetaNova[m] = calcValorRows(rowsMes, rowsPer);
-        }
-
-        if (!cancelled) {
-          setHistorico(resultadoRealizado);
-          setHistoricoMeta(resultadoMeta);
-          setSerieMetaLocal(serieMetaNova);
-        }
-      } finally {
-        if (!cancelled) setLoadingHistorico(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [open, clienteId, fazendaId, fazendaIds?.join(','), indicadorKey, anoAtual, anoInicio, mesAtual]);
+  // Props de roteamento (clienteId, fazendaId, fazendaIds, anoInicio, viewMode, tipoAcumulado)
+  // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
+  void clienteId; void fazendaId; void fazendaIds; void anoInicio;
+  void tipoAcumulado; void labelPeriodo; void _viewMode;
 
   if (!open) return null;
 
@@ -239,12 +137,7 @@ export function IndicadorHistoricoModal({
     return ((a - b) / b) * 100;
   };
 
-  // META vem de serieMetaLocal (carregada pelo modal sob demanda)
-  const metaSerieFinal: number[] | undefined = serieMetaLocal.length > 0
-    ? (serieMetaLocal as number[])
-    : (serieMeta ?? undefined);
-
-  const deltaMetaInterno = calcDelta(valorAtual, getMesValue(metaSerieFinal, mesAtual));
+  const deltaMetaInterno = calcDelta(valorAtual, getMesValue(serieMeta, mesAtual));
 
   const dados = MESES_LABELS.map((mes, idx) => {
     // Realizado: corta no mês atual (Jan→mesAtual)
@@ -252,7 +145,7 @@ export function IndicadorHistoricoModal({
     // Ano anterior: série completa Jan–Dez
     const anoAnterior = getMesValue(serieAnoAnt, idx + 1);
     // Meta: série completa Jan–Dez (nunca cortar)
-    const meta        = getMesValue(metaSerieFinal, idx + 1);
+    const meta        = getMesValue(serieMeta, idx + 1);
     return {
       mes,
       atual,
@@ -265,41 +158,20 @@ export function IndicadorHistoricoModal({
   });
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
-  const hasMeta = metaSerieFinal != null && metaSerieFinal.some(v => v != null && !isNaN(v as number));
+  const hasMeta = serieMeta != null && serieMeta.some(v => v != null && !isNaN(v as number));
 
-  // ── Resumo do período (Jan→mesAtual) ──
-  const calcResumo = (serie: number[] | undefined): number | null => {
-    if (!serie) return null;
-    const vals = MESES_LABELS.slice(0, mesAtual)
-      .map((_, i) => getMesValue(serie, i + 1))
-      .filter((v): v is number => v != null && !isNaN(v));
-    if (vals.length === 0) return null;
-    if (tipoAcumulado === 'soma')  return vals.reduce((s, v) => s + v, 0);
-    if (tipoAcumulado === 'media') return vals.reduce((s, v) => s + v, 0) / vals.length;
-    if (tipoAcumulado === 'posicao') {
-      const v = getMesValue(serie, mesAtual);
-      return v != null && !isNaN(v) ? v : null;
-    }
-    const v = getMesValue(serie, mesAtual);
-    return v != null && !isNaN(v) ? v : null;
-  };
-
+  // ── Histórico inferior — barras mês a mês de serieAno (Jan→mesAtual) ──
+  // serieAno já vem do hook com o modo correto (mês/período) aplicado.
+  // Modal NÃO calcula nada aqui.
   const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
-
-  // Meta do ano atual: vem de historicoMeta (query do banco) ou fallback do hook
-  const metaAnoAtualValor = historicoMeta.find(h => h.ano === anoAtual)?.valor ?? null;
-  const metaParaBarra = metaAnoAtualValor ?? (serieMeta ? calcResumo(serieMeta) : null);
-
-  const barDados = [
-    ...historico.map(h => ({
-      nome: String(h.ano),
-      valor: h.valor,
-      cor: h.ano === anoAtual ? '#185FA5' : '#B4B2A9',
-    })),
-    ...(metaParaBarra != null && !isNaN(metaParaBarra)
-      ? [{ nome: `Meta ${anoAtual}`, valor: metaParaBarra, cor: '#F97316' }]
-      : []),
-  ].filter(b => b.valor != null && !isNaN(b.valor as number));
+  const barDados = MESES_LABELS.slice(0, mesAtual).map((mes, idx) => {
+    const m = idx + 1;
+    return {
+      nome: mes,
+      valor: getMesValue(serieAno, m),
+      cor: m === mesAtual ? '#185FA5' : '#B4B2A9',
+    };
+  }).filter(b => b.valor != null && !isNaN(b.valor as number));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
@@ -490,17 +362,15 @@ export function IndicadorHistoricoModal({
               <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico do período</p>
               <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{labelPer}</p>
             </div>
-            {loadingHistorico ? (
-              <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
-            ) : barDados.length > 0 ? (
+            {barDados.length > 0 ? (
               <ResponsiveContainer width="100%" height={130}>
                 <BarChart data={barDados} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
                   <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   {(() => {
-                    const refVal = historico.find(h => h.ano === anoAtual)?.valor;
-                    return refVal != null && !isNaN(refVal) ? (
-                      <ReferenceLine y={refVal} stroke="#185FA5" strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
+                    const metaRef = getMesValue(serieMeta, mesAtual);
+                    return metaRef != null && !isNaN(metaRef) ? (
+                      <ReferenceLine y={metaRef} stroke="#F97316" strokeDasharray="4 3" strokeWidth={1} opacity={0.6} />
                     ) : null;
                   })()}
                   <Bar
