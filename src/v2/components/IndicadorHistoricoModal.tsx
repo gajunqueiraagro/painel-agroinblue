@@ -70,6 +70,8 @@ export function IndicadorHistoricoModal({
   anoInicio,
 }: Props) {
   const [historico, setHistorico] = useState<Array<{ ano: number; valor: number | null }>>([]);
+  const [historicoMeta, setHistoricoMeta] = useState<Array<{ ano: number; valor: number | null }>>([]);
+  const [serieMetaLocal, setSerieMetaLocal] = useState<(number | null)[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
 
   useEffect(() => {
@@ -78,7 +80,31 @@ export function IndicadorHistoricoModal({
     const inicio = anoInicio ?? anoAtual - 6;
     let cancelled = false;
 
+    setHistoricoMeta([]);
+    setSerieMetaLocal([]);
     setLoadingHistorico(true);
+
+    const calcValorRows = (rowsMes: any[], rowsPer: any[]): number | null => {
+      if (indicadorKey === 'cabecas') {
+        const s = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
+        return s > 0 ? s : null;
+      } else if (indicadorKey === 'pesoMedio') {
+        const ptf = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.peso_total_final) || 0), 0);
+        const sf  = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
+        return sf > 0 ? ptf / sf : null;
+      } else if (indicadorKey === 'arrobas') {
+        const pb = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.producao_biologica) || 0), 0);
+        return pb > 0 ? pb / 30 : null;
+      } else if (indicadorKey === 'gmd') {
+        const vals = rowsPer.map((r: any) => Number(r.gmd)).filter((v: number) => !isNaN(v) && v > 0);
+        return vals.length > 0 ? vals.reduce((s: number, v: number) => s + v, 0) / vals.length : null;
+      } else if (indicadorKey === 'desfrute') {
+        const s = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.saidas_externas) || 0), 0);
+        return s > 0 ? s : null;
+      }
+      return null;
+    };
+
     (async () => {
       try {
         let query = supabase
@@ -86,6 +112,7 @@ export function IndicadorHistoricoModal({
           .select(`
             ano,
             mes,
+            cenario,
             saldo_final,
             peso_total_final,
             producao_biologica,
@@ -94,7 +121,7 @@ export function IndicadorHistoricoModal({
             fazenda:fazendas!inner(cliente_id)
           `)
           .eq('fazenda.cliente_id', clienteId)
-          .eq('cenario', 'realizado')
+          .in('cenario', ['realizado', 'meta'])
           .gte('ano', inicio)
           .lte('ano', anoAtual)
           .lte('mes', mesAtual);
@@ -110,49 +137,45 @@ export function IndicadorHistoricoModal({
           return;
         }
 
-        const porAno: Record<number, any[]> = {};
+        const porAnoRealizado: Record<number, any[]> = {};
+        const porAnoMeta: Record<number, any[]> = {};
         for (const r of data as any[]) {
-          if (!porAno[r.ano]) porAno[r.ano] = [];
-          porAno[r.ano].push(r);
-        }
-
-        const resultado: Array<{ ano: number; valor: number | null }> = [];
-        for (let a = inicio; a <= anoAtual; a++) {
-          const rows = porAno[a] ?? [];
-          const rowsMes = rows.filter((r: any) => r.mes === mesAtual);
-          const rowsPer = rows;
-
-          let valor: number | null = null;
-
-          if (indicadorKey === 'cabecas') {
-            const s = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
-            valor = s > 0 ? s : null;
-
-          } else if (indicadorKey === 'pesoMedio') {
-            const ptf = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.peso_total_final) || 0), 0);
-            const sf  = rowsMes.reduce((acc: number, r: any) => acc + (Number(r.saldo_final) || 0), 0);
-            valor = sf > 0 ? ptf / sf : null;
-
-          } else if (indicadorKey === 'arrobas') {
-            const pb = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.producao_biologica) || 0), 0);
-            valor = pb > 0 ? pb / 30 : null;
-
-          } else if (indicadorKey === 'gmd') {
-            // TODO: refinar para ponderação por cabeças médias quando disponível
-            const vals = rowsPer
-              .map((r: any) => Number(r.gmd))
-              .filter((v: number) => !isNaN(v) && v > 0);
-            valor = vals.length > 0 ? vals.reduce((s: number, v: number) => s + v, 0) / vals.length : null;
-
-          } else if (indicadorKey === 'desfrute') {
-            const s = rowsPer.reduce((acc: number, r: any) => acc + (Number(r.saidas_externas) || 0), 0);
-            valor = s > 0 ? s : null;
+          if ((r as any).cenario === 'meta') {
+            if (!porAnoMeta[r.ano]) porAnoMeta[r.ano] = [];
+            porAnoMeta[r.ano].push(r);
+          } else {
+            if (!porAnoRealizado[r.ano]) porAnoRealizado[r.ano] = [];
+            porAnoRealizado[r.ano].push(r);
           }
-
-          resultado.push({ ano: a, valor });
         }
 
-        if (!cancelled) setHistorico(resultado);
+        const resultadoRealizado: Array<{ ano: number; valor: number | null }> = [];
+        const resultadoMeta: Array<{ ano: number; valor: number | null }> = [];
+
+        for (let a = inicio; a <= anoAtual; a++) {
+          const rowsR = porAnoRealizado[a] ?? [];
+          const rowsM = porAnoMeta[a] ?? [];
+          const rowsRMes = rowsR.filter((r: any) => r.mes === mesAtual);
+          const rowsMMes = rowsM.filter((r: any) => r.mes === mesAtual);
+
+          resultadoRealizado.push({ ano: a, valor: calcValorRows(rowsRMes, rowsR) });
+          resultadoMeta.push({ ano: a, valor: calcValorRows(rowsMMes, rowsM) });
+        }
+
+        // Série mensal meta do anoAtual — agrupa por mês, correto para indicadores com múltiplas categorias
+        const metaDoAnoAtual = porAnoMeta[anoAtual] ?? [];
+        const serieMetaNova = Array(13).fill(null) as (number | null)[];
+        for (let m = 1; m <= 12; m++) {
+          const rowsMes = metaDoAnoAtual.filter((r: any) => r.mes === m);
+          const rowsPer = metaDoAnoAtual.filter((r: any) => r.mes <= m);
+          serieMetaNova[m] = calcValorRows(rowsMes, rowsPer);
+        }
+
+        if (!cancelled) {
+          setHistorico(resultadoRealizado);
+          setHistoricoMeta(resultadoMeta);
+          setSerieMetaLocal(serieMetaNova);
+        }
       } finally {
         if (!cancelled) setLoadingHistorico(false);
       }
@@ -180,13 +203,15 @@ export function IndicadorHistoricoModal({
     mes,
     atual:       safeAt(serieAno, idx + 1),
     anoAnterior: safeAt(serieAnoAnt, idx + 1),
-    meta:        safeAt(serieMeta, idx + 1),
+    // Usar serieMetaLocal (do banco) se disponível; fallback para serieMeta (do hook, null por padrão)
+    meta:        safeAt(serieMetaLocal.length > 0 ? serieMetaLocal as number[] : serieMeta, idx + 1),
   }));
 
   const valorMesSelecionado = safeAt(serieAno, mesAtual);
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
-  const hasMeta = serieMeta != null && serieMeta.some(v => v != null && !isNaN(v));
+  const activeMetaSerie = serieMetaLocal.length > 0 ? serieMetaLocal as number[] : serieMeta;
+  const hasMeta = activeMetaSerie != null && activeMetaSerie.some(v => v != null && !isNaN(v));
 
   // ── Resumo do período (Jan→mesAtual) ──
   const calcResumo = (serie: number[] | undefined): number | null => {
@@ -205,9 +230,11 @@ export function IndicadorHistoricoModal({
     return v != null && !isNaN(v) ? v : null;
   };
 
-  const metaVal = calcResumo(serieMeta);
-
   const labelPer = labelPeriodo ?? `Jan–${MESES_LABELS[mesAtual - 1]}`;
+
+  // Meta do ano atual: vem de historicoMeta (query do banco) ou fallback do hook
+  const metaAnoAtualValor = historicoMeta.find(h => h.ano === anoAtual)?.valor ?? null;
+  const metaParaBarra = metaAnoAtualValor ?? (serieMeta ? calcResumo(serieMeta) : null);
 
   const barDados = [
     ...historico.map(h => ({
@@ -215,8 +242,8 @@ export function IndicadorHistoricoModal({
       valor: h.valor,
       cor: h.ano === anoAtual ? '#185FA5' : '#B4B2A9',
     })),
-    ...(serieMeta && metaVal != null && !isNaN(metaVal)
-      ? [{ nome: `Meta ${anoAtual}`, valor: metaVal, cor: '#F97316' }]
+    ...(metaParaBarra != null && !isNaN(metaParaBarra)
+      ? [{ nome: `Meta ${anoAtual}`, valor: metaParaBarra, cor: '#F97316' }]
       : []),
   ].filter(b => b.valor != null && !isNaN(b.valor as number));
 
