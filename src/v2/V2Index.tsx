@@ -16,6 +16,7 @@ import { V2Home } from './pages/V2Home';
 import { V2PainelConsultor } from './pages/V2PainelConsultor';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
+import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
 import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
 import { FechamentoTab } from '@/pages/FechamentoTab';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
@@ -51,7 +52,7 @@ import { toast } from 'sonner';
 
 function V2LancamentosWrapper() {
   const { isGlobal } = useFazenda();
-  const { canEdit } = usePermissions();
+  const { canEdit, canEditMeta } = usePermissions();
   const {
     lancamentos,
     adicionarLancamento,
@@ -321,6 +322,29 @@ export default function V2Index() {
         filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
       />
     );
+    if (section === 'meta-precos') {
+      if (isGlobal) {
+        return (
+          <div className="px-4 py-6 space-y-3">
+            <h2 className="text-base font-semibold text-foreground">Preços META</h2>
+            <div className="p-6 rounded-lg border border-dashed border-border text-center text-muted-foreground text-sm">
+              Selecione uma fazenda específica para editar os preços da META.
+            </div>
+          </div>
+        );
+      }
+      if (!canEditMeta) {
+        return (
+          <div className="px-4 py-6 space-y-3">
+            <h2 className="text-base font-semibold text-foreground">Preços META</h2>
+            <div className="p-6 rounded-lg border border-dashed border-border text-center text-muted-foreground text-sm">
+              Sem permissão para editar META.
+            </div>
+          </div>
+        );
+      }
+      return <MetaPrecoTab onBack={() => setSection('planejamento-home')} />;
+    }
     if (section === 'configuracoes') return <V2Configuracoes onNavigate={setSection} />;
     if (section === 'config-clientes') return <ClientesTab />;
     if (section === 'config-bancario') return <FinV2ContasTab />;
