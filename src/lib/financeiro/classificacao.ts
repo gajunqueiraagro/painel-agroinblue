@@ -320,15 +320,23 @@ export function isDesembolsoProdutivo(l: LancamentoClassificavel): boolean {
 }
 
 /**
- * É Custeio Produção Pecuária (Custo Fixo Pec + Custo Variável Pec).
- * macro = 'custeio produtivo' E escopo != 'agri'.
- * NÃO inclui: investimento na fazenda, investimento em bovinos, juros,
- * amortizações, agricultura.
+ * É Custeio Produção Pecuária = Custo Fixo Pec + Custo Variável Pec.
+ *
+ * Filtra por grupo_custo exato — fonte oficial do plano de contas (mesma regra
+ * usada em useAnaliseTrimestral.ts:175-177). Filtro por macro_custo é insuficiente
+ * porque "Custeio Produtivo" inclui também Juros Pec, Custo Fixo Agri e Custo
+ * Variável Agri (e getEscopo só pega Agri quando centro_custo é literalmente
+ * 'agricultura' — falha para 'Soja', 'Cana', etc.).
+ *
+ * NÃO inclui: Juros Financ. Pec., Custos Agri, Investimentos, Amortizações,
+ *             Bovinos, Dividendos, Deduções.
+ *
  * Usado como numerador em: Custeio Produção Pec., Custo Produtivo R$/@,
  * Custo Cab. R$/cab., Margem por @.
  */
-export function isCusteioPecuaria(l: LancamentoClassificavel): boolean {
-  return canonicalMacro(l) === 'custeio produtivo' && getEscopo(l) !== 'agri';
+export function isCusteioProducaoPecuaria(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Pecuária'
+      || l.grupo_custo === 'Custo Variável Pecuária';
 }
 
 /** É Receita operacional (macro_custo = "receitas") */

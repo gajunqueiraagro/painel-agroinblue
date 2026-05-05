@@ -49,7 +49,7 @@ import {
   isSaida as isFinSaida,
   classificarEntrada,
   classificarSaida,
-  isCusteioPecuaria,
+  isCusteioProducaoPecuaria,
   datePagtoMes,
   datePagtoAno,
 } from '@/lib/financeiro/classificacao';
@@ -270,9 +270,10 @@ export function buildMonthlyDataFromView(
   const recPecMes = (m: number) => finDoMes(m).filter(l => isFinEntrada(l) && classificarEntrada(l) === 'Receitas Pecuárias').reduce((s, l) => s + Math.abs(l.valor), 0);
   const deducMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Dedução de Receitas').reduce((s, l) => s + Math.abs(l.valor), 0);
   const desembPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Pec.').reduce((s, l) => s + Math.abs(l.valor), 0);
-  // Custeio Produção Pecuária — APENAS macro 'custeio produtivo' E escopo != 'agri'.
-  // Subconjunto estrito de desembPecMes (que também inclui 'investimento na fazenda').
-  const custeioPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && isCusteioPecuaria(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
+  // Custeio Produção Pecuária — grupo_custo IN ('Custo Fixo Pecuária', 'Custo Variável Pecuária').
+  // Fonte oficial do plano (mesma regra de useAnaliseTrimestral.ts).
+  // NÃO inclui Juros, Agri, Investimentos.
+  const custeioPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && isCusteioProducaoPecuaria(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
   // valorRebanhoMes has 13 elements: [0]=Dec prev year, [1]=Jan, ..., [12]=Dec
   const valorRebFin = valorRebanhoMes.slice(1);
