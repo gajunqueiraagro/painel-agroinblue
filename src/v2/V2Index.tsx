@@ -116,7 +116,8 @@ export default function V2Index() {
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   const periodoTipo = getPeriodoTipo(section);
   const { clientes, clienteAtual } = useCliente();
-  const { fazendas } = useFazenda();
+  const { fazendas, isGlobal } = useFazenda();
+  const { canEditMeta } = usePermissions();
 
   useEffect(() => {
     if (!clienteAtual?.id) return;
