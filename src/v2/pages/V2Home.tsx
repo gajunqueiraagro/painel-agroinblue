@@ -327,8 +327,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'cabecas' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="Cabeças" unidade="cab" formatoValor="inteiro"
-          subtitulo="Quantidade de cabeças no final do mês"
+          titulo={viewMode === 'periodo' ? 'Rebanho Médio no período' : 'Rebanho Final do mês'}
+          unidade="cab" formatoValor="inteiro"
+          subtitulo={viewMode === 'periodo'
+            ? 'Quantidade média de cabeças no período selecionado'
+            : 'Quantidade de cabeças no final do mês'}
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.cabFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
@@ -338,7 +341,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(cabecas, dadosMesAnt.cabecas)}
+          deltaMes={calcDeltaV(
+            seriesMensais?.cabFin?.[mesNum] ?? null,
+            mesNum > 1 ? (seriesMensais?.cabFin?.[mesNum - 1] ?? null) : null
+          )}
           deltaAno={calcDeltaV(cabecas, dadosAnoAnt.cabecas)}
         />
       )}

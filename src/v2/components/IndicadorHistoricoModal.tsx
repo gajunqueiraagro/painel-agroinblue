@@ -269,6 +269,24 @@ export function IndicadorHistoricoModal({
       : []),
   ].filter(b => b.valor != null && !isNaN(b.valor as number));
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    return (
+      <div className="rounded-md border border-border/40 bg-background px-3 py-2 shadow-md text-sm">
+        <p className="font-medium text-foreground mb-1">{label}</p>
+        {payload.map((entry: any, i: number) => (
+          entry.value != null && (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
+              <span className="text-foreground">{fmtValor(entry.value)}</span>
+              <span className="text-muted-foreground text-xs">{entry.name}</span>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -282,10 +300,7 @@ export function IndicadorHistoricoModal({
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border/40">
           {/* Esquerda — título + subtítulo */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
-              <button onClick={onClose} className="ml-4 text-muted-foreground hover:text-foreground text-lg leading-none" aria-label="Fechar">✕</button>
-            </div>
+            <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
             {subtitulo && (
               <p className="text-sm text-muted-foreground mt-0.5">{subtitulo}</p>
             )}
@@ -295,7 +310,9 @@ export function IndicadorHistoricoModal({
           <div className="text-right shrink-0">
             <div className="flex items-baseline gap-1.5 justify-end">
               <span className="text-3xl font-bold text-foreground">{fmtValor(valorAtual)}</span>
-              {unidade && <span className="text-base text-muted-foreground">{unidade}.</span>}
+              <span className="text-sm text-muted-foreground">
+                {MESES_LABELS[mesAtual - 1]} {anoAtual}
+              </span>
             </div>
             {deltaMes != null && (
               <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -325,10 +342,7 @@ export function IndicadorHistoricoModal({
               <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
               <YAxis tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 6 }}
-                formatter={(v: any) => fmtValor(typeof v === 'number' ? v : null)}
-              />
+              <Tooltip content={<CustomTooltip />} />
               <ReferenceArea
                 x1={MESES_LABELS[0]}
                 x2={MESES_LABELS[mesAtual - 1]}
