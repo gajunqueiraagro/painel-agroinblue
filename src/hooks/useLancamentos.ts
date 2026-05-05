@@ -86,10 +86,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   }, [queryClient]);
 
   const loadData = useCallback(async () => {
-    if (!enabled) {
-      setLoading(false);
-      return;
-    }
+    if (!enabled) return;
     if (!fazendaId || (isGlobal && (!clienteId || fazendas.length === 0))) {
       setLancamentos([]);
       setSaldosIniciais([]);
@@ -205,6 +202,10 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   }, [enabled, fazendaId, isGlobal, fazendas, cenario, clienteId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!enabled) setLoading(false);
+  }, [enabled]);
 
   // Migrate localStorage data on first load
   useEffect(() => {
