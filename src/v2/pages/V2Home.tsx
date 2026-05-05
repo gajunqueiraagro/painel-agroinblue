@@ -154,6 +154,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     return ((atual - base) / base) * 100;
   };
 
+  const calcDeltaV = (atual: number | null | undefined, base: number | null | undefined): number | null => {
+    if (atual == null || base == null || isNaN(atual) || isNaN(base) || base === 0) return null;
+    return ((atual - base) / base) * 100;
+  };
+
   // Só usar comparativo de mês anterior se existir mês anterior real
   // E só exibir comparativos zootécnicos se dados atuais estiverem completos
   const dadosZootCompletos = !loadingPainel && cabecas != null && cabecas > 0;
@@ -323,6 +328,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="Cabeças" unidade="cab" formatoValor="inteiro"
+          subtitulo="Quantidade de cabeças no final do mês"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.cabFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.cabFin}
@@ -332,12 +338,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
+          deltaMes={calcDeltaV(cabecas, dadosMesAnt.cabecas)}
+          deltaAno={calcDeltaV(cabecas, dadosAnoAnt.cabecas)}
         />
       )}
       {modalIndicador === 'pesoMedio' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="Peso médio final" unidade="kg" formatoValor="decimal1"
+          subtitulo="Peso médio do rebanho no final do mês"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.pesoMedioFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.pesoMedioFin}
@@ -347,12 +356,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
+          deltaMes={calcDeltaV(pesoMedio, dadosMesAnt.pesoMedio)}
+          deltaAno={calcDeltaV(pesoMedio, dadosAnoAnt.pesoMedio)}
         />
       )}
       {modalIndicador === 'arrobas' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="@ Produzidas" unidade="@" formatoValor="decimal1"
+          subtitulo="Produção biológica convertida em arrobas"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.arrobasProd ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.arrobasProd}
@@ -362,12 +374,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
+          deltaMes={calcDeltaV(arrobas, dadosMesAnt.arrobas)}
+          deltaAno={calcDeltaV(arrobas, dadosAnoAnt.arrobas)}
         />
       )}
       {modalIndicador === 'gmd' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="GMD" unidade="kg/dia" formatoValor="decimal3"
+          subtitulo="Ganho médio diário no período"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.gmd ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.gmd}
@@ -377,12 +392,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
+          deltaMes={calcDeltaV(gmd, dadosMesAnt.gmd)}
+          deltaAno={calcDeltaV(gmd, dadosAnoAnt.gmd)}
         />
       )}
       {modalIndicador === 'desfrute' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="Desfrute cab." unidade="cab" formatoValor="inteiro"
+          subtitulo="Cabeças vendidas/saídas no mês"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.desfruteCab ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.desfruteCab}
@@ -391,12 +409,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           anoInicio={anoNum - 6}
+          deltaMes={calcDeltaV(desfrute, dadosMesAnt.desfrute)}
+          deltaAno={calcDeltaV(desfrute, dadosAnoAnt.desfrute)}
         />
       )}
       {modalIndicador === 'valorRebanho' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
           titulo="Valor Rebanho" formatoValor="moeda"
+          subtitulo="Valor financeiro estimado do rebanho"
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={seriesMensais?.valorRebFin ?? []}
           serieAnoAnt={dadosAnoAnt.seriesMensais?.valorRebFin}
@@ -404,6 +425,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           indicadorKey="valorRebanho"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
+          deltaMes={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], seriesMensais?.valorRebFin?.[mesNum === 1 ? 0 : mesNum - 1])}
+          deltaAno={calcDeltaV(seriesMensais?.valorRebFin?.[mesNum], dadosAnoAnt.seriesMensais?.valorRebFin?.[mesNum])}
         />
       )}
     </div>

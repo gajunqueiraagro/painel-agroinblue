@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -11,6 +10,7 @@ import {
   BarChart,
   Bar,
   Cell,
+  ReferenceArea,
 } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -41,6 +41,12 @@ interface Props {
   fazendaId?: string | null;
   /** Ano inicial do histórico; default: anoAtual - 6. */
   anoInicio?: number;
+  /** Subtítulo opcional exibido abaixo do título. */
+  subtitulo?: string;
+  /** Variação % vs mês anterior — calculado fora; null oculta a linha. */
+  deltaMes?: number | null;
+  /** Variação % vs ano anterior — calculado fora; null oculta a linha. */
+  deltaAno?: number | null;
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -68,6 +74,9 @@ export function IndicadorHistoricoModal({
   clienteId,
   fazendaId,
   anoInicio,
+  subtitulo,
+  deltaMes,
+  deltaAno,
 }: Props) {
   const [historico, setHistorico] = useState<Array<{ ano: number; valor: number | null }>>([]);
   const [historicoMeta, setHistoricoMeta] = useState<Array<{ ano: number; valor: number | null }>>([]);
@@ -199,19 +208,32 @@ export function IndicadorHistoricoModal({
     return v != null && !isNaN(v) ? v : null;
   };
 
+  const valorAtual = safeAt(serieAno, mesAtual);
+
+  const calcDelta = (a: number | null, b: number | null): number | null => {
+    if (a == null || b == null || isNaN(a) || isNaN(b) || b === 0) return null;
+    return ((a - b) / b) * 100;
+  };
+
+  // META vem de serieMetaLocal (carregada pelo modal sob demanda)
+  const metaSerieFinal: number[] | undefined = serieMetaLocal.length > 0
+    ? (serieMetaLocal as number[])
+    : (serieMeta ?? undefined);
+
+  const deltaMetaInterno = calcDelta(valorAtual, safeAt(metaSerieFinal, mesAtual));
+
   const dados = MESES_LABELS.map((mes, idx) => ({
     mes,
-    atual:       safeAt(serieAno, idx + 1),
+    // Realizado: corta no mês atual (Jan→mesAtual)
+    atual:       idx + 1 <= mesAtual ? safeAt(serieAno, idx + 1) : null,
+    // Ano anterior: série completa Jan–Dez
     anoAnterior: safeAt(serieAnoAnt, idx + 1),
-    // Usar serieMetaLocal (do banco) se disponível; fallback para serieMeta (do hook, null por padrão)
-    meta:        safeAt(serieMetaLocal.length > 0 ? serieMetaLocal as number[] : serieMeta, idx + 1),
+    // Meta: corta no mês atual (Jan→mesAtual)
+    meta:        idx + 1 <= mesAtual ? safeAt(metaSerieFinal, idx + 1) : null,
   }));
 
-  const valorMesSelecionado = safeAt(serieAno, mesAtual);
-
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
-  const activeMetaSerie = serieMetaLocal.length > 0 ? serieMetaLocal as number[] : serieMeta;
-  const hasMeta = activeMetaSerie != null && activeMetaSerie.some(v => v != null && !isNaN(v));
+  const hasMeta = metaSerieFinal != null && metaSerieFinal.some(v => v != null && !isNaN(v as number));
 
   // ── Resumo do período (Jan→mesAtual) ──
   const calcResumo = (serie: number[] | undefined): number | null => {
@@ -256,49 +278,44 @@ export function IndicadorHistoricoModal({
         className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-border/30">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Histórico mensal</p>
-            <p className="text-base font-medium text-foreground mt-0.5">{titulo}</p>
+        {/* Header executivo (two-column) */}
+        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border/40">
+          {/* Esquerda — título + subtítulo */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
+              <button onClick={onClose} className="ml-4 text-muted-foreground hover:text-foreground text-lg leading-none" aria-label="Fechar">✕</button>
+            </div>
+            {subtitulo && (
+              <p className="text-sm text-muted-foreground mt-0.5">{subtitulo}</p>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        {/* Valor em destaque */}
-        <div className="px-5 pt-4 pb-2">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[32px] font-medium tabular-nums text-foreground">{fmtValor(valorMesSelecionado)}</span>
-            <span className="text-sm text-muted-foreground">
-              {MESES_LABELS[mesAtual - 1]} {anoAtual}
-            </span>
+          {/* Direita — valor + variações */}
+          <div className="text-right shrink-0">
+            <div className="flex items-baseline gap-1.5 justify-end">
+              <span className="text-3xl font-bold text-foreground">{fmtValor(valorAtual)}</span>
+              {unidade && <span className="text-base text-muted-foreground">{unidade}.</span>}
+            </div>
+            {deltaMes != null && (
+              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                <span>{deltaMes >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaMes >= 0 ? '+' : ''}{deltaMes.toFixed(1)}% vs mês</span>
+              </div>
+            )}
+            {deltaAno != null && (
+              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                <span>{deltaAno >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaAno >= 0 ? '+' : ''}{deltaAno.toFixed(1)}% vs ano ant.</span>
+              </div>
+            )}
+            {deltaMetaInterno != null && (
+              <div className={`text-sm font-medium flex items-center justify-end gap-1 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                <span>{deltaMetaInterno >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaMetaInterno >= 0 ? '+' : ''}{deltaMetaInterno.toFixed(1)}% vs META</span>
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Legenda */}
-        <div className="px-5 pb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-[2px] bg-[#185FA5]" />
-            {anoAtual}
-          </span>
-          {hasAnoAnt && (
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-4 h-[1.5px] border-t-[1.5px] border-dashed border-[#B4B2A9]" />
-              {anoAtual - 1}
-            </span>
-          )}
-          {hasMeta && (
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-4 h-[1.5px] border-t-[1.5px] border-dashed border-[#F97316]" />
-              Meta {anoAtual}
-            </span>
-          )}
         </div>
 
         {/* Gráfico */}
@@ -311,6 +328,12 @@ export function IndicadorHistoricoModal({
               <Tooltip
                 contentStyle={{ fontSize: 12, borderRadius: 6 }}
                 formatter={(v: any) => fmtValor(typeof v === 'number' ? v : null)}
+              />
+              <ReferenceArea
+                x1={MESES_LABELS[0]}
+                x2={MESES_LABELS[mesAtual - 1]}
+                fill="rgba(0,0,0,0.05)"
+                strokeOpacity={0}
               />
               {hasAnoAnt && (
                 <Line
@@ -352,7 +375,32 @@ export function IndicadorHistoricoModal({
               />
             </LineChart>
           </ResponsiveContainer>
+
+          {/* Legenda — abaixo do gráfico */}
+          <div className="flex gap-5 px-1 mt-3 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-[2px] rounded bg-[#185FA5]" />
+              <span className="text-xs text-muted-foreground">{anoAtual}</span>
+            </div>
+            {hasAnoAnt && (
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#B4B2A9" strokeWidth="2" strokeDasharray="4 3"/></svg>
+                <span className="text-xs text-muted-foreground">{anoAtual - 1}</span>
+              </div>
+            )}
+            {hasMeta && (
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="#F97316" strokeWidth="2" strokeDasharray="6 3"/></svg>
+                <span className="text-xs text-muted-foreground">Meta {anoAtual}</span>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Separador antes do bloco resumo */}
+        {indicadorKey !== 'valorRebanho' && (
+          <div className="border-t border-border/30 mx-0 mt-4" />
+        )}
 
         {/* Resumo do período (histórico multi-ano) */}
         {indicadorKey !== 'valorRebanho' && (
@@ -361,12 +409,8 @@ export function IndicadorHistoricoModal({
               borderTop: '0.5px solid var(--color-border-tertiary)',
               paddingTop: '0.75rem', marginBottom: '0.25rem'
             }}>
-              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: 0 }}>
-                Resumo do período
-              </p>
-              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: 0 }}>
-                {labelPer}
-              </p>
+              <p className="text-xs font-medium text-muted-foreground" style={{ margin: 0 }}>Histórico do período</p>
+              <p className="text-xs text-muted-foreground/70" style={{ margin: 0 }}>{labelPer}</p>
             </div>
             {loadingHistorico ? (
               <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', padding: '1rem 0' }}>Carregando...</p>
