@@ -167,6 +167,22 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
+  // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
+  // ao histórico p/ que a barra do anoAtual bata 100% com o topo do modal.
+  const valorOficialAnoAtual: number | null = histAtivo
+    ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.valor   ?? null)
+     : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.valor ?? null)
+     : modalIndicador === 'gmd'       ? (gmdIndicador?.valor       ?? null)
+     : modalIndicador === 'arrobas'   ? arrobas
+     : modalIndicador === 'desfrute'  ? desfrute
+     : null)
+    : null;
+  const valorOficialMetaAnoAtual: number | null = histAtivo
+    ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.serieMetaIndicador?.[mesNum] ?? null)
+     : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'gmd'       ? (gmdIndicador?.serieMeta?.[mesNum] ?? null)
+     : null)
+    : null;
   const {
     historico: historicoAno,
     historicoMeta: historicoAnoMeta,
@@ -181,6 +197,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     viewMode,
     anoAtual: anoNum,
     anoInicio: anoNum - 6,
+    valorOficialAnoAtual,
+    valorOficialMetaAnoAtual,
   });
 
   // Comparativos — sempre modo 'mes', nunca 'periodo'

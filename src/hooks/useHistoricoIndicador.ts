@@ -1,7 +1,16 @@
 // ⚠️ HISTÓRICO AUXILIAR LEGADO
-// Fonte: zoot_mensal_cache
-// Pode divergir do PC-100 em casos de snapshot validado e global (transferências inter-fazenda).
-// NÃO usar para:
+// Fonte: zoot_mensal_cache (raw, SEM fechamento overlay aplicado pelo useRebanhoOficial).
+// Anos anteriores ao corrente PODEM divergir do PC-100 em casos de:
+//   - snapshot validado
+//   - fechamento overlay (substituição de saldo_final/peso_total_final/producao_biologica/gmd)
+//   - global com transferências inter-fazenda
+//
+// REGRA: o anoAtual deve ser fornecido via prop `valorOficialAnoAtual` (vinda do hook
+// principal usePainelConsultorData) — garante paridade EXATA com o topo do modal.
+// Anos < anoAtual usam o cálculo via cache (apenas comparativo histórico — divergência
+// silenciosa rejeitada pela equipe está documentada aqui).
+//
+// NÃO usar este hook para:
 // - cards
 // - gráfico principal
 // - deltas
@@ -39,6 +48,14 @@ interface Params {
   viewMode?: 'mes' | 'periodo';
   anoAtual: number;
   anoInicio?: number;
+  /**
+   * Valor oficial do anoAtual já calculado pelo hook principal (ex. gmdIndicador.valor).
+   * Quando fornecido, a barra do anoAtual usa este valor — garantindo paridade exata com o topo.
+   * Anos anteriores continuam via cache zoot_mensal_cache (auxiliar legado).
+   */
+  valorOficialAnoAtual?: number | null;
+  /** Valor oficial da meta do anoAtual (do hook principal). Aplica mesma regra. */
+  valorOficialMetaAnoAtual?: number | null;
 }
 
 interface Result {
@@ -57,6 +74,8 @@ export function useHistoricoIndicador({
   viewMode = 'mes',
   anoAtual,
   anoInicio,
+  valorOficialAnoAtual,
+  valorOficialMetaAnoAtual,
 }: Params): Result {
   const [historico, setHistorico] = useState<AnoValor[]>([]);
   const [historicoMeta, setHistoricoMeta] = useState<AnoValor[]>([]);
@@ -191,8 +210,18 @@ export function useHistoricoIndicador({
         const resR: AnoValor[] = [];
         const resM: AnoValor[] = [];
         for (let a = inicio; a <= anoAtual; a++) {
-          resR.push({ ano: a, valor: calcValor(porAnoR[a] ?? [], a) });
-          resM.push({ ano: a, valor: calcValor(porAnoM[a] ?? [], a) });
+          // anoAtual: usar valor oficial (passado por prop) p/ bater 100% com topo.
+          // Anos anteriores: usar cálculo via cache (auxiliar legado, sem overlay).
+          if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+            resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+          } else {
+            resR.push({ ano: a, valor: calcValor(porAnoR[a] ?? [], a) });
+          }
+          if (a === anoAtual && valorOficialMetaAnoAtual !== undefined) {
+            resM.push({ ano: a, valor: valorOficialMetaAnoAtual ?? null });
+          } else {
+            resM.push({ ano: a, valor: calcValor(porAnoM[a] ?? [], a) });
+          }
         }
 
         if (!cancelled) {
@@ -209,6 +238,7 @@ export function useHistoricoIndicador({
     enabled, clienteId, fazendaId,
     fazendaIds?.join(','),
     indicadorKey, anoAtual, anoInicio, mesAtual, viewMode,
+    valorOficialAnoAtual, valorOficialMetaAnoAtual,
   ]);
 
   return { historico, historicoMeta, loading };
