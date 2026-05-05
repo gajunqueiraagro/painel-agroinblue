@@ -203,12 +203,21 @@ export function IndicadorHistoricoModal({
     return String(v ?? '—');
   };
 
-  const safeAt = (arr: number[] | undefined, idx: number): number | null => {
-    const v = arr?.[idx];
+  const getMesValue = (serie: number[] | null | undefined, mes: number): number | null => {
+    if (!serie || mes < 1 || mes > 12) return null;
+
+    // se vier com 13 posições, assume padrão 1-based: [1]=Jan
+    if (serie.length >= 13) {
+      const v = serie[mes];
+      return v != null && !isNaN(v) ? v : null;
+    }
+
+    // se vier com 12 posições, assume padrão 0-based: [0]=Jan
+    const v = serie[mes - 1];
     return v != null && !isNaN(v) ? v : null;
   };
 
-  const valorAtual = safeAt(serieAno, mesAtual);
+  const valorAtual = getMesValue(serieAno, mesAtual);
 
   const calcDelta = (a: number | null, b: number | null): number | null => {
     if (a == null || b == null || isNaN(a) || isNaN(b) || b === 0) return null;
@@ -220,16 +229,16 @@ export function IndicadorHistoricoModal({
     ? (serieMetaLocal as number[])
     : (serieMeta ?? undefined);
 
-  const deltaMetaInterno = calcDelta(valorAtual, safeAt(metaSerieFinal, mesAtual));
+  const deltaMetaInterno = calcDelta(valorAtual, getMesValue(metaSerieFinal, mesAtual));
 
   const dados = MESES_LABELS.map((mes, idx) => ({
     mes,
     // Realizado: corta no mês atual (Jan→mesAtual)
-    atual:       idx + 1 <= mesAtual ? safeAt(serieAno, idx + 1) : null,
+    atual:       idx + 1 <= mesAtual ? getMesValue(serieAno, idx + 1) : null,
     // Ano anterior: série completa Jan–Dez
-    anoAnterior: safeAt(serieAnoAnt, idx + 1),
+    anoAnterior: getMesValue(serieAnoAnt, idx + 1),
     // Meta: corta no mês atual (Jan→mesAtual)
-    meta:        idx + 1 <= mesAtual ? safeAt(metaSerieFinal, idx + 1) : null,
+    meta:        idx + 1 <= mesAtual ? getMesValue(metaSerieFinal, idx + 1) : null,
   }));
 
   const hasAnoAnt = serieAnoAnt != null && serieAnoAnt.some(v => v != null && !isNaN(v));
@@ -239,16 +248,16 @@ export function IndicadorHistoricoModal({
   const calcResumo = (serie: number[] | undefined): number | null => {
     if (!serie) return null;
     const vals = MESES_LABELS.slice(0, mesAtual)
-      .map((_, i) => serie[i + 1])
-      .filter(v => v != null && !isNaN(v));
+      .map((_, i) => getMesValue(serie, i + 1))
+      .filter((v): v is number => v != null && !isNaN(v));
     if (vals.length === 0) return null;
     if (tipoAcumulado === 'soma')  return vals.reduce((s, v) => s + v, 0);
     if (tipoAcumulado === 'media') return vals.reduce((s, v) => s + v, 0) / vals.length;
     if (tipoAcumulado === 'posicao') {
-      const v = serie[mesAtual];
+      const v = getMesValue(serie, mesAtual);
       return v != null && !isNaN(v) ? v : null;
     }
-    const v = serie[mesAtual];
+    const v = getMesValue(serie, mesAtual);
     return v != null && !isNaN(v) ? v : null;
   };
 
