@@ -13,7 +13,7 @@
  */
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { calcularIndicadoresEficienciaArea } from '@/lib/calculos/eficienciaArea';
-import { computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
+import { computePeriodGmd, rollingAvg } from '@/lib/calculos/painelConsultorIndicadores';
 import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
@@ -308,13 +308,6 @@ function cumSum(arr: number[]): number[] {
   for (const v of arr) { acc += v; r.push(acc); }
   return r;
 }
-function rollingAvg(arr: number[]): number[] {
-  const r: number[] = [];
-  let sum = 0, n = 0;
-  for (const v of arr) { sum += v; n++; r.push(n > 0 ? sum / n : 0); }
-  return r;
-}
-
 /**
  * Dados financeiros META agregados do planejamento_financeiro.
  * Calculado por agregarGridMetaPainelConsultor. Uso exclusivo do PainelConsultorTab — não exportar.

@@ -3,6 +3,21 @@
 // Não duplicar a fórmula em outros arquivos. Importar daqui.
 
 /**
+ * Média acumulada (Jan → N) — usada pelo PC-100 em "media_periodo".
+ *
+ *   rollingAvg(arr)[i] = Σ arr[0..i] / (i + 1)
+ *
+ * NaN propaga: se algum elemento for NaN, todos os índices subsequentes
+ * ficam NaN. Comportamento idêntico ao PC-100; não filtrar NaN aqui.
+ */
+export function rollingAvg(arr: number[]): number[] {
+  const r: number[] = [];
+  let sum = 0, n = 0;
+  for (const v of arr) { sum += v; n++; r.push(n > 0 ? sum / n : 0); }
+  return r;
+}
+
+/**
  * GMD médio do período acumulado (Jan → N).
  * Fórmula oficial PC-100:
  *   GMD período(N) = Σ producao_biologica(1..N)

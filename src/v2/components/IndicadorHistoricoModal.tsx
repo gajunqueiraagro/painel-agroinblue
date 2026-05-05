@@ -36,7 +36,7 @@ interface Props {
   onClose: () => void;
   titulo: string;
   unidade?: string;
-  formatoValor?: 'inteiro' | 'decimal1' | 'decimal3' | 'moeda';
+  formatoValor?: 'inteiro' | 'decimal1' | 'decimal2' | 'decimal3' | 'moeda';
   /** Mês selecionado (1–12) — usado para destacar o ponto no gráfico. */
   mesAtual: number;
   anoAtual: number;
@@ -51,7 +51,7 @@ interface Props {
   /** Sobrescreve o label do período (default: "Jan–{mesAtual}"). */
   labelPeriodo?: string;
   /** Identificador do indicador (gera a query histórica correta). */
-  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho';
+  indicadorKey: 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa';
   /** Cliente — mantido por compatibilidade; não usado na query. */
   clienteId?: string;
   /** Fazenda específica; null = global (somar todas as fazendas do cliente). */
@@ -109,10 +109,11 @@ export function IndicadorHistoricoModal({
   if (!open) return null;
 
   const fmtValor = (v: number | null | undefined): string => {
-    if (formatoValor === 'inteiro') return fmtN(v, 0) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'inteiro')  return fmtN(v, 0) + (unidade ? ' ' + unidade : '');
     if (formatoValor === 'decimal1') return fmtN(v, 1) + (unidade ? ' ' + unidade : '');
+    if (formatoValor === 'decimal2') return fmtN(v, 2) + (unidade ? ' ' + unidade : '');
     if (formatoValor === 'decimal3') return fmtN(v, 3) + (unidade ? ' ' + unidade : '');
-    if (formatoValor === 'moeda') return fmtR(v);
+    if (formatoValor === 'moeda')    return fmtR(v);
     return String(v ?? '—');
   };
 
@@ -385,6 +386,7 @@ export function IndicadorHistoricoModal({
                         v,
                         formatoValor === 'inteiro' ? 0
                           : formatoValor === 'decimal3' ? 3
+                          : formatoValor === 'decimal2' ? 2
                           : 1,
                       ),
                     }}

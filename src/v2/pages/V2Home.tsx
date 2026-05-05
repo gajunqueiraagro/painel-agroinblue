@@ -158,7 +158,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -310,9 +310,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             loading={statusArea === 'carregando'} status={msgArea(statusArea)}
             deltaMes={vsMes(areaProdutivaMes, dadosMesAnt.areaProdutivaMes)}
             deltaAno={vsAno(areaProdutivaMes, dadosAnoAnt.areaProdutivaMes)} />
-          <MetricTile label="UA/ha" value={fmtN(lotUaHa, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
-            deltaMes={vsMes(lotUaHa, dadosMesAnt.lotUaHa)}
-            deltaAno={vsAno(lotUaHa, dadosAnoAnt.lotUaHa)} />
+          <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
+            deltaMes={uaHaIndicador?.deltaMes ?? null}
+            deltaAno={uaHaIndicador?.deltaAno ?? null}
+            deltaMeta={uaHaIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('uaHa')} />
           <MetricTile label="kg/ha" value={fmtN(kgHa, 1)} unit="kg/ha" loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={vsMes(kgHa, dadosMesAnt.kgHa)}
             deltaAno={vsAno(kgHa, dadosAnoAnt.kgHa)} />
@@ -444,6 +446,26 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={gmdIndicador?.deltaMes ?? null}
           deltaAno={gmdIndicador?.deltaAno ?? null}
+        />
+      )}
+      {modalIndicador === 'uaHa' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo={uaHaIndicador?.titulo ?? ''}
+          unidade="UA/ha" formatoValor="decimal2"
+          subtitulo={uaHaIndicador?.subtitulo ?? ''}
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={uaHaIndicador?.serieAno ?? []}
+          serieAnoAnt={uaHaIndicador?.serieAnoAnt}
+          serieMeta={uaHaIndicador?.serieMeta}
+          tipoAcumulado="media"
+          indicadorKey="uaHa"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={uaHaIndicador?.deltaMes ?? null}
+          deltaAno={uaHaIndicador?.deltaAno ?? null}
         />
       )}
       {modalIndicador === 'desfrute' && (

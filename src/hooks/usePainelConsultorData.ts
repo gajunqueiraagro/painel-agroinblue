@@ -13,7 +13,7 @@ import {
 } from '@/hooks/useRebanhoOficial';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/pages/PainelConsultorTab';
-import { computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
+import { computePeriodGmd, rollingAvg } from '@/lib/calculos/painelConsultorIndicadores';
 import type { StatusPilares } from '@/hooks/useStatusPilares';
 
 interface Params {
@@ -112,6 +112,19 @@ export interface PainelConsultorDataResult {
     deltaMeta:  number | null;
     serieAno:   number[];
     serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
+  /** Indicador de UA/ha (lotação) — sem ano anterior nesta fase. */
+  uaHaIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;   // sempre null nesta fase
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];
   } | null;
   loading: boolean;
@@ -655,6 +668,56 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── UA/ha oficial (1-based, length 13) ──
+  // Fórmula período = rollingAvg(lotUaHa) (PC-100). Sem ano anterior nesta fase.
+  // ─────────────────────────────────────────────────────────────
+  const uaHaMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.lotUaHa[i - 1] ?? NaN)
+  );
+
+  const uaHaPeriodo12 = rollingAvg(monthlyData.lotUaHa);
+  const uaHaPeriodoSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (uaHaPeriodo12[i - 1] ?? NaN)
+  );
+
+  const uaHaSerie = isPeriodo ? uaHaPeriodoSerie13 : uaHaMesSerie13;
+  const uaHaValor = safe(uaHaSerie[mesIdx]);
+
+  const uaHaDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(uaHaSerie[mesIdx]);
+    const prev = safe(uaHaSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Meta — monthlyDataMeta.lotUaHa já vem de calcularIndicadoresEficienciaArea.
+  const uaHaMesMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (monthlyDataMeta.lotUaHa[i - 1] ?? NaN)
+      )
+    : null;
+
+  const uaHaPeriodoMetaSerie13 = monthlyDataMeta
+    ? (() => {
+        const arr12 = rollingAvg(monthlyDataMeta.lotUaHa);
+        return Array.from({ length: 13 }, (_, i) =>
+          i === 0 ? NaN : (arr12[i - 1] ?? NaN)
+        );
+      })()
+    : null;
+
+  const uaHaSerieMeta = isPeriodo ? uaHaPeriodoMetaSerie13 : uaHaMesMetaSerie13;
+
+  const uaHaDeltaMeta = (() => {
+    if (!uaHaSerieMeta) return null;
+    const curr = safe(uaHaSerie[mesIdx]);
+    const meta = safe(uaHaSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -695,9 +758,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     valorRebanhoMes: safe(monthlyData.valorRebFin[idx]),
     areaProdutivaMes: safe(areaMensal[idx]),
 
-    lotUaHa: isPeriodo
-      ? meanArr(sliceUpTo(monthlyData.lotUaHa, idx))
-      : safe(monthlyData.lotUaHa[idx]),
+    // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
+    lotUaHa: uaHaValor,
 
     arrHa: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.arrHa, idx))
@@ -765,6 +827,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: gmdSerieAnoAnt ?? undefined,
       serieMeta:   gmdSerieMeta ?? undefined,
     } : null,
+    uaHaIndicador: monthlyData ? {
+      label:     isPeriodo ? 'UA/HA MÉDIA NO PERÍODO' : 'UA/HA NO MÊS',
+      titulo:    isPeriodo ? 'UA/ha no período' : 'UA/ha no mês',
+      subtitulo: isPeriodo
+        ? 'Taxa de lotação média no período'
+        : 'Taxa de lotação no mês',
+      valor:     uaHaValor,
+      deltaMes:  uaHaDeltaMes,
+      deltaAno:  null,                 // sem ano anterior nesta fase
+      deltaMeta: uaHaDeltaMeta,
+      serieAno:    uaHaSerie,
+      serieAnoAnt: undefined,
+      serieMeta:   uaHaSerieMeta ?? undefined,
+    } : null,
     loading,
   };
 
@@ -785,6 +861,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       cabecasIndicador: null,
       pesoMedioIndicador: null,
       gmdIndicador: null,
+      uaHaIndicador: null,
     };
   }
 
