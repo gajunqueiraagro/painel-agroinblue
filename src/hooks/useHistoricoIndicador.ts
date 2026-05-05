@@ -158,8 +158,10 @@ export function useHistoricoIndicador({
           }
 
           if (indicadorKey === 'arrobas') {
-            // soma producao_biologica Jan→mesAtual / 30
-            const pb = rowsPer.reduce((acc: number, r: any) =>
+            // mes: producao_biologica do mes / 30
+            // periodo: Σ producao_biologica Jan→m / 30
+            const rows = viewMode === 'periodo' ? rowsPer : rowsMes;
+            const pb = rows.reduce((acc: number, r: any) =>
               acc + (Number(r.producao_biologica) || 0), 0);
             return pb > 0 ? pb / 30 : null;
           }

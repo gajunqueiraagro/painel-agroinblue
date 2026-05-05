@@ -159,7 +159,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
-    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador,
+    seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
@@ -173,7 +173,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.valor   ?? null)
      : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.valor ?? null)
      : modalIndicador === 'gmd'       ? (gmdIndicador?.valor       ?? null)
-     : modalIndicador === 'arrobas'   ? arrobas
+     : modalIndicador === 'arrobas'   ? (arrobasIndicador?.valor   ?? null)
      : modalIndicador === 'desfrute'  ? desfrute
      : null)
     : null;
@@ -181,6 +181,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.serieMetaIndicador?.[mesNum] ?? null)
      : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.serieMeta?.[mesNum] ?? null)
      : modalIndicador === 'gmd'       ? (gmdIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'arrobas'   ? (arrobasIndicador?.serieMeta?.[mesNum] ?? null)
      : null)
     : null;
   const {
@@ -327,9 +328,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={pesoMedioIndicador?.deltaAno ?? null}
             deltaMeta={pesoMedioIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('pesoMedio')} />
-          <MetricTile label="@ produzidas" value={fmtN(arrobas, 1)} unit="@" loading={loadingPainel}
-            deltaMes={vsMes(arrobas, dadosMesAnt.arrobas)}
-            deltaAno={vsAno(arrobas, dadosAnoAnt.arrobas)}
+          <MetricTile label={arrobasIndicador?.label ?? '@ PRODUZIDAS NO MÊS'} value={fmtN(arrobasIndicador?.valor ?? null, 1)} unit="@" loading={loadingPainel}
+            deltaMes={arrobasIndicador?.deltaMes ?? null}
+            deltaAno={arrobasIndicador?.deltaAno ?? null}
+            deltaMeta={arrobasIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('arrobas')} />
           <MetricTile label="Desfrute cab." value={fmtN(desfrute)} unit="cab" loading={loadingPainel}
             deltaMes={vsMes(desfrute, dadosMesAnt.desfrute)}
@@ -459,20 +461,21 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       {modalIndicador === 'arrobas' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo="@ Produzidas" unidade="@" formatoValor="decimal1"
-          subtitulo="Produção biológica convertida em arrobas"
+          titulo={arrobasIndicador?.titulo ?? ''}
+          unidade="@" formatoValor="decimal1"
+          subtitulo={arrobasIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={seriesMensais?.arrobasProd ?? []}
-          serieAnoAnt={dadosAnoAnt.seriesMensais?.arrobasProd}
-          serieMeta={seriesMeta?.arrobasProd}
+          serieAno={arrobasIndicador?.serieAno ?? []}
+          serieAnoAnt={arrobasIndicador?.serieAnoAnt}
+          serieMeta={arrobasIndicador?.serieMeta}
           tipoAcumulado="soma"
           indicadorKey="arrobas"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
-          deltaMes={calcDeltaV(arrobas, dadosMesAnt.arrobas)}
-          deltaAno={calcDeltaV(arrobas, dadosAnoAnt.arrobas)}
+          deltaMes={arrobasIndicador?.deltaMes ?? null}
+          deltaAno={arrobasIndicador?.deltaAno ?? null}
           historicoAno={historicoAno}
           historicoMeta={historicoAnoMeta}
           loadingHistorico={loadingHistorico}

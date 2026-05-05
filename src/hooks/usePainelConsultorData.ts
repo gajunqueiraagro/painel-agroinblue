@@ -140,6 +140,19 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];      // ausente nesta fase
     serieMeta?:  number[];
   } | null;
+  /** Indicador @ produzidas — fluxo (mês = valor do mês; período = acumulado Jan→mês). */
+  arrobasIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
   loading: boolean;
 }
 
@@ -787,6 +800,84 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
+  // ─────────────────────────────────────────────────────────────
+  // ── @ produzidas oficial — fluxo (1-based, length 13) ──
+  // mes = valor do mês; periodo = soma acumulada Jan→m. Sem média/rollingAvg.
+  // ─────────────────────────────────────────────────────────────
+  const cumSumTo13 = (arr12: number[]): number[] => {
+    const out = Array(13).fill(NaN) as number[];
+    let acc = 0;
+    for (let i = 1; i <= 12; i++) {
+      const v = arr12[i - 1];
+      acc += (v == null || isNaN(v) ? 0 : v);
+      out[i] = acc;
+    }
+    return out;
+  };
+
+  const arrobasMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.arrobasProd[i - 1] ?? NaN)
+  );
+  const arrobasPeriodoSerie13 = cumSumTo13(monthlyData.arrobasProd);
+  const arrobasSerie = isPeriodo ? arrobasPeriodoSerie13 : arrobasMesSerie13;
+  const arrobasValor = safe(arrobasSerie[mesIdx]);
+
+  const arrobasDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(arrobasSerie[mesIdx]);
+    const prev = safe(arrobasSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — viewTotalsAnoAnt[m].producao_biologica / 30
+  const arrobasProdAnoAnt12 = viewTotalsAnoAnt
+    ? Array.from({ length: 12 }, (_, i) =>
+        (viewTotalsAnoAnt[i + 1]?.producao_biologica ?? 0) / 30
+      )
+    : null;
+
+  const arrobasMesAnoAntSerie13 = arrobasProdAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (arrobasProdAnoAnt12[i - 1] ?? NaN)
+      )
+    : null;
+
+  const arrobasPeriodoAnoAntSerie13 = arrobasProdAnoAnt12
+    ? cumSumTo13(arrobasProdAnoAnt12)
+    : null;
+
+  const arrobasSerieAnoAnt = isPeriodo ? arrobasPeriodoAnoAntSerie13 : arrobasMesAnoAntSerie13;
+
+  const arrobasDeltaAno = (() => {
+    if (!arrobasSerieAnoAnt) return null;
+    const curr = safe(arrobasSerie[mesIdx]);
+    const ant  = safe(arrobasSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  // Meta — monthlyDataMeta.arrobasProd
+  const arrobasMesMetaSerie13 = monthlyDataMeta
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (monthlyDataMeta.arrobasProd[i - 1] ?? NaN)
+      )
+    : null;
+
+  const arrobasPeriodoMetaSerie13 = monthlyDataMeta
+    ? cumSumTo13(monthlyDataMeta.arrobasProd)
+    : null;
+
+  const arrobasSerieMeta = isPeriodo ? arrobasPeriodoMetaSerie13 : arrobasMesMetaSerie13;
+
+  const arrobasDeltaMeta = (() => {
+    if (!arrobasSerieMeta) return null;
+    const curr = safe(arrobasSerie[mesIdx]);
+    const meta = safe(arrobasSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -803,9 +894,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // GMD: série oficial (mês = monthlyData.gmd; período = computePeriodGmd PC-100)
     gmd: gmdValor,
 
-    arrobas: isPeriodo
-      ? sumArr(sliceUpTo(monthlyData.arrobasProd, idx))
-      : safe(monthlyData.arrobasProd[idx]),
+    // @ produzidas: série oficial (mês = valor do mês; período = acumulado Jan→m)
+    arrobas: arrobasValor,
 
     desfrute: isPeriodo
       ? sumArr(sliceUpTo(monthlyData.desfruteCab, idx))
@@ -924,6 +1014,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: undefined,
       serieMeta:   kgHaSerieMeta ?? undefined,
     } : null,
+    arrobasIndicador: monthlyData ? {
+      label:     isPeriodo ? '@ PRODUZIDAS NO PERÍODO' : '@ PRODUZIDAS NO MÊS',
+      titulo:    isPeriodo ? '@ produzidas no período' : '@ produzidas no mês',
+      subtitulo: isPeriodo
+        ? 'Arrobas produzidas acumuladas no período'
+        : 'Arrobas produzidas no mês',
+      valor:     arrobasValor,
+      deltaMes:  arrobasDeltaMes,
+      deltaAno:  arrobasDeltaAno,
+      deltaMeta: arrobasDeltaMeta,
+      serieAno:    arrobasSerie,
+      serieAnoAnt: arrobasSerieAnoAnt ?? undefined,
+      serieMeta:   arrobasSerieMeta ?? undefined,
+    } : null,
     loading,
   };
 
@@ -946,6 +1050,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       gmdIndicador: null,
       uaHaIndicador: null,
       kgHaIndicador: null,
+      arrobasIndicador: null,
     };
   }
 
