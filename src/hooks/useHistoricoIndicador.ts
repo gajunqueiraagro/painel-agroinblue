@@ -41,7 +41,9 @@ export type HistoricoIndicadorKey =
   | 'desfrute'
   | 'valorRebanho'
   | 'uaHa'
-  | 'kgHa';
+  | 'kgHa'
+  | 'receitaPec'   // fonte: lancamentos cenario='realizado'/'meta', TIPOS_DESFRUTE, valor_total
+  | 'precoArr';    // fonte: mesma — Σ valor_total / Σ (qtd × peso_medio_kg / 30)
 
 export interface AnoValor {
   ano: number;
@@ -376,6 +378,116 @@ export function useHistoricoIndicador({
               resR.push({ ano: a, valor: calcDesfrute(rowsPorAno[a] ?? [], a) });
             }
             resM.push({ ano: a, valor: null });
+          }
+
+          if (!cancelled) {
+            setHistorico(resR);
+            setHistoricoMeta(resM);
+          }
+          return;
+        }
+
+        // ───── Branch RECEITA PEC / PREÇO R$/@ — fonte: lancamentos (TIPOS_DESFRUTE) ─────
+        // Receita Pec: Σ valor_total por mês.
+        // Preço R$/@: Σ valor_total / Σ (qtd × peso_medio_kg / 30) — mesma query.
+        if (indicadorKey === 'receitaPec' || indicadorKey === 'precoArr') {
+          if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
+            if (!cancelled) {
+              setHistorico([]);
+              setHistoricoMeta([]);
+              setLoading(false);
+            }
+            return;
+          }
+
+          const PAGE = 1000;
+          const allRows: any[] = [];
+          let from = 0;
+          while (true) {
+            let q = supabase
+              .from('lancamentos')
+              .select('tipo, quantidade, peso_medio_kg, valor_total, data, cenario')
+              .eq('cancelado', false)
+              .in('cenario', ['realizado', 'meta'])
+              .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+              .gte('data', `${inicio}-01-01`)
+              .lte('data', `${anoAtual}-12-31`);
+            if (fazendaId) q = q.eq('fazenda_id', fazendaId);
+            else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
+
+            const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+            if (cancelled) return;
+            if (error) {
+              setHistorico([]); setHistoricoMeta([]);
+              return;
+            }
+            if (!data || data.length === 0) break;
+            allRows.push(...data);
+            if (data.length < PAGE) break;
+            from += PAGE;
+          }
+
+          // Agrupa por (ano, cenario)
+          const rowsR: Record<number, any[]> = {};
+          const rowsM: Record<number, any[]> = {};
+          for (const r of allRows) {
+            const a = Number(String(r.data ?? '').slice(0, 4));
+            if (isNaN(a)) continue;
+            const bucket = r.cenario === 'meta' ? rowsM : rowsR;
+            (bucket[a] ??= []).push(r);
+          }
+
+          const calcAgregado = (rowsDoAno: any[]): { rec: number[]; desfArr: number[] } => {
+            const rec = Array(12).fill(0);
+            const desfArr = Array(12).fill(0);
+            for (const r of rowsDoAno) {
+              const m = parseInt(String(r.data ?? '').slice(5, 7));
+              if (isNaN(m) || m < 1 || m > 12) continue;
+              const qtd = Number(r.quantidade) || 0;
+              const pmk = Number(r.peso_medio_kg) || 0;
+              const vt  = Math.abs(Number(r.valor_total) || 0);
+              rec[m - 1]    += vt;
+              desfArr[m - 1] += (qtd * pmk) / 30;
+            }
+            return { rec, desfArr };
+          };
+
+          const calcValor = (rowsDoAno: any[]): number | null => {
+            if (!rowsDoAno || rowsDoAno.length === 0) return null;
+            const { rec, desfArr } = calcAgregado(rowsDoAno);
+            if (indicadorKey === 'receitaPec') {
+              if (viewMode === 'periodo') {
+                let acc = 0;
+                for (let i = 0; i < mesAtual; i++) acc += rec[i];
+                return acc > 0 ? acc : null;
+              }
+              const v = rec[mesAtual - 1];
+              return v > 0 ? v : null;
+            }
+            // precoArr
+            if (viewMode === 'periodo') {
+              let rAcc = 0; let dAcc = 0;
+              for (let i = 0; i < mesAtual; i++) { rAcc += rec[i]; dAcc += desfArr[i]; }
+              return dAcc > 0 ? rAcc / dAcc : null;
+            }
+            const r = rec[mesAtual - 1];
+            const d = desfArr[mesAtual - 1];
+            return d > 0 ? r / d : null;
+          };
+
+          const resR: AnoValor[] = [];
+          const resM: AnoValor[] = [];
+          for (let a = inicio; a <= anoAtual; a++) {
+            if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+              resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+            } else {
+              resR.push({ ano: a, valor: calcValor(rowsR[a] ?? []) });
+            }
+            if (a === anoAtual && valorOficialMetaAnoAtual !== undefined) {
+              resM.push({ ano: a, valor: valorOficialMetaAnoAtual ?? null });
+            } else {
+              resM.push({ ano: a, valor: calcValor(rowsM[a] ?? []) });
+            }
           }
 
           if (!cancelled) {

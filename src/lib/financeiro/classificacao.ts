@@ -319,6 +319,18 @@ export function isDesembolsoProdutivo(l: LancamentoClassificavel): boolean {
   return macro === 'custeio produtivo' || macro === 'investimento na fazenda';
 }
 
+/**
+ * É Custeio Produção Pecuária (Custo Fixo Pec + Custo Variável Pec).
+ * macro = 'custeio produtivo' E escopo != 'agri'.
+ * NÃO inclui: investimento na fazenda, investimento em bovinos, juros,
+ * amortizações, agricultura.
+ * Usado como numerador em: Custeio Produção Pec., Custo Produtivo R$/@,
+ * Custo Cab. R$/cab., Margem por @.
+ */
+export function isCusteioPecuaria(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'custeio produtivo' && getEscopo(l) !== 'agri';
+}
+
 /** É Receita operacional (macro_custo = "receitas") */
 export function isReceita(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'receitas';

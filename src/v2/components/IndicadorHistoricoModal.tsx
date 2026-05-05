@@ -55,7 +55,7 @@ interface Props {
    *  não têm histórico multi-ano — V2Home não chama useHistoricoIndicador para eles. */
   indicadorKey:
     | 'cabecas' | 'pesoMedio' | 'arrobas' | 'gmd' | 'desfrute' | 'valorRebanho' | 'uaHa' | 'kgHa'
-    | 'receitaPec' | 'desembolsoProd' | 'custoArr' | 'precoArr' | 'custoCab' | 'margemArr';
+    | 'receitaPec' | 'custeioPec' | 'custoArr' | 'precoArr' | 'custoCab' | 'margemArr';
   /** Cliente — mantido por compatibilidade; não usado na query. */
   clienteId?: string;
   /** Fazenda específica; null = global (somar todas as fazendas do cliente). */

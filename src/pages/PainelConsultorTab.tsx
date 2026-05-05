@@ -49,6 +49,7 @@ import {
   isSaida as isFinSaida,
   classificarEntrada,
   classificarSaida,
+  isCusteioPecuaria,
   datePagtoMes,
   datePagtoAno,
 } from '@/lib/financeiro/classificacao';
@@ -156,6 +157,12 @@ interface MonthlyData {
   saiFin: number[];
   recPec: number[];
   custOper: number[];
+  /**
+   * Custeio Produção Pecuária — fonte: lancFin com macro='custeio produtivo' e escopo!='agri'.
+   * Subconjunto estrito de custOper (que também inclui investimento na fazenda).
+   * Numerador oficial de: Custo Produtivo R$/@, Custo Cab. R$/cab., Margem por @.
+   */
+  custeioPec: number[];
   resCaixa: number[];
   recPecComp: number[];
   resOper: number[];
@@ -261,6 +268,9 @@ export function buildMonthlyDataFromView(
   const recPecMes = (m: number) => finDoMes(m).filter(l => isFinEntrada(l) && classificarEntrada(l) === 'Receitas Pecuárias').reduce((s, l) => s + Math.abs(l.valor), 0);
   const deducMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Dedução de Receitas').reduce((s, l) => s + Math.abs(l.valor), 0);
   const desembPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && classificarSaida(l) === 'Desemb. Produtivo Pec.').reduce((s, l) => s + Math.abs(l.valor), 0);
+  // Custeio Produção Pecuária — APENAS macro 'custeio produtivo' E escopo != 'agri'.
+  // Subconjunto estrito de desembPecMes (que também inclui 'investimento na fazenda').
+  const custeioPecMes = (m: number) => finDoMes(m).filter(l => isFinSaida(l) && isCusteioPecuaria(l)).reduce((s, l) => s + Math.abs(l.valor), 0);
 
   // valorRebanhoMes has 13 elements: [0]=Dec prev year, [1]=Jan, ..., [12]=Dec
   const valorRebFin = valorRebanhoMes.slice(1);
@@ -270,6 +280,7 @@ export function buildMonthlyDataFromView(
   const saiFinArr = mk(saiFinMes);
   const recPecArr = mk(recPecMes);
   const custOperArr = mk(desembPecMes);
+  const custeioPecArr = mk(custeioPecMes);
   const resCaixaArr = mk(m => entFinMes(m) - saiFinMes(m));
   const recPecCompArr = mk(recPecCompMes);
   const resOperArr = mk(m => recPecCompMes(m) - deducMes(m) - desembPecMes(m));
@@ -300,7 +311,7 @@ export function buildMonthlyDataFromView(
     })(),
     valorRebIni, valorRebFin,
     entFin: entFinArr, saiFin: saiFinArr, recPec: recPecArr,
-    custOper: custOperArr, resCaixa: resCaixaArr,
+    custOper: custOperArr, custeioPec: custeioPecArr, resCaixa: resCaixaArr,
     recPecComp: recPecCompArr, resOper: resOperArr,
     ebitda: ebitdaArr, varValorReb: varValorRebArr,
     desfruteCab, desfrute_arr,

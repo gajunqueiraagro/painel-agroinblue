@@ -196,7 +196,7 @@ export interface PainelConsultorDataResult {
   /**
    * Receita Pecuária Competência — fonte: monthlyData.recPecComp (lancPec desfrute, valorTotal/competência).
    * Mês = recPecComp[m]. Período = Σ recPecComp Jan→m.
-   * Sem ano-1 (lancPec ano-1 não carregado) nem meta (não existe campo no monthlyDataMeta).
+   * Ano-1 e meta: queries diretas a 'lancamentos' (cenario='realizado'/'meta', TIPOS_DESFRUTE).
    */
   receitaPecIndicador: {
     label:      string;
@@ -204,18 +204,19 @@ export interface PainelConsultorDataResult {
     subtitulo:  string;
     valor:      number | null;
     deltaMes:   number | null;
-    deltaAno:   number | null;   // sempre null — fonte ano-1 indisponível
-    deltaMeta:  number | null;   // sempre null — fonte meta indisponível
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
     serieAno:   number[];
-    serieAnoAnt?: number[];      // ausente
-    serieMeta?:  number[];       // ausente
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
   } | null;
   /**
-   * Desembolso Produção Pecuária — fonte: monthlyData.custOper (lancFin classificarSaida='Desemb. Produtivo Pec.', caixa).
-   * Mês = custOper[m]. Período = Σ custOper Jan→m.
-   * Sem ano-1 nem meta — mesmas razões da receita.
+   * Custeio Produção Pecuária — fonte: monthlyData.custeioPec (lancFin macro='custeio produtivo' + escopo!='agri').
+   * Mês = custeioPec[m]. Período = Σ custeioPec Jan→m.
+   * NÃO inclui investimento na fazenda, investimento em bovinos, juros, amortização nem agricultura.
+   * Sem ano-1 nem meta — useFinanceiro hardcoded cenario='realizado' do ano corrente.
    */
-  desembolsoProdIndicador: {
+  custeioPecIndicador: {
     label:      string;
     titulo:     string;
     subtitulo:  string;
@@ -247,7 +248,7 @@ export interface PainelConsultorDataResult {
   /**
    * Preço de Venda R$/@ — derivado: recPecComp / desfrute_arr.
    * Mês = recPecComp[m]/desfrute_arr[m]. Período = Σ recPecComp / Σ desfrute_arr.
-   * NÃO existe no PC-100 (PC-100 tem valorPorArr de estoque, não venda). Sem ano-1 nem meta.
+   * Ano-1 e meta: derivados das mesmas queries diretas a 'lancamentos' (pecAnoAnt12/pecMeta12).
    */
   precoArrIndicador: {
     label:      string;
@@ -607,6 +608,130 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     load();
     return () => { cancelled = true; };
   }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Pec ano-1 (cenario='realizado', TIPOS_DESFRUTE) — agrega Σ valor_total e Σ qtd*pesoMedio/30
+  // por mês. Suporta Receita Pec ano-1 e Preço de Venda R$/@ ano-1 (mesma fonte oficial).
+  const [pecAnoAnt12, setPecAnoAnt12] = useState<{ rec: number[]; desfArr: number[] }>(
+    () => ({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) }),
+  );
+  useEffect(() => {
+    if (!incluirComparativos) {
+      setPecAnoAnt12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const anoAnt = ano - 1;
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from('lancamentos')
+          .select('tipo, quantidade, peso_medio_kg, valor_total, data')
+          .eq('cancelado', false)
+          .eq('cenario', 'realizado')
+          .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+          .gte('data', `${anoAnt}-01-01`)
+          .lte('data', `${anoAnt}-12-31`);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setPecAnoAnt12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setPecAnoAnt12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+          return;
+        }
+        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const rec = Array(12).fill(0);
+      const desfArr = Array(12).fill(0);
+      for (const r of allRows) {
+        const m = parseInt(String(r.data ?? '').slice(5, 7));
+        if (isNaN(m) || m < 1 || m > 12) continue;
+        const qtd = Number(r.quantidade) || 0;
+        const pmk = Number(r.peso_medio_kg) || 0;
+        const vt  = Math.abs(Number(r.valor_total) || 0);
+        rec[m - 1]    += vt;
+        desfArr[m - 1] += (qtd * pmk) / 30;
+      }
+      setPecAnoAnt12({ rec, desfArr });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
+
+  // Pec META (cenario='meta', TIPOS_DESFRUTE) — mesma estrutura para o ano corrente.
+  const [pecMeta12, setPecMeta12] = useState<{ rec: number[]; desfArr: number[] }>(
+    () => ({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) }),
+  );
+  useEffect(() => {
+    if (!carregarMetaEffective) {
+      setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+      return;
+    }
+    let cancelled = false;
+    const cid = clienteAtual?.id;
+    const load = async () => {
+      const PAGE = 1000;
+      const allRows: any[] = [];
+      let from = 0;
+      while (true) {
+        let q = supabase
+          .from('lancamentos')
+          .select('tipo, quantidade, peso_medio_kg, valor_total, data')
+          .eq('cancelado', false)
+          .eq('cenario', 'meta')
+          .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+          .gte('data', `${ano}-01-01`)
+          .lte('data', `${ano}-12-31`);
+        if (isGlobal) {
+          if (!cid) {
+            if (!cancelled) setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+            return;
+          }
+          q = q.eq('cliente_id', cid);
+        } else if (fazendaId && fazendaId !== '__global__') {
+          q = q.eq('fazenda_id', fazendaId);
+        } else {
+          if (!cancelled) setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
+          return;
+        }
+        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error || !data || data.length === 0) break;
+        allRows.push(...data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      if (cancelled) return;
+      const rec = Array(12).fill(0);
+      const desfArr = Array(12).fill(0);
+      for (const r of allRows) {
+        const m = parseInt(String(r.data ?? '').slice(5, 7));
+        if (isNaN(m) || m < 1 || m > 12) continue;
+        const qtd = Number(r.quantidade) || 0;
+        const pmk = Number(r.peso_medio_kg) || 0;
+        const vt  = Math.abs(Number(r.valor_total) || 0);
+        rec[m - 1]    += vt;
+        desfArr[m - 1] += (qtd * pmk) / 30;
+      }
+      setPecMeta12({ rec, desfArr });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [carregarMetaEffective, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
   // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
@@ -1466,28 +1591,61 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
-  // === 2) Desembolso Produção Pecuária ===
-  const desembolsoProdMesSerie13 = Array.from({ length: 13 }, (_, i) =>
-    i === 0 ? NaN : (monthlyData.custOper[i - 1] ?? NaN)
+  // Receita Pec — ano-1 e meta (fonte: pecAnoAnt12 / pecMeta12 via fetch direto a 'lancamentos').
+  const receitaPecAnoAntPossui = pecAnoAnt12.rec.some(v => v > 0);
+  const receitaPecMesAnoAntSerie13 = receitaPecAnoAntPossui
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (pecAnoAnt12.rec[i - 1] ?? NaN))
+    : null;
+  const receitaPecPeriodoAnoAntSerie13 = receitaPecAnoAntPossui
+    ? cumSumTo13(pecAnoAnt12.rec)
+    : null;
+  const receitaPecSerieAnoAnt = isPeriodo ? receitaPecPeriodoAnoAntSerie13 : receitaPecMesAnoAntSerie13;
+  const receitaPecDeltaAno = (() => {
+    if (!receitaPecSerieAnoAnt) return null;
+    const curr = safe(receitaPecSerie[mesIdx]);
+    const ant  = safe(receitaPecSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const receitaPecMetaPossui = pecMeta12.rec.some(v => v > 0);
+  const receitaPecMesMetaSerie13 = receitaPecMetaPossui
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (pecMeta12.rec[i - 1] ?? NaN))
+    : null;
+  const receitaPecPeriodoMetaSerie13 = receitaPecMetaPossui
+    ? cumSumTo13(pecMeta12.rec)
+    : null;
+  const receitaPecSerieMeta = isPeriodo ? receitaPecPeriodoMetaSerie13 : receitaPecMesMetaSerie13;
+  const receitaPecDeltaMeta = (() => {
+    if (!receitaPecSerieMeta) return null;
+    const curr = safe(receitaPecSerie[mesIdx]);
+    const meta = safe(receitaPecSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
+  // === 2) Custeio Produção Pecuária — fonte custeioPec (sem investimento/juros/agri) ===
+  const custeioPecMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.custeioPec[i - 1] ?? NaN)
   );
-  const desembolsoProdPeriodoSerie13 = cumSumTo13(monthlyData.custOper);
-  const desembolsoProdSerie = isPeriodo ? desembolsoProdPeriodoSerie13 : desembolsoProdMesSerie13;
-  const desembolsoProdValor = safe(desembolsoProdSerie[mesIdx]);
-  const desembolsoProdDeltaMes = (() => {
+  const custeioPecPeriodoSerie13 = cumSumTo13(monthlyData.custeioPec);
+  const custeioPecSerie = isPeriodo ? custeioPecPeriodoSerie13 : custeioPecMesSerie13;
+  const custeioPecValor = safe(custeioPecSerie[mesIdx]);
+  const custeioPecDeltaMes = (() => {
     if (mesIdx <= 1) return null;
-    const curr = safe(desembolsoProdSerie[mesIdx]);
-    const prev = safe(desembolsoProdSerie[mesIdx - 1]);
+    const curr = safe(custeioPecSerie[mesIdx]);
+    const prev = safe(custeioPecSerie[mesIdx - 1]);
     if (curr == null || prev == null || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
   })();
 
-  // === 3) Custo Produtivo R$/@ — custOper / arrobasProd ===
-  const custoArrMes12 = monthlyData.custOper.map((c, i) => {
+  // === 3) Custo Produtivo R$/@ — custeioPec / arrobasProd ===
+  const custoArrMes12 = monthlyData.custeioPec.map((c, i) => {
     const a = monthlyData.arrobasProd[i];
     return a != null && a > 0 ? c / a : NaN;
   });
   const custoArrPeriodo12 = (() => {
-    const cAcum = cumSumArr(monthlyData.custOper);
+    const cAcum = cumSumArr(monthlyData.custeioPec);
     const aAcum = cumSumArr(monthlyData.arrobasProd);
     return cAcum.map((c, i) => aAcum[i] > 0 ? c / aAcum[i] : NaN);
   })();
@@ -1533,14 +1691,73 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - prev) / prev) * 100;
   })();
 
-  // === 5) Custo Cab. R$/cab — custOper / cabMedia (mesma base GMD) ===
-  const custoCabMes12 = monthlyData.custOper.map((c, i) => {
+  // Preço R$/@ — ano-1 e meta (mesmas fontes pecAnoAnt12 / pecMeta12).
+  const precoArrAnoAntPossui = pecAnoAnt12.desfArr.some(v => v > 0);
+  const precoArrMesAnoAnt12 = precoArrAnoAntPossui
+    ? pecAnoAnt12.rec.map((r, i) => {
+        const d = pecAnoAnt12.desfArr[i];
+        return d > 0 ? r / d : NaN;
+      })
+    : null;
+  const precoArrPeriodoAnoAnt12 = precoArrAnoAntPossui
+    ? (() => {
+        const rAcum = cumSumArr(pecAnoAnt12.rec);
+        const dAcum = cumSumArr(pecAnoAnt12.desfArr);
+        return rAcum.map((r, i) => dAcum[i] > 0 ? r / dAcum[i] : NaN);
+      })()
+    : null;
+  const precoArrMesAnoAntSerie13 = precoArrMesAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (precoArrMesAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const precoArrPeriodoAnoAntSerie13 = precoArrPeriodoAnoAnt12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (precoArrPeriodoAnoAnt12[i - 1] ?? NaN))
+    : null;
+  const precoArrSerieAnoAnt = isPeriodo ? precoArrPeriodoAnoAntSerie13 : precoArrMesAnoAntSerie13;
+  const precoArrDeltaAno = (() => {
+    if (!precoArrSerieAnoAnt) return null;
+    const curr = safe(precoArrSerie[mesIdx]);
+    const ant  = safe(precoArrSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  const precoArrMetaPossui = pecMeta12.desfArr.some(v => v > 0);
+  const precoArrMesMeta12 = precoArrMetaPossui
+    ? pecMeta12.rec.map((r, i) => {
+        const d = pecMeta12.desfArr[i];
+        return d > 0 ? r / d : NaN;
+      })
+    : null;
+  const precoArrPeriodoMeta12 = precoArrMetaPossui
+    ? (() => {
+        const rAcum = cumSumArr(pecMeta12.rec);
+        const dAcum = cumSumArr(pecMeta12.desfArr);
+        return rAcum.map((r, i) => dAcum[i] > 0 ? r / dAcum[i] : NaN);
+      })()
+    : null;
+  const precoArrMesMetaSerie13 = precoArrMesMeta12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (precoArrMesMeta12[i - 1] ?? NaN))
+    : null;
+  const precoArrPeriodoMetaSerie13 = precoArrPeriodoMeta12
+    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (precoArrPeriodoMeta12[i - 1] ?? NaN))
+    : null;
+  const precoArrSerieMeta = isPeriodo ? precoArrPeriodoMetaSerie13 : precoArrMesMetaSerie13;
+  const precoArrDeltaMeta = (() => {
+    if (!precoArrSerieMeta) return null;
+    const curr = safe(precoArrSerie[mesIdx]);
+    const meta = safe(precoArrSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
+  // === 5) Custo Cab. R$/cab — custeioPec / cabMedia (mesma base GMD) ===
+  const custoCabMes12 = monthlyData.custeioPec.map((c, i) => {
     const cm = monthlyData.cabMediaMes[i];
     return cm != null && cm > 0 ? c / cm : NaN;
   });
   const custoCabPeriodoSerie13 = Array.from({ length: 13 }, (_, i) => {
     if (i === 0) return NaN;
-    const cAcum = sumArr(sliceUpTo(monthlyData.custOper, i - 1));
+    const cAcum = sumArr(sliceUpTo(monthlyData.custeioPec, i - 1));
     const cmAcum = cabMediaAcumulada[i];
     return cmAcum > 0 ? cAcum / cmAcum : NaN;
   });
@@ -1765,23 +1982,23 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Receita pecuária do mês (competência)',
       valor:     receitaPecValor,
       deltaMes:  receitaPecDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  receitaPecDeltaAno,
+      deltaMeta: receitaPecDeltaMeta,
       serieAno:    receitaPecSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: receitaPecSerieAnoAnt ?? undefined,
+      serieMeta:   receitaPecSerieMeta ?? undefined,
     } : null,
-    desembolsoProdIndicador: monthlyData ? {
-      label:     isPeriodo ? 'DESEMBOLSO PRODUÇÃO PECUÁRIA ACUM.' : 'DESEMBOLSO PRODUÇÃO PECUÁRIA NO MÊS',
-      titulo:    isPeriodo ? 'Desembolso Produção Pecuária acum.' : 'Desembolso Produção Pecuária no mês',
+    custeioPecIndicador: monthlyData ? {
+      label:     isPeriodo ? 'CUSTEIO PRODUÇÃO PECUÁRIA ACUM.' : 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS',
+      titulo:    isPeriodo ? 'Custeio Produção Pecuária acum.' : 'Custeio Produção Pecuária no mês',
       subtitulo: isPeriodo
-        ? 'Desembolso pecuário acumulado Jan→mês (caixa)'
-        : 'Desembolso pecuário do mês (caixa)',
-      valor:     desembolsoProdValor,
-      deltaMes:  desembolsoProdDeltaMes,
+        ? 'Custo Fixo + Custo Variável Pecuária acumulado Jan→mês (caixa)'
+        : 'Custo Fixo + Custo Variável Pecuária no mês (caixa)',
+      valor:     custeioPecValor,
+      deltaMes:  custeioPecDeltaMes,
       deltaAno:  null,
       deltaMeta: null,
-      serieAno:    desembolsoProdSerie,
+      serieAno:    custeioPecSerie,
       serieAnoAnt: undefined,
       serieMeta:   undefined,
     } : null,
@@ -1807,11 +2024,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         : 'Receita pecuária por @ desfrutada no mês',
       valor:     precoArrValor,
       deltaMes:  precoArrDeltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
+      deltaAno:  precoArrDeltaAno,
+      deltaMeta: precoArrDeltaMeta,
       serieAno:    precoArrSerie,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+      serieAnoAnt: precoArrSerieAnoAnt ?? undefined,
+      serieMeta:   precoArrSerieMeta ?? undefined,
     } : null,
     custoCabIndicador: monthlyData ? {
       label:     isPeriodo ? 'CUSTO CAB. PERÍODO R$/CAB.' : 'CUSTO CAB. MÊS R$/CAB.',
@@ -1867,7 +2084,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       desfruteIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
-      desembolsoProdIndicador: null,
+      custeioPecIndicador: null,
       custoArrIndicador: null,
       precoArrIndicador: null,
       custoCabIndicador: null,

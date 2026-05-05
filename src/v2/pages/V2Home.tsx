@@ -171,14 +171,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
-    receitaPecIndicador, desembolsoProdIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
+    receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
   // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
   // uaHa/kgHa: branch específico que cruza fechamento_area_snapshot + zoot_mensal_cache.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa'];
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa', 'receitaPec', 'precoArr'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
@@ -192,13 +192,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'valorRebanho' ? (valorRebanhoIndicador?.valor ?? null)
      : modalIndicador === 'uaHa'         ? (uaHaIndicador?.valor         ?? null)
      : modalIndicador === 'kgHa'         ? (kgHaIndicador?.valor         ?? null)
+     : modalIndicador === 'receitaPec'   ? (receitaPecIndicador?.valor   ?? null)
+     : modalIndicador === 'precoArr'     ? (precoArrIndicador?.valor     ?? null)
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
-    ? (modalIndicador === 'cabecas'   ? (cabecasIndicador?.serieMetaIndicador?.[mesNum] ?? null)
-     : modalIndicador === 'pesoMedio' ? (pesoMedioIndicador?.serieMeta?.[mesNum] ?? null)
-     : modalIndicador === 'gmd'       ? (gmdIndicador?.serieMeta?.[mesNum] ?? null)
-     : modalIndicador === 'arrobas'   ? (arrobasIndicador?.serieMeta?.[mesNum] ?? null)
+    ? (modalIndicador === 'cabecas'    ? (cabecasIndicador?.serieMetaIndicador?.[mesNum] ?? null)
+     : modalIndicador === 'pesoMedio'  ? (pesoMedioIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'gmd'        ? (gmdIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'arrobas'    ? (arrobasIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'receitaPec' ? (receitaPecIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'precoArr'   ? (precoArrIndicador?.serieMeta?.[mesNum] ?? null)
      : null)
     : null;
   const {
@@ -282,8 +286,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
   return (
-    <div className="px-4 py-5 space-y-4 max-w-7xl">
-      <div>
+    <div className="px-4 pb-5 max-w-7xl">
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-foreground">
           {g}{clienteAtual ? ', ' + clienteAtual.nome : ''}
         </h2>
@@ -315,6 +319,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           </div>
         )}
       </div>
+      <div className="space-y-4">
 
       {!dadosCompletos && (
         <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-800">
@@ -394,13 +399,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaMeta={receitaPecIndicador?.deltaMeta ?? null}
             onClick={() => setModalIndicador('receitaPec')} />
           <MetricTile
-            label={desembolsoProdIndicador?.label ?? 'DESEMBOLSO PRODUÇÃO PECUÁRIA NO MÊS'}
-            value={fmtR(desembolsoProdIndicador?.valor ?? null)}
+            label={custeioPecIndicador?.label ?? 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS'}
+            value={fmtR(custeioPecIndicador?.valor ?? null)}
             loading={loadingPainel}
-            deltaMes={desembolsoProdIndicador?.deltaMes ?? null}
-            deltaAno={desembolsoProdIndicador?.deltaAno ?? null}
-            deltaMeta={desembolsoProdIndicador?.deltaMeta ?? null}
-            onClick={() => setModalIndicador('desembolsoProd')} />
+            deltaMes={custeioPecIndicador?.deltaMes ?? null}
+            deltaAno={custeioPecIndicador?.deltaAno ?? null}
+            deltaMeta={custeioPecIndicador?.deltaMeta ?? null}
+            onClick={() => setModalIndicador('custeioPec')} />
           <MetricTile
             label={custoArrIndicador?.label ?? 'CUSTO PRODUTIVO R$/@'}
             value={fmtR(custoArrIndicador?.valor ?? null)}
@@ -472,6 +477,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           })()}
         </SectionBlock>
 
+      </div>
       </div>
 
       {modalIndicador === 'cabecas' && (
@@ -679,26 +685,29 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={receitaPecIndicador?.deltaMes ?? null}
           deltaAno={receitaPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
-      {modalIndicador === 'desembolsoProd' && (
+      {modalIndicador === 'custeioPec' && (
         <IndicadorHistoricoModal
           open onClose={() => setModalIndicador(null)}
-          titulo={desembolsoProdIndicador?.titulo ?? ''}
+          titulo={custeioPecIndicador?.titulo ?? ''}
           formatoValor="moedaAbreviada"
-          subtitulo={desembolsoProdIndicador?.subtitulo ?? ''}
+          subtitulo={custeioPecIndicador?.subtitulo ?? ''}
           mesAtual={mesNum} anoAtual={anoNum}
-          serieAno={desembolsoProdIndicador?.serieAno ?? []}
-          serieAnoAnt={desembolsoProdIndicador?.serieAnoAnt}
-          serieMeta={desembolsoProdIndicador?.serieMeta}
+          serieAno={custeioPecIndicador?.serieAno ?? []}
+          serieAnoAnt={custeioPecIndicador?.serieAnoAnt}
+          serieMeta={custeioPecIndicador?.serieMeta}
           tipoAcumulado={isPeriodo ? 'soma' : 'posicao'}
-          indicadorKey="desembolsoProd"
+          indicadorKey="custeioPec"
           clienteId={clienteAtual?.id}
           fazendaId={isGlobal ? null : fazendaAtual?.id}
           fazendaIds={fazendaIdsPecuaria}
           anoInicio={anoNum - 6}
-          deltaMes={desembolsoProdIndicador?.deltaMes ?? null}
-          deltaAno={desembolsoProdIndicador?.deltaAno ?? null}
+          deltaMes={custeioPecIndicador?.deltaMes ?? null}
+          deltaAno={custeioPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
         />
       )}
@@ -742,6 +751,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={precoArrIndicador?.deltaMes ?? null}
           deltaAno={precoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
         />
       )}
       {modalIndicador === 'custoCab' && (
