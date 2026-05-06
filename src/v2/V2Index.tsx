@@ -43,6 +43,8 @@ import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
+import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
+import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { V2Configuracoes } from './pages/V2Configuracoes';
@@ -50,6 +52,39 @@ import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
+
+/**
+ * V2 → Financeiro → Financiamentos.
+ * Mesma orquestração do V1 (Index.tsx finView) — list / novo / detalhe.
+ * Mantém estado local; troca de section desmonta e reseta.
+ */
+type FinView = { mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string };
+function FinanciamentosViewV2() {
+  const [view, setView] = useState<FinView>({ mode: 'list' });
+
+  if (view.mode === 'detalhe') {
+    return (
+      <FinanciamentoDetalhe
+        id={view.id}
+        onVoltar={() => setView({ mode: 'list' })}
+      />
+    );
+  }
+  if (view.mode === 'novo') {
+    return (
+      <FinanciamentoCadastro
+        onVoltar={() => setView({ mode: 'list' })}
+        onSalvo={() => setView({ mode: 'list' })}
+      />
+    );
+  }
+  return (
+    <FinanciamentosListaPage
+      onNovo={() => setView({ mode: 'novo' })}
+      onDetalhe={(id) => setView({ mode: 'detalhe', id })}
+    />
+  );
+}
 
 interface V2LancamentosWrapperProps {
   /** Abate para abrir em modo edição (vindo da Conferência). */
@@ -196,7 +231,7 @@ export default function V2Index() {
       <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
     );
     if (section === 'financiamentos') return (
-      <FinanciamentosListaPage />
+      <FinanciamentosViewV2 />
     );
     if (section === 'saldos-mensais') return (
       <FinV2SaldosTab />
