@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import type { Lancamento } from '@/types/cattle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
@@ -50,7 +51,15 @@ import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
 
-function V2LancamentosWrapper() {
+interface V2LancamentosWrapperProps {
+  /** Abate para abrir em modo edição (vindo da Conferência). */
+  abateParaEditar?: Lancamento | null;
+  /** Venda para abrir em modo edição (vindo da Conferência). */
+  vendaParaEditar?: Lancamento | null;
+  /** Callback chamado após cancelar/salvar edição vinda da Conferência. */
+  onReturnFromEdit?: () => void;
+}
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit }: V2LancamentosWrapperProps = {}) {
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
   const {
@@ -98,6 +107,10 @@ function V2LancamentosWrapper() {
       onEditar={wrappedEditar as any}
       onRemover={wrappedRemover as any}
       onCountFinanceiros={countFinanceirosVinculados}
+      abateParaEditar={abateParaEditar}
+      vendaParaEditar={vendaParaEditar}
+      onReturnFromEdit={onReturnFromEdit}
+      abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
     />
   );
 }
@@ -114,6 +127,14 @@ export default function V2Index() {
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
+  // Estado para edição completa de Abate/Venda vinda da Conferência.
+  // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
+  const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
+  const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
+  const limparEdicaoAvancada = () => {
+    setAbateParaEditar(null);
+    setVendaParaEditar(null);
+  };
   const periodoTipo = getPeriodoTipo(section);
   const { clientes, clienteAtual } = useCliente();
   const { fazendas, isGlobal } = useFazenda();
@@ -236,6 +257,16 @@ export default function V2Index() {
             filtroStatusInicial="realizado"
             onRemover={removerLancamento}
             onEditar={editarLancamento}
+            onEditarAbate={(l) => {
+              setAbateParaEditar(l);
+              setVendaParaEditar(null);
+              setSection('lancamentos-zoot');
+            }}
+            onEditarVenda={(l) => {
+              setVendaParaEditar(l);
+              setAbateParaEditar(null);
+              setSection('lancamentos-zoot');
+            }}
           />
         )}
       </V2ZootWrapper>
@@ -276,7 +307,16 @@ export default function V2Index() {
         filtroMesInicial={mes === '0' ? undefined : Number(mes)}
       />
     );
-    if (section === 'lancamentos-zoot') return <V2LancamentosWrapper />;
+    if (section === 'lancamentos-zoot') return (
+      <V2LancamentosWrapper
+        abateParaEditar={abateParaEditar}
+        vendaParaEditar={vendaParaEditar}
+        onReturnFromEdit={() => {
+          limparEdicaoAvancada();
+          setSection('conferencia-lancamentos');
+        }}
+      />
+    );
     if (section === 'chuvas') return (
       <ChuvasTab anoInicial={ano} />
     );
