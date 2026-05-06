@@ -30,6 +30,7 @@ import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
+import { EditAbateSheet } from '@/components/edit/EditAbateSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
@@ -105,6 +106,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [consumoEditOpen, setConsumoEditOpen] = useState(false);
   // Etapa 5 — sheet padronizado para Reclassificação (substitui Dialog genérico)
   const [reclassificacaoEditOpen, setReclassificacaoEditOpen] = useState(false);
+  // Etapa 6 — sheet padronizado para Abate (substitui Dialog genérico)
+  const [abateEditOpen, setAbateEditOpen] = useState(false);
 
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
@@ -200,6 +203,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (isReclassificacao(lancamento.tipo)) {
       // Etapa 5 — sheet padronizado para Reclassificação.
       setReclassificacaoEditOpen(true);
+    } else if (lancamento.tipo === 'abate') {
+      // Etapa 6 — sheet padronizado para Abate.
+      setAbateEditOpen(true);
     } else {
       setForm({ ...lancamento });
       setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
@@ -912,6 +918,20 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           podeRemover={true}
           p1Oficial={p1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
+        />
+
+        {/* Etapa 6 — Sheet padronizado de Abate */}
+        <EditAbateSheet
+          lancamento={lancamento}
+          open={abateEditOpen}
+          onOpenChange={setAbateEditOpen}
+          onSalvar={onEditar}
+          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
+          podeRemover={true}
+          canEditMeta={canEditMeta}
+          p1Oficial={p1Oficial}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazenda}
         />
 
         {/* Confirmation dialog for deletion */}
