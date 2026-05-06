@@ -15,6 +15,7 @@ import { ReactNode } from 'react';
 import {
   LayoutDashboard, Beef, DollarSign, Target,
   Settings, LogOut, KeyRound, ChevronRight,
+  Briefcase, ShieldCheck, Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,6 +45,9 @@ const GRUPO_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
   rebanho:      Beef,
   financeiro:   DollarSign,
   planejamento: Target,
+  executivo:    Briefcase,
+  auditoria:    ShieldCheck,
+  cadastros:    Folder,
 };
 
 // ─── Componente ───────────────────────────────────────────────────────────────

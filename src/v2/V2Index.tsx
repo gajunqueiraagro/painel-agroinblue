@@ -400,6 +400,32 @@ export default function V2Index() {
     if (section === 'config-bancario') return <FinV2ContasTab />;
     if (section === 'config-auditoria') return <AuditoriaTab />;
     if (section === 'config-fazendas') return <V2Fazendas />;
+
+    // ── Placeholders "Em construção" (PR Reorganização Sidebar) ──
+    // Rotas existem no menu mas ainda não têm componente dedicado.
+    // Substituir pelo wrapper real numa PR posterior.
+    const PLACEHOLDERS: Partial<Record<V2Section, string>> = {
+      'lancamentos-meta-zoo': 'Lançamentos META Zoo',
+      'lancamentos-meta-fin': 'Lançamentos META Fin',
+      'dre-executivo':        'DRE Executivo',
+      'divergencias':         'Divergências',
+      'logs':                 'Logs',
+      'validacoes':           'Validações',
+    };
+    if (PLACEHOLDERS[section]) {
+      const titulo = PLACEHOLDERS[section]!;
+      return (
+        <div className="px-4 py-6 space-y-3 max-w-3xl mx-auto">
+          <h2 className="text-base font-semibold text-foreground">{titulo}</h2>
+          <p className="text-sm text-muted-foreground">Em construção — esta seção será implementada em breve.</p>
+          <div className="p-8 rounded-lg border border-dashed border-border text-center text-muted-foreground text-sm">
+            🚧 Tela em desenvolvimento.
+            <br />
+            <span className="text-xs">Reorganização da sidebar — fase preparatória.</span>
+          </div>
+        </div>
+      );
+    }
     const labels: Record<string, string> = {
       financeiro: 'Financeiro', rebanho: 'Rebanho',
       movimentacoes: 'Movimentações', indicadores: 'Indicadores',
