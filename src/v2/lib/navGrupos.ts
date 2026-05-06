@@ -26,7 +26,7 @@ export type V2Section =
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
   | 'planejamento-home' | 'meta-cenario' | 'meta-metas' | 'meta-consolidacao'
-  | 'meta-precos'
+  | 'meta-precos' | 'fluxo-caixa-meta'
   | 'painel-consultor' | 'auditoria-anual' | 'painel-anual'
   // mobile
   | 'atalhos-campeiro' | 'atalhos-financeiro'
@@ -129,6 +129,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'lancamentos-meta-zoo', label: 'Lançamentos META Zoo', status: 'ready' },
           { id: 'lancamentos-meta-fin', label: 'Lançamentos META Fin (em construção)', status: 'needs-wrapper' },
+          { id: 'fluxo-caixa-meta',     label: 'Fluxo Caixa META',                      status: 'ready' },
           { id: 'meta-gmd',             label: 'GMD META',                              status: 'ready' },
           { id: 'meta-precos',          label: 'Preços META',                           status: 'ready' },
         ],
@@ -219,6 +220,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'planejamento-home': 'planejamento',
   'meta-gmd': 'planejamento', 'meta-precos': 'planejamento',
   'lancamentos-meta-zoo': 'planejamento', 'lancamentos-meta-fin': 'planejamento',
+  'fluxo-caixa-meta': 'planejamento',
   // legados ainda no type (não no menu)
   'meta-cenario': 'planejamento', 'meta-consolidacao': 'planejamento', 'meta-metas': 'planejamento',
 

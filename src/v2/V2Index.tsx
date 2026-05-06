@@ -349,6 +349,11 @@ export default function V2Index() {
     if (section === 'financeiro-lanc') return (
       <FinanceiroV2Tab onIntensiveToggle={setIntensivo} />
     );
+    // Fluxo Caixa META — mesma tela financeira, mas em cenário META.
+    // Sem nova lógica/dupla-tela; apenas valor inicial + filtro de cenário no hook.
+    if (section === 'fluxo-caixa-meta') return (
+      <FinanceiroV2Tab onIntensiveToggle={setIntensivo} cenarioInicial="meta" />
+    );
     if (section === 'fechamento') return (
       <FechamentoTab
         filtroAnoInicial={ano}
