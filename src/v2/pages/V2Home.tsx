@@ -41,10 +41,18 @@ interface MetricTileProps {
   deltaMes?: number | null;
   deltaAno?: number | null;
   deltaMeta?: number | null;
+  /** Inverte apenas a cor (verde/vermelho) dos deltas, mantendo seta e número.
+   * Use em indicadores onde "menos é melhor" (ex.: dívida, alavancagem). */
+  inverseDelta?: boolean;
   onClick?: () => void;
 }
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, onClick }: MetricTileProps) {
+function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, inverseDelta, onClick }: MetricTileProps) {
+  const deltaColor = (d: number) => {
+    const positivo = d >= 0;
+    const verde = inverseDelta ? !positivo : positivo;
+    return verde ? 'text-emerald-600' : 'text-red-500';
+  };
   const valColor =
     tone === 'positive' ? 'text-emerald-700' :
     tone === 'negative' ? 'text-red-700' :
@@ -68,19 +76,19 @@ function MetricTile({ label, value, unit, loading, pending, tone = 'default', st
       </p>
       <div className="mt-1 space-y-px">
         {deltaMes != null
-          ? <p className={`text-[10px] font-medium ${deltaMes >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          ? <p className={`text-[10px] font-medium ${deltaColor(deltaMes)}`}>
               {deltaMes >= 0 ? '↑' : '↓'} {Math.abs(deltaMes).toFixed(1)}% vs mês
             </p>
           : <p className="text-[10px] text-muted-foreground/40">— vs mês</p>
         }
         {deltaAno != null
-          ? <p className={`text-[10px] font-medium ${deltaAno >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          ? <p className={`text-[10px] font-medium ${deltaColor(deltaAno)}`}>
               {deltaAno >= 0 ? '↑' : '↓'} {Math.abs(deltaAno).toFixed(1)}% vs ano ant.
             </p>
           : <p className="text-[10px] text-muted-foreground/40">— vs ano ant.</p>
         }
         {deltaMeta != null
-          ? <p className={`text-[10px] font-medium ${deltaMeta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          ? <p className={`text-[10px] font-medium ${deltaColor(deltaMeta)}`}>
               {deltaMeta >= 0 ? '↑' : '↓'} {Math.abs(deltaMeta).toFixed(1)}% vs META
             </p>
           : <p className="text-[10px] text-muted-foreground/40">— vs META</p>
@@ -286,10 +294,39 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       : sorted.find(m => m.mes === mesNum)?.saldoFinal ?? null;
   }, [mesesFluxo, mesNum, isPeriodo, loadingFluxo]);
 
+  // Comparativos do Caixa: vs mês anterior + vs mesmo mês ano anterior.
+  // Em modo "período" não aplica delta (compara saldo acumulado Jan→mes; vs mês não é coerente).
+  const { lancamentos: lancFinAnoAnt, rateioADM: rateioADMAnoAnt } = useFinanceiro({ ano: anoNum - 1 });
+  const { meses: mesesFluxoAnoAnt, loading: loadingFluxoAnoAnt } = useFluxoCaixa(lancFinAnoAnt, rateioADMAnoAnt, anoNum - 1, 12);
+  const caixaMesAnt = useMemo(() => {
+    if (isPeriodo) return null;
+    if (mesNum === 1) {
+      if (loadingFluxoAnoAnt || !mesesFluxoAnoAnt.length) return null;
+      return mesesFluxoAnoAnt.find(m => m.mes === 12)?.saldoFinal ?? null;
+    }
+    if (loadingFluxo || !mesesFluxo.length) return null;
+    return mesesFluxo.find(m => m.mes === mesNum - 1)?.saldoFinal ?? null;
+  }, [isPeriodo, mesNum, mesesFluxo, mesesFluxoAnoAnt, loadingFluxo, loadingFluxoAnoAnt]);
+  const caixaAnoAnt = useMemo(() => {
+    if (isPeriodo) return null;
+    if (loadingFluxoAnoAnt || !mesesFluxoAnoAnt.length) return null;
+    return mesesFluxoAnoAnt.find(m => m.mes === mesNum)?.saldoFinal ?? null;
+  }, [isPeriodo, mesNum, mesesFluxoAnoAnt, loadingFluxoAnoAnt]);
+  const deltaMesCaixa = useMemo(() => {
+    if (caixaValor == null || caixaMesAnt == null || caixaMesAnt === 0) return null;
+    return ((caixaValor - caixaMesAnt) / Math.abs(caixaMesAnt)) * 100;
+  }, [caixaValor, caixaMesAnt]);
+  const deltaAnoCaixa = useMemo(() => {
+    if (caixaValor == null || caixaAnoAnt == null || caixaAnoAnt === 0) return null;
+    return ((caixaValor - caixaAnoAnt) / Math.abs(caixaAnoAnt)) * 100;
+  }, [caixaValor, caixaAnoAnt]);
+
   const {
     total: endividamentoTotal,
     alavancagem: finAlavancagem,
     pizzaVencimentos: finPizza,
+    deltaMes: finEndDeltaMes,
+    deltaAno: finEndDeltaAno,
     loading: loadingDivida,
   } = useEndividamentoAtual(anoNum);
   const endividamentoValor = loadingDivida ? null : endividamentoTotal;
@@ -462,8 +499,25 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
         <SectionBlock title="Estrutura Financeira" subtitle="posição patrimonial">
-          <MetricTile label="Caixa disponível" value={fmtR(caixaValor)} loading={loadingFluxo} tone="blue" />
-          <MetricTile label="Endividamento" value={fmtR(endividamentoValor)} loading={loadingDivida} tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'} />
+          <MetricTile
+            label="Caixa disponível"
+            value={fmtR(caixaValor)}
+            loading={loadingFluxo}
+            tone="blue"
+            deltaMes={deltaMesCaixa}
+            deltaAno={deltaAnoCaixa}
+            deltaMeta={null}
+          />
+          <MetricTile
+            label="Endividamento"
+            value={fmtR(endividamentoValor)}
+            loading={loadingDivida}
+            tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'}
+            deltaMes={finEndDeltaMes}
+            deltaAno={finEndDeltaAno}
+            deltaMeta={null}
+            inverseDelta
+          />
           <MetricTile
             label="Dívida / rebanho"
             value={loadingDivida ? null : fmtN(finAlavancagem?.percentual ?? null, 1)}
@@ -474,6 +528,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
               : finAlavancagem?.status === 'atencao' ? 'negative'
               : 'default'
             }
+            deltaMes={finAlavancagem?.deltaMes ?? null}
+            deltaAno={finAlavancagem?.deltaAno ?? null}
+            deltaMeta={null}
+            inverseDelta
           />
           {(() => {
             const pizza = finPizza ?? [];
@@ -488,6 +546,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
                   ? `${fmtN(pctCurto, 0)}% curto / ${fmtN(100 - pctCurto, 0)}% longo`
                   : null}
                 loading={loadingDivida}
+                deltaMes={null}
+                deltaAno={null}
+                deltaMeta={null}
               />
             );
           })()}
