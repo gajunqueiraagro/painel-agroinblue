@@ -6,7 +6,7 @@ import type { StatusValidacaoArea } from '@/hooks/usePainelConsultorData';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import { useFluxoCaixa } from '@/hooks/useFluxoCaixa';
-import { useFinanciamentosPainel } from '@/hooks/useFinanciamentosPainel';
+import { useEndividamentoAtual } from '@/hooks/useEndividamentoAtual';
 import { IndicadorHistoricoModal } from '@/v2/components/IndicadorHistoricoModal';
 import { useHistoricoIndicador, type HistoricoIndicadorKey } from '@/hooks/useHistoricoIndicador';
 import { supabase } from '@/integrations/supabase/client';
@@ -286,10 +286,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       : sorted.find(m => m.mes === mesNum)?.saldoFinal ?? null;
   }, [mesesFluxo, mesNum, isPeriodo, loadingFluxo]);
 
-  const { kpis: finKpis, loading: loadingDivida } = useFinanciamentosPainel(
-    anoNum, 'todos', isPeriodo ? 'todos' : mesNum,
-  );
-  const endividamentoValor = loadingDivida ? null : (finKpis?.saldoDevedor?.total?.total ?? 0);
+  const { total: endividamentoTotal, loading: loadingDivida } = useEndividamentoAtual();
+  const endividamentoValor = loadingDivida ? null : endividamentoTotal;
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
