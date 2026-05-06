@@ -377,6 +377,20 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const effectiveStatusOp: StatusOperacional | 'meta' = isCenarioMeta ? 'meta' : statusOp as StatusOperacional;
   const isMeta = isCenarioMeta; // Meta usa estilo laranja
 
+  // Lançamento sendo editado — desfaz seu efeito sobre saldo na validação meta.
+  const metaLancamentoEmEdicao = useMemo(() => {
+    if (!editingAbateId) return null;
+    const orig = editOriginalRef.current;
+    if (!orig) return null;
+    return {
+      id: orig.id,
+      categoria: orig.categoria as Categoria,
+      tipo: orig.tipo,
+      quantidade: orig.quantidade,
+      pesoKg: orig.pesoMedioKg || 0,
+    };
+  }, [editingAbateId]);
+
   // ── Bloqueio META: mesma lógica do painel inteligente ──
   const metaBloqueio = useMetaValidacaoBloqueios(
     data ? Number(data.slice(0, 4)) : new Date().getFullYear(),
@@ -386,6 +400,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     parseNumericValue(quantidade) || 0,
     parseNumericValue(pesoKg) || 0,
     clienteAtual?.id,
+    metaLancamentoEmEdicao,
   );
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
@@ -1626,9 +1641,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       destinoFinal = motivoMorte === '__custom__' ? motivoMorteCustom : motivoMorte || undefined;
     }
 
-    // For Boitel venda, use saldoReceber (financial cash value) as the grid TOTAL
+    // Boitel venda: valor total da movimentação = LUCRO LÍQUIDO do produtor.
+    // (NÃO usar `_saldoReceber` — é o saldo a receber/acerto com boitel,
+    // semântica diferente do valor total da venda.)
     const isBoitelVenda = isVenda && tipoPeso === 'boitel';
-    const boitelSaldo = boitelDataForResumo?._saldoReceber || boitelDataForResumo?._lucroTotal || 0;
+    const boitelLucroLiquido = boitelDataForResumo?._lucroTotal || 0;
     const compraValorTotal = (isCompra && compraDetalhes)
       ? (() => {
           const qtd = parseNumericValue(quantidade) || 0;
@@ -1639,7 +1656,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         })()
       : 0;
     const valorTotalFinal = isBoitelVenda
-      ? (boitelSaldo > 0 ? boitelSaldo : undefined)
+      ? (boitelLucroLiquido > 0 ? boitelLucroLiquido : undefined)
       : isCompra
         ? (compraValorTotal > 0 ? compraValorTotal : undefined)
         : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
@@ -3147,6 +3164,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   quantidade={parseNumericValue(quantidade) || 0}
                   pesoKg={parseNumericValue(pesoKg) || 0}
                   clienteId={clienteAtual?.id}
+                  lancamentoEmEdicao={metaLancamentoEmEdicao}
                   onSugestaoEvolucao={(info: EvolucaoSugestao) => {
                     setEvolucaoSugestao(info);
                     setEvolucaoDialogOpen(true);

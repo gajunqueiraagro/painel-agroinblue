@@ -66,6 +66,48 @@ interface Props {
   onSugestaoEvolucao?: (info: EvolucaoSugestao) => void;
   /** State callback for parent coordination */
   onStepStateChange?: (state: MetaStepState) => void;
+  /**
+   * Lançamento sendo editado — quando setado, o efeito desse lançamento sobre
+   * o saldo/peso da categoria é desfeito antes da validação. Evita falso
+   * "saldo insuficiente" ao reabrir edição com mesmos valores.
+   */
+  lancamentoEmEdicao?: {
+    id: string;
+    categoria: Categoria;
+    tipo: TipoMovimentacao;
+    quantidade: number;
+    pesoKg: number;
+  } | null;
+}
+
+/**
+ * Desfaz o efeito do lançamento original sobre saldo/pesoTotal da categoria,
+ * para que a validação do edit considere o lançamento como inexistente.
+ */
+function ajustarPorLancamentoEmEdicao(
+  saldoAtual: number,
+  pesoTotalAtual: number,
+  categoriaValidada: string,
+  lanc: Props['lancamentoEmEdicao'],
+): { saldoAtual: number; pesoTotalAtual: number } {
+  if (!lanc || lanc.categoria !== categoriaValidada) {
+    return { saldoAtual, pesoTotalAtual };
+  }
+  const wasSaida = isMovimentacaoSaida(lanc.tipo) || isReclassificacaoTipo(lanc.tipo);
+  const wasEntrada = isMovimentacaoEntrada(lanc.tipo) || isNascimento(lanc.tipo);
+  const peso = lanc.quantidade * lanc.pesoKg;
+  if (wasSaida) {
+    // Saída original consumiu — restaurar.
+    return { saldoAtual: saldoAtual + lanc.quantidade, pesoTotalAtual: pesoTotalAtual + peso };
+  }
+  if (wasEntrada) {
+    // Entrada original adicionou — descontar.
+    return {
+      saldoAtual: Math.max(0, saldoAtual - lanc.quantidade),
+      pesoTotalAtual: Math.max(0, pesoTotalAtual - peso),
+    };
+  }
+  return { saldoAtual, pesoTotalAtual };
 }
 
 export interface EvolucaoSugestao {
@@ -305,7 +347,7 @@ function StepHeader({ step, label, status, expanded, onToggle, tooltip, alwaysOp
 
 // ── Component ──
 
-export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao, onStepStateChange }: Props) {
+export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, onSugestaoEvolucao, onStepStateChange, lancamentoEmEdicao }: Props) {
   const { getSaldoMap, getPesoMedioMap, getCategoriasDetalhe, loading: loadingRebanho } = useRebanhoOficial({ ano, cenario: 'meta' });
   const { rows: gmdRows } = useMetaGmd(String(ano));
   const { getParametros, getProximaCategoria, getCategoriasAnteriores, isLoading: loadingParams } = useCategoriaParametros(clienteId);
@@ -332,9 +374,15 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const categoriasAnteriores = useMemo(() => categoria ? getCategoriasAnteriores(categoria) : [], [categoria, getCategoriasAnteriores]);
 
   // ── BLOCO 1: Situação atual do lote ──
-  const saldoAtual = categoria ? (saldoMap.get(categoria) ?? 0) : 0;
+  // Em modo edição, desfazemos o efeito do lançamento original para que a
+  // validação do edit não conte o próprio lançamento como consumo de saldo.
+  const saldoAtualRaw = categoria ? (saldoMap.get(categoria) ?? 0) : 0;
   const pesoMedioAtual = categoria ? (pesoMedioMap.get(categoria) ?? null) : null;
-  const pesoTotalAtual = pesoMedioAtual != null ? saldoAtual * pesoMedioAtual : 0;
+  const pesoTotalAtualRaw = pesoMedioAtual != null ? saldoAtualRaw * pesoMedioAtual : 0;
+  const { saldoAtual, pesoTotalAtual } = useMemo(
+    () => ajustarPorLancamentoEmEdicao(saldoAtualRaw, pesoTotalAtualRaw, categoria || '', lancamentoEmEdicao),
+    [saldoAtualRaw, pesoTotalAtualRaw, categoria, lancamentoEmEdicao],
+  );
   const catDetalhe = categoria ? categoriasDetalhe.find(c => c.categoriaCodigo === categoria) : undefined;
 
   // ── BLOCO 2: Simulação do lançamento ──
@@ -763,6 +811,7 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 export function useMetaValidacaoBloqueios(
   ano: number, mes: number, categoria: Categoria | '',
   tipo: TipoMovimentacao, quantidade: number, pesoKg: number, clienteId?: string,
+  lancamentoEmEdicao?: Props['lancamentoEmEdicao'],
 ): { hasBloqueio: boolean; primeiroBloqueio: string | null } {
   const { getSaldoMap, getPesoMedioMap } = useRebanhoOficial({ ano, cenario: 'meta' });
   const { getParametros } = useCategoriaParametros(clienteId);
@@ -770,10 +819,13 @@ export function useMetaValidacaoBloqueios(
   return useMemo(() => {
     if (!categoria || quantidade <= 0) return { hasBloqueio: false, primeiroBloqueio: null };
 
-    const saldoAtual = getSaldoMap(mes).get(categoria) ?? 0;
+    const saldoRaw = getSaldoMap(mes).get(categoria) ?? 0;
     const pesoMedioAtual = getPesoMedioMap(mes).get(categoria) ?? null;
-    const pesoTotalAtual = pesoMedioAtual != null ? saldoAtual * pesoMedioAtual : 0;
+    const pesoTotalRaw = pesoMedioAtual != null ? saldoRaw * pesoMedioAtual : 0;
     const catParams = getParametros(categoria);
+    const { saldoAtual, pesoTotalAtual } = ajustarPorLancamentoEmEdicao(
+      saldoRaw, pesoTotalRaw, categoria, lancamentoEmEdicao,
+    );
 
     const validacoes = calcularValidacoesMeta({
       categoria, tipo, quantidade, pesoKg,
@@ -785,5 +837,5 @@ export function useMetaValidacaoBloqueios(
       hasBloqueio: bloqueios.length > 0,
       primeiroBloqueio: bloqueios.length > 0 ? bloqueios[0].mensagem : null,
     };
-  }, [ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, getSaldoMap, getPesoMedioMap, getParametros]);
+  }, [ano, mes, categoria, tipo, quantidade, pesoKg, clienteId, lancamentoEmEdicao, getSaldoMap, getPesoMedioMap, getParametros]);
 }
