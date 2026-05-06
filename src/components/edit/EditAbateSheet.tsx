@@ -65,19 +65,21 @@ export function EditAbateSheet({
 
   const abateFinRef = useRef<AbateFinanceiroPanelRef>(null);
 
-  // Carrega financeiro vinculado ao abrir o sheet
+  // Carrega financeiro vinculado ao abrir o sheet.
+  // Filtra por tipo_operacao (mais robusto que sinal — legacy pode não ter sinal).
+  // Hidrata também nota fiscal e fornecedor a partir do primeiro registro.
   useEffect(() => {
     if (!open || finLoaded) return;
     (async () => {
       const { data } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, sinal, valor, data_pagamento, favorecido_id, tipo_operacao')
+        .select('id, valor, data_pagamento, favorecido_id, tipo_operacao, numero_documento')
         .eq('movimentacao_rebanho_id', lancamento.id)
         .eq('cancelado', false)
         .order('data_pagamento');
       const rows = data || [];
-      const receitas = rows.filter(r => r.sinal === 1);
-      const deducoes = rows.filter(r => r.sinal === -1);
+      const receitas = rows.filter(r => r.tipo_operacao === '1-Entradas');
+      const deducoes = rows.filter(r => r.tipo_operacao === '2-Saídas');
       const valor = receitas.reduce((s, r) => s + Math.abs(Number(r.valor) || 0), 0);
       const desc = deducoes.reduce((s, r) => s + Math.abs(Number(r.valor) || 0), 0);
       const forma: 'avista' | 'prazo' = receitas.length > 1 ? 'prazo' : 'avista';
@@ -89,9 +91,12 @@ export function EditAbateSheet({
       setFormaRecebDb(forma);
       setParcelasDb(parc);
       setFornecedorIdDb(rows.find(r => r.favorecido_id)?.favorecido_id || '');
+      // Nota fiscal real fica em numero_documento dos registros financeiros
+      const ndoc = rows.find(r => r.numero_documento)?.numero_documento || lancamento.notaFiscal || '';
+      setNotaFiscalEdit(ndoc);
       setFinLoaded(true);
     })();
-  }, [open, finLoaded, lancamento.id, lancamento.data]);
+  }, [open, finLoaded, lancamento.id, lancamento.data, lancamento.notaFiscal]);
 
   // Reset hidratação quando o sheet fecha (próxima abertura recarrega)
   useEffect(() => {
@@ -377,6 +382,17 @@ export function EditAbateSheet({
                 <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
                 <p className="text-[11px] font-medium text-muted-foreground">
                   Salve os dados zootécnicos primeiro
+                </p>
+              </div>
+            </div>
+          )}
+          {finLoaded && valorLiquidoDb <= 0 && (
+            <div className="flex items-start gap-2 text-[11px] p-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 mb-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Valores financeiros não encontrados.</p>
+                <p className="text-[10px]">
+                  Não há receita ativa vinculada a este abate em <code>financeiro_lancamentos_v2</code> (cancelado=false). Verifique se o financeiro foi cancelado ou regenere a partir do fluxo de criação.
                 </p>
               </div>
             </div>
