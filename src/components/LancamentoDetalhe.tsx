@@ -28,6 +28,7 @@ import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
+import { toast } from 'sonner';
 
 interface Props {
   lancamento: Lancamento;
@@ -207,6 +208,24 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     onClose();
   };
 
+  // ---- Purchase zootécnico — detector de mudança ----
+  // Compara compraForm com o lancamento original. Se nada mudou, BLOCO 2
+  // (financeiro) é liberado sem exigir o "1. Salvar zoo".
+  const compraZooDirty = useMemo(() => {
+    if (!isCompra) return false;
+    const cenarioForm = compraStatusMode === 'meta' ? 'meta' : 'realizado';
+    const statusForm  = compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null);
+    return (
+      compraForm.data !== lancamento.data ||
+      Number(compraForm.quantidade) !== Number(lancamento.quantidade) ||
+      Number(compraForm.pesoMedioKg ?? 0) !== Number(lancamento.pesoMedioKg ?? 0) ||
+      compraForm.categoria !== lancamento.categoria ||
+      (compraForm.fazendaOrigem || '') !== (lancamento.fazendaOrigem || '') ||
+      cenarioForm !== (lancamento.cenario || 'realizado') ||
+      statusForm !== (lancamento.statusOperacional ?? null)
+    );
+  }, [isCompra, compraForm, compraStatusMode, lancamento]);
+
   // ---- Purchase zootécnico save ----
   const handleSalvarCompraZoo = async () => {
     const dados: Partial<Lancamento> = {
@@ -232,6 +251,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     try {
       await onEditar(lancamento.id, dados);
       setCompraZooSaved(true);
+      toast.success('Dados zootécnicos atualizados.');
+    } catch (e: any) {
+      toast.error('Falha ao salvar dados zootécnicos: ' + (e?.message || 'erro desconhecido'));
     } finally {
       setCompraSaving(false);
     }
@@ -725,8 +747,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     <span>Alterações nos dados zootécnicos impactam o financeiro.</span>
                   </div>
                 )}
-                {/* Save zootécnico button */}
-                {!compraZooSaved ? (
+                {/* Save zootécnico button — só aparece se há alteração não salva */}
+                {!compraZooDirty ? (
+                  <div className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted/30 rounded px-2 py-1 border border-border/40">
+                    Sem alterações zootécnicas — financeiro disponível abaixo.
+                  </div>
+                ) : !compraZooSaved ? (
                   <Button
                     className="w-full h-7 text-[10px] font-bold"
                     size="sm"
@@ -756,7 +782,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     <span>Os {finRecords.length} lançamento(s) existente(s) serão cancelados e substituídos.</span>
                   </div>
                 )}
-                {!compraZooSaved && (
+                {compraZooDirty && !compraZooSaved && (
                   <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] rounded-md flex items-center justify-center p-4">
                     <div className="text-center space-y-1">
                       <AlertTriangle className="h-4 w-4 mx-auto text-muted-foreground" />
