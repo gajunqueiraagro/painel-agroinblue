@@ -26,6 +26,7 @@ import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, 
 import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
+import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
@@ -93,6 +94,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
   // Etapa 1 — sheet padronizado para Nascimento (substitui Dialog genérico)
   const [nascimentoEditOpen, setNascimentoEditOpen] = useState(false);
+  // Etapa 2 — sheet padronizado para Morte (substitui Dialog genérico)
+  const [morteEditOpen, setMorteEditOpen] = useState(false);
 
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
@@ -176,6 +179,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (lancamento.tipo === 'nascimento') {
       // Etapa 1 — sheet padronizado para Nascimento.
       setNascimentoEditOpen(true);
+    } else if (lancamento.tipo === 'morte') {
+      // Etapa 2 — sheet padronizado para Morte.
+      setMorteEditOpen(true);
     } else {
       setForm({ ...lancamento });
       setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
@@ -826,6 +832,20 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           lancamento={lancamento}
           open={nascimentoEditOpen}
           onOpenChange={setNascimentoEditOpen}
+          onSalvar={onEditar}
+          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
+          podeRemover={true}
+          canEditMeta={canEditMeta}
+          p1Oficial={p1Oficial}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazenda}
+        />
+
+        {/* Etapa 2 — Sheet padronizado de Morte */}
+        <EditMorteSheet
+          lancamento={lancamento}
+          open={morteEditOpen}
+          onOpenChange={setMorteEditOpen}
           onSalvar={onEditar}
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
