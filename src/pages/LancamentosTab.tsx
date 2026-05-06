@@ -1845,6 +1845,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
           // Auto-generate/update financeiro for venda
@@ -1861,6 +1862,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isCompra && compraDetalhes && fazendaAtual && clienteAtual) {
           // Re-generate financeiro for compra edit
@@ -1887,6 +1889,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else {
           setEditingAbateId(null);
@@ -1898,6 +1901,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
           triggerZootCacheRefresh(data, tipo === 'reclassificacao');
+          setLancModalOpen(false);
           restoreEditOrigin();
         }
       } else {
@@ -1928,6 +1932,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
           // Auto-generate financeiro for abate — pass overrides to avoid race condition
@@ -1948,6 +1953,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Abate registrado com financeiro!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
@@ -1963,6 +1969,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isConsumo && returnedId) {
           // Consumo NÃO gera lançamento financeiro — fluxo só zootécnico.
@@ -1974,6 +1981,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
           triggerZootCacheRefresh(data);
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (returnedId) {
           setLastSavedLancamentoId(null);
@@ -1985,6 +1993,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           resetFinancialFields();
           toast.success('Lançamento registrado!');
           triggerZootCacheRefresh(data, tipo === 'reclassificacao');
+          setLancModalOpen(false);
           restoreEditOrigin();
         } else if (!returnedId) {
           toast.error('Erro ao salvar lançamento. Verifique os dados e tente novamente.');
@@ -3101,7 +3110,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   reclassState.setQuantidade('');
                   reclassState.setPesoKg('');
                   reclassState.setPesoAutoFilled(false);
-                  restoreEditOrigin();
+                  setLancModalOpen(false);
+          restoreEditOrigin();
                 } finally {
                   setSubmitting(false);
                 }
