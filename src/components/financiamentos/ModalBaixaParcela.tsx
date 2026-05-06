@@ -99,8 +99,9 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     setObservacao(obs);
     setBaseline({ data_vencimento: dv, valor_principal: p, valor_juros: j, status: st, data_pagamento: dp, observacao: obs });
 
-    // Registrar: sempre inicia com hoje e conta default do financiamento
-    setDataPagamento(dp || format(new Date(), 'yyyy-MM-dd'));
+    // Default da Data Pagamento: se a parcela já estava paga, preserva a data registrada;
+    // caso contrário, usa a data de vencimento da própria parcela (não a data de hoje).
+    setDataPagamento(dp || dv);
     setContaBancariaId(financiamento.conta_bancaria_id ?? '');
   }, [parcela, lastParcelaId, financiamento.conta_bancaria_id]);
 
