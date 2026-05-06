@@ -44,10 +44,12 @@ interface MetricTileProps {
   /** Inverte apenas a cor (verde/vermelho) dos deltas, mantendo seta e número.
    * Use em indicadores onde "menos é melhor" (ex.: dívida, alavancagem). */
   inverseDelta?: boolean;
+  /** Quando true, oculta inteiramente o bloco de deltas (vs mês/ano/META). */
+  hideDelta?: boolean;
   onClick?: () => void;
 }
 
-function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, inverseDelta, onClick }: MetricTileProps) {
+function MetricTile({ label, value, unit, loading, pending, tone = 'default', status, deltaMes, deltaAno, deltaMeta, inverseDelta, hideDelta, onClick }: MetricTileProps) {
   const deltaColor = (d: number) => {
     const positivo = d >= 0;
     const verde = inverseDelta ? !positivo : positivo;
@@ -74,26 +76,28 @@ function MetricTile({ label, value, unit, loading, pending, tone = 'default', st
             : <>{value ?? '—'}{unit && value ? <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span> : null}</>
         }
       </p>
-      <div className="mt-1 space-y-px">
-        {deltaMes != null
-          ? <p className={`text-[10px] font-medium ${deltaColor(deltaMes)}`}>
-              {deltaMes >= 0 ? '↑' : '↓'} {Math.abs(deltaMes).toFixed(1)}% vs mês
-            </p>
-          : <p className="text-[10px] text-muted-foreground/40">— vs mês</p>
-        }
-        {deltaAno != null
-          ? <p className={`text-[10px] font-medium ${deltaColor(deltaAno)}`}>
-              {deltaAno >= 0 ? '↑' : '↓'} {Math.abs(deltaAno).toFixed(1)}% vs ano ant.
-            </p>
-          : <p className="text-[10px] text-muted-foreground/40">— vs ano ant.</p>
-        }
-        {deltaMeta != null
-          ? <p className={`text-[10px] font-medium ${deltaColor(deltaMeta)}`}>
-              {deltaMeta >= 0 ? '↑' : '↓'} {Math.abs(deltaMeta).toFixed(1)}% vs META
-            </p>
-          : <p className="text-[10px] text-muted-foreground/40">— vs META</p>
-        }
-      </div>
+      {!hideDelta && (
+        <div className="mt-1 space-y-px">
+          {deltaMes != null
+            ? <p className={`text-[10px] font-medium ${deltaColor(deltaMes)}`}>
+                {deltaMes >= 0 ? '↑' : '↓'} {Math.abs(deltaMes).toFixed(1)}% vs mês
+              </p>
+            : <p className="text-[10px] text-muted-foreground/40">— vs mês</p>
+          }
+          {deltaAno != null
+            ? <p className={`text-[10px] font-medium ${deltaColor(deltaAno)}`}>
+                {deltaAno >= 0 ? '↑' : '↓'} {Math.abs(deltaAno).toFixed(1)}% vs ano ant.
+              </p>
+            : <p className="text-[10px] text-muted-foreground/40">— vs ano ant.</p>
+          }
+          {deltaMeta != null
+            ? <p className={`text-[10px] font-medium ${deltaColor(deltaMeta)}`}>
+                {deltaMeta >= 0 ? '↑' : '↓'} {Math.abs(deltaMeta).toFixed(1)}% vs META
+              </p>
+            : <p className="text-[10px] text-muted-foreground/40">— vs META</p>
+          }
+        </div>
+      )}
     </div>
   );
 }
@@ -327,9 +331,33 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     pizzaVencimentos: finPizza,
     deltaMes: finEndDeltaMes,
     deltaAno: finEndDeltaAno,
+    serieAno: finSerieAno,
+    serieAnoAnt: finSerieAnoAnt,
+    serieAlavancagemAno: finSerieAlavAno,
+    serieAlavancagemAnoAnt: finSerieAlavAnoAnt,
     loading: loadingDivida,
   } = useEndividamentoAtual(anoNum);
   const endividamentoValor = loadingDivida ? null : endividamentoTotal;
+
+  // Séries mensais para o modal histórico do Caixa (saldoFinal Jan→Dez).
+  const caixaSerieAno = useMemo(() => {
+    const arr = new Array(12).fill(null) as (number | null)[];
+    if (!loadingFluxo && mesesFluxo.length) {
+      for (const m of mesesFluxo) {
+        if (m.mes >= 1 && m.mes <= 12) arr[m.mes - 1] = m.saldoFinal;
+      }
+    }
+    return arr;
+  }, [mesesFluxo, loadingFluxo]);
+  const caixaSerieAnoAnt = useMemo(() => {
+    const arr = new Array(12).fill(null) as (number | null)[];
+    if (!loadingFluxoAnoAnt && mesesFluxoAnoAnt.length) {
+      for (const m of mesesFluxoAnoAnt) {
+        if (m.mes >= 1 && m.mes <= 12) arr[m.mes - 1] = m.saldoFinal;
+      }
+    }
+    return arr;
+  }, [mesesFluxoAnoAnt, loadingFluxoAnoAnt]);
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
 
@@ -507,6 +535,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaMes={deltaMesCaixa}
             deltaAno={deltaAnoCaixa}
             deltaMeta={null}
+            onClick={() => setModalIndicador('caixaDisponivel')}
           />
           <MetricTile
             label="Endividamento"
@@ -517,6 +546,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={finEndDeltaAno}
             deltaMeta={null}
             inverseDelta
+            onClick={() => setModalIndicador('endividamento')}
           />
           <MetricTile
             label="Dívida / rebanho"
@@ -532,6 +562,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
             deltaAno={finAlavancagem?.deltaAno ?? null}
             deltaMeta={null}
             inverseDelta
+            onClick={() => setModalIndicador('alavancagem')}
           />
           {(() => {
             const pizza = finPizza ?? [];
@@ -543,12 +574,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
               <MetricTile
                 label="Curto vs longo prazo"
                 value={pctCurto != null
-                  ? `${fmtN(pctCurto, 0)}% curto / ${fmtN(100 - pctCurto, 0)}% longo`
+                  ? `${fmtN(pctCurto, 0)}% Curto Prazo / ${fmtN(100 - pctCurto, 0)}% Longo Prazo`
                   : null}
                 loading={loadingDivida}
-                deltaMes={null}
-                deltaAno={null}
-                deltaMeta={null}
+                hideDelta
               />
             );
           })()}
@@ -891,6 +920,68 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           historicoMeta={historicoAnoMeta}
           loadingHistorico={loadingHistorico}
           corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
+        />
+      )}
+      {modalIndicador === 'caixaDisponivel' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Caixa disponível"
+          unidade="" formatoValor="moedaAbreviada"
+          subtitulo="Saldo final de caixa por mês"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={caixaSerieAno as number[]}
+          serieAnoAnt={caixaSerieAnoAnt as number[]}
+          tipoAcumulado="posicao"
+          indicadorKey="caixaDisponivel"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={deltaMesCaixa}
+          deltaAno={deltaAnoCaixa}
+          viewMode={viewMode}
+        />
+      )}
+      {modalIndicador === 'endividamento' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Endividamento"
+          unidade="" formatoValor="moedaAbreviada"
+          subtitulo="Saldo devedor em aberto por mês"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={finSerieAno}
+          serieAnoAnt={finSerieAnoAnt}
+          tipoAcumulado="posicao"
+          indicadorKey="endividamento"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={finEndDeltaMes}
+          deltaAno={finEndDeltaAno}
+          viewMode={viewMode}
+          corPrincipal="vermelho"
+        />
+      )}
+      {modalIndicador === 'alavancagem' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Dívida / rebanho"
+          unidade="%" formatoValor="decimal1"
+          subtitulo="Alavancagem pecuária = dívida pecuária / valor do rebanho"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={finSerieAlavAno as number[]}
+          serieAnoAnt={finSerieAlavAnoAnt as number[]}
+          tipoAcumulado="posicao"
+          indicadorKey="alavancagem"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={finAlavancagem?.deltaMes ?? null}
+          deltaAno={finAlavancagem?.deltaAno ?? null}
+          viewMode={viewMode}
+          corPrincipal="vermelho"
         />
       )}
     </div>

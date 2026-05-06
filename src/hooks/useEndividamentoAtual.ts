@@ -50,6 +50,14 @@ export interface EndividamentoAtual {
   deltaAno: number | null;
   alavancagem: AlavancagemLeve;
   pizzaVencimentos: PizzaSliceLeve[];
+  /** Saldo devedor R$ Jan→Dez do anoBase, último dia de cada mês. */
+  serieAno: number[];
+  /** Saldo devedor R$ Jan→Dez do anoBase-1. */
+  serieAnoAnt: number[];
+  /** Alavancagem % Jan→Dez do anoBase (null quando sem snapshot de rebanho). */
+  serieAlavancagemAno: (number | null)[];
+  /** Alavancagem % Jan→Dez do anoBase-1. */
+  serieAlavancagemAnoAnt: (number | null)[];
   loading: boolean;
 }
 
@@ -62,6 +70,9 @@ const EMPTY_ALAVANCAGEM: AlavancagemLeve = {
   status: 'indisponivel',
 };
 
+const EMPTY_SERIE_NUM = (): number[] => new Array(12).fill(0);
+const EMPTY_SERIE_NULL = (): (number | null)[] => new Array(12).fill(null);
+
 const EMPTY = {
   total: 0,
   principal: 0,
@@ -72,6 +83,10 @@ const EMPTY = {
   deltaAno: null as number | null,
   alavancagem: EMPTY_ALAVANCAGEM,
   pizzaVencimentos: [] as PizzaSliceLeve[],
+  serieAno: EMPTY_SERIE_NUM(),
+  serieAnoAnt: EMPTY_SERIE_NUM(),
+  serieAlavancagemAno: EMPTY_SERIE_NULL(),
+  serieAlavancagemAnoAnt: EMPTY_SERIE_NULL(),
 };
 
 function ultimoDiaDoMes(ano: number, mes: number): string {
@@ -128,24 +143,25 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
         dataContratoById.set(f.id, f.data_contrato);
       }
 
-      // 2) Parcelas relevantes para os 3 snapshots: em aberto OU pagas após
-      //    a data de corte mais antiga (ano anterior). Bounded.
+      // 2) Parcelas relevantes: em aberto OU pagas dentro da janela coberta pelas séries.
+      //    Janela = início do ano anterior ao anoBase OU dataCorteAnoAnt (o que for menor).
+      const inicioCobertura = `${Math.min(anoBaseEff - 1, anoHoje - 1)}-01-01`;
       const { data: parcs, error: e2 } = await supabase
         .from('financiamento_parcelas')
         .select('financiamento_id, valor_principal, valor_juros, data_vencimento, data_pagamento')
         .in('financiamento_id', ids)
         .neq('status', 'cancelado')
-        .or(`data_pagamento.is.null,data_pagamento.gte.${dataCorteAnoAnt}`);
+        .or(`data_pagamento.is.null,data_pagamento.gte.${inicioCobertura}`);
       if (e2) throw e2;
 
       // 3) Snapshots de valor_rebanho_fechamento (somando fazendas).
-      //    Limit 100 cobre ~10 fazendas × 10 meses recentes — bounded.
+      //    Limit 300 cobre ~10 fazendas × 30 meses — suficiente p/ séries 24m + recentes.
       const { data: snaps } = await supabase
         .from('valor_rebanho_fechamento')
         .select('ano_mes, valor_total')
         .eq('cliente_id', clienteId!)
         .order('ano_mes', { ascending: false })
-        .limit(100);
+        .limit(300);
       const aggReb = new Map<string, number>();
       for (const r of snaps ?? []) {
         aggReb.set(r.ano_mes, (aggReb.get(r.ano_mes) || 0) + (Number(r.valor_total) || 0));
@@ -155,7 +171,11 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
       const valorRebanhoMesAnt = aggReb.get(`${mesAntAno}-${String(mesAntMes).padStart(2, '0')}`) ?? 0;
       const valorRebanhoAnoAnt = aggReb.get(`${anoHoje - 1}-${String(mesHoje).padStart(2, '0')}`) ?? 0;
 
-      // 4) Para cada parcela, avaliar em-aberto em 3 datas e acumular.
+      // 4) Pré-computar 24 datas de corte para as séries mensais.
+      const cortesAno: string[] = new Array(12).fill('').map((_, i) => ultimoDiaDoMes(anoBaseEff, i + 1));
+      const cortesAnoAnt: string[] = new Array(12).fill('').map((_, i) => ultimoDiaDoMes(anoBaseEff - 1, i + 1));
+
+      // 5) Avaliar em-aberto em todas as datas e acumular (snapshots + séries).
       let principal = 0;
       let juros = 0;
       let dividaPecAtual = 0;
@@ -165,6 +185,10 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
       let dividaPecAnoAnt = 0;
       let curtoPrazo = 0;
       let longoPrazo = 0;
+      const totalAnoSerie = new Array(12).fill(0);
+      const dividaPecAnoSerie = new Array(12).fill(0);
+      const totalAnoAntSerie = new Array(12).fill(0);
+      const dividaPecAnoAntSerie = new Array(12).fill(0);
 
       const isEmAbertoEm = (
         dataPagamento: string | null,
@@ -182,12 +206,13 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
         const vt = vp + vj;
         const tipo = tipoById.get(p.financiamento_id);
         const dc = dataContratoById.get(p.financiamento_id) ?? null;
+        const ehPec = tipo === 'pecuaria';
 
         // Atual (hoje)
         if (isEmAbertoEm(p.data_pagamento, dc, hojeISO)) {
           principal += vp;
           juros += vj;
-          if (tipo === 'pecuaria') dividaPecAtual += vp;
+          if (ehPec) dividaPecAtual += vp;
 
           // Pizza só do snapshot atual.
           const venc = p.data_vencimento;
@@ -201,15 +226,37 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
         // Mês anterior
         if (isEmAbertoEm(p.data_pagamento, dc, dataCorteMesAnt)) {
           totalMesAnt += vt;
-          if (tipo === 'pecuaria') dividaPecMesAnt += vp;
+          if (ehPec) dividaPecMesAnt += vp;
         }
 
         // Mesmo mês, ano anterior
         if (isEmAbertoEm(p.data_pagamento, dc, dataCorteAnoAnt)) {
           totalAnoAnt += vt;
-          if (tipo === 'pecuaria') dividaPecAnoAnt += vp;
+          if (ehPec) dividaPecAnoAnt += vp;
+        }
+
+        // Séries mensais (12 meses × 2 anos)
+        for (let m = 0; m < 12; m++) {
+          if (isEmAbertoEm(p.data_pagamento, dc, cortesAno[m])) {
+            totalAnoSerie[m] += vt;
+            if (ehPec) dividaPecAnoSerie[m] += vp;
+          }
+          if (isEmAbertoEm(p.data_pagamento, dc, cortesAnoAnt[m])) {
+            totalAnoAntSerie[m] += vt;
+            if (ehPec) dividaPecAnoAntSerie[m] += vp;
+          }
         }
       }
+
+      // 6) Séries de alavancagem (% por mês = dívida pec mensal / rebanho do mesmo ano_mes).
+      const serieAlavAno: (number | null)[] = new Array(12).fill(null).map((_, m) => {
+        const reb = aggReb.get(`${anoBaseEff}-${String(m + 1).padStart(2, '0')}`) ?? 0;
+        return reb > 0 ? (dividaPecAnoSerie[m] / reb) * 100 : null;
+      });
+      const serieAlavAnoAnt: (number | null)[] = new Array(12).fill(null).map((_, m) => {
+        const reb = aggReb.get(`${anoBaseEff - 1}-${String(m + 1).padStart(2, '0')}`) ?? 0;
+        return reb > 0 ? (dividaPecAnoAntSerie[m] / reb) * 100 : null;
+      });
 
       const totalAtual = principal + juros;
 
@@ -245,6 +292,10 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
           status: alavStatus,
         },
         pizzaVencimentos,
+        serieAno: totalAnoSerie,
+        serieAnoAnt: totalAnoAntSerie,
+        serieAlavancagemAno: serieAlavAno,
+        serieAlavancagemAnoAnt: serieAlavAnoAnt,
       };
     },
   });
@@ -259,6 +310,10 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
     deltaAno: data?.deltaAno ?? null,
     alavancagem: data?.alavancagem ?? EMPTY_ALAVANCAGEM,
     pizzaVencimentos: data?.pizzaVencimentos ?? EMPTY.pizzaVencimentos,
+    serieAno: data?.serieAno ?? EMPTY.serieAno,
+    serieAnoAnt: data?.serieAnoAnt ?? EMPTY.serieAnoAnt,
+    serieAlavancagemAno: data?.serieAlavancagemAno ?? EMPTY.serieAlavancagemAno,
+    serieAlavancagemAnoAnt: data?.serieAlavancagemAnoAnt ?? EMPTY.serieAlavancagemAnoAnt,
     loading: isLoading,
   };
 }
