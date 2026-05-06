@@ -78,6 +78,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     status: string;
     data_pagamento: string;
     observacao: string;
+    conta_bancaria_id: string;
   } | null>(null);
 
   useEffect(() => {
@@ -97,12 +98,42 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     setJuros(j);
     setStatus(st);
     setObservacao(obs);
-    setBaseline({ data_vencimento: dv, valor_principal: p, valor_juros: j, status: st, data_pagamento: dp, observacao: obs });
 
     // Default da Data Pagamento: se a parcela já estava paga, preserva a data registrada;
     // caso contrário, usa a data de vencimento da própria parcela (não a data de hoje).
     setDataPagamento(dp || dv);
-    setContaBancariaId(financiamento.conta_bancaria_id ?? '');
+
+    // Conta bancária: para parcela paga, ler a conta real do lançamento financeiro vinculado
+    // (financeiro_lancamentos_v2.conta_bancaria_id via parcela.lancamento_id). Default do
+    // financiamento serve apenas como fallback visual enquanto o fetch resolve / quando
+    // não há lançamento vinculado.
+    const fallbackConta = financiamento.conta_bancaria_id ?? '';
+    setContaBancariaId(fallbackConta);
+    setBaseline({
+      data_vencimento: dv,
+      valor_principal: p,
+      valor_juros: j,
+      status: st,
+      data_pagamento: dp,
+      observacao: obs,
+      conta_bancaria_id: fallbackConta,
+    });
+
+    if (st === 'pago' && parcela.lancamento_id) {
+      let cancelled = false;
+      (async () => {
+        const { data } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('conta_bancaria_id')
+          .eq('id', parcela.lancamento_id!)
+          .maybeSingle();
+        if (cancelled) return;
+        const contaReal = (data?.conta_bancaria_id as string | null | undefined) ?? fallbackConta;
+        setContaBancariaId(contaReal);
+        setBaseline(prev => prev ? { ...prev, conta_bancaria_id: contaReal } : prev);
+      })();
+      return () => { cancelled = true; };
+    }
   }, [parcela, lastParcelaId, financiamento.conta_bancaria_id]);
 
   const valorTotal = principal + juros;
@@ -128,7 +159,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     juros !== baseline.valor_juros ||
     status !== baseline.status ||
     (status === 'pago' ? dataPagamento : '') !== (baseline.status === 'pago' ? baseline.data_pagamento : '') ||
-    (status === 'pago' && contaBancariaId !== (financiamento.conta_bancaria_id ?? '')) ||
+    (status === 'pago' && contaBancariaId !== (baseline.conta_bancaria_id ?? '')) ||
     observacao !== baseline.observacao
   );
 
@@ -261,6 +292,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       if (errParc) throw errParc;
 
       const dataPagamentoMudou = (status === 'pago' ? dataPagamento : '') !== (baseline.status === 'pago' ? baseline.data_pagamento : '');
+      const contaMudou = status === 'pago' && contaBancariaId !== (baseline.conta_bancaria_id ?? '');
       const indoParaPago = statusMudou && status === 'pago';
       const saindoDePago = statusMudou && baseline.status === 'pago' && status !== 'pago';
       const ehPagoComMudancas = status === 'pago' && (valoresMudaram || dataMudou || dataPagamentoMudou);
@@ -362,6 +394,18 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
             credor_id: financiamento.credor_id ?? null,
             data_contrato: financiamento.data_contrato ?? null,
           });
+        }
+      } else if (contaMudou) {
+        // Apenas a conta bancária mudou — atualiza in-place os lançamentos vinculados
+        // (principal e juros) sem deletar/recriar. atualizarStatusMirror já cobre ambos.
+        if (parcela.lancamento_id || parcela.lancamento_juros_id) {
+          await atualizarStatusMirror(
+            supabase as any,
+            parcela.lancamento_id ?? null,
+            parcela.lancamento_juros_id ?? null,
+            dataPagamento,
+            contaBancariaId,
+          );
         }
       }
 
