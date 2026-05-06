@@ -28,6 +28,7 @@ import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
+import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
@@ -99,6 +100,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [morteEditOpen, setMorteEditOpen] = useState(false);
   // Etapa 3 — sheet padronizado para Transferência saída (substitui Dialog genérico)
   const [transferenciaEditOpen, setTransferenciaEditOpen] = useState(false);
+  // Etapa 4 — sheet padronizado para Consumo (substitui Dialog genérico)
+  const [consumoEditOpen, setConsumoEditOpen] = useState(false);
 
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
@@ -188,6 +191,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (lancamento.tipo === 'transferencia_saida') {
       // Etapa 3 — sheet padronizado para Transferência (saída).
       setTransferenciaEditOpen(true);
+    } else if (lancamento.tipo === 'consumo') {
+      // Etapa 4 — sheet padronizado para Consumo.
+      setConsumoEditOpen(true);
     } else {
       setForm({ ...lancamento });
       setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
@@ -874,6 +880,20 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
           outrasFazendas={outrasFazendas}
+        />
+
+        {/* Etapa 4 — Sheet padronizado de Consumo */}
+        <EditConsumoSheet
+          lancamento={lancamento}
+          open={consumoEditOpen}
+          onOpenChange={setConsumoEditOpen}
+          onSalvar={onEditar}
+          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
+          podeRemover={true}
+          canEditMeta={canEditMeta}
+          p1Oficial={p1Oficial}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazenda}
         />
 
         {/* Confirmation dialog for deletion */}
