@@ -301,11 +301,12 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
 
       const FEMEAS = ['mamotes_f', 'desmama_f', 'novilhas', 'vacas'];
       const isFemea = FEMEAS.includes(categoria);
-      const subcentroCompra = isFemea ? 'COMPRAS ANIMAIS/FEMEAS' : 'COMPRAS ANIMAIS/MACHOS';
+      const subcentroCompra = isFemea ? 'Investimento Compra Bovinos Fêmeas' : 'Investimento Compra Bovinos Machos';
+      // Frete e comissão compartilham o mesmo subcentro oficial V2.
+      const SUBCENTRO_FRETE_COMISSAO = 'Investimento Frete/Comissão Compra Bovinos';
 
       const subcentrosNecessarios = [subcentroCompra];
-      if (calc.freteVal > 0) subcentrosNecessarios.push('FRETE COMPRA ANIMAIS');
-      if (calc.comissaoVal > 0) subcentrosNecessarios.push('COMISSÃO COMPRA ANIMAIS');
+      if (calc.freteVal > 0 || calc.comissaoVal > 0) subcentrosNecessarios.push(SUBCENTRO_FRETE_COMISSAO);
 
       const { data: planoContas } = await supabase
         .from('financeiro_plano_contas')
@@ -374,7 +375,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       }
 
       if (calc.freteVal > 0) {
-        const clasFrete = planoMap.get('FRETE COMPRA ANIMAIS')!;
+        const clasFrete = planoMap.get(SUBCENTRO_FRETE_COMISSAO)!;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
@@ -392,7 +393,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       }
 
       if (calc.comissaoVal > 0) {
-        const clasComissao = planoMap.get('COMISSÃO COMPRA ANIMAIS')!;
+        const clasComissao = planoMap.get(SUBCENTRO_FRETE_COMISSAO)!;
         inserts.push({
           ...baseRecord,
           ano_mes: anoMes,
