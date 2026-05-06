@@ -57,16 +57,41 @@ import { toast } from 'sonner';
  * V2 → Financeiro → Financiamentos.
  * Mesma orquestração do V1 (Index.tsx finView) — list / novo / detalhe.
  * Mantém estado local; troca de section desmonta e reseta.
+ *
+ * Quando `initialFinanciamentoId` é setado pelo parent, abre direto em detalhe
+ * (entrada externa via lançamento de financiamento). Ao voltar desse detalhe
+ * externo, chama `onVoltarParaOrigem` para retornar à section de origem.
+ * Cliques internos (lista → detalhe) seguem fluxo padrão e voltam para list.
  */
 type FinView = { mode: 'list' } | { mode: 'novo' } | { mode: 'detalhe'; id: string };
-function FinanciamentosViewV2() {
-  const [view, setView] = useState<FinView>({ mode: 'list' });
+interface FinanciamentosViewV2Props {
+  initialFinanciamentoId?: string;
+  onVoltarParaOrigem?: () => void;
+}
+function FinanciamentosViewV2({ initialFinanciamentoId, onVoltarParaOrigem }: FinanciamentosViewV2Props = {}) {
+  const [view, setView] = useState<FinView>(
+    initialFinanciamentoId ? { mode: 'detalhe', id: initialFinanciamentoId } : { mode: 'list' },
+  );
+
+  // Sincroniza quando o parent troca o id de origem (re-entrada por outro lançamento).
+  useEffect(() => {
+    if (initialFinanciamentoId) {
+      setView({ mode: 'detalhe', id: initialFinanciamentoId });
+    }
+  }, [initialFinanciamentoId]);
 
   if (view.mode === 'detalhe') {
+    const veioDeOrigemExterna = !!initialFinanciamentoId && view.id === initialFinanciamentoId;
     return (
       <FinanciamentoDetalhe
         id={view.id}
-        onVoltar={() => setView({ mode: 'list' })}
+        onVoltar={() => {
+          if (veioDeOrigemExterna && onVoltarParaOrigem) {
+            onVoltarParaOrigem();
+          } else {
+            setView({ mode: 'list' });
+          }
+        }}
       />
     );
   }
@@ -175,6 +200,10 @@ export default function V2Index() {
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
+  // Quando um lançamento de financiamento é editado em Financeiro → Lançamentos,
+  // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
+  // Voltar do detalhe externo limpa este state e retorna a 'financeiro-lanc'.
+  const [financiamentoIdAlvo, setFinanciamentoIdAlvo] = useState<string | null>(null);
   const limparEdicaoAvancada = () => {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
@@ -231,7 +260,13 @@ export default function V2Index() {
       <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
     );
     if (section === 'financiamentos') return (
-      <FinanciamentosViewV2 />
+      <FinanciamentosViewV2
+        initialFinanciamentoId={financiamentoIdAlvo ?? undefined}
+        onVoltarParaOrigem={() => {
+          setFinanciamentoIdAlvo(null);
+          setSection('financeiro-lanc');
+        }}
+      />
     );
     if (section === 'saldos-mensais') return (
       <FinV2SaldosTab />
@@ -387,7 +422,13 @@ export default function V2Index() {
       <PastosTab />
     );
     if (section === 'financeiro-lanc') return (
-      <FinanceiroV2Tab onIntensiveToggle={setIntensivo} />
+      <FinanceiroV2Tab
+        onIntensiveToggle={setIntensivo}
+        onAbrirFinanciamento={(id) => {
+          setFinanciamentoIdAlvo(id);
+          setSection('financiamentos');
+        }}
+      />
     );
     // Fluxo Caixa META / Lançamentos META Fin — ambos abrem a tela existente do
     // Fluxo de Caixa META (PlanejamentoFinanceiroTab), acessada via FinanceiroCaixaTab
