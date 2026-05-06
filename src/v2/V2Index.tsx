@@ -60,8 +60,10 @@ interface V2LancamentosWrapperProps {
   onReturnFromEdit?: () => void;
   /** Atalho do card "Chuvas" — navega para a tela de Chuvas. */
   onNavegarChuvas?: () => void;
+  /** Cenário inicial — 'meta' para Planejamento → Lançamentos META Zoo. */
+  cenarioInicial?: 'realizado' | 'meta';
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, cenarioInicial }: V2LancamentosWrapperProps = {}) {
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
   const {
@@ -113,6 +115,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
       vendaParaEditar={vendaParaEditar}
       onReturnFromEdit={onReturnFromEdit}
       onNavegarChuvas={onNavegarChuvas}
+      cenarioInicial={cenarioInicial}
       abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
     />
   );
@@ -329,6 +332,14 @@ export default function V2Index() {
         onNavegarChuvas={() => setSection('chuvas')}
       />
     );
+    // Lançamentos META Zoo — mesma tela de Lançamentos Zootécnicos, mas inicia em
+    // cenário META por padrão. Sem nova lógica/dupla-tela; apenas valor inicial.
+    if (section === 'lancamentos-meta-zoo') return (
+      <V2LancamentosWrapper
+        cenarioInicial="meta"
+        onNavegarChuvas={() => setSection('chuvas')}
+      />
+    );
     if (section === 'chuvas') return (
       <ChuvasTab anoInicial={ano} />
     );
@@ -409,7 +420,7 @@ export default function V2Index() {
     // Rotas existem no menu mas ainda não têm componente dedicado.
     // Substituir pelo wrapper real numa PR posterior.
     const PLACEHOLDERS: Partial<Record<V2Section, string>> = {
-      'lancamentos-meta-zoo': 'Lançamentos META Zoo',
+      // 'lancamentos-meta-zoo' implementado acima — abre LancamentosTab com cenarioInicial='meta'
       'lancamentos-meta-fin': 'Lançamentos META Fin',
       'dre-executivo':        'DRE Executivo',
       'divergencias':         'Divergências',

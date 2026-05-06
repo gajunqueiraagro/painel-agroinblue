@@ -95,6 +95,13 @@ interface Props {
    * Quando ausente, o card fica oculto. Não altera lógica de lançamento.
    */
   onNavegarChuvas?: () => void;
+  /**
+   * Cenário inicial padrão da tela: 'realizado' (default) ou 'meta'.
+   * Usado APENAS como valor inicial do `statusOp`. O usuário pode trocar
+   * manualmente depois — comportamento atual (resets pós-save voltam a
+   * 'realizado') preservado.
+   */
+  cenarioInicial?: 'realizado' | 'meta';
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
@@ -247,7 +254,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, cenarioInicial }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -297,7 +304,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
-  const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>('realizado');
+  // Default 'realizado'. Quando `cenarioInicial='meta'` (Planejamento → Lançamentos
+  // META Zoo), abre já em META. Usuário pode trocar manualmente depois.
+  const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>(
+    cenarioInicial === 'meta' ? 'meta' : 'realizado',
+  );
   const [morteLoteOpen, setMorteLoteOpen] = useState(false);
   const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
