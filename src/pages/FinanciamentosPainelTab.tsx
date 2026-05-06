@@ -128,70 +128,116 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
         <div className="flex-1 flex items-center justify-center"><span className="text-3xl animate-pulse">💰</span></div>
       ) : (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {/* LINHA 1+2 — grid 4 cols (cards + BarChart span 2x2) */}
-          <div className="grid gap-3 auto-rows-fr" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-            <KpiCard
-              label="Saldo devedor"
-              total={fmt(kpis.saldoDevedor.total.total)}
-              principal={fmt(kpis.saldoDevedor.total.principal)}
-              juros={fmt(kpis.saldoDevedor.total.juros)}
-              extra={`Pec: ${fmtCompact(kpis.saldoDevedor.pecuaria.total)} · Agri: ${fmtCompact(kpis.saldoDevedor.agricultura.total)}`}
-            />
-            <KpiCard
-              label={`Amortizado em ${ano}`}
-              total={fmt(kpis.amortizadoNoAno.total)}
-              totalClass="text-emerald-600"
-              principal={fmt(kpis.amortizadoNoAno.principal)}
-              juros={fmt(kpis.amortizadoNoAno.juros)}
-            />
+          {/* LINHA 1 — esquerda (2/3): Saldo/Amortizado/BarChart · direita (1/3): A amortizar/Anos seguintes/Alavancagem */}
+          <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
+            {/* ESQUERDA — 2 colunas internas */}
+            <div className="lg:col-span-2 grid gap-3 grid-cols-1 sm:grid-cols-2 auto-rows-min">
+              <KpiCard
+                label="Saldo devedor"
+                total={fmt(kpis.saldoDevedor.total.total)}
+                principal={fmt(kpis.saldoDevedor.total.principal)}
+                juros={fmt(kpis.saldoDevedor.total.juros)}
+                extra={`Pec: ${fmtCompact(kpis.saldoDevedor.pecuaria.total)} · Agri: ${fmtCompact(kpis.saldoDevedor.agricultura.total)}`}
+              />
+              <KpiCard
+                label={`Amortizado em ${ano}`}
+                total={fmt(kpis.amortizadoNoAno.total)}
+                totalClass="text-emerald-600"
+                principal={fmt(kpis.amortizadoNoAno.principal)}
+                juros={fmt(kpis.amortizadoNoAno.juros)}
+              />
 
-            {/* BarChart — col-span-2 row-span-2 */}
-            <Card className="col-span-2 row-span-2">
-              <CardContent className="p-3 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-2 shrink-0">
-                  <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
-                  <p className="text-[10px] text-muted-foreground">Clique em uma barra</p>
-                </div>
-                <div className="flex-1 min-h-0" style={{ height: 280 }}>
-                  <ResponsiveContainer>
-                    <BarChart
-                      data={barrasMensais}
-                      onClick={(e: any) => {
-                        const idx = e?.activeTooltipIndex;
-                        if (typeof idx === 'number' && idx >= 0 && idx < 12) {
-                          setMesSelecionado(idx + 1);
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                      <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar dataKey="principalPago" stackId="a" fill="#1e3a8a" name="Principal (pago)" />
-                      <Bar dataKey="principalPendente" stackId="a" fill="#1e3a8a" fillOpacity={0.45} name="Principal (pendente)" />
-                      <Bar dataKey="jurosPago" stackId="a" fill="#f97316" name="Juros (pago)" />
-                      <Bar dataKey="jurosPendente" stackId="a" fill="#f97316" fillOpacity={0.45} name="Juros (pendente)" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+              {/* BarChart — ocupa as 2 colunas internas */}
+              <Card className="sm:col-span-2">
+                <CardContent className="p-3 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-2 shrink-0">
+                    <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
+                    <p className="text-[10px] text-muted-foreground">Clique em uma barra</p>
+                  </div>
+                  <div className="flex-1 min-h-0" style={{ height: 280 }}>
+                    <ResponsiveContainer>
+                      <BarChart
+                        data={barrasMensais}
+                        onClick={(e: any) => {
+                          const idx = e?.activeTooltipIndex;
+                          if (typeof idx === 'number' && idx >= 0 && idx < 12) {
+                            setMesSelecionado(idx + 1);
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+                        <YAxis tickFormatter={(v) => fmtCompact(Number(v)).replace('R$ ', '')} tick={{ fontSize: 10 }} />
+                        <Tooltip formatter={(v: number) => fmt(Number(v))} contentStyle={{ fontSize: 11 }} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="principalPago" stackId="a" fill="#1e3a8a" name="Principal (pago)" />
+                        <Bar dataKey="principalPendente" stackId="a" fill="#1e3a8a" fillOpacity={0.45} name="Principal (pendente)" />
+                        <Bar dataKey="jurosPago" stackId="a" fill="#f97316" name="Juros (pago)" />
+                        <Bar dataKey="jurosPendente" stackId="a" fill="#f97316" fillOpacity={0.45} name="Juros (pendente)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-            <KpiCard
-              label={`A amortizar em ${ano}`}
-              total={fmt(kpis.aAmortizarNoAno.total)}
-              totalClass="text-amber-600"
-              principal={fmt(kpis.aAmortizarNoAno.principal)}
-              juros={fmt(kpis.aAmortizarNoAno.juros)}
-            />
-            <KpiCard
-              label="Anos seguintes"
-              total={fmt(kpis.totalAnosSeguintes.total)}
-              principal={fmt(kpis.totalAnosSeguintes.principal)}
-              juros={fmt(kpis.totalAnosSeguintes.juros)}
-            />
+            {/* DIREITA — empilhada: A amortizar / Anos seguintes / Alavancagem */}
+            <div className="flex flex-col gap-3">
+              <KpiCard
+                label={`A amortizar em ${ano}`}
+                total={fmt(kpis.aAmortizarNoAno.total)}
+                totalClass="text-amber-600"
+                principal={fmt(kpis.aAmortizarNoAno.principal)}
+                juros={fmt(kpis.aAmortizarNoAno.juros)}
+              />
+              <KpiCard
+                label="Anos seguintes"
+                total={fmt(kpis.totalAnosSeguintes.total)}
+                principal={fmt(kpis.totalAnosSeguintes.principal)}
+                juros={fmt(kpis.totalAnosSeguintes.juros)}
+              />
+              <Card>
+                <CardContent className="p-3 space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-xs font-semibold">Alavancagem pecuária</p>
+                    {alavancagem.status === 'indisponivel' ? (
+                      <span className="text-[10px] text-muted-foreground">Sem rebanho cadastrado</span>
+                    ) : (
+                      <span className={`text-xs font-bold ${alavancagemColor}`}>
+                        {alavancagem.percentual.toFixed(1)}%
+                        <span className="ml-2 text-[10px] uppercase">
+                          {alavancagem.status === 'saudavel' && 'saudável'}
+                          {alavancagem.status === 'atencao' && 'atenção'}
+                          {alavancagem.status === 'critico' && 'crítico'}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária (Principal)</p>
+                      <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.dividaPecuaria)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Valor do rebanho</p>
+                      <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.valorRebanho)}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full ${alavancagemBarColor} transition-all`} style={{ width: `${Math.min(100, alavancagem.percentual)}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[9px] text-muted-foreground">
+                      <span>0%</span>
+                      <span>30% (saudável)</span>
+                      <span>50% (atenção)</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* LINHA 3 — grid 3 cols: Pizza | Evolução | Credor */}
@@ -264,50 +310,9 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
             </Card>
           </div>
 
-          {/* LINHA 4 — grid 4 cols: Alavancagem card (1/4) | Histórico (3/4) */}
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-            <Card className="md:col-span-1">
-              <CardContent className="p-3 space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-xs font-semibold">Alavancagem pecuária</p>
-                  {alavancagem.status === 'indisponivel' ? (
-                    <span className="text-[10px] text-muted-foreground">Sem rebanho cadastrado</span>
-                  ) : (
-                    <span className={`text-xs font-bold ${alavancagemColor}`}>
-                      {alavancagem.percentual.toFixed(1)}%
-                      <span className="ml-2 text-[10px] uppercase">
-                        {alavancagem.status === 'saudavel' && 'saudável'}
-                        {alavancagem.status === 'atencao' && 'atenção'}
-                        {alavancagem.status === 'critico' && 'crítico'}
-                      </span>
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase text-muted-foreground">Dívida pecuária (Principal)</p>
-                    <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.dividaPecuaria)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase text-muted-foreground">Valor do rebanho</p>
-                    <p className="text-sm font-semibold tabular-nums">{fmt(alavancagem.valorRebanho)}</p>
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full ${alavancagemBarColor} transition-all`} style={{ width: `${Math.min(100, alavancagem.percentual)}%` }} />
-                  </div>
-                  <div className="flex justify-between text-[9px] text-muted-foreground">
-                    <span>0%</span>
-                    <span>30% (saudável)</span>
-                    <span>50% (atenção)</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="md:col-span-3">
+          {/* LINHA 4 — Histórico de alavancagem em largura cheia (Alavancagem card movida ao topo direito) */}
+          <div className="grid gap-3 grid-cols-1">
+            <Card>
               <CardContent className="p-3">
                 <p className="text-xs font-semibold mb-1">Histórico de alavancagem</p>
                 <p className="text-[10px] text-muted-foreground mb-1">Barras agrupadas: endividamento pecuária vs valor do rebanho · Linha: % alavancagem</p>
