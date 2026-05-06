@@ -133,11 +133,14 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     queryKey: ['painel-financiamentos', clienteId, tipoFiltro],
     enabled: !!clienteId,
     queryFn: async () => {
+      // Inclui ativos e quitados; exclui apenas 'cancelado' (contrato anulado).
+      // Contratos quitados precisam compor o histórico de alavancagem nas datas em
+      // que ainda tinham dívida em aberto. O helper parcelaEmAbertoEm já isola por refDate.
       let q = supabase
         .from('financiamentos')
         .select('id, cliente_id, descricao, numero_contrato, tipo_financiamento, credor_id, status, data_contrato, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
         .eq('cliente_id', clienteId!)
-        .eq('status', 'ativo');
+        .neq('status', 'cancelado');
       if (tipoFiltro !== 'todos') q = q.eq('tipo_financiamento', tipoFiltro);
       const { data, error } = await q;
       if (error) throw error;
