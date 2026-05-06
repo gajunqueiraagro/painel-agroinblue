@@ -2137,32 +2137,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const abateDataEmbarqueAuto = data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : '';
   const abateDataAbateAuto = data;
 
-  // ===== BLOCKED VIEW =====
-  if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
-    return (
-      <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
-        {onBackToConciliacao && (
-          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-md py-2 transition-colors hover:bg-primary/20 mb-3">
-            <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
-          </button>
-        )}
-        {renderTipoCards()}
-        <div className="bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-200 dark:border-orange-800 rounded-md p-6 text-center space-y-3">
-          <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto" />
-          <h3 className="font-bold text-foreground text-lg">Lançamento bloqueado</h3>
-          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
-            {isGlobal
-              ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
-              : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // ===== TOP TYPE-CARDS NAVIGATION =====
   // Substitui o sidebar lateral antigo. Onclick replica a mesma transição de
   // aba/tipo + resetAllFields que existia na navegação anterior.
+  // Declarado ANTES do BLOCKED VIEW porque ambos os returns usam renderTipoCards
+  // (TDZ: const não é hoisted — se chamado antes da declaração, runtime quebra).
   const isEditing = !!editingAbateId;
   const renderTipoCards = () => {
     const handleClick = (it: TipoCardItem) => {
@@ -2213,6 +2192,29 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       </div>
     );
   };
+
+  // ===== BLOCKED VIEW =====
+  if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
+    return (
+      <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
+        {onBackToConciliacao && (
+          <button onClick={onBackToConciliacao} className="w-full flex items-center justify-center gap-1 text-sm font-bold text-primary bg-primary/10 rounded-md py-2 transition-colors hover:bg-primary/20 mb-3">
+            <ArrowLeft className="h-4 w-4" /> {backLabel || 'Retornar à Conciliação de Categoria'}
+          </button>
+        )}
+        {renderTipoCards()}
+        <div className="bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-200 dark:border-orange-800 rounded-md p-6 text-center space-y-3">
+          <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto" />
+          <h3 className="font-bold text-foreground text-lg">Lançamento bloqueado</h3>
+          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+            {isGlobal
+              ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
+              : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
 
   // ===== FINANCIAL DETAILS PANEL (right column — non-abate) =====
