@@ -14,8 +14,13 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ChevronsUpDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 
 interface Props {
   value: string;
@@ -33,6 +38,8 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoNome, setNovoNome] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [reativarTarget, setReativarTarget] = useState<{ id: string; nome: string } | null>(null);
+  const [reativando, setReativando] = useState(false);
 
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['credor-autocomplete', clienteId],
@@ -75,6 +82,32 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
       toast.error('Selecione uma fazenda antes de criar um credor');
       return;
     }
+
+    // Pré-check: verificar duplicata por nome_normalizado (inclui inativos).
+    // Index único no banco impede duplicata mesmo entre ativo/inativo.
+    const normalizado = normalizeFornecedorNome(nome);
+    const { data: existing } = await supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome, ativo')
+      .eq('cliente_id', clienteId)
+      .eq('nome_normalizado', normalizado)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.ativo) {
+        // Já cadastrado e ativo — apenas selecionar e fechar.
+        onChange(existing.id);
+        toast.info(`Fornecedor "${existing.nome}" já cadastrado — selecionado.`);
+        setNovoOpen(false);
+        setNovoNome('');
+        setOpen(false);
+        return;
+      }
+      // Inativo → oferecer reativação.
+      setReativarTarget({ id: existing.id, nome: existing.nome });
+      return;
+    }
+
     setSalvando(true);
     const { data, error } = await supabase
       .from('financeiro_fornecedores')
@@ -94,6 +127,27 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
       setNovoNome('');
       setOpen(false);
     }
+  };
+
+  const reativarExistente = async () => {
+    if (!reativarTarget) return;
+    setReativando(true);
+    const { error } = await supabase
+      .from('financeiro_fornecedores')
+      .update({ ativo: true })
+      .eq('id', reativarTarget.id);
+    setReativando(false);
+    if (error) {
+      toast.error('Erro ao reativar: ' + error.message);
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ['credor-autocomplete', clienteId] });
+    onChange(reativarTarget.id);
+    toast.success(`Fornecedor "${reativarTarget.nome}" reativado e selecionado`);
+    setReativarTarget(null);
+    setNovoOpen(false);
+    setNovoNome('');
+    setOpen(false);
   };
 
   return (
@@ -183,6 +237,24 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!reativarTarget} onOpenChange={(v) => { if (!v) setReativarTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Credor inativo já cadastrado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe um credor inativo com o nome <strong>"{reativarTarget?.nome}"</strong>.
+              Em vez de criar uma duplicata, deseja reativá-lo e selecioná-lo neste financiamento?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reativando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={reativarExistente} disabled={reativando}>
+              {reativando ? 'Reativando...' : 'Reativar e selecionar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

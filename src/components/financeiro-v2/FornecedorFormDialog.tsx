@@ -10,6 +10,7 @@ import { AlertTriangle, Eye, Merge, CheckCircle, Trash2, Ban } from 'lucide-reac
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 
 interface Fornecedor {
   id: string;
@@ -87,6 +88,8 @@ export function FornecedorFormDialog({
   const [ativo, setAtivo] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [reativarTarget, setReativarTarget] = useState<Fornecedor | null>(null);
+  const [reativando, setReativando] = useState(false);
   const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -161,6 +164,26 @@ export function FornecedorFormDialog({
       toast.error('Preencha nome e fazenda');
       return;
     }
+
+    // Pré-check de duplicata por nome_normalizado (mesma lógica do trigger no banco).
+    // Evita unique violation no índice idx_financeiro_fornecedores_cliente_nome_norm_unique
+    // e oferece reativação quando há fornecedor inativo com o mesmo nome.
+    if (!editing) {
+      const normalizado = normalizeFornecedorNome(nome);
+      const colidindo = allFornecedores.find(
+        (f) => normalizeFornecedorNome(f.nome) === normalizado,
+      );
+      if (colidindo) {
+        if (colidindo.ativo) {
+          toast.error(`Já existe fornecedor ativo "${colidindo.nome}". Selecione-o em vez de criar um novo.`);
+          return;
+        }
+        // Inativo → oferecer reativação via AlertDialog. Não cria duplicata.
+        setReativarTarget(colidindo);
+        return;
+      }
+    }
+
     setSaving(true);
     const payload: any = {
       cliente_id: clienteId,
@@ -182,17 +205,35 @@ export function FornecedorFormDialog({
 
     if (editing) {
       const { error } = await supabase.from('financeiro_fornecedores').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar'); setSaving(false); return; }
+      if (error) { toast.error('Erro ao atualizar: ' + error.message); setSaving(false); return; }
       toast.success('Fornecedor atualizado');
     } else {
       const { error } = await supabase.from('financeiro_fornecedores').insert(payload);
-      if (error) { toast.error('Erro ao criar'); setSaving(false); return; }
+      if (error) { toast.error('Erro ao criar: ' + error.message); setSaving(false); return; }
       toast.success('Fornecedor criado');
     }
     setSaving(false);
     onClose();
     onSaved();
-  }, [saving, clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
+  }, [saving, clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, allFornecedores, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
+
+  const reativarExistente = useCallback(async () => {
+    if (!reativarTarget) return;
+    setReativando(true);
+    const { error } = await supabase
+      .from('financeiro_fornecedores')
+      .update({ ativo: true })
+      .eq('id', reativarTarget.id);
+    setReativando(false);
+    if (error) {
+      toast.error('Erro ao reativar: ' + error.message);
+      return;
+    }
+    toast.success(`Fornecedor "${reativarTarget.nome}" reativado`);
+    setReativarTarget(null);
+    onClose();
+    onSaved();
+  }, [reativarTarget, onClose, onSaved]);
 
   const handleMerge = useCallback(async (target: Fornecedor) => {
     if (!editing) return;
@@ -487,6 +528,23 @@ export function FornecedorFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <AlertDialog open={!!reativarTarget} onOpenChange={(v) => { if (!v) setReativarTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fornecedor inativo já cadastrado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe um fornecedor inativo com o nome <strong>"{reativarTarget?.nome}"</strong>.
+              Em vez de criar uma duplicata, deseja reativá-lo? Os dados existentes serão preservados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reativando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={reativarExistente} disabled={reativando}>
+              {reativando ? 'Reativando...' : 'Reativar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
