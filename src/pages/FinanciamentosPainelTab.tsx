@@ -149,12 +149,12 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
 
               {/* BarChart — ocupa as 2 colunas internas */}
               <Card className="sm:col-span-2">
-                <CardContent className="p-3 h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-2 shrink-0">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold">Parcelas por mês em {ano}</p>
                     <p className="text-[10px] text-muted-foreground">Clique em uma barra</p>
                   </div>
-                  <div className="flex-1 min-h-0" style={{ height: 280 }}>
+                  <div style={{ width: '100%', height: 280 }}>
                     <ResponsiveContainer>
                       <BarChart
                         data={barrasMensais}

@@ -201,8 +201,26 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     const hojeMs = new Date(hojeISO + 'T00:00:00').getTime();
     const em30Dias = new Date(hojeMs + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 
+    // ── Data de corte derivada dos filtros (mes='todos' → 31/12 do ano; senão último dia do mês) ──
+    const corteMes = mesRef === 'todos' ? 12 : Number(mesRef);
+    const corteMesPadded = String(corteMes).padStart(2, '0');
+    const corteAnoMes = `${ano}-${corteMesPadded}`;
+    // new Date(year, monthIdx0+1, 0) → último dia do mês monthIdx0+1
+    const ultimoDiaCorte = new Date(ano, corteMes, 0).getDate();
+    const dataCorte = `${ano}-${corteMesPadded}-${String(ultimoDiaCorte).padStart(2, '0')}`;
+
     const finById = new Map<string, FinanciamentoRow>();
     for (const f of financiamentos) finById.set(f.id, f);
+
+    // ── Helper: parcela está em aberto numa data de referência ──
+    // Em aberto = financiamento já existia (data_contrato <= refDate)
+    //           E parcela ainda não foi paga até refDate (data_pagamento null OU > refDate).
+    // Não usa data_vencimento como critério de exclusão — vencida pendente continua em aberto.
+    const parcelaEmAbertoEm = (p: ParcelaRow, finRef: FinanciamentoRow | undefined, refDate: string): boolean => {
+      if (!finRef || !finRef.data_contrato || finRef.data_contrato > refDate) return false;
+      if (p.data_pagamento && p.data_pagamento <= refDate) return false;
+      return true;
+    };
 
     // ── KPIs ──
     const mkBreakdown = (): Breakdown => ({ principal: 0, juros: 0, total: 0 });
@@ -240,9 +258,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       const isPago = p.status === 'pago';
       const venc = p.data_vencimento;
       const isThisYear = venc >= anoInicio && venc <= anoFim;
-      // Se data_pagamento for NULL, usa data_vencimento como fallback para determinar o ano do pagamento
-      const refPagamento = p.data_pagamento || p.data_vencimento;
-      const pagoThisYear = !!(refPagamento && refPagamento >= anoInicio && refPagamento <= anoFim);
+      const emAberto = parcelaEmAbertoEm(p, fin, dataCorte);
 
       parcelasEnriquecidas.push({
         parcela_id: p.id,
@@ -258,8 +274,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
         status: p.status,
       });
 
-      // Saldo devedor total (só pendentes, independente do ano)
-      if (isPendente) {
+      // ── Saldo devedor / vencidas / a amortizar / anos seguintes — em aberto na dataCorte ──
+      if (emAberto) {
         const bucket = fin.tipo_financiamento === 'pecuaria' ? saldoPec
           : fin.tipo_financiamento === 'agricultura' ? saldoAgri
             : null;
@@ -269,16 +285,9 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
           bucket.total += valorTotal;
         }
 
-        credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
+        if (venc < dataCorte) overdueCount++;
 
-        const vencYear = Number(venc.substring(0, 4));
-        // Pizza de perfil de vencimentos: somamos APENAS o valor_principal (amortização)
-        if (vencYear <= ano + 1) curtoPrazo += principal;
-        else longoPrazo += principal;
-
-        if (venc < hojeISO) overdueCount++;
-
-        if (isThisYear) {
+        if (venc > dataCorte && venc <= anoFim) {
           aAmortizar.principal += principal;
           aAmortizar.juros += juros;
           aAmortizar.total += valorTotal;
@@ -289,7 +298,17 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
         }
       }
 
-      if (isPago && pagoThisYear) {
+      // ── Pizza/Credor (out of scope nesta etapa) — mantém lógica original baseada em pendente ──
+      if (isPendente) {
+        credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
+
+        const vencYear = Number(venc.substring(0, 4));
+        if (vencYear <= ano + 1) curtoPrazo += principal;
+        else longoPrazo += principal;
+      }
+
+      // ── Amortizado YTD: pago entre 01/01 do ano e dataCorte (sem fallback para data_vencimento) ──
+      if (isPago && p.data_pagamento && p.data_pagamento >= anoInicio && p.data_pagamento <= dataCorte) {
         amortizado.principal += principal;
         amortizado.juros += juros;
         amortizado.total += valorTotal;
@@ -390,14 +409,15 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       { label: 'Demais', valor: demais, cor: '#60a5fa', anoRef: null },
     ];
 
-    // ── Histórico de Alavancagem (apenas pecuária, snapshots anuais) ──
-    // Para cada ano entre minAno (data_contrato mais antiga dos financiamentos pec) e anoFiltro:
-    //   endividamento = sum principal de parcelas onde fin.data_contrato <= refDate E p.data_vencimento >= refDate E tipo=pecuaria
-    //   rebanho = max ano_mes <= refMês mais próximo em rebanhoSnapshots
-    //   alavancagem = endividamento / rebanho * 100
-    const refMonth = mesRef === 'todos' ? 3 : mesRef;
+    // ── Histórico de Alavancagem (apenas pecuária) ──
+    // Para cada ano [minAnoPec..ano], usa o MESMO mês de corte aplicado aos KPIs (corteMes).
+    //   refDate = último dia do mês de corte naquele ano histórico
+    //   endividamento = Σ principal de parcelas em aberto na refDate (data_pagamento null OU > refDate)
+    //                   E financiamento contratado até a refDate (data_contrato <= refDate)
+    //   rebanho = snapshot do mesmo ano_mes (sem fallback). Ausente → alavancagem = null.
+    const refMonth = corteMes;
     const refMonthLabel = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][refMonth - 1];
-    const refMonthPadded = String(refMonth).padStart(2, '0');
+    const refMonthPadded = corteMesPadded;
 
     const financiamentosPec = financiamentos.filter(f => f.tipo_financiamento === 'pecuaria');
     let minAnoPec = ano;
@@ -412,22 +432,19 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
 
     const historicoAlavancagem: HistoricoAlavancagemPoint[] = [];
     for (let y = minAnoPec; y <= ano; y++) {
-      const refDate = `${y}-${refMonthPadded}-01`;
+      const ultimoDiaRef = new Date(y, refMonth, 0).getDate();
+      const refDate = `${y}-${refMonthPadded}-${String(ultimoDiaRef).padStart(2, '0')}`;
       const refAnoMes = `${y}-${refMonthPadded}`;
 
-      // Endividamento: parcelas onde fin ativa antes da refDate E não venceu ainda
       let endividamento = 0;
       for (const p of parcelas) {
         const fin = finPecById.get(p.financiamento_id);
-        if (!fin) continue;
-        const dataContrato = fin.data_contrato;
-        if (!dataContrato || dataContrato > refDate) continue;
-        if (p.data_vencimento < refDate) continue;
+        if (!parcelaEmAbertoEm(p, fin, refDate)) continue;
         endividamento += Number(p.valor_principal) || 0;
       }
 
-      // Rebanho: último snapshot com ano_mes <= refAnoMes
-      const snap = rebanhoSnapshots.find(r => r.ano_mes <= refAnoMes);
+      // Rebanho: snapshot do mesmo ano_mes (sem fallback para snap mais antigo)
+      const snap = rebanhoSnapshots.find(r => r.ano_mes === refAnoMes);
       const rebanho = snap?.total ?? 0;
       const alavancagem = rebanho > 0 ? (endividamento / rebanho) * 100 : null;
 
@@ -441,22 +458,19 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       });
     }
 
-    // ── Alavancagem atual: mesma fórmula do Histórico para Mar/ano_atual ──
-    // Endividamento pecuária (principal, por data de referência hoje)
-    const hojeRef = hojeISO;
+    // ── Alavancagem atual: dívida pecuária Principal em aberto na dataCorte / Valor do Rebanho do mês de corte ──
     let dividaPecuariaPrincipal = 0;
     for (const p of parcelas) {
       const fin = finPecById.get(p.financiamento_id);
-      if (!fin) continue;
-      if (fin.status !== 'ativo') continue;
-      const dc = fin.data_contrato;
-      if (!dc || dc > hojeRef) continue;
-      if (p.data_vencimento < hojeRef) continue;
+      if (!parcelaEmAbertoEm(p, fin, dataCorte)) continue;
       dividaPecuariaPrincipal += Number(p.valor_principal) || 0;
     }
-    const alavancagemPerc = valorRebanho > 0 ? (dividaPecuariaPrincipal / valorRebanho) * 100 : 0;
+    // Valor do Rebanho: snapshot exato do mês/ano de corte (sem fallback p/ snap mais recente).
+    // Mantém fonte atual (valor_rebanho_fechamento) — troca de fonte fica para etapa posterior.
+    const valorRebanhoCorte = rebanhoSnapshots.find(r => r.ano_mes === corteAnoMes)?.total ?? 0;
+    const alavancagemPerc = valorRebanhoCorte > 0 ? (dividaPecuariaPrincipal / valorRebanhoCorte) * 100 : 0;
     const alavancagemStatus: 'saudavel' | 'atencao' | 'critico' | 'indisponivel' =
-      valorRebanho <= 0 ? 'indisponivel'
+      valorRebanhoCorte <= 0 ? 'indisponivel'
         : alavancagemPerc < 30 ? 'saudavel'
           : alavancagemPerc < 50 ? 'atencao'
             : 'critico';
@@ -474,7 +488,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       dividaPorCredor,
       alavancagem: {
         dividaPecuaria: dividaPecuariaPrincipal,
-        valorRebanho,
+        valorRebanho: valorRebanhoCorte,
         percentual: alavancagemPerc,
         status: alavancagemStatus,
       },
