@@ -58,8 +58,10 @@ interface V2LancamentosWrapperProps {
   vendaParaEditar?: Lancamento | null;
   /** Callback chamado após cancelar/salvar edição vinda da Conferência. */
   onReturnFromEdit?: () => void;
+  /** Atalho do card "Chuvas" — navega para a tela de Chuvas. */
+  onNavegarChuvas?: () => void;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas }: V2LancamentosWrapperProps = {}) {
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
   const {
@@ -110,6 +112,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
       abateParaEditar={abateParaEditar}
       vendaParaEditar={vendaParaEditar}
       onReturnFromEdit={onReturnFromEdit}
+      onNavegarChuvas={onNavegarChuvas}
       abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
     />
   );
@@ -323,6 +326,7 @@ export default function V2Index() {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');
         }}
+        onNavegarChuvas={() => setSection('chuvas')}
       />
     );
     if (section === 'chuvas') return (

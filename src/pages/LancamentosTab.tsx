@@ -90,6 +90,11 @@ interface Props {
   initialMesFiltro?: string;
   /** Cenário inicial para reclassificação quando navegado da Evolução por Categoria */
   initialReclassCenario?: 'realizado' | 'meta';
+  /**
+   * Callback opcional acionado pelo card "Chuvas" (atalho de navegação).
+   * Quando ausente, o card fica oculto. Não altera lógica de lançamento.
+   */
+  onNavegarChuvas?: () => void;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
@@ -111,11 +116,18 @@ const ABA_CONFIG: { id: Aba; label: string; icon: React.ReactNode }[] = [
 ];
 
 interface TipoCardItem {
-  value: TipoMovimentacao;
+  /** Identificador. Para itens `navOnly`, qualquer string (ex: 'chuvas'). */
+  value: TipoMovimentacao | 'chuvas';
   aba: Aba;
   label: string;
   icon: string;
   desc: string;
+  /**
+   * Quando true, o card é um atalho de navegação para outra seção do app
+   * (ex.: Chuvas). NÃO altera tipo/aba/state interno e NÃO abre o modal de
+   * lançamento. O parent decide para onde navegar via `onNavegarChuvas`.
+   */
+  navOnly?: boolean;
 }
 interface TipoCardGroup { grupo: 'entradas' | 'saidas' | 'outros'; label: string; items: TipoCardItem[]; }
 
@@ -140,6 +152,8 @@ const TIPO_CARDS_GROUPS: TipoCardGroup[] = [
   {
     grupo: 'outros', label: 'Outros', items: [
       { value: 'reclassificacao', aba: 'reclassificacao', label: 'Evoluir Categoria', icon: '🔄', desc: 'Mudar a categoria do animal' },
+      // Atalho de navegação — NÃO é um tipo de lançamento. Vai para a tela de Chuvas.
+      { value: 'chuvas',          aba: 'reclassificacao', label: 'Chuvas',            icon: '🌧️', desc: 'Registro pluviométrico', navOnly: true },
     ],
   },
 ];
@@ -233,7 +247,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -2163,14 +2177,19 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const isEditing = !!editingAbateId;
   const renderTipoCards = () => {
     const handleClick = (it: TipoCardItem) => {
-      if (isEditing) return; // Bloqueia navegação durante edição
+      // Atalho de navegação (ex.: Chuvas) — não muda state nem abre modal.
+      if (it.navOnly) {
+        if (it.value === 'chuvas') onNavegarChuvas?.();
+        return;
+      }
+      if (isEditing) return; // Bloqueia troca de tipo durante edição
       setAba(it.aba);
-      setTipo(it.value);
+      setTipo(it.value as TipoMovimentacao);
       resetAllFields();
       setLancModalOpen(true);
     };
     const isItemActive = (it: TipoCardItem) =>
-      it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
+      !it.navOnly && it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
 
     return (
       <div className="space-y-3 mb-4">
@@ -2180,9 +2199,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               {g.label}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-              {g.items.map(it => {
+              {g.items
+                // Esconde Chuvas se o parent não passou callback de navegação.
+                .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
+                .map(it => {
                 const active = isItemActive(it);
-                const disabled = isEditing && !active;
+                // navOnly nunca é "disabled" durante edição — atalho continua acessível
+                const disabled = !it.navOnly && isEditing && !active;
                 return (
                   <button
                     key={it.value}
