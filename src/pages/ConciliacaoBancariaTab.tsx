@@ -720,8 +720,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
         {!loading && selectedCard && (
           <div className="space-y-2">
-            {/* ════ 3 CARDS: [Resumo span-2] [Status] [Saldos por conta span-2] ════ */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'2fr 0.75fr 2.6fr', alignItems:'start'}}>
+            {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
+                Resumo encurta um pouco; Saldos ganha espaço para evitar corte
+                em Sistema/Extrato/Diferença. Status mantido compacto. */}
+            <div className="grid gap-2" style={{gridTemplateColumns:'1.7fr 0.75fr 3fr', alignItems:'start'}}>
 
               {/* ── COL 1: Resumo das movimentações ── */}
               <div className="rounded-lg border overflow-hidden bg-card">
