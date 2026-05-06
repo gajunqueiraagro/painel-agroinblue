@@ -924,6 +924,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   useEffect(() => {
     if (abateParaEditar) {
       loadAbateForEdit(abateParaEditar);
+      setLancModalOpen(true); // Abre o modal de form/financial automaticamente
     }
   }, [abateParaEditar, abateFornecedores]);
 
@@ -1211,6 +1212,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   useEffect(() => {
     if (vendaParaEditar) {
       loadVendaForEdit(vendaParaEditar);
+      setLancModalOpen(true);
     }
   }, [vendaParaEditar, abateFornecedores]);
 

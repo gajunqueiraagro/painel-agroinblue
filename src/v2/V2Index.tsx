@@ -135,6 +135,14 @@ export default function V2Index() {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
   };
+  // Limpa estado de edição se sair da seção `lancamentos-zoot` por qualquer
+  // motivo (menu, drawer, navegação direta) — evita criação normal travada
+  // em modo edição.
+  useEffect(() => {
+    if (section !== 'lancamentos-zoot' && (abateParaEditar || vendaParaEditar)) {
+      limparEdicaoAvancada();
+    }
+  }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const periodoTipo = getPeriodoTipo(section);
   const { clientes, clienteAtual } = useCliente();
   const { fazendas, isGlobal } = useFazenda();
