@@ -27,6 +27,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
+import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calculos/formatters';
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
@@ -96,6 +97,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const [nascimentoEditOpen, setNascimentoEditOpen] = useState(false);
   // Etapa 2 — sheet padronizado para Morte (substitui Dialog genérico)
   const [morteEditOpen, setMorteEditOpen] = useState(false);
+  // Etapa 3 — sheet padronizado para Transferência saída (substitui Dialog genérico)
+  const [transferenciaEditOpen, setTransferenciaEditOpen] = useState(false);
 
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
@@ -182,6 +185,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     } else if (lancamento.tipo === 'morte') {
       // Etapa 2 — sheet padronizado para Morte.
       setMorteEditOpen(true);
+    } else if (lancamento.tipo === 'transferencia_saida') {
+      // Etapa 3 — sheet padronizado para Transferência (saída).
+      setTransferenciaEditOpen(true);
     } else {
       setForm({ ...lancamento });
       setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
@@ -853,6 +859,21 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           p1Oficial={p1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
+        />
+
+        {/* Etapa 3 — Sheet padronizado de Transferência (saída) */}
+        <EditTransferenciaSheet
+          lancamento={lancamento}
+          open={transferenciaEditOpen}
+          onOpenChange={setTransferenciaEditOpen}
+          onSalvar={onEditar}
+          onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
+          podeRemover={true}
+          canEditMeta={canEditMeta}
+          p1Oficial={p1Oficial}
+          temAlteracaoEstrutural={temAlteracaoEstrutural}
+          nomeFazenda={nomeFazenda}
+          outrasFazendas={outrasFazendas}
         />
 
         {/* Confirmation dialog for deletion */}
