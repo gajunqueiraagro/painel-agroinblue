@@ -233,6 +233,7 @@ export default function V2Index() {
             lancamentos={lancamentosTodosCenarios}
             filtroAnoInicial={ano}
             filtroMesInicial={undefined}
+            filtroStatusInicial="realizado"
             onRemover={removerLancamento}
             onEditar={editarLancamento}
           />
