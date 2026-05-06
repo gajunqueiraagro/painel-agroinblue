@@ -34,6 +34,14 @@ interface Props {
   mode?: 'create' | 'update';
   onFinanceiroUpdated?: () => void;
   statusOperacional?: 'previsto' | 'programado' | 'agendado' | 'realizado' | 'meta';
+  /**
+   * Hidratação opcional para edição — quando o painel é renderizado dentro
+   * de um sheet/modal de edição, parcelas e formaReceb existentes devem
+   * inicializar o state interno. Mesmo padrão de `VendaFinanceiroPanel`.
+   * Quando undefined, comportamento idêntico ao atual (avista, parcelas vazias).
+   */
+  initialFormaReceb?: 'avista' | 'prazo';
+  initialParcelas?: Parcela[];
 }
 
 export interface AbateFinanceiroOverrides {
@@ -52,14 +60,31 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
   quantidade, categoria, data, valorLiquido, totalDescontos = 0, frigorifico,
   fornecedorId, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'realizado',
+  initialFormaReceb, initialParcelas,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const isPrevisto = statusOperacional === 'previsto';
 
-  const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>('avista');
-  const [qtdParcelas, setQtdParcelas] = useState('2');
-  const [parcelas, setParcelas] = useState<Parcela[]>([]);
+  // Hidratação opcional via props — quando undefined, defaults idênticos ao atual.
+  const [formaReceb, setFormaReceb] = useState<'avista' | 'prazo'>(
+    () => initialFormaReceb || 'avista',
+  );
+  const [qtdParcelas, setQtdParcelas] = useState(
+    () => (initialParcelas && initialParcelas.length > 0) ? String(initialParcelas.length) : '2',
+  );
+  const [parcelas, setParcelas] = useState<Parcela[]>(
+    () => initialParcelas || [],
+  );
+
+  // Sync quando o parent troca o lancamento sendo editado (mesma instância de painel).
+  useEffect(() => {
+    if (initialFormaReceb) setFormaReceb(initialFormaReceb);
+    if (initialParcelas && initialParcelas.length > 0) {
+      setParcelas(initialParcelas);
+      setQtdParcelas(String(initialParcelas.length));
+    }
+  }, [initialFormaReceb, initialParcelas]);
 
   const [gerado, setGerado] = useState(false);
   const [gerando, setGerando] = useState(false);
