@@ -49,7 +49,6 @@ import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorD
 import { supabase } from '@/integrations/supabase/client';
 import { VendaFinanceiroPanel, VendaFinanceiroPanelRef } from '@/components/VendaFinanceiroPanel';
 import { useAnosDisponiveis } from '@/hooks/useAnosDisponiveis';
-import { ConsumoFinanceiroPanel, ConsumoFinanceiroPanelRef } from '@/components/ConsumoFinanceiroPanel';
 import { ConfirmacaoRegistroDialog } from '@/components/ConfirmacaoRegistroDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -268,7 +267,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [p1BloqueioMsg, setP1BloqueioMsg] = useState<string | null>(null);
   const abateFinanceiroRef = useRef<AbateFinanceiroPanelRef>(null);
   const vendaFinanceiroRef = useRef<VendaFinanceiroPanelRef>(null);
-  const consumoFinanceiroRef = useRef<ConsumoFinanceiroPanelRef>(null);
   const [abateFinanceiroMissing, setAbateFinanceiroMissing] = useState(false);
   const [gerandoFinanceiroFallback, setGerandoFinanceiroFallback] = useState(false);
   const [anoFiltro, setAnoFiltro] = useState(initialAnoFiltro || String(new Date().getFullYear()));
@@ -325,7 +323,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [pesoCarcacaKg, setPesoCarcacaKg] = useState('');
   const [precoArroba, setPrecoArroba] = useState('');
   const [precoKg, setPrecoKg] = useState('');
-  const [consumoPrecoKg, setConsumoPrecoKg] = useState<number | undefined>(undefined);
   const [bonusPrecoce, setBonusPrecoce] = useState('');
   const [bonusQualidade, setBonusQualidade] = useState('');
   const [bonusListaTrace, setBonusListaTrace] = useState('');
@@ -542,11 +539,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       else if (vendaTipoPreco === 'por_cab') { valorBruto = qtd * vi; }
       else if (vendaTipoPreco === 'por_total') { valorBruto = vi; }
     }
-    else if (isConsumo) {
-      if (consumoPrecoKg && qtd && peso) {
-        valorBruto = consumoPrecoKg * qtd * peso;
-      }
-    }
     else if (usaPrecoKg) { valorBruto = totalKg * (parseNumericValue(precoKg) || 0); }
     const bonusPrecoceTotal = 0;
     const bonusQualidadeTotal = 0;
@@ -574,7 +566,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       carcacaCalc, bonusPrecoceTotal, bonusQualidadeTotal, bonusListaTraceTotal,
       descQualidadeTotal, descFunruralTotal, descOutrosTotal,
     };
-  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, consumoPrecoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, isConsumo, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes, abateCalc]);
+  }, [quantidade, pesoKg, pesoCarcacaKg, rendCarcaca, precoArroba, precoKg, bonusPrecoce, bonusQualidade, bonusListaTrace, descontoQualidade, funruralPct, funruralReais, outrosDescontos, bonus, descontos, comissaoPct, frete, outrasDespesas, isAbate, isVenda, usaPrecoArroba, usaPrecoKg, vendaTipoPreco, vendaPrecoInput, vendaDetalhes, abateDetalhes, abateCalc]);
 
   const gerarParcelas = useCallback((numParcelas: number, baseDate: string, valorTotal: number) => {
     const p: Parcela[] = [];
@@ -629,7 +621,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   const resetFinancialFields = () => {
     setPesoCarcacaKg(''); setPrecoArroba(''); setPrecoKg('');
-    setConsumoPrecoKg(undefined);
     setBonusPrecoce(''); setBonusQualidade(''); setBonusListaTrace('');
     setDescontoQualidade(''); setDescontoFunrural(''); setOutrosDescontos('');
     setBonus(''); setDescontos(''); setComissaoPct(''); setFrete(''); setOutrasDespesas('');
@@ -668,7 +659,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setTransferenciaDialogOpen(false);
     resetFinancialFields();
     vendaFinanceiroRef.current?.resetForm();
-    consumoFinanceiroRef.current?.resetForm();
   };
 
   // Check if financeiro records exist for current editing abate
@@ -1956,10 +1946,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           triggerZootCacheRefresh(data);
           restoreEditOrigin();
         } else if (isConsumo && returnedId) {
-          if (consumoFinanceiroRef.current && calc.valorLiquido > 0) {
-            await consumoFinanceiroRef.current.generateFinanceiro(returnedId);
-          }
-          consumoFinanceiroRef.current?.resetForm();
+          // Consumo NÃO gera lançamento financeiro — fluxo só zootécnico.
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
@@ -2360,51 +2347,26 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       );
     }
 
-    // Consumo: use dedicated ConsumoFinanceiroPanel
+    // Consumo: NÃO gera lançamento financeiro. Painel apenas informativo + botão.
     if (isConsumo) {
       return (
-        <div className="space-y-2 self-start">
-          <div className="bg-card rounded-md border shadow-sm p-3 space-y-2">
-            <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Valor da Operação</h4>
-            <div>
-              <Label className={`text-[11px] ${metaLabelClass}`}>Preço R$/kg</Label>
-              <Input
-                type="number"
-                value={consumoPrecoKg ?? ''}
-                onChange={e => {
-                  const raw = e.target.value;
-                  setConsumoPrecoKg(raw ? Number(raw.replace(',', '.')) : undefined);
-                }}
-                placeholder="0,00"
-                className={`h-8 text-[12px] ${metaInputClass}`}
-              />
+        <div className="bg-card rounded-md border shadow-sm p-3 space-y-2 self-start">
+          <h3 className="text-[14px] font-semibold text-foreground">Detalhes Financeiros</h3>
+          <Separator />
+          <div className="flex gap-2 items-start py-1">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-semibold mb-1">Consumo não gera lançamento financeiro.</p>
+              <ul className="space-y-0.5 list-disc list-inside text-[10px]">
+                <li>Movimentação interna do rebanho</li>
+                <li>Não impacta fluxo de caixa</li>
+              </ul>
             </div>
-            {calc.valorBruto > 0 && (
-              <div className={`rounded-md p-2 text-[12px] ${isMeta ? 'bg-orange-100 dark:bg-orange-950/30' : 'bg-muted/30'}`}>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor total</span>
-                  <strong>{formatMoeda(calc.valorBruto)}</strong>
-                </div>
-              </div>
-            )}
           </div>
-          <ConsumoFinanceiroPanel
-            key={`consumo-${tipo}`}
-            ref={consumoFinanceiroRef}
-            quantidade={parseNumericValue(quantidade) || 0}
-            pesoKg={parseNumericValue(pesoKg) || 0}
-            categoria={categoria}
-            data={data}
-            notaFiscal={notaFiscal}
-            onNotaFiscalChange={setNotaFiscal}
-            statusOp={effectiveStatusOp}
-            lancamentoId={lastSavedLancamentoId || undefined}
-            valorBruto={calc.valorBruto}
-            valorLiquido={calc.valorLiquido}
-            onRequestRegister={handleRequestRegister}
-            registerLabel={editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
-            submitting={submitting}
-          />
+          <Separator />
+          <Button type="button" className="w-full h-10 text-[13px] font-bold" onClick={handleRequestRegister} disabled={submitting}>
+            {editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
+          </Button>
         </div>
       );
     }
