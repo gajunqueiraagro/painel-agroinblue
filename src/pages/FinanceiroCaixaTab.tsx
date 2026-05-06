@@ -51,6 +51,9 @@ interface Props {
   filtroMesInicial?: number;
   initialTab?: SubTab;
   hideInternalTabs?: boolean;
+  /** Cenário inicial da subaba "Fluxo" (toggle Realizado/META). Default 'realizado'. */
+  initialFluxoCenario?: 'realizado' | 'meta';
+  modo?: 'mes' | string;
 }
 
 const MESES_FILTRO = [
@@ -71,7 +74,7 @@ function classifySaida(l: FinanceiroLancamento): string {
   return classificarSaidaCentral(l);
 }
 
-export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false, modo = 'mes' }: Props) {
+export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais = [], onBack, filtroAnoInicial, filtroMesInicial, initialTab, hideInternalTabs = false, initialFluxoCenario = 'realizado', modo = 'mes' }: Props) {
   const [subTab, setSubTab] = useState<SubTab>(initialTab ?? 'dashboard');
   useEffect(() => {
     if (initialTab) {
@@ -79,7 +82,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
     }
   }, [initialTab]);
 
-  const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>('realizado');
+  const [fluxoCenario, setFluxoCenario] = useState<'realizado' | 'meta'>(initialFluxoCenario);
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);
   const [drillMacro, setDrillMacro] = useState<string | null>(null);
   const { fazendaAtual, fazendas } = useFazenda();

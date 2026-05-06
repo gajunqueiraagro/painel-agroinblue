@@ -62,8 +62,10 @@ interface V2LancamentosWrapperProps {
   onNavegarChuvas?: () => void;
   /** Cenário inicial — 'meta' para Planejamento → Lançamentos META Zoo. */
   cenarioInicial?: 'realizado' | 'meta';
+  /** Restringe cenários disponíveis no seletor de Status (ex.: ['meta']). */
+  cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, cenarioInicial }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
   const {
@@ -116,6 +118,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
       onReturnFromEdit={onReturnFromEdit}
       onNavegarChuvas={onNavegarChuvas}
       cenarioInicial={cenarioInicial}
+      cenariosPermitidos={cenariosPermitidos}
       abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
     />
   );
@@ -332,11 +335,12 @@ export default function V2Index() {
         onNavegarChuvas={() => setSection('chuvas')}
       />
     );
-    // Lançamentos META Zoo — mesma tela de Lançamentos Zootécnicos, mas inicia em
-    // cenário META por padrão. Sem nova lógica/dupla-tela; apenas valor inicial.
+    // Lançamentos META Zoo — mesma tela de Lançamentos Zootécnicos, mas travada em
+    // cenário META: Realizado/Programado ficam desabilitados no seletor de Status.
     if (section === 'lancamentos-meta-zoo') return (
       <V2LancamentosWrapper
         cenarioInicial="meta"
+        cenariosPermitidos={['meta']}
         onNavegarChuvas={() => setSection('chuvas')}
       />
     );
@@ -349,10 +353,17 @@ export default function V2Index() {
     if (section === 'financeiro-lanc') return (
       <FinanceiroV2Tab onIntensiveToggle={setIntensivo} />
     );
-    // Fluxo Caixa META — mesma tela financeira, mas em cenário META.
-    // Sem nova lógica/dupla-tela; apenas valor inicial + filtro de cenário no hook.
-    if (section === 'fluxo-caixa-meta') return (
-      <FinanceiroV2Tab onIntensiveToggle={setIntensivo} cenarioInicial="meta" />
+    // Fluxo Caixa META / Lançamentos META Fin — ambos abrem a tela existente do
+    // Fluxo de Caixa META (PlanejamentoFinanceiroTab), acessada via FinanceiroCaixaTab
+    // já abrindo na subaba 'fluxo' com toggle META selecionado. Não usa FinanceiroV2Tab.
+    if (section === 'fluxo-caixa-meta' || section === 'lancamentos-meta-fin') return (
+      <FinanceiroCaixaTab
+        initialTab="fluxo"
+        initialFluxoCenario="meta"
+        hideInternalTabs
+        filtroAnoInicial={ano}
+        filtroMesInicial={mes === '0' ? undefined : Number(mes)}
+      />
     );
     if (section === 'fechamento') return (
       <FechamentoTab
@@ -426,7 +437,7 @@ export default function V2Index() {
     // Substituir pelo wrapper real numa PR posterior.
     const PLACEHOLDERS: Partial<Record<V2Section, string>> = {
       // 'lancamentos-meta-zoo' implementado acima — abre LancamentosTab com cenarioInicial='meta'
-      'lancamentos-meta-fin': 'Lançamentos META Fin',
+      // 'lancamentos-meta-fin' / 'fluxo-caixa-meta' implementados acima — abrem FinanceiroCaixaTab em fluxo+meta
       'dre-executivo':        'DRE Executivo',
       'divergencias':         'Divergências',
       'logs':                 'Logs',

@@ -148,8 +148,6 @@ interface Props {
   onIntensiveToggle?: (active: boolean) => void;
   drillFilters?: FinV2DrillFilters | null;
   onAbrirFinanciamento?: (id: string) => void;
-  /** Cenário operacional inicial. 'meta' habilita Fluxo Caixa META. Default 'realizado'. */
-  cenarioInicial?: 'realizado' | 'meta';
 }
 
 function getInitialPageSize() {
@@ -160,15 +158,11 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, cenarioInicial = 'realizado' }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
-  const isMetaMode = cenarioInicial === 'meta';
-  const hook = useFinanceiroV2(pageSize, isMetaMode ? 'meta' : 'realizado');
-  // Chaves separadas para sessionStorage — evita cross-talk entre Realizado e META
-  const stateKey = isMetaMode ? 'financeiro_v2_state__meta' : 'financeiro_v2_state';
-  const returnFiltersKey = isMetaMode ? 'financeirov2_return_filters__meta' : 'financeirov2_return_filters';
+  const hook = useFinanceiroV2(pageSize);
   const fechamentoHook = useFechamentoMensal();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -181,7 +175,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Load dynamic years from DB
   useEffect(() => {
-    const saved = sessionStorage.getItem(stateKey);
+    const saved = sessionStorage.getItem('financeiro_v2_state');
     if (!saved) return;
     try {
       const state = JSON.parse(saved);
@@ -189,7 +183,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (Array.isArray(state.mesesSelecionados)) setMesesSelecionados(state.mesesSelecionados);
       if (state.contaOrigem) setContaOrigem(state.contaOrigem);
       if (state.contaDestino) setContaDestino(state.contaDestino);
-      sessionStorage.removeItem(stateKey);
+      sessionStorage.removeItem('financeiro_v2_state');
     } catch (e) {
       console.error('Erro ao restaurar estado do financeiro', e);
     }
@@ -236,7 +230,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
   useEffect(() => {
-    const raw = sessionStorage.getItem(returnFiltersKey);
+    const raw = sessionStorage.getItem('financeirov2_return_filters');
     if (!raw) return;
     try {
       const f = JSON.parse(raw);
@@ -257,13 +251,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
     } finally {
-      sessionStorage.removeItem(returnFiltersKey);
+      sessionStorage.removeItem('financeirov2_return_filters');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
-    const salvarEstado = () => sessionStorage.setItem(stateKey, JSON.stringify({
+    const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
       ano, mesesSelecionados, contaOrigem, contaDestino,
     }));
 
@@ -913,15 +907,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   return (
     <div className={cn("relative", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
-      {isMetaMode && (
-        <div className="rounded-md border border-orange-300 bg-orange-50 px-3 py-1.5 text-[11px] font-semibold text-orange-800 flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-orange-500" />
-          MODO META — Planejamento Financeiro
-          <span className="ml-2 font-normal text-orange-700/80">
-            Lançamentos com cenário=meta. Operações de extrato e conciliação ficam ocultas.
-          </span>
-        </div>
-      )}
       {/* FILTERS */}
       <Card className="rounded-lg bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         <CardContent className="p-2 space-y-1">
@@ -1358,7 +1343,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {mode === 'list' && !hook.loading && ano && (
         <>
-          {!modoIntensivo && !isMetaMode && (
+          {!modoIntensivo && (
             <CorrecaoTransferenciasBanner
               contas={hook.contasBancarias}
               onFixed={() => hook.loadLancamentos(filtros, hook.page)}

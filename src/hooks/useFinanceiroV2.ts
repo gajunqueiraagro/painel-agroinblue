@@ -122,16 +122,7 @@ export interface ClassificacaoItem {
 
 const DEFAULT_PAGE_SIZE = 30;
 
-/**
- * @param cenarioFiltro Restringe a leitura por cenário.
- *   - 'realizado' (default): preserva comportamento atual — exclui cenario='meta'.
- *   - 'meta': retorna apenas cenario='meta' (Fluxo Caixa META / Lançamentos META).
- *   - 'todos': sem filtro de cenário.
- */
-export function useFinanceiroV2(
-  pageSize: number = DEFAULT_PAGE_SIZE,
-  cenarioFiltro: 'realizado' | 'meta' | 'todos' = 'realizado',
-) {
+export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const { clienteAtual } = useCliente();
   const { user } = useAuth();
   const clienteId = clienteAtual?.id;
@@ -241,14 +232,8 @@ export function useFinanceiroV2(
       .select('*')
       .eq('cliente_id', clienteId!)
       .eq('cancelado', false)
-      .neq('status_transacao', 'conciliado');
-
-    if (cenarioFiltro === 'realizado') {
-      query = query.neq('cenario', 'meta');
-    } else if (cenarioFiltro === 'meta') {
-      query = query.eq('cenario', 'meta');
-    }
-    // 'todos' → sem filtro de cenário
+      .neq('status_transacao', 'conciliado')
+      .neq('cenario', 'meta');
 
     if (filtros.fazenda_id) {
       query = query.eq('fazenda_id', filtros.fazenda_id);
@@ -298,7 +283,7 @@ export function useFinanceiroV2(
     if (filtros.subcentro) query = query.eq('subcentro', filtros.subcentro);
 
     return query;
-  }, [clienteId, cenarioFiltro]);
+  }, [clienteId]);
 
   const fetchAllLancamentos = useCallback(async (filtros: FiltrosV2): Promise<LancamentoV2[]> => {
     if (!clienteId) return [];

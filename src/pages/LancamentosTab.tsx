@@ -102,6 +102,12 @@ interface Props {
    * 'realizado') preservado.
    */
   cenarioInicial?: 'realizado' | 'meta';
+  /**
+   * Restringe quais cenários ficam clicáveis no seletor "Status" do form.
+   * Quando ausente, todos ficam disponíveis (comportamento atual).
+   * Ex.: ['meta'] → bloqueia Realizado/Programado para a rota Lançamentos META Zoo.
+   */
+  cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
 }
 
 type Aba = 'entrada' | 'saida' | 'reclassificacao';
@@ -254,7 +260,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, cenarioInicial }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -309,6 +315,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [statusOp, setStatusOp] = useState<StatusOperacional | 'meta'>(
     cenarioInicial === 'meta' ? 'meta' : 'realizado',
   );
+  // Cenário usado nos resets pós-save. Quando `cenariosPermitidos` está restrito,
+  // não voltar a 'realizado' (botão estaria desabilitado) — usar o primeiro permitido.
+  const defaultCenario: StatusOperacional | 'meta' =
+    cenariosPermitidos && cenariosPermitidos.length > 0 ? cenariosPermitidos[0] : 'realizado';
   const [morteLoteOpen, setMorteLoteOpen] = useState(false);
   const { canEditMeta } = usePermissions();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -686,7 +696,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaOrigem('');
     setFazendaDestino('');
     setData('');
-    setStatusOp('realizado');
+    setStatusOp(defaultCenario);
     setLastSavedLancamentoId(null);
     setEditingAbateId(null);
     setDetalheId(null);
@@ -746,7 +756,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setQuantidade(''); setCategoria(''); setPesoKg('');
     setFazendaOrigem(''); setFazendaDestino('');
     setData(format(new Date(), 'yyyy-MM-dd'));
-    setObservacao(''); setStatusOp('realizado');
+    setObservacao(''); setStatusOp(defaultCenario);
     resetFinancialFields();
     // Restore internal origin context if editing from within the same tab
     const ctx = internalEditOrigin.current;
@@ -1866,7 +1876,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Abate atualizado com financeiro!');
           triggerZootCacheRefresh(data);
@@ -1883,7 +1893,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Venda atualizada com financeiro!');
           triggerZootCacheRefresh(data);
@@ -1909,7 +1919,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           setCompraDetalhes(null);
           toast.success('Compra atualizada com financeiro!');
@@ -1922,7 +1932,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Registro atualizado com sucesso!');
           triggerZootCacheRefresh(data, tipo === 'reclassificacao');
@@ -1953,7 +1963,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Compra registrada com sucesso!');
           triggerZootCacheRefresh(data);
@@ -1990,7 +2000,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Venda registrada com sucesso!');
           triggerZootCacheRefresh(data);
@@ -2002,7 +2012,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setQuantidade(''); setCategoria(''); setPesoKg('');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Consumo registrado com sucesso!');
           triggerZootCacheRefresh(data);
@@ -2014,7 +2024,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setPesoKg(tipo === 'nascimento' ? '30' : '');
           setFazendaOrigem(''); setFazendaDestino('');
           setData(format(new Date(), 'yyyy-MM-dd'));
-          setObservacao(''); setStatusOp('realizado');
+          setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
           toast.success('Lançamento registrado!');
           triggerZootCacheRefresh(data, tipo === 'reclassificacao');
@@ -2690,7 +2700,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             { value: 'meta' as const, label: META_VISUAL.label, dot: META_VISUAL.dot, activeBorder: META_VISUAL.activeBorder, activeBg: META_VISUAL.activeBg, activeText: 'text-orange-800 dark:text-orange-300' },
           ]).map(s => {
             const selected = statusOp === s.value;
-            const disabled = s.value === 'meta' && !canEditMeta;
+            const blockedByCenarios = cenariosPermitidos ? !cenariosPermitidos.includes(s.value) : false;
+            const blockedByPermission = s.value === 'meta' && !canEditMeta;
+            const disabled = blockedByCenarios || blockedByPermission;
             return (
               <button
                 key={s.value}
@@ -2701,7 +2713,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   disabled ? 'opacity-40 cursor-not-allowed border-border bg-muted/10 text-muted-foreground' :
                   selected ? `${s.activeBg} ${s.activeBorder} ${s.activeText} shadow-sm` : 'border-border bg-muted/10 text-muted-foreground hover:bg-muted/30'
                 }`}
-                title={disabled ? 'Somente consultores podem criar registros META' : undefined}
+                title={blockedByCenarios ? 'Cenário indisponível neste caminho' : blockedByPermission ? 'Somente consultores podem criar registros META' : undefined}
               >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${selected ? s.dot : 'border border-muted-foreground/40 bg-transparent'}`} />
                 <span>{s.label}</span>
