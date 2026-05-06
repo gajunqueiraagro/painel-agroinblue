@@ -2311,7 +2311,11 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           notaFiscal={notaFiscal}
           onNotaFiscalChange={setNotaFiscal}
           statusOp={effectiveStatusOp}
-          lancamentoId={lastSavedLancamentoId || undefined}
+          // editingAbateId é o ID genérico de edição (Abate/Venda/etc).
+          // Em edit, lastSavedLancamentoId é null — passar editingAbateId
+          // permite o painel buscar boitel_lote_id no DB como fallback.
+          lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
+          mode={editingAbateId ? 'update' : 'create'}
           tipoPeso={tipoPeso}
           onTipoPesoChange={setTipoPeso}
           vendaTipoPreco={vendaTipoPreco}
@@ -3335,7 +3339,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     notaFiscal={notaFiscal}
                     onNotaFiscalChange={setNotaFiscal}
                     statusOp={effectiveStatusOp}
-                    lancamentoId={lastSavedLancamentoId || undefined}
+                    lancamentoId={editingAbateId || lastSavedLancamentoId || undefined}
                     mode="update"
                     tipoPeso={tipoPeso}
                     onTipoPesoChange={() => {}}
