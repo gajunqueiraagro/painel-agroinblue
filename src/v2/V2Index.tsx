@@ -14,7 +14,6 @@ import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2ContextDrawer } from './components/V2ContextDrawer';
 import { V2Home } from './pages/V2Home';
-import { V2PainelConsultor } from './pages/V2PainelConsultor';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
@@ -255,7 +254,12 @@ export default function V2Index() {
 
   function renderContent() {
     if (section === 'home') return <V2Home ano={ano} mes={mes} viewMode={viewMode} onViewModeChange={setViewMode} />;
-    if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
+    if (section === 'painel-consultor') return (
+      <PainelConsultorTab
+        onBack={() => setSection('home')}
+        filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
+      />
+    );
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     if (section === 'conciliacao') return (
       <ConciliacaoBancariaTab
@@ -494,12 +498,6 @@ export default function V2Index() {
         initialAno={ano}
         initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
         ocultarFiltrosPeriodo
-      />
-    );
-    if (section === 'painel-anual') return (
-      <PainelConsultorTab
-        onBack={() => setSection('home')}
-        filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
       />
     );
     if (section === 'meta-precos') {
