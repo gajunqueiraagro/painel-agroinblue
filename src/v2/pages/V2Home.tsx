@@ -286,7 +286,12 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       : sorted.find(m => m.mes === mesNum)?.saldoFinal ?? null;
   }, [mesesFluxo, mesNum, isPeriodo, loadingFluxo]);
 
-  const { total: endividamentoTotal, loading: loadingDivida } = useEndividamentoAtual();
+  const {
+    total: endividamentoTotal,
+    alavancagem: finAlavancagem,
+    pizzaVencimentos: finPizza,
+    loading: loadingDivida,
+  } = useEndividamentoAtual(anoNum);
   const endividamentoValor = loadingDivida ? null : endividamentoTotal;
 
   const resultadoTone = resultado == null ? 'default' : resultado >= 0 ? 'positive' : 'negative';
@@ -461,17 +466,17 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           <MetricTile label="Endividamento" value={fmtR(endividamentoValor)} loading={loadingDivida} tone={endividamentoValor != null && endividamentoValor > 0 ? 'negative' : 'default'} />
           <MetricTile
             label="Dívida / rebanho"
-            value={loadingDivida ? null : fmtN(finKpis?.alavancagem?.percentual ?? null, 1)}
+            value={loadingDivida ? null : fmtN(finAlavancagem?.percentual ?? null, 1)}
             unit="%"
             loading={loadingDivida}
             tone={
-              finKpis?.alavancagem?.status === 'critico' ? 'negative'
-              : finKpis?.alavancagem?.status === 'atencao' ? 'negative'
+              finAlavancagem?.status === 'critico' ? 'negative'
+              : finAlavancagem?.status === 'atencao' ? 'negative'
               : 'default'
             }
           />
           {(() => {
-            const pizza = finKpis?.pizzaVencimentos ?? [];
+            const pizza = finPizza ?? [];
             const curto = pizza.find(p => p.nome?.toLowerCase().includes('curto'));
             const longo = pizza.find(p => p.nome?.toLowerCase().includes('longo'));
             const total = (curto?.valor ?? 0) + (longo?.valor ?? 0);
