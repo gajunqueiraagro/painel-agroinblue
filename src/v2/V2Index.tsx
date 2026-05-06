@@ -204,6 +204,10 @@ export default function V2Index() {
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
   // Voltar do detalhe externo limpa este state e retorna a 'financeiro-lanc'.
   const [financiamentoIdAlvo, setFinanciamentoIdAlvo] = useState<string | null>(null);
+  // Quando o lápis do modal "Lançamentos do mês" da Conciliação Bancária é clicado,
+  // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
+  // para retornar a 'conciliacao'. Resetar ao redirecionar para outras sections.
+  const [voltarParaConciliacao, setVoltarParaConciliacao] = useState(false);
   const limparEdicaoAvancada = () => {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
@@ -254,7 +258,16 @@ export default function V2Index() {
     if (section === 'painel-consultor') return <V2PainelConsultor ano={ano} mes={mes} />;
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} />;
     if (section === 'conciliacao') return (
-      <ConciliacaoBancariaTab />
+      <ConciliacaoBancariaTab
+        initialAno={ano}
+        initialMes={mes !== '0' ? Number(mes) : undefined}
+        onNavigateToLancamentos={(a, m) => {
+          setAno(String(a));
+          setMes(String(m));
+          setVoltarParaConciliacao(true);
+          setSection('financeiro-lanc');
+        }}
+      />
     );
     if (section === 'painel-financiamentos') return (
       <FinanciamentosPainelTab filtroAnoInicial={Number(ano)} />
@@ -424,10 +437,19 @@ export default function V2Index() {
     if (section === 'financeiro-lanc') return (
       <FinanceiroV2Tab
         onIntensiveToggle={setIntensivo}
+        filtroAnoInicial={ano}
+        filtroMesInicial={mes !== '0' ? Number(mes) : undefined}
         onAbrirFinanciamento={(id) => {
+          // Ao redirecionar para Financiamentos, limpa o flag de retorno à Conciliação
+          // para evitar que o "Voltar" do Detalhe → Lançamentos volte errado para Concilia.
+          setVoltarParaConciliacao(false);
           setFinanciamentoIdAlvo(id);
           setSection('financiamentos');
         }}
+        onBack={voltarParaConciliacao ? () => {
+          setVoltarParaConciliacao(false);
+          setSection('conciliacao');
+        } : undefined}
       />
     );
     // Fluxo Caixa META / Lançamentos META Fin — ambos abrem a tela existente do
