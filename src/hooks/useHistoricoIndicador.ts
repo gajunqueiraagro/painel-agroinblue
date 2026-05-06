@@ -43,7 +43,11 @@ export type HistoricoIndicadorKey =
   | 'uaHa'
   | 'kgHa'
   | 'receitaPec'   // fonte: lancamentos cenario='realizado'/'meta', TIPOS_DESFRUTE, valor_total
-  | 'precoArr';    // fonte: mesma — Σ valor_total / Σ (qtd × peso_medio_kg / 30)
+  | 'precoArr'     // fonte: mesma — Σ valor_total / Σ (qtd × peso_medio_kg / 30)
+  | 'custeioPec'   // fonte: financeiro_lancamentos_v2 grupo IN (Custo Fixo Pec, Custo Variável Pec) + planejamento_financeiro meta
+  | 'custoArr'     // fonte: custeioPec / arrobasProd (zoot_mensal_cache.producao_biologica/30)
+  | 'custoCab'     // fonte: custeioPec / cabMedia (zoot_mensal_cache.saldo_inicial/saldo_final)
+  | 'margemArr';   // fonte: precoArr − custoArr (mesma fonte oficial dos dois)
 
 export interface AnoValor {
   ano: number;
@@ -491,6 +495,284 @@ export function useHistoricoIndicador({
               resM.push({ ano: a, valor: valorOficialMetaAnoAtual ?? null });
             } else {
               resM.push({ ano: a, valor: calcValor(rowsM[a] ?? []) });
+            }
+          }
+
+          if (!cancelled) {
+            setHistorico(resR);
+            setHistoricoMeta(resM);
+          }
+          return;
+        }
+
+        // ───── Branch CUSTEIO/CUSTO/MARGEM — fonte: financeiro_lancamentos_v2 + planejamento_financeiro + zoot_mensal_cache + (margem) lancamentos pec ─────
+        // Fórmulas:
+        //   custeioPec = Σ valor por mês (status='realizado', cenario='realizado',
+        //                                  cancelado=false, sem_movimentacao_caixa=false,
+        //                                  grupo_custo IN ('Custo Fixo Pecuária','Custo Variável Pecuária'))
+        //                META: planejamento_financeiro cenario='meta', mesmos grupos.
+        //   custoArr   = custeioPec / arrobasProd (arrobasProd = zoot.producao_biologica / 30)
+        //   custoCab   = custeioPec / cabMedia    (cabMedia = (saldo_inicial + saldo_final) / 2)
+        //                Período = (Σcusteio / mediaCabMedia) / numMeses
+        //   margemArr  = precoArr − custoArr (precoArr = Σ valor_total / Σ (qtd × peso_medio_kg / 30))
+        //
+        // NÃO usa: custOper legado, investimento, juros, agricultura, deduções, dividendos.
+        if (
+          indicadorKey === 'custeioPec' ||
+          indicadorKey === 'custoArr'   ||
+          indicadorKey === 'custoCab'   ||
+          indicadorKey === 'margemArr'
+        ) {
+          if (!fazendaId && !(fazendaIds && fazendaIds.length > 0)) {
+            if (!cancelled) { setHistorico([]); setHistoricoMeta([]); setLoading(false); }
+            return;
+          }
+
+          // 1) Financeiro REALIZADO — paginado.
+          const PAGE = 1000;
+          const finRealRows: any[] = [];
+          {
+            let from = 0;
+            while (true) {
+              let q = (supabase
+                .from('financeiro_lancamentos_v2')
+                .select('data_pagamento, valor, grupo_custo') as any)
+                .eq('cancelado', false)
+                .eq('sem_movimentacao_caixa', false)
+                .eq('status_transacao', 'realizado')
+                .eq('cenario', 'realizado')
+                .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária'])
+                .gte('data_pagamento', `${inicio}-01-01`)
+                .lte('data_pagamento', `${anoAtual}-12-31`);
+              if (fazendaId) q = q.eq('fazenda_id', fazendaId);
+              else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
+              const { data, error } = await q.range(from, from + PAGE - 1);
+              if (cancelled) return;
+              if (error) { setHistorico([]); setHistoricoMeta([]); return; }
+              if (!data || data.length === 0) break;
+              finRealRows.push(...data);
+              if (data.length < PAGE) break;
+              from += PAGE;
+            }
+          }
+
+          // 2) Financeiro META — planejamento_financeiro (mensal).
+          const finMetaRows: any[] = [];
+          {
+            let from = 0;
+            while (true) {
+              let q = (supabase
+                .from('planejamento_financeiro' as any)
+                .select('ano, mes, valor_planejado, grupo_custo') as any)
+                .eq('cenario', 'meta')
+                .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária'])
+                .gte('ano', inicio)
+                .lte('ano', anoAtual);
+              if (fazendaId) q = q.eq('fazenda_id', fazendaId);
+              else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
+              const { data, error } = await q.range(from, from + PAGE - 1);
+              if (cancelled) return;
+              if (error) { setHistorico([]); setHistoricoMeta([]); return; }
+              if (!data || data.length === 0) break;
+              finMetaRows.push(...data);
+              if (data.length < PAGE) break;
+              from += PAGE;
+            }
+          }
+
+          // 3) Zoot multi-ano (apenas se custoArr/custoCab/margemArr).
+          const precisaZoot = indicadorKey !== 'custeioPec';
+          let zootRowsAll: any[] = [];
+          if (precisaZoot) {
+            let zq = supabase
+              .from('zoot_mensal_cache')
+              .select('ano, mes, cenario, saldo_inicial, saldo_final, producao_biologica')
+              .in('cenario', ['realizado', 'meta'])
+              .gte('ano', inicio)
+              .lte('ano', anoAtual);
+            if (fazendaId) zq = zq.eq('fazenda_id', fazendaId);
+            else if (fazendaIds && fazendaIds.length > 0) zq = zq.in('fazenda_id', fazendaIds);
+            const { data, error } = await zq;
+            if (cancelled) return;
+            if (error) { setHistorico([]); setHistoricoMeta([]); return; }
+            zootRowsAll = (data as any[]) || [];
+          }
+
+          // 4) Lancamentos pec multi-ano (apenas se margemArr — para precoArr).
+          const precisaLancsPec = indicadorKey === 'margemArr';
+          const pecRowsAll: any[] = [];
+          if (precisaLancsPec) {
+            let from = 0;
+            while (true) {
+              let q = supabase
+                .from('lancamentos')
+                .select('tipo, quantidade, peso_medio_kg, valor_total, data, cenario, status_operacional')
+                .eq('cancelado', false)
+                .in('cenario', ['realizado', 'meta'])
+                .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
+                .gte('data', `${inicio}-01-01`)
+                .lte('data', `${anoAtual}-12-31`);
+              if (fazendaId) q = q.eq('fazenda_id', fazendaId);
+              else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
+              const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+              if (cancelled) return;
+              if (error) { setHistorico([]); setHistoricoMeta([]); return; }
+              if (!data || data.length === 0) break;
+              pecRowsAll.push(...data);
+              if (data.length < PAGE) break;
+              from += PAGE;
+            }
+          }
+
+          // ── Agrega custeio mensal por (cenario, ano).
+          // realizado vem do financeiro_lancamentos_v2 (data_pagamento → mês).
+          // meta vem do planejamento_financeiro (mes direto).
+          const custeioR: Record<number, number[]> = {}; // ano → 12 meses
+          const custeioM: Record<number, number[]> = {};
+          for (const r of finRealRows) {
+            const a = Number(String(r.data_pagamento ?? '').slice(0, 4));
+            const m = parseInt(String(r.data_pagamento ?? '').slice(5, 7));
+            if (isNaN(a) || isNaN(m) || m < 1 || m > 12) continue;
+            (custeioR[a] ??= Array(12).fill(0))[m - 1] += Math.abs(Number(r.valor) || 0);
+          }
+          for (const r of finMetaRows) {
+            const a = Number(r.ano);
+            const m = Number(r.mes);
+            if (!Number.isInteger(a) || !Number.isInteger(m) || m < 1 || m > 12) continue;
+            (custeioM[a] ??= Array(12).fill(0))[m - 1] += Number(r.valor_planejado) || 0;
+          }
+
+          // ── Agrega zoot mensal por (cenario, ano): arrobasProd[12], cabIni[12], cabFin[12].
+          const zootR: Record<number, { arr: number[]; cabIni: number[]; cabFin: number[] }> = {};
+          const zootM: Record<number, { arr: number[]; cabIni: number[]; cabFin: number[] }> = {};
+          for (const r of zootRowsAll) {
+            const a = Number(r.ano), m = Number(r.mes);
+            if (!Number.isInteger(a) || !Number.isInteger(m) || m < 1 || m > 12) continue;
+            const bucket = r.cenario === 'meta' ? zootM : zootR;
+            const slot = bucket[a] ??= { arr: Array(12).fill(0), cabIni: Array(12).fill(0), cabFin: Array(12).fill(0) };
+            slot.arr[m - 1]    += (Number(r.producao_biologica) || 0) / 30;
+            slot.cabIni[m - 1] += Number(r.saldo_inicial) || 0;
+            slot.cabFin[m - 1] += Number(r.saldo_final)   || 0;
+          }
+
+          // ── Agrega lancs pec multi-ano (margemArr): rec[12], desfArr[12] por (cenario, ano).
+          const pecR: Record<number, { rec: number[]; desfArr: number[] }> = {};
+          const pecM: Record<number, { rec: number[]; desfArr: number[] }> = {};
+          for (const r of pecRowsAll) {
+            const a = Number(String(r.data ?? '').slice(0, 4));
+            const m = parseInt(String(r.data ?? '').slice(5, 7));
+            if (isNaN(a) || isNaN(m) || m < 1 || m > 12) continue;
+            const isMeta = r.cenario === 'meta';
+            if (!isMeta && r.status_operacional !== 'realizado') continue;
+            const bucket = isMeta ? pecM : pecR;
+            const slot = bucket[a] ??= { rec: Array(12).fill(0), desfArr: Array(12).fill(0) };
+            const qtd = Number(r.quantidade) || 0;
+            const pmk = Number(r.peso_medio_kg) || 0;
+            const vt  = Math.abs(Number(r.valor_total) || 0);
+            slot.rec[m - 1]    += vt;
+            slot.desfArr[m - 1] += (qtd * pmk) / 30;
+          }
+
+          // ── Calculadores por ano (mode mês/periodo) ──
+          const isPer = viewMode === 'periodo';
+          const sumUpTo = (arr: number[]) => {
+            let s = 0;
+            for (let i = 0; i < mesAtual; i++) s += (arr[i] ?? 0);
+            return s;
+          };
+          const meanCabMediaUpTo = (cabIni: number[], cabFin: number[]): number => {
+            let acc = 0; let n = 0;
+            for (let i = 0; i < mesAtual; i++) {
+              const cm = ((cabIni[i] ?? 0) + (cabFin[i] ?? 0)) / 2;
+              if (cm > 0) { acc += cm; n++; }
+            }
+            return n > 0 ? acc / n : 0;
+          };
+
+          const calcCusteio = (ano: number): number | null => {
+            const arr = custeioR[ano];
+            if (!arr) return null;
+            const v = isPer ? sumUpTo(arr) : (arr[mesAtual - 1] ?? 0);
+            return v > 0 ? v : null;
+          };
+          const calcCusteioMeta = (ano: number): number | null => {
+            const arr = custeioM[ano];
+            if (!arr) return null;
+            const v = isPer ? sumUpTo(arr) : (arr[mesAtual - 1] ?? 0);
+            return v > 0 ? v : null;
+          };
+
+          const calcCustoArr = (ano: number, isMeta: boolean): number | null => {
+            const cArr = isMeta ? custeioM[ano] : custeioR[ano];
+            const z    = isMeta ? zootM[ano]    : zootR[ano];
+            if (!cArr || !z) return null;
+            if (isPer) {
+              const cAcum = sumUpTo(cArr);
+              const aAcum = sumUpTo(z.arr);
+              return aAcum > 0 ? cAcum / aAcum : null;
+            }
+            const c = cArr[mesAtual - 1] ?? 0;
+            const a = z.arr[mesAtual - 1] ?? 0;
+            return a > 0 ? c / a : null;
+          };
+
+          const calcCustoCab = (ano: number, isMeta: boolean): number | null => {
+            const cArr = isMeta ? custeioM[ano] : custeioR[ano];
+            const z    = isMeta ? zootM[ano]    : zootR[ano];
+            if (!cArr || !z) return null;
+            if (isPer) {
+              const cAcum  = sumUpTo(cArr);
+              const cmMean = meanCabMediaUpTo(z.cabIni, z.cabFin);
+              if (!(cmMean > 0) || mesAtual <= 0) return null;
+              return (cAcum / cmMean) / mesAtual;
+            }
+            const c = cArr[mesAtual - 1] ?? 0;
+            const cm = ((z.cabIni[mesAtual - 1] ?? 0) + (z.cabFin[mesAtual - 1] ?? 0)) / 2;
+            return cm > 0 ? c / cm : null;
+          };
+
+          const calcPrecoArr = (ano: number, isMeta: boolean): number | null => {
+            const p = isMeta ? pecM[ano] : pecR[ano];
+            if (!p) return null;
+            if (isPer) {
+              const rAcc = sumUpTo(p.rec);
+              const dAcc = sumUpTo(p.desfArr);
+              return dAcc > 0 ? rAcc / dAcc : null;
+            }
+            const r = p.rec[mesAtual - 1] ?? 0;
+            const d = p.desfArr[mesAtual - 1] ?? 0;
+            return d > 0 ? r / d : null;
+          };
+
+          const calcMargem = (ano: number, isMeta: boolean): number | null => {
+            const preco = calcPrecoArr(ano, isMeta);
+            const custo = calcCustoArr(ano, isMeta);
+            if (preco == null || custo == null) return null;
+            return preco - custo;
+          };
+
+          const calcValor = (ano: number, isMeta: boolean): number | null => {
+            switch (indicadorKey) {
+              case 'custeioPec': return isMeta ? calcCusteioMeta(ano) : calcCusteio(ano);
+              case 'custoArr':   return calcCustoArr(ano, isMeta);
+              case 'custoCab':   return calcCustoCab(ano, isMeta);
+              case 'margemArr':  return calcMargem(ano, isMeta);
+              default: return null;
+            }
+          };
+
+          const resR: AnoValor[] = [];
+          const resM: AnoValor[] = [];
+          for (let a = inicio; a <= anoAtual; a++) {
+            if (a === anoAtual && valorOficialAnoAtual !== undefined) {
+              resR.push({ ano: a, valor: valorOficialAnoAtual ?? null });
+            } else {
+              resR.push({ ano: a, valor: calcValor(a, false) });
+            }
+            if (a === anoAtual && valorOficialMetaAnoAtual !== undefined) {
+              resM.push({ ano: a, valor: valorOficialMetaAnoAtual ?? null });
+            } else {
+              resM.push({ ano: a, valor: calcValor(a, true) });
             }
           }
 

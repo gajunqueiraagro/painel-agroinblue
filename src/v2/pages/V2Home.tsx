@@ -178,7 +178,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
   // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
   // uaHa/kgHa: branch específico que cruza fechamento_area_snapshot + zoot_mensal_cache.
-  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa', 'receitaPec', 'precoArr'];
+  const HIST_KEYS_PERMITIDAS: HistoricoIndicadorKey[] = ['cabecas', 'pesoMedio', 'arrobas', 'gmd', 'desfrute', 'valorRebanho', 'uaHa', 'kgHa', 'receitaPec', 'precoArr', 'custeioPec', 'custoArr', 'custoCab', 'margemArr'];
   const histAtivo = modalIndicador != null
     && (HIST_KEYS_PERMITIDAS as string[]).includes(modalIndicador);
   // Valor oficial do anoAtual e da meta — vêm do hook principal e são repassados
@@ -194,6 +194,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'kgHa'         ? (kgHaIndicador?.valor         ?? null)
      : modalIndicador === 'receitaPec'   ? (receitaPecIndicador?.valor   ?? null)
      : modalIndicador === 'precoArr'     ? (precoArrIndicador?.valor     ?? null)
+     : modalIndicador === 'custeioPec'   ? (custeioPecIndicador?.valor   ?? null)
+     : modalIndicador === 'custoArr'     ? (custoArrIndicador?.valor     ?? null)
+     : modalIndicador === 'custoCab'     ? (custoCabIndicador?.valor     ?? null)
+     : modalIndicador === 'margemArr'    ? (margemArrIndicador?.valor    ?? null)
      : null)
     : null;
   const valorOficialMetaAnoAtual: number | null = histAtivo
@@ -203,6 +207,10 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
      : modalIndicador === 'arrobas'    ? (arrobasIndicador?.serieMeta?.[mesNum] ?? null)
      : modalIndicador === 'receitaPec' ? (receitaPecIndicador?.serieMeta?.[mesNum] ?? null)
      : modalIndicador === 'precoArr'   ? (precoArrIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'custeioPec' ? (custeioPecIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'custoArr'   ? (custoArrIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'custoCab'   ? (custoCabIndicador?.serieMeta?.[mesNum] ?? null)
+     : modalIndicador === 'margemArr'  ? (margemArrIndicador?.serieMeta?.[mesNum] ?? null)
      : null)
     : null;
   const {
@@ -715,6 +723,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custeioPecIndicador?.deltaMes ?? null}
           deltaAno={custeioPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -737,6 +748,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoArrIndicador?.deltaMes ?? null}
           deltaAno={custoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -784,6 +798,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoCabIndicador?.deltaMes ?? null}
           deltaAno={custoCabIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -806,6 +823,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={margemArrIndicador?.deltaMes ?? null}
           deltaAno={margemArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
+          historicoAno={historicoAno}
+          historicoMeta={historicoAnoMeta}
+          loadingHistorico={loadingHistorico}
           corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
         />
       )}
