@@ -76,6 +76,16 @@ function normalizeZooLancamento(lancamento: Lancamento): Lancamento {
     };
   }
 
+  // Zootécnico não tem status "Agendado" — é semântica financeira.
+  // Lançamentos zoot com statusOperacional='agendado' viraram badge "Agendado"
+  // por engano. Normaliza para 'programado' (operação futura/programada).
+  if (lancamento.statusOperacional === 'agendado') {
+    return {
+      ...lancamento,
+      statusOperacional: 'programado',
+    };
+  }
+
   return lancamento;
 }
 
