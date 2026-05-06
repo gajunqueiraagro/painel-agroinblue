@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -248,6 +249,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [fazendas, fazendaAtual]);
 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
+  // Etapa 1 — modal envolve o formulário; aberto por clique nos cards de tipo.
+  const [lancModalOpen, setLancModalOpen] = useState(false);
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
@@ -2149,6 +2152,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setAba(it.aba);
       setTipo(it.value);
       resetAllFields();
+      setLancModalOpen(true);
     };
     const isItemActive = (it: TipoCardItem) =>
       it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
@@ -3059,6 +3063,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {/* ── Cards superiores de tipo (substitui sidebar e strip mobile) ── */}
       {renderTipoCards()}
 
+      {/*
+        ── Modal de lançamento (Etapa 1) ──
+        Envolve o formulário + painel financeiro. Renderiza somente quando aberto
+        para preservar o comportamento original de mount/unmount dos blocos internos.
+        - Fechamento manual: ESC e botão X (no header do DialogContent).
+        - Clique fora: bloqueado (onPointerDownOutside.preventDefault) para não
+          perder dados preenchidos sem confirmação explícita.
+        - Submit: handlers continuam idênticos; modal NÃO fecha após salvar
+          (auto-close será endereçado na Etapa 2).
+      */}
+      <Dialog open={lancModalOpen} onOpenChange={setLancModalOpen}>
+      <DialogContent
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="max-w-full sm:max-w-5xl w-full h-screen sm:h-auto sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5"
+      >
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start overflow-visible">
         {/* Center: Form or Historico */}
         {aba === 'reclassificacao' ? (
@@ -3431,6 +3451,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </>
         )}
       </div>
+      </DialogContent>
+      </Dialog>
 
       {lancamentoDetalhe && (
         <LancamentoDetalhe
