@@ -21,8 +21,11 @@ interface WrapperProps {
 }
 
 export function V2ZootWrapper({ children }: WrapperProps) {
-  const { lancamentos, saldosIniciais, removerLancamento, editarLancamento } = useLancamentos();
-  const { lancamentos: metaLancamentos } = useLancamentos('meta');
+  const realizado = useLancamentos();
+  const meta = useLancamentos('meta');
+
+  const { lancamentos, saldosIniciais } = realizado;
+  const metaLancamentos = meta.lancamentos;
 
   const lancamentosTodosCenarios = useMemo(() => {
     const merged = [...lancamentos];
@@ -31,6 +34,18 @@ export function V2ZootWrapper({ children }: WrapperProps) {
     }
     return merged;
   }, [lancamentos, metaLancamentos]);
+
+  // Roteamento por cenário — useLancamentos mantém state local separado por
+  // instância (realizado/meta). A função correta deve ser chamada conforme
+  // o lançamento, senão o state da instância adversa fica stale.
+  const removerLancamento = async (id: string) => {
+    const ehMeta = metaLancamentos.some(l => l.id === id);
+    return ehMeta ? meta.removerLancamento(id) : realizado.removerLancamento(id);
+  };
+  const editarLancamento = async (id: string, dados: any) => {
+    const ehMeta = metaLancamentos.some(l => l.id === id);
+    return ehMeta ? meta.editarLancamento(id, dados) : realizado.editarLancamento(id, dados);
+  };
 
   return <>{children({ lancamentos, saldosIniciais, removerLancamento, editarLancamento, lancamentosTodosCenarios })}</>;
 }
