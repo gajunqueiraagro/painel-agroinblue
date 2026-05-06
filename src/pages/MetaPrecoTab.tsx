@@ -295,25 +295,25 @@ export function MetaPrecoTab({ onBack }: Props) {
       precoArr.push({ label: 'I', value: null });
     }
 
-    // Points J–D — exclusively from validated META snapshots, limited to selected month
+    // Points J–D — Jan–Dez completos, sempre. Fonte oficial: snapshot validado por mês.
+    // Para o mês selecionado, se NÃO houver snapshot, cai para cálculo live com precosLocal
+    // (preview enquanto usuário edita). Sem snapshot e fora do mês selecionado → null.
     const chartMonthLabels = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-    const mesSelecionado = Number(mes); // 1-based
     for (let i = 0; i < MESES_SHORT.length; i++) {
       const m = MESES_SHORT[i];
-      const mesNum = i + 1;
       const mesKey = `${ano}-${m.key}`;
       const snap = validadoSnapAll[mesKey];
+      const hasSnap = !!snap && (snap.valor > 0 || snap.arrobas > 0);
 
-      // Months after selected month → null (not shown on chart)
-      if (mesNum > mesSelecionado) {
-        valorArr.push({ label: chartMonthLabels[i], value: null });
-        arrobasArr.push({ label: chartMonthLabels[i], value: null });
-        precoArr.push({ label: chartMonthLabels[i], value: null });
+      if (hasSnap) {
+        valorArr.push({ label: chartMonthLabels[i], value: snap.valor > 0 ? snap.valor : null });
+        arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas > 0 ? snap.arrobas : null });
+        precoArr.push({ label: chartMonthLabels[i], value: snap.precoArr > 0 ? snap.precoArr : null });
         continue;
       }
 
       if (m.key === mes) {
-        // For the currently selected month, use live calculation for valor (reflects unsaved price changes)
+        // Mês selecionado sem snapshot: live preview a partir de precosLocal.
         const rowsMes = viewDataMeta?.filter(r => r.mes === Number(m.key)) ?? [];
         let totalValor = 0;
         let totalPesoKg = 0;
@@ -334,21 +334,15 @@ export function MetaPrecoTab({ onBack }: Props) {
 
         const totalArrobas = totalPesoKg / 30;
         valorArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalValor > 0 ? totalValor : null });
-        if (snap && snap.arrobas > 0) {
-          arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas });
-        } else {
-          arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
-        }
+        arrobasArr.push({ label: chartMonthLabels[i], value: totalCab > 0 ? totalArrobas : null });
         precoArr.push({ label: chartMonthLabels[i], value: hasAnyPrice && totalArrobas > 0 ? totalValor / totalArrobas : null });
-      } else if (snap && (snap.valor > 0 || snap.arrobas > 0)) {
-        valorArr.push({ label: chartMonthLabels[i], value: snap.valor > 0 ? snap.valor : null });
-        arrobasArr.push({ label: chartMonthLabels[i], value: snap.arrobas > 0 ? snap.arrobas : null });
-        precoArr.push({ label: chartMonthLabels[i], value: snap.precoArr > 0 ? snap.precoArr : null });
-      } else {
-        valorArr.push({ label: chartMonthLabels[i], value: null });
-        arrobasArr.push({ label: chartMonthLabels[i], value: null });
-        precoArr.push({ label: chartMonthLabels[i], value: null });
+        continue;
       }
+
+      // Demais meses sem snapshot → null (sem fonte oficial; não usar fallback zero).
+      valorArr.push({ label: chartMonthLabels[i], value: null });
+      arrobasArr.push({ label: chartMonthLabels[i], value: null });
+      precoArr.push({ label: chartMonthLabels[i], value: null });
     }
 
     return { valor: valorArr, arrobas: arrobasArr, precoArroba: precoArr };
