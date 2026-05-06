@@ -1351,17 +1351,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           )}
            <div ref={scrollContainerRef} className={cn("rounded-lg border border-[hsl(var(--border))] overflow-auto relative", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 200px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
+              {/*
+                Larguras das colunas:
+                - Modo normal: Produto (col 4) usa flex (sem width); Doc 100; demais mantidas.
+                - Modo intensivo: Produto fixo em 280 (deixa de dominar com truncate);
+                  Doc sobe para 110 para caber NF/série completa.
+              */}
               <colgroup>
                 <col style={{ width: 28 }} />
                 <col style={{ width: 60 }} />
                 <col style={{ width: 60 }} />
-                <col />
+                <col style={modoIntensivo ? { width: 280 } : undefined} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 100 }} />
                 <col style={{ width: 100 }} />
                 <col style={{ width: 90 }} />
                 <col style={{ width: 100 }} />
-                <col style={{ width: 80 }} />
+                <col style={{ width: modoIntensivo ? 110 : 100 }} />
                 <col style={{ width: 58 }} />
                 <col style={{ width: 36 }} />
               </colgroup>
