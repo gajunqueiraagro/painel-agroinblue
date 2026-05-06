@@ -38,12 +38,18 @@ export function V2ZootWrapper({ children }: WrapperProps) {
   // Roteamento por cenário — useLancamentos mantém state local separado por
   // instância (realizado/meta). A função correta deve ser chamada conforme
   // o lançamento, senão o state da instância adversa fica stale.
+  //
+  // Usamos `lancamentosTodosCenarios` (mesma fonte exibida na tela) para olhar
+  // a propriedade `.cenario` do objeto. Roteamento por presença em
+  // `metaLancamentos.some(...)` falha em casos de timing/refetch dessincronizados.
   const removerLancamento = async (id: string) => {
-    const ehMeta = metaLancamentos.some(l => l.id === id);
+    const lanc = lancamentosTodosCenarios.find(l => l.id === id);
+    const ehMeta = lanc?.cenario === 'meta';
     return ehMeta ? meta.removerLancamento(id) : realizado.removerLancamento(id);
   };
   const editarLancamento = async (id: string, dados: any) => {
-    const ehMeta = metaLancamentos.some(l => l.id === id);
+    const lanc = lancamentosTodosCenarios.find(l => l.id === id);
+    const ehMeta = lanc?.cenario === 'meta';
     return ehMeta ? meta.editarLancamento(id, dados) : realizado.editarLancamento(id, dados);
   };
 
