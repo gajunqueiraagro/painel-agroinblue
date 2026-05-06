@@ -127,11 +127,10 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Planejamento',
         itens: [
-          { id: 'lancamentos-meta-zoo', label: 'Lançamentos META Zoo', status: 'ready' },
-          { id: 'lancamentos-meta-fin', label: 'Lançamentos META Fin', status: 'ready' },
-          { id: 'fluxo-caixa-meta',     label: 'Fluxo Caixa META',                      status: 'ready' },
-          { id: 'meta-gmd',             label: 'GMD META',                              status: 'ready' },
-          { id: 'meta-precos',          label: 'Preços META',                           status: 'ready' },
+          { id: 'lancamentos-meta-zoo', label: 'Lançamentos META Zoo',       status: 'ready' },
+          { id: 'lancamentos-meta-fin', label: 'Lançamentos META Financeiro', status: 'ready' },
+          { id: 'meta-gmd',             label: 'GMD META',                    status: 'ready' },
+          { id: 'meta-precos',          label: 'Preços META',                 status: 'ready' },
         ],
       },
       {

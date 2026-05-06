@@ -328,6 +328,7 @@ export default function V2Index() {
       <V2LancamentosWrapper
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
+        cenariosPermitidos={['realizado', 'programado']}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');
