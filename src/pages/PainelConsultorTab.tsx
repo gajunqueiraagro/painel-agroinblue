@@ -1416,11 +1416,12 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     if (!isGlobal && (!fazendaId || fazendaId === '__global__')) return;
 
     const meses = Array.from({ length: 12 }, (_, i) => `${anoNum}-${String(i + 1).padStart(2, '0')}`);
+    // Sem filtro de status — alinha com MetaPrecoTab (fonte oficial). O snapshot
+    // é considerado autoritativo independente do status (ver auditoria meta).
     let q = supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total, status')
+      .select('ano_mes, valor_total, valor_cabeca_medio, preco_arroba_medio, cabecas, peso_medio_kg, arrobas_total')
       .eq('cliente_id', cid)
-      .eq('status', 'validado')
       .in('ano_mes', meses);
     if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
 

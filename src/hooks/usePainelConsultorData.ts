@@ -858,11 +858,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     }
     let cancelled = false;
     const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+    // Sem filtro de status — alinha com MetaPrecoTab (fonte oficial). O snapshot
+    // é considerado autoritativo independente do status (ver auditoria meta).
     let q = supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total, status')
+      .select('ano_mes, valor_total')
       .eq('cliente_id', cid)
-      .eq('status', 'validado')
       .in('ano_mes', meses);
     if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
     q.then(({ data, error }) => {
