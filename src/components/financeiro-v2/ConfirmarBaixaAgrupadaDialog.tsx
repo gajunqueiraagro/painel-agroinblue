@@ -51,16 +51,17 @@ export function ConfirmarBaixaAgrupadaDialog({
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
 
-  // Default: marcar todos os itens conversíveis (agendado/programado).
+  // Default: marcar TODOS os itens elegíveis (agendado/programado/realizado).
+  // Realizados criam apenas vínculo (sem mexer no status do lançamento).
   useEffect(() => {
     if (!open) return;
-    const conversiveis = itens
+    const elegiveis = itens
       .filter((it) => {
         const s = (it.statusTransacao || '').toLowerCase();
-        return s === 'agendado' || s === 'programado';
+        return s === 'agendado' || s === 'programado' || s === 'realizado';
       })
       .map((it) => it.id);
-    setMarcados(new Set(conversiveis));
+    setMarcados(new Set(elegiveis));
   }, [open, itens]);
 
   const totais = useMemo(() => {
@@ -71,6 +72,13 @@ export function ConfirmarBaixaAgrupadaDialog({
     const jaRealizados = itens.filter((it) => (it.statusTransacao || '').toLowerCase() === 'realizado').length;
     return { conversiveis, jaRealizados };
   }, [itens]);
+
+  // "Confirmar agrupamento" — todos os itens já realizados, apenas cria vínculo.
+  // "Confirmar baixa via OFX (agrupado)" — há agendado/programado a converter.
+  const apenasVinculo = totais.conversiveis === 0 && totais.jaRealizados > 0;
+  const tituloDialog = apenasVinculo
+    ? 'Confirmar agrupamento'
+    : 'Confirmar baixa via OFX (agrupado)';
 
   const toggle = (id: string) => {
     setMarcados((prev) => {
@@ -119,10 +127,11 @@ export function ConfirmarBaixaAgrupadaDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Confirmar baixa via OFX (agrupado)</DialogTitle>
+          <DialogTitle>{tituloDialog}</DialogTitle>
           <DialogDescription>
-            Marque quais lançamentos realmente foram pagos. Apenas <strong>agendado</strong> e <strong>programado</strong>
-            podem ser convertidos em <strong>realizado</strong>. META e cancelados são bloqueados.
+            {apenasVinculo
+              ? 'Todos os lançamentos já estão realizados — apenas o vínculo de conciliação será criado. Status financeiro NÃO é alterado.'
+              : <>Marque quais lançamentos realmente foram pagos. <strong>Agendado/programado</strong> são convertidos em <strong>realizado</strong>; <strong>realizado</strong> apenas recebe vínculo. META e cancelados são bloqueados.</>}
           </DialogDescription>
         </DialogHeader>
 
@@ -150,14 +159,14 @@ export function ConfirmarBaixaAgrupadaDialog({
             <TableBody>
               {itens.map((it) => {
                 const status = (it.statusTransacao || '').toLowerCase();
-                const conversivel = status === 'agendado' || status === 'programado';
+                const elegivel = status === 'agendado' || status === 'programado' || status === 'realizado';
                 const cls = STATUS_BADGE[status] ?? 'bg-muted text-muted-foreground';
                 return (
-                  <TableRow key={it.id} className={!conversivel ? 'opacity-60' : ''}>
+                  <TableRow key={it.id} className={!elegivel ? 'opacity-60' : ''}>
                     <TableCell>
                       <Checkbox
                         checked={marcados.has(it.id)}
-                        disabled={!conversivel}
+                        disabled={!elegivel}
                         onCheckedChange={() => toggle(it.id)}
                       />
                     </TableCell>
@@ -186,7 +195,11 @@ export function ConfirmarBaixaAgrupadaDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={salvando}>Cancelar</Button>
           <Button onClick={handleConfirmar} disabled={salvando || marcados.size === 0}>
-            {salvando ? 'Processando...' : `Confirmar ${marcados.size} realizado(s)`}
+            {salvando
+              ? 'Processando...'
+              : (apenasVinculo
+                ? `Confirmar agrupamento (${marcados.size})`
+                : `Confirmar ${marcados.size} realizado(s)`)}
           </Button>
         </DialogFooter>
       </DialogContent>

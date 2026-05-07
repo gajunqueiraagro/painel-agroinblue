@@ -21,6 +21,7 @@ import { useImportacaoExtrato, type MovimentoPreview, type CandidatoPossivel } f
 import { useBaixaViaExtrato } from '@/hooks/useBaixaViaExtrato';
 import { ConfirmarBaixaAgrupadaDialog } from './ConfirmarBaixaAgrupadaDialog';
 import { RevisarMatchDialog } from './RevisarMatchDialog';
+import { DivergenciaDialog } from './DivergenciaDialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -253,6 +254,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const [confirmFinalizarParcial, setConfirmFinalizarParcial] = useState(false);
   // Filtro local da tabela — apenas visualização.
   const [filtro, setFiltro] = useState<FiltroTabela>('todos');
+  // Modal de auditoria da diferença residual.
+  const [verDivergencia, setVerDivergencia] = useState(false);
 
   // Reset COMPLETO quando o cliente muda (admin pode trocar de cliente
   // sem fechar a tela). Evita arrastar conta/preview de outro cliente.
@@ -656,14 +659,27 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 <span className="text-muted-foreground">→</span>
                 <StepBadge num={3} label="Finalizar"      status={step3} />
               </div>
-              <div className="text-[11px] text-muted-foreground">
-                {preview.totalLinhas} mov.
-                {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
-                {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}</span></>}
-                {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}</span></>}
-                {preview.ambiguos > 0    && <> · <span className="text-purple-800 font-semibold">{preview.ambiguos} ambíguo{preview.ambiguos !== 1 ? 's' : ''}</span></>}
-                {preview.ignorados > 0   && <> · {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}</>}
-                {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="text-[11px] text-muted-foreground">
+                  {preview.totalLinhas} mov.
+                  {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
+                  {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}</span></>}
+                  {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}</span></>}
+                  {preview.ambiguos > 0    && <> · <span className="text-purple-800 font-semibold">{preview.ambiguos} ambíguo{preview.ambiguos !== 1 ? 's' : ''}</span></>}
+                  {preview.ignorados > 0   && <> · {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}</>}
+                  {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
+                </div>
+                {(preview.parciais > 0 || preview.pendentes > 0 || preview.novosParaSalvar > 0) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setVerDivergencia(true)}
+                    title="Listar movimentos que contribuem para a diferença residual."
+                  >
+                    Ver divergência
+                  </Button>
+                )}
               </div>
             </div>
           );
@@ -913,8 +929,9 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 Rodapé do agrupado é status-aware:
                                 - conciliado → badge "conciliado", sem ação
                                 - ignorado   → badge "ignorado", sem ação
-                                - parcial    → ainda permite ação (extrato pode receber mais vínculos)
-                                - default    → botão "Confirmar realizados" se houver agendado/programado
+                                - parcial    → ainda permite ação
+                                - todos realizados → botão "Confirmar agrupamento" (apenas vínculos)
+                                - há agendado/programado → botão "Confirmar realizados"
                               */}
                               {m.statusPersistido === 'conciliado' ? (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
@@ -928,17 +945,25 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
                                   ✓ Baixado via OFX
                                 </span>
-                              ) : m.detalhesAgrupados.some((d) => podeConverterStatus(d.statusTransacao)) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 text-[10px] px-2"
-                                  disabled={convertindo}
-                                  onClick={() => abrirAgrupado(m)}
-                                >
-                                  ✓ Confirmar realizados
-                                </Button>
-                              )}
+                              ) : m.detalhesAgrupados.length > 0 && (() => {
+                                // Botão visível sempre que há itens agrupados.
+                                // Label muda conforme: agendado/programado → "Confirmar realizados";
+                                // todos realizados → "Confirmar agrupamento" (apenas vínculo).
+                                const temConversivel = m.detalhesAgrupados.some(
+                                  (d) => podeConverterStatus(d.statusTransacao),
+                                );
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-[10px] px-2"
+                                    disabled={convertindo}
+                                    onClick={() => abrirAgrupado(m)}
+                                  >
+                                    {temConversivel ? '✓ Confirmar realizados' : '✓ Confirmar agrupamento'}
+                                  </Button>
+                                );
+                              })()}
                             </div>
                           ) : m.statusPersistido === 'conciliado' ? (
                             <span className="text-emerald-700 italic text-[10px]">— conciliado —</span>
@@ -1198,6 +1223,14 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           }}
         />
       )}
+
+      {/* Modal de auditoria da diferença residual. */}
+      <DivergenciaDialog
+        open={verDivergencia}
+        onClose={() => setVerDivergencia(false)}
+        preview={preview}
+        clienteId={clienteId}
+      />
 
       {/* Modal de revisão manual: provável / sem match (lista + side-by-side) */}
       {revisar && (
