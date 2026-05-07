@@ -735,12 +735,61 @@ export function useImportacaoExtrato() {
     setError(null);
   }
 
+  /**
+   * Re-consulta extrato_bancario_v2 para os hashes do preview atual e
+   * atualiza existeNoDB / extratoIdExistente / statusPersistido + agregados.
+   *
+   * Disparado após cada baixa/vínculo individual para que os contadores
+   * (pendentes / parciais / conciliados) reflitam o estado real do DB.
+   */
+  async function refreshStatusPersistidos(): Promise<void> {
+    if (!preview || !clienteAtual?.id) return;
+    const hashes = preview.movimentos.map((m) => m.hash);
+    if (hashes.length === 0) return;
+
+    const { data, error } = await supabase
+      .from('extrato_bancario_v2' as any)
+      .select('id, hash_movimento, status')
+      .eq('cliente_id', clienteAtual.id)
+      .in('hash_movimento', hashes);
+    if (error) {
+      console.error('[refreshStatusPersistidos]', error);
+      return;
+    }
+
+    const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
+    for (const r of (data as unknown as
+      { id: string; hash_movimento: string; status: StatusPersistido }[] ?? [])
+    ) {
+      persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+    }
+
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs: MovimentoPreview[] = prev.movimentos.map((m) => {
+        const persistido = persistidoPorHash.get(m.hash) ?? null;
+        return {
+          ...m,
+          existeNoDB: persistido !== null,
+          extratoIdExistente: persistido?.id ?? null,
+          statusPersistido: persistido?.status ?? null,
+        };
+      });
+      return {
+        ...prev,
+        movimentos: movs,
+        ...recomputarAgregados(movs),
+      };
+    });
+  }
+
   return {
     preview,
     loading,
     error,
     gerarPreview,
     confirmarImportacao,
+    refreshStatusPersistidos,
     reset,
   };
 }

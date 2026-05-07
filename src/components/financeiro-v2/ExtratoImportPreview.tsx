@@ -30,6 +30,22 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { Info, CheckCircle2 } from 'lucide-react';
 
+type StepStatus = 'pending' | 'active' | 'done';
+
+function StepBadge({ num, label, status }: { num: number; label: string; status: StepStatus }) {
+  const cls =
+    status === 'done'   ? 'bg-emerald-100 text-emerald-700'
+    : status === 'active' ? 'bg-amber-100 text-amber-800'
+    : 'bg-muted text-muted-foreground';
+  const icon = status === 'done' ? '✓' : String(num);
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${cls}`}>
+      <span className="font-mono w-3 text-center">{icon}</span>
+      {label}
+    </span>
+  );
+}
+
 interface BadgeStatus {
   label: string;
   cls: string;
@@ -117,7 +133,10 @@ function fmtData(s: string): string {
 export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, onImported }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
-  const { preview, loading, error, gerarPreview, confirmarImportacao, reset } = useImportacaoExtrato();
+  const {
+    preview, loading, error,
+    gerarPreview, confirmarImportacao, refreshStatusPersistidos, reset,
+  } = useImportacaoExtrato();
   const { baixarLancamentoViaExtrato } = useBaixaViaExtrato();
 
   const [contas, setContas] = useState<Conta[]>([]);
@@ -140,6 +159,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   // Flag: a importação já foi confirmada nesta sessão (extratos persistidos).
   // Antes disso, qualquer baixa individual mostra toast pedindo confirmação primeiro.
   const [importacaoConfirmada, setImportacaoConfirmada] = useState(false);
+  // AlertDialog de confirmação ao sair com movimentos parcialmente conciliados.
+  const [confirmFinalizarParcial, setConfirmFinalizarParcial] = useState(false);
 
   // Reset COMPLETO quando o cliente muda (admin pode trocar de cliente
   // sem fechar a tela). Evita arrastar conta/preview de outro cliente.
@@ -286,6 +307,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       if (r.vinculado) partes.push('vínculo criado com extrato');
       toast.success(partes.length > 0 ? partes.join(' · ') : 'Já vinculado anteriormente');
       setConfirm1a1(null);
+      // Reflete o novo status persistido (conciliado/parcial) no preview.
+      await refreshStatusPersistidos();
     } catch (e: any) {
       toast.error('Erro: ' + (e?.message ?? e));
     } finally {
@@ -371,6 +394,25 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setConfirm1a1(m);
   };
 
+  /** Finalização limpa — todas as pendências resolvidas, extrato conciliado. */
+  const handleFinalizarConciliacao = () => {
+    toast.success('Conciliação finalizada com sucesso.');
+    onClose();
+  };
+
+  /** Saída com pendências (nao_conciliado pendentes, sem parciais). */
+  const handleFinalizarDepois = () => {
+    toast.info('Pendências preservadas. Reabra o mesmo OFX para retomar.');
+    onClose();
+  };
+
+  /** Saída quando há parciais — confirmação obrigatória antes. */
+  const handleConfirmarFinalizarParcial = () => {
+    setConfirmFinalizarParcial(false);
+    toast.info('Saída registrada. Movimentos parciais permanecem para conciliação posterior.');
+    onClose();
+  };
+
   const totalValor = useMemo(() => {
     if (!preview) return 0;
     return preview.movimentos
@@ -418,46 +460,48 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           <Button onClick={handleGerar} disabled={loading || !arquivo || !contaId}>
             {loading ? 'Processando...' : 'Gerar preview'}
           </Button>
-          {preview && (
-            <Button variant="outline" onClick={handleLimparPreview} disabled={loading}>
-              Limpar preview
-            </Button>
-          )}
         </div>
 
+        {/* Indicador das 3 etapas do fluxo (visível assim que há preview). */}
+        {preview && (() => {
+          const algoSalvo = preview.existentesNoBanco > 0;
+          const tudoSalvo = preview.novosParaSalvar === 0 && preview.totalLinhas > 0;
+          const temPendencia = preview.pendentes > 0 || preview.parciais > 0;
+          const step1: StepStatus = tudoSalvo ? 'done' : (preview.novosParaSalvar > 0 ? 'active' : 'pending');
+          const step2: StepStatus = !algoSalvo ? 'pending' : (temPendencia ? 'active' : 'done');
+          const step3: StepStatus = step2 === 'done' ? 'active' : 'pending';
+          return (
+            <div className="shrink-0 flex items-center gap-1 text-[10px] flex-wrap">
+              <StepBadge num={1} label="Salvar extrato"  status={step1} />
+              <span className="text-muted-foreground">→</span>
+              <StepBadge num={2} label="Conciliar"        status={step2} />
+              <span className="text-muted-foreground">→</span>
+              <StepBadge num={3} label="Finalizar"        status={step3} />
+            </div>
+          );
+        })()}
+
         {preview && !importacaoConfirmada && preview.novosParaSalvar > 0 && (
-          <div className="shrink-0 flex items-center gap-2 rounded border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800">
-            <Info className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1 truncate">
+          <div className="shrink-0 flex items-center gap-1.5 rounded bg-amber-50/70 px-2 py-1 text-[11px] text-amber-800">
+            <Info className="h-3 w-3 shrink-0" />
+            <span className="truncate">
               1º passo: salvar o extrato bancário. Isso não altera o financeiro.
             </span>
-            <Button
-              size="sm"
-              onClick={handleConfirmar}
-              disabled={loading}
-              className="h-7 text-xs px-3 shrink-0"
-            >
-              {loading ? 'Salvando...' : `Salvar extrato (${preview.novosParaSalvar})`}
-            </Button>
           </div>
         )}
         {importacaoConfirmada && (
-          <div className="shrink-0 flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-[11px] text-emerald-800">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1 truncate">
-              Extrato salvo. Agora revise os matches e confirme vínculos/baixas.
-            </span>
-            <span className="shrink-0 inline-flex items-center px-2 h-7 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold">
-              Extrato salvo ✓
+          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+            <CheckCircle2 className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              Extrato salvo. Revise os matches e confirme vínculos/baixas.
             </span>
           </div>
         )}
         {preview && !importacaoConfirmada && preview.novosParaSalvar === 0 && preview.existentesNoBanco > 0 && (
-          <div className="shrink-0 flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-[11px] text-emerald-800">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="flex-1 truncate">
-              Todos os {preview.existentesNoBanco} movimento(s) já estão no banco.
-              Use as ações na coluna "Match financeiro" para finalizar a conciliação.
+          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+            <CheckCircle2 className="h-3 w-3 shrink-0" />
+            <span className="truncate">
+              Todos os {preview.existentesNoBanco} movimento(s) já estão no banco. Use as ações para finalizar.
             </span>
           </div>
         )}
@@ -690,23 +734,79 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         )}
 
         <DialogFooter className="shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
-          {!importacaoConfirmada && (
+          {/* Zona 1: resumo do estado atual */}
+          {preview ? (
+            <div className="text-[11px] text-muted-foreground sm:mr-auto truncate">
+              {preview.totalLinhas} mov.
+              {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
+              {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parciais</span></>}
+              {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendentes</span></>}
+              {preview.ignorados > 0   && <> · {preview.ignorados} ignorados</>}
+              {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
+            </div>
+          ) : (
             <span className="text-[10px] text-muted-foreground sm:mr-auto">
               Nenhum lançamento será criado ou alterado nesta etapa.
             </span>
           )}
-          <div className="flex gap-2 sm:ml-auto">
-            <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
-            <Button
-              onClick={handleConfirmar}
-              disabled={
-                loading || !preview || preview.novosParaSalvar === 0 || importacaoConfirmada
-              }
-            >
-              {importacaoConfirmada
-                ? 'Extrato salvo ✓'
-                : (loading ? 'Salvando...' : `Salvar extrato (${preview?.novosParaSalvar ?? 0})`)}
+
+          {/* Zona 2: ações secundárias */}
+          <div className="flex gap-2 flex-wrap">
+            {preview && (
+              <Button variant="ghost" onClick={handleLimparPreview} disabled={loading}>
+                Limpar preview
+              </Button>
+            )}
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              Fechar
             </Button>
+
+            {/* Zona 3: ação principal — varia conforme o estado do fluxo */}
+            {(() => {
+              if (!preview) return null;
+              if (preview.novosParaSalvar > 0) {
+                // Estado 1: ainda há novos para salvar → botão de save (primário, padrão)
+                return (
+                  <Button
+                    onClick={handleConfirmar}
+                    disabled={loading || importacaoConfirmada}
+                  >
+                    {importacaoConfirmada
+                      ? 'Extrato salvo ✓'
+                      : (loading ? 'Salvando...' : `Salvar extrato (${preview.novosParaSalvar})`)}
+                  </Button>
+                );
+              }
+              if (preview.parciais > 0) {
+                // Estado 2: parciais existem → exige confirmação para sair
+                return (
+                  <Button
+                    variant="outline"
+                    className="border-amber-400 text-amber-800 hover:bg-amber-50"
+                    onClick={() => setConfirmFinalizarParcial(true)}
+                  >
+                    Finalizar com pendências
+                  </Button>
+                );
+              }
+              if (preview.pendentes > 0) {
+                // Estado 3: nao_conciliado pendentes → saída suave
+                return (
+                  <Button variant="outline" onClick={handleFinalizarDepois}>
+                    Finalizar depois
+                  </Button>
+                );
+              }
+              // Estado 4: tudo limpo → finalização final
+              return (
+                <Button
+                  onClick={handleFinalizarConciliacao}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  Finalizar conciliação
+                </Button>
+              );
+            })()}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -752,6 +852,29 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* AlertDialog: confirmação ao finalizar com movimentos parciais. */}
+      <AlertDialog
+        open={confirmFinalizarParcial}
+        onOpenChange={(v) => { if (!v) setConfirmFinalizarParcial(false); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finalizar com movimentos parciais?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existem <strong>{preview?.parciais ?? 0} movimento(s) parcialmente conciliado(s)</strong>.
+              Eles permanecem com status <em>parcial</em> em <code>extrato_bancario_v2</code> e podem
+              ser concluídos depois reabrindo o mesmo OFX. Deseja sair mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmarFinalizarParcial}>
+              Sair com pendências
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Modal de seleção para baixa agrupada */}
       {confirmAgrupado && (
         <ConfirmarBaixaAgrupadaDialog
@@ -764,6 +887,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           onConcluido={() => {
             setHashesBaixados((prev) => new Set(prev).add(confirmAgrupado.movimento.hash));
             setConfirmAgrupado(null);
+            void refreshStatusPersistidos();
           }}
         />
       )}
@@ -785,6 +909,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           onConcluido={() => {
             setHashesBaixados((prev) => new Set(prev).add(revisar.movimento.hash));
             setRevisar(null);
+            void refreshStatusPersistidos();
           }}
         />
       )}
