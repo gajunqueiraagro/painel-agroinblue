@@ -62,6 +62,15 @@ export interface MovimentoPreview extends MovimentoBruto {
   detalhesAgrupados: LancamentoAgrupadoInfo[];
   /** Top-10 candidatos sugeridos para escolha manual (mesmo se score baixo). */
   candidatosPossiveis: CandidatoPossivel[];
+  /**
+   * Há 2+ candidatos 1:1 com score equivalente (empate estrito ≤1pt OU
+   * valor+data+fornecedor idênticos). Auto-pick é DESLIGADO neste caso —
+   * o usuário deve escolher manualmente. matchAmbiguo é independente de
+   * matchAgrupado e nunca esconde pendência operacional.
+   */
+  matchAmbiguo: boolean;
+  /** Candidatos top equivalentes — populado SOMENTE quando matchAmbiguo=true. */
+  candidatosAmbiguos: CandidatoPossivel[];
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -87,6 +96,19 @@ export interface CandidatoPossivel {
   diffValor: number;    // |valor lanc| - |valor mov|
   diffDias: number;     // |data lanc - data mov| em dias
   numeroDocumento: string | null;
+  // ── Enriquecimentos para distinguir candidatos equivalentes (NF/fazenda/conta) ──
+  fazenda: string | null;
+  contaBancaria: string | null;
+  /** |valor| original do lançamento. */
+  valorOriginal: number;
+  /** Soma absoluta de valor_aplicado dos vínculos existentes em conciliacao_bancaria_itens. */
+  valorJaConciliado: number;
+  /** valorOriginal - valorJaConciliado (limitado a 0). */
+  saldoConciliar: number;
+  /** valorJaConciliado > 0. */
+  jaVinculadoOFX: boolean;
+  /** valorJaConciliado >= valorOriginal (tolerância 0.01). */
+  conciliadoIntegralmente: boolean;
 }
 
 export interface PreviewResult {
@@ -111,6 +133,8 @@ export interface PreviewResult {
   matchDireto: number;
   matchAgrupados: number;
   semMatch: number;
+  /** Movimentos com 2+ candidatos top equivalentes — exigem escolha manual. */
+  ambiguos: number;
   formato: 'OFX' | 'CSV';
 }
 
@@ -128,7 +152,8 @@ function recomputarAgregados(
 ): Pick<
   PreviewResult,
   | 'novosParaSalvar' | 'existentesNoBanco' | 'pendentes' | 'parciais'
-  | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados' | 'semMatch'
+  | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados'
+  | 'semMatch' | 'ambiguos'
 > {
   const acionaveis = movimentos.filter(
     (m) =>
@@ -147,9 +172,12 @@ function recomputarAgregados(
     parciais:          movimentos.filter((m) => m.statusPersistido === 'parcial').length,
     conciliados:       movimentos.filter((m) => m.statusPersistido === 'conciliado').length,
     ignorados:         movimentos.filter((m) => m.statusPersistido === 'ignorado').length,
-    matchDireto:       acionaveis.filter((m) => m.matchEncontrado && !m.matchAgrupado).length,
+    // matchDireto exclui ambíguos — empates não contam como match único.
+    matchDireto:       acionaveis.filter((m) => m.matchEncontrado && !m.matchAgrupado && !m.matchAmbiguo).length,
     matchAgrupados:    acionaveis.filter((m) => m.matchAgrupado).length,
-    semMatch:          acionaveis.filter((m) => !m.matchEncontrado).length,
+    // semMatch exclui ambíguos — eles têm candidatos, só não há vencedor único.
+    semMatch:          acionaveis.filter((m) => !m.matchEncontrado && !m.matchAmbiguo).length,
+    ambiguos:          acionaveis.filter((m) => m.matchAmbiguo).length,
   };
 }
 
@@ -198,6 +226,63 @@ interface LancamentoCandidato {
   grupo_custo: string | null;
   status_transacao: string | null;
   numero_documento: string | null;
+  fazenda_id: string | null;
+  conta_bancaria_id: string | null;
+}
+
+/** Comparação textual estrita para ambiguidade (sem incluir parcial difuso). */
+function similarFornecedorEstrito(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false;
+  const an = a
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  const bn = b
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  if (!an || !bn) return false;
+  return an === bn || an.includes(bn) || bn.includes(an);
+}
+
+/**
+ * Detecta empate de candidatos 1:1 — regra estrita (financeiro):
+ *   ambíguo = score IGUAL ao topo OU diferença ≤ 1pt OU
+ *             (mesmo valor + mesma data + fornecedor parecido).
+ * Tolerância maior gera falso-ambíguo. Por isso ≤ 1, não ≤ 5.
+ */
+interface CandidatoComScore {
+  lanc: LancamentoCandidato;
+  score: number;
+  fornNome: string | null;
+}
+function detectarAmbiguidade(
+  candidatos: CandidatoComScore[],
+): { scoreMax: number; empatesTop: CandidatoComScore[]; ambiguo: boolean } {
+  if (candidatos.length === 0) return { scoreMax: 0, empatesTop: [], ambiguo: false };
+  const sorted = [...candidatos].sort((a, b) => b.score - a.score);
+  const top = sorted[0];
+  if (top.score < 50) return { scoreMax: top.score, empatesTop: [], ambiguo: false };
+
+  const empatesTop = sorted.filter((c) => {
+    if (Math.abs(c.score - top.score) <= 1) return true;
+    // Caso especial: scores diferentes mas valor+data+fornecedor idênticos
+    const valorIgual =
+      Math.abs(Math.abs(c.lanc.valor) - Math.abs(top.lanc.valor)) <= 0.01;
+    const dataIgual = c.lanc.data_pagamento === top.lanc.data_pagamento;
+    const fornParecido = similarFornecedorEstrito(c.fornNome, top.fornNome);
+    return valorIgual && dataIgual && fornParecido;
+  });
+
+  return {
+    scoreMax: top.score,
+    empatesTop,
+    ambiguo: empatesTop.length > 1,
+  };
 }
 
 /**
@@ -430,7 +515,7 @@ export function useImportacaoExtrato() {
       // Exclui cenário META — não é alvo de conciliação.
       const { data: lancsRaw } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, status_transacao, numero_documento, cenario')
+        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, status_transacao, numero_documento, cenario, fazenda_id')
         .eq('cliente_id', clienteAtual.id)
         .eq('cancelado', false)
         .neq('cenario', 'meta')
@@ -441,19 +526,69 @@ export function useImportacaoExtrato() {
 
       const lancs = (lancsRaw ?? []) as unknown as LancamentoCandidato[];
 
-      // Carregar nomes de fornecedores referenciados (uma query agregada).
+      // ── Lookups paralelos: fornecedores, fazendas, contas, vínculos existentes ──
       const favIds = Array.from(
         new Set(lancs.map((l) => l.favorecido_id).filter((x): x is string => !!x)),
       );
+      const fazIds = Array.from(
+        new Set(lancs.map((l) => l.fazenda_id).filter((x): x is string => !!x)),
+      );
+      const contaIds = Array.from(
+        new Set(
+          lancs
+            .flatMap((l) => [l.conta_bancaria_id, l.conta_destino_id])
+            .filter((x): x is string => !!x),
+        ),
+      );
+      const lancIds = lancs.map((l) => l.id);
+
+      const [fornsRes, fazsRes, contasRes, vinculosRes] = await Promise.all([
+        favIds.length > 0
+          ? supabase.from('financeiro_fornecedores').select('id, nome').in('id', favIds)
+          : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+        fazIds.length > 0
+          ? supabase.from('fazendas').select('id, nome').in('id', fazIds)
+          : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+        contaIds.length > 0
+          ? supabase
+              .from('financeiro_contas_bancarias')
+              .select('id, nome_conta, nome_exibicao')
+              .in('id', contaIds)
+          : Promise.resolve({ data: [] as { id: string; nome_conta: string; nome_exibicao: string | null }[] }),
+        lancIds.length > 0
+          ? supabase
+              .from('conciliacao_bancaria_itens' as any)
+              .select('lancamento_id, valor_aplicado')
+              .eq('cliente_id', clienteAtual.id)
+              .in('lancamento_id', lancIds)
+          : Promise.resolve({ data: [] as { lancamento_id: string; valor_aplicado: number }[] }),
+      ]);
+
       const fornMap = new Map<string, string>();
-      if (favIds.length > 0) {
-        const { data: forns } = await supabase
-          .from('financeiro_fornecedores')
-          .select('id, nome')
-          .in('id', favIds);
-        for (const f of (forns ?? []) as { id: string; nome: string }[]) {
-          fornMap.set(f.id, f.nome);
-        }
+      for (const f of (fornsRes.data ?? []) as { id: string; nome: string }[]) {
+        fornMap.set(f.id, f.nome);
+      }
+      const fazendaMap = new Map<string, string>();
+      for (const f of (fazsRes.data ?? []) as { id: string; nome: string }[]) {
+        fazendaMap.set(f.id, f.nome);
+      }
+      const contaMap = new Map<string, string>();
+      for (const c of (contasRes.data ?? []) as
+        { id: string; nome_conta: string; nome_exibicao: string | null }[]
+      ) {
+        contaMap.set(c.id, c.nome_exibicao || c.nome_conta);
+      }
+      // Soma dos valor_aplicado por lançamento — base para saldo conciliável e
+      // para excluir do auto-match os lançamentos já totalmente cobertos.
+      const totalAplicadoPorLanc = new Map<string, number>();
+      for (const v of (vinculosRes.data ?? []) as
+        { lancamento_id: string; valor_aplicado: number }[]
+      ) {
+        const cur = totalAplicadoPorLanc.get(v.lancamento_id) ?? 0;
+        totalAplicadoPorLanc.set(
+          v.lancamento_id,
+          cur + Math.abs(Number(v.valor_aplicado) || 0),
+        );
       }
 
       // Mapa lancId → nomeFornecedor (para score agrupado consultar por l.id).
@@ -465,30 +600,82 @@ export function useImportacaoExtrato() {
         }
       }
 
+      // Lançamentos já conciliados integralmente — excluídos do auto-match
+      // mas continuam disponíveis em candidatosPossiveis para auditoria manual.
+      function jaConciliadoIntegralmente(l: LancamentoCandidato): boolean {
+        const aplicado = totalAplicadoPorLanc.get(l.id) ?? 0;
+        const valorAbs = Math.abs(Number(l.valor) || 0);
+        return aplicado >= valorAbs - 0.01;
+      }
+      const lancsLivres = lancs.filter((l) => !jaConciliadoIntegralmente(l));
+
+      // Helper: monta um CandidatoPossivel completo (com fazenda/conta/saldo).
+      function montarCandidato(
+        l: LancamentoCandidato,
+        movDataISO: string,
+        valorMovAbs: number,
+      ): CandidatoPossivel {
+        const valorOriginal = Math.abs(Number(l.valor) || 0);
+        const valorJaConciliado = totalAplicadoPorLanc.get(l.id) ?? 0;
+        const saldoConciliar = Math.max(0, valorOriginal - valorJaConciliado);
+        return {
+          id: l.id,
+          data: l.data_pagamento,
+          fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
+          descricao: l.descricao,
+          valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
+          statusTransacao: l.status_transacao,
+          diffValor: Math.abs(valorOriginal - valorMovAbs),
+          diffDias: l.data_pagamento ? Math.abs(diasEntre(movDataISO, l.data_pagamento)) : 999,
+          numeroDocumento: l.numero_documento,
+          fazenda: l.fazenda_id ? fazendaMap.get(l.fazenda_id) ?? null : null,
+          contaBancaria: l.conta_bancaria_id ? contaMap.get(l.conta_bancaria_id) ?? null : null,
+          valorOriginal,
+          valorJaConciliado,
+          saldoConciliar,
+          jaVinculadoOFX: valorJaConciliado > 0,
+          conciliadoIntegralmente: valorJaConciliado >= valorOriginal - 0.01,
+        };
+      }
+
       // Para cada movimento:
-      //   1) tentar match 1:1 (|valor| igual, data ±7d, score ≥ 50);
-      //   2) se falhar, tentar composição (subset, até 8 itens, ±10 dias, sinal compatível, timeout 200ms).
+      //   1) tentar match 1:1 sobre `lancsLivres` (excluídos os já totalmente
+      //      conciliados). Detectar ambiguidade — se houver empate estrito,
+      //      desativar auto-pick e expor candidatosAmbiguos para escolha humana;
+      //   2) se 1:1 falhar, tentar composição (subset, até 8 itens, ±10 dias,
+      //      sinal compatível, timeout 200ms).
       const movimentos: MovimentoPreview[] = movimentosComHash.map((m) => {
         const valorMov = Math.abs(m.valor);
 
-        // ── 1) tentativa 1:1 ──
-        let melhor: LancamentoCandidato | null = null;
-        let melhorScore = 0;
-        for (const l of lancs) {
+        // ── 1) Score de TODOS os candidatos viáveis (auto-match exclui já-totalmente-conciliados) ──
+        const candidatosScore: CandidatoComScore[] = [];
+        for (const l of lancsLivres) {
           if (Math.abs(Math.abs(Number(l.valor) || 0) - valorMov) > 0.01) continue;
           if (!l.data_pagamento) continue;
           if (Math.abs(diasEntre(m.data, l.data_pagamento)) > 7) continue;
           const fornNome = l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null;
           const s = calcularScore(m.data, m.descricao, l, fornNome);
-          if (s > melhorScore) {
-            melhorScore = s;
-            melhor = l;
-          }
+          candidatosScore.push({ lanc: l, score: s, fornNome });
         }
+
+        const { scoreMax, empatesTop, ambiguo } = detectarAmbiguidade(candidatosScore);
+        const matchAmbiguo = ambiguo;
+        // Auto-pick SOMENTE quando há candidato único (não ambíguo) com score ≥ 50.
+        const melhor: LancamentoCandidato | null =
+          !matchAmbiguo && empatesTop.length === 1 && scoreMax >= 50
+            ? empatesTop[0].lanc
+            : null;
+        const melhorScore = scoreMax;
         const fornecedorMatch = melhor?.favorecido_id ? fornMap.get(melhor.favorecido_id) ?? null : null;
 
+        // Lista de candidatos ambíguos enriquecida (somente quando há empate real).
+        const candidatosAmbiguos: CandidatoPossivel[] = matchAmbiguo
+          ? empatesTop.map((c) => montarCandidato(c.lanc, m.data, valorMov))
+          : [];
+
         // Top-10 candidatos sugeridos (ranking por valor próximo, data, similaridade).
-        // Útil tanto para "Ver possíveis" (sem match) quanto para revisar matches fracos.
+        // Mantém TODOS os lançamentos do range (incluindo já vinculados ou conciliados)
+        // — modal manual é responsável por mostrar flags e desabilitar quando preciso.
         const sinalEsperado = m.tipo === 'credito' ? 1 : -1;
         const movN = normalizarTexto(m.descricao);
         const candidatosPossiveis: CandidatoPossivel[] = lancs
@@ -518,17 +705,7 @@ export function useImportacaoExtrato() {
             return b.similaridade - a.similaridade;
           })
           .slice(0, 10)
-          .map(({ lanc: l, diffValor, diffDias }) => ({
-            id: l.id,
-            data: l.data_pagamento,
-            fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
-            descricao: l.descricao,
-            valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
-            statusTransacao: l.status_transacao,
-            diffValor,
-            diffDias,
-            numeroDocumento: l.numero_documento,
-          }));
+          .map(({ lanc: l }) => montarCandidato(l, m.data, valorMov));
 
         const persistido = persistidoPorHash.get(m.hash) ?? null;
         const baseFields: MovimentoPreview = {
@@ -537,6 +714,8 @@ export function useImportacaoExtrato() {
           extratoIdExistente: persistido?.id ?? null,
           statusPersistido: persistido?.status ?? null,
           scoreMatch: melhorScore,
+          // matchEncontrado=true quando há candidatos viáveis — inclui ambíguos
+          // (existem candidatos, só não há vencedor único).
           matchEncontrado: melhorScore >= 50,
           lancamentoMatchId: melhor?.id ?? null,
           fornecedorMatch,
@@ -548,6 +727,8 @@ export function useImportacaoExtrato() {
           lancamentosIds: [],
           detalhesAgrupados: [],
           candidatosPossiveis,
+          matchAmbiguo,
+          candidatosAmbiguos,
         };
 
         // ── 2) tentativa de composição ──

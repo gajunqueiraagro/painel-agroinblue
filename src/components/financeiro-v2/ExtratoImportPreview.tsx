@@ -38,6 +38,7 @@ type FiltroTabela =
   | 'ignorados'
   | 'match_direto'
   | 'agrupados'
+  | 'ambiguos'
   | 'sem_match'
   | 'ja_no_banco';
 
@@ -49,6 +50,7 @@ const ROTULO_FILTRO: Record<FiltroTabela, string> = {
   ignorados: 'ignorados',
   match_direto: 'match direto',
   agrupados: 'agrupados',
+  ambiguos: 'ambíguos',
   sem_match: 'sem match',
   ja_no_banco: 'já no banco',
 };
@@ -76,9 +78,11 @@ function aplicarFiltro(m: MovimentoPreview, f: FiltroTabela): boolean {
     case 'conciliados':  return m.statusPersistido === 'conciliado';
     case 'ignorados':    return m.statusPersistido === 'ignorado';
     case 'ja_no_banco':  return m.existeNoDB;
-    case 'match_direto': return acionavel && m.matchEncontrado && !m.matchAgrupado;
+    case 'match_direto': return acionavel && m.matchEncontrado && !m.matchAgrupado && !m.matchAmbiguo;
     case 'agrupados':    return acionavel && m.matchAgrupado;
-    case 'sem_match':    return acionavel && !m.matchEncontrado;
+    case 'ambiguos':     return acionavel && m.matchAmbiguo;
+    // sem_match exclui ambíguos — eles têm candidatos, só não há vencedor único.
+    case 'sem_match':    return acionavel && !m.matchEncontrado && !m.matchAmbiguo;
   }
 }
 
@@ -143,6 +147,13 @@ function badgeFromMovimento(m: MovimentoPreview): BadgeStatus {
     return {
       label: `agrupado ${m.quantidadeItensMatch} itens (${m.scoreMatch})`,
       cls: 'bg-blue-100 text-blue-700',
+    };
+  }
+  // Empate estrito de candidatos 1:1 — auto-pick desligado.
+  if (m.matchAmbiguo) {
+    return {
+      label: `ambíguo (${m.candidatosAmbiguos.length})`,
+      cls: 'bg-purple-100 text-purple-800',
     };
   }
   if (m.scoreMatch >= 80) return { label: `match forte (${m.scoreMatch})`, cls: 'bg-emerald-100 text-emerald-700' };
@@ -416,6 +427,66 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     }
   };
 
+  /**
+   * Re-consulta `conciliacao_bancaria_itens` para os candidatos passados e
+   * atualiza valorJaConciliado/saldoConciliar/jaVinculadoOFX/conciliadoIntegralmente.
+   * Disparado antes de abrir RevisarMatchDialog para refletir vínculos criados
+   * desde que o preview foi gerado.
+   */
+  const enriquecerCandidatosComVinculos = async (
+    cands: CandidatoPossivel[],
+  ): Promise<CandidatoPossivel[]> => {
+    if (!clienteId || cands.length === 0) return cands;
+    const ids = cands.map((c) => c.id);
+    const { data } = await supabase
+      .from('conciliacao_bancaria_itens' as any)
+      .select('lancamento_id, valor_aplicado')
+      .eq('cliente_id', clienteId)
+      .in('lancamento_id', ids);
+    const aplicado = new Map<string, number>();
+    for (const v of (data ?? []) as { lancamento_id: string; valor_aplicado: number }[]) {
+      aplicado.set(
+        v.lancamento_id,
+        (aplicado.get(v.lancamento_id) ?? 0) + Math.abs(Number(v.valor_aplicado) || 0),
+      );
+    }
+    return cands.map((c) => {
+      const aplicadoNow = aplicado.get(c.id) ?? 0;
+      return {
+        ...c,
+        valorJaConciliado: aplicadoNow,
+        saldoConciliar: Math.max(0, c.valorOriginal - aplicadoNow),
+        jaVinculadoOFX: aplicadoNow > 0,
+        conciliadoIntegralmente: aplicadoNow >= c.valorOriginal - 0.01,
+      };
+    });
+  };
+
+  /** Ambíguo: abre revisão com candidatos top equivalentes. Auto-pick está desligado. */
+  const abrirEscolherAmbiguo = async (m: MovimentoPreview) => {
+    if (!clienteId) return;
+    if (m.candidatosAmbiguos.length === 0) {
+      toast.error('Sem candidatos para escolher.');
+      return;
+    }
+    if (!exigirMovimentoPersistido(m)) return;
+    setConvertindo(true);
+    try {
+      const extratoId = await obterExtratoId(clienteId, m);
+      const candidatos = await enriquecerCandidatosComVinculos(m.candidatosAmbiguos);
+      setRevisar({
+        extratoId,
+        movimento: m,
+        candidatos,
+        titulo: `Escolher lançamento — ${m.candidatosAmbiguos.length} candidatos equivalentes`,
+      });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message ?? e));
+    } finally {
+      setConvertindo(false);
+    }
+  };
+
   /** Provável (50-79): abre revisão com o candidato 1:1 já escolhido pelo matcher. */
   const abrirRevisarAprovar = async (m: MovimentoPreview) => {
     if (!clienteId || !m.lancamentoMatchId) return;
@@ -423,7 +494,11 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setConvertindo(true);
     try {
       const extratoId = await obterExtratoId(clienteId, m);
-      const cand: CandidatoPossivel = {
+      // Reforça com candidatosPossiveis (sem duplicar o já escolhido). Se o
+      // candidato principal já estiver em candidatosPossiveis, usa essa
+      // versão (que tem fazenda/conta/saldo). Senão, monta um stub mínimo.
+      const principal = m.candidatosPossiveis.find((c) => c.id === m.lancamentoMatchId);
+      const cand: CandidatoPossivel = principal ?? {
         id: m.lancamentoMatchId,
         data: m.data,
         fornecedor: m.fornecedorMatch,
@@ -433,13 +508,20 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         diffValor: 0,
         diffDias: 0,
         numeroDocumento: null,
+        fazenda: null,
+        contaBancaria: null,
+        valorOriginal: Math.abs(m.valor),
+        valorJaConciliado: 0,
+        saldoConciliar: Math.abs(m.valor),
+        jaVinculadoOFX: false,
+        conciliadoIntegralmente: false,
       };
-      // Reforça com candidatosPossiveis (sem duplicar o já escolhido).
       const extras = m.candidatosPossiveis.filter((c) => c.id !== cand.id);
+      const candidatos = await enriquecerCandidatosComVinculos([cand, ...extras]);
       setRevisar({
         extratoId,
         movimento: m,
-        candidatos: [cand, ...extras],
+        candidatos,
         titulo: `Revisar e aprovar match provável (${m.scoreMatch})`,
       });
     } catch (e: any) {
@@ -460,10 +542,11 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setConvertindo(true);
     try {
       const extratoId = await obterExtratoId(clienteId, m);
+      const candidatos = await enriquecerCandidatosComVinculos(m.candidatosPossiveis);
       setRevisar({
         extratoId,
         movimento: m,
-        candidatos: m.candidatosPossiveis,
+        candidatos,
         titulo: 'Possíveis lançamentos para este movimento',
       });
     } catch (e: any) {
@@ -578,6 +661,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
                 {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}</span></>}
                 {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}</span></>}
+                {preview.ambiguos > 0    && <> · <span className="text-purple-800 font-semibold">{preview.ambiguos} ambíguo{preview.ambiguos !== 1 ? 's' : ''}</span></>}
                 {preview.ignorados > 0   && <> · {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}</>}
                 {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
               </div>
@@ -642,6 +726,15 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   count={preview.matchAgrupados}
                   active={filtro === 'agrupados'}
                   onClick={() => setFiltro('agrupados')}
+                />
+              )}
+              {preview.ambiguos > 0 && (
+                <ChipFiltro
+                  cls="bg-purple-100 text-purple-800"
+                  label={`${preview.ambiguos} ambíguo${preview.ambiguos !== 1 ? 's' : ''}`}
+                  count={preview.ambiguos}
+                  active={filtro === 'ambiguos'}
+                  onClick={() => setFiltro('ambiguos')}
                 />
               )}
               <ChipFiltro
@@ -851,6 +944,29 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             <span className="text-emerald-700 italic text-[10px]">— conciliado —</span>
                           ) : m.statusPersistido === 'ignorado' ? (
                             <span className="text-muted-foreground italic text-[10px]">— ignorado —</span>
+                          ) : m.matchAmbiguo ? (
+                            // Empate estrito: 2+ candidatos top equivalentes. Auto-pick desligado;
+                            // usuário escolhe explicitamente.
+                            <div className="space-y-1">
+                              <span className="text-purple-800 text-[10px] block">
+                                {m.candidatosAmbiguos.length} candidatos com mesmo valor/data — escolha manual
+                              </span>
+                              {hashesBaixados.has(m.hash) ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                  ✓ Baixado via OFX
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2 border-purple-300 text-purple-800 hover:bg-purple-50"
+                                  disabled={convertindo}
+                                  onClick={() => abrirEscolherAmbiguo(m)}
+                                >
+                                  Escolher lançamento
+                                </Button>
+                              )}
+                            </div>
                           ) : m.matchEncontrado && matchTitulo ? (
                             <div className="space-y-1">
                               <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>
@@ -931,6 +1047,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
               {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parciais</span></>}
               {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendentes</span></>}
+              {preview.ambiguos > 0    && <> · <span className="text-purple-800 font-semibold">{preview.ambiguos} ambíguos</span></>}
               {preview.ignorados > 0   && <> · {preview.ignorados} ignorados</>}
               {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
             </div>

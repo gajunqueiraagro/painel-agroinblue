@@ -131,7 +131,12 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
                 <TableRow>
                   <TableHead className="text-[10px]">Data</TableHead>
                   <TableHead className="text-[10px]">Fornecedor / descrição</TableHead>
+                  <TableHead className="text-[10px]">NF</TableHead>
+                  <TableHead className="text-[10px]">Fazenda</TableHead>
+                  <TableHead className="text-[10px]">Conta</TableHead>
                   <TableHead className="text-[10px] text-right">Valor</TableHead>
+                  <TableHead className="text-[10px] text-right">Já concil.</TableHead>
+                  <TableHead className="text-[10px] text-right">Saldo</TableHead>
                   <TableHead className="text-[10px] text-right">Δ R$</TableHead>
                   <TableHead className="text-[10px] text-right">Δ dias</TableHead>
                   <TableHead className="text-[10px]">Status</TableHead>
@@ -142,28 +147,74 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
                 {candidatos.map((c) => {
                   const st = (c.statusTransacao || '').toLowerCase();
                   const cls = STATUS_BADGE[st] ?? 'bg-muted text-muted-foreground';
+                  // Lançamento já totalmente conciliado: só mostrado para auditoria, sem ação.
+                  const bloqueado = c.conciliadoIntegralmente;
                   return (
-                    <TableRow key={c.id}>
+                    <TableRow key={c.id} className={bloqueado ? 'opacity-50' : ''}>
                       <TableCell className="text-[11px] font-mono">{fmtData(c.data)}</TableCell>
-                      <TableCell className="text-[11px] max-w-[220px] truncate" title={c.fornecedor || c.descricao || ''}>
+                      <TableCell className="text-[11px] max-w-[200px] truncate" title={c.fornecedor || c.descricao || ''}>
                         {c.fornecedor || c.descricao || '-'}
+                      </TableCell>
+                      <TableCell className="text-[10px] font-mono text-muted-foreground">
+                        {c.numeroDocumento || '-'}
+                      </TableCell>
+                      <TableCell className="text-[10px] max-w-[140px] truncate" title={c.fazenda ?? undefined}>
+                        {c.fazenda || '—'}
+                      </TableCell>
+                      <TableCell className="text-[10px] max-w-[120px] truncate" title={c.contaBancaria ?? undefined}>
+                        {c.contaBancaria || '—'}
                       </TableCell>
                       <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${c.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                         {formatMoeda(c.valor)}
+                      </TableCell>
+                      <TableCell className="text-[10px] text-right font-mono text-muted-foreground">
+                        {c.valorJaConciliado > 0 ? formatMoeda(c.valorJaConciliado) : '—'}
+                      </TableCell>
+                      <TableCell className="text-[10px] text-right font-mono">
+                        {c.conciliadoIntegralmente
+                          ? <span className="text-emerald-700 font-semibold">0</span>
+                          : c.jaVinculadoOFX
+                            ? <span className="text-amber-700 font-semibold">{formatMoeda(c.saldoConciliar)}</span>
+                            : <span className="text-muted-foreground">{formatMoeda(c.valorOriginal)}</span>}
                       </TableCell>
                       <TableCell className="text-[11px] text-right font-mono text-muted-foreground">
                         {c.diffValor === 0 ? '0' : formatMoeda(c.diffValor)}
                       </TableCell>
                       <TableCell className="text-[11px] text-right font-mono text-muted-foreground">{c.diffDias}</TableCell>
                       <TableCell className="text-[10px]">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${cls}`}>
-                          {st || '—'}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${cls}`}>
+                            {st || '—'}
+                          </span>
+                          {c.conciliadoIntegralmente ? (
+                            <span className="inline-flex items-center px-1.5 py-px rounded bg-slate-200 text-slate-700 text-[8px] font-semibold">
+                              já conciliado
+                            </span>
+                          ) : c.jaVinculadoOFX && (
+                            <span className="inline-flex items-center px-1.5 py-px rounded bg-amber-100 text-amber-800 text-[8px] font-semibold">
+                              parcial
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => setSelecionadoId(c.id)}>
-                          Escolher
-                        </Button>
+                        {bloqueado ? (
+                          <span
+                            className="text-[9px] text-muted-foreground"
+                            title="Lançamento já totalmente conciliado em outro extrato — não pode receber novo vínculo automático."
+                          >
+                            indisponível
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-[10px] px-2"
+                            onClick={() => setSelecionadoId(c.id)}
+                          >
+                            Escolher
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -192,14 +243,37 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
               <div><strong>Fornecedor:</strong> {selecionado.fornecedor || '—'}</div>
               <div><strong>Descrição:</strong> {selecionado.descricao || '-'}</div>
               <div className={`font-semibold tabular-nums ${selecionado.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                <strong className="text-foreground">Valor:</strong> {formatMoeda(selecionado.valor)}
+                <strong className="text-foreground">Valor original:</strong> {formatMoeda(selecionado.valorOriginal)}
               </div>
-              <div><strong>Doc.:</strong> <code className="font-mono">{selecionado.numeroDocumento || '-'}</code></div>
+              {selecionado.valorJaConciliado > 0 && (
+                <>
+                  <div className="text-amber-800">
+                    <strong>Já conciliado:</strong> {formatMoeda(selecionado.valorJaConciliado)}
+                  </div>
+                  <div className={selecionado.conciliadoIntegralmente ? 'text-emerald-700 font-semibold' : 'text-amber-800 font-semibold'}>
+                    <strong className="text-foreground">Saldo restante:</strong>{' '}
+                    {formatMoeda(selecionado.saldoConciliar)}
+                  </div>
+                </>
+              )}
+              <div><strong>NF / doc.:</strong> <code className="font-mono">{selecionado.numeroDocumento || '-'}</code></div>
+              <div><strong>Fazenda:</strong> {selecionado.fazenda || '—'}</div>
+              <div><strong>Conta:</strong> {selecionado.contaBancaria || '—'}</div>
               <div>
                 <strong>Status:</strong>{' '}
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_BADGE[statusSel] ?? 'bg-muted text-muted-foreground'}`}>
                   {statusSel || '—'}
                 </span>
+                {selecionado.conciliadoIntegralmente && (
+                  <span className="ml-1 inline-flex items-center px-1.5 py-px rounded bg-slate-200 text-slate-700 text-[9px] font-semibold">
+                    já conciliado integralmente
+                  </span>
+                )}
+                {!selecionado.conciliadoIntegralmente && selecionado.jaVinculadoOFX && (
+                  <span className="ml-1 inline-flex items-center px-1.5 py-px rounded bg-amber-100 text-amber-800 text-[9px] font-semibold">
+                    parcial
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -233,6 +307,14 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
           </div>
         )}
 
+        {/* Bloqueio: lançamento já totalmente conciliado em outro extrato. */}
+        {selecionado && selecionado.conciliadoIntegralmente && (
+          <div className="rounded-md border border-slate-300 bg-slate-50 p-2 text-[11px] text-slate-700">
+            Este lançamento já foi <strong>totalmente conciliado</strong> em outro extrato.
+            Vínculo automático bloqueado para evitar duplicidade.
+          </div>
+        )}
+
         <DialogFooter className="gap-2">
           {selecionado && candidatos.length > 1 && (
             <Button variant="ghost" onClick={() => setSelecionadoId(null)} disabled={salvando}>
@@ -245,17 +327,23 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
               <Button
                 variant="outline"
                 onClick={handleAtualizarValor}
-                disabled={salvando}
+                disabled={salvando || selecionado.conciliadoIntegralmente}
                 title="Atualiza apenas o valor do lançamento. Sinal/conta/categoria/fornecedor mantidos."
               >
                 {salvando ? '...' : 'Atualizar lançamento com valor do extrato'}
               </Button>
-              <Button onClick={handleManterValor} disabled={salvando}>
+              <Button
+                onClick={handleManterValor}
+                disabled={salvando || selecionado.conciliadoIntegralmente}
+              >
                 {salvando ? '...' : 'Manter valor do financeiro'}
               </Button>
             </>
           ) : (
-            <Button onClick={handleAprovar} disabled={salvando || !selecionado}>
+            <Button
+              onClick={handleAprovar}
+              disabled={salvando || !selecionado || (selecionado?.conciliadoIntegralmente ?? false)}
+            >
               {salvando ? 'Processando...' : acaoLabel}
             </Button>
           )}
