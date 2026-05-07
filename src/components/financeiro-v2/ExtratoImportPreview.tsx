@@ -23,6 +23,7 @@ import { useBaixaViaExtrato } from '@/hooks/useBaixaViaExtrato';
 import { ConfirmarBaixaAgrupadaDialog } from './ConfirmarBaixaAgrupadaDialog';
 import { RevisarMatchDialog } from './RevisarMatchDialog';
 import { DivergenciaDialog } from './DivergenciaDialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -43,19 +44,6 @@ type FiltroTabela =
   | 'ambiguos'
   | 'sem_match'
   | 'ja_no_banco';
-
-const ROTULO_FILTRO: Record<FiltroTabela, string> = {
-  todos: 'todos',
-  pendentes: 'pendentes',
-  parciais: 'parciais',
-  conciliados: 'conciliados',
-  ignorados: 'ignorados',
-  match_direto: 'match direto',
-  agrupados: 'agrupados',
-  ambiguos: 'ambíguos',
-  sem_match: 'sem match',
-  ja_no_banco: 'já no banco',
-};
 
 /**
  * Filtro local da tabela — apenas visualização, sem mexer em dados.
@@ -678,9 +666,11 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     onClose();
   };
 
-  /** Saída com pendências (nao_conciliado pendentes, sem parciais). */
-  const handleFinalizarDepois = () => {
-    toast.info('Pendências preservadas. Reabra o mesmo OFX para retomar.');
+  /** "Salvar progresso e sair" — fecha o modal preservando pendentes/parciais.
+   *  Vínculos e baixas já efetuados ficam intactos no banco; ao reabrir o
+   *  mesmo OFX, conciliados e parciais aparecem como tal. */
+  const handleSalvarProgressoESair = () => {
+    toast.info('Progresso salvo. Pendentes e parciais permanecem para retomar depois.');
     onClose();
   };
 
@@ -716,9 +706,9 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </DialogDescription>
         </DialogHeader>
 
-        {/* Linha de controles: arquivo, conta, gerar preview lado a lado */}
-        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_auto] gap-3 items-end px-6 py-3 border-b">
-          <div>
+        {/* Linha única: arquivo + conta + Gerar preview + step indicator + Ver divergência. */}
+        <div className="shrink-0 flex items-end flex-wrap gap-3 px-6 py-3 border-b">
+          <div className="min-w-[180px] max-w-[260px] flex-1">
             <Label className="text-xs">Arquivo (.ofx ou .csv)</Label>
             <Input
               type="file"
@@ -727,7 +717,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               className="h-9"
             />
           </div>
-          <div>
+          <div className="min-w-[160px] max-w-[220px] flex-1">
             <Label className="text-xs">Conta bancária *</Label>
             <Select value={contaId} onValueChange={setContaId}>
               <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -743,44 +733,31 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           <Button
             onClick={handleGerar}
             disabled={loading || !arquivo || !contaId}
-            className="h-9"
+            className="h-9 shrink-0"
           >
             {loading ? 'Processando...' : 'Gerar preview'}
           </Button>
-        </div>
 
-        {/* Faixa única: etapas (esquerda) + resumo do estado (direita) */}
-        {preview && (() => {
-          const algoSalvo = preview.existentesNoBanco > 0;
-          const tudoSalvo = preview.novosParaSalvar === 0 && preview.totalLinhas > 0;
-          const temPendencia = preview.pendentes > 0 || preview.parciais > 0;
-          const step1: StepStatus = tudoSalvo ? 'done' : (preview.novosParaSalvar > 0 ? 'active' : 'pending');
-          const step2: StepStatus = !algoSalvo ? 'pending' : (temPendencia ? 'active' : 'done');
-          const step3: StepStatus = step2 === 'done' ? 'active' : 'pending';
-          return (
-            <div className="shrink-0 flex items-center justify-between flex-wrap gap-2 px-6 py-2 border-b text-[10px]">
-              <div className="flex items-center gap-1 flex-wrap">
+          {/* Step indicator + Ver divergência empurrados para a direita. */}
+          {preview && (() => {
+            const algoSalvo = preview.existentesNoBanco > 0;
+            const tudoSalvo = preview.novosParaSalvar === 0 && preview.totalLinhas > 0;
+            const temPendencia = preview.pendentes > 0 || preview.parciais > 0;
+            const step1: StepStatus = tudoSalvo ? 'done' : (preview.novosParaSalvar > 0 ? 'active' : 'pending');
+            const step2: StepStatus = !algoSalvo ? 'pending' : (temPendencia ? 'active' : 'done');
+            const step3: StepStatus = step2 === 'done' ? 'active' : 'pending';
+            return (
+              <div className="ml-auto flex items-center gap-1.5 flex-wrap text-[10px]">
                 <StepBadge num={1} label="Salvar extrato" status={step1} />
                 <span className="text-muted-foreground">→</span>
                 <StepBadge num={2} label="Conciliar"      status={step2} />
                 <span className="text-muted-foreground">→</span>
                 <StepBadge num={3} label="Finalizar"      status={step3} />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="text-[11px] text-muted-foreground">
-                  {preview.totalLinhas} mov.
-                  {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
-                  {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}</span></>}
-                  {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}</span></>}
-                  {preview.ambiguos > 0    && <> · <span className="text-purple-800 font-semibold">{preview.ambiguos} ambíguo{preview.ambiguos !== 1 ? 's' : ''}</span></>}
-                  {preview.ignorados > 0   && <> · {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}</>}
-                  {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
-                </div>
                 {(preview.parciais > 0 || preview.pendentes > 0 || preview.novosParaSalvar > 0) && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-6 text-[10px] px-2"
+                    className="h-7 text-[10px] px-2 ml-1"
                     onClick={() => setVerDivergencia(true)}
                     title="Listar movimentos que contribuem para a diferença residual."
                   >
@@ -788,11 +765,11 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   </Button>
                 )}
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
+        </div>
 
-        {/* Avisos contextuais inline (compactos, 1 linha) */}
+        {/* Aviso contextual inline (compacto, 1 linha) — somente nos 2 estados úteis. */}
         {preview && !importacaoConfirmada && preview.novosParaSalvar > 0 && (
           <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-amber-50/70 text-[11px] text-amber-800 border-b">
             <Info className="h-3 w-3 shrink-0" />
@@ -803,14 +780,6 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-emerald-50/70 text-[11px] text-emerald-800 border-b">
             <CheckCircle2 className="h-3 w-3 shrink-0" />
             <span className="truncate">Extrato salvo. Revise os matches e confirme vínculos/baixas.</span>
-          </div>
-        )}
-        {preview && !importacaoConfirmada && preview.novosParaSalvar === 0 && preview.existentesNoBanco > 0 && (
-          <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-emerald-50/70 text-[11px] text-emerald-800 border-b">
-            <CheckCircle2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              {preview.existentesNoBanco} já no banco · use as ações para finalizar.
-            </span>
           </div>
         )}
 
@@ -917,23 +886,6 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               </span>
             </div>
 
-            {/* Indicador do filtro aplicado + botão "Limpar filtro". */}
-            <div className="flex items-center justify-between text-[11px] shrink-0">
-              <span className="text-muted-foreground">
-                Exibindo <strong className="text-foreground">{movimentosFiltrados.length}</strong> de {preview.movimentos.length} movimento{preview.movimentos.length !== 1 ? 's' : ''}
-                {filtro !== 'todos' && <> · filtro: <span className="font-semibold">{ROTULO_FILTRO[filtro]}</span></>}
-              </span>
-              {filtro !== 'todos' && (
-                <button
-                  type="button"
-                  className="text-blue-700 hover:underline"
-                  onClick={() => setFiltro('todos')}
-                >
-                  Limpar filtro
-                </button>
-              )}
-            </div>
-
             {/* Barra de ação em massa: aparece quando há seleção; acessível via header checkbox. */}
             {(() => {
               const elegiveisFiltrados = movimentosFiltrados.filter(elegivelVinculoMassa);
@@ -1015,7 +967,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                       Movimento do extrato
                     </TableHead>
                     <TableHead className="text-[10px] uppercase tracking-wide">
-                      Match financeiro
+                      Lançamento do sistema sugerido
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1091,13 +1043,46 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                           {m.matchAgrupado ? (
                             <div className="space-y-1">
                               <details className="group">
-                                <summary className="cursor-pointer list-none text-blue-800 hover:underline">
-                                  <span className="inline-block">
-                                    {m.quantidadeItensMatch} lançamentos · {formatMoeda(m.valorSomado)}
-                                    <span className="ml-1 text-[9px] text-blue-500 group-open:hidden">▶ ver</span>
-                                    <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
-                                  </span>
-                                </summary>
+                                <HoverCard openDelay={300} closeDelay={100}>
+                                  <HoverCardTrigger asChild>
+                                    <summary className="cursor-pointer list-none text-blue-800 hover:underline">
+                                      <span className="inline-block">
+                                        {m.quantidadeItensMatch} lançamentos · {formatMoeda(m.valorSomado)}
+                                        <span className="ml-1 text-[9px] text-blue-500 group-open:hidden">▶ ver</span>
+                                        <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
+                                      </span>
+                                    </summary>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent className="w-[460px] p-2 text-[10px]" side="left" align="start">
+                                    <div className="font-semibold text-blue-800 mb-1.5">
+                                      Preview rápido — {m.quantidadeItensMatch} lançamento(s) · {formatMoeda(m.valorSomado)}
+                                    </div>
+                                    <div className="space-y-1 max-h-[280px] overflow-auto">
+                                      {m.detalhesAgrupados.map((d) => (
+                                        <div key={d.id} className="flex gap-2 items-baseline border-b border-muted pb-1 last:border-b-0">
+                                          <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
+                                          <span className="flex-1 truncate" title={d.fornecedor || d.descricao || ''}>
+                                            <strong>{d.fornecedor || '—'}</strong>
+                                            {d.descricao && d.descricao !== d.fornecedor && (
+                                              <span className="text-muted-foreground"> · {d.descricao}</span>
+                                            )}
+                                            {d.numeroDocumento && <span className="text-muted-foreground"> · NF {d.numeroDocumento}</span>}
+                                            {d.fazenda && <span className="text-muted-foreground"> · {d.fazenda}</span>}
+                                          </span>
+                                          <span className={`tabular-nums shrink-0 font-semibold ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                            {formatMoeda(d.valor)}
+                                          </span>
+                                          <span className="text-[8px] uppercase shrink-0 text-muted-foreground">
+                                            {(d.statusTransacao || '—').toLowerCase()}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="mt-1.5 text-[9px] text-muted-foreground italic">
+                                      Clique no resumo para expandir e auditar antes de aprovar.
+                                    </div>
+                                  </HoverCardContent>
+                                </HoverCard>
                                 <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-1 text-[10px]">
                                   {m.detalhesAgrupados.map((d) => {
                                     const st = (d.statusTransacao || '').toLowerCase();
@@ -1207,13 +1192,18 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             </div>
                           ) : m.matchEncontrado && matchTitulo ? (
                             <div className="space-y-1">
-                              {/* Linha principal: fornecedor (titulo) + status do lançamento. */}
-                              <div className="flex items-center gap-1 flex-wrap">
+                              {/* Linha principal: fornecedor + VALOR do lançamento + status. */}
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-emerald-800 font-semibold truncate" title={matchTitulo}>
                                   {matchTitulo}
                                 </span>
+                                {m.candidatoMatch && (
+                                  <span className={`tabular-nums font-bold shrink-0 ${m.candidatoMatch.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                    {formatMoeda(m.candidatoMatch.valor)}
+                                  </span>
+                                )}
                                 {m.statusMatch && (
-                                  <span className="inline-flex items-center px-1 py-px rounded text-[8px] uppercase bg-slate-100 text-slate-700 font-semibold">
+                                  <span className="inline-flex items-center px-1.5 py-px rounded text-[9px] uppercase bg-slate-100 text-slate-700 font-semibold shrink-0">
                                     {m.statusMatch}
                                   </span>
                                 )}
@@ -1385,8 +1375,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               if (preview.pendentes > 0) {
                 // Estado 3: nao_conciliado pendentes → saída suave
                 return (
-                  <Button variant="outline" onClick={handleFinalizarDepois}>
-                    Finalizar depois
+                  <Button variant="outline" onClick={handleSalvarProgressoESair}>
+                    Salvar progresso e sair
                   </Button>
                 );
               }
