@@ -365,18 +365,29 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         </div>
 
         {preview && !importacaoConfirmada && preview.novos > 0 && (
-          <div className="shrink-0 flex items-center gap-1.5 rounded bg-amber-50/70 px-2 py-1 text-[11px] text-amber-800">
-            <Info className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              1º passo: salvar o extrato bancário. Isso não altera o financeiro nem marca pagamentos como realizados.
+          <div className="shrink-0 flex items-center gap-2 rounded border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate">
+              1º passo: salvar o extrato bancário. Isso não altera o financeiro.
             </span>
+            <Button
+              size="sm"
+              onClick={handleConfirmar}
+              disabled={loading}
+              className="h-7 text-xs px-3 shrink-0"
+            >
+              {loading ? 'Salvando...' : `Salvar extrato (${preview.novos})`}
+            </Button>
           </div>
         )}
         {importacaoConfirmada && (
-          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
-            <CheckCircle2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              Extrato salvo. Agora revise os matches e escolha quais vínculos ou baixas deseja confirmar.
+          <div className="shrink-0 flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-[11px] text-emerald-800">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate">
+              Extrato salvo. Agora revise os matches e confirme vínculos/baixas.
+            </span>
+            <span className="shrink-0 inline-flex items-center px-2 h-7 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold">
+              Extrato salvo ✓
             </span>
           </div>
         )}
