@@ -30,6 +30,75 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { Info, CheckCircle2 } from 'lucide-react';
 
+type FiltroTabela =
+  | 'todos'
+  | 'pendentes'
+  | 'parciais'
+  | 'conciliados'
+  | 'ignorados'
+  | 'match_direto'
+  | 'agrupados'
+  | 'sem_match'
+  | 'ja_no_banco';
+
+const ROTULO_FILTRO: Record<FiltroTabela, string> = {
+  todos: 'todos',
+  pendentes: 'pendentes',
+  parciais: 'parciais',
+  conciliados: 'conciliados',
+  ignorados: 'ignorados',
+  match_direto: 'match direto',
+  agrupados: 'agrupados',
+  sem_match: 'sem match',
+  ja_no_banco: 'já no banco',
+};
+
+/** Filtro local da tabela — apenas visualização, sem mexer em dados. */
+function aplicarFiltro(m: MovimentoPreview, f: FiltroTabela): boolean {
+  const acionavel =
+    !m.existeNoDB ||
+    m.statusPersistido === 'nao_conciliado' ||
+    m.statusPersistido === 'parcial';
+  switch (f) {
+    case 'todos':        return true;
+    case 'pendentes':    return m.statusPersistido === 'nao_conciliado';
+    case 'parciais':     return m.statusPersistido === 'parcial';
+    case 'conciliados':  return m.statusPersistido === 'conciliado';
+    case 'ignorados':    return m.statusPersistido === 'ignorado';
+    case 'ja_no_banco':  return m.existeNoDB;
+    case 'match_direto': return acionavel && m.matchEncontrado && !m.matchAgrupado;
+    case 'agrupados':    return acionavel && m.matchAgrupado;
+    case 'sem_match':    return acionavel && !m.matchEncontrado;
+  }
+}
+
+interface ChipFiltroProps {
+  active: boolean;
+  count: number;
+  cls: string;
+  label: string;
+  onClick: () => void;
+}
+function ChipFiltro({ active, count, cls, label, onClick }: ChipFiltroProps) {
+  const desabilitado = count === 0;
+  return (
+    <button
+      type="button"
+      onClick={desabilitado ? undefined : onClick}
+      disabled={desabilitado}
+      className={`h-7 inline-flex items-center px-2 rounded font-semibold transition ${cls}
+        ${desabilitado
+          ? 'opacity-40 cursor-not-allowed'
+          : active
+            ? 'ring-2 ring-current ring-offset-1 cursor-pointer'
+            : 'cursor-pointer hover:brightness-95'}
+      `}
+    >
+      {label}
+    </button>
+  );
+}
+
 type StepStatus = 'pending' | 'active' | 'done';
 
 function StepBadge({ num, label, status }: { num: number; label: string; status: StepStatus }) {
@@ -161,6 +230,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const [importacaoConfirmada, setImportacaoConfirmada] = useState(false);
   // AlertDialog de confirmação ao sair com movimentos parcialmente conciliados.
   const [confirmFinalizarParcial, setConfirmFinalizarParcial] = useState(false);
+  // Filtro local da tabela — apenas visualização.
+  const [filtro, setFiltro] = useState<FiltroTabela>('todos');
 
   // Reset COMPLETO quando o cliente muda (admin pode trocar de cliente
   // sem fechar a tela). Evita arrastar conta/preview de outro cliente.
@@ -170,6 +241,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setArquivo(null);
     setHashesBaixados(new Set());
     setImportacaoConfirmada(false);
+    setFiltro('todos');
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
@@ -216,6 +288,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       setContaId('');
       setHashesBaixados(new Set());
       setImportacaoConfirmada(false);
+      setFiltro('todos');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -243,6 +316,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     if (!validarContaDoCliente()) return;
     try {
       setImportacaoConfirmada(false);
+      setFiltro('todos');
       await gerarPreview({ arquivo, contaBancariaId: contaId });
     } catch (e: any) {
       toast.error('Erro ao gerar preview: ' + (e?.message ?? e));
@@ -253,6 +327,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     reset();
     setImportacaoConfirmada(false);
     setHashesBaixados(new Set());
+    setFiltro('todos');
   };
 
   const handleConfirmar = async () => {
@@ -420,6 +495,13 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       .reduce((s, m) => s + Math.abs(m.valor), 0);
   }, [preview]);
 
+  /** Movimentos filtrados pelo chip ativo. Apenas visual — nada é alterado. */
+  const movimentosFiltrados = useMemo(() => {
+    if (!preview) return [];
+    if (filtro === 'todos') return preview.movimentos;
+    return preview.movimentos.filter((m) => aplicarFiltro(m, filtro));
+  }, [preview, filtro]);
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="w-[94vw] max-w-7xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
@@ -526,48 +608,104 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           {preview && (
             <>
             <div className="flex items-center gap-1.5 flex-wrap text-xs shrink-0">
+              <ChipFiltro
+                cls="bg-muted text-muted-foreground"
+                label={`Todos (${preview.totalLinhas})`}
+                count={preview.totalLinhas}
+                active={filtro === 'todos'}
+                onClick={() => setFiltro('todos')}
+              />
               <span className="h-7 inline-flex items-center px-2 rounded bg-blue-50 text-blue-800 font-semibold">
                 {preview.formato}
               </span>
-              <span className="h-7 inline-flex items-center px-2 rounded bg-emerald-50 text-emerald-800 font-semibold">
-                {preview.matchDireto} match direto
-              </span>
+              <ChipFiltro
+                cls="bg-emerald-50 text-emerald-800"
+                label={`${preview.matchDireto} match direto`}
+                count={preview.matchDireto}
+                active={filtro === 'match_direto'}
+                onClick={() => setFiltro('match_direto')}
+              />
               {preview.matchAgrupados > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-blue-50 text-blue-800 font-semibold">
-                  {preview.matchAgrupados} agrupado{preview.matchAgrupados !== 1 ? 's' : ''}
-                </span>
+                <ChipFiltro
+                  cls="bg-blue-50 text-blue-800"
+                  label={`${preview.matchAgrupados} agrupado${preview.matchAgrupados !== 1 ? 's' : ''}`}
+                  count={preview.matchAgrupados}
+                  active={filtro === 'agrupados'}
+                  onClick={() => setFiltro('agrupados')}
+                />
               )}
-              <span className="h-7 inline-flex items-center px-2 rounded bg-red-50 text-red-700 font-semibold">
-                {preview.semMatch} sem match
-              </span>
+              <ChipFiltro
+                cls="bg-red-50 text-red-700"
+                label={`${preview.semMatch} sem match`}
+                count={preview.semMatch}
+                active={filtro === 'sem_match'}
+                onClick={() => setFiltro('sem_match')}
+              />
               {preview.existentesNoBanco > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-slate-100 text-slate-700 font-semibold">
-                  {preview.existentesNoBanco} já no banco
-                </span>
+                <ChipFiltro
+                  cls="bg-slate-100 text-slate-700"
+                  label={`${preview.existentesNoBanco} já no banco`}
+                  count={preview.existentesNoBanco}
+                  active={filtro === 'ja_no_banco'}
+                  onClick={() => setFiltro('ja_no_banco')}
+                />
               )}
               {preview.pendentes > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-amber-50 text-amber-800 font-semibold">
-                  {preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}
-                </span>
+                <ChipFiltro
+                  cls="bg-amber-50 text-amber-800"
+                  label={`${preview.pendentes} pendente${preview.pendentes !== 1 ? 's' : ''}`}
+                  count={preview.pendentes}
+                  active={filtro === 'pendentes'}
+                  onClick={() => setFiltro('pendentes')}
+                />
               )}
               {preview.parciais > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-amber-100 text-amber-900 font-semibold">
-                  {preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}
-                </span>
+                <ChipFiltro
+                  cls="bg-amber-100 text-amber-900"
+                  label={`${preview.parciais} parcial${preview.parciais !== 1 ? 'is' : ''}`}
+                  count={preview.parciais}
+                  active={filtro === 'parciais'}
+                  onClick={() => setFiltro('parciais')}
+                />
               )}
               {preview.conciliados > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-emerald-100 text-emerald-800 font-semibold">
-                  {preview.conciliados} conciliado{preview.conciliados !== 1 ? 's' : ''}
-                </span>
+                <ChipFiltro
+                  cls="bg-emerald-100 text-emerald-800"
+                  label={`${preview.conciliados} conciliado${preview.conciliados !== 1 ? 's' : ''}`}
+                  count={preview.conciliados}
+                  active={filtro === 'conciliados'}
+                  onClick={() => setFiltro('conciliados')}
+                />
               )}
               {preview.ignorados > 0 && (
-                <span className="h-7 inline-flex items-center px-2 rounded bg-muted text-muted-foreground font-semibold">
-                  {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}
-                </span>
+                <ChipFiltro
+                  cls="bg-muted text-muted-foreground"
+                  label={`${preview.ignorados} ignorado${preview.ignorados !== 1 ? 's' : ''}`}
+                  count={preview.ignorados}
+                  active={filtro === 'ignorados'}
+                  onClick={() => setFiltro('ignorados')}
+                />
               )}
               <span className="text-muted-foreground ml-auto">
                 Total {formatMoeda(totalValor)} (a salvar)
               </span>
+            </div>
+
+            {/* Indicador do filtro aplicado + botão "Limpar filtro". */}
+            <div className="flex items-center justify-between text-[11px] shrink-0">
+              <span className="text-muted-foreground">
+                Exibindo <strong className="text-foreground">{movimentosFiltrados.length}</strong> de {preview.movimentos.length} movimento{preview.movimentos.length !== 1 ? 's' : ''}
+                {filtro !== 'todos' && <> · filtro: <span className="font-semibold">{ROTULO_FILTRO[filtro]}</span></>}
+              </span>
+              {filtro !== 'todos' && (
+                <button
+                  type="button"
+                  className="text-blue-700 hover:underline"
+                  onClick={() => setFiltro('todos')}
+                >
+                  Limpar filtro
+                </button>
+              )}
             </div>
 
             <div className="flex-1 min-h-0 overflow-auto border rounded-md">
@@ -584,7 +722,14 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {preview.movimentos.map((m, i) => {
+                  {movimentosFiltrados.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">
+                        Nenhum movimento neste filtro.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {movimentosFiltrados.map((m, i) => {
                     const badge = badgeFromMovimento(m);
                     const matchTitulo = m.fornecedorMatch || m.descricaoMatch;
                     const linhaInerte =
