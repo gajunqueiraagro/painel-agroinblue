@@ -47,7 +47,10 @@ export function useBaixaViaExtrato() {
     convertido: boolean;
     vinculado: boolean;
   }> {
-    if (!clienteAtual?.id) throw new Error('Cliente não selecionado');
+    if (!clienteAtual?.id) {
+      throw new Error('Cliente não selecionado — recarregue a tela e tente novamente.');
+    }
+    if (!p.lancamentoId) throw new Error('Lançamento não informado');
 
     // 1) Carregar lançamento.
     const { data: row, error: e1 } = await supabase

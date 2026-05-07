@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useImportacaoExtrato, type MovimentoPreview } from '@/hooks/useImportacaoExtrato';
+import { useImportacaoExtrato, type MovimentoPreview, type CandidatoPossivel } from '@/hooks/useImportacaoExtrato';
 import { useBaixaViaExtrato } from '@/hooks/useBaixaViaExtrato';
 import { ConfirmarBaixaAgrupadaDialog } from './ConfirmarBaixaAgrupadaDialog';
+import { RevisarMatchDialog } from './RevisarMatchDialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -51,12 +52,39 @@ function podeConverterStatus(status: string | null | undefined): boolean {
   return s === 'agendado' || s === 'programado';
 }
 
-/** Persiste 1 movimento de extrato isolado (ou retorna o id existente via hash). */
+/**
+ * Persiste 1 movimento de extrato isolado (ou retorna o id existente via hash).
+ *
+ * Guards:
+ *   - clienteId obrigatório (RLS exige cliente_id ∈ cliente_membros do user).
+ *   - contaBancariaId obrigatório.
+ *   - conta bancária deve pertencer ao mesmo cliente (defesa adicional).
+ */
 async function garantirExtratoId(
-  clienteId: string,
-  contaBancariaId: string,
+  clienteId: string | null | undefined,
+  contaBancariaId: string | null | undefined,
   m: MovimentoPreview,
 ): Promise<string> {
+  if (!clienteId) {
+    throw new Error('Cliente não selecionado — recarregue a tela e tente novamente.');
+  }
+  if (!contaBancariaId) {
+    throw new Error('Conta bancária não selecionada.');
+  }
+
+  // Sanity check: a conta deve pertencer ao cliente atual.
+  // Evita cruzamentos acidentais entre clientes que disparariam RLS no INSERT.
+  const { data: conta, error: errConta } = await supabase
+    .from('financeiro_contas_bancarias')
+    .select('cliente_id')
+    .eq('id', contaBancariaId)
+    .maybeSingle();
+  if (errConta) throw errConta;
+  if (!conta) throw new Error('Conta bancária não encontrada');
+  if ((conta as { cliente_id: string }).cliente_id !== clienteId) {
+    throw new Error('Conta não pertence ao cliente atual — não é possível criar o movimento.');
+  }
+
   if (m.duplicado) {
     const { data, error } = await supabase
       .from('extrato_bancario_v2' as any)
@@ -116,6 +144,13 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   // Conversão 1:1 (AlertDialog) e agrupada (Dialog).
   const [confirm1a1, setConfirm1a1] = useState<MovimentoPreview | null>(null);
   const [confirmAgrupado, setConfirmAgrupado] = useState<{ extratoId: string; movimento: MovimentoPreview } | null>(null);
+  // Revisão manual: provável (50-79) e ver possíveis (sem match).
+  const [revisar, setRevisar] = useState<{
+    extratoId: string;
+    movimento: MovimentoPreview;
+    candidatos: CandidatoPossivel[];
+    titulo: string;
+  } | null>(null);
   const [convertindo, setConvertindo] = useState(false);
   // Hashes locais marcados como já-baixados para feedback visual sem refetch.
   const [hashesBaixados, setHashesBaixados] = useState<Set<string>>(new Set());
@@ -202,6 +237,61 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     try {
       const extratoId = await garantirExtratoId(clienteId, contaId, m);
       setConfirmAgrupado({ extratoId, movimento: m });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message ?? e));
+    } finally {
+      setConvertindo(false);
+    }
+  };
+
+  /** Provável (50-79): abre revisão com o candidato 1:1 já escolhido pelo matcher. */
+  const abrirRevisarAprovar = async (m: MovimentoPreview) => {
+    if (!clienteId || !m.lancamentoMatchId) return;
+    setConvertindo(true);
+    try {
+      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      const cand: CandidatoPossivel = {
+        id: m.lancamentoMatchId,
+        data: m.data,
+        fornecedor: m.fornecedorMatch,
+        descricao: m.descricaoMatch,
+        valor: m.valor,
+        statusTransacao: m.statusMatch,
+        diffValor: 0,
+        diffDias: 0,
+        numeroDocumento: null,
+      };
+      // Reforça com candidatosPossiveis (sem duplicar o já escolhido).
+      const extras = m.candidatosPossiveis.filter((c) => c.id !== cand.id);
+      setRevisar({
+        extratoId,
+        movimento: m,
+        candidatos: [cand, ...extras],
+        titulo: `Revisar e aprovar match provável (${m.scoreMatch})`,
+      });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message ?? e));
+    } finally {
+      setConvertindo(false);
+    }
+  };
+
+  /** Sem match: abre revisão com lista de candidatos sugeridos (top-10). */
+  const abrirVerPossiveis = async (m: MovimentoPreview) => {
+    if (!clienteId) return;
+    if (m.candidatosPossiveis.length === 0) {
+      toast.error('Nenhum candidato compatível encontrado');
+      return;
+    }
+    setConvertindo(true);
+    try {
+      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      setRevisar({
+        extratoId,
+        movimento: m,
+        candidatos: m.candidatosPossiveis,
+        titulo: 'Possíveis lançamentos para este movimento',
+      });
     } catch (e: any) {
       toast.error('Erro: ' + (e?.message ?? e));
     } finally {
@@ -392,7 +482,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
                                   ✓ Baixado via OFX
                                 </span>
-                              ) : (m.scoreMatch >= 80 && podeConverterStatus(m.statusMatch)) && (
+                              ) : m.scoreMatch >= 80 && podeConverterStatus(m.statusMatch) ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -402,10 +492,33 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 >
                                   ✓ Marcar realizado
                                 </Button>
-                              )}
+                              ) : m.scoreMatch >= 50 && m.scoreMatch < 80 && m.lancamentoMatchId ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2 border-amber-400 text-amber-800 hover:bg-amber-50"
+                                  disabled={convertindo}
+                                  onClick={() => abrirRevisarAprovar(m)}
+                                >
+                                  Revisar e aprovar
+                                </Button>
+                              ) : null}
                             </div>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <div className="space-y-1">
+                              <span className="text-muted-foreground">—</span>
+                              {!hashesBaixados.has(m.hash) && m.candidatosPossiveis.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2 border-blue-300 text-blue-800 hover:bg-blue-50"
+                                  disabled={convertindo}
+                                  onClick={() => abrirVerPossiveis(m)}
+                                >
+                                  Ver possíveis ({m.candidatosPossiveis.length})
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>
@@ -467,6 +580,27 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           onConcluido={() => {
             setHashesBaixados((prev) => new Set(prev).add(confirmAgrupado.movimento.hash));
             setConfirmAgrupado(null);
+          }}
+        />
+      )}
+
+      {/* Modal de revisão manual: provável / sem match (lista + side-by-side) */}
+      {revisar && (
+        <RevisarMatchDialog
+          open={!!revisar}
+          onClose={() => setRevisar(null)}
+          extratoId={revisar.extratoId}
+          movimentoOFX={{
+            data: revisar.movimento.data,
+            descricao: revisar.movimento.descricao,
+            valor: revisar.movimento.valor,
+            documento: revisar.movimento.documento,
+          }}
+          candidatos={revisar.candidatos}
+          tituloCustom={revisar.titulo}
+          onConcluido={() => {
+            setHashesBaixados((prev) => new Set(prev).add(revisar.movimento.hash));
+            setRevisar(null);
           }}
         />
       )}

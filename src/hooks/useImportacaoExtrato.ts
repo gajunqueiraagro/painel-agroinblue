@@ -53,6 +53,8 @@ export interface MovimentoPreview extends MovimentoBruto {
   lancamentosIds: string[];
   /** Detalhes para auditoria visual (tooltip/expand). */
   detalhesAgrupados: LancamentoAgrupadoInfo[];
+  /** Top-10 candidatos sugeridos para escolha manual (mesmo se score baixo). */
+  candidatosPossiveis: CandidatoPossivel[];
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -65,6 +67,19 @@ export interface LancamentoAgrupadoInfo {
   grupoCusto: string | null;
   /** Status atual do lançamento (para decidir se converte). */
   statusTransacao: string | null;
+}
+
+/** Candidato sugerido para movimentos sem match automático (ranking heurístico). */
+export interface CandidatoPossivel {
+  id: string;
+  data: string | null;
+  fornecedor: string | null;
+  descricao: string | null;
+  valor: number;        // signed
+  statusTransacao: string | null;
+  diffValor: number;    // |valor lanc| - |valor mov|
+  diffDias: number;     // |data lanc - data mov| em dias
+  numeroDocumento: string | null;
 }
 
 export interface PreviewResult {
@@ -407,6 +422,50 @@ export function useImportacaoExtrato() {
           }
         }
         const fornecedorMatch = melhor?.favorecido_id ? fornMap.get(melhor.favorecido_id) ?? null : null;
+
+        // Top-10 candidatos sugeridos (ranking por valor próximo, data, similaridade).
+        // Útil tanto para "Ver possíveis" (sem match) quanto para revisar matches fracos.
+        const sinalEsperado = m.tipo === 'credito' ? 1 : -1;
+        const movN = normalizarTexto(m.descricao);
+        const candidatosPossiveis: CandidatoPossivel[] = lancs
+          .filter((l) => {
+            if (!l.data_pagamento) return false;
+            const dDiff = Math.abs(diasEntre(m.data, l.data_pagamento));
+            if (dDiff > 10) return false;
+            const sinalLanc = (Number(l.sinal) || 0) >= 0 ? 1 : -1;
+            return sinalLanc === sinalEsperado;
+          })
+          .map((l) => {
+            const valorL = Math.abs(Number(l.valor) || 0);
+            const diffValor = Math.abs(valorL - valorMov);
+            const diffDias = Math.abs(diasEntre(m.data, l.data_pagamento!));
+            const fornN = normalizarTexto(l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null);
+            const lancN = normalizarTexto(l.descricao);
+            const similaridade = (movN && (
+              (lancN && (movN.includes(lancN) || lancN.includes(movN))) ||
+              (fornN && movN.includes(fornN))
+            )) ? 1 : 0;
+            return { lanc: l, diffValor, diffDias, similaridade };
+          })
+          // ordenar: menor diff de valor → menor diff de data → maior similaridade.
+          .sort((a, b) => {
+            if (a.diffValor !== b.diffValor) return a.diffValor - b.diffValor;
+            if (a.diffDias !== b.diffDias) return a.diffDias - b.diffDias;
+            return b.similaridade - a.similaridade;
+          })
+          .slice(0, 10)
+          .map(({ lanc: l, diffValor, diffDias }) => ({
+            id: l.id,
+            data: l.data_pagamento,
+            fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
+            descricao: l.descricao,
+            valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
+            statusTransacao: l.status_transacao,
+            diffValor,
+            diffDias,
+            numeroDocumento: l.numero_documento,
+          }));
+
         const baseFields: Omit<MovimentoPreview, 'duplicado'> = {
           ...m,
           scoreMatch: melhorScore,
@@ -420,6 +479,7 @@ export function useImportacaoExtrato() {
           valorSomado: 0,
           lancamentosIds: [],
           detalhesAgrupados: [],
+          candidatosPossiveis,
         };
 
         // ── 2) tentativa de composição ──
