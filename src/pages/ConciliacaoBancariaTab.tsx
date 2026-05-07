@@ -21,6 +21,8 @@ import {
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
+import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
+import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
 type MesStatusExt = ConciliacaoStatus | 'parcial';
@@ -326,6 +328,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const [showLancModal, setShowLancModal]     = useState(false);
   const [filtroModal, setFiltroModal]         = useState<'todos'|'entradas'|'saidas'|'transf_entrada'|'transf_saida'>('todos');
   const [lancSort, setLancSort]               = useState<{col:'data'|'descricao'|'fornecedor'|'valor';dir:'asc'|'desc'}>({col:'data',dir:'asc'});
+
+  /* Fase 1B: import OFX/CSV + visualização do extrato importado */
+  const [showImportExtrato, setShowImportExtrato] = useState(false);
+  const [vistaExtrato, setVistaExtrato] = useState<'conciliacao' | 'extrato'>('conciliacao');
 
   /* Edit saldo */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
@@ -707,6 +713,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </span>
             {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
             <div className="flex-1" />
+            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
+              onClick={() => setShowImportExtrato(true)}>
+              ⬆ Importar OFX/CSV
+            </Button>
             {onNavigateToLancamentos && (
               <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
                 onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
@@ -716,9 +726,34 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
+        {/* Aba interna: Conciliação (atual) | Extrato importado (novo) */}
+        {!loading && selectedCard && (
+          <div className="flex gap-1 items-center pt-1">
+            <button
+              onClick={() => setVistaExtrato('conciliacao')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Conciliação
+            </button>
+            <button
+              onClick={() => setVistaExtrato('extrato')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'extrato' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Extrato Importado
+            </button>
+          </div>
+        )}
+
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
-        {!loading && selectedCard && (
+        {!loading && selectedCard && vistaExtrato === 'extrato' && (
+          <ExtratoListaTab
+            contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
+            anoMes={`${ano}-${selectedMes}`}
+          />
+        )}
+
+        {!loading && selectedCard && vistaExtrato === 'conciliacao' && (
           <div className="space-y-2">
             {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
                 Resumo encurta um pouco; Saldos ganha espaço para evitar corte
@@ -1135,6 +1170,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExtratoImportPreview
+        open={showImportExtrato}
+        onClose={() => setShowImportExtrato(false)}
+        contaBancariaIdInicial={selectedConta !== '__all__' ? selectedConta : undefined}
+      />
     </div>
   );
 }
