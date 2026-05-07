@@ -28,6 +28,7 @@ import {
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { Info, CheckCircle2 } from 'lucide-react';
 
 interface BadgeStatus {
   label: string;
@@ -318,8 +319,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-3 overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Importar extrato bancário (OFX/CSV)</DialogTitle>
           <DialogDescription>
             Selecione o arquivo e a conta. O sistema detecta duplicatas por hash do movimento.
@@ -327,7 +328,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
           <div>
             <Label className="text-xs">Arquivo (.ofx ou .csv)</Label>
             <Input
@@ -352,7 +353,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           <Button onClick={handleGerar} disabled={loading || !arquivo || !contaId}>
             {loading ? 'Processando...' : 'Gerar preview'}
           </Button>
@@ -364,28 +365,27 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         </div>
 
         {preview && !importacaoConfirmada && preview.novos > 0 && (
-          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <strong>Próximo passo:</strong> clique em <strong>Confirmar ({preview.novos})</strong> no rodapé para
-            importar os movimentos. Só depois disso os botões "Marcar realizado", "Revisar e aprovar",
-            "Vincular extrato" e "Ver possíveis" ficam ativos.
+          <div className="shrink-0 flex items-center gap-1.5 rounded bg-amber-50/70 px-2 py-1 text-[11px] text-amber-800">
+            <Info className="h-3 w-3 shrink-0" />
+            <span className="truncate">Confirme a importação para habilitar as ações de conciliação.</span>
           </div>
         )}
         {importacaoConfirmada && (
-          <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-            <strong>Importação confirmada.</strong> Use os botões na coluna "Match financeiro" para baixar
-            agendados/programados, vincular já-realizados ou revisar candidatos manualmente.
+          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+            <CheckCircle2 className="h-3 w-3 shrink-0" />
+            <span className="truncate">Importação confirmada — ações de conciliação disponíveis.</span>
           </div>
         )}
 
         {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <div className="shrink-0 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             {error}
           </div>
         )}
 
         {preview && (
           <>
-            <div className="flex items-center gap-2 flex-wrap text-xs">
+            <div className="flex items-center gap-2 flex-wrap text-xs shrink-0">
               <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 font-semibold">
                 Formato: {preview.formato}
               </span>
@@ -408,7 +408,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               </span>
             </div>
 
-            <div className="overflow-auto flex-1 min-h-[200px] max-h-[40vh] border rounded">
+            <div className="overflow-auto flex-1 min-h-[200px] border rounded">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
@@ -570,7 +570,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
           <Button
             onClick={handleConfirmar}
