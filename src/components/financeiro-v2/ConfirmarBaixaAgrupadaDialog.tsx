@@ -150,10 +150,14 @@ export function ConfirmarBaixaAgrupadaDialog({
               <TableRow>
                 <TableHead className="w-8"></TableHead>
                 <TableHead className="text-[10px]">Data</TableHead>
-                <TableHead className="text-[10px]">Fornecedor / descrição</TableHead>
+                <TableHead className="text-[10px]">Fornecedor</TableHead>
+                <TableHead className="text-[10px]">Descrição</TableHead>
+                <TableHead className="text-[10px]">NF</TableHead>
+                <TableHead className="text-[10px]">Fazenda</TableHead>
+                <TableHead className="text-[10px]">Conta</TableHead>
+                <TableHead className="text-[10px]">Classificação</TableHead>
                 <TableHead className="text-[10px] text-right">Valor</TableHead>
-                <TableHead className="text-[10px]">Macro</TableHead>
-                <TableHead className="text-[10px]">Status atual</TableHead>
+                <TableHead className="text-[10px]">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -161,6 +165,9 @@ export function ConfirmarBaixaAgrupadaDialog({
                 const status = (it.statusTransacao || '').toLowerCase();
                 const elegivel = status === 'agendado' || status === 'programado' || status === 'realizado';
                 const cls = STATUS_BADGE[status] ?? 'bg-muted text-muted-foreground';
+                const classif = [it.macroCusto, it.grupoCusto, it.centroCusto, it.subcentro]
+                  .filter(Boolean)
+                  .join(' · ');
                 return (
                   <TableRow key={it.id} className={!elegivel ? 'opacity-60' : ''}>
                     <TableCell>
@@ -171,14 +178,26 @@ export function ConfirmarBaixaAgrupadaDialog({
                       />
                     </TableCell>
                     <TableCell className="text-[11px] font-mono">{fmtData(it.data)}</TableCell>
-                    <TableCell className="text-[11px] max-w-[260px] truncate" title={it.fornecedor || it.descricao || ''}>
-                      {it.fornecedor || it.descricao || '-'}
+                    <TableCell className="text-[11px] max-w-[180px] truncate" title={it.fornecedor ?? undefined}>
+                      {it.fornecedor || '—'}
+                    </TableCell>
+                    <TableCell className="text-[11px] max-w-[200px] truncate" title={it.descricao ?? undefined}>
+                      {it.descricao || '—'}
+                    </TableCell>
+                    <TableCell className="text-[10px] font-mono text-muted-foreground">
+                      {it.numeroDocumento || '—'}
+                    </TableCell>
+                    <TableCell className="text-[10px] max-w-[120px] truncate" title={it.fazenda ?? undefined}>
+                      {it.fazenda || '—'}
+                    </TableCell>
+                    <TableCell className="text-[10px] max-w-[120px] truncate" title={it.contaBancaria ?? undefined}>
+                      {it.contaBancaria || '—'}
+                    </TableCell>
+                    <TableCell className="text-[10px] italic max-w-[180px] truncate" title={classif || undefined}>
+                      {classif || '—'}
                     </TableCell>
                     <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${it.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                       {formatMoeda(it.valor)}
-                    </TableCell>
-                    <TableCell className="text-[10px] text-muted-foreground italic" title={it.grupoCusto ?? undefined}>
-                      {it.macroCusto ?? '-'}
                     </TableCell>
                     <TableCell className="text-[10px]">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${cls}`}>

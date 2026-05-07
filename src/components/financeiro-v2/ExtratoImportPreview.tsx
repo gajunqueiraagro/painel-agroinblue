@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useImportacaoExtrato, type MovimentoPreview, type CandidatoPossivel } from '@/hooks/useImportacaoExtrato';
@@ -256,6 +257,12 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const [filtro, setFiltro] = useState<FiltroTabela>('todos');
   // Modal de auditoria da diferença residual.
   const [verDivergencia, setVerDivergencia] = useState(false);
+  // Seleção em massa para vínculo de matches seguros (já realizados).
+  const [selecionadosMassa, setSelecionadosMassa] = useState<Set<string>>(new Set());
+  // AlertDialog de confirmação do vínculo em massa.
+  const [confirmMassa, setConfirmMassa] = useState(false);
+  // Flag para desabilitar UI enquanto executa o vínculo em massa.
+  const [executandoMassa, setExecutandoMassa] = useState(false);
 
   // Reset COMPLETO quando o cliente muda (admin pode trocar de cliente
   // sem fechar a tela). Evita arrastar conta/preview de outro cliente.
@@ -266,6 +273,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setHashesBaixados(new Set());
     setImportacaoConfirmada(false);
     setFiltro('todos');
+    setSelecionadosMassa(new Set());
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId]);
@@ -313,6 +321,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       setHashesBaixados(new Set());
       setImportacaoConfirmada(false);
       setFiltro('todos');
+      setSelecionadosMassa(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -352,6 +361,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setImportacaoConfirmada(false);
     setHashesBaixados(new Set());
     setFiltro('todos');
+    setSelecionadosMassa(new Set());
   };
 
   const handleConfirmar = async () => {
@@ -563,6 +573,103 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const abrirConfirm1a1 = (m: MovimentoPreview) => {
     if (!exigirMovimentoPersistido(m)) return;
     setConfirm1a1(m);
+  };
+
+  /**
+   * Elegibilidade para vínculo em massa — apenas casos seguros.
+   * Bloqueia ambíguo, agrupado, parcial, conciliado, ignorado, divergência
+   * de valor, e qualquer caso que precise de revisão humana.
+   */
+  const elegivelVinculoMassa = (m: MovimentoPreview): boolean => {
+    if (!m.existeNoDB) return false;
+    if (m.statusPersistido !== 'nao_conciliado') return false;
+    if (!m.matchEncontrado) return false;
+    if (m.matchAmbiguo) return false;
+    if (m.matchAgrupado) return false;
+    if (!m.lancamentoMatchId) return false;
+    // Apenas lançamento já realizado: vínculo puro, sem mudar status financeiro.
+    if ((m.statusMatch || '').toLowerCase() !== 'realizado') return false;
+    // Score forte (≥80) — match direto exato.
+    if (m.scoreMatch < 80) return false;
+    // Lançamento ainda tem saldo conciliável (não está totalmente vinculado).
+    if (m.candidatoMatch?.conciliadoIntegralmente) return false;
+    // Sem divergência de valor (matcher 1:1 já exige tolerância 0.01).
+    if (m.candidatoMatch && Math.abs(m.candidatoMatch.diffValor) > 0.01) return false;
+    return true;
+  };
+
+  /** Toggle de uma linha individual. */
+  const toggleSelecionadoMassa = (hash: string) => {
+    setSelecionadosMassa((prev) => {
+      const next = new Set(prev);
+      if (next.has(hash)) next.delete(hash);
+      else next.add(hash);
+      return next;
+    });
+  };
+
+  /** Header checkbox: marca/desmarca todos os elegíveis do FILTRO atual. */
+  const handleToggleTodosElegiveis = () => {
+    const elegiveis = movimentosFiltrados.filter(elegivelVinculoMassa).map((m) => m.hash);
+    const todosMarcados = elegiveis.every((h) => selecionadosMassa.has(h));
+    setSelecionadosMassa((prev) => {
+      const next = new Set(prev);
+      if (todosMarcados) {
+        for (const h of elegiveis) next.delete(h);
+      } else {
+        for (const h of elegiveis) next.add(h);
+      }
+      return next;
+    });
+  };
+
+  /** "Selecionar vínculos seguros" — disponível principalmente no filtro match_direto. */
+  const handleSelecionarVinculosSeguros = () => {
+    if (!preview) return;
+    const hashes = preview.movimentos.filter(elegivelVinculoMassa).map((m) => m.hash);
+    setSelecionadosMassa(new Set(hashes));
+  };
+
+  /** Execução do vínculo em massa (chama baixarLancamentoViaExtrato por item). */
+  const executarVinculoMassa = async () => {
+    if (!clienteId || !preview) return;
+    setExecutandoMassa(true);
+    setConfirmMassa(false);
+    let vinculados = 0;
+    let erros = 0;
+    const hashes = Array.from(selecionadosMassa);
+    for (const hash of hashes) {
+      const m = preview.movimentos.find((x) => x.hash === hash);
+      if (!m || !m.lancamentoMatchId) { erros++; continue; }
+      // Defesa: re-checar elegibilidade antes de cada chamada (estado pode ter mudado).
+      if (!elegivelVinculoMassa(m)) { erros++; continue; }
+      try {
+        const extratoId = await obterExtratoId(clienteId, m);
+        const r = await baixarLancamentoViaExtrato({
+          lancamentoId: m.lancamentoMatchId,
+          extratoId,
+          dataPagamentoReal: m.data,
+          documentoBanco: m.documento ?? undefined,
+        });
+        if (r.vinculado) {
+          vinculados++;
+          setHashesBaixados((prev) => new Set(prev).add(m.hash));
+        }
+      } catch (e: any) {
+        erros++;
+        console.error('[mass-vinc] hash=', hash, e);
+      }
+    }
+    if (vinculados > 0 || erros > 0) {
+      const partes: string[] = [];
+      if (vinculados > 0) partes.push(`${vinculados} vinculado(s)`);
+      if (erros > 0) partes.push(`${erros} falha(s)`);
+      if (erros > 0 && vinculados === 0) toast.error(partes.join(' · '));
+      else toast.success(partes.join(' · '));
+    }
+    setSelecionadosMassa(new Set());
+    setExecutandoMassa(false);
+    await refreshStatusPersistidos();
   };
 
   /** Finalização limpa — todas as pendências resolvidas, extrato conciliado. */
@@ -827,10 +934,83 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               )}
             </div>
 
+            {/* Barra de ação em massa: aparece quando há seleção; acessível via header checkbox. */}
+            {(() => {
+              const elegiveisFiltrados = movimentosFiltrados.filter(elegivelVinculoMassa);
+              const totalElegiveis = elegiveisFiltrados.length;
+              const totalSelecionados = selecionadosMassa.size;
+              if (totalElegiveis === 0 && totalSelecionados === 0) return null;
+              const valorTotalSelecionado = preview!.movimentos
+                .filter((m) => selecionadosMassa.has(m.hash))
+                .reduce((s, m) => s + Math.abs(m.valor), 0);
+              return (
+                <div className="shrink-0 flex items-center gap-2 flex-wrap text-[11px] rounded border border-blue-200 bg-blue-50/60 px-2 py-1.5">
+                  {totalSelecionados > 0 ? (
+                    <>
+                      <span className="font-semibold text-blue-900">
+                        {totalSelecionados} selecionado(s) · {formatMoeda(valorTotalSelecionado)}
+                      </span>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => setConfirmMassa(true)}
+                        disabled={executandoMassa}
+                      >
+                        Vincular extratos em massa
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs px-2"
+                        onClick={() => setSelecionadosMassa(new Set())}
+                        disabled={executandoMassa}
+                      >
+                        Limpar seleção
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">
+                        {totalElegiveis} elegível(eis) para vínculo em massa no filtro atual.
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2 border-blue-300 text-blue-800 hover:bg-blue-100"
+                        onClick={
+                          filtro === 'match_direto'
+                            ? handleSelecionarVinculosSeguros
+                            : handleToggleTodosElegiveis
+                        }
+                      >
+                        {filtro === 'match_direto'
+                          ? 'Selecionar vínculos seguros'
+                          : `Selecionar elegíveis (${totalElegiveis})`}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="flex-1 min-h-0 overflow-auto border rounded-md">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
+                    <TableHead className="w-8">
+                      {(() => {
+                        const elegiveisFiltrados = movimentosFiltrados.filter(elegivelVinculoMassa);
+                        if (elegiveisFiltrados.length === 0) return null;
+                        const todosMarcados = elegiveisFiltrados.every((m) => selecionadosMassa.has(m.hash));
+                        return (
+                          <Checkbox
+                            checked={todosMarcados}
+                            onCheckedChange={handleToggleTodosElegiveis}
+                            aria-label="Selecionar todos elegíveis"
+                          />
+                        );
+                      })()}
+                    </TableHead>
                     <TableHead className="text-[10px]">Data</TableHead>
                     <TableHead className="text-[10px]">Descrição</TableHead>
                     <TableHead className="text-[10px]">Documento</TableHead>
@@ -843,7 +1023,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 <TableBody>
                   {movimentosFiltrados.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
                         Nenhum movimento neste filtro.
                       </TableCell>
                     </TableRow>
@@ -853,8 +1033,19 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                     const matchTitulo = m.fornecedorMatch || m.descricaoMatch;
                     const linhaInerte =
                       m.statusPersistido === 'conciliado' || m.statusPersistido === 'ignorado';
+                    const podeMarcar = elegivelVinculoMassa(m);
                     return (
                       <TableRow key={i} className={linhaInerte ? 'opacity-60' : ''}>
+                        <TableCell className="w-8">
+                          {podeMarcar ? (
+                            <Checkbox
+                              checked={selecionadosMassa.has(m.hash)}
+                              onCheckedChange={() => toggleSelecionadoMassa(m.hash)}
+                              aria-label="Selecionar para vínculo em massa"
+                              disabled={executandoMassa}
+                            />
+                          ) : null}
+                        </TableCell>
                         <TableCell className="text-[11px] font-mono">{fmtData(m.data)}</TableCell>
                         <TableCell className="text-[11px] max-w-[240px] truncate" title={m.descricao}>
                           {m.descricao || '-'}
@@ -898,27 +1089,40 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                     <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
                                   </span>
                                 </summary>
-                                <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-0.5 text-[10px]">
+                                <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-1 text-[10px]">
                                   {m.detalhesAgrupados.map((d) => {
                                     const st = (d.statusTransacao || '').toLowerCase();
                                     const stCls = st === 'realizado' ? 'bg-emerald-100 text-emerald-700'
                                       : st === 'agendado' ? 'bg-amber-100 text-amber-800'
                                       : st === 'programado' ? 'bg-blue-100 text-blue-700'
                                       : 'bg-muted text-muted-foreground';
+                                    const classif = [d.macroCusto, d.grupoCusto, d.centroCusto, d.subcentro]
+                                      .filter(Boolean)
+                                      .join(' · ');
                                     return (
-                                      <div key={d.id} className="flex gap-2 items-baseline">
-                                        <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
-                                        <span className="flex-1 truncate" title={d.fornecedor || d.descricao || ''}>
-                                          {d.fornecedor || d.descricao || '-'}
-                                        </span>
-                                        <span className={`tabular-nums shrink-0 ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                                          {formatMoeda(d.valor)}
-                                        </span>
-                                        <span className={`shrink-0 px-1.5 py-px rounded text-[8px] uppercase ${stCls}`}>{st || '—'}</span>
-                                        {d.macroCusto && (
-                                          <span className="text-muted-foreground italic shrink-0 text-[9px]" title={d.grupoCusto || undefined}>
-                                            {d.macroCusto}
+                                      <div key={d.id} className="space-y-0.5 border-b border-blue-100 pb-1 last:border-b-0">
+                                        <div className="flex gap-2 items-baseline">
+                                          <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
+                                          <span className="flex-1 truncate font-semibold" title={d.fornecedor || d.descricao || ''}>
+                                            {d.fornecedor || d.descricao || '-'}
                                           </span>
+                                          <span className={`tabular-nums shrink-0 ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                            {formatMoeda(d.valor)}
+                                          </span>
+                                          <span className={`shrink-0 px-1.5 py-px rounded text-[8px] uppercase ${stCls}`}>{st || '—'}</span>
+                                        </div>
+                                        {(d.numeroDocumento || d.fazenda || d.contaBancaria || classif || d.descricao) && (
+                                          <div className="ml-4 text-[9px] text-muted-foreground space-y-px">
+                                            {d.descricao && d.descricao !== d.fornecedor && (
+                                              <div className="truncate" title={d.descricao}>{d.descricao}</div>
+                                            )}
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              {d.numeroDocumento && <span>NF <code className="font-mono">{d.numeroDocumento}</code></span>}
+                                              {d.fazenda && <span>· {d.fazenda}</span>}
+                                              {d.contaBancaria && <span>· {d.contaBancaria}</span>}
+                                            </div>
+                                            {classif && <div className="italic truncate" title={classif}>{classif}</div>}
+                                          </div>
                                         )}
                                       </div>
                                     );
@@ -994,7 +1198,55 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             </div>
                           ) : m.matchEncontrado && matchTitulo ? (
                             <div className="space-y-1">
-                              <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>
+                              {/* Linha principal: fornecedor (titulo) + status do lançamento. */}
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-emerald-800 font-semibold truncate" title={matchTitulo}>
+                                  {matchTitulo}
+                                </span>
+                                {m.statusMatch && (
+                                  <span className="inline-flex items-center px-1 py-px rounded text-[8px] uppercase bg-slate-100 text-slate-700 font-semibold">
+                                    {m.statusMatch}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Linha secundária: descrição/NF/fazenda/conta/classificação. */}
+                              {m.candidatoMatch && (
+                                <div className="text-[9px] text-muted-foreground space-y-0.5">
+                                  {m.candidatoMatch.descricao && m.candidatoMatch.descricao !== matchTitulo && (
+                                    <div className="truncate" title={m.candidatoMatch.descricao}>
+                                      {m.candidatoMatch.descricao}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {m.candidatoMatch.numeroDocumento && (
+                                      <span title="NF / documento">NF <code className="font-mono">{m.candidatoMatch.numeroDocumento}</code></span>
+                                    )}
+                                    {m.candidatoMatch.fazenda && (
+                                      <span title="fazenda">· {m.candidatoMatch.fazenda}</span>
+                                    )}
+                                    {m.candidatoMatch.contaBancaria && (
+                                      <span title="conta bancária">· {m.candidatoMatch.contaBancaria}</span>
+                                    )}
+                                  </div>
+                                  {(m.candidatoMatch.macroCusto || m.candidatoMatch.grupoCusto || m.candidatoMatch.centroCusto || m.candidatoMatch.subcentro) && (
+                                    <div className="italic text-[8px] truncate"
+                                      title={[
+                                        m.candidatoMatch.macroCusto,
+                                        m.candidatoMatch.grupoCusto,
+                                        m.candidatoMatch.centroCusto,
+                                        m.candidatoMatch.subcentro,
+                                      ].filter(Boolean).join(' · ')}
+                                    >
+                                      {[
+                                        m.candidatoMatch.macroCusto,
+                                        m.candidatoMatch.grupoCusto,
+                                        m.candidatoMatch.centroCusto,
+                                        m.candidatoMatch.subcentro,
+                                      ].filter(Boolean).join(' · ')}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {hashesBaixados.has(m.hash) ? (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
                                   ✓ Baixado via OFX
@@ -1179,6 +1431,46 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               {convertindo
                 ? 'Processando...'
                 : ((confirm1a1?.statusMatch || '').toLowerCase() === 'realizado' ? 'Vincular' : 'Marcar realizado')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog: confirmação do vínculo em massa (matches seguros). */}
+      <AlertDialog
+        open={confirmMassa}
+        onOpenChange={(v) => { if (!v) setConfirmMassa(false); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar vínculo em massa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const valorTotal = preview
+                  ? preview.movimentos
+                      .filter((m) => selecionadosMassa.has(m.hash))
+                      .reduce((s, m) => s + Math.abs(m.valor), 0)
+                  : 0;
+                return (
+                  <span className="block space-y-2">
+                    <span className="block">
+                      <strong>{selecionadosMassa.size}</strong> movimento(s) selecionado(s) ·{' '}
+                      <strong>{formatMoeda(valorTotal)}</strong>
+                    </span>
+                    <span className="block text-amber-800">
+                      Apenas vínculos serão criados — entre cada extrato e seu lançamento já
+                      <strong> realizado</strong>. <strong>Nenhum valor, categoria, fornecedor,
+                      fazenda ou status financeiro será alterado.</strong>
+                    </span>
+                  </span>
+                );
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={executandoMassa}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executarVinculoMassa} disabled={executandoMassa}>
+              {executandoMassa ? 'Processando...' : `Vincular ${selecionadosMassa.size}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -63,6 +63,12 @@ export interface MovimentoPreview extends MovimentoBruto {
   /** Top-10 candidatos sugeridos para escolha manual (mesmo se score baixo). */
   candidatosPossiveis: CandidatoPossivel[];
   /**
+   * Info enriquecida do candidato 1:1 escolhido (`null` em ambíguo, agrupado,
+   * ou sem match). Usada pela UI para exibir fornecedor/NF/fazenda/conta/
+   * classificação do match auto-escolhido.
+   */
+  candidatoMatch: CandidatoPossivel | null;
+  /**
    * Há 2+ candidatos 1:1 com score equivalente (empate estrito ≤1pt OU
    * valor+data+fornecedor idênticos). Auto-pick é DESLIGADO neste caso —
    * o usuário deve escolher manualmente. matchAmbiguo é independente de
@@ -81,8 +87,13 @@ export interface LancamentoAgrupadoInfo {
   valor: number;        // signed (negativo = saída)
   macroCusto: string | null;
   grupoCusto: string | null;
+  centroCusto: string | null;
+  subcentro: string | null;
   /** Status atual do lançamento (para decidir se converte). */
   statusTransacao: string | null;
+  numeroDocumento: string | null;
+  fazenda: string | null;
+  contaBancaria: string | null;
 }
 
 /** Candidato sugerido para movimentos sem match automático (ranking heurístico). */
@@ -99,6 +110,11 @@ export interface CandidatoPossivel {
   // ── Enriquecimentos para distinguir candidatos equivalentes (NF/fazenda/conta) ──
   fazenda: string | null;
   contaBancaria: string | null;
+  // Classificação financeira (apenas leitura — nunca alterada pela conciliação).
+  macroCusto: string | null;
+  grupoCusto: string | null;
+  centroCusto: string | null;
+  subcentro: string | null;
   /** |valor| original do lançamento. */
   valorOriginal: number;
   /** Soma absoluta de valor_aplicado dos vínculos existentes em conciliacao_bancaria_itens. */
@@ -224,6 +240,8 @@ interface LancamentoCandidato {
   favorecido_id: string | null;
   macro_custo: string | null;
   grupo_custo: string | null;
+  centro_custo: string | null;
+  subcentro: string | null;
   status_transacao: string | null;
   numero_documento: string | null;
   fazenda_id: string | null;
@@ -515,7 +533,7 @@ export function useImportacaoExtrato() {
       // Exclui cenário META — não é alvo de conciliação.
       const { data: lancsRaw } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, status_transacao, numero_documento, cenario, fazenda_id')
+        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, centro_custo, subcentro, status_transacao, numero_documento, cenario, fazenda_id')
         .eq('cliente_id', clienteAtual.id)
         .eq('cancelado', false)
         .neq('cenario', 'meta')
@@ -609,7 +627,7 @@ export function useImportacaoExtrato() {
       }
       const lancsLivres = lancs.filter((l) => !jaConciliadoIntegralmente(l));
 
-      // Helper: monta um CandidatoPossivel completo (com fazenda/conta/saldo).
+      // Helper: monta um CandidatoPossivel completo (com fazenda/conta/saldo/classificação).
       function montarCandidato(
         l: LancamentoCandidato,
         movDataISO: string,
@@ -630,6 +648,10 @@ export function useImportacaoExtrato() {
           numeroDocumento: l.numero_documento,
           fazenda: l.fazenda_id ? fazendaMap.get(l.fazenda_id) ?? null : null,
           contaBancaria: l.conta_bancaria_id ? contaMap.get(l.conta_bancaria_id) ?? null : null,
+          macroCusto: l.macro_custo,
+          grupoCusto: l.grupo_custo,
+          centroCusto: l.centro_custo,
+          subcentro: l.subcentro,
           valorOriginal,
           valorJaConciliado,
           saldoConciliar,
@@ -708,6 +730,7 @@ export function useImportacaoExtrato() {
           .map(({ lanc: l }) => montarCandidato(l, m.data, valorMov));
 
         const persistido = persistidoPorHash.get(m.hash) ?? null;
+        const candidatoMatch = melhor ? montarCandidato(melhor, m.data, valorMov) : null;
         const baseFields: MovimentoPreview = {
           ...m,
           existeNoDB: persistido !== null,
@@ -727,6 +750,7 @@ export function useImportacaoExtrato() {
           lancamentosIds: [],
           detalhesAgrupados: [],
           candidatosPossiveis,
+          candidatoMatch,
           matchAmbiguo,
           candidatosAmbiguos,
         };
@@ -764,7 +788,12 @@ export function useImportacaoExtrato() {
                   valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
                   macroCusto: l.macro_custo,
                   grupoCusto: l.grupo_custo,
+                  centroCusto: l.centro_custo,
+                  subcentro: l.subcentro,
                   statusTransacao: l.status_transacao,
+                  numeroDocumento: l.numero_documento,
+                  fazenda: l.fazenda_id ? fazendaMap.get(l.fazenda_id) ?? null : null,
+                  contaBancaria: l.conta_bancaria_id ? contaMap.get(l.conta_bancaria_id) ?? null : null,
                 }))
                 .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
               return {
