@@ -1,6 +1,5 @@
--- fix: policies criadas com TO authenticated bloqueavam inserts via anon key + JWT
--- Padrão do projeto usa roles = public (sem TO authenticated)
--- Adicionado bypass is_admin_agroinblue para admin_agroinblue
+-- fix: policies com TO authenticated bloqueavam inserts + admin sem bypass
+-- Versão final: roles=public + bypass is_admin_agroinblue
 
 DROP POLICY IF EXISTS "Membros do cliente podem ver extrato_bancario_v2" ON public.extrato_bancario_v2;
 DROP POLICY IF EXISTS "Membros do cliente podem inserir extrato_bancario_v2" ON public.extrato_bancario_v2;
