@@ -72,7 +72,16 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
   const statusSel = (selecionado?.statusTransacao || '').toLowerCase();
   const acaoLabel = statusSel === 'realizado' ? 'Aprovar e vincular' : 'Aprovar e marcar realizado';
 
-  const handleAprovar = async () => {
+  // ── Detecção de divergência de valor (OFX vs lançamento) ──
+  // OFX nunca pode alterar valor financeiro silenciosamente. Quando há
+  // diferença > 0.01, a aprovação direta é bloqueada e o usuário precisa
+  // escolher entre Manter (Opção A) ou Atualizar (Opção B).
+  const valorOFXAbs = Math.abs(movimentoOFX.valor);
+  const valorSelAbs = selecionado ? Math.abs(selecionado.valor) : 0;
+  const diffValor = selecionado ? Math.abs(valorOFXAbs - valorSelAbs) : 0;
+  const haDivergencia = !!selecionado && diffValor > 0.01;
+
+  const executarBaixa = async (extras: { atualizarValorLancamento?: number } = {}) => {
     if (!selecionado) return;
     setSalvando(true);
     try {
@@ -81,10 +90,12 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
         extratoId,
         dataPagamentoReal: movimentoOFX.data,
         documentoBanco: movimentoOFX.documento ?? undefined,
+        ...extras,
       });
       const partes: string[] = [];
       if (r.convertido) partes.push('lançamento marcado realizado');
       if (r.vinculado) partes.push('vínculo criado com extrato');
+      if (r.valorAtualizado) partes.push('valor do lançamento atualizado');
       toast.success(partes.length > 0 ? partes.join(' · ') : 'Sem alteração necessária');
       onConcluido?.();
       onClose();
@@ -94,6 +105,13 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
       setSalvando(false);
     }
   };
+
+  /** Opção A — manter valor do financeiro (default recomendado). */
+  const handleManterValor = () => executarBaixa();
+  /** Opção B — atualizar lançamento com valor do extrato. */
+  const handleAtualizarValor = () => executarBaixa({ atualizarValorLancamento: valorOFXAbs });
+  /** Aprovação direta — só dispara se NÃO há divergência. */
+  const handleAprovar = () => executarBaixa();
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -187,6 +205,34 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
           </div>
         )}
 
+        {/* Divergência de valor — bloqueia aprovação direta e oferece A/B. */}
+        {selecionado && haDivergencia && (
+          <div className="rounded-md border border-amber-400 bg-amber-50 p-3 text-xs space-y-2">
+            <div className="font-bold text-amber-900 text-sm">⚠ Divergência de valor</div>
+            <div className="grid grid-cols-3 gap-3 tabular-nums">
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase">Extrato</div>
+                <div className="font-semibold">{formatMoeda(movimentoOFX.valor)}</div>
+                <div className="text-[10px] text-muted-foreground">{fmtData(movimentoOFX.data)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase">Lançamento</div>
+                <div className="font-semibold">{formatMoeda(selecionado.valor)}</div>
+                <div className="text-[10px] text-muted-foreground">{fmtData(selecionado.data)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground text-[10px] uppercase">Diferença</div>
+                <div className="font-semibold text-amber-800">{formatMoeda(diffValor)}</div>
+              </div>
+            </div>
+            <div className="text-amber-800 text-[11px]">
+              Aprovação direta foi bloqueada. Escolha uma opção abaixo. Fornecedor,
+              descrição, conta, fazenda, categoria e classificação NÃO são alterados em
+              nenhum dos casos.
+            </div>
+          </div>
+        )}
+
         <DialogFooter className="gap-2">
           {selecionado && candidatos.length > 1 && (
             <Button variant="ghost" onClick={() => setSelecionadoId(null)} disabled={salvando}>
@@ -194,9 +240,25 @@ export function RevisarMatchDialog({ open, onClose, extratoId, movimentoOFX, can
             </Button>
           )}
           <Button variant="outline" onClick={onClose} disabled={salvando}>Cancelar</Button>
-          <Button onClick={handleAprovar} disabled={salvando || !selecionado}>
-            {salvando ? 'Processando...' : acaoLabel}
-          </Button>
+          {selecionado && haDivergencia ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleAtualizarValor}
+                disabled={salvando}
+                title="Atualiza apenas o valor do lançamento. Sinal/conta/categoria/fornecedor mantidos."
+              >
+                {salvando ? '...' : 'Atualizar lançamento com valor do extrato'}
+              </Button>
+              <Button onClick={handleManterValor} disabled={salvando}>
+                {salvando ? '...' : 'Manter valor do financeiro'}
+              </Button>
+            </>
+          ) : (
+            <Button onClick={handleAprovar} disabled={salvando || !selecionado}>
+              {salvando ? 'Processando...' : acaoLabel}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
