@@ -34,8 +34,16 @@ interface BadgeStatus {
   label: string;
   cls: string;
 }
+/**
+ * Prioridade da badge:
+ *   1) status operacional persistido (conciliado/parcial/ignorado) tem precedência;
+ *   2) caso contrário (nao_conciliado ou ainda não salvo), mostra match heurístico.
+ * Hash existente NÃO esconde pendência — só estados terminais ofuscam o match.
+ */
 function badgeFromMovimento(m: MovimentoPreview): BadgeStatus {
-  if (m.duplicado) return { label: 'duplicado', cls: 'bg-muted text-muted-foreground' };
+  if (m.statusPersistido === 'conciliado') return { label: 'conciliado', cls: 'bg-emerald-100 text-emerald-700' };
+  if (m.statusPersistido === 'parcial')    return { label: 'parcial',    cls: 'bg-amber-100 text-amber-700' };
+  if (m.statusPersistido === 'ignorado')   return { label: 'ignorado',   cls: 'bg-muted text-muted-foreground' };
   if (m.matchAgrupado) {
     return {
       label: `agrupado ${m.quantidadeItensMatch} itens (${m.scoreMatch})`,
@@ -247,11 +255,15 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     }
   };
 
-  /** Bloqueia ação individual antes da importação ter sido confirmada. */
-  const exigirImportacaoConfirmada = (): boolean => {
-    if (importacaoConfirmada) return true;
+  /**
+   * Permite ação se o movimento já está persistido. Antes do save desta
+   * sessão, movimentos novos (existeNoDB=false) bloqueiam com toast claro;
+   * movimentos existentes em DB de uma sessão anterior continuam acionáveis.
+   */
+  const exigirMovimentoPersistido = (m: MovimentoPreview): boolean => {
+    if (m.existeNoDB) return true;
     toast.error(
-      'Salve o extrato primeiro (botão "Salvar extrato" no rodapé) antes de baixar lançamentos individualmente.',
+      'Este movimento ainda não foi salvo. Clique em "Salvar extrato" antes de acionar.',
     );
     return false;
   };
@@ -284,7 +296,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   /** Abre modal agrupado — usa o extrato já persistido (precisa de id real). */
   const abrirAgrupado = async (m: MovimentoPreview) => {
     if (!clienteId) return;
-    if (!exigirImportacaoConfirmada()) return;
+    if (!exigirMovimentoPersistido(m)) return;
     setConvertindo(true);
     try {
       const extratoId = await obterExtratoId(clienteId, m);
@@ -299,7 +311,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   /** Provável (50-79): abre revisão com o candidato 1:1 já escolhido pelo matcher. */
   const abrirRevisarAprovar = async (m: MovimentoPreview) => {
     if (!clienteId || !m.lancamentoMatchId) return;
-    if (!exigirImportacaoConfirmada()) return;
+    if (!exigirMovimentoPersistido(m)) return;
     setConvertindo(true);
     try {
       const extratoId = await obterExtratoId(clienteId, m);
@@ -336,7 +348,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       toast.error('Nenhum candidato compatível encontrado');
       return;
     }
-    if (!exigirImportacaoConfirmada()) return;
+    if (!exigirMovimentoPersistido(m)) return;
     setConvertindo(true);
     try {
       const extratoId = await obterExtratoId(clienteId, m);
@@ -353,16 +365,16 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     }
   };
 
-  /** Wrapper para "Marcar realizado" / "Vincular extrato" — checa importação confirmada. */
+  /** Wrapper para "Marcar realizado" / "Vincular extrato" — checa persistência do movimento. */
   const abrirConfirm1a1 = (m: MovimentoPreview) => {
-    if (!exigirImportacaoConfirmada()) return;
+    if (!exigirMovimentoPersistido(m)) return;
     setConfirm1a1(m);
   };
 
   const totalValor = useMemo(() => {
     if (!preview) return 0;
     return preview.movimentos
-      .filter(m => !m.duplicado)
+      .filter((m) => !m.existeNoDB)
       .reduce((s, m) => s + Math.abs(m.valor), 0);
   }, [preview]);
 
@@ -413,7 +425,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           )}
         </div>
 
-        {preview && !importacaoConfirmada && preview.novos > 0 && (
+        {preview && !importacaoConfirmada && preview.novosParaSalvar > 0 && (
           <div className="shrink-0 flex items-center gap-2 rounded border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] text-amber-800">
             <Info className="h-3.5 w-3.5 shrink-0" />
             <span className="flex-1 truncate">
@@ -425,7 +437,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               disabled={loading}
               className="h-7 text-xs px-3 shrink-0"
             >
-              {loading ? 'Salvando...' : `Salvar extrato (${preview.novos})`}
+              {loading ? 'Salvando...' : `Salvar extrato (${preview.novosParaSalvar})`}
             </Button>
           </div>
         )}
@@ -437,6 +449,15 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             </span>
             <span className="shrink-0 inline-flex items-center px-2 h-7 rounded bg-emerald-100 text-emerald-800 text-xs font-semibold">
               Extrato salvo ✓
+            </span>
+          </div>
+        )}
+        {preview && !importacaoConfirmada && preview.novosParaSalvar === 0 && preview.existentesNoBanco > 0 && (
+          <div className="shrink-0 flex items-center gap-2 rounded border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 text-[11px] text-emerald-800">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate">
+              Todos os {preview.existentesNoBanco} movimento(s) já estão no banco.
+              Use as ações na coluna "Match financeiro" para finalizar a conciliação.
             </span>
           </div>
         )}
@@ -464,11 +485,33 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               <span className="px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">
                 {preview.semMatch} sem match
               </span>
-              <span className="px-2 py-1 rounded bg-muted text-muted-foreground font-semibold">
-                {preview.duplicados} duplicado{preview.duplicados !== 1 ? 's' : ''}
-              </span>
+              {preview.existentesNoBanco > 0 && (
+                <span className="px-2 py-1 rounded bg-slate-100 text-slate-700 font-semibold">
+                  {preview.existentesNoBanco} já no banco
+                </span>
+              )}
+              {preview.pendentes > 0 && (
+                <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 font-semibold">
+                  {preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}
+                </span>
+              )}
+              {preview.parciais > 0 && (
+                <span className="px-2 py-1 rounded bg-amber-100 text-amber-900 font-semibold">
+                  {preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}
+                </span>
+              )}
+              {preview.conciliados > 0 && (
+                <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                  {preview.conciliados} conciliado{preview.conciliados !== 1 ? 's' : ''}
+                </span>
+              )}
+              {preview.ignorados > 0 && (
+                <span className="px-2 py-1 rounded bg-muted text-muted-foreground font-semibold">
+                  {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}
+                </span>
+              )}
               <span className="text-muted-foreground">
-                Total {formatMoeda(totalValor)} (apenas novos)
+                Total {formatMoeda(totalValor)} (a salvar)
               </span>
             </div>
 
@@ -489,8 +532,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   {preview.movimentos.map((m, i) => {
                     const badge = badgeFromMovimento(m);
                     const matchTitulo = m.fornecedorMatch || m.descricaoMatch;
+                    const linhaInerte =
+                      m.statusPersistido === 'conciliado' || m.statusPersistido === 'ignorado';
                     return (
-                      <TableRow key={i} className={m.duplicado ? 'opacity-50' : ''}>
+                      <TableRow key={i} className={linhaInerte ? 'opacity-60' : ''}>
                         <TableCell className="text-[11px] font-mono">{fmtData(m.data)}</TableCell>
                         <TableCell className="text-[11px] max-w-[240px] truncate" title={m.descricao}>
                           {m.descricao || '-'}
@@ -506,10 +551,20 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${badge.cls}`}>
                             {badge.label}
                           </span>
+                          {m.existeNoDB && m.statusPersistido === 'nao_conciliado' && (
+                            <span
+                              className="ml-1 inline-flex items-center px-1.5 py-px rounded bg-slate-100 text-slate-600 text-[9px] font-semibold whitespace-nowrap"
+                              title="Movimento já está em extrato_bancario_v2 mas ainda não foi conciliado."
+                            >
+                              já no banco
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-[11px] max-w-[300px]">
-                          {m.duplicado ? (
-                            <span className="text-muted-foreground">—</span>
+                          {m.statusPersistido === 'conciliado' ? (
+                            <span className="text-emerald-700 italic text-[10px]">— conciliado —</span>
+                          ) : m.statusPersistido === 'ignorado' ? (
+                            <span className="text-muted-foreground italic text-[10px]">— ignorado —</span>
                           ) : m.matchAgrupado ? (
                             <div className="space-y-1">
                               <details className="group">
@@ -644,11 +699,13 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading || !preview || preview.novos === 0 || importacaoConfirmada}
+              disabled={
+                loading || !preview || preview.novosParaSalvar === 0 || importacaoConfirmada
+              }
             >
               {importacaoConfirmada
                 ? 'Extrato salvo ✓'
-                : (loading ? 'Salvando...' : `Salvar extrato (${preview?.novos ?? 0})`)}
+                : (loading ? 'Salvando...' : `Salvar extrato (${preview?.novosParaSalvar ?? 0})`)}
             </Button>
           </div>
         </DialogFooter>

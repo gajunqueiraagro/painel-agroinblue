@@ -26,10 +26,17 @@ import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX'
 import { parseCSV } from '@/lib/financeiro/parser/parseCSV';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
 
+/** Status operacional persistido em extrato_bancario_v2.status. */
+export type StatusPersistido = 'nao_conciliado' | 'parcial' | 'conciliado' | 'ignorado';
+
 export interface MovimentoPreview extends MovimentoBruto {
   hash: string;
-  /** Já existe em extrato_bancario_v2 (mesmo cliente, mesmo hash). */
-  duplicado: boolean;
+  /** Hash já está em extrato_bancario_v2 (apenas fato físico). */
+  existeNoDB: boolean;
+  /** id do registro em extrato_bancario_v2, quando existeNoDB=true. */
+  extratoIdExistente: string | null;
+  /** Status operacional do registro persistido (null se não existe). */
+  statusPersistido: StatusPersistido | null;
   /** Score 0-100 do melhor candidato em financeiro_lancamentos_v2 (apenas visual). */
   scoreMatch: number;
   /** Sinal de match: scoreMatch >= 50 (1:1 ou agrupado). */
@@ -85,15 +92,53 @@ export interface CandidatoPossivel {
 export interface PreviewResult {
   movimentos: MovimentoPreview[];
   totalLinhas: number;
-  novos: number;
-  duplicados: number;
-  /** Movimentos NOVOS resolvidos por match 1:1 (score >= 50, sem composição). */
+  /** Movimentos cujo hash AINDA não está no banco — alvo do "Salvar extrato". */
+  novosParaSalvar: number;
+  /** Total de movimentos cujo hash já existe em extrato_bancario_v2 (qualquer status). */
+  existentesNoBanco: number;
+  /** existeNoDB && statusPersistido='nao_conciliado'. Pendência aberta. */
+  pendentes: number;
+  /** existeNoDB && statusPersistido='parcial'. Parcialmente conciliado. */
+  parciais: number;
+  /** existeNoDB && statusPersistido='conciliado'. Já fechado. */
+  conciliados: number;
+  /** existeNoDB && statusPersistido='ignorado'. */
+  ignorados: number;
+  /**
+   * Match counters — calculados sobre movimentos AINDA acionáveis
+   * (não existe no DB ou status_persistido ∈ {nao_conciliado, parcial}).
+   */
   matchDireto: number;
-  /** Movimentos NOVOS resolvidos via composição (subset). */
   matchAgrupados: number;
-  /** Movimentos NOVOS sem qualquer match (score < 50). */
   semMatch: number;
   formato: 'OFX' | 'CSV';
+}
+
+/** Recalcula todos os agregados a partir do array de movimentos. */
+function recomputarAgregados(
+  movimentos: MovimentoPreview[],
+): Pick<
+  PreviewResult,
+  | 'novosParaSalvar' | 'existentesNoBanco' | 'pendentes' | 'parciais'
+  | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados' | 'semMatch'
+> {
+  const acionaveis = movimentos.filter(
+    (m) =>
+      !m.existeNoDB ||
+      m.statusPersistido === 'nao_conciliado' ||
+      m.statusPersistido === 'parcial',
+  );
+  return {
+    novosParaSalvar:   movimentos.filter((m) => !m.existeNoDB).length,
+    existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
+    pendentes:         movimentos.filter((m) => m.statusPersistido === 'nao_conciliado').length,
+    parciais:          movimentos.filter((m) => m.statusPersistido === 'parcial').length,
+    conciliados:       movimentos.filter((m) => m.statusPersistido === 'conciliado').length,
+    ignorados:         movimentos.filter((m) => m.statusPersistido === 'ignorado').length,
+    matchDireto:       acionaveis.filter((m) => m.matchEncontrado && !m.matchAgrupado).length,
+    matchAgrupados:    acionaveis.filter((m) => m.matchAgrupado).length,
+    semMatch:          acionaveis.filter((m) => !m.matchEncontrado).length,
+  };
 }
 
 export interface ConfirmarParams {
@@ -344,15 +389,22 @@ export function useImportacaoExtrato() {
         })),
       );
 
-      // Consultar duplicatas em uma única query.
+      // Consulta dos hashes JÁ persistidos: traz id + status para que a UI
+      // possa diferenciar "existe no banco" (fato físico) de "já processado"
+      // (status operacional). Hash existente NÃO significa pendência fechada.
       const hashes = movimentosComHash.map((m) => m.hash);
       const { data: existentes, error: errSel } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('hash_movimento')
+        .select('id, hash_movimento, status')
         .eq('cliente_id', clienteAtual.id)
         .in('hash_movimento', hashes);
       if (errSel) throw errSel;
-      const dupSet = new Set((existentes as unknown as { hash_movimento: string }[] ?? []).map((r) => r.hash_movimento));
+      const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
+      for (const r of (existentes as unknown as
+        { id: string; hash_movimento: string; status: StatusPersistido }[] ?? [])
+      ) {
+        persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+      }
 
       // ── Match financeiro: buscar candidatos em financeiro_lancamentos_v2 ──
       // Range de datas amplo (±10 dias para cobrir 1:1 e composição N:N).
@@ -466,8 +518,12 @@ export function useImportacaoExtrato() {
             numeroDocumento: l.numero_documento,
           }));
 
-        const baseFields: Omit<MovimentoPreview, 'duplicado'> = {
+        const persistido = persistidoPorHash.get(m.hash) ?? null;
+        const baseFields: MovimentoPreview = {
           ...m,
+          existeNoDB: persistido !== null,
+          extratoIdExistente: persistido?.id ?? null,
+          statusPersistido: persistido?.status ?? null,
           scoreMatch: melhorScore,
           matchEncontrado: melhorScore >= 50,
           lancamentoMatchId: melhor?.id ?? null,
@@ -520,7 +576,6 @@ export function useImportacaoExtrato() {
                 .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
               return {
                 ...baseFields,
-                duplicado: dupSet.has(m.hash),
                 scoreMatch: scoreGrupo,
                 matchEncontrado: true,
                 lancamentoMatchId: null,
@@ -536,18 +591,13 @@ export function useImportacaoExtrato() {
           }
         }
 
-        return { ...baseFields, duplicado: dupSet.has(m.hash) };
+        return baseFields;
       });
 
-      const novos = movimentos.filter((m) => !m.duplicado);
       const result: PreviewResult = {
         movimentos,
         totalLinhas: movimentos.length,
-        novos: novos.length,
-        duplicados: movimentos.filter((m) => m.duplicado).length,
-        matchDireto: novos.filter((m) => m.matchEncontrado && !m.matchAgrupado).length,
-        matchAgrupados: novos.filter((m) => m.matchAgrupado).length,
-        semMatch: novos.filter((m) => !m.matchEncontrado).length,
+        ...recomputarAgregados(movimentos),
         formato,
       };
       setPreview(result);
@@ -577,7 +627,7 @@ export function useImportacaoExtrato() {
     const fazendaId = fazendaAtual?.id;
     const fazendaEspecifica = !!fazendaId && fazendaId !== '__global__';
 
-    const novos = preview.movimentos.filter((m) => !m.duplicado);
+    const novos = preview.movimentos.filter((m) => !m.existeNoDB);
     if (novos.length === 0) throw new Error('Nenhum movimento novo para importar');
 
     setLoading(true);
@@ -609,7 +659,7 @@ export function useImportacaoExtrato() {
             tipo_arquivo: params.formato,
             total_linhas: preview.totalLinhas,
             total_validas: novos.length,
-            total_com_erro: preview.duplicados,
+            total_com_erro: preview.existentesNoBanco,
             status: 'confirmada',
           } as any)
           .select('id')
@@ -618,9 +668,12 @@ export function useImportacaoExtrato() {
         importacaoId = (imp as { id: string }).id;
       }
 
-      // 2) Insert dos movimentos em batches de 500.
+      // 2) Insert dos movimentos em batches de 500. Capturamos o id retornado
+      //    para atualizar o preview em memória — assim o usuário não perde as
+      //    ações de conciliação por re-gerar preview.
       const BATCH = 500;
       let inseridos = 0;
+      const idsPorHash = new Map<string, string>();
       for (let i = 0; i < novos.length; i += BATCH) {
         const fatia = novos.slice(i, i + BATCH).map((m) => ({
           cliente_id: clienteAtual.id,
@@ -634,16 +687,39 @@ export function useImportacaoExtrato() {
           hash_movimento: m.hash,
           status: 'nao_conciliado' as const,
         }));
-        const { error: e2 } = await supabase
+        const { data: inserted, error: e2 } = await supabase
           .from('extrato_bancario_v2' as any)
-          .insert(fatia);
+          .insert(fatia)
+          .select('id, hash_movimento');
         if (e2) throw e2;
+        for (const r of (inserted ?? []) as { id: string; hash_movimento: string }[]) {
+          idsPorHash.set(r.hash_movimento, r.id);
+        }
         inseridos += fatia.length;
       }
 
-      // Preserva o preview na tela: o usuário ainda vai interagir com os botões
-      // por linha (Marcar realizado / Vincular / Revisar / Ver possíveis), que
-      // dependem de o extrato já estar persistido (lookup por hash).
+      // Atualiza o preview em memória: cada movimento novo passa a ter
+      // existeNoDB=true, statusPersistido='nao_conciliado' e o id do
+      // registro recém-criado. Permite ações imediatamente após salvar.
+      setPreview((prev) => {
+        if (!prev) return prev;
+        const movs: MovimentoPreview[] = prev.movimentos.map((m) => {
+          if (m.existeNoDB) return m;
+          const novoId = idsPorHash.get(m.hash) ?? null;
+          return {
+            ...m,
+            existeNoDB: true,
+            extratoIdExistente: novoId,
+            statusPersistido: 'nao_conciliado' as const,
+          };
+        });
+        return {
+          ...prev,
+          movimentos: movs,
+          ...recomputarAgregados(movs),
+        };
+      });
+
       return { inseridos, importacaoId };
     } catch (e: any) {
       const msg = e?.message ?? String(e);
