@@ -957,7 +957,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                       <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
                       <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                      <SelectItem value="3-Transferência" className={itemCls}>Transf.</SelectItem>
+                      <SelectItem value="3-Transferências" className={itemCls}>Transf.</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1164,7 +1164,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <SelectItem value="__all__" className={itemCls}>Todos</SelectItem>
                       <SelectItem value="1-Entradas" className={itemCls}>Entradas</SelectItem>
                       <SelectItem value="2-Saídas" className={itemCls}>Saídas</SelectItem>
-                      <SelectItem value="3-Transferência" className={itemCls}>Transferências</SelectItem>
+                      <SelectItem value="3-Transferências" className={itemCls}>Transferências</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
