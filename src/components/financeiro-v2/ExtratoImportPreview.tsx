@@ -82,8 +82,8 @@ async function obterExtratoId(
   if (error) throw error;
   if (!data) {
     throw new Error(
-      'Este movimento ainda não foi importado. ' +
-      'Clique em "Confirmar" no rodapé para importar o extrato antes de baixar lançamentos individualmente.',
+      'Este movimento ainda não foi salvo. ' +
+      'Clique em "Salvar extrato" no rodapé antes de baixar lançamentos individualmente.',
     );
   }
   return (data as { id: string }).id;
@@ -187,8 +187,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         formato: preview.formato,
       });
       toast.success(
-        `${r.inseridos} movimento(s) importado(s). ` +
-        `Agora você pode marcar realizados / aprovar / vincular individualmente.`,
+        `Extrato salvo (${r.inseridos} movimento(s)). ` +
+        `Agora revise os matches para vincular ou marcar realizados.`,
       );
       setImportacaoConfirmada(true);
       onImported?.(r);
@@ -202,7 +202,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const exigirImportacaoConfirmada = (): boolean => {
     if (importacaoConfirmada) return true;
     toast.error(
-      'Confirme a importação do extrato (botão "Confirmar" no rodapé) antes de baixar lançamentos individualmente.',
+      'Salve o extrato primeiro (botão "Salvar extrato" no rodapé) antes de baixar lançamentos individualmente.',
     );
     return false;
   };
@@ -367,13 +367,17 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         {preview && !importacaoConfirmada && preview.novos > 0 && (
           <div className="shrink-0 flex items-center gap-1.5 rounded bg-amber-50/70 px-2 py-1 text-[11px] text-amber-800">
             <Info className="h-3 w-3 shrink-0" />
-            <span className="truncate">Confirme a importação para habilitar as ações de conciliação.</span>
+            <span className="truncate">
+              1º passo: salvar o extrato bancário. Isso não altera o financeiro nem marca pagamentos como realizados.
+            </span>
           </div>
         )}
         {importacaoConfirmada && (
           <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
             <CheckCircle2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">Importação confirmada — ações de conciliação disponíveis.</span>
+            <span className="truncate">
+              Extrato salvo. Agora revise os matches e escolha quais vínculos ou baixas deseja confirmar.
+            </span>
           </div>
         )}
 
@@ -570,16 +574,23 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </>
         )}
 
-        <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
-          <Button
-            onClick={handleConfirmar}
-            disabled={loading || !preview || preview.novos === 0 || importacaoConfirmada}
-          >
-            {importacaoConfirmada
-              ? 'Importação confirmada ✓'
-              : (loading ? 'Salvando...' : `Confirmar (${preview?.novos ?? 0})`)}
-          </Button>
+        <DialogFooter className="shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
+          {!importacaoConfirmada && (
+            <span className="text-[10px] text-muted-foreground sm:mr-auto">
+              Nenhum lançamento será criado ou alterado nesta etapa.
+            </span>
+          )}
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
+            <Button
+              onClick={handleConfirmar}
+              disabled={loading || !preview || preview.novos === 0 || importacaoConfirmada}
+            >
+              {importacaoConfirmada
+                ? 'Extrato salvo ✓'
+                : (loading ? 'Salvando...' : `Salvar extrato (${preview?.novos ?? 0})`)}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
 
