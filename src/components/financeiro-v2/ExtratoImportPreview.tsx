@@ -994,10 +994,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             })()}
 
             <div className="flex-1 min-h-0 overflow-auto border rounded-md">
-              <Table>
+              <Table className="table-fixed w-full">
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
-                    <TableHead className="w-8">
+                    <TableHead className="w-10 align-top">
                       {(() => {
                         const elegiveisFiltrados = movimentosFiltrados.filter(elegivelVinculoMassa);
                         if (elegiveisFiltrados.length === 0) return null;
@@ -1011,19 +1011,18 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                         );
                       })()}
                     </TableHead>
-                    <TableHead className="text-[10px]">Data</TableHead>
-                    <TableHead className="text-[10px]">Descrição</TableHead>
-                    <TableHead className="text-[10px]">Documento</TableHead>
-                    <TableHead className="text-[10px] text-right">Valor</TableHead>
-                    <TableHead className="text-[10px]">Tipo</TableHead>
-                    <TableHead className="text-[10px]">Status</TableHead>
-                    <TableHead className="text-[10px]">Match financeiro</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wide w-[40%]">
+                      Movimento do extrato
+                    </TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wide">
+                      Match financeiro
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {movimentosFiltrados.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-xs text-muted-foreground py-8">
+                      <TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-8">
                         Nenhum movimento neste filtro.
                       </TableCell>
                     </TableRow>
@@ -1035,8 +1034,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                       m.statusPersistido === 'conciliado' || m.statusPersistido === 'ignorado';
                     const podeMarcar = elegivelVinculoMassa(m);
                     return (
-                      <TableRow key={i} className={linhaInerte ? 'opacity-60' : ''}>
-                        <TableCell className="w-8">
+                      <TableRow key={i} className={linhaInerte ? 'opacity-60 align-top' : 'align-top'}>
+                        <TableCell className="w-10 pt-3">
                           {podeMarcar ? (
                             <Checkbox
                               checked={selecionadosMassa.has(m.hash)}
@@ -1046,31 +1045,41 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             />
                           ) : null}
                         </TableCell>
-                        <TableCell className="text-[11px] font-mono">{fmtData(m.data)}</TableCell>
-                        <TableCell className="text-[11px] max-w-[240px] truncate" title={m.descricao}>
-                          {m.descricao || '-'}
+                        {/* COLUNA ESQUERDA — MOVIMENTO DO EXTRATO (data/valor/tipo/badges + descrição completa + doc) */}
+                        <TableCell className="text-[11px] py-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono shrink-0">{fmtData(m.data)}</span>
+                              <span className={`font-bold tabular-nums shrink-0 ${m.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                {formatMoeda(m.valor)}
+                              </span>
+                              <span className="text-[10px] shrink-0 text-muted-foreground">
+                                {m.tipo === 'credito' ? '↑ Cred' : '↓ Déb'}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-semibold whitespace-nowrap ${badge.cls}`}>
+                                {badge.label}
+                              </span>
+                              {m.existeNoDB && m.statusPersistido === 'nao_conciliado' && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-px rounded bg-slate-100 text-slate-600 text-[9px] font-semibold whitespace-nowrap"
+                                  title="Movimento já está em extrato_bancario_v2 mas ainda não foi conciliado."
+                                >
+                                  já no banco
+                                </span>
+                              )}
+                            </div>
+                            <div className="whitespace-normal break-words leading-snug" title={m.descricao}>
+                              {m.descricao || '—'}
+                            </div>
+                            {m.documento && (
+                              <div className="text-[9px] text-muted-foreground font-mono break-all">
+                                Doc: {m.documento}
+                              </div>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-[11px] font-mono text-muted-foreground">
-                          {m.documento || '-'}
-                        </TableCell>
-                        <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${m.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                          {formatMoeda(m.valor)}
-                        </TableCell>
-                        <TableCell className="text-[11px]">{m.tipo === 'credito' ? '↑ Cred' : '↓ Déb'}</TableCell>
-                        <TableCell className="text-[10px]">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${badge.cls}`}>
-                            {badge.label}
-                          </span>
-                          {m.existeNoDB && m.statusPersistido === 'nao_conciliado' && (
-                            <span
-                              className="ml-1 inline-flex items-center px-1.5 py-px rounded bg-slate-100 text-slate-600 text-[9px] font-semibold whitespace-nowrap"
-                              title="Movimento já está em extrato_bancario_v2 mas ainda não foi conciliado."
-                            >
-                              já no banco
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-[11px] max-w-[300px]">
+                        {/* COLUNA DIREITA — MATCH FINANCEIRO (largura ampla, ações sempre visíveis) */}
+                        <TableCell className="text-[11px] py-2">
                           {/*
                             Renderização da coluna "Match financeiro".
                             Precedência: matchAgrupado preserva os detalhes mesmo
