@@ -17,10 +17,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
+import { useImportacaoExtrato, type MovimentoPreview } from '@/hooks/useImportacaoExtrato';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+
+interface BadgeStatus {
+  label: string;
+  cls: string;
+}
+function badgeFromMovimento(m: MovimentoPreview): BadgeStatus {
+  if (m.duplicado) return { label: 'duplicado', cls: 'bg-muted text-muted-foreground' };
+  if (m.scoreMatch >= 80) return { label: `match forte (${m.scoreMatch})`, cls: 'bg-emerald-100 text-emerald-700' };
+  if (m.scoreMatch >= 50) return { label: `provável (${m.scoreMatch})`, cls: 'bg-amber-100 text-amber-700' };
+  return { label: 'sem match', cls: 'bg-red-100 text-red-700' };
+}
 
 interface Conta {
   id: string;
@@ -162,14 +173,17 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
 
         {preview && (
           <>
-            <div className="flex items-center gap-3 flex-wrap text-xs">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
               <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 font-semibold">
                 Formato: {preview.formato}
               </span>
               <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 font-semibold">
-                {preview.novos} novo{preview.novos !== 1 ? 's' : ''}
+                {preview.comMatch} com match
               </span>
-              <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 font-semibold">
+              <span className="px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">
+                {preview.semMatch} sem match
+              </span>
+              <span className="px-2 py-1 rounded bg-muted text-muted-foreground font-semibold">
                 {preview.duplicados} duplicado{preview.duplicados !== 1 ? 's' : ''}
               </span>
               <span className="text-muted-foreground">
@@ -187,29 +201,39 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                     <TableHead className="text-[10px] text-right">Valor</TableHead>
                     <TableHead className="text-[10px]">Tipo</TableHead>
                     <TableHead className="text-[10px]">Status</TableHead>
+                    <TableHead className="text-[10px]">Match financeiro</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {preview.movimentos.map((m, i) => (
-                    <TableRow key={i} className={m.duplicado ? 'opacity-50' : ''}>
-                      <TableCell className="text-[11px] font-mono">{fmtData(m.data)}</TableCell>
-                      <TableCell className="text-[11px] max-w-[260px] truncate" title={m.descricao}>
-                        {m.descricao || '-'}
-                      </TableCell>
-                      <TableCell className="text-[11px] font-mono text-muted-foreground">
-                        {m.documento || '-'}
-                      </TableCell>
-                      <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${m.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                        {formatMoeda(m.valor)}
-                      </TableCell>
-                      <TableCell className="text-[11px]">{m.tipo === 'credito' ? '↑ Cred' : '↓ Déb'}</TableCell>
-                      <TableCell className="text-[11px]">
-                        {m.duplicado
-                          ? <span className="text-amber-700 font-semibold">duplicado</span>
-                          : <span className="text-emerald-700 font-semibold">novo</span>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {preview.movimentos.map((m, i) => {
+                    const badge = badgeFromMovimento(m);
+                    const matchTitulo = m.fornecedorMatch || m.descricaoMatch;
+                    return (
+                      <TableRow key={i} className={m.duplicado ? 'opacity-50' : ''}>
+                        <TableCell className="text-[11px] font-mono">{fmtData(m.data)}</TableCell>
+                        <TableCell className="text-[11px] max-w-[240px] truncate" title={m.descricao}>
+                          {m.descricao || '-'}
+                        </TableCell>
+                        <TableCell className="text-[11px] font-mono text-muted-foreground">
+                          {m.documento || '-'}
+                        </TableCell>
+                        <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${m.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                          {formatMoeda(m.valor)}
+                        </TableCell>
+                        <TableCell className="text-[11px]">{m.tipo === 'credito' ? '↑ Cred' : '↓ Déb'}</TableCell>
+                        <TableCell className="text-[10px]">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-[11px] max-w-[200px] truncate" title={matchTitulo ?? ''}>
+                          {!m.duplicado && m.matchEncontrado && matchTitulo
+                            ? <span className="text-emerald-800">{matchTitulo}</span>
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

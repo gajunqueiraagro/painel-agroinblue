@@ -28,7 +28,18 @@ import { hashMovimento } from '@/lib/financeiro/extratoHash';
 
 export interface MovimentoPreview extends MovimentoBruto {
   hash: string;
+  /** Já existe em extrato_bancario_v2 (mesmo cliente, mesmo hash). */
   duplicado: boolean;
+  /** Score 0-100 do melhor candidato em financeiro_lancamentos_v2 (apenas visual). */
+  scoreMatch: number;
+  /** Sinal de match: scoreMatch >= 50. */
+  matchEncontrado: boolean;
+  /** id do lançamento candidato (melhor score) ou null. */
+  lancamentoMatchId: string | null;
+  /** Nome do fornecedor do candidato, se houver. */
+  fornecedorMatch: string | null;
+  /** Descrição do candidato. */
+  descricaoMatch: string | null;
 }
 
 export interface PreviewResult {
@@ -36,6 +47,10 @@ export interface PreviewResult {
   totalLinhas: number;
   novos: number;
   duplicados: number;
+  /** Movimentos NOVOS com matchEncontrado=true. */
+  comMatch: number;
+  /** Movimentos NOVOS sem qualquer match (score < 50). */
+  semMatch: number;
   formato: 'OFX' | 'CSV';
 }
 
@@ -50,6 +65,66 @@ function detectarFormato(nomeArquivo: string, conteudo: string): 'OFX' | 'CSV' |
   if (lower.endsWith('.ofx') || /<OFX>/i.test(conteudo)) return 'OFX';
   if (lower.endsWith('.csv') || lower.endsWith('.txt')) return 'CSV';
   return null;
+}
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function diasEntre(a: string, b: string): number {
+  const d1 = new Date(a + 'T00:00:00').getTime();
+  const d2 = new Date(b + 'T00:00:00').getTime();
+  return Math.round((d1 - d2) / 86400000);
+}
+
+function normalizarTexto(s: string | null | undefined): string {
+  return (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+interface LancamentoCandidato {
+  id: string;
+  data_pagamento: string | null;
+  valor: number;
+  sinal: number;
+  descricao: string | null;
+  favorecido_id: string | null;
+}
+
+/**
+ * Score 0-100 de match entre movimento do extrato e lançamento financeiro.
+ * Pré-condição: |valor| do extrato == |valor| do lançamento (tol 0.01).
+ *   - 70 pontos: valor exato
+ *   - +20:        diferença de data ≤ 3 dias
+ *   - +10:        descrição/fornecedor similar
+ */
+function calcularScore(
+  movDataISO: string,
+  movDescricao: string,
+  lanc: LancamentoCandidato,
+  fornNome: string | null,
+): number {
+  let score = 70;
+  if (lanc.data_pagamento) {
+    const diff = Math.abs(diasEntre(movDataISO, lanc.data_pagamento));
+    if (diff <= 3) score += 20;
+  }
+  const movN = normalizarTexto(movDescricao);
+  const lancN = normalizarTexto(lanc.descricao);
+  const fornN = normalizarTexto(fornNome);
+  if (movN && (
+    (lancN && (movN.includes(lancN) || lancN.includes(movN))) ||
+    (fornN && movN.includes(fornN))
+  )) {
+    score += 10;
+  }
+  return score;
 }
 
 export function useImportacaoExtrato() {
@@ -98,18 +173,81 @@ export function useImportacaoExtrato() {
         .eq('cliente_id', clienteAtual.id)
         .in('hash_movimento', hashes);
       if (errSel) throw errSel;
-
       const dupSet = new Set((existentes as unknown as { hash_movimento: string }[] ?? []).map((r) => r.hash_movimento));
-      const movimentos: MovimentoPreview[] = movimentosComHash.map((m) => ({
-        ...m,
-        duplicado: dupSet.has(m.hash),
-      }));
 
+      // ── Match financeiro: buscar candidatos em financeiro_lancamentos_v2 ──
+      // Range de datas amplo (±7 dias além do mínimo/máximo do arquivo).
+      const datas = movimentosComHash.map((m) => m.data).sort();
+      const dataMin = datas[0];
+      const dataMax = datas[datas.length - 1];
+      const fetchIni = addDays(dataMin, -7);
+      const fetchFim = addDays(dataMax, +7);
+
+      const { data: lancsRaw } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('cancelado', false)
+        .eq('status_transacao', 'realizado')
+        .or(`conta_bancaria_id.eq.${params.contaBancariaId},conta_destino_id.eq.${params.contaBancariaId}`)
+        .gte('data_pagamento', fetchIni)
+        .lte('data_pagamento', fetchFim);
+
+      const lancs = (lancsRaw ?? []) as unknown as LancamentoCandidato[];
+
+      // Carregar nomes de fornecedores referenciados (uma query agregada).
+      const favIds = Array.from(
+        new Set(lancs.map((l) => l.favorecido_id).filter((x): x is string => !!x)),
+      );
+      const fornMap = new Map<string, string>();
+      if (favIds.length > 0) {
+        const { data: forns } = await supabase
+          .from('financeiro_fornecedores')
+          .select('id, nome')
+          .in('id', favIds);
+        for (const f of (forns ?? []) as { id: string; nome: string }[]) {
+          fornMap.set(f.id, f.nome);
+        }
+      }
+
+      // Para cada movimento: encontrar melhor candidato (|valor| igual; data ±7d; maior score).
+      const movimentos: MovimentoPreview[] = movimentosComHash.map((m) => {
+        const valorMov = Math.abs(m.valor);
+        let melhor: LancamentoCandidato | null = null;
+        let melhorScore = 0;
+        for (const l of lancs) {
+          if (Math.abs(Math.abs(Number(l.valor) || 0) - valorMov) > 0.01) continue;
+          if (!l.data_pagamento) continue;
+          if (Math.abs(diasEntre(m.data, l.data_pagamento)) > 7) continue;
+          const fornNome = l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null;
+          const s = calcularScore(m.data, m.descricao, l, fornNome);
+          if (s > melhorScore) {
+            melhorScore = s;
+            melhor = l;
+          }
+        }
+
+        const fornecedorMatch = melhor?.favorecido_id ? fornMap.get(melhor.favorecido_id) ?? null : null;
+
+        return {
+          ...m,
+          duplicado: dupSet.has(m.hash),
+          scoreMatch: melhorScore,
+          matchEncontrado: melhorScore >= 50,
+          lancamentoMatchId: melhor?.id ?? null,
+          fornecedorMatch,
+          descricaoMatch: melhor?.descricao ?? null,
+        };
+      });
+
+      const novos = movimentos.filter((m) => !m.duplicado);
       const result: PreviewResult = {
         movimentos,
         totalLinhas: movimentos.length,
-        novos: movimentos.filter((m) => !m.duplicado).length,
+        novos: novos.length,
         duplicados: movimentos.filter((m) => m.duplicado).length,
+        comMatch: novos.filter((m) => m.matchEncontrado).length,
+        semMatch: novos.filter((m) => !m.matchEncontrado).length,
         formato,
       };
       setPreview(result);
