@@ -53,7 +53,14 @@ const ROTULO_FILTRO: Record<FiltroTabela, string> = {
   ja_no_banco: 'já no banco',
 };
 
-/** Filtro local da tabela — apenas visualização, sem mexer em dados. */
+/**
+ * Filtro local da tabela — apenas visualização, sem mexer em dados.
+ *
+ * Precedência: `statusPersistido` é a verdade do banco. Heurísticas do
+ * preview (matchAgrupado / scoreMatch) NUNCA definem pendência operacional —
+ * só servem para layout. Um agrupado conciliado entra em "conciliados",
+ * jamais em "pendentes".
+ */
 function aplicarFiltro(m: MovimentoPreview, f: FiltroTabela): boolean {
   const acionavel =
     !m.existeNoDB ||
@@ -61,7 +68,10 @@ function aplicarFiltro(m: MovimentoPreview, f: FiltroTabela): boolean {
     m.statusPersistido === 'parcial';
   switch (f) {
     case 'todos':        return true;
-    case 'pendentes':    return m.statusPersistido === 'nao_conciliado';
+    // Pendente = ainda exige ação humana: novo (null) ou nao_conciliado.
+    // Conciliado/parcial/ignorado NUNCA podem aparecer aqui, mesmo se forem agrupados.
+    case 'pendentes':
+      return m.statusPersistido === null || m.statusPersistido === 'nao_conciliado';
     case 'parciais':     return m.statusPersistido === 'parcial';
     case 'conciliados':  return m.statusPersistido === 'conciliado';
     case 'ignorados':    return m.statusPersistido === 'ignorado';
@@ -761,11 +771,15 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                           )}
                         </TableCell>
                         <TableCell className="text-[11px] max-w-[300px]">
-                          {m.statusPersistido === 'conciliado' ? (
-                            <span className="text-emerald-700 italic text-[10px]">— conciliado —</span>
-                          ) : m.statusPersistido === 'ignorado' ? (
-                            <span className="text-muted-foreground italic text-[10px]">— ignorado —</span>
-                          ) : m.matchAgrupado ? (
+                          {/*
+                            Renderização da coluna "Match financeiro".
+                            Precedência: matchAgrupado preserva os detalhes mesmo
+                            quando o status já é conciliado/ignorado — o que muda
+                            é só a ação rodapé. Para movimentos NÃO agrupados,
+                            statusPersistido tem precedência total e suprime a
+                            heurística (1:1 / sem match).
+                          */}
+                          {m.matchAgrupado ? (
                             <div className="space-y-1">
                               <details className="group">
                                 <summary className="cursor-pointer list-none text-blue-800 hover:underline">
@@ -802,7 +816,22 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                   })}
                                 </div>
                               </details>
-                              {hashesBaixados.has(m.hash) ? (
+                              {/*
+                                Rodapé do agrupado é status-aware:
+                                - conciliado → badge "conciliado", sem ação
+                                - ignorado   → badge "ignorado", sem ação
+                                - parcial    → ainda permite ação (extrato pode receber mais vínculos)
+                                - default    → botão "Confirmar realizados" se houver agendado/programado
+                              */}
+                              {m.statusPersistido === 'conciliado' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                  conciliado
+                                </span>
+                              ) : m.statusPersistido === 'ignorado' ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-semibold">
+                                  ignorado
+                                </span>
+                              ) : hashesBaixados.has(m.hash) ? (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
                                   ✓ Baixado via OFX
                                 </span>
@@ -818,6 +847,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 </Button>
                               )}
                             </div>
+                          ) : m.statusPersistido === 'conciliado' ? (
+                            <span className="text-emerald-700 italic text-[10px]">— conciliado —</span>
+                          ) : m.statusPersistido === 'ignorado' ? (
+                            <span className="text-muted-foreground italic text-[10px]">— ignorado —</span>
                           ) : m.matchEncontrado && matchTitulo ? (
                             <div className="space-y-1">
                               <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>

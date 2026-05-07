@@ -114,7 +114,15 @@ export interface PreviewResult {
   formato: 'OFX' | 'CSV';
 }
 
-/** Recalcula todos os agregados a partir do array de movimentos. */
+/**
+ * Recalcula todos os agregados a partir do array de movimentos.
+ *
+ * Precedência absoluta: `statusPersistido` define pendência. Heurísticas
+ * (`matchAgrupado`, `scoreMatch`) só contam para os contadores de match,
+ * e ainda assim restritos a movimentos AINDA acionáveis. Um agrupado
+ * conciliado conta apenas em `conciliados` — nunca em `pendentes` nem
+ * em `matchAgrupados`.
+ */
 function recomputarAgregados(
   movimentos: MovimentoPreview[],
 ): Pick<
@@ -131,7 +139,11 @@ function recomputarAgregados(
   return {
     novosParaSalvar:   movimentos.filter((m) => !m.existeNoDB).length,
     existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
-    pendentes:         movimentos.filter((m) => m.statusPersistido === 'nao_conciliado').length,
+    // Pendente = null (não salvo) OR nao_conciliado. Conciliado/parcial/ignorado
+    // NUNCA entram, mesmo que sejam agrupados.
+    pendentes:         movimentos.filter((m) =>
+      m.statusPersistido === null || m.statusPersistido === 'nao_conciliado'
+    ).length,
     parciais:          movimentos.filter((m) => m.statusPersistido === 'parcial').length,
     conciliados:       movimentos.filter((m) => m.statusPersistido === 'conciliado').length,
     ignorados:         movimentos.filter((m) => m.statusPersistido === 'ignorado').length,
