@@ -40,6 +40,8 @@ export interface MovimentoPreview extends MovimentoBruto {
   fornecedorMatch: string | null;
   /** Descrição do candidato 1:1. */
   descricaoMatch: string | null;
+  /** Status do lançamento candidato 1:1 ('realizado'|'agendado'|'programado'|null). */
+  statusMatch: string | null;
 
   /** Match composto por vários lançamentos (N:N). */
   matchAgrupado: boolean;
@@ -61,6 +63,8 @@ export interface LancamentoAgrupadoInfo {
   valor: number;        // signed (negativo = saída)
   macroCusto: string | null;
   grupoCusto: string | null;
+  /** Status atual do lançamento (para decidir se converte). */
+  statusTransacao: string | null;
 }
 
 export interface PreviewResult {
@@ -120,6 +124,8 @@ interface LancamentoCandidato {
   favorecido_id: string | null;
   macro_custo: string | null;
   grupo_custo: string | null;
+  status_transacao: string | null;
+  numero_documento: string | null;
 }
 
 /**
@@ -341,12 +347,15 @@ export function useImportacaoExtrato() {
       const fetchIni = addDays(dataMin, -10);
       const fetchFim = addDays(dataMax, +10);
 
+      // Inclui agendado/programado para permitir conversão assistida via OFX.
+      // Exclui cenário META — não é alvo de conciliação.
       const { data: lancsRaw } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo')
+        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo, status_transacao, numero_documento, cenario')
         .eq('cliente_id', clienteAtual.id)
         .eq('cancelado', false)
-        .eq('status_transacao', 'realizado')
+        .neq('cenario', 'meta')
+        .in('status_transacao', ['realizado', 'agendado', 'programado'])
         .or(`conta_bancaria_id.eq.${params.contaBancariaId},conta_destino_id.eq.${params.contaBancariaId}`)
         .gte('data_pagamento', fetchIni)
         .lte('data_pagamento', fetchFim);
@@ -405,6 +414,7 @@ export function useImportacaoExtrato() {
           lancamentoMatchId: melhor?.id ?? null,
           fornecedorMatch,
           descricaoMatch: melhor?.descricao ?? null,
+          statusMatch: melhor?.status_transacao ?? null,
           matchAgrupado: false,
           quantidadeItensMatch: 0,
           valorSomado: 0,
@@ -445,6 +455,7 @@ export function useImportacaoExtrato() {
                   valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
                   macroCusto: l.macro_custo,
                   grupoCusto: l.grupo_custo,
+                  statusTransacao: l.status_transacao,
                 }))
                 .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
               return {

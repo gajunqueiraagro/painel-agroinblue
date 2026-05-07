@@ -18,6 +18,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useImportacaoExtrato, type MovimentoPreview } from '@/hooks/useImportacaoExtrato';
+import { useBaixaViaExtrato } from '@/hooks/useBaixaViaExtrato';
+import { ConfirmarBaixaAgrupadaDialog } from './ConfirmarBaixaAgrupadaDialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -37,6 +43,47 @@ function badgeFromMovimento(m: MovimentoPreview): BadgeStatus {
   if (m.scoreMatch >= 80) return { label: `match forte (${m.scoreMatch})`, cls: 'bg-emerald-100 text-emerald-700' };
   if (m.scoreMatch >= 50) return { label: `provável (${m.scoreMatch})`, cls: 'bg-amber-100 text-amber-700' };
   return { label: 'sem match', cls: 'bg-red-100 text-red-700' };
+}
+
+/** Status do match elegível para conversão Agendado/Programado → Realizado. */
+function podeConverterStatus(status: string | null | undefined): boolean {
+  const s = (status || '').toLowerCase();
+  return s === 'agendado' || s === 'programado';
+}
+
+/** Persiste 1 movimento de extrato isolado (ou retorna o id existente via hash). */
+async function garantirExtratoId(
+  clienteId: string,
+  contaBancariaId: string,
+  m: MovimentoPreview,
+): Promise<string> {
+  if (m.duplicado) {
+    const { data, error } = await supabase
+      .from('extrato_bancario_v2' as any)
+      .select('id')
+      .eq('cliente_id', clienteId)
+      .eq('hash_movimento', m.hash)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return (data as { id: string }).id;
+  }
+  const { data, error } = await supabase
+    .from('extrato_bancario_v2' as any)
+    .insert({
+      cliente_id: clienteId,
+      conta_bancaria_id: contaBancariaId,
+      data_movimento: m.data,
+      descricao: m.descricao,
+      documento: m.documento,
+      valor: m.valor,
+      tipo_movimento: m.tipo,
+      hash_movimento: m.hash,
+      status: 'nao_conciliado',
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
 }
 
 interface Conta {
@@ -60,10 +107,18 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
   const { preview, loading, error, gerarPreview, confirmarImportacao, reset } = useImportacaoExtrato();
+  const { baixarLancamentoViaExtrato } = useBaixaViaExtrato();
 
   const [contas, setContas] = useState<Conta[]>([]);
   const [contaId, setContaId] = useState<string>(contaBancariaIdInicial ?? '');
   const [arquivo, setArquivo] = useState<File | null>(null);
+
+  // Conversão 1:1 (AlertDialog) e agrupada (Dialog).
+  const [confirm1a1, setConfirm1a1] = useState<MovimentoPreview | null>(null);
+  const [confirmAgrupado, setConfirmAgrupado] = useState<{ extratoId: string; movimento: MovimentoPreview } | null>(null);
+  const [convertindo, setConvertindo] = useState(false);
+  // Hashes locais marcados como já-baixados para feedback visual sem refetch.
+  const [hashesBaixados, setHashesBaixados] = useState<Set<string>>(new Set());
 
   // Carregar contas do cliente
   useEffect(() => {
@@ -87,6 +142,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     if (!open) {
       reset();
       setArquivo(null);
+      setHashesBaixados(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -114,6 +170,42 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       onClose();
     } catch (e: any) {
       toast.error('Erro ao confirmar: ' + (e?.message ?? e));
+    }
+  };
+
+  /** Conversão 1:1 confirmada — converte status e cria vínculo. */
+  const executarConversao1a1 = async (m: MovimentoPreview) => {
+    if (!clienteId || !m.lancamentoMatchId) return;
+    setConvertindo(true);
+    try {
+      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      await baixarLancamentoViaExtrato({
+        lancamentoId: m.lancamentoMatchId,
+        extratoId,
+        dataPagamentoReal: m.data,
+        documentoBanco: m.documento ?? undefined,
+      });
+      setHashesBaixados((prev) => new Set(prev).add(m.hash));
+      toast.success('Lançamento convertido em realizado e vinculado ao extrato');
+      setConfirm1a1(null);
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message ?? e));
+    } finally {
+      setConvertindo(false);
+    }
+  };
+
+  /** Abre modal agrupado — garante o extrato existir antes (precisa de id real). */
+  const abrirAgrupado = async (m: MovimentoPreview) => {
+    if (!clienteId) return;
+    setConvertindo(true);
+    try {
+      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      setConfirmAgrupado({ extratoId, movimento: m });
+    } catch (e: any) {
+      toast.error('Erro: ' + (e?.message ?? e));
+    } finally {
+      setConvertindo(false);
     }
   };
 
@@ -237,39 +329,81 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             {badge.label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-[11px] max-w-[280px]">
+                        <TableCell className="text-[11px] max-w-[300px]">
                           {m.duplicado ? (
                             <span className="text-muted-foreground">—</span>
                           ) : m.matchAgrupado ? (
-                            <details className="group">
-                              <summary className="cursor-pointer list-none text-blue-800 hover:underline">
-                                <span className="inline-block">
-                                  {m.quantidadeItensMatch} lançamentos · {formatMoeda(m.valorSomado)}
-                                  <span className="ml-1 text-[9px] text-blue-500 group-open:hidden">▶ ver</span>
-                                  <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
+                            <div className="space-y-1">
+                              <details className="group">
+                                <summary className="cursor-pointer list-none text-blue-800 hover:underline">
+                                  <span className="inline-block">
+                                    {m.quantidadeItensMatch} lançamentos · {formatMoeda(m.valorSomado)}
+                                    <span className="ml-1 text-[9px] text-blue-500 group-open:hidden">▶ ver</span>
+                                    <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
+                                  </span>
+                                </summary>
+                                <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-0.5 text-[10px]">
+                                  {m.detalhesAgrupados.map((d) => {
+                                    const st = (d.statusTransacao || '').toLowerCase();
+                                    const stCls = st === 'realizado' ? 'bg-emerald-100 text-emerald-700'
+                                      : st === 'agendado' ? 'bg-amber-100 text-amber-800'
+                                      : st === 'programado' ? 'bg-blue-100 text-blue-700'
+                                      : 'bg-muted text-muted-foreground';
+                                    return (
+                                      <div key={d.id} className="flex gap-2 items-baseline">
+                                        <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
+                                        <span className="flex-1 truncate" title={d.fornecedor || d.descricao || ''}>
+                                          {d.fornecedor || d.descricao || '-'}
+                                        </span>
+                                        <span className={`tabular-nums shrink-0 ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                          {formatMoeda(d.valor)}
+                                        </span>
+                                        <span className={`shrink-0 px-1.5 py-px rounded text-[8px] uppercase ${stCls}`}>{st || '—'}</span>
+                                        {d.macroCusto && (
+                                          <span className="text-muted-foreground italic shrink-0 text-[9px]" title={d.grupoCusto || undefined}>
+                                            {d.macroCusto}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </details>
+                              {hashesBaixados.has(m.hash) ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                  ✓ Baixado via OFX
                                 </span>
-                              </summary>
-                              <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-0.5 text-[10px]">
-                                {m.detalhesAgrupados.map((d) => (
-                                  <div key={d.id} className="flex gap-2 items-baseline">
-                                    <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
-                                    <span className="flex-1 truncate" title={d.fornecedor || d.descricao || ''}>
-                                      {d.fornecedor || d.descricao || '-'}
-                                    </span>
-                                    <span className={`tabular-nums shrink-0 ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                                      {formatMoeda(d.valor)}
-                                    </span>
-                                    {d.macroCusto && (
-                                      <span className="text-muted-foreground italic shrink-0 text-[9px]" title={d.grupoCusto || undefined}>
-                                        {d.macroCusto}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </details>
+                              ) : m.detalhesAgrupados.some((d) => podeConverterStatus(d.statusTransacao)) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2"
+                                  disabled={convertindo}
+                                  onClick={() => abrirAgrupado(m)}
+                                >
+                                  ✓ Confirmar realizados
+                                </Button>
+                              )}
+                            </div>
                           ) : m.matchEncontrado && matchTitulo ? (
-                            <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>
+                            <div className="space-y-1">
+                              <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>
+                              {hashesBaixados.has(m.hash) ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                  ✓ Baixado via OFX
+                                </span>
+                              ) : (m.scoreMatch >= 80 && podeConverterStatus(m.statusMatch)) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2"
+                                  disabled={convertindo}
+                                  onClick={() => setConfirm1a1(m)}
+                                >
+                                  ✓ Marcar realizado
+                                </Button>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -293,6 +427,49 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* AlertDialog: confirmação de baixa 1:1 */}
+      <AlertDialog open={!!confirm1a1} onOpenChange={(v) => { if (!v) setConfirm1a1(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar baixa do lançamento via OFX?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm1a1 && (
+                <span>
+                  O lançamento <strong>{confirm1a1.fornecedorMatch || confirm1a1.descricaoMatch || '(sem nome)'}</strong> será
+                  marcado como <strong>realizado</strong> com data de pagamento {fmtData(confirm1a1.data)} e vinculado
+                  a este movimento do extrato. Categoria, valor e classificação NÃO serão alterados.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={convertindo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={convertindo}
+              onClick={() => confirm1a1 && executarConversao1a1(confirm1a1)}
+            >
+              {convertindo ? 'Processando...' : 'Marcar realizado'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de seleção para baixa agrupada */}
+      {confirmAgrupado && (
+        <ConfirmarBaixaAgrupadaDialog
+          open={!!confirmAgrupado}
+          onClose={() => setConfirmAgrupado(null)}
+          extratoId={confirmAgrupado.extratoId}
+          dataMovimentoExtrato={confirmAgrupado.movimento.data}
+          documentoExtrato={confirmAgrupado.movimento.documento}
+          itens={confirmAgrupado.movimento.detalhesAgrupados}
+          onConcluido={() => {
+            setHashesBaixados((prev) => new Set(prev).add(confirmAgrupado.movimento.hash));
+            setConfirmAgrupado(null);
+          }}
+        />
+      )}
     </Dialog>
   );
 }
