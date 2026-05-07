@@ -422,22 +422,23 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-3 overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>Importar extrato bancário (OFX/CSV)</DialogTitle>
-          <DialogDescription>
-            Selecione o arquivo e a conta. O sistema detecta duplicatas por hash do movimento.
-            Movimentos importados ficam com status <strong>não conciliado</strong> — sem criar lançamento.
+      <DialogContent className="w-[94vw] max-w-7xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+        {/* Header compacto fixo (linha 1: título + subtítulo curto) */}
+        <DialogHeader className="shrink-0 px-6 py-3 border-b">
+          <DialogTitle className="text-base leading-none">Importar extrato bancário</DialogTitle>
+          <DialogDescription className="text-[11px] text-muted-foreground">
+            OFX/CSV · não cria lançamento. Importe, salve o extrato e finalize a conciliação com confirmação humana.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
+        {/* Linha de controles: arquivo, conta, gerar preview lado a lado */}
+        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-[1.2fr_1fr_auto] gap-3 items-end px-6 py-3 border-b">
           <div>
             <Label className="text-xs">Arquivo (.ofx ou .csv)</Label>
             <Input
               type="file"
               accept=".ofx,.csv,.txt"
-              onChange={e => setArquivo(e.target.files?.[0] ?? null)}
+              onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
               className="h-9"
             />
           </div>
@@ -446,7 +447,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             <Select value={contaId} onValueChange={setContaId}>
               <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {contas.map(c => (
+                {contas.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.nome_exibicao || c.nome_conta}
                   </SelectItem>
@@ -454,15 +455,16 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               </SelectContent>
             </Select>
           </div>
-        </div>
-
-        <div className="flex gap-2 shrink-0">
-          <Button onClick={handleGerar} disabled={loading || !arquivo || !contaId}>
+          <Button
+            onClick={handleGerar}
+            disabled={loading || !arquivo || !contaId}
+            className="h-9"
+          >
             {loading ? 'Processando...' : 'Gerar preview'}
           </Button>
         </div>
 
-        {/* Indicador das 3 etapas do fluxo (visível assim que há preview). */}
+        {/* Faixa única: etapas (esquerda) + resumo do estado (direita) */}
         {preview && (() => {
           const algoSalvo = preview.existentesNoBanco > 0;
           const tudoSalvo = preview.novosParaSalvar === 0 && preview.totalLinhas > 0;
@@ -471,95 +473,104 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           const step2: StepStatus = !algoSalvo ? 'pending' : (temPendencia ? 'active' : 'done');
           const step3: StepStatus = step2 === 'done' ? 'active' : 'pending';
           return (
-            <div className="shrink-0 flex items-center gap-1 text-[10px] flex-wrap">
-              <StepBadge num={1} label="Salvar extrato"  status={step1} />
-              <span className="text-muted-foreground">→</span>
-              <StepBadge num={2} label="Conciliar"        status={step2} />
-              <span className="text-muted-foreground">→</span>
-              <StepBadge num={3} label="Finalizar"        status={step3} />
+            <div className="shrink-0 flex items-center justify-between flex-wrap gap-2 px-6 py-2 border-b text-[10px]">
+              <div className="flex items-center gap-1 flex-wrap">
+                <StepBadge num={1} label="Salvar extrato" status={step1} />
+                <span className="text-muted-foreground">→</span>
+                <StepBadge num={2} label="Conciliar"      status={step2} />
+                <span className="text-muted-foreground">→</span>
+                <StepBadge num={3} label="Finalizar"      status={step3} />
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {preview.totalLinhas} mov.
+                {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
+                {preview.parciais > 0    && <> · <span className="text-amber-800 font-semibold">{preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}</span></>}
+                {preview.pendentes > 0   && <> · <span className="text-amber-700 font-semibold">{preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}</span></>}
+                {preview.ignorados > 0   && <> · {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}</>}
+                {preview.novosParaSalvar > 0 && <> · {preview.novosParaSalvar} a salvar</>}
+              </div>
             </div>
           );
         })()}
 
+        {/* Avisos contextuais inline (compactos, 1 linha) */}
         {preview && !importacaoConfirmada && preview.novosParaSalvar > 0 && (
-          <div className="shrink-0 flex items-center gap-1.5 rounded bg-amber-50/70 px-2 py-1 text-[11px] text-amber-800">
+          <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-amber-50/70 text-[11px] text-amber-800 border-b">
             <Info className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              1º passo: salvar o extrato bancário. Isso não altera o financeiro.
-            </span>
+            <span className="truncate">1º passo: salvar o extrato bancário. Isso não altera o financeiro.</span>
           </div>
         )}
         {importacaoConfirmada && (
-          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+          <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-emerald-50/70 text-[11px] text-emerald-800 border-b">
             <CheckCircle2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              Extrato salvo. Revise os matches e confirme vínculos/baixas.
-            </span>
+            <span className="truncate">Extrato salvo. Revise os matches e confirme vínculos/baixas.</span>
           </div>
         )}
         {preview && !importacaoConfirmada && preview.novosParaSalvar === 0 && preview.existentesNoBanco > 0 && (
-          <div className="shrink-0 flex items-center gap-1.5 rounded bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+          <div className="shrink-0 flex items-center gap-1.5 px-6 py-1 bg-emerald-50/70 text-[11px] text-emerald-800 border-b">
             <CheckCircle2 className="h-3 w-3 shrink-0" />
             <span className="truncate">
-              Todos os {preview.existentesNoBanco} movimento(s) já estão no banco. Use as ações para finalizar.
+              {preview.existentesNoBanco} já no banco · use as ações para finalizar.
             </span>
           </div>
         )}
 
         {error && (
-          <div className="shrink-0 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <div className="shrink-0 px-6 py-1 text-[11px] text-destructive bg-destructive/5 border-b">
             {error}
           </div>
         )}
 
-        {preview && (
-          <>
-            <div className="flex items-center gap-2 flex-wrap text-xs shrink-0">
-              <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 font-semibold">
-                Formato: {preview.formato}
+        {/* Área central rolável — tabela ocupa o máximo possível */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-6 py-3 gap-2">
+          {preview && (
+            <>
+            <div className="flex items-center gap-1.5 flex-wrap text-xs shrink-0">
+              <span className="h-7 inline-flex items-center px-2 rounded bg-blue-50 text-blue-800 font-semibold">
+                {preview.formato}
               </span>
-              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 font-semibold">
+              <span className="h-7 inline-flex items-center px-2 rounded bg-emerald-50 text-emerald-800 font-semibold">
                 {preview.matchDireto} match direto
               </span>
               {preview.matchAgrupados > 0 && (
-                <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-blue-50 text-blue-800 font-semibold">
                   {preview.matchAgrupados} agrupado{preview.matchAgrupados !== 1 ? 's' : ''}
                 </span>
               )}
-              <span className="px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">
+              <span className="h-7 inline-flex items-center px-2 rounded bg-red-50 text-red-700 font-semibold">
                 {preview.semMatch} sem match
               </span>
               {preview.existentesNoBanco > 0 && (
-                <span className="px-2 py-1 rounded bg-slate-100 text-slate-700 font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-slate-100 text-slate-700 font-semibold">
                   {preview.existentesNoBanco} já no banco
                 </span>
               )}
               {preview.pendentes > 0 && (
-                <span className="px-2 py-1 rounded bg-amber-50 text-amber-800 font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-amber-50 text-amber-800 font-semibold">
                   {preview.pendentes} pendente{preview.pendentes !== 1 ? 's' : ''}
                 </span>
               )}
               {preview.parciais > 0 && (
-                <span className="px-2 py-1 rounded bg-amber-100 text-amber-900 font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-amber-100 text-amber-900 font-semibold">
                   {preview.parciais} parcial{preview.parciais !== 1 ? 'is' : ''}
                 </span>
               )}
               {preview.conciliados > 0 && (
-                <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-emerald-100 text-emerald-800 font-semibold">
                   {preview.conciliados} conciliado{preview.conciliados !== 1 ? 's' : ''}
                 </span>
               )}
               {preview.ignorados > 0 && (
-                <span className="px-2 py-1 rounded bg-muted text-muted-foreground font-semibold">
+                <span className="h-7 inline-flex items-center px-2 rounded bg-muted text-muted-foreground font-semibold">
                   {preview.ignorados} ignorado{preview.ignorados !== 1 ? 's' : ''}
                 </span>
               )}
-              <span className="text-muted-foreground">
+              <span className="text-muted-foreground ml-auto">
                 Total {formatMoeda(totalValor)} (a salvar)
               </span>
             </div>
 
-            <div className="overflow-auto flex-1 min-h-[200px] border rounded">
+            <div className="flex-1 min-h-0 overflow-auto border rounded-md">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
@@ -730,10 +741,11 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 </TableBody>
               </Table>
             </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
 
-        <DialogFooter className="shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
+        <DialogFooter className="shrink-0 border-t bg-background px-6 py-3 flex items-center justify-between gap-3 z-20 flex-col-reverse sm:flex-row">
           {/* Zona 1: resumo do estado atual */}
           {preview ? (
             <div className="text-[11px] text-muted-foreground sm:mr-auto truncate">
