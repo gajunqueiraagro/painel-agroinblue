@@ -28,6 +28,12 @@ interface BadgeStatus {
 }
 function badgeFromMovimento(m: MovimentoPreview): BadgeStatus {
   if (m.duplicado) return { label: 'duplicado', cls: 'bg-muted text-muted-foreground' };
+  if (m.matchAgrupado) {
+    return {
+      label: `agrupado ${m.quantidadeItensMatch} itens (${m.scoreMatch})`,
+      cls: 'bg-blue-100 text-blue-700',
+    };
+  }
   if (m.scoreMatch >= 80) return { label: `match forte (${m.scoreMatch})`, cls: 'bg-emerald-100 text-emerald-700' };
   if (m.scoreMatch >= 50) return { label: `provável (${m.scoreMatch})`, cls: 'bg-amber-100 text-amber-700' };
   return { label: 'sem match', cls: 'bg-red-100 text-red-700' };
@@ -178,8 +184,13 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 Formato: {preview.formato}
               </span>
               <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-800 font-semibold">
-                {preview.comMatch} com match
+                {preview.matchDireto} match direto
               </span>
+              {preview.matchAgrupados > 0 && (
+                <span className="px-2 py-1 rounded bg-blue-50 text-blue-800 font-semibold">
+                  {preview.matchAgrupados} agrupado{preview.matchAgrupados !== 1 ? 's' : ''}
+                </span>
+              )}
               <span className="px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">
                 {preview.semMatch} sem match
               </span>
@@ -226,10 +237,42 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             {badge.label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-[11px] max-w-[200px] truncate" title={matchTitulo ?? ''}>
-                          {!m.duplicado && m.matchEncontrado && matchTitulo
-                            ? <span className="text-emerald-800">{matchTitulo}</span>
-                            : <span className="text-muted-foreground">—</span>}
+                        <TableCell className="text-[11px] max-w-[280px]">
+                          {m.duplicado ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : m.matchAgrupado ? (
+                            <details className="group">
+                              <summary className="cursor-pointer list-none text-blue-800 hover:underline">
+                                <span className="inline-block">
+                                  {m.quantidadeItensMatch} lançamentos · {formatMoeda(m.valorSomado)}
+                                  <span className="ml-1 text-[9px] text-blue-500 group-open:hidden">▶ ver</span>
+                                  <span className="ml-1 text-[9px] text-blue-500 hidden group-open:inline">▼ ocultar</span>
+                                </span>
+                              </summary>
+                              <div className="mt-1 ml-2 pl-2 border-l border-blue-200 space-y-0.5 text-[10px]">
+                                {m.detalhesAgrupados.map((d) => (
+                                  <div key={d.id} className="flex gap-2 items-baseline">
+                                    <span className="font-mono text-muted-foreground shrink-0">{fmtData(d.data ?? '')}</span>
+                                    <span className="flex-1 truncate" title={d.fornecedor || d.descricao || ''}>
+                                      {d.fornecedor || d.descricao || '-'}
+                                    </span>
+                                    <span className={`tabular-nums shrink-0 ${d.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                      {formatMoeda(d.valor)}
+                                    </span>
+                                    {d.macroCusto && (
+                                      <span className="text-muted-foreground italic shrink-0 text-[9px]" title={d.grupoCusto || undefined}>
+                                        {d.macroCusto}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : m.matchEncontrado && matchTitulo ? (
+                            <span className="text-emerald-800 truncate block" title={matchTitulo}>{matchTitulo}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

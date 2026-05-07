@@ -32,14 +32,35 @@ export interface MovimentoPreview extends MovimentoBruto {
   duplicado: boolean;
   /** Score 0-100 do melhor candidato em financeiro_lancamentos_v2 (apenas visual). */
   scoreMatch: number;
-  /** Sinal de match: scoreMatch >= 50. */
+  /** Sinal de match: scoreMatch >= 50 (1:1 ou agrupado). */
   matchEncontrado: boolean;
-  /** id do lançamento candidato (melhor score) ou null. */
+  /** id do lançamento candidato 1:1 (null em match agrupado). */
   lancamentoMatchId: string | null;
-  /** Nome do fornecedor do candidato, se houver. */
+  /** Nome do fornecedor do candidato 1:1, se houver. */
   fornecedorMatch: string | null;
-  /** Descrição do candidato. */
+  /** Descrição do candidato 1:1. */
   descricaoMatch: string | null;
+
+  /** Match composto por vários lançamentos (N:N). */
+  matchAgrupado: boolean;
+  /** Quantidade de lançamentos no grupo (0 quando não agrupado). */
+  quantidadeItensMatch: number;
+  /** Soma absoluta dos valores do grupo (deve bater com |valor| do extrato). */
+  valorSomado: number;
+  /** Ids dos lançamentos que compõem o grupo. */
+  lancamentosIds: string[];
+  /** Detalhes para auditoria visual (tooltip/expand). */
+  detalhesAgrupados: LancamentoAgrupadoInfo[];
+}
+
+export interface LancamentoAgrupadoInfo {
+  id: string;
+  data: string | null;
+  fornecedor: string | null;
+  descricao: string | null;
+  valor: number;        // signed (negativo = saída)
+  macroCusto: string | null;
+  grupoCusto: string | null;
 }
 
 export interface PreviewResult {
@@ -47,8 +68,10 @@ export interface PreviewResult {
   totalLinhas: number;
   novos: number;
   duplicados: number;
-  /** Movimentos NOVOS com matchEncontrado=true. */
-  comMatch: number;
+  /** Movimentos NOVOS resolvidos por match 1:1 (score >= 50, sem composição). */
+  matchDireto: number;
+  /** Movimentos NOVOS resolvidos via composição (subset). */
+  matchAgrupados: number;
   /** Movimentos NOVOS sem qualquer match (score < 50). */
   semMatch: number;
   formato: 'OFX' | 'CSV';
@@ -95,6 +118,8 @@ interface LancamentoCandidato {
   sinal: number;
   descricao: string | null;
   favorecido_id: string | null;
+  macro_custo: string | null;
+  grupo_custo: string | null;
 }
 
 /**
@@ -125,6 +150,139 @@ function calcularScore(
     score += 10;
   }
   return score;
+}
+
+/**
+ * Heurística gulosa para encontrar combinação de até `maxItens` lançamentos
+ * cuja soma de |valor| seja ≈ `target` (tol 0.05).
+ *
+ * Estratégia:
+ *   - Pool ordenado por proximidade da data do movimento (heurística forte).
+ *   - DFS limitado por profundidade e tempo (timeoutMs).
+ *   - Poda: candidatos cujo |valor| > restante+0.05 são pulados.
+ *   - Quando encontra solução, mantém a com MENOS itens (ties: mais próxima da data).
+ *
+ * Retorna `null` se não houver combinação viável dentro do orçamento.
+ */
+interface GrupoEncontrado {
+  itens: LancamentoCandidato[];
+  somaAbs: number;
+}
+function tryGroupingMatch(
+  target: number,
+  pool: LancamentoCandidato[],
+  movDataISO: string,
+  maxItens: number,
+  timeoutMs: number,
+): GrupoEncontrado | null {
+  if (pool.length === 0 || target <= 0) return null;
+
+  // Ordena por proximidade da data — primeiros são candidatos mais prováveis.
+  const ordenado = [...pool].sort((a, b) => {
+    const da = a.data_pagamento ? Math.abs(diasEntre(movDataISO, a.data_pagamento)) : 999;
+    const db = b.data_pagamento ? Math.abs(diasEntre(movDataISO, b.data_pagamento)) : 999;
+    return da - db;
+  });
+
+  const start = Date.now();
+  let melhor: GrupoEncontrado | null = null;
+  const atual: LancamentoCandidato[] = [];
+
+  function dfs(startIdx: number, restante: number, depth: number) {
+    if (Date.now() - start > timeoutMs) return;
+    if (Math.abs(restante) < 0.05) {
+      if (melhor === null || atual.length < melhor.itens.length) {
+        const somaAbs = target - restante; // = soma acumulada dos itens
+        melhor = { itens: [...atual], somaAbs: Math.abs(somaAbs) };
+      }
+      return;
+    }
+    if (depth >= maxItens) return;
+    if (restante < -0.05) return; // ultrapassou demais
+    // Poda: se já temos solução com K itens, parar quando atual.length+1 >= K
+    if (melhor !== null && atual.length + 1 >= melhor.itens.length) return;
+
+    for (let i = startIdx; i < ordenado.length; i++) {
+      if (Date.now() - start > timeoutMs) return;
+      const v = Math.abs(Number(ordenado[i].valor) || 0);
+      if (v > restante + 0.05) continue;
+      atual.push(ordenado[i]);
+      dfs(i + 1, restante - v, depth + 1);
+      atual.pop();
+    }
+  }
+
+  dfs(0, target, 0);
+  return melhor;
+}
+
+/**
+ * Score para match agrupado. Teto = 89 (nunca supera match 1:1 max=100).
+ *
+ * Bônus:
+ *   +20 — Δ data média do grupo até a data do movimento ≤ 3 dias
+ *   +10 — >50% dos itens têm fornecedor/descrição similar ao movimento
+ *   +10 — todos os itens compartilham mesma `macro_custo` (coerência)
+ *   +10 — span (max-min) entre datas do grupo ≤ 3 dias (compactness)
+ *
+ * Penalidades:
+ *   -10 — grupo com > 5 itens (preferir grupos pequenos)
+ *   -10 — múltiplas macros (mistura de naturezas)
+ *    -5 — span > 7 dias entre as datas do grupo
+ *
+ * Base = 50. Após bônus/penalidades, teto duro em 89.
+ */
+function calcularScoreAgrupado(
+  movDataISO: string,
+  movDescricao: string,
+  itens: LancamentoCandidato[],
+  fornByLancId: Map<string, string>,
+): number {
+  if (itens.length === 0) return 0;
+  let score = 50;
+
+  // ── Δ data média ──
+  const datas = itens.map((l) => l.data_pagamento).filter((d): d is string => !!d);
+  let span = 0;
+  if (datas.length > 0) {
+    const ts = datas.map((d) => new Date(d + 'T00:00:00').getTime());
+    const mediaTs = ts.reduce((s, x) => s + x, 0) / ts.length;
+    const movTs = new Date(movDataISO + 'T00:00:00').getTime();
+    const diasMedios = Math.abs((mediaTs - movTs) / 86400000);
+    if (diasMedios <= 3) score += 20;
+    span = (Math.max(...ts) - Math.min(...ts)) / 86400000;
+  }
+
+  // ── descrição/fornecedor similar ──
+  const movN = normalizarTexto(movDescricao);
+  if (movN) {
+    let similares = 0;
+    for (const l of itens) {
+      const lancN = normalizarTexto(l.descricao);
+      const fornN = normalizarTexto(l.favorecido_id ? fornByLancId.get(l.id) ?? null : null);
+      if ((lancN && (movN.includes(lancN) || lancN.includes(movN))) ||
+          (fornN && movN.includes(fornN))) {
+        similares++;
+      }
+    }
+    if (similares / itens.length > 0.5) score += 10;
+  }
+
+  // ── coerência de macro_custo ──
+  const macros = new Set(itens.map((l) => l.macro_custo).filter((m): m is string => !!m));
+  if (macros.size === 1) score += 10;
+  if (macros.size > 1) score -= 10;
+
+  // ── compactness das datas ──
+  if (datas.length > 0) {
+    if (span <= 3) score += 10;
+    else if (span > 7) score -= 5;
+  }
+
+  // ── tamanho do grupo ──
+  if (itens.length > 5) score -= 10;
+
+  return Math.max(0, Math.min(89, score));
 }
 
 export function useImportacaoExtrato() {
@@ -176,16 +334,16 @@ export function useImportacaoExtrato() {
       const dupSet = new Set((existentes as unknown as { hash_movimento: string }[] ?? []).map((r) => r.hash_movimento));
 
       // ── Match financeiro: buscar candidatos em financeiro_lancamentos_v2 ──
-      // Range de datas amplo (±7 dias além do mínimo/máximo do arquivo).
+      // Range de datas amplo (±10 dias para cobrir 1:1 e composição N:N).
       const datas = movimentosComHash.map((m) => m.data).sort();
       const dataMin = datas[0];
       const dataMax = datas[datas.length - 1];
-      const fetchIni = addDays(dataMin, -7);
-      const fetchFim = addDays(dataMax, +7);
+      const fetchIni = addDays(dataMin, -10);
+      const fetchFim = addDays(dataMax, +10);
 
       const { data: lancsRaw } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id')
+        .select('id, data_pagamento, valor, sinal, descricao, favorecido_id, conta_bancaria_id, conta_destino_id, macro_custo, grupo_custo')
         .eq('cliente_id', clienteAtual.id)
         .eq('cancelado', false)
         .eq('status_transacao', 'realizado')
@@ -210,9 +368,22 @@ export function useImportacaoExtrato() {
         }
       }
 
-      // Para cada movimento: encontrar melhor candidato (|valor| igual; data ±7d; maior score).
+      // Mapa lancId → nomeFornecedor (para score agrupado consultar por l.id).
+      const fornByLancId = new Map<string, string>();
+      for (const l of lancs) {
+        if (l.favorecido_id) {
+          const nome = fornMap.get(l.favorecido_id);
+          if (nome) fornByLancId.set(l.id, nome);
+        }
+      }
+
+      // Para cada movimento:
+      //   1) tentar match 1:1 (|valor| igual, data ±7d, score ≥ 50);
+      //   2) se falhar, tentar composição (subset, até 8 itens, ±10 dias, sinal compatível, timeout 200ms).
       const movimentos: MovimentoPreview[] = movimentosComHash.map((m) => {
         const valorMov = Math.abs(m.valor);
+
+        // ── 1) tentativa 1:1 ──
         let melhor: LancamentoCandidato | null = null;
         let melhorScore = 0;
         for (const l of lancs) {
@@ -226,18 +397,75 @@ export function useImportacaoExtrato() {
             melhor = l;
           }
         }
-
         const fornecedorMatch = melhor?.favorecido_id ? fornMap.get(melhor.favorecido_id) ?? null : null;
-
-        return {
+        const baseFields: Omit<MovimentoPreview, 'duplicado'> = {
           ...m,
-          duplicado: dupSet.has(m.hash),
           scoreMatch: melhorScore,
           matchEncontrado: melhorScore >= 50,
           lancamentoMatchId: melhor?.id ?? null,
           fornecedorMatch,
           descricaoMatch: melhor?.descricao ?? null,
+          matchAgrupado: false,
+          quantidadeItensMatch: 0,
+          valorSomado: 0,
+          lancamentosIds: [],
+          detalhesAgrupados: [],
         };
+
+        // ── 2) tentativa de composição ──
+        // Pula se já há match 1:1 forte (>85) — não vale a pena buscar grupo.
+        // Pula se 1:1 já é razoável (>=50) — match direto vence agrupado por design.
+        if (melhorScore < 50) {
+          const sinalEsperado = m.tipo === 'credito' ? 1 : -1;
+          const pool = lancs.filter((l) => {
+            if (!l.data_pagamento) return false;
+            if (Math.abs(diasEntre(m.data, l.data_pagamento)) > 10) return false;
+            // Compatibilidade de sinal: positivo = entrada, negativo = saída
+            const sinalLanc = (Number(l.sinal) || 0) >= 0 ? 1 : -1;
+            return sinalLanc === sinalEsperado;
+          });
+
+          // Limita pool a 30 mais próximos da data para reduzir explosão DFS.
+          const poolReduzido = pool
+            .map((l) => ({ l, dist: Math.abs(diasEntre(m.data, l.data_pagamento!)) }))
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 30)
+            .map((x) => x.l);
+
+          const grupo = tryGroupingMatch(valorMov, poolReduzido, m.data, 8, 200);
+          if (grupo && grupo.itens.length >= 2) {
+            const scoreGrupo = calcularScoreAgrupado(m.data, m.descricao, grupo.itens, fornByLancId);
+            if (scoreGrupo >= 50) {
+              const detalhes: LancamentoAgrupadoInfo[] = grupo.itens
+                .map((l) => ({
+                  id: l.id,
+                  data: l.data_pagamento,
+                  fornecedor: l.favorecido_id ? fornMap.get(l.favorecido_id) ?? null : null,
+                  descricao: l.descricao,
+                  valor: (Number(l.valor) || 0) * ((Number(l.sinal) || 0) >= 0 ? 1 : -1),
+                  macroCusto: l.macro_custo,
+                  grupoCusto: l.grupo_custo,
+                }))
+                .sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
+              return {
+                ...baseFields,
+                duplicado: dupSet.has(m.hash),
+                scoreMatch: scoreGrupo,
+                matchEncontrado: true,
+                lancamentoMatchId: null,
+                fornecedorMatch: null,
+                descricaoMatch: null,
+                matchAgrupado: true,
+                quantidadeItensMatch: grupo.itens.length,
+                valorSomado: grupo.somaAbs,
+                lancamentosIds: grupo.itens.map((x) => x.id),
+                detalhesAgrupados: detalhes,
+              };
+            }
+          }
+        }
+
+        return { ...baseFields, duplicado: dupSet.has(m.hash) };
       });
 
       const novos = movimentos.filter((m) => !m.duplicado);
@@ -246,7 +474,8 @@ export function useImportacaoExtrato() {
         totalLinhas: movimentos.length,
         novos: novos.length,
         duplicados: movimentos.filter((m) => m.duplicado).length,
-        comMatch: novos.filter((m) => m.matchEncontrado).length,
+        matchDireto: novos.filter((m) => m.matchEncontrado && !m.matchAgrupado).length,
+        matchAgrupados: novos.filter((m) => m.matchAgrupado).length,
         semMatch: novos.filter((m) => !m.matchEncontrado).length,
         formato,
       };
