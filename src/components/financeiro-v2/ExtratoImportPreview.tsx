@@ -133,37 +133,85 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   // Antes disso, qualquer baixa individual mostra toast pedindo confirmação primeiro.
   const [importacaoConfirmada, setImportacaoConfirmada] = useState(false);
 
-  // Carregar contas do cliente
+  // Reset COMPLETO quando o cliente muda (admin pode trocar de cliente
+  // sem fechar a tela). Evita arrastar conta/preview de outro cliente.
   useEffect(() => {
-    if (!open || !clienteId) return;
+    setContas([]);
+    setContaId('');
+    setArquivo(null);
+    setHashesBaixados(new Set());
+    setImportacaoConfirmada(false);
+    reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId]);
+
+  // Carregar contas do cliente atual. Se a conta selecionada não pertence
+  // ao cliente carregado, limpa a seleção (defesa contra leak entre clientes).
+  useEffect(() => {
+    if (!open || !clienteId) {
+      setContas([]);
+      return;
+    }
     supabase
       .from('financeiro_contas_bancarias')
       .select('id, nome_conta, nome_exibicao')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao')
-      .then(({ data }) => setContas((data ?? []) as Conta[]));
+      .then(({ data }) => {
+        const lista = (data ?? []) as Conta[];
+        setContas(lista);
+        setContaId((current) => {
+          if (!current) return current;
+          return lista.some((c) => c.id === current) ? current : '';
+        });
+      });
   }, [open, clienteId]);
 
-  // Sincroniza conta inicial quando muda
+  // Aceita contaBancariaIdInicial apenas se ela pertencer às contas do
+  // cliente atual. Caso contrário, mantém seleção limpa (sem fallback).
   useEffect(() => {
-    if (contaBancariaIdInicial) setContaId(contaBancariaIdInicial);
-  }, [contaBancariaIdInicial]);
+    if (!contaBancariaIdInicial || contas.length === 0) return;
+    if (contas.some((c) => c.id === contaBancariaIdInicial)) {
+      setContaId(contaBancariaIdInicial);
+    } else {
+      setContaId('');
+    }
+  }, [contaBancariaIdInicial, contas]);
 
   // Reset ao fechar
   useEffect(() => {
     if (!open) {
       reset();
       setArquivo(null);
+      setContaId('');
       setHashesBaixados(new Set());
       setImportacaoConfirmada(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  /** Garante que contaId pertence às contas atuais do cliente. */
+  const validarContaDoCliente = (): boolean => {
+    if (!clienteId) {
+      toast.error('Cliente não selecionado — recarregue a tela.');
+      return false;
+    }
+    if (!contaId) {
+      toast.error('Selecione a conta bancária.');
+      return false;
+    }
+    if (!contas.some((c) => c.id === contaId)) {
+      toast.error('A conta selecionada não pertence ao cliente atual. Selecione novamente.');
+      setContaId('');
+      return false;
+    }
+    return true;
+  };
+
   const handleGerar = async () => {
     if (!arquivo) { toast.error('Selecione um arquivo .ofx ou .csv'); return; }
-    if (!contaId) { toast.error('Selecione a conta bancária'); return; }
+    if (!validarContaDoCliente()) return;
     try {
       setImportacaoConfirmada(false);
       await gerarPreview({ arquivo, contaBancariaId: contaId });
@@ -180,6 +228,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
 
   const handleConfirmar = async () => {
     if (!arquivo || !preview) return;
+    if (!validarContaDoCliente()) return;
     try {
       const r = await confirmarImportacao({
         contaBancariaId: contaId,

@@ -583,6 +583,19 @@ export function useImportacaoExtrato() {
     setLoading(true);
     setError(null);
     try {
+      // 0) Validação defensiva — a conta bancária deve pertencer ao cliente atual.
+      //    Evita inserir em extrato_bancario_v2 com conta_bancaria_id de outro cliente.
+      const { data: conta, error: errConta } = await supabase
+        .from('financeiro_contas_bancarias')
+        .select('cliente_id')
+        .eq('id', params.contaBancariaId)
+        .maybeSingle();
+      if (errConta) throw errConta;
+      if (!conta) throw new Error('Conta bancária não encontrada.');
+      if ((conta as { cliente_id: string }).cliente_id !== clienteAtual.id) {
+        throw new Error('A conta bancária selecionada não pertence ao cliente atual.');
+      }
+
       // 1) Cabeçalho de importação — opcional (depende de fazenda específica).
       let importacaoId: string | null = null;
       if (fazendaEspecifica) {
