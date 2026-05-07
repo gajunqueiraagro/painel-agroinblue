@@ -99,7 +99,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   contaBancariaIdInicial?: string;
-  onImported?: (resultado: { inseridos: number; importacaoId: string }) => void;
+  onImported?: (resultado: { inseridos: number; importacaoId: string | null }) => void;
 }
 
 function fmtData(s: string): string {

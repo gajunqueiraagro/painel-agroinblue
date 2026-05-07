@@ -563,14 +563,19 @@ export function useImportacaoExtrato() {
 
   async function confirmarImportacao(params: ConfirmarParams): Promise<{
     inseridos: number;
-    importacaoId: string;
+    importacaoId: string | null;
   }> {
     if (!preview) throw new Error('Sem preview gerado — chame gerarPreview primeiro');
     if (!clienteAtual?.id) throw new Error('Cliente não selecionado');
+
+    // Extrato bancário pertence ao cliente+conta (sem fazenda — a tabela
+    // extrato_bancario_v2 não tem fazenda_id). O cabeçalho opcional em
+    // financeiro_importacoes_v2 ainda exige fazenda_id NOT NULL, então só
+    // criamos esse header quando o usuário está em uma fazenda específica.
+    // Em modo global, a importação é salva direto em extrato_bancario_v2
+    // com importacao_id = NULL (campo já é nullable). Sem fazenda padrão.
     const fazendaId = fazendaAtual?.id;
-    if (!fazendaId || fazendaId === '__global__') {
-      throw new Error('Selecione uma fazenda específica para importar');
-    }
+    const fazendaEspecifica = !!fazendaId && fazendaId !== '__global__';
 
     const novos = preview.movimentos.filter((m) => !m.duplicado);
     if (novos.length === 0) throw new Error('Nenhum movimento novo para importar');
@@ -578,24 +583,27 @@ export function useImportacaoExtrato() {
     setLoading(true);
     setError(null);
     try {
-      // 1) Cabeçalho de importação.
-      const { data: imp, error: e1 } = await supabase
-        .from('financeiro_importacoes_v2')
-        .insert({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaId,
-          conta_bancaria_id: params.contaBancariaId,
-          nome_arquivo: params.nomeArquivo,
-          tipo_arquivo: params.formato,
-          total_linhas: preview.totalLinhas,
-          total_validas: novos.length,
-          total_com_erro: preview.duplicados,
-          status: 'confirmada',
-        } as any)
-        .select('id')
-        .single();
-      if (e1) throw e1;
-      const importacaoId = (imp as { id: string }).id;
+      // 1) Cabeçalho de importação — opcional (depende de fazenda específica).
+      let importacaoId: string | null = null;
+      if (fazendaEspecifica) {
+        const { data: imp, error: e1 } = await supabase
+          .from('financeiro_importacoes_v2')
+          .insert({
+            cliente_id: clienteAtual.id,
+            fazenda_id: fazendaId,
+            conta_bancaria_id: params.contaBancariaId,
+            nome_arquivo: params.nomeArquivo,
+            tipo_arquivo: params.formato,
+            total_linhas: preview.totalLinhas,
+            total_validas: novos.length,
+            total_com_erro: preview.duplicados,
+            status: 'confirmada',
+          } as any)
+          .select('id')
+          .single();
+        if (e1) throw e1;
+        importacaoId = (imp as { id: string }).id;
+      }
 
       // 2) Insert dos movimentos em batches de 500.
       const BATCH = 500;
@@ -604,7 +612,7 @@ export function useImportacaoExtrato() {
         const fatia = novos.slice(i, i + BATCH).map((m) => ({
           cliente_id: clienteAtual.id,
           conta_bancaria_id: params.contaBancariaId,
-          importacao_id: importacaoId,
+          importacao_id: importacaoId, // null em modo global
           data_movimento: m.data,
           descricao: m.descricao,
           documento: m.documento,
