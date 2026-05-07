@@ -53,64 +53,38 @@ function podeConverterStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * Persiste 1 movimento de extrato isolado (ou retorna o id existente via hash).
+ * Lookup do id do extrato persistido — APENAS leitura, sem INSERT.
+ *
+ * Por que lookup-only?
+ *   - INSERT individual em extrato_bancario_v2 fora do batch da importação
+ *     conflita com RLS (cliente_membros) e não é necessário: o batch da
+ *     importação já cobre o caso normal. Se o movimento ainda não foi
+ *     importado, o erro instrui o usuário a confirmar a importação.
  *
  * Guards:
- *   - clienteId obrigatório (RLS exige cliente_id ∈ cliente_membros do user).
- *   - contaBancariaId obrigatório.
- *   - conta bancária deve pertencer ao mesmo cliente (defesa adicional).
+ *   - clienteId obrigatório (do contexto oficial).
+ *   - lookup por (cliente_id, hash_movimento) — chave única na tabela.
  */
-async function garantirExtratoId(
+async function obterExtratoId(
   clienteId: string | null | undefined,
-  contaBancariaId: string | null | undefined,
   m: MovimentoPreview,
 ): Promise<string> {
   if (!clienteId) {
     throw new Error('Cliente não selecionado — recarregue a tela e tente novamente.');
   }
-  if (!contaBancariaId) {
-    throw new Error('Conta bancária não selecionada.');
-  }
-
-  // Sanity check: a conta deve pertencer ao cliente atual.
-  // Evita cruzamentos acidentais entre clientes que disparariam RLS no INSERT.
-  const { data: conta, error: errConta } = await supabase
-    .from('financeiro_contas_bancarias')
-    .select('cliente_id')
-    .eq('id', contaBancariaId)
-    .maybeSingle();
-  if (errConta) throw errConta;
-  if (!conta) throw new Error('Conta bancária não encontrada');
-  if ((conta as { cliente_id: string }).cliente_id !== clienteId) {
-    throw new Error('Conta não pertence ao cliente atual — não é possível criar o movimento.');
-  }
-
-  if (m.duplicado) {
-    const { data, error } = await supabase
-      .from('extrato_bancario_v2' as any)
-      .select('id')
-      .eq('cliente_id', clienteId)
-      .eq('hash_movimento', m.hash)
-      .maybeSingle();
-    if (error) throw error;
-    if (data) return (data as { id: string }).id;
-  }
   const { data, error } = await supabase
     .from('extrato_bancario_v2' as any)
-    .insert({
-      cliente_id: clienteId,
-      conta_bancaria_id: contaBancariaId,
-      data_movimento: m.data,
-      descricao: m.descricao,
-      documento: m.documento,
-      valor: m.valor,
-      tipo_movimento: m.tipo,
-      hash_movimento: m.hash,
-      status: 'nao_conciliado',
-    })
     .select('id')
-    .single();
+    .eq('cliente_id', clienteId)
+    .eq('hash_movimento', m.hash)
+    .maybeSingle();
   if (error) throw error;
+  if (!data) {
+    throw new Error(
+      'Este movimento ainda não foi importado. ' +
+      'Clique em "Confirmar" no rodapé para importar o extrato antes de baixar lançamentos individualmente.',
+    );
+  }
   return (data as { id: string }).id;
 }
 
@@ -154,6 +128,9 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const [convertindo, setConvertindo] = useState(false);
   // Hashes locais marcados como já-baixados para feedback visual sem refetch.
   const [hashesBaixados, setHashesBaixados] = useState<Set<string>>(new Set());
+  // Flag: a importação já foi confirmada nesta sessão (extratos persistidos).
+  // Antes disso, qualquer baixa individual mostra toast pedindo confirmação primeiro.
+  const [importacaoConfirmada, setImportacaoConfirmada] = useState(false);
 
   // Carregar contas do cliente
   useEffect(() => {
@@ -178,6 +155,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       reset();
       setArquivo(null);
       setHashesBaixados(new Set());
+      setImportacaoConfirmada(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -186,10 +164,17 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     if (!arquivo) { toast.error('Selecione um arquivo .ofx ou .csv'); return; }
     if (!contaId) { toast.error('Selecione a conta bancária'); return; }
     try {
+      setImportacaoConfirmada(false);
       await gerarPreview({ arquivo, contaBancariaId: contaId });
     } catch (e: any) {
       toast.error('Erro ao gerar preview: ' + (e?.message ?? e));
     }
+  };
+
+  const handleLimparPreview = () => {
+    reset();
+    setImportacaoConfirmada(false);
+    setHashesBaixados(new Set());
   };
 
   const handleConfirmar = async () => {
@@ -200,12 +185,25 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         nomeArquivo: arquivo.name,
         formato: preview.formato,
       });
-      toast.success(`${r.inseridos} movimento(s) importado(s)`);
+      toast.success(
+        `${r.inseridos} movimento(s) importado(s). ` +
+        `Agora você pode marcar realizados / aprovar / vincular individualmente.`,
+      );
+      setImportacaoConfirmada(true);
       onImported?.(r);
-      onClose();
+      // NÃO fechar automaticamente — usuário precisa interagir com botões individuais.
     } catch (e: any) {
       toast.error('Erro ao confirmar: ' + (e?.message ?? e));
     }
+  };
+
+  /** Bloqueia ação individual antes da importação ter sido confirmada. */
+  const exigirImportacaoConfirmada = (): boolean => {
+    if (importacaoConfirmada) return true;
+    toast.error(
+      'Confirme a importação do extrato (botão "Confirmar" no rodapé) antes de baixar lançamentos individualmente.',
+    );
+    return false;
   };
 
   /** Conversão 1:1 confirmada — converte status e cria vínculo. */
@@ -213,15 +211,18 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     if (!clienteId || !m.lancamentoMatchId) return;
     setConvertindo(true);
     try {
-      const extratoId = await garantirExtratoId(clienteId, contaId, m);
-      await baixarLancamentoViaExtrato({
+      const extratoId = await obterExtratoId(clienteId, m);
+      const r = await baixarLancamentoViaExtrato({
         lancamentoId: m.lancamentoMatchId,
         extratoId,
         dataPagamentoReal: m.data,
         documentoBanco: m.documento ?? undefined,
       });
       setHashesBaixados((prev) => new Set(prev).add(m.hash));
-      toast.success('Lançamento convertido em realizado e vinculado ao extrato');
+      const partes: string[] = [];
+      if (r.convertido) partes.push('lançamento marcado realizado');
+      if (r.vinculado) partes.push('vínculo criado com extrato');
+      toast.success(partes.length > 0 ? partes.join(' · ') : 'Já vinculado anteriormente');
       setConfirm1a1(null);
     } catch (e: any) {
       toast.error('Erro: ' + (e?.message ?? e));
@@ -230,12 +231,13 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     }
   };
 
-  /** Abre modal agrupado — garante o extrato existir antes (precisa de id real). */
+  /** Abre modal agrupado — usa o extrato já persistido (precisa de id real). */
   const abrirAgrupado = async (m: MovimentoPreview) => {
     if (!clienteId) return;
+    if (!exigirImportacaoConfirmada()) return;
     setConvertindo(true);
     try {
-      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      const extratoId = await obterExtratoId(clienteId, m);
       setConfirmAgrupado({ extratoId, movimento: m });
     } catch (e: any) {
       toast.error('Erro: ' + (e?.message ?? e));
@@ -247,9 +249,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   /** Provável (50-79): abre revisão com o candidato 1:1 já escolhido pelo matcher. */
   const abrirRevisarAprovar = async (m: MovimentoPreview) => {
     if (!clienteId || !m.lancamentoMatchId) return;
+    if (!exigirImportacaoConfirmada()) return;
     setConvertindo(true);
     try {
-      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      const extratoId = await obterExtratoId(clienteId, m);
       const cand: CandidatoPossivel = {
         id: m.lancamentoMatchId,
         data: m.data,
@@ -283,9 +286,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       toast.error('Nenhum candidato compatível encontrado');
       return;
     }
+    if (!exigirImportacaoConfirmada()) return;
     setConvertindo(true);
     try {
-      const extratoId = await garantirExtratoId(clienteId, contaId, m);
+      const extratoId = await obterExtratoId(clienteId, m);
       setRevisar({
         extratoId,
         movimento: m,
@@ -297,6 +301,12 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     } finally {
       setConvertindo(false);
     }
+  };
+
+  /** Wrapper para "Marcar realizado" / "Vincular extrato" — checa importação confirmada. */
+  const abrirConfirm1a1 = (m: MovimentoPreview) => {
+    if (!exigirImportacaoConfirmada()) return;
+    setConfirm1a1(m);
   };
 
   const totalValor = useMemo(() => {
@@ -347,11 +357,25 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             {loading ? 'Processando...' : 'Gerar preview'}
           </Button>
           {preview && (
-            <Button variant="outline" onClick={() => reset()} disabled={loading}>
+            <Button variant="outline" onClick={handleLimparPreview} disabled={loading}>
               Limpar preview
             </Button>
           )}
         </div>
+
+        {preview && !importacaoConfirmada && preview.novos > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <strong>Próximo passo:</strong> clique em <strong>Confirmar ({preview.novos})</strong> no rodapé para
+            importar os movimentos. Só depois disso os botões "Marcar realizado", "Revisar e aprovar",
+            "Vincular extrato" e "Ver possíveis" ficam ativos.
+          </div>
+        )}
+        {importacaoConfirmada && (
+          <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            <strong>Importação confirmada.</strong> Use os botões na coluna "Match financeiro" para baixar
+            agendados/programados, vincular já-realizados ou revisar candidatos manualmente.
+          </div>
+        )}
 
         {error && (
           <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
@@ -482,13 +506,29 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
                                   ✓ Baixado via OFX
                                 </span>
+                              ) : (m.statusMatch || '').toLowerCase() === 'realizado' ? (
+                                // Lançamento já está realizado: apenas vínculo (status NÃO muda).
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold">
+                                    Já realizado
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-[10px] px-2 border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                                    disabled={convertindo}
+                                    onClick={() => abrirConfirm1a1(m)}
+                                  >
+                                    Vincular extrato
+                                  </Button>
+                                </div>
                               ) : m.scoreMatch >= 80 && podeConverterStatus(m.statusMatch) ? (
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   className="h-6 text-[10px] px-2"
                                   disabled={convertindo}
-                                  onClick={() => setConfirm1a1(m)}
+                                  onClick={() => abrirConfirm1a1(m)}
                                 >
                                   ✓ Marcar realizado
                                 </Button>
@@ -534,25 +574,39 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           <Button variant="outline" onClick={onClose} disabled={loading}>Fechar</Button>
           <Button
             onClick={handleConfirmar}
-            disabled={loading || !preview || preview.novos === 0}
+            disabled={loading || !preview || preview.novos === 0 || importacaoConfirmada}
           >
-            {loading ? 'Salvando...' : `Confirmar (${preview?.novos ?? 0})`}
+            {importacaoConfirmada
+              ? 'Importação confirmada ✓'
+              : (loading ? 'Salvando...' : `Confirmar (${preview?.novos ?? 0})`)}
           </Button>
         </DialogFooter>
       </DialogContent>
 
-      {/* AlertDialog: confirmação de baixa 1:1 */}
+      {/* AlertDialog: baixa 1:1 (Marcar realizado) ou apenas vínculo (Já realizado). */}
       <AlertDialog open={!!confirm1a1} onOpenChange={(v) => { if (!v) setConfirm1a1(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar baixa do lançamento via OFX?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {(confirm1a1?.statusMatch || '').toLowerCase() === 'realizado'
+                ? 'Vincular extrato ao lançamento já realizado?'
+                : 'Confirmar baixa do lançamento via OFX?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm1a1 && (
-                <span>
-                  O lançamento <strong>{confirm1a1.fornecedorMatch || confirm1a1.descricaoMatch || '(sem nome)'}</strong> será
-                  marcado como <strong>realizado</strong> com data de pagamento {fmtData(confirm1a1.data)} e vinculado
-                  a este movimento do extrato. Categoria, valor e classificação NÃO serão alterados.
-                </span>
+                (confirm1a1.statusMatch || '').toLowerCase() === 'realizado' ? (
+                  <span>
+                    O lançamento <strong>{confirm1a1.fornecedorMatch || confirm1a1.descricaoMatch || '(sem nome)'}</strong> já
+                    está marcado como <strong>realizado</strong>. Apenas o vínculo com este movimento do extrato será criado.
+                    Status, categoria, valor e classificação NÃO serão alterados.
+                  </span>
+                ) : (
+                  <span>
+                    O lançamento <strong>{confirm1a1.fornecedorMatch || confirm1a1.descricaoMatch || '(sem nome)'}</strong> será
+                    marcado como <strong>realizado</strong> com data de pagamento {fmtData(confirm1a1.data)} e vinculado
+                    a este movimento do extrato. Categoria, valor e classificação NÃO serão alterados.
+                  </span>
+                )
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -562,7 +616,9 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
               disabled={convertindo}
               onClick={() => confirm1a1 && executarConversao1a1(confirm1a1)}
             >
-              {convertindo ? 'Processando...' : 'Marcar realizado'}
+              {convertindo
+                ? 'Processando...'
+                : ((confirm1a1?.statusMatch || '').toLowerCase() === 'realizado' ? 'Vincular' : 'Marcar realizado')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

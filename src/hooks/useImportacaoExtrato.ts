@@ -620,7 +620,9 @@ export function useImportacaoExtrato() {
         inseridos += fatia.length;
       }
 
-      setPreview(null);
+      // Preserva o preview na tela: o usuário ainda vai interagir com os botões
+      // por linha (Marcar realizado / Vincular / Revisar / Ver possíveis), que
+      // dependem de o extrato já estar persistido (lookup por hash).
       return { inseridos, importacaoId };
     } catch (e: any) {
       const msg = e?.message ?? String(e);
