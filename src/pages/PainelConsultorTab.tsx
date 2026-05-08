@@ -60,6 +60,7 @@ import { CATALOGO_INDICADORES, getFonteStatusLabel, type FonteIndicador, type In
 import { warnIndicadoresSemCatalogo } from '@/lib/painelConsultor/validarIndicadores';
 import { agregaSnapshotsGlobal } from '@/lib/painelConsultor/consolidacaoGlobal';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useAuditoriaCustoCab } from '@/hooks/useAuditoriaCustoCab';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -1361,7 +1362,7 @@ function SourceInfoTooltip({ indicadorId, cenario }: { indicadorId?: string; cen
 
 // ─── Component ───
 export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaConsolidacao }: Props) {
-  const { fazendaAtual, fazendas, isGlobal } = useFazenda();
+  const { fazendaAtual, fazendas, isGlobal, fazendasComPecuaria } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
   const { lancamentos: lancFin } = useFinanceiro();
@@ -1402,6 +1403,25 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { rawFazenda: zootMeta, rawCategorias: viewCategoriasMeta } = useRebanhoOficial({ ano: anoNum, cenario: 'meta' });
   const { rows: gmdMetaRows } = useMetaGmd(ano);
   const { clienteAtual } = useCliente();
+
+  // ─── Auditoria multi-ano de Custo Cab. R$/cab.mês (mesma fórmula oficial) ───
+  // Bloco compacto para conferência cruzada com o gráfico histórico do modal.
+  // NÃO é fonte paralela: usa o mesmo SQL/filtros/fórmula que usePainelConsultorData
+  // aplica para o ano corrente, replicado para cada ano do range [-6, atual].
+  const fazendaIdsPecuariaPC100 = useMemo(
+    () => fazendasComPecuaria.map((f) => f.id),
+    [fazendasComPecuaria],
+  );
+  const mesAtualGlobalPC100 = filtroGlobal?.mes || (new Date().getMonth() + 1);
+  const auditoriaCustoCab = useAuditoriaCustoCab({
+    enabled: !!clienteAtual?.id,
+    clienteId: clienteAtual?.id,
+    fazendaId: isGlobal ? null : fazendaId,
+    fazendaIds: fazendaIdsPecuariaPC100,
+    anoInicio: anoNum - 6,
+    anoAtual: anoNum,
+    mesAtual: mesAtualGlobalPC100,
+  });
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
   // Leitura oficial do Valor do Rebanho META validado (tabela valor_rebanho_meta_validada)
@@ -1946,6 +1966,79 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
               </CollapsibleContent>
             </Collapsible>
           ))}
+        </div>
+      </div>
+
+      {/* AUDITORIA / VALIDAÇÃO — bloco temporário de conferência cruzada.
+          Reproduz a fórmula oficial de Custo Cab. R$/cab.mês para múltiplos
+          anos, sem ser fonte oficial. Não é consumido pela V2Home nem pelo
+          modal histórico — somente para comparação visual. Quando o bug do
+          gráfico histórico for resolvido, este bloco pode ser removido. */}
+      <div className="my-4 px-4">
+        <div className="rounded-md border-2 border-dashed border-amber-400 bg-amber-50/40 p-3 text-xs">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <div>
+              <p className="font-semibold text-amber-900 flex items-center gap-1.5">
+                <span className="inline-flex items-center px-1.5 py-px rounded bg-amber-300/60 text-amber-900 text-[9px] font-bold uppercase tracking-wider">
+                  AUDITORIA
+                </span>
+                Custo Cab. R$/cab.mês — validação multi-ano
+              </p>
+              <p className="text-[10px] text-amber-800/80">
+                Reproduz a fórmula oficial do PC-100 para anos anteriores. NÃO é fonte
+                oficial — bloco temporário para comparar com as barras do modal histórico.
+                Não usado pela V2Home nem pelo modal.
+              </p>
+            </div>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {auditoriaCustoCab.loading ? 'carregando…' : `${auditoriaCustoCab.rows.length} ano(s)`}
+            </span>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full text-[11px] tabular-nums">
+              <thead className="text-left text-[10px] uppercase text-muted-foreground border-b">
+                <tr>
+                  <th className="py-1 pr-2">Ano</th>
+                  <th className="py-1 pr-2 text-right">Custeio Jan→{mesAtualGlobalPC100}</th>
+                  <th className="py-1 pr-2 text-right">Rebanho médio</th>
+                  <th className="py-1 pr-2 text-right">Meses (período)</th>
+                  <th className="py-1 pr-2 text-right">Meses c/ rebanho</th>
+                  <th className="py-1 pr-2 text-right">R$/cab.mês</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditoriaCustoCab.rows.map((r) => (
+                  <tr key={r.ano} className="border-b border-amber-100/60 last:border-b-0">
+                    <td className="py-1 pr-2 font-mono">{r.ano}</td>
+                    <td className="py-1 pr-2 text-right">
+                      {r.custeioAcum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-1 pr-2 text-right">
+                      {r.cabMediaMean.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.mesesPeriodo}</td>
+                    <td className="py-1 pr-2 text-right">{r.mesesComRebanho}</td>
+                    <td className="py-1 pr-2 text-right font-semibold">
+                      {r.custoCab != null
+                        ? r.custoCab.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+                {!auditoriaCustoCab.loading && auditoriaCustoCab.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-3 text-center text-muted-foreground">
+                      Sem dados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-muted-foreground italic mt-2">
+            Fórmula: <code>custoCab = (Σcusteio Jan→mês ÷ rebanho médio) ÷ mes</code>.
+            Rebanho médio = média de <code>(saldo_inicial + saldo_final)/2</code> nos meses Jan→mês com cabMedia &gt; 0.
+          </p>
         </div>
       </div>
 
