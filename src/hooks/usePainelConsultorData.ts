@@ -2157,62 +2157,109 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return ((curr - meta) / meta) * 100;
   })();
 
-  // ─── Etapa 2C: indicadores financeiros oficiais ───────────────────────
+  // ─── Etapa 2C + fix referências (Opção A): indicadores financeiros oficiais ───────────────────────
   // Agregadores literais por grupo_custo / macro_custo (classificacao.ts).
   // Fonte: lancFin já filtrado e disponível neste hook. Nenhuma query extra.
-  const _addArr12 = (a: number[], b: number[]) => a.map((v, i) => v + (b[i] ?? 0));
-  const _custeioPecSemJurosArr   = agregaCusteioPecSemJuros(lancFin, ano);
-  const _jurosPecArr             = agregaJurosPec(lancFin, ano);
-  const _invFazendaPecArr        = agregaInvFazendaPec(lancFin, ano);
-  const _custeioAgriSemJurosArr  = agregaCusteioAgriSemJuros(lancFin, ano);
-  const _jurosAgriArr            = agregaJurosAgri(lancFin, ano);
-  const _invFazendaAgriArr       = agregaInvFazendaAgri(lancFin, ano);
-  const _invBovinosArr           = agregaInvBovinos(lancFin, ano);
-  const _amortizacoesArr         = agregaAmortizacoes(lancFin, ano);
-  const _dividendosArr           = agregaDividendos(lancFin, ano);
-  const _custeioPecComJurosArr   = _addArr12(_custeioPecSemJurosArr, _jurosPecArr);
-  const _custeioAgriComJurosArr  = _addArr12(_custeioAgriSemJurosArr, _jurosAgriArr);
-  const _desembolsoPecArr        = _addArr12(_custeioPecComJurosArr, _invFazendaPecArr);
-  const _desembolsoAgriArr       = _addArr12(_custeioAgriComJurosArr, _invFazendaAgriArr);
-  const _saidasTotaisArr = _addArr12(
-    _addArr12(
-      _addArr12(_addArr12(_desembolsoPecArr, _desembolsoAgriArr), _invBovinosArr),
-      _amortizacoesArr,
-    ),
-    _dividendosArr,
-  );
+  //
+  // CRÍTICO: o bloco inteiro (14 séries raw + 14 *Indicador) está dentro de um único
+  // useMemo com deps [lancFin, ano, mes, viewMode]. Isso garante que as referências
+  // dos *Indicador permaneçam ESTÁVEIS quando os inputs não mudam — evitando render
+  // loop em consumidores que coloquem esses objetos em deps de useMemo (caso de
+  // PainelConsultorTab → soberanoSerie → blocos → setOpenBlocos).
+  const _finSoberano = useMemo(() => {
+    const addArr12 = (a: number[], b: number[]) => a.map((v, i) => v + (b[i] ?? 0));
 
-  // Closure local: monta IndicadorFinanceiroShape uniformemente.
-  // deltaAno e deltaMeta ficam null nesta etapa (entram em 2F).
-  const _buildIndicadorFin = (
-    serie12: number[],
-    label: string,
-    titulo: string,
-    subtitulo: string,
-  ): IndicadorFinanceiroShape => {
-    const mesSerie13 = Array.from({ length: 13 }, (_, i) =>
-      i === 0 ? NaN : (serie12[i - 1] ?? NaN),
+    const cusPecSemJ  = agregaCusteioPecSemJuros(lancFin, ano);
+    const jurPec      = agregaJurosPec(lancFin, ano);
+    const invFazPec   = agregaInvFazendaPec(lancFin, ano);
+    const cusAgriSemJ = agregaCusteioAgriSemJuros(lancFin, ano);
+    const jurAgri     = agregaJurosAgri(lancFin, ano);
+    const invFazAgri  = agregaInvFazendaAgri(lancFin, ano);
+    const invBov      = agregaInvBovinos(lancFin, ano);
+    const amort       = agregaAmortizacoes(lancFin, ano);
+    const div         = agregaDividendos(lancFin, ano);
+    const cusPecComJ  = addArr12(cusPecSemJ, jurPec);
+    const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
+    const desembPec   = addArr12(cusPecComJ, invFazPec);
+    const desembAgri  = addArr12(cusAgriComJ, invFazAgri);
+    const saidasTot = addArr12(
+      addArr12(addArr12(addArr12(desembPec, desembAgri), invBov), amort),
+      div,
     );
-    const periodoSerie13 = cumSumTo13(serie12);
-    const serieAno = isPeriodo ? periodoSerie13 : mesSerie13;
-    const valor = safe(serieAno[mesIdx]);
-    const deltaMes = (() => {
-      if (mesIdx <= 1) return null;
-      const curr = safe(serieAno[mesIdx]);
-      const prev = safe(serieAno[mesIdx - 1]);
-      if (curr == null || prev == null || prev === 0) return null;
-      return ((curr - prev) / prev) * 100;
-    })();
-    return {
-      label, titulo, subtitulo,
-      valor, deltaMes,
-      deltaAno:  null,
-      deltaMeta: null,
-      serieAno,
-      serieAnoAnt: undefined,
-      serieMeta:   undefined,
+
+    const isPer = viewMode === 'periodo';
+    const mesPos = mes;
+    const buildInd = (
+      serie12: number[],
+      label: string,
+      titulo: string,
+      subtitulo: string,
+    ): IndicadorFinanceiroShape => {
+      const mesSerie13 = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (serie12[i - 1] ?? NaN));
+      const periodoSerie13 = cumSumTo13(serie12);
+      const serieAno = isPer ? periodoSerie13 : mesSerie13;
+      const valor = safe(serieAno[mesPos]);
+      const deltaMes = (() => {
+        if (mesPos <= 1) return null;
+        const curr = safe(serieAno[mesPos]);
+        const prev = safe(serieAno[mesPos - 1]);
+        if (curr == null || prev == null || prev === 0) return null;
+        return ((curr - prev) / prev) * 100;
+      })();
+      return {
+        label, titulo, subtitulo,
+        valor, deltaMes,
+        deltaAno:  null,
+        deltaMeta: null,
+        serieAno,
+        serieAnoAnt: undefined,
+        serieMeta:   undefined,
+      };
     };
-  };
+
+    return {
+      saidasTotais: buildInd(saidasTot, 'SAÍDAS TOTAIS', 'Saídas Totais',
+        isPer ? 'Saídas operacionais acumuladas Jan→mês (caixa, exclui dedução de receitas)'
+              : 'Saídas operacionais no mês (caixa, exclui dedução de receitas)'),
+      jurosPec: buildInd(jurPec, 'JUROS PECUÁRIA', 'Juros Pecuária',
+        isPer ? 'Juros pecuária acumulado Jan→mês (caixa)'
+              : 'Juros pecuária no mês (caixa)'),
+      custeioPecComJuros: buildInd(cusPecComJ, 'CUSTEIO PEC. COM JUROS', 'Custeio Pec. com Juros',
+        isPer ? 'Custeio Produção Pecuária + Juros acumulado Jan→mês (caixa)'
+              : 'Custeio Produção Pecuária + Juros no mês (caixa)'),
+      investPec: buildInd(invFazPec, 'INV. FAZENDA PECUÁRIA', 'Investimento na Fazenda Pecuária',
+        isPer ? 'Investimento na Fazenda escopo Pecuária acumulado Jan→mês (caixa)'
+              : 'Investimento na Fazenda escopo Pecuária no mês (caixa)'),
+      desembolsoPec: buildInd(desembPec, 'DESEMBOLSO PECUÁRIA', 'Desembolso Pecuária',
+        isPer ? 'Custeio Pec. com Juros + Inv. Fazenda Pec. acumulado Jan→mês (caixa)'
+              : 'Custeio Pec. com Juros + Inv. Fazenda Pec. no mês (caixa)'),
+      custeioAgri: buildInd(cusAgriSemJ, 'CUSTEIO AGRICULTURA', 'Custeio Agricultura',
+        isPer ? 'Custo Fixo + Custo Variável Agricultura acumulado Jan→mês (caixa)'
+              : 'Custo Fixo + Custo Variável Agricultura no mês (caixa)'),
+      jurosAgri: buildInd(jurAgri, 'JUROS AGRICULTURA', 'Juros Agricultura',
+        isPer ? 'Juros agricultura acumulado Jan→mês (caixa)'
+              : 'Juros agricultura no mês (caixa)'),
+      custeioAgriComJuros: buildInd(cusAgriComJ, 'CUSTEIO AGRI. COM JUROS', 'Custeio Agri. com Juros',
+        isPer ? 'Custeio Produção Agri + Juros acumulado Jan→mês (caixa)'
+              : 'Custeio Produção Agri + Juros no mês (caixa)'),
+      investAgri: buildInd(invFazAgri, 'INV. FAZENDA AGRI.', 'Investimento na Fazenda Agricultura',
+        isPer ? 'Investimento na Fazenda escopo Agricultura acumulado Jan→mês (caixa)'
+              : 'Investimento na Fazenda escopo Agricultura no mês (caixa)'),
+      desembolsoAgri: buildInd(desembAgri, 'DESEMBOLSO AGRICULTURA', 'Desembolso Agricultura',
+        isPer ? 'Custeio Agri com Juros + Inv. Fazenda Agri acumulado Jan→mês (caixa)'
+              : 'Custeio Agri com Juros + Inv. Fazenda Agri no mês (caixa)'),
+      investBovinos: buildInd(invBov, 'INV. EM BOVINOS', 'Investimento em Bovinos',
+        isPer ? 'Investimento em Bovinos (reposição) acumulado Jan→mês (caixa)'
+              : 'Investimento em Bovinos (reposição) no mês (caixa)'),
+      amortizacoes: buildInd(amort, 'AMORTIZAÇÕES', 'Amortizações Financeiras',
+        isPer ? 'Amortizações de financiamentos (principal) acumulado Jan→mês (caixa)'
+              : 'Amortizações de financiamentos (principal) no mês (caixa)'),
+      dividendos: buildInd(div, 'DIVIDENDOS / RETIRADAS', 'Dividendos / Retiradas',
+        isPer ? 'Dividendos e retiradas acumulado Jan→mês (caixa)'
+              : 'Dividendos e retiradas no mês (caixa)'),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lancFin, ano, mes, viewMode]);
 
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
@@ -2475,110 +2522,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     } : null,
 
     // ─── Etapa 2C: indicadores financeiros oficiais (caixa fica em 2D) ───
-    saidasTotaisIndicador: _buildIndicadorFin(
-      _saidasTotaisArr,
-      'SAÍDAS TOTAIS',
-      'Saídas Totais',
-      isPeriodo
-        ? 'Saídas operacionais acumuladas Jan→mês (caixa, exclui dedução de receitas)'
-        : 'Saídas operacionais no mês (caixa, exclui dedução de receitas)',
-    ),
-    jurosPecIndicador: _buildIndicadorFin(
-      _jurosPecArr,
-      'JUROS PECUÁRIA',
-      'Juros Pecuária',
-      isPeriodo
-        ? 'Juros pecuária acumulado Jan→mês (caixa)'
-        : 'Juros pecuária no mês (caixa)',
-    ),
-    custeioPecComJurosIndicador: _buildIndicadorFin(
-      _custeioPecComJurosArr,
-      'CUSTEIO PEC. COM JUROS',
-      'Custeio Pec. com Juros',
-      isPeriodo
-        ? 'Custeio Produção Pecuária + Juros acumulado Jan→mês (caixa)'
-        : 'Custeio Produção Pecuária + Juros no mês (caixa)',
-    ),
-    investPecIndicador: _buildIndicadorFin(
-      _invFazendaPecArr,
-      'INV. FAZENDA PECUÁRIA',
-      'Investimento na Fazenda Pecuária',
-      isPeriodo
-        ? 'Investimento na Fazenda escopo Pecuária acumulado Jan→mês (caixa)'
-        : 'Investimento na Fazenda escopo Pecuária no mês (caixa)',
-    ),
-    desembolsoPecIndicador: _buildIndicadorFin(
-      _desembolsoPecArr,
-      'DESEMBOLSO PECUÁRIA',
-      'Desembolso Pecuária',
-      isPeriodo
-        ? 'Custeio Pec. com Juros + Inv. Fazenda Pec. acumulado Jan→mês (caixa)'
-        : 'Custeio Pec. com Juros + Inv. Fazenda Pec. no mês (caixa)',
-    ),
-    custeioAgriIndicador: _buildIndicadorFin(
-      _custeioAgriSemJurosArr,
-      'CUSTEIO AGRICULTURA',
-      'Custeio Agricultura',
-      isPeriodo
-        ? 'Custo Fixo + Custo Variável Agricultura acumulado Jan→mês (caixa)'
-        : 'Custo Fixo + Custo Variável Agricultura no mês (caixa)',
-    ),
-    jurosAgriIndicador: _buildIndicadorFin(
-      _jurosAgriArr,
-      'JUROS AGRICULTURA',
-      'Juros Agricultura',
-      isPeriodo
-        ? 'Juros agricultura acumulado Jan→mês (caixa)'
-        : 'Juros agricultura no mês (caixa)',
-    ),
-    custeioAgriComJurosIndicador: _buildIndicadorFin(
-      _custeioAgriComJurosArr,
-      'CUSTEIO AGRI. COM JUROS',
-      'Custeio Agri. com Juros',
-      isPeriodo
-        ? 'Custeio Produção Agri + Juros acumulado Jan→mês (caixa)'
-        : 'Custeio Produção Agri + Juros no mês (caixa)',
-    ),
-    investAgriIndicador: _buildIndicadorFin(
-      _invFazendaAgriArr,
-      'INV. FAZENDA AGRI.',
-      'Investimento na Fazenda Agricultura',
-      isPeriodo
-        ? 'Investimento na Fazenda escopo Agricultura acumulado Jan→mês (caixa)'
-        : 'Investimento na Fazenda escopo Agricultura no mês (caixa)',
-    ),
-    desembolsoAgriIndicador: _buildIndicadorFin(
-      _desembolsoAgriArr,
-      'DESEMBOLSO AGRICULTURA',
-      'Desembolso Agricultura',
-      isPeriodo
-        ? 'Custeio Agri com Juros + Inv. Fazenda Agri acumulado Jan→mês (caixa)'
-        : 'Custeio Agri com Juros + Inv. Fazenda Agri no mês (caixa)',
-    ),
-    investBovinosIndicador: _buildIndicadorFin(
-      _invBovinosArr,
-      'INV. EM BOVINOS',
-      'Investimento em Bovinos',
-      isPeriodo
-        ? 'Investimento em Bovinos (reposição) acumulado Jan→mês (caixa)'
-        : 'Investimento em Bovinos (reposição) no mês (caixa)',
-    ),
-    amortizacoesIndicador: _buildIndicadorFin(
-      _amortizacoesArr,
-      'AMORTIZAÇÕES',
-      'Amortizações Financeiras',
-      isPeriodo
-        ? 'Amortizações de financiamentos (principal) acumulado Jan→mês (caixa)'
-        : 'Amortizações de financiamentos (principal) no mês (caixa)',
-    ),
-    dividendosIndicador: _buildIndicadorFin(
-      _dividendosArr,
-      'DIVIDENDOS / RETIRADAS',
-      'Dividendos / Retiradas',
-      isPeriodo
-        ? 'Dividendos e retiradas acumulado Jan→mês (caixa)'
-        : 'Dividendos e retiradas no mês (caixa)',
-    ),
+    // Lê do _finSoberano memoizado — referências estáveis por [lancFin, ano, mes, viewMode].
+    saidasTotaisIndicador:        _finSoberano.saidasTotais,
+    jurosPecIndicador:            _finSoberano.jurosPec,
+    custeioPecComJurosIndicador:  _finSoberano.custeioPecComJuros,
+    investPecIndicador:           _finSoberano.investPec,
+    desembolsoPecIndicador:       _finSoberano.desembolsoPec,
+    custeioAgriIndicador:         _finSoberano.custeioAgri,
+    jurosAgriIndicador:           _finSoberano.jurosAgri,
+    custeioAgriComJurosIndicador: _finSoberano.custeioAgriComJuros,
+    investAgriIndicador:          _finSoberano.investAgri,
+    desembolsoAgriIndicador:      _finSoberano.desembolsoAgri,
+    investBovinosIndicador:       _finSoberano.investBovinos,
+    amortizacoesIndicador:        _finSoberano.amortizacoes,
+    dividendosIndicador:          _finSoberano.dividendos,
     caixaIndicador:               null,
 
     loading,
