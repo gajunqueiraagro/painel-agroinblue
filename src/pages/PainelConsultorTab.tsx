@@ -35,6 +35,7 @@ import { useStatusPilares, BLOCO_PILAR_MAP, getPilarBadgeConfig, getPilarTooltip
 import { DivergenciaP1Dialog } from '@/components/DivergenciaP1Dialog';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
+import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePastos } from '@/hooks/usePastos';
 import { useRebanhoOficial, indexByMes, type ZootMensal, type ZootCategoriaMensal, totalizarPorMes as totalizarViewPorMes } from '@/hooks/useRebanhoOficial';
@@ -261,7 +262,32 @@ function agregarGridMetaPainelConsultor(
   return { entradas, saidas, recPec, custoProd, recOper, outrasSaidas, resOper, resFinal };
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
+interface SoberanoSerie12 {
+  custeioPecSemJuros:   number[];
+  jurosPec:             number[];
+  custeioPecComJuros:   number[];
+  investFazendaPec:     number[];
+  desembolsoPec:        number[];
+  custeioAgriSemJuros:  number[];
+  jurosAgri:             number[];
+  custeioAgriComJuros:  number[];
+  investFazendaAgri:    number[];
+  desembolsoAgri:       number[];
+  investBovinos:        number[];
+  amortizacoes:         number[];
+  dividendos:           number[];
+  saidasTotais:         number[];
+}
+
+function buildBlocosForTab(
+  d: MonthlyData,
+  tab: ViewTab,
+  realValorCab?: number[],
+  realPrecoArr?: number[],
+  pesoSnap?: PesoSnapshot,
+  dezPesoSnap?: number,
+  soberano?: SoberanoSerie12,
+): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -330,6 +356,32 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
     ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : NaN))
     : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : NaN; });
 
+  // ─── Bloco "Financeiro Soberano (Auditoria)" ──────────────────────────
+  // Visualização paralela ao bloco Financeiro (Caixa). Não substitui legado.
+  // Cada série já vem como 12-array raw mensal — r() aplica a transformação
+  // por aba (mensal/medio/acumulado/media_periodo) igual aos demais blocos.
+  const blocoSoberano: Bloco | null = soberano
+    ? {
+        nome: 'Financeiro Soberano (Auditoria)',
+        rows: [
+          r('Custeio Pec. s/ juros',    'money', soberano.custeioPecSemJuros,  'sob_custeio_pec_sj'),
+          r('Juros Pecuária',           'money', soberano.jurosPec,            'sob_juros_pec'),
+          r('Custeio Pec. c/ juros',    'money', soberano.custeioPecComJuros,  'sob_custeio_pec_cj'),
+          r('Invest. Fazenda Pec.',     'money', soberano.investFazendaPec,    'sob_inv_faz_pec'),
+          r('Desembolso Pecuária',      'money', soberano.desembolsoPec,       'sob_desemb_pec'),
+          r('Custeio Agri. s/ juros',   'money', soberano.custeioAgriSemJuros, 'sob_custeio_agri_sj'),
+          r('Juros Agricultura',        'money', soberano.jurosAgri,           'sob_juros_agri'),
+          r('Custeio Agri. c/ juros',   'money', soberano.custeioAgriComJuros, 'sob_custeio_agri_cj'),
+          r('Invest. Fazenda Agri.',    'money', soberano.investFazendaAgri,   'sob_inv_faz_agri'),
+          r('Desembolso Agricultura',   'money', soberano.desembolsoAgri,      'sob_desemb_agri'),
+          r('Investimento em Bovinos',  'money', soberano.investBovinos,       'sob_inv_bov'),
+          r('Amortizações',             'money', soberano.amortizacoes,        'sob_amort'),
+          r('Dividendos / Retiradas',   'money', soberano.dividendos,          'sob_div'),
+          r('Saídas Totais',            'money', soberano.saidasTotais,        'sob_saidas_totais'),
+        ],
+      }
+    : null;
+
   switch (tab) {
     case 'mensal':
       return [
@@ -363,6 +415,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
           ],
         },
+        ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -405,6 +458,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
           ],
         },
+        ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -444,6 +498,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
           ],
         },
+        ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -489,6 +544,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
           ],
         },
+        ...(blocoSoberano ? [blocoSoberano] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -1173,6 +1229,19 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const [showReabrirP1, setShowReabrirP1] = useState(false);
 
   const anoNum = Number(ano);
+
+  // ─── Indicadores financeiros SOBERANOS (Etapa 2C) — bloco "Financeiro Soberano (Auditoria)".
+  // Consome usePainelConsultorData passando lancFin/lancPec já carregados (sem refetch).
+  // viewMode='mes' garante que indicador.serieAno[1..12] seja RAW mensal — r() aplica
+  // a transformação por aba (mensal/medio/acumulado/media_periodo) dentro de buildBlocosForTab.
+  const pcdSoberano = usePainelConsultorData({
+    ano: anoNum,
+    mes: filtroGlobal?.mes || (new Date().getMonth() + 1),
+    viewMode: 'mes',
+    lancPecExterno: lancPec.length > 0 ? lancPec : undefined,
+    lancFinExterno: lancFin.length > 0 ? lancFin : undefined,
+  });
+
   const anosDisponiveis = useMemo(() => {
     const s = new Set<string>();
     s.add(String(new Date().getFullYear()));
@@ -1432,6 +1501,47 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     [viewCategoriasMeta],
   );
 
+  // Série soberana 12-mensal por indicador para o bloco "Financeiro Soberano (Auditoria)".
+  // Cada indicador.serieAno tem 13 posições; [0]=NaN contexto, [1..12]=Jan..Dez raw (porque
+  // chamamos usePCD com viewMode='mes'). NaNs são neutralizados para 0 — coluna em branco
+  // só aconteceria por loading; o bloco fica oculto até pcdSoberano.custeioPecIndicador existir.
+  const soberanoSerie = useMemo<SoberanoSerie12 | undefined>(() => {
+    const slice12 = (ind: { serieAno: number[] } | null | undefined) =>
+      ind ? ind.serieAno.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : 0)) : Array(12).fill(0);
+    if (!pcdSoberano.custeioPecIndicador) return undefined;
+    return {
+      custeioPecSemJuros:  slice12(pcdSoberano.custeioPecIndicador),
+      jurosPec:            slice12(pcdSoberano.jurosPecIndicador),
+      custeioPecComJuros:  slice12(pcdSoberano.custeioPecComJurosIndicador),
+      investFazendaPec:    slice12(pcdSoberano.investPecIndicador),
+      desembolsoPec:       slice12(pcdSoberano.desembolsoPecIndicador),
+      custeioAgriSemJuros: slice12(pcdSoberano.custeioAgriIndicador),
+      jurosAgri:           slice12(pcdSoberano.jurosAgriIndicador),
+      custeioAgriComJuros: slice12(pcdSoberano.custeioAgriComJurosIndicador),
+      investFazendaAgri:   slice12(pcdSoberano.investAgriIndicador),
+      desembolsoAgri:      slice12(pcdSoberano.desembolsoAgriIndicador),
+      investBovinos:       slice12(pcdSoberano.investBovinosIndicador),
+      amortizacoes:        slice12(pcdSoberano.amortizacoesIndicador),
+      dividendos:          slice12(pcdSoberano.dividendosIndicador),
+      saidasTotais:        slice12(pcdSoberano.saidasTotaisIndicador),
+    };
+  }, [
+    pcdSoberano.custeioPecIndicador,
+    pcdSoberano.jurosPecIndicador,
+    pcdSoberano.custeioPecComJurosIndicador,
+    pcdSoberano.investPecIndicador,
+    pcdSoberano.desembolsoPecIndicador,
+    pcdSoberano.custeioAgriIndicador,
+    pcdSoberano.jurosAgriIndicador,
+    pcdSoberano.custeioAgriComJurosIndicador,
+    pcdSoberano.investAgriIndicador,
+    pcdSoberano.desembolsoAgriIndicador,
+    pcdSoberano.investBovinosIndicador,
+    pcdSoberano.amortizacoesIndicador,
+    pcdSoberano.dividendosIndicador,
+    pcdSoberano.saidasTotaisIndicador,
+  ]);
+
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
     if (isPrevisto) {
@@ -1458,8 +1568,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       arrobas: realPesoSnap.arrobas.slice(1),
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel]);
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie]);
 
   useEffect(() => {
     if (blocos.length > 0) {
