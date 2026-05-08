@@ -345,6 +345,69 @@ export function isReceita(l: LancamentoClassificavel): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// PC-100 / Fluxo de Caixa Executivo — classificadores oficiais por linha.
+// Nomenclatura segue plano de contas. Filtros literais por grupo_custo
+// (NUNCA por escopo_negocio) — mesmo padrão de isCusteioProducaoPecuaria.
+// ---------------------------------------------------------------------------
+
+/**
+ * É Custeio Produção Agricultura = Custo Fixo Agri + Custo Variável Agri.
+ * Espelha isCusteioProducaoPecuaria — sem incluir Juros.
+ */
+export function isCusteioProducaoAgricultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Agricultura'
+      || l.grupo_custo === 'Custo Variável Agricultura';
+}
+
+/** Juros Pecuária — entra em "Custeio Pec com Juros" e em "Desembolso Pec". */
+export function isJurosPecuaria(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Juros Pecuária';
+}
+
+/** Juros Agricultura — entra em "Custeio Agri com Juros" e em "Desembolso Agri". */
+export function isJurosAgricultura(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Juros Agricultura';
+}
+
+/** Macro Investimento na Fazenda (sem distinção de escopo). */
+export function isInvestimentoFazenda(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'investimento na fazenda';
+}
+
+/** Investimento na Fazenda — escopo Pecuária (derivado de centro_custo via getEscopo). */
+export function isInvestimentoFazendaPecuaria(l: LancamentoClassificavel): boolean {
+  return isInvestimentoFazenda(l) && getEscopo(l) === 'pec';
+}
+
+/** Investimento na Fazenda — escopo Agricultura. */
+export function isInvestimentoFazendaAgricultura(l: LancamentoClassificavel): boolean {
+  return isInvestimentoFazenda(l) && getEscopo(l) === 'agri';
+}
+
+/** Investimento em Bovinos (linha "Reposição"/"Investimento em Bovinos" do PC-100). */
+export function isReposicaoBovinos(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'investimento em bovinos';
+}
+
+/**
+ * Amortização Financeira — APENAS saldo principal.
+ * Juros financeiros NÃO entram aqui — caem em isJurosPecuaria/isJurosAgricultura
+ * (grupo_custo='Juros Pecuária'/'Juros Agricultura' dentro do macro Custeio Produtivo).
+ */
+export function isAmortizacao(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'amortizações financeiras';
+}
+
+/**
+ * Dividendo / Retirada — mesma linha por enquanto (macro 'dividendos' OU
+ * centro_custo='Dividendos' legado). Refinar depois se houver separação oficial.
+ */
+export function isDividendoOuRetirada(l: LancamentoClassificavel): boolean {
+  if (canonicalMacro(l) === 'dividendos') return true;
+  return norm(l.centro_custo) === 'dividendos';
+}
+
+// ---------------------------------------------------------------------------
 // DATA HELPERS
 // ---------------------------------------------------------------------------
 

@@ -21,6 +21,10 @@ import {
   classificarSaidaFluxo,
   classificarEntrada,
   classificarSaida,
+  isCusteioProducaoPecuaria,
+  isCusteioProducaoAgricultura,
+  isJurosPecuaria,
+  isJurosAgricultura,
   datePagtoMes as datePagtoMesClass,
   datePagtoAno as datePagtoAnoClass,
   type LancamentoClassificavel,
@@ -70,6 +74,15 @@ export interface FluxoMensal {
   dividendos: number;
   outrasSaidas: number;
   totalSaidas: number;
+  // ─── Linhas oficiais PC-100 (filtros literais por grupo_custo) ───
+  /** Custeio Pec sem juros: grupo IN (Custo Fixo Pec, Custo Variável Pec). */
+  custeioPecSemJuros: number;
+  /** Custeio Agri sem juros: grupo IN (Custo Fixo Agri, Custo Variável Agri). */
+  custeioAgriSemJuros: number;
+  /** Juros Pec: grupo='Juros Pecuária'. */
+  jurosPec: number;
+  /** Juros Agri: grupo='Juros Agricultura'. */
+  jurosAgri: number;
   // Saldos
   saldoFinal: number;
   saldoAcumulado: number;
@@ -240,6 +253,9 @@ export function useFluxoCaixa(
       let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
       let dividendos = 0;
+      // PC-100 oficial — agregados literais por grupo_custo
+      let custeioPecSemJuros = 0, custeioAgriSemJuros = 0;
+      let jurosPec = 0, jurosAgri = 0;
 
       if (!isAfterFilter) {
         for (const l of lancs) {
@@ -266,6 +282,15 @@ export function useFluxoCaixa(
             const catFluxo = classificarSaidaFluxo(l);
             const catDash = classificarSaida(l);
             const macro = (l.macro_custo || '').toLowerCase().trim();
+
+            // ─── Agregadores PC-100 oficiais (ortogonais aos catFluxo abaixo) ───
+            // Filtros literais por grupo_custo — não dependem de getEscopo nem
+            // de catDash. Mesmo lançamento pode entrar em múltiplos buckets
+            // se assim for sua classificação real.
+            if (isCusteioProducaoPecuaria(l)) custeioPecSemJuros += val;
+            else if (isCusteioProducaoAgricultura(l)) custeioAgriSemJuros += val;
+            if (isJurosPecuaria(l)) jurosPec += val;
+            else if (isJurosAgricultura(l)) jurosAgri += val;
 
             if (catFluxo === 'deducao') {
               deducaoReceitas += val;
@@ -336,6 +361,11 @@ export function useFluxoCaixa(
         totalSaidas,
         saldoFinal,
         saldoAcumulado: isAfterFilter ? 0 : saldoAcumulado,
+        // PC-100 oficial
+        custeioPecSemJuros,
+        custeioAgriSemJuros,
+        jurosPec,
+        jurosAgri,
       });
     }
 
