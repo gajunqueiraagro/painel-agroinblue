@@ -16,7 +16,8 @@
  * - Desembolso produtivo = macro_custo "Custeio Produtivo" + tipo_operacao 2-Saídas.
  * ═══════════════════════════════════════════════════════════════════════
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -340,6 +341,26 @@ interface UseFinanceiroOptions {
   ano?: number;
 }
 
+interface FinanceiroQueryData {
+  importacoes: ImportacaoRecord[];
+  lancamentos: FinanceiroLancamento[];
+  centrosCusto: CentroCustoOficial[];
+  contasBancarias: ContaBancariaImportacao[];
+  lancamentosADM: FinanceiroLancamento[];
+  rawSaldos: RawSaldo[];
+  rawLancsPec: RawLancPec[];
+}
+
+// Referências estáveis para fallback enquanto a query não tem data — evita
+// recalcular memos consumidores (rebanhoMedioPorFazendaMes, indicadores, etc.)
+// quando data?.X cai em ?? [] criando array novo a cada render.
+const EMPTY_IMPORTACOES: ImportacaoRecord[] = [];
+const EMPTY_LANCAMENTOS: FinanceiroLancamento[] = [];
+const EMPTY_CENTROS: CentroCustoOficial[] = [];
+const EMPTY_CONTAS: ContaBancariaImportacao[] = [];
+const EMPTY_RAW_SALDOS: RawSaldo[] = [];
+const EMPTY_RAW_LANCS: RawLancPec[] = [];
+
 export function useFinanceiro(options: UseFinanceiroOptions = {}) {
   const enabled = options.enabled ?? true;
   const anoFiltro = options.ano;
@@ -350,15 +371,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
   const clienteId = clienteAtual?.id;
   const isGlobal = fazendaId === '__global__';
 
-  const [importacoes, setImportacoes] = useState<ImportacaoRecord[]>([]);
-  const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([]);
-  const [centrosCusto, setCentrosCusto] = useState<CentroCustoOficial[]>([]);
-  const [contasBancarias, setContasBancarias] = useState<ContaBancariaImportacao[]>([]);
-  const [lancamentosADM, setLancamentosADM] = useState<FinanceiroLancamento[]>([]);
-  const [rawSaldos, setRawSaldos] = useState<RawSaldo[]>([]);
-  const [rawLancsPec, setRawLancsPec] = useState<RawLancPec[]>([]);
-  const [loading, setLoading] = useState(false);
-
+  const queryClient = useQueryClient();
 
   // Identify ADM fazenda and operational fazendas
   const fazendaADM = useMemo(
@@ -379,60 +392,64 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
     [fazendas],
   );
 
-  // --- Load data ---
-  const loadData = useCallback(async () => {
-    if (!enabled) return;
-    if (!fazendaId) {
-      setImportacoes([]);
-      setLancamentos([]);
-      setCentrosCusto([]);
-      setContasBancarias([]);
-      setLancamentosADM([]);
-      setRawSaldos([]);
-      setRawLancsPec([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
-      const opIds = fazendasOperacionais.map(f => f.id);
+  // --- React Query — cache compartilhado entre consumidores ---
+  // queryKey segue spec: [tag, clienteId, ano, escopo, enabled].
+  // Cache local (staleTime/gcTime) — sem mexer no QueryClient global.
+  const query = useQuery<FinanceiroQueryData>({
+    queryKey: ['financeiro-data', clienteId, anoFiltro ?? 'all', isGlobal ? 'global' : fazendaId, enabled] as const,
+    enabled: enabled && !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<FinanceiroQueryData> => {
+      if (!fazendaId) {
+        return {
+          importacoes: [],
+          lancamentos: [],
+          centrosCusto: [],
+          contasBancarias: [],
+          lancamentosADM: [],
+          rawSaldos: [],
+          rawLancsPec: [],
+        };
+      }
+      try {
+        const allFazendaIds = fazendas.filter(f => f.id !== '__global__').map(f => f.id);
+        const opIds = fazendasOperacionais.map(f => f.id);
 
-      if (isGlobal) {
-        if (allFazendaIds.length === 0) {
-          setLancamentos([]); setImportacoes([]); setCentrosCusto([]);
-          setContasBancarias([]); setLancamentosADM([]); setRawSaldos([]); setRawLancsPec([]);
-          setLoading(false);
-          return;
+        if (isGlobal) {
+          if (allFazendaIds.length === 0) {
+            return {
+              importacoes: [], lancamentos: [], centrosCusto: [],
+              contasBancarias: [], lancamentosADM: [], rawSaldos: [], rawLancsPec: [],
+            };
+          }
+
+          const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
+            fetchAllPaginated<any>((from, to) => {
+              let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
+                .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
+              if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
+              return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+            }),
+            supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
+            supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
+            supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId!).eq('ativa', true),
+            opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
+            opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
+          ]);
+          const allLancs = allLancsRaw.map(mapV2ToLancamento);
+
+          return {
+            importacoes: (impResult.data as ImportacaoRecord[]) || [],
+            lancamentos: allLancs,
+            centrosCusto: (ccResult.data as CentroCustoOficial[]) || [],
+            contasBancarias: (contasResult.data as ContaBancariaImportacao[]) || [],
+            lancamentosADM: fazendaADM ? allLancs.filter(l => l.fazenda_id === fazendaADM.id) : [],
+            rawSaldos: (saldoResult.data as RawSaldo[]) || [],
+            rawLancsPec: (lancPecResult.data as RawLancPec[]) || [],
+          };
         }
 
-        const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
-          fetchAllPaginated<any>((from, to) => {
-            let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
-              .eq('sem_movimentacao_caixa', false).eq('status_transacao', 'realizado').eq('cenario', 'realizado');
-            if (anoFiltro) q = q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-            return q.order('data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
-          }),
-          supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
-          supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
-          supabase.from('financeiro_contas_bancarias').select('id, fazenda_id, nome_conta, nome_exibicao, codigo_conta, banco, numero_conta, conta_digito').eq('cliente_id', clienteId!).eq('ativa', true),
-          opIds.length > 0 ? supabase.from('saldos_iniciais').select('fazenda_id, ano, categoria, quantidade').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
-          opIds.length > 0 ? supabase.from('lancamentos').select('fazenda_id, data, tipo, quantidade, categoria, categoria_destino').in('fazenda_id', opIds) : Promise.resolve({ data: [] }),
-        ]);
-        const allLancs = allLancsRaw.map(mapV2ToLancamento);
-
-        setLancamentos(allLancs);
-        setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
-        setImportacoes((impResult.data as ImportacaoRecord[]) || []);
-        setContasBancarias((contasResult.data as ContaBancariaImportacao[]) || []);
-        setRawSaldos((saldoResult.data as RawSaldo[]) || []);
-        setRawLancsPec((lancPecResult.data as RawLancPec[]) || []);
-
-        if (fazendaADM) {
-          setLancamentosADM(allLancs.filter(l => l.fazenda_id === fazendaADM.id));
-        } else {
-          setLancamentosADM([]);
-        }
-      } else {
         // Per-fazenda — use paginated fetch for lancamentos
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
@@ -466,33 +483,34 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
             : Promise.resolve({ data: [] }),
         ]);
 
-        setLancamentos(lancData);
-        setCentrosCusto((ccResult.data as CentroCustoOficial[]) || []);
-        setImportacoes((impResult.data as ImportacaoRecord[]) || []);
-        setContasBancarias((contasResult.data as ContaBancariaImportacao[]) || []);
-
-        if (needsRateio) {
-          setLancamentosADM(admData);
-          setRawSaldos((saldoResult.data as RawSaldo[]) || []);
-          setRawLancsPec((lancPecResult.data as RawLancPec[]) || []);
-        } else {
-          setLancamentosADM([]);
-          setRawSaldos([]);
-          setRawLancsPec([]);
-        }
+        return {
+          importacoes: (impResult.data as ImportacaoRecord[]) || [],
+          lancamentos: lancData,
+          centrosCusto: (ccResult.data as CentroCustoOficial[]) || [],
+          contasBancarias: (contasResult.data as ContaBancariaImportacao[]) || [],
+          lancamentosADM: needsRateio ? admData : [],
+          rawSaldos: needsRateio ? ((saldoResult.data as RawSaldo[]) || []) : [],
+          rawLancsPec: needsRateio ? ((lancPecResult.data as RawLancPec[]) || []) : [],
+        };
+      } catch (err) {
+        toast.error('Erro ao carregar dados financeiros');
+        throw err;
       }
-    } catch {
-      toast.error('Erro ao carregar dados financeiros');
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled, fazendaId, isGlobal, fazendas, fazendaADM, fazendasOperacionais, anoFiltro]);
+    },
+  });
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const importacoes = query.data?.importacoes ?? EMPTY_IMPORTACOES;
+  const lancamentos = query.data?.lancamentos ?? EMPTY_LANCAMENTOS;
+  const centrosCusto = query.data?.centrosCusto ?? EMPTY_CENTROS;
+  const contasBancarias = query.data?.contasBancarias ?? EMPTY_CONTAS;
+  const lancamentosADM = query.data?.lancamentosADM ?? EMPTY_LANCAMENTOS;
+  const rawSaldos = query.data?.rawSaldos ?? EMPTY_RAW_SALDOS;
+  const rawLancsPec = query.data?.rawLancsPec ?? EMPTY_RAW_LANCS;
+  const loading = query.isLoading || query.isFetching;
 
-  useEffect(() => {
-    if (!enabled) setLoading(false);
-  }, [enabled]);
+  const reloadData = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['financeiro-data'] });
+  }, [queryClient]);
 
   // --- Rebanho médio por fazenda por mês (para rateio ADM v2) ---
   const rebanhoMedioPorFazendaMes = useMemo(() => {
@@ -1255,7 +1273,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         toast.success(`Importação concluída: ${msgs.join(' · ')}`);
       }
 
-      await loadData();
+      await queryClient.invalidateQueries({ queryKey: ['financeiro-data'] });
       return {
         ok: errosDetalhe.length === 0,
         totalProcessado: expandedRows.length,
@@ -1275,7 +1293,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         erros: [{ motivo: err.message || String(err) }],
       };
     }
-  }, [user, loadData, fazendas]);
+  }, [user, queryClient, fazendas, fazendaAtual]);
 
   // --- Buscar detalhes do lote para confirmação ---
   const buscarDetalhesLote = useCallback(async (importacaoId: string) => {
@@ -1317,13 +1335,13 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
       if (impErr) throw impErr;
 
       toast.success('Importação removida com sucesso');
-      await loadData();
+      await queryClient.invalidateQueries({ queryKey: ['financeiro-data'] });
       return true;
     } catch (err: any) {
       toast.error('Erro ao excluir importação: ' + (err.message || err));
       return false;
     }
-  }, [loadData]);
+  }, [queryClient]);
 
   // --- Indicadores ---
   const indicadores = useMemo(() => {
@@ -1382,7 +1400,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
     importacoes, lancamentos, centrosCusto, contasBancarias, indicadores,
     rateioADM, rateioConferencia, fazendasSemRebanho,
     fazendaMapForImport, loading, confirmarImportacao, excluirImportacao, buscarDetalhesLote,
-    reloadData: loadData, isGlobal, fazendaADM,
+    reloadData, isGlobal, fazendaADM,
     totalLancamentosADM: lancamentosADM.length,
   };
 }
