@@ -275,13 +275,13 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
               );
             })}
 
-            {/* Saldo Final — FONTE OFICIAL: Σ categorias (totaisPorMes) */}
+            {/* Saldo Final — fonte oficial consolidada: saldo_final */}
             <tr className="border-t-2 bg-primary/20">
               <td className="px-1.5 py-1 font-extrabold text-foreground sticky left-0 bg-primary/20 whitespace-nowrap">Saldo Final</td>
               {MESES_COLS.map((m) => {
                 const mes = Number(m.key);
                 const t = totaisPorMes[mes];
-                const saldoFim = t?.saldo_sistema ?? null;
+                const saldoFim = t?.saldo_final ?? null;
                 const isNeg = saldoFim != null && saldoFim < 0;
                 return (
                   <td key={m.key} className={`px-1 py-1 text-center font-extrabold tabular-nums whitespace-nowrap ${qb(m.key)} ${isNeg ? 'text-destructive' : 'text-foreground'}`}
@@ -291,8 +291,8 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
                   </td>
                 );
               })}
-              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums whitespace-nowrap bg-primary/20 border-l border-border/60 ${((totaisPorMes[12]?.saldo_sistema ?? null) != null && totaisPorMes[12]!.saldo_sistema! < 0) ? 'text-destructive' : 'text-foreground'}`}>
-                {totaisPorMes[12]?.saldo_sistema != null ? fmtNum(totaisPorMes[12].saldo_sistema) : '—'}
+              <td className={`px-1.5 py-1 text-center font-extrabold tabular-nums whitespace-nowrap bg-primary/20 border-l border-border/60 ${((totaisPorMes[12]?.saldo_final ?? null) != null && totaisPorMes[12]!.saldo_final < 0) ? 'text-destructive' : 'text-foreground'}`}>
+                {totaisPorMes[12]?.saldo_final != null ? fmtNum(totaisPorMes[12].saldo_final) : '—'}
               </td>
             </tr>
 
