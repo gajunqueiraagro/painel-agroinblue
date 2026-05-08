@@ -221,9 +221,6 @@ export function useFluxoCaixa(
 
   // Compute 12-line fluxo
   const meses = useMemo((): FluxoMensal[] => {
-    // TEMP-PERF
-    const _t0 = performance.now();
-    const _label = `[PERF] useFluxoCaixa.meses ano=${ano} lancs=${lancamentosGlobais.length}`;
     // Filter: realizado + data_pagamento in the given year
     const realizados = lancamentosGlobais.filter(l => {
       if (!isRealizado(l)) return false;
@@ -372,7 +369,6 @@ export function useFluxoCaixa(
       });
     }
 
-    console.log(`${_label} → ${(performance.now() - _t0).toFixed(1)}ms`);
     return result;
   }, [lancamentosGlobais, ano, mesAte, saldoInicialAno, filtros?.grupo, filtros?.centro, filtros?.subcentro]);
 

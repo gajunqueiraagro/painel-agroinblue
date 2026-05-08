@@ -34,41 +34,47 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   const adminCheckedRef = useRef<string | null>(null);
   const adminResultRef = useRef<boolean | null>(null);
 
+  // Guard de concorrência: bloqueia chamadas paralelas de loadClientes
+  // (StrictMode dev double-mount, re-renders rápidos do AuthContext etc.).
+  const loadingRef = useRef(false);
+
+  const userId = user?.id;
+
   const loadClientes = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
       setClientes([]);
       setClienteAtualState(null);
       setLoading(false);
       setIsAdmin(false);
       return;
     }
+    if (loadingRef.current) {
+      console.log('[ClienteContext] skip concurrent loadClientes', { userId });
+      return;
+    }
+    loadingRef.current = true;
     setLoading(true);
-    // TEMP-PERF
-    console.time('[PERF] ClienteContext.loadClientes total');
+    console.log('[ClienteContext] loadClientes start', { userId });
     try {
       // Check if user is admin (cache por userId — 1 RPC por sessão)
       let userIsAdmin: boolean;
-      if (adminCheckedRef.current === user.id && adminResultRef.current !== null) {
+      if (adminCheckedRef.current === userId && adminResultRef.current !== null) {
         userIsAdmin = adminResultRef.current;
       } else {
-        console.time('[PERF] ClienteContext.rpc is_admin_agroinblue');
-        const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: user.id });
-        console.timeEnd('[PERF] ClienteContext.rpc is_admin_agroinblue');
+        const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: userId });
         userIsAdmin = !!adminCheck;
-        adminCheckedRef.current = user.id;
+        adminCheckedRef.current = userId;
         adminResultRef.current = userIsAdmin;
       }
       setIsAdmin(userIsAdmin);
 
       if (userIsAdmin) {
         // Admin sees all clients
-        console.time('[PERF] ClienteContext.query clientes (admin)');
         const { data: allClientes } = await supabase
           .from('clientes')
           .select('*')
           .eq('ativo', true)
           .order('nome');
-        console.timeEnd('[PERF] ClienteContext.query clientes (admin)');
 
         if (allClientes && allClientes.length > 0) {
           const list: Cliente[] = allClientes.map(c => ({
@@ -84,13 +90,11 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Regular user: load from cliente_membros
-        console.time('[PERF] ClienteContext.query cliente_membros');
         const { data: membros } = await supabase
           .from('cliente_membros')
           .select('cliente_id, perfil, clientes(id, nome, slug, ativo, config)')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('ativo', true);
-        console.timeEnd('[PERF] ClienteContext.query cliente_membros');
 
         if (membros && membros.length > 0) {
           const list: Cliente[] = membros
@@ -110,10 +114,11 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
     } catch {
       setClientes([]);
       setClienteAtualState(null);
+    } finally {
+      setLoading(false);
+      loadingRef.current = false;
     }
-    setLoading(false);
-    console.timeEnd('[PERF] ClienteContext.loadClientes total');
-  }, [user]);
+  }, [userId]);
 
   const restoreOrSetDefault = (list: Cliente[]) => {
     const savedId = localStorage.getItem('cliente-ativo');

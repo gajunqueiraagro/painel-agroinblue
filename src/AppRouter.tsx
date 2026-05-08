@@ -1,5 +1,4 @@
-import { Route, Routes, useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -14,20 +13,8 @@ import LayoutLab from '@/pages/LayoutLab';
 
 export default function AppRouter() {
   const { user, loading: authLoading } = useAuth();
-  const { loading: loadingCliente, clienteAtual } = useCliente();
-  const { fazendaAtual, loading: fazendaLoading, fazendas } = useFazenda();
-
-  // ─── TEMP-PERF: cronometra boot até "fazendas prontas" ───
-  const bootStartRef = useRef<number>(performance.now());
-  const lastStateRef = useRef<string>('');
-  useEffect(() => {
-    const state = `auth=${authLoading} user=${!!user} cli=${loadingCliente}/${!!clienteAtual} faz=${fazendaLoading}/${fazendas.length}/${!!fazendaAtual}`;
-    if (state !== lastStateRef.current) {
-      const t = (performance.now() - bootStartRef.current).toFixed(0);
-      console.log(`[PERF][${t}ms] AppRouter state:`, state);
-      lastStateRef.current = state;
-    }
-  });
+  const { loading: loadingCliente } = useCliente();
+  const { fazendaAtual, loading: fazendaLoading } = useFazenda();
 
   if (authLoading) {
     return (

@@ -60,25 +60,18 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
-    // TEMP-PERF
-    console.time('[PERF] FazendaContext.loadFazendas total');
     try {
-      console.time('[PERF] FazendaContext.query fazendas');
       const { data: fazendasCliente } = await supabase
         .from('fazendas')
         .select('id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
         .eq('cliente_id', clienteAtual.id);
-      console.timeEnd('[PERF] FazendaContext.query fazendas');
-      console.log(`[PERF] FazendaContext fazendas count = ${fazendasCliente?.length ?? 0}`);
 
       if (fazendasCliente && fazendasCliente.length > 0) {
-        console.time('[PERF] FazendaContext.query fazenda_membros');
         const { data: membros } = await supabase
           .from('fazenda_membros')
           .select('fazenda_id, papel')
           .eq('user_id', user.id)
           .in('fazenda_id', fazendasCliente.map(f => f.id));
-        console.timeEnd('[PERF] FazendaContext.query fazenda_membros');
 
         const papelPorFazenda = new Map<string, string>(
           (membros || []).map(m => [m.fazenda_id, m.papel])
@@ -110,7 +103,6 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       setFazendas([]);
     } finally {
       setLoading(false);
-      console.timeEnd('[PERF] FazendaContext.loadFazendas total');
     }
   }, [user, clienteAtual]);
 
