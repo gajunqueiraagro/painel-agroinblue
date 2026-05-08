@@ -20,6 +20,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllPaginated } from '@/lib/supabase/fetchAllPaginated';
 import {
   cabecasMediaPeriodoFromRows,
   pesoMedioPonderadoFromRows,
@@ -581,21 +582,35 @@ export function useHistoricoIndicador({
           }
 
           // 3) Zoot multi-ano (apenas se custoArr/custoCab/margemArr).
+          //    Paginado via fetchAllPaginated — sem isso, PostgREST corta em 1000
+          //    rows e anos a partir do limite silencioso (ex.: 2024/2025) somem
+          //    do gráfico porque zootR[ano] fica undefined e calcCustoCab → null.
           const precisaZoot = indicadorKey !== 'custeioPec';
           let zootRowsAll: any[] = [];
           if (precisaZoot) {
-            let zq = supabase
-              .from('zoot_mensal_cache')
-              .select('ano, mes, cenario, saldo_inicial, saldo_final, producao_biologica')
-              .in('cenario', ['realizado', 'meta'])
-              .gte('ano', inicio)
-              .lte('ano', anoAtual);
-            if (fazendaId) zq = zq.eq('fazenda_id', fazendaId);
-            else if (fazendaIds && fazendaIds.length > 0) zq = zq.in('fazenda_id', fazendaIds);
-            const { data, error } = await zq;
-            if (cancelled) return;
-            if (error) { setHistorico([]); setHistoricoMeta([]); return; }
-            zootRowsAll = (data as any[]) || [];
+            try {
+              const res = await fetchAllPaginated<any>({
+                query: () => {
+                  let zq = supabase
+                    .from('zoot_mensal_cache')
+                    .select('ano, mes, cenario, saldo_inicial, saldo_final, producao_biologica')
+                    .in('cenario', ['realizado', 'meta'])
+                    .gte('ano', inicio)
+                    .lte('ano', anoAtual);
+                  if (fazendaId) zq = zq.eq('fazenda_id', fazendaId);
+                  else if (fazendaIds && fazendaIds.length > 0) zq = zq.in('fazenda_id', fazendaIds);
+                  return zq;
+                },
+                shouldAbort: () => cancelled,
+                context: `useHistoricoIndicador/zoot_mensal_cache(${indicadorKey})`,
+              });
+              if (cancelled || res.aborted) return;
+              zootRowsAll = res.data;
+            } catch (e) {
+              console.error('[useHistoricoIndicador] zoot fetch:', e);
+              if (!cancelled) { setHistorico([]); setHistoricoMeta([]); }
+              return;
+            }
           }
 
           // 4) Lancamentos pec multi-ano (apenas se margemArr — para precoArr).
