@@ -43,13 +43,17 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
+    // TEMP-PERF
+    console.time('[PERF] ClienteContext.loadClientes total');
     try {
       // Check if user is admin (cache por userId — 1 RPC por sessão)
       let userIsAdmin: boolean;
       if (adminCheckedRef.current === user.id && adminResultRef.current !== null) {
         userIsAdmin = adminResultRef.current;
       } else {
+        console.time('[PERF] ClienteContext.rpc is_admin_agroinblue');
         const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: user.id });
+        console.timeEnd('[PERF] ClienteContext.rpc is_admin_agroinblue');
         userIsAdmin = !!adminCheck;
         adminCheckedRef.current = user.id;
         adminResultRef.current = userIsAdmin;
@@ -58,11 +62,13 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
 
       if (userIsAdmin) {
         // Admin sees all clients
+        console.time('[PERF] ClienteContext.query clientes (admin)');
         const { data: allClientes } = await supabase
           .from('clientes')
           .select('*')
           .eq('ativo', true)
           .order('nome');
+        console.timeEnd('[PERF] ClienteContext.query clientes (admin)');
 
         if (allClientes && allClientes.length > 0) {
           const list: Cliente[] = allClientes.map(c => ({
@@ -78,11 +84,13 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Regular user: load from cliente_membros
+        console.time('[PERF] ClienteContext.query cliente_membros');
         const { data: membros } = await supabase
           .from('cliente_membros')
           .select('cliente_id, perfil, clientes(id, nome, slug, ativo, config)')
           .eq('user_id', user.id)
           .eq('ativo', true);
+        console.timeEnd('[PERF] ClienteContext.query cliente_membros');
 
         if (membros && membros.length > 0) {
           const list: Cliente[] = membros
@@ -104,6 +112,7 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
       setClienteAtualState(null);
     }
     setLoading(false);
+    console.timeEnd('[PERF] ClienteContext.loadClientes total');
   }, [user]);
 
   const restoreOrSetDefault = (list: Cliente[]) => {

@@ -19,6 +19,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // TEMP-PERF
+    console.time('[PERF] AuthContext.getSession');
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -26,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.timeEnd('[PERF] AuthContext.getSession');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
