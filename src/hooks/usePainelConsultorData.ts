@@ -45,6 +45,25 @@ export type StatusValidacaoArea =
   | 'incompleto'
   | 'carregando';
 
+/**
+ * Shape compartilhado dos indicadores financeiros oficiais (Etapa 2B).
+ * Mesma forma usada em receitaPecIndicador, custeioPecIndicador etc.
+ * Não substitui os indicadores existentes — usado apenas pelos campos
+ * novos da Etapa 2B (saídas totais, juros, desembolsos, caixa…).
+ */
+interface IndicadorFinanceiroShape {
+  label:        string;
+  titulo:       string;
+  subtitulo:    string;
+  valor:        number | null;
+  deltaMes:     number | null;
+  deltaAno:     number | null;
+  deltaMeta:    number | null;
+  serieAno:     number[];
+  serieAnoAnt?: number[];
+  serieMeta?:   number[];
+}
+
 export interface PainelConsultorDataResult {
   cabecas: number | null;
   pesoMedio: number | null;
@@ -297,6 +316,24 @@ export interface PainelConsultorDataResult {
     serieAnoAnt?: number[];
     serieMeta?:  number[];
   } | null;
+
+  // ─── Indicadores financeiros oficiais — Etapa 2B (shape only) ───
+  // Todos retornam null nesta etapa; o cálculo entra na 2C/2D.
+  saidasTotaisIndicador:        IndicadorFinanceiroShape | null;
+  jurosPecIndicador:            IndicadorFinanceiroShape | null;
+  custeioPecComJurosIndicador:  IndicadorFinanceiroShape | null;
+  investPecIndicador:           IndicadorFinanceiroShape | null;
+  desembolsoPecIndicador:       IndicadorFinanceiroShape | null;
+  custeioAgriIndicador:         IndicadorFinanceiroShape | null;
+  jurosAgriIndicador:           IndicadorFinanceiroShape | null;
+  custeioAgriComJurosIndicador: IndicadorFinanceiroShape | null;
+  investAgriIndicador:          IndicadorFinanceiroShape | null;
+  desembolsoAgriIndicador:      IndicadorFinanceiroShape | null;
+  investBovinosIndicador:       IndicadorFinanceiroShape | null;
+  amortizacoesIndicador:        IndicadorFinanceiroShape | null;
+  dividendosIndicador:          IndicadorFinanceiroShape | null;
+  caixaIndicador:               IndicadorFinanceiroShape | null;
+
   loading: boolean;
 }
 
@@ -2368,6 +2405,23 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: margemArrSerieAnoAnt ?? undefined,
       serieMeta:   margemArrSerieMeta ?? undefined,
     } : null,
+
+    // ─── Etapa 2B: shape only — sem cálculo ainda ───
+    saidasTotaisIndicador:        null,
+    jurosPecIndicador:            null,
+    custeioPecComJurosIndicador:  null,
+    investPecIndicador:           null,
+    desembolsoPecIndicador:       null,
+    custeioAgriIndicador:         null,
+    jurosAgriIndicador:           null,
+    custeioAgriComJurosIndicador: null,
+    investAgriIndicador:          null,
+    desembolsoAgriIndicador:      null,
+    investBovinosIndicador:       null,
+    amortizacoesIndicador:        null,
+    dividendosIndicador:          null,
+    caixaIndicador:               null,
+
     loading,
   };
 
@@ -2399,6 +2453,21 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       precoArrIndicador: null,
       custoCabIndicador: null,
       margemArrIndicador: null,
+      // ─── Etapa 2B ───
+      saidasTotaisIndicador:        null,
+      jurosPecIndicador:            null,
+      custeioPecComJurosIndicador:  null,
+      investPecIndicador:           null,
+      desembolsoPecIndicador:       null,
+      custeioAgriIndicador:         null,
+      jurosAgriIndicador:           null,
+      custeioAgriComJurosIndicador: null,
+      investAgriIndicador:          null,
+      desembolsoAgriIndicador:      null,
+      investBovinosIndicador:       null,
+      amortizacoesIndicador:        null,
+      dividendosIndicador:          null,
+      caixaIndicador:               null,
     };
   }
 
