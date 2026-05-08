@@ -40,7 +40,7 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
 
   const userId = user?.id;
 
-  const loadClientes = useCallback(async () => {
+  const loadClientes = useCallback(async (isCancelled: () => boolean = () => false) => {
     if (!userId) {
       setClientes([]);
       setClienteAtualState(null);
@@ -67,10 +67,12 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
         console.log('[ClienteContext] rpc is_admin_agroinblue START');
         const { data: adminCheck, error: rpcErr } = await supabase.rpc('is_admin_agroinblue', { _user_id: userId });
         console.log(`[ClienteContext] rpc is_admin_agroinblue END (${(performance.now() - _tRpc).toFixed(0)}ms)`, { data: adminCheck, error: rpcErr });
+        if (isCancelled()) return;
         userIsAdmin = !!adminCheck;
         adminCheckedRef.current = userId;
         adminResultRef.current = userIsAdmin;
       }
+      if (isCancelled()) return;
       setIsAdmin(userIsAdmin);
 
       if (userIsAdmin) {
@@ -83,6 +85,7 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
           .eq('ativo', true)
           .order('nome');
         console.log(`[ClienteContext] query clientes (admin) END (${(performance.now() - _tQ).toFixed(0)}ms)`, { rows: allClientes?.length ?? 0, error: qErr });
+        if (isCancelled()) return;
 
         if (allClientes && allClientes.length > 0) {
           const list: Cliente[] = allClientes.map(c => ({
@@ -106,6 +109,7 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
           .eq('user_id', userId)
           .eq('ativo', true);
         console.log(`[ClienteContext] query cliente_membros END (${(performance.now() - _tQ).toFixed(0)}ms)`, { rows: membros?.length ?? 0, error: qErr });
+        if (isCancelled()) return;
 
         if (membros && membros.length > 0) {
           const list: Cliente[] = membros
@@ -124,9 +128,14 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
       }
     } catch (e) {
       console.error('[ClienteContext] loadClientes EXCEPTION', e);
+      if (isCancelled()) return;
       setClientes([]);
       setClienteAtualState(null);
     } finally {
+      // loadingRef.current SÓ é resetado aqui — NUNCA na cleanup do useEffect.
+      // Isso garante que múltiplas chamadas concorrentes sejam bloqueadas pelo
+      // guard `if (loadingRef.current)` durante todo o ciclo async, mesmo
+      // quando o effect re-executa por troca de userId/remount.
       setLoading(false);
       loadingRef.current = false;
       console.log(`[ClienteContext] loadClientes total: ${(performance.now() - _t0).toFixed(0)}ms`);
@@ -140,7 +149,14 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadClientes();
+    let cancelled = false;
+    loadClientes(() => cancelled);
+    return () => {
+      cancelled = true;
+      // NÃO mexer em loadingRef.current aqui — mantemos true durante o ciclo
+      // async até o finally fechar o ciclo. Isso impede que uma re-execução
+      // do effect (ex.: remount do provider durante boot) bypasse o guard.
+    };
   }, [loadClientes]);
 
   const setClienteAtual = (c: Cliente) => {
