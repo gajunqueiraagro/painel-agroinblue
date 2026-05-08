@@ -12,7 +12,7 @@ import {
   totalizarPorMes as totalizarViewPorMes,
 } from '@/hooks/useRebanhoOficial';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
-import { buildMonthlyDataFromView } from '@/pages/PainelConsultorTab';
+import { buildMonthlyDataFromView } from '@/lib/painelConsultor/buildMonthlyDataFromView';
 import {
   computePeriodGmd,
   rollingAvg,
