@@ -465,7 +465,7 @@ function agregarGridMetaPainelConsultor(
   return { entradas, saidas, recPec, custoProd, recOper, outrasSaidas, resOper, resFinal };
 }
 
-function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number): Bloco[] {
+function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[], realPrecoArr?: number[], pesoSnap?: PesoSnapshot, dezPesoSnap?: number, fluxoMeses?: FluxoMensal[]): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -526,6 +526,25 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   const finSaidas = d.saiFin;
   const finRecPec = d.recPec;
   const finResCaixa = d.resCaixa;
+
+  // ─── Fluxo de Caixa Executivo (linhas oficiais) ───
+  // Cadeia: financeiro_lancamentos_v2 → classificacao.ts → useFluxoCaixa.
+  // Quando fluxoMeses não é passado, todas as linhas saem zeradas (defesa).
+  const fxz: number[] = Array(12).fill(0);
+  const fxTotalSaidas         = fluxoMeses ? fluxoMeses.map(m => m.totalSaidas)         : fxz;
+  const fxCusteioPecSemJuros  = fluxoMeses ? fluxoMeses.map(m => m.custeioPecSemJuros)  : fxz;
+  const fxJurosPec            = fluxoMeses ? fluxoMeses.map(m => m.jurosPec)            : fxz;
+  const fxCusteioPecComJuros  = fxCusteioPecSemJuros.map((v, i) => v + fxJurosPec[i]);
+  const fxInvestPec           = fluxoMeses ? fluxoMeses.map(m => m.investPec)           : fxz;
+  const fxDesembolsoPec       = fxCusteioPecComJuros.map((v, i) => v + fxInvestPec[i]);
+  const fxCusteioAgriSemJuros = fluxoMeses ? fluxoMeses.map(m => m.custeioAgriSemJuros) : fxz;
+  const fxJurosAgri           = fluxoMeses ? fluxoMeses.map(m => m.jurosAgri)           : fxz;
+  const fxCusteioAgriComJuros = fxCusteioAgriSemJuros.map((v, i) => v + fxJurosAgri[i]);
+  const fxInvestAgri          = fluxoMeses ? fluxoMeses.map(m => m.investAgri)          : fxz;
+  const fxDesembolsoAgri      = fxCusteioAgriComJuros.map((v, i) => v + fxInvestAgri[i]);
+  const fxReposicao           = fluxoMeses ? fluxoMeses.map(m => m.reposicao)           : fxz;
+  const fxAmortizacoes        = fluxoMeses ? fluxoMeses.map(m => m.amortizacoes)        : fxz;
+  const fxDividendos          = fluxoMeses ? fluxoMeses.map(m => m.dividendos)          : fxz;
   // Use persisted snapshot values when available; fallback to calculation
   const valorPorCab = realValorCab && realValorCab.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realValorCab[i] || (cabFin[i] > 0 ? v / cabFin[i] : NaN))
@@ -533,6 +552,27 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
   const valorPorArr = realPrecoArr && realPrecoArr.some(v => v > 0)
     ? d.valorRebFin.map((v, i) => realPrecoArr[i] || (pesoTotalFin[i] > 0 ? v / (pesoTotalFin[i] / 30) : NaN))
     : d.valorRebFin.map((v, i) => { const pf = pesoTotalFin[i]; return pf > 0 ? v / (pf / 30) : NaN; });
+
+  // Helper local: rows oficiais do Fluxo de Caixa para o grupo "Financeiro (Caixa)".
+  // Usa a função r() — aplica a transformação correta da aba ativa
+  // (mensal/medio/acumulado/media_periodo). Sufixo no indicadorId garante
+  // colisão zero entre abas.
+  const fluxoOficialRows = (suf: string): Row[] => [
+    r('Saídas Totais',                        'money', fxTotalSaidas,         `flx_saidas_totais_${suf}`),
+    r('Custeio Pecuária (Fixo + Variável)',   'money', fxCusteioPecSemJuros,  `flx_custeio_pec_${suf}`),
+    r('Juros Pecuária',                       'money', fxJurosPec,            `flx_juros_pec_${suf}`),
+    r('Custeio Pecuária com Juros',           'money', fxCusteioPecComJuros,  `flx_custeio_pec_juros_${suf}`),
+    r('Investimento Fazenda Pecuária',        'money', fxInvestPec,           `flx_inv_pec_${suf}`),
+    r('Desembolso Pecuária',                  'money', fxDesembolsoPec,       `flx_desembolso_pec_${suf}`),
+    r('Custeio Agricultura (Fixo + Variável)','money', fxCusteioAgriSemJuros, `flx_custeio_agri_${suf}`),
+    r('Juros Agricultura',                    'money', fxJurosAgri,           `flx_juros_agri_${suf}`),
+    r('Custeio Agricultura com Juros',        'money', fxCusteioAgriComJuros, `flx_custeio_agri_juros_${suf}`),
+    r('Investimento Fazenda Agricultura',     'money', fxInvestAgri,          `flx_inv_agri_${suf}`),
+    r('Desembolso Agricultura',               'money', fxDesembolsoAgri,      `flx_desembolso_agri_${suf}`),
+    r('Investimento em Bovinos',              'money', fxReposicao,           `flx_reposicao_${suf}`),
+    r('Amortizações',                         'money', fxAmortizacoes,        `flx_amortizacoes_${suf}`),
+    r('Dividendos / Retiradas',               'money', fxDividendos,          `flx_dividendos_${suf}`),
+  ];
 
   switch (tab) {
     case 'mensal':
@@ -565,6 +605,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+            ...fluxoOficialRows('mensal'),
           ],
         },
         {
@@ -607,6 +648,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+            ...fluxoOficialRows('med'),
           ],
         },
         {
@@ -646,6 +688,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_acum'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_acum'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_acum'),
+            ...fluxoOficialRows('acum'),
           ],
         },
         {
@@ -691,6 +734,7 @@ function buildBlocosForTab(d: MonthlyData, tab: ViewTab, realValorCab?: number[]
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+            ...fluxoOficialRows('periodo'),
           ],
         },
         {
@@ -1426,45 +1470,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   // ─── Fluxo de Caixa Executivo (PC-100 oficial) ──────────────────────────
   // Cadeia oficial: financeiro_lancamentos_v2 → classificacao.ts → useFluxoCaixa
-  // → PainelConsultorTab. NÃO recriar filtros nem cálculos paralelos.
+  // → PainelConsultorTab. As 12 linhas oficiais entram no grupo "Financeiro
+  // (Caixa)" via buildBlocosForTab — ver passagem de fluxoMeses abaixo.
   const fluxoCaixaResult = useFluxoCaixa(lancFin, [], anoNum, 12);
-  const fluxoMatrizPC100 = useMemo(() => {
-    const meses = fluxoCaixaResult.meses;
-    if (!meses || meses.length === 0) return null;
-    // Helpers de série mensal e acumulado Jan→m.
-    const mensal = (sel: (m: FluxoMensal) => number): number[] =>
-      meses.map(sel);
-    const acumulado = (mensalArr: number[]): number[] => {
-      const out: number[] = []; let s = 0;
-      for (const v of mensalArr) { s += v; out.push(s); }
-      return out;
-    };
-    const linha = (label: string, key: string, sel: (m: FluxoMensal) => number) => {
-      const mensalArr = mensal(sel);
-      return {
-        label, key,
-        mensal: mensalArr,
-        acumulado: acumulado(mensalArr),
-        totalAno: mensalArr.reduce((s, v) => s + v, 0),
-      };
-    };
-    return [
-      linha('Saídas Totais',                        'totalSaidas',           m => m.totalSaidas),
-      linha('Custeio Pecuária (Fixo + Variável)',   'custeioPecSemJuros',    m => m.custeioPecSemJuros),
-      linha('Juros Pecuária',                       'jurosPec',              m => m.jurosPec),
-      linha('Custeio Pec com Juros',                'custeioPecComJuros',    m => m.custeioPecSemJuros + m.jurosPec),
-      linha('Investimento Fazenda Pecuária',        'investPec',             m => m.investPec),
-      linha('Desembolso Pecuária (Fixo+Var+Juros+Inv)', 'desembolsoPec',     m => m.custeioPecSemJuros + m.jurosPec + m.investPec),
-      linha('Custeio Agricultura (Fixo + Variável)','custeioAgriSemJuros',   m => m.custeioAgriSemJuros),
-      linha('Juros Agricultura',                    'jurosAgri',             m => m.jurosAgri),
-      linha('Custeio Agri com Juros',               'custeioAgriComJuros',   m => m.custeioAgriSemJuros + m.jurosAgri),
-      linha('Investimento Fazenda Agricultura',     'investAgri',            m => m.investAgri),
-      linha('Desembolso Agricultura (Fixo+Var+Juros+Inv)', 'desembolsoAgri', m => m.custeioAgriSemJuros + m.jurosAgri + m.investAgri),
-      linha('Investimento em Bovinos',              'reposicao',             m => m.reposicao),
-      linha('Amortizações',                         'amortizacoes',          m => m.amortizacoes),
-      linha('Dividendos / Retiradas',               'dividendos',            m => m.dividendos),
-    ];
-  }, [fluxoCaixaResult.meses]);
   const { statusArray: snapshotStatusArray, isComprometido: isSnapshotComprometido, getStatusByMonth } = useSnapshotStatus(anoNum);
 
   // Leitura oficial do Valor do Rebanho META validado (tabela valor_rebanho_meta_validada)
@@ -1704,7 +1712,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       arrobas: realPesoSnap.arrobas.slice(1),
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined);
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, fluxoCaixaResult.meses);
   }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel]);
 
   useEffect(() => {
@@ -2009,75 +2017,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
               </CollapsibleContent>
             </Collapsible>
           ))}
-        </div>
-      </div>
-
-      {/* ─── FLUXO DE CAIXA EXECUTIVO PC-100 (OFICIAL) ───
-          Matriz mensal + acumulado Jan→mês para as linhas executivas.
-          Fonte: useFluxoCaixa (financeiro_lancamentos_v2 + classificacao.ts).
-          NÃO contém comparativos meta/ano-1 ainda — próxima entrega.
-          NÃO recalcula localmente: consome a cadeia oficial. */}
-      <div className="my-4 px-4">
-        <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-xs">
-          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-            <div>
-              <p className="font-semibold text-foreground flex items-center gap-1.5">
-                <span className="inline-flex items-center px-1.5 py-px rounded bg-primary/80 text-white text-[9px] font-bold uppercase tracking-wider">
-                  PC-100 OFICIAL
-                </span>
-                Fluxo de Caixa Executivo — {anoNum}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                Mensal + acumulado Jan→mês. Cadeia oficial:{' '}
-                <code>financeiro_lancamentos_v2 → classificacao.ts → useFluxoCaixa</code>.
-                Realizado apenas — comparativos meta/ano-1 na próxima entrega.
-              </p>
-            </div>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {fluxoCaixaResult.loading ? 'carregando…' : `${fluxoMatrizPC100?.length ?? 0} linhas`}
-            </span>
-          </div>
-
-          {fluxoMatrizPC100 && fluxoMatrizPC100.length > 0 && (
-            <div className="overflow-auto">
-              <table className="w-full text-[10px] tabular-nums border-collapse">
-                <thead className="text-left text-[9px] uppercase text-muted-foreground sticky top-0 bg-primary/10">
-                  <tr>
-                    <th className="py-1 pr-2 text-left sticky left-0 bg-primary/10">Linha</th>
-                    {MESES_LABELS.map((mes) => (
-                      <th key={mes} className="py-1 px-1 text-right">{mes}</th>
-                    ))}
-                    <th className="py-1 px-2 text-right border-l">Acum. Jan→{mesAtualGlobalPC100}</th>
-                    <th className="py-1 px-2 text-right">Total Ano</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fluxoMatrizPC100.map((row) => (
-                    <tr key={row.key} className="border-b border-primary/10 hover:bg-primary/5 last:border-b-0">
-                      <td className="py-1 pr-2 font-medium text-foreground sticky left-0 bg-background/95 backdrop-blur-sm">
-                        {row.label}
-                      </td>
-                      {row.mensal.map((v, i) => (
-                        <td key={i} className={`py-1 px-1 text-right ${v === 0 ? 'text-muted-foreground/40' : ''}`}>
-                          {v === 0 ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                        </td>
-                      ))}
-                      <td className="py-1 px-2 text-right border-l font-semibold">
-                        {(row.acumulado[mesAtualGlobalPC100 - 1] ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                      </td>
-                      <td className="py-1 px-2 text-right text-muted-foreground">
-                        {row.totalAno.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="text-[9px] text-muted-foreground italic mt-2">
-            Filtros base: <code>cancelado=false · sem_movimentacao_caixa=false · status_transacao='realizado' · cenario='realizado'</code>.{' '}
-            Classificação literal por <code>grupo_custo</code>/<code>macro_custo</code> via <code>classificacao.ts</code>.
-          </p>
         </div>
       </div>
 
