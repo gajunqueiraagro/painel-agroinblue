@@ -407,6 +407,56 @@ export function isDividendoOuRetirada(l: LancamentoClassificavel): boolean {
   return norm(l.centro_custo) === 'dividendos';
 }
 
+/**
+ * Dedução de Receitas — predicado literal oficial.
+ * Igualdade exata em canonicalMacro; sem heurística por contains/substring.
+ */
+export function isDeducaoReceitas(l: LancamentoClassificavel): boolean {
+  return canonicalMacro(l) === 'dedução de receitas';
+}
+
+// ---------------------------------------------------------------------------
+// CLASSIFICADOR SOBERANO OFICIAL — categoria única por saída
+//
+// Mutualidade exclusiva via cascata explícita. Ordem oficial aprovada:
+//   1. deducao
+//   2. dividendos
+//   3. amortizacoes
+//   4. reposicao (bovinos)
+//   5. desembolso (fallback)
+//
+// Apenas predicados literais oficiais (igualdade exata em canonicalMacro
+// e/ou centro_custo). NUNCA usar contains/substring/heurísticas implícitas.
+//
+// IMPORTANTE: este classificador NÃO substitui classificarSaidaFluxo nesta
+// fase. É infraestrutura preparatória — nenhum consumidor está conectado
+// ainda. O comportamento atual do sistema permanece inalterado.
+// ---------------------------------------------------------------------------
+
+export type CategoriaSaidaSoberana =
+  | 'deducao'
+  | 'dividendos'
+  | 'amortizacoes'
+  | 'reposicao'
+  | 'desembolso';
+
+/**
+ * Classificador soberano oficial de saída financeira.
+ *
+ * Pré-condição: o caller deve ter validado que o lançamento é saída
+ * (`isSaida(l)`); a função apenas categoriza. Lançamentos que não
+ * satisfazem nenhum predicado caem em 'desembolso' (default literal).
+ */
+export function classificarSaidaFinanceiraOficial(
+  l: LancamentoClassificavel,
+): CategoriaSaidaSoberana {
+  if (isDeducaoReceitas(l))   return 'deducao';
+  if (isDividendoOuRetirada(l)) return 'dividendos';
+  if (isAmortizacao(l))        return 'amortizacoes';
+  if (isReposicaoBovinos(l))   return 'reposicao';
+  return 'desembolso';
+}
+
 // ---------------------------------------------------------------------------
 // DATA HELPERS
 // ---------------------------------------------------------------------------
