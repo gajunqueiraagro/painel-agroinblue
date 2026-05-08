@@ -906,7 +906,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
-            <table className="text-[10px] border-collapse table-fixed">
+            <table className="text-[10px] border-collapse table-fixed w-full">
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
                   <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-20 border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Cabeças</th>
