@@ -54,14 +54,19 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
     }
     loadingRef.current = true;
     setLoading(true);
+    const _t0 = performance.now();
     console.log('[ClienteContext] loadClientes start', { userId });
     try {
       // Check if user is admin (cache por userId — 1 RPC por sessão)
       let userIsAdmin: boolean;
       if (adminCheckedRef.current === userId && adminResultRef.current !== null) {
         userIsAdmin = adminResultRef.current;
+        console.log('[ClienteContext] is_admin_agroinblue: cache hit', { userIsAdmin });
       } else {
-        const { data: adminCheck } = await supabase.rpc('is_admin_agroinblue', { _user_id: userId });
+        const _tRpc = performance.now();
+        console.log('[ClienteContext] rpc is_admin_agroinblue START');
+        const { data: adminCheck, error: rpcErr } = await supabase.rpc('is_admin_agroinblue', { _user_id: userId });
+        console.log(`[ClienteContext] rpc is_admin_agroinblue END (${(performance.now() - _tRpc).toFixed(0)}ms)`, { data: adminCheck, error: rpcErr });
         userIsAdmin = !!adminCheck;
         adminCheckedRef.current = userId;
         adminResultRef.current = userIsAdmin;
@@ -70,11 +75,14 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
 
       if (userIsAdmin) {
         // Admin sees all clients
-        const { data: allClientes } = await supabase
+        const _tQ = performance.now();
+        console.log('[ClienteContext] query clientes (admin) START');
+        const { data: allClientes, error: qErr } = await supabase
           .from('clientes')
           .select('*')
           .eq('ativo', true)
           .order('nome');
+        console.log(`[ClienteContext] query clientes (admin) END (${(performance.now() - _tQ).toFixed(0)}ms)`, { rows: allClientes?.length ?? 0, error: qErr });
 
         if (allClientes && allClientes.length > 0) {
           const list: Cliente[] = allClientes.map(c => ({
@@ -90,11 +98,14 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Regular user: load from cliente_membros
-        const { data: membros } = await supabase
+        const _tQ = performance.now();
+        console.log('[ClienteContext] query cliente_membros START');
+        const { data: membros, error: qErr } = await supabase
           .from('cliente_membros')
           .select('cliente_id, perfil, clientes(id, nome, slug, ativo, config)')
           .eq('user_id', userId)
           .eq('ativo', true);
+        console.log(`[ClienteContext] query cliente_membros END (${(performance.now() - _tQ).toFixed(0)}ms)`, { rows: membros?.length ?? 0, error: qErr });
 
         if (membros && membros.length > 0) {
           const list: Cliente[] = membros
@@ -111,12 +122,14 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
           setClienteAtualState(null);
         }
       }
-    } catch {
+    } catch (e) {
+      console.error('[ClienteContext] loadClientes EXCEPTION', e);
       setClientes([]);
       setClienteAtualState(null);
     } finally {
       setLoading(false);
       loadingRef.current = false;
+      console.log(`[ClienteContext] loadClientes total: ${(performance.now() - _t0).toFixed(0)}ms`);
     }
   }, [userId]);
 

@@ -60,18 +60,26 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true);
+    console.log('[FazendaContext] loadFazendas start', { clienteId: clienteAtual.id });
+    const _t0 = performance.now();
     try {
-      const { data: fazendasCliente } = await supabase
+      const _tQ1 = performance.now();
+      console.log('[FazendaContext] query fazendas START');
+      const { data: fazendasCliente, error: errFaz } = await supabase
         .from('fazendas')
         .select('id, nome, owner_id, cliente_id, codigo_importacao, tem_pecuaria')
         .eq('cliente_id', clienteAtual.id);
+      console.log(`[FazendaContext] query fazendas END (${(performance.now() - _tQ1).toFixed(0)}ms)`, { rows: fazendasCliente?.length ?? 0, error: errFaz });
 
       if (fazendasCliente && fazendasCliente.length > 0) {
-        const { data: membros } = await supabase
+        const _tQ2 = performance.now();
+        console.log('[FazendaContext] query fazenda_membros START');
+        const { data: membros, error: errMem } = await supabase
           .from('fazenda_membros')
           .select('fazenda_id, papel')
           .eq('user_id', user.id)
           .in('fazenda_id', fazendasCliente.map(f => f.id));
+        console.log(`[FazendaContext] query fazenda_membros END (${(performance.now() - _tQ2).toFixed(0)}ms)`, { rows: membros?.length ?? 0, error: errMem });
 
         const papelPorFazenda = new Map<string, string>(
           (membros || []).map(m => [m.fazenda_id, m.papel])
@@ -97,12 +105,14 @@ export function FazendaProvider({ children }: { children: ReactNode }) {
       }
       // Marca cache somente após fetch bem-sucedido
       loadedForRef.current = cacheKey;
-    } catch {
+    } catch (e) {
+      console.error('[FazendaContext] loadFazendas EXCEPTION', e);
       // Em caso de erro, limpar cache para permitir retry
       loadedForRef.current = null;
       setFazendas([]);
     } finally {
       setLoading(false);
+      console.log(`[FazendaContext] loadFazendas total: ${(performance.now() - _t0).toFixed(0)}ms`);
     }
   }, [user, clienteAtual]);
 
