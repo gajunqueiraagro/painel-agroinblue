@@ -1788,52 +1788,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
 
   // === 2) Custeio Produção Pecuária — fonte custeioPec (sem investimento/juros/agri) ===
-  const custeioPecMesSerie13 = Array.from({ length: 13 }, (_, i) =>
-    i === 0 ? NaN : (monthlyData.custeioPec[i - 1] ?? NaN)
-  );
-  const custeioPecPeriodoSerie13 = cumSumTo13(monthlyData.custeioPec);
-  const custeioPecSerie = isPeriodo ? custeioPecPeriodoSerie13 : custeioPecMesSerie13;
-  const custeioPecValor = safe(custeioPecSerie[mesIdx]);
-  const custeioPecDeltaMes = (() => {
-    if (mesIdx <= 1) return null;
-    const curr = safe(custeioPecSerie[mesIdx]);
-    const prev = safe(custeioPecSerie[mesIdx - 1]);
-    if (curr == null || prev == null || prev === 0) return null;
-    return ((curr - prev) / prev) * 100;
-  })();
-
-  // Custeio Pec — ano-1 (custeioPecAnoAnt12) e meta (custeioPecMeta12).
+  // Booleans "possui" mantidos no escopo do hook por serem consumidos também por
+  // custoArrIndicador/custoCabIndicador (custoArrAnoAntPossui, custoCabAnoAntPossui etc.).
   const custeioPecAnoAntPossui = custeioPecAnoAnt12.some(v => v > 0);
-  const custeioPecMesAnoAntSerie13 = custeioPecAnoAntPossui
-    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecAnoAnt12[i - 1] ?? NaN))
-    : null;
-  const custeioPecPeriodoAnoAntSerie13 = custeioPecAnoAntPossui
-    ? cumSumTo13(custeioPecAnoAnt12)
-    : null;
-  const custeioPecSerieAnoAnt = isPeriodo ? custeioPecPeriodoAnoAntSerie13 : custeioPecMesAnoAntSerie13;
-  const custeioPecDeltaAno = (() => {
-    if (!custeioPecSerieAnoAnt) return null;
-    const curr = safe(custeioPecSerie[mesIdx]);
-    const ant  = safe(custeioPecSerieAnoAnt[mesIdx]);
-    if (curr == null || ant == null || ant === 0) return null;
-    return ((curr - ant) / ant) * 100;
-  })();
-
   const custeioPecMetaPossui = custeioPecMeta12.some(v => v > 0);
-  const custeioPecMesMetaSerie13 = custeioPecMetaPossui
-    ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecMeta12[i - 1] ?? NaN))
-    : null;
-  const custeioPecPeriodoMetaSerie13 = custeioPecMetaPossui
-    ? cumSumTo13(custeioPecMeta12)
-    : null;
-  const custeioPecSerieMeta = isPeriodo ? custeioPecPeriodoMetaSerie13 : custeioPecMesMetaSerie13;
-  const custeioPecDeltaMeta = (() => {
-    if (!custeioPecSerieMeta) return null;
-    const curr = safe(custeioPecSerie[mesIdx]);
-    const meta = safe(custeioPecSerieMeta[mesIdx]);
-    if (curr == null || meta == null || meta === 0) return null;
-    return ((curr - meta) / meta) * 100;
-  })();
+  // O objeto custeioPecIndicador é construído via _custeioPecIndicadorMemo,
+  // declarado logo antes de baseReturn (referência estável — quebra o render
+  // loop quando consumido como dep de useMemo em PainelConsultorTab).
 
   // === 3) Custo Produtivo R$/@ — custeioPec / arrobasProd ===
   const custoArrMes12 = monthlyData.custeioPec.map((c, i) => {
@@ -2261,6 +2222,81 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancFin, ano, mes, viewMode]);
 
+  // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
+  // Estabiliza a referência do objeto retornado para evitar render loop em
+  // consumidores que coloquem custeioPecIndicador em deps de useMemo (caso
+  // de PainelConsultorTab → soberanoSerie). Fórmula idêntica ao código
+  // anterior — apenas envolvida em useMemo com deps primitivas/estáveis.
+  const _custeioPecIndicadorMemo = useMemo<IndicadorFinanceiroShape | null>(() => {
+    if (!monthlyData) return null;
+
+    const custeioPecMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+      i === 0 ? NaN : (monthlyData.custeioPec[i - 1] ?? NaN),
+    );
+    const custeioPecPeriodoSerie13 = cumSumTo13(monthlyData.custeioPec);
+    const custeioPecSerie = isPeriodo ? custeioPecPeriodoSerie13 : custeioPecMesSerie13;
+    const custeioPecValor = safe(custeioPecSerie[mesIdx]);
+    const custeioPecDeltaMes = (() => {
+      if (mesIdx <= 1) return null;
+      const curr = safe(custeioPecSerie[mesIdx]);
+      const prev = safe(custeioPecSerie[mesIdx - 1]);
+      if (curr == null || prev == null || prev === 0) return null;
+      return ((curr - prev) / prev) * 100;
+    })();
+
+    const anoAntPossui = custeioPecAnoAnt12.some(v => v > 0);
+    const custeioPecMesAnoAntSerie13 = anoAntPossui
+      ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecAnoAnt12[i - 1] ?? NaN))
+      : null;
+    const custeioPecPeriodoAnoAntSerie13 = anoAntPossui
+      ? cumSumTo13(custeioPecAnoAnt12)
+      : null;
+    const custeioPecSerieAnoAnt = isPeriodo
+      ? custeioPecPeriodoAnoAntSerie13
+      : custeioPecMesAnoAntSerie13;
+    const custeioPecDeltaAno = (() => {
+      if (!custeioPecSerieAnoAnt) return null;
+      const curr = safe(custeioPecSerie[mesIdx]);
+      const ant  = safe(custeioPecSerieAnoAnt[mesIdx]);
+      if (curr == null || ant == null || ant === 0) return null;
+      return ((curr - ant) / ant) * 100;
+    })();
+
+    const metaPossui = custeioPecMeta12.some(v => v > 0);
+    const custeioPecMesMetaSerie13 = metaPossui
+      ? Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (custeioPecMeta12[i - 1] ?? NaN))
+      : null;
+    const custeioPecPeriodoMetaSerie13 = metaPossui
+      ? cumSumTo13(custeioPecMeta12)
+      : null;
+    const custeioPecSerieMeta = isPeriodo
+      ? custeioPecPeriodoMetaSerie13
+      : custeioPecMesMetaSerie13;
+    const custeioPecDeltaMeta = (() => {
+      if (!custeioPecSerieMeta) return null;
+      const curr = safe(custeioPecSerie[mesIdx]);
+      const meta = safe(custeioPecSerieMeta[mesIdx]);
+      if (curr == null || meta == null || meta === 0) return null;
+      return ((curr - meta) / meta) * 100;
+    })();
+
+    return {
+      label:     isPeriodo ? 'CUSTEIO PRODUÇÃO PECUÁRIA ACUM.' : 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS',
+      titulo:    isPeriodo ? 'Custeio Produção Pecuária acum.' : 'Custeio Produção Pecuária no mês',
+      subtitulo: isPeriodo
+        ? 'Custo Fixo + Custo Variável Pecuária acumulado Jan→mês (caixa)'
+        : 'Custo Fixo + Custo Variável Pecuária no mês (caixa)',
+      valor:     custeioPecValor,
+      deltaMes:  custeioPecDeltaMes,
+      deltaAno:  custeioPecDeltaAno,
+      deltaMeta: custeioPecDeltaMeta,
+      serieAno:    custeioPecSerie,
+      serieAnoAnt: custeioPecSerieAnoAnt ?? undefined,
+      serieMeta:   custeioPecSerieMeta ?? undefined,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthlyData, isPeriodo, mesIdx, custeioPecAnoAnt12, custeioPecMeta12]);
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2450,20 +2486,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: receitaPecSerieAnoAnt ?? undefined,
       serieMeta:   receitaPecSerieMeta ?? undefined,
     } : null,
-    custeioPecIndicador: monthlyData ? {
-      label:     isPeriodo ? 'CUSTEIO PRODUÇÃO PECUÁRIA ACUM.' : 'CUSTEIO PRODUÇÃO PECUÁRIA NO MÊS',
-      titulo:    isPeriodo ? 'Custeio Produção Pecuária acum.' : 'Custeio Produção Pecuária no mês',
-      subtitulo: isPeriodo
-        ? 'Custo Fixo + Custo Variável Pecuária acumulado Jan→mês (caixa)'
-        : 'Custo Fixo + Custo Variável Pecuária no mês (caixa)',
-      valor:     custeioPecValor,
-      deltaMes:  custeioPecDeltaMes,
-      deltaAno:  custeioPecDeltaAno,
-      deltaMeta: custeioPecDeltaMeta,
-      serieAno:    custeioPecSerie,
-      serieAnoAnt: custeioPecSerieAnoAnt ?? undefined,
-      serieMeta:   custeioPecSerieMeta ?? undefined,
-    } : null,
+    custeioPecIndicador: _custeioPecIndicadorMemo,
     custoArrIndicador: monthlyData ? {
       label:     'CUSTO PRODUTIVO R$/@',
       titulo:    'Custo Produtivo R$/@',
