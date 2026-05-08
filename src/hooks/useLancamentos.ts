@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -11,6 +11,16 @@ import { toast } from 'sonner';
 const STORAGE_KEY = 'gado-lancamentos';
 const SALDO_KEY = 'gado-saldo-inicial';
 const LANCAMENTOS_PAGE_SIZE = 1000;
+
+interface LancamentosQueryData {
+  lancamentos: Lancamento[];
+  saldosIniciais: SaldoInicial[];
+}
+
+// Referências estáveis para fallback enquanto o useQuery não tem data — evita
+// recalcular memos consumidores quando data?.X cai em ?? [].
+const EMPTY_LANCAMENTOS: Lancamento[] = [];
+const EMPTY_SALDOS: SaldoInicial[] = [];
 
 async function fetchLancamentosPaginated(params: {
   cenario: 'realizado' | 'meta';
@@ -63,7 +73,64 @@ async function fetchLancamentosPaginated(params: {
   return rows;
 }
 
-type UseLancamentosArg =
+/** Mapeia row cru do banco para o shape Lancamento da UI. */
+function mapRowToLancamento(l: any, profileMap: Record<string, string>): Lancamento {
+  return {
+    id: l.id,
+    data: l.data,
+    tipo: l.tipo as any,
+    quantidade: l.quantidade,
+    categoria: l.categoria as Categoria,
+    categoriaDestino: l.categoria_destino as Categoria | undefined,
+    fazendaOrigem: l.fazenda_origem ?? undefined,
+    fazendaDestino: l.fazenda_destino ?? undefined,
+    pesoMedioKg: l.peso_medio_kg ?? undefined,
+    pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
+    precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
+    observacao: l.observacao ?? undefined,
+    motivo: (l as any).motivo ?? undefined,
+    abateFrigorifico: (l as any).abate_frigorifico ?? undefined,
+    rendimento: l.rendimento ?? undefined,
+    compradorFornecedor: l.comprador_fornecedor ?? undefined,
+    precoArroba: l.preco_arroba ?? undefined,
+    pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,
+    bonusPrecoce: l.bonus_precoce ?? undefined,
+    bonusQualidade: l.bonus_qualidade ?? undefined,
+    bonusListaTrace: l.bonus_lista_trace ?? undefined,
+    descontoQualidade: l.desconto_qualidade ?? undefined,
+    descontoFunrural: l.desconto_funrural ?? undefined,
+    outrosDescontos: l.outros_descontos ?? undefined,
+    acrescimos: l.acrescimos ?? undefined,
+    deducoes: l.deducoes ?? undefined,
+    valorTotal: l.valor_total ?? undefined,
+    notaFiscal: l.numero_documento ?? undefined,
+    tipoPeso: l.tipo_peso ?? 'vivo',
+    cenario: l.cenario ?? 'realizado',
+    statusOperacional: l.status_operacional ?? (l.cenario === 'meta' ? null : 'realizado'),
+    dataVenda: l.data_venda ?? undefined,
+    dataEmbarque: l.data_embarque ?? undefined,
+    dataAbate: l.data_abate ?? undefined,
+    tipoVenda: l.tipo_venda ?? undefined,
+    detalhesSnapshot: l.detalhes_snapshot ?? undefined,
+    frigorifico: (l as any).frigorifico ?? undefined,
+    pedido: (l as any).pedido ?? undefined,
+    instrucao: (l as any).instrucao ?? undefined,
+    docAcerto: (l as any).doc_acerto ?? undefined,
+    anexoNfUrl: (l as any).anexo_nf_url ?? undefined,
+    anexoAcertoUrl: (l as any).anexo_acerto_url ?? undefined,
+    createdAt: l.created_at,
+    updatedAt: l.updated_at,
+    createdBy: l.created_by ?? undefined,
+    updatedBy: l.updated_by ?? undefined,
+    createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
+    updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
+    fazendaId: l.fazenda_id,
+    origemRegistro: l.origem_registro ?? undefined,
+    loteImportacaoId: l.lote_importacao_id ?? undefined,
+  };
+}
+
+export type UseLancamentosArg =
   | 'realizado'
   | 'meta'
   | { cenario?: 'realizado' | 'meta'; enabled?: boolean; ano?: number };
@@ -76,13 +143,18 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   const queryClient = useQueryClient();
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
-  const [saldosIniciais, setSaldosIniciais] = useState<SaldoInicial[]>([]);
-  const [loading, setLoading] = useState(enabled);
   const [migrated, setMigrated] = useState(false);
 
   const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id || fazendaAtual?.cliente_id;
+
+  // queryKey segue spec da Fase 1.5. Não inclui `enabled` para evitar criar
+  // entrada de cache separada quando consumer alterna enabled — assim, ao
+  // re-habilitar, o cache existente é reutilizado.
+  const queryKey = useMemo(
+    () => ['lancamentos-zoo', clienteId, cenario, anoFiltro ?? 'all', isGlobal ? 'global' : fazendaId] as const,
+    [clienteId, cenario, anoFiltro, isGlobal, fazendaId],
+  );
 
   const invalidateZootQueries = useCallback(async () => {
     await Promise.all([
@@ -93,134 +165,84 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     ]);
   }, [queryClient]);
 
-  const loadData = useCallback(async () => {
-    if (!enabled) return;
-    if (!fazendaId || (isGlobal && (!clienteId || fazendas.length === 0))) {
-      setLancamentos([]);
-      setSaldosIniciais([]);
-      setLoading(false);
-      return;
-    }
+  const query = useQuery<LancamentosQueryData>({
+    queryKey,
+    enabled: enabled && !!clienteId && !!fazendaId && (!isGlobal || fazendas.length > 0),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<LancamentosQueryData> => {
+      // Edge case: gates do enabled cobrem o feliz; aqui só evita query degenerada.
+      if (!fazendaId || (isGlobal && (!clienteId || fazendas.length === 0))) {
+        return { lancamentos: [], saldosIniciais: [] };
+      }
+      try {
+        const fazendaIds = fazendas.map(f => f.id).filter(id => id !== '__global__');
 
-    setLoading(true);
-    try {
-      const fazendaIds = fazendas.map(f => f.id).filter(id => id !== '__global__');
+        let saldosQueryGlobal = supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds).eq('cliente_id', clienteId!);
+        if (anoFiltro) saldosQueryGlobal = saldosQueryGlobal.eq('ano', anoFiltro);
+        let saldosQueryFazenda = supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId!).eq('cliente_id', clienteId!);
+        if (anoFiltro) saldosQueryFazenda = saldosQueryFazenda.eq('ano', anoFiltro);
 
-      let saldosQueryGlobal = supabase.from('saldos_iniciais').select('*').in('fazenda_id', fazendaIds).eq('cliente_id', clienteId!);
-      if (anoFiltro) saldosQueryGlobal = saldosQueryGlobal.eq('ano', anoFiltro);
-      let saldosQueryFazenda = supabase.from('saldos_iniciais').select('*').eq('fazenda_id', fazendaId!).eq('cliente_id', clienteId!);
-      if (anoFiltro) saldosQueryFazenda = saldosQueryFazenda.eq('ano', anoFiltro);
+        const [lancData, saldoRes] = isGlobal
+          ? await Promise.all([
+              fetchLancamentosPaginated({ fazendaIds, clienteId, cenario, ano: anoFiltro }),
+              saldosQueryGlobal,
+            ])
+          : await Promise.all([
+              fetchLancamentosPaginated({ fazendaId, clienteId, cenario, ano: anoFiltro }),
+              saldosQueryFazenda,
+            ]);
 
-      const [lancData, saldoRes] = isGlobal
-        ? await Promise.all([
-            fetchLancamentosPaginated({ fazendaIds, clienteId, cenario, ano: anoFiltro }),
-            saldosQueryGlobal,
-          ])
-        : await Promise.all([
-            fetchLancamentosPaginated({ fazendaId, clienteId, cenario, ano: anoFiltro }),
-            saldosQueryFazenda,
-          ]);
+        // Profiles (deduplicado dentro do mesmo queryFn — uma única chamada por fetch).
+        const userIds = new Set<string>();
+        lancData.forEach((l: any) => {
+          if (l.created_by) userIds.add(l.created_by);
+          if (l.updated_by) userIds.add(l.updated_by);
+        });
 
-      const userIds = new Set<string>();
-      lancData.forEach((l: any) => {
-        if (l.created_by) userIds.add(l.created_by);
-        if (l.updated_by) userIds.add(l.updated_by);
-      });
-
-      let profileMap: Record<string, string> = {};
-      if (userIds.size > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('user_id, nome')
-          .in('user_id', Array.from(userIds));
-        if (profiles) {
-          profiles.forEach(p => { profileMap[p.user_id] = p.nome || 'Sem nome'; });
+        const profileMap: Record<string, string> = {};
+        if (userIds.size > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('user_id, nome')
+            .in('user_id', Array.from(userIds));
+          if (profiles) {
+            profiles.forEach(p => { profileMap[p.user_id] = p.nome || 'Sem nome'; });
+          }
         }
+
+        const lancamentos = lancData.map((l: any) => mapRowToLancamento(l, profileMap));
+
+        const saldosIniciais: SaldoInicial[] = saldoRes.data
+          ? saldoRes.data.map(s => ({
+              ano: s.ano,
+              mes: (s as any).mes ?? 1,
+              categoria: s.categoria as Categoria,
+              quantidade: s.quantidade,
+              pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
+              precoKg: (s as any).preco_kg ?? undefined,
+              fazendaId: (s as any).fazenda_id ?? undefined,
+            }))
+          : [];
+
+        return { lancamentos, saldosIniciais };
+      } catch (error) {
+        // Comportamento original: erro silencioso, retorna vazio. Preservado.
+        console.error('Erro ao carregar lançamentos:', error);
+        return { lancamentos: [], saldosIniciais: [] };
       }
+    },
+  });
 
-      setLancamentos(lancData.map((l: any) => ({
-        id: l.id,
-        data: l.data,
-        tipo: l.tipo as any,
-        quantidade: l.quantidade,
-        categoria: l.categoria as Categoria,
-        categoriaDestino: l.categoria_destino as Categoria | undefined,
-        fazendaOrigem: l.fazenda_origem ?? undefined,
-        fazendaDestino: l.fazenda_destino ?? undefined,
-        pesoMedioKg: l.peso_medio_kg ?? undefined,
-        pesoMedioArrobas: l.peso_medio_arrobas ?? undefined,
-        precoMedioCabeca: l.preco_medio_cabeca ?? undefined,
-        observacao: l.observacao ?? undefined,
-        motivo: (l as any).motivo ?? undefined,
-        abateFrigorifico: (l as any).abate_frigorifico ?? undefined,
-        rendimento: l.rendimento ?? undefined,
-        compradorFornecedor: l.comprador_fornecedor ?? undefined,
-        precoArroba: l.preco_arroba ?? undefined,
-        pesoCarcacaKg: l.peso_carcaca_kg ?? undefined,
-        bonusPrecoce: l.bonus_precoce ?? undefined,
-        bonusQualidade: l.bonus_qualidade ?? undefined,
-        bonusListaTrace: l.bonus_lista_trace ?? undefined,
-        descontoQualidade: l.desconto_qualidade ?? undefined,
-        descontoFunrural: l.desconto_funrural ?? undefined,
-        outrosDescontos: l.outros_descontos ?? undefined,
-        acrescimos: l.acrescimos ?? undefined,
-        deducoes: l.deducoes ?? undefined,
-        valorTotal: l.valor_total ?? undefined,
-        notaFiscal: l.numero_documento ?? undefined,
-        tipoPeso: l.tipo_peso ?? 'vivo',
-        cenario: l.cenario ?? 'realizado',
-        statusOperacional: l.status_operacional ?? (l.cenario === 'meta' ? null : 'realizado'),
-        dataVenda: l.data_venda ?? undefined,
-        dataEmbarque: l.data_embarque ?? undefined,
-        dataAbate: l.data_abate ?? undefined,
-        tipoVenda: l.tipo_venda ?? undefined,
-        detalhesSnapshot: l.detalhes_snapshot ?? undefined,
-        frigorifico: (l as any).frigorifico ?? undefined,
-        pedido: (l as any).pedido ?? undefined,
-        instrucao: (l as any).instrucao ?? undefined,
-        docAcerto: (l as any).doc_acerto ?? undefined,
-        anexoNfUrl: (l as any).anexo_nf_url ?? undefined,
-        anexoAcertoUrl: (l as any).anexo_acerto_url ?? undefined,
-        createdAt: l.created_at,
-        updatedAt: l.updated_at,
-        createdBy: l.created_by ?? undefined,
-        updatedBy: l.updated_by ?? undefined,
-        createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
-        updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
-        fazendaId: l.fazenda_id,
-        origemRegistro: l.origem_registro ?? undefined,
-        loteImportacaoId: l.lote_importacao_id ?? undefined,
-      })));
+  const lancamentos = query.data?.lancamentos ?? EMPTY_LANCAMENTOS;
+  const saldosIniciais = query.data?.saldosIniciais ?? EMPTY_SALDOS;
+  const loading = query.isLoading || query.isFetching;
 
-      if (saldoRes.data) {
-      setSaldosIniciais(saldoRes.data.map(s => ({
-          ano: s.ano,
-          mes: (s as any).mes ?? 1,
-          categoria: s.categoria as Categoria,
-          quantidade: s.quantidade,
-          pesoMedioKg: (s as any).peso_medio_kg ?? undefined,
-          precoKg: (s as any).preco_kg ?? undefined,
-          fazendaId: (s as any).fazenda_id ?? undefined,
-        })));
-      } else {
-        setSaldosIniciais([]);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar lançamentos:', error);
-      setLancamentos([]);
-      setSaldosIniciais([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled, fazendaId, isGlobal, fazendas, cenario, clienteId, anoFiltro]);
+  const loadData = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
-  useEffect(() => { loadData(); }, [loadData]);
-
-  useEffect(() => {
-    if (!enabled) setLoading(false);
-  }, [enabled]);
-
-  // Migrate localStorage data on first load
+  // Migração localStorage→DB — INALTERADA (fora do useQuery).
   useEffect(() => {
     if (!enabled) return;
     if (!fazendaId || fazendaId === '__global__' || migrated) return;
@@ -273,7 +295,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     };
 
     doMigrate();
-  }, [enabled, fazendaId, migrated, loadData]);
+  }, [enabled, fazendaId, migrated, loadData, clienteId]);
 
   const adicionarLancamento = async (lancamento: Omit<Lancamento, 'id'>): Promise<string | undefined> => {
     if (!fazendaId || fazendaId === '__global__') return undefined;
@@ -327,10 +349,15 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
         fazendaId,
         data: insertData,
       });
-      setLancamentos(prev => [{
+      // Otimista: adiciona temp item ao topo da lista cacheada.
+      const tempItem = {
         id: `temp-${Date.now()}`,
         ...lancamento,
-      }, ...prev]);
+      } as Lancamento;
+      queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+        if (!old) return old;
+        return { ...old, lancamentos: [tempItem, ...old.lancamentos] };
+      });
       toast.info('Lançamento salvo na fila offline');
       return undefined;
     }
@@ -352,58 +379,65 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     }
 
     if (data) {
-      // Só adiciona ao state local se o cenário retornado pelo banco corresponde ao cenário deste hook.
-      // Ex: hook 'realizado' não deve exibir registros 'meta' e vice-versa.
+      // Só adiciona ao cache local se o cenário retornado pelo banco corresponde
+      // ao cenário deste hook. Ex: hook 'realizado' não exibe registros 'meta'.
       const returnedCenario = (data as any).cenario ?? 'realizado';
       if (returnedCenario === cenario) {
-      setLancamentos(prev => [{
-        id: data.id,
-        data: data.data,
-        tipo: data.tipo as any,
-        quantidade: data.quantidade,
-        categoria: data.categoria as Categoria,
-        categoriaDestino: data.categoria_destino as Categoria | undefined,
-        fazendaOrigem: data.fazenda_origem ?? undefined,
-        fazendaDestino: data.fazenda_destino ?? undefined,
-        pesoMedioKg: data.peso_medio_kg ?? undefined,
-        pesoMedioArrobas: data.peso_medio_arrobas ?? undefined,
-        precoMedioCabeca: data.preco_medio_cabeca ?? undefined,
-        observacao: data.observacao ?? undefined,
-        precoArroba: data.preco_arroba ?? undefined,
-        pesoCarcacaKg: data.peso_carcaca_kg ?? undefined,
-        bonusPrecoce: data.bonus_precoce ?? undefined,
-        bonusQualidade: data.bonus_qualidade ?? undefined,
-        bonusListaTrace: data.bonus_lista_trace ?? undefined,
-        descontoQualidade: data.desconto_qualidade ?? undefined,
-        descontoFunrural: data.desconto_funrural ?? undefined,
-        outrosDescontos: data.outros_descontos ?? undefined,
-        acrescimos: data.acrescimos ?? undefined,
-        deducoes: data.deducoes ?? undefined,
-        valorTotal: data.valor_total ?? undefined,
-        notaFiscal: data.numero_documento ?? undefined,
-        tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
-        cenario: (data as any).cenario ?? 'realizado',
-        statusOperacional: (data.status_operacional as StatusOperacional) ?? ((data as any).cenario === 'meta' ? null : 'realizado'),
-        dataVenda: (data as any).data_venda ?? undefined,
-        dataEmbarque: (data as any).data_embarque ?? undefined,
-        dataAbate: (data as any).data_abate ?? undefined,
-        tipoVenda: (data as any).tipo_venda ?? undefined,
-        detalhesSnapshot: (data as any).detalhes_snapshot ?? undefined,
-        frigorifico: (data as any).frigorifico ?? undefined,
-        pedido: (data as any).pedido ?? undefined,
-        instrucao: (data as any).instrucao ?? undefined,
-        docAcerto: (data as any).doc_acerto ?? undefined,
-        anexoNfUrl: (data as any).anexo_nf_url ?? undefined,
-        anexoAcertoUrl: (data as any).anexo_acerto_url ?? undefined,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-        createdBy: data.created_by ?? undefined,
-        updatedBy: data.updated_by ?? undefined,
-        fazendaId: data.fazenda_id,
-        origemRegistro: (data as any).origem_registro ?? undefined,
-        loteImportacaoId: (data as any).lote_importacao_id ?? undefined,
-      }, ...prev]);
+        const newItem: Lancamento = {
+          id: data.id,
+          data: data.data,
+          tipo: data.tipo as any,
+          quantidade: data.quantidade,
+          categoria: data.categoria as Categoria,
+          categoriaDestino: data.categoria_destino as Categoria | undefined,
+          fazendaOrigem: data.fazenda_origem ?? undefined,
+          fazendaDestino: data.fazenda_destino ?? undefined,
+          pesoMedioKg: data.peso_medio_kg ?? undefined,
+          pesoMedioArrobas: data.peso_medio_arrobas ?? undefined,
+          precoMedioCabeca: data.preco_medio_cabeca ?? undefined,
+          observacao: data.observacao ?? undefined,
+          precoArroba: data.preco_arroba ?? undefined,
+          pesoCarcacaKg: data.peso_carcaca_kg ?? undefined,
+          bonusPrecoce: data.bonus_precoce ?? undefined,
+          bonusQualidade: data.bonus_qualidade ?? undefined,
+          bonusListaTrace: data.bonus_lista_trace ?? undefined,
+          descontoQualidade: data.desconto_qualidade ?? undefined,
+          descontoFunrural: data.desconto_funrural ?? undefined,
+          outrosDescontos: data.outros_descontos ?? undefined,
+          acrescimos: data.acrescimos ?? undefined,
+          deducoes: data.deducoes ?? undefined,
+          valorTotal: data.valor_total ?? undefined,
+          notaFiscal: data.numero_documento ?? undefined,
+          tipoPeso: (data.tipo_peso as 'vivo' | 'morto') ?? 'vivo',
+          cenario: (data as any).cenario ?? 'realizado',
+          statusOperacional: (data.status_operacional as StatusOperacional) ?? ((data as any).cenario === 'meta' ? null : 'realizado'),
+          dataVenda: (data as any).data_venda ?? undefined,
+          dataEmbarque: (data as any).data_embarque ?? undefined,
+          dataAbate: (data as any).data_abate ?? undefined,
+          tipoVenda: (data as any).tipo_venda ?? undefined,
+          detalhesSnapshot: (data as any).detalhes_snapshot ?? undefined,
+          frigorifico: (data as any).frigorifico ?? undefined,
+          pedido: (data as any).pedido ?? undefined,
+          instrucao: (data as any).instrucao ?? undefined,
+          docAcerto: (data as any).doc_acerto ?? undefined,
+          anexoNfUrl: (data as any).anexo_nf_url ?? undefined,
+          anexoAcertoUrl: (data as any).anexo_acerto_url ?? undefined,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at,
+          createdBy: data.created_by ?? undefined,
+          updatedBy: data.updated_by ?? undefined,
+          fazendaId: data.fazenda_id,
+          origemRegistro: (data as any).origem_registro ?? undefined,
+          loteImportacaoId: (data as any).lote_importacao_id ?? undefined,
+        };
+        // Otimista: atualiza cache imediatamente.
+        queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+          if (!old) return old;
+          return { ...old, lancamentos: [newItem, ...old.lancamentos] };
+        });
       }
+      // Invalida cache de lançamentos (refetch garante consistência) + zoot deps.
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
       await invalidateZootQueries();
       return data.id;
     }
@@ -461,13 +495,21 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {
-      setLancamentos(prev => prev.map(l => l.id === id ? {
-        ...l,
-        ...dados,
-        cenario: dados.cenario ?? (dados.statusOperacional !== undefined
-          ? (dados.statusOperacional === null ? 'meta' : 'realizado')
-          : l.cenario),
-      } : l));
+      // Otimista: atualiza item no cache.
+      queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          lancamentos: old.lancamentos.map(l => l.id === id ? {
+            ...l,
+            ...dados,
+            cenario: dados.cenario ?? (dados.statusOperacional !== undefined
+              ? (dados.statusOperacional === null ? 'meta' : 'realizado')
+              : l.cenario),
+          } : l),
+        };
+      });
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
       await invalidateZootQueries();
     }
   };
@@ -563,10 +605,17 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
           },
         });
       }
-      // Remove both sides from local state
+      // Otimista: remove ambos os lados (id + transferencia_par_id) do cache.
       const idsToRemove = new Set([id]);
       if (isTransfer && parId) idsToRemove.add(parId);
-      setLancamentos(prev => prev.filter(l => !idsToRemove.has(l.id)));
+      queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          lancamentos: old.lancamentos.filter(l => !idsToRemove.has(l.id)),
+        };
+      });
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
       await invalidateZootQueries();
     }
     return !error;
@@ -624,10 +673,13 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
         fazendaId: (data as any).fazenda_id ?? undefined,
       };
 
-      setSaldosIniciais(prev => {
-        const filtered = prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria));
-        return [...filtered, saldoPersistido];
+      // Otimista: substitui no cache (filter + push).
+      queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+        if (!old) return old;
+        const filtered = old.saldosIniciais.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria));
+        return { ...old, saldosIniciais: [...filtered, saldoPersistido] };
       });
+      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
       await invalidateZootQueries();
       return;
     }
@@ -645,7 +697,14 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
       throw error;
     }
 
-    setSaldosIniciais(prev => prev.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria)));
+    queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        saldosIniciais: old.saldosIniciais.filter(s => !(s.ano === ano && (s.mes || 1) === mes && s.categoria === categoria)),
+      };
+    });
+    await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
     await invalidateZootQueries();
   };
 
