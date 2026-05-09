@@ -235,13 +235,13 @@ export function IndicadorHistoricoModal({
       .filter((e: any) => allowedKeys.has(String(e.dataKey)) && e.value != null)
       .sort((a: any, b: any) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey));
     return (
-      <div className="rounded-md border border-border/40 bg-background px-3 py-2 shadow-md text-sm">
-        <p className="font-medium text-foreground mb-1">{label}</p>
+      <div className="rounded-sm border border-border/25 bg-background/80 backdrop-blur-sm px-2 py-1 shadow-sm text-[11px] leading-tight">
+        <p className="font-medium text-foreground/85 text-[10px] mb-0.5">{label}</p>
         {entries.map((entry: any, i: number) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
-            <span className="text-foreground">{fmtValor(entry.value)}</span>
-            <span className="text-muted-foreground text-xs">{displayName(entry.dataKey)}</span>
+          <div key={i} className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: entry.color }} />
+            <span className="text-foreground/90">{fmtValor(entry.value)}</span>
+            <span className="text-muted-foreground/80 text-[10px]">{displayName(entry.dataKey)}</span>
           </div>
         ))}
       </div>
@@ -263,7 +263,7 @@ export function IndicadorHistoricoModal({
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
             {subtitulo && (
-              <p className="text-sm text-muted-foreground mt-0.5">{subtitulo}</p>
+              <p className="text-[11px] font-light text-muted-foreground/70 leading-snug mt-0.5">{subtitulo}</p>
             )}
           </div>
 
@@ -276,19 +276,19 @@ export function IndicadorHistoricoModal({
               </span>
             </div>
             {deltaMes != null && (
-              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaMes >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaMes >= 0 ? '+' : ''}{deltaMes.toFixed(1)}% vs mês</span>
               </div>
             )}
             {deltaAno != null && (
-              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaAno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaAno >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaAno >= 0 ? '+' : ''}{deltaAno.toFixed(1)}% vs ano ant.</span>
               </div>
             )}
             {deltaMetaInterno != null && (
-              <div className={`text-xs font-medium leading-tight flex items-center justify-end gap-1 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${deltaMetaInterno >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                 <span>{deltaMetaInterno >= 0 ? '↗' : '↙'}</span>
                 <span>{deltaMetaInterno >= 0 ? '+' : ''}{deltaMetaInterno.toFixed(1)}% vs META</span>
               </div>
