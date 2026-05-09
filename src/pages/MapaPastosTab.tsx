@@ -465,28 +465,28 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
               {renderColGroup()}
               <thead>
                 <tr className="h-7">
-                  <th className="sticky left-0 top-0 z-30 px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Pasto</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Atividade</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[10px] font-bold border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderRightStyle: 'solid', borderRightWidth: 2, borderRightColor: 'hsl(220 13% 75%)', borderBottomWidth: 1, borderBottomColor: 'hsl(220 13% 75%)' }}>Lote</th>
+                  <th className="sticky left-0 top-0 z-50 px-1.5 py-0.5 text-left text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Pasto</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Atividade</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-bold border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderRightStyle: 'solid', borderRightWidth: 2, borderRightColor: 'hsl(220 13% 75%)', borderBottomWidth: 1, borderBottomColor: 'hsl(220 13% 75%)' }}>Lote</th>
                   {categorias.map((cat, idx) => {
                     const bg = isMacho(cat) ? hdrBgMacho : isFemea(cat) ? hdrBgFemea : hdrBg;
                     const leftBdr = getCatBorderLeft(idx);
                     return (
-                      <th key={cat.id} className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                      <th key={cat.id} className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-bold border-b border-r whitespace-nowrap" style={{ backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
                         {CAT_SIGLAS[cat.codigo] || cat.codigo}
                       </th>
                     );
                   })}
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Total</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Peso</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Área</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
-                  <th className="sticky top-0 z-20 px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Total</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Peso</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Área</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
-                  const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.15)' };
+                  const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.45)' };
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
                       <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
