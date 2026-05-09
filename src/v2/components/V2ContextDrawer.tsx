@@ -40,11 +40,11 @@ function DrawerItem({
     <button
       onClick={() => onSelect(item.id)}
       className={cn(
-        'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-left text-xs transition-colors',
+        'w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-xs transition-colors duration-150',
         isActive
-          ? 'bg-primary/8 text-foreground font-medium'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-        item.primary && 'font-semibold text-foreground',
+          ? 'bg-muted text-foreground font-semibold shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+        item.primary && !isActive && 'font-semibold text-foreground',
       )}
     >
       {item.primary && (
@@ -84,7 +84,7 @@ export function V2ContextDrawer({
       <div
         className={cn(
           'absolute top-0 left-0 h-full w-60',
-          'bg-background border-r border-border shadow-lg z-50',
+          'bg-background border-r border-border/40 shadow-lg z-50',
           'flex flex-col overflow-y-auto',
           'transition-transform duration-200',
           isOpen ? 'translate-x-0' : '-translate-x-full',
@@ -93,17 +93,17 @@ export function V2ContextDrawer({
         {grupo && (
           <>
             {/* Cabeçalho do grupo */}
-            <div className="px-4 py-3.5 border-b border-border shrink-0">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="px-4 py-4 border-b border-border/40 shrink-0">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/85">
                 {grupo.label}
               </p>
             </div>
 
             {/* Seções e itens */}
-            <nav className="flex-1 py-2 px-2 space-y-3">
+            <nav className="flex-1 py-4 px-2 space-y-6">
               {grupo.drawer.map((secao) => (
                 <div key={secao.titulo}>
-                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 select-none">
+                  <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
                     {secao.titulo}
                   </p>
                   <div className="space-y-0.5">
