@@ -372,7 +372,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   getQualidadeColor: (v: number | null) => string;
 }) {
   const colWidths = useMemo(() => {
-    const base = [60, 55, 120];
+    const base = [115, 135, 120];
     const cats = categorias.map(() => 44);
     const tail = [50, 50, 45, 42, 34];
     return [...base, ...cats, ...tail];
