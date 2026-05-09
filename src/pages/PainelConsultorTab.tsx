@@ -1216,12 +1216,19 @@ function exportToExcel(blocos: Bloco[], ano: number, fazendaNome: string, tab: V
 }
 
 // ─── Determine current month cutoff ───
-function getCurrentMonthCutoff(anoNum: number): number {
+function getCurrentMonthCutoff(anoNum: number, filtroMes?: number | null): number {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  if (anoNum < currentYear) return 12;
+
+  // ano futuro: nada
   if (anoNum > currentYear) return 0;
+
+  // filtro de mês explícito (1-12): vira autoridade
+  if (filtroMes && filtroMes >= 1 && filtroMes <= 12) return filtroMes;
+
+  // sem filtro: comportamento padrão (ano passado=12, ano corrente=mes atual)
+  if (anoNum < currentYear) return 12;
   return currentMonth;
 }
 
@@ -1378,7 +1385,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { rawCategorias: viewDataRealizado } = useRebanhoOficial({ ano: anoNum, cenario: 'realizado', global: isGlobal });
 
   // Month cutoff: months > cutoff are blank
-  const monthCutoff = useMemo(() => getCurrentMonthCutoff(anoNum), [anoNum]);
+  const monthCutoff = useMemo(
+    () => getCurrentMonthCutoff(anoNum, filtroGlobal?.mes),
+    [anoNum, filtroGlobal?.mes]
+  );
 
   // ── Leitura oficial do Valor do Rebanho REALIZADO validado ──
   const [realValorCabMes, setRealValorCabMes] = useState<number[]>(Array(13).fill(0));
