@@ -361,12 +361,14 @@ export function isCusteioProducaoAgricultura(l: LancamentoClassificavel): boolea
 
 /** Juros Pecuária — entra em "Custeio Pec com Juros" e em "Desembolso Pec". */
 export function isJurosPecuaria(l: LancamentoClassificavel): boolean {
-  return l.grupo_custo === 'Juros Pecuária';
+  return l.grupo_custo === 'Juros Pecuária'
+      || l.grupo_custo === 'Juros de Financiamento Pecuária';
 }
 
 /** Juros Agricultura — entra em "Custeio Agri com Juros" e em "Desembolso Agri". */
 export function isJurosAgricultura(l: LancamentoClassificavel): boolean {
-  return l.grupo_custo === 'Juros Agricultura';
+  return l.grupo_custo === 'Juros Agricultura'
+      || l.grupo_custo === 'Juros de Financiamento Agricultura';
 }
 
 /** Macro Investimento na Fazenda (sem distinção de escopo). */
