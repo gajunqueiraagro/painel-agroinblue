@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
@@ -91,15 +92,108 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   // Lista de fazendas operacionais (não-ADM) do cliente
   const fazendasOperacionais = fazendas.filter(f => !/admin/i.test(f.nome));
 
+  const qc = useQueryClient();
+
   const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
-  const [planoContas, setPlanoContas] = useState<PlanoContasRow[]>([]);
-  const [dividendos, setDividendos] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const [saldoInicial, setSaldoInicial] = useState<number>(0);
   const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
   const [lancamentosFinanciamento, setLancamentosFinanciamento] = useState<Map<string, number[]>>(new Map());
   const [lancamentosNutricao, setLancamentosNutricao] = useState<Map<string, number[]>>(new Map());
-  const [lancamentosProjetos, setLancamentosProjetos] = useState<Map<string, number[]>>(new Map());
+
+  // ── Fase 1.6.A: 4 loaders triviais migrados para TanStack Query ──
+  // Mantém API pública intacta — variáveis derivadas com fallback idêntico ao state anterior.
+  const planoContasQuery = useQuery<PlanoContasRow[]>({
+    queryKey: ['ppf:plano'],
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase
+        .from('financeiro_plano_contas' as any)
+        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
+        .eq('ativo', true)
+        .not('subcentro', 'is', null)
+        .neq('macro_custo', 'Dividendos')
+        .order('ordem_exibicao') as any);
+      if (error) throw error;
+      return ((rows || []) as PlanoContasRow[]);
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const planoContas = planoContasQuery.data ?? [];
+
+  const dividendosQuery = useQuery<{ id: string; nome: string }[]>({
+    queryKey: ['ppf:dividendos', clienteId],
+    queryFn: async () => {
+      const { data: rows, error } = await supabase
+        .from('financeiro_dividendos')
+        .select('id, nome')
+        .eq('cliente_id', clienteId!)
+        .eq('ativo', true)
+        .order('ordem_exibicao');
+      if (error) throw error;
+      return (rows || []).map(r => ({ id: r.id, nome: r.nome }));
+    },
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const dividendos = dividendosQuery.data ?? [];
+
+  const saldoInicialQuery = useQuery<number>({
+    queryKey: ['ppf:saldo-inicial', clienteId, fazendaId, ano],
+    queryFn: async () => {
+      const anoMesAnterior = `${ano - 1}-12`;
+      let query = supabase
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final')
+        .eq('cliente_id', clienteId!)
+        .eq('ano_mes', anoMesAnterior);
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId!);
+      }
+      const { data: rows, error } = await query;
+      if (error) throw error;
+      const total = (rows || []).reduce((s: number, r: any) => s + (r.saldo_final || 0), 0);
+      return Math.round(total * 100) / 100;
+    },
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const saldoInicial = saldoInicialQuery.data ?? 0;
+
+  const lancamentosProjetosQuery = useQuery<Map<string, number[]>>({
+    queryKey: ['ppf:projetos', clienteId, fazendaId, ano],
+    queryFn: async () => {
+      let query = supabase
+        .from('meta_projetos_investimento' as any)
+        .select('subcentro, jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez')
+        .eq('cliente_id', clienteId!)
+        .eq('ano', ano)
+        .neq('status', 'cancelado');
+      if (isValidFazenda(fazendaId)) {
+        query = query.eq('fazenda_id', fazendaId!);
+      }
+      const { data: rows, error } = await (query as any);
+      if (error) throw error;
+      const result = new Map<string, number[]>();
+      const mesKeys = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      for (const r of (rows || [])) {
+        const sub = (r as any).subcentro as string;
+        if (!sub) continue;
+        if (!result.has(sub)) result.set(sub, new Array(12).fill(0));
+        const arr = result.get(sub)!;
+        mesKeys.forEach((k, i) => { arr[i] += Math.abs(Number((r as any)[k]) || 0); });
+      }
+      for (const [, arr] of result) {
+        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
+      }
+      return result;
+    },
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const lancamentosProjetos = lancamentosProjetosQuery.data ?? new Map<string, number[]>();
 
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
@@ -137,66 +231,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       setLoading(false);
     }
   }, [fazendaId, clienteId, ano]);
-
-  // ─── Load plano de contas (global) ────────────────────────
-  // Exclui Dividendos (fonte canônica = financeiro_dividendos por cliente).
-  const loadPlano = useCallback(async () => {
-    try {
-      const { data: rows, error } = await (supabase
-        .from('financeiro_plano_contas' as any)
-        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
-        .eq('ativo', true)
-        .not('subcentro', 'is', null)
-        .neq('macro_custo', 'Dividendos')
-        .order('ordem_exibicao') as any);
-      if (error) throw error;
-      setPlanoContas((rows || []) as PlanoContasRow[]);
-    } catch (e: any) {
-      console.error('Erro ao carregar plano de contas:', e);
-    }
-  }, []);
-
-  // ─── Load dividendos do cliente ───────────────────────────
-  const loadDividendos = useCallback(async () => {
-    if (!clienteId) return;
-    try {
-      const { data: rows, error } = await supabase
-        .from('financeiro_dividendos')
-        .select('id, nome')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .order('ordem_exibicao');
-      if (error) throw error;
-      setDividendos((rows || []).map(r => ({ id: r.id, nome: r.nome })));
-    } catch (e: any) {
-      console.error('Erro ao carregar dividendos:', e);
-    }
-  }, [clienteId]);
-
-  // ─── Load saldo inicial (saldo bancário dez do ano anterior) ──
-  const loadSaldoInicial = useCallback(async () => {
-    if (!clienteId) return;
-    const anoMesAnterior = `${ano - 1}-12`;
-    try {
-      let query = supabase
-        .from('financeiro_saldos_bancarios_v2')
-        .select('saldo_final')
-        .eq('cliente_id', clienteId)
-        .eq('ano_mes', anoMesAnterior);
-
-      if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId);
-      }
-
-      const { data: rows, error } = await query;
-      if (error) throw error;
-      const total = (rows || []).reduce((s: number, r: any) => s + (r.saldo_final || 0), 0);
-      setSaldoInicial(Math.round(total * 100) / 100);
-    } catch (e: any) {
-      console.error('Erro ao carregar saldo inicial:', e);
-      setSaldoInicial(0);
-    }
-  }, [clienteId, fazendaId, ano]);
 
   // ─── Load lancamentos rebanho (META) ──────────────────────
   const loadLancamentosRebanho = useCallback(async () => {
@@ -242,10 +276,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     }
   }, [clienteId, fazendaId, ano]);
 
-  useEffect(() => { loadPlano(); }, [loadPlano]);
   useEffect(() => { loadSaved(); }, [loadSaved]);
-  useEffect(() => { loadSaldoInicial(); }, [loadSaldoInicial]);
-  useEffect(() => { loadDividendos(); }, [loadDividendos]);
   useEffect(() => { loadLancamentosRebanho(); }, [loadLancamentosRebanho]);
 
   // ─── Load parcelas de financiamento (pendentes, ano META) ─
@@ -513,46 +544,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }, [clienteId, fazendaId, fazendas, ano]);
 
   useEffect(() => { loadNutricao(); }, [loadNutricao]);
-
-  // ─── Load projetos de investimento (META) ─────────────────
-  const loadProjetos = useCallback(async () => {
-    if (!clienteId) { setLancamentosProjetos(new Map()); return; }
-    try {
-      let query = supabase
-        .from('meta_projetos_investimento' as any)
-        .select('subcentro, jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez')
-        .eq('cliente_id', clienteId)
-        .eq('ano', ano)
-        .neq('status', 'cancelado');
-
-      if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId);
-      }
-
-      const { data: rows, error } = await (query as any);
-      if (error) throw error;
-
-      const result = new Map<string, number[]>();
-      const mesKeys = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-      for (const r of (rows || [])) {
-        const sub = (r as any).subcentro as string;
-        if (!sub) continue;
-        if (!result.has(sub)) result.set(sub, new Array(12).fill(0));
-        const arr = result.get(sub)!;
-        mesKeys.forEach((k, i) => { arr[i] += Math.abs(Number((r as any)[k]) || 0); });
-      }
-      // Round
-      for (const [, arr] of result) {
-        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
-      }
-      setLancamentosProjetos(result);
-    } catch (e: any) {
-      console.error('Erro ao carregar projetos investimento:', e);
-      setLancamentosProjetos(new Map());
-    }
-  }, [clienteId, fazendaId, ano]);
-
-  useEffect(() => { loadProjetos(); }, [loadProjetos]);
 
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
@@ -978,7 +969,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     lancamentosNutricao,
     lancamentosProjetos,
     reloadNutricao: loadNutricao,
-    reloadProjetos: loadProjetos,
+    reloadProjetos: () => qc.invalidateQueries({ queryKey: ['ppf:projetos'] }),
     reload: loadSaved,
   };
 }
