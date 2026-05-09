@@ -2565,6 +2565,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   };
 
   if (incompletoOverride) {
+    // BUG #1 FIX: indicadores financeiros soberanos vêm de financeiro_lancamentos_v2
+    // e NÃO dependem de fechamento P1 das fazendas. Preservá-los aqui garante que
+    // o bloco "Financeiro Soberano (Auditoria)" continue visível mesmo quando o
+    // mês selecionado não tem P1 fechado em todas as fazendas (ex: meses futuros).
+    // Indicadores rebanho/produção/derivados continuam null pois DEPENDEM de P1.
     return {
       ...baseReturn,
       cabecas: null,
@@ -2587,25 +2592,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       desfruteIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
-      custeioPecIndicador: null,
+      custeioPecIndicador: _custeioPecIndicadorMemo,
       custoArrIndicador: null,
       precoArrIndicador: null,
       custoCabIndicador: null,
       margemArrIndicador: null,
-      // ─── Etapa 2B ───
-      saidasTotaisIndicador:        null,
-      jurosPecIndicador:            null,
-      custeioPecComJurosIndicador:  null,
-      investPecIndicador:           null,
-      desembolsoPecIndicador:       null,
-      custeioAgriIndicador:         null,
-      jurosAgriIndicador:           null,
-      custeioAgriComJurosIndicador: null,
-      investAgriIndicador:          null,
-      desembolsoAgriIndicador:      null,
-      investBovinosIndicador:       null,
-      amortizacoesIndicador:        null,
-      dividendosIndicador:          null,
+      // ─── Etapa 2C: indicadores financeiros soberanos preservados (independem de P1) ───
+      saidasTotaisIndicador:        _finSoberano.saidasTotais,
+      jurosPecIndicador:            _finSoberano.jurosPec,
+      custeioPecComJurosIndicador:  _finSoberano.custeioPecComJuros,
+      investPecIndicador:           _finSoberano.investPec,
+      desembolsoPecIndicador:       _finSoberano.desembolsoPec,
+      custeioAgriIndicador:         _finSoberano.custeioAgri,
+      jurosAgriIndicador:           _finSoberano.jurosAgri,
+      custeioAgriComJurosIndicador: _finSoberano.custeioAgriComJuros,
+      investAgriIndicador:          _finSoberano.investAgri,
+      desembolsoAgriIndicador:      _finSoberano.desembolsoAgri,
+      investBovinosIndicador:       _finSoberano.investBovinos,
+      amortizacoesIndicador:        _finSoberano.amortizacoes,
+      dividendosIndicador:          _finSoberano.dividendos,
       caixaIndicador:               null,
     };
   }
