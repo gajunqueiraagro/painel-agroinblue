@@ -158,6 +158,24 @@ export function IndicadorHistoricoModal({
     return String(v ?? '—');
   };
 
+  // Formatação compacta para eixo Y / labels do gráfico — sem prefixo R$ e
+  // abreviação K/M/B em moedaAbreviada para não estourar o eixo.
+  const fmtAxis = (v: number | null | undefined): string => {
+    if (v == null || isNaN(v)) return '';
+    if (formatoValor === 'decimal1')       return fmtN(v, 1);
+    if (formatoValor === 'decimal2')       return fmtN(v, 2);
+    if (formatoValor === 'decimal3')       return fmtN(v, 3);
+    if (formatoValor === 'moedaAbreviada') {
+      const abs = Math.abs(v);
+      if (abs >= 1e9) return (v / 1e9).toFixed(1).replace('.', ',') + 'B';
+      if (abs >= 1e6) return (v / 1e6).toFixed(1).replace('.', ',') + 'M';
+      if (abs >= 1e3) return (v / 1e3).toFixed(1).replace('.', ',') + 'K';
+      return fmtN(v, 0);
+    }
+    // inteiro, moeda e fallback: separador de milhar, sem casas decimais
+    return fmtN(v, 0);
+  };
+
   const getMesValue = (serie: number[] | null | undefined, mes: number): number | null => {
     if (!serie || mes < 1 || mes > 12) return null;
 
@@ -304,8 +322,8 @@ export function IndicadorHistoricoModal({
           <ResponsiveContainer width="100%" height={190}>
             <ComposedChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
-              <YAxis tick={{ fontSize: 11, fill: '#888780' }} stroke="#E8E6DF" />
+              <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
+              <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
               <Tooltip content={<CustomTooltip />} />
               {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
               {hasAnoAnt && (
@@ -415,7 +433,7 @@ export function IndicadorHistoricoModal({
             ) : barDados.length > 0 ? (
               <ResponsiveContainer width="100%" height={130}>
                 <BarChart data={barDados} margin={{ top: 24, right: 8, left: 8, bottom: 0 }} barCategoryGap="25%">
-                  <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#888780' }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="nome" tick={{ fontSize: 9, fill: '#888780' }} axisLine={false} tickLine={false} />
                   <YAxis hide />
                   {refValAnoAtual != null && !isNaN(refValAnoAtual) && (
                     <ReferenceLine y={refValAnoAtual} stroke={COR_ATUAL.stroke} strokeDasharray="4 3" strokeWidth={1} opacity={0.5} />
@@ -426,15 +444,9 @@ export function IndicadorHistoricoModal({
                     isAnimationActive={false}
                     label={{
                       position: 'top',
-                      fontSize: 10,
+                      fontSize: 9,
                       fill: 'var(--color-text-secondary)',
-                      formatter: (v: number) => fmtN(
-                        v,
-                        formatoValor === 'inteiro' ? 0
-                          : formatoValor === 'decimal3' ? 3
-                          : formatoValor === 'decimal2' ? 2
-                          : 1,
-                      ),
+                      formatter: (v: number) => fmtAxis(v),
                     }}
                   >
                     {barDados.map((entry, i) => (
