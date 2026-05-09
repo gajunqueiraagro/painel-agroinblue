@@ -2233,6 +2233,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         isPer ? 'Juros pecuária acumulado Jan→mês (caixa)'
               : 'Juros pecuária no mês (caixa)',
         jurPec_M),
+      custeioPecSemJuros: buildInd(cusPecSemJ, 'CUSTEIO PEC. SEM JUROS', 'Custeio Pec. sem Juros',
+        isPer ? 'Custeio produção pecuária acumulado Jan→mês (caixa, sem juros)'
+              : 'Custeio produção pecuária no mês (caixa, sem juros)',
+        cusPecSemJ_M),
       custeioPecComJuros: buildInd(cusPecComJ, 'CUSTEIO PEC. COM JUROS', 'Custeio Pec. com Juros',
         isPer ? 'Custeio Produção Pecuária + Juros acumulado Jan→mês (caixa)'
               : 'Custeio Produção Pecuária + Juros no mês (caixa)',
@@ -2355,6 +2359,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthlyData, isPeriodo, mesIdx, custeioPecAnoAnt12, custeioPecMeta12]);
+
+  // Wrapper que prefere serieMeta soberana (calculada via gridMetaExterno em
+  // _finSoberano.custeioPecSemJuros) e mantém todo o resto vindo do memo legado.
+  // Quando _finSoberano.custeioPecSemJuros.serieMeta é undefined (sem gridMeta),
+  // retorna o memo legado intacto — preservando comportamento Realizado.
+  const _custeioPecIndicadorMerged = useMemo<IndicadorFinanceiroShape | null>(() => {
+    if (!_custeioPecIndicadorMemo) return null;
+    const sobMetaSerie = _finSoberano.custeioPecSemJuros?.serieMeta;
+    if (!sobMetaSerie) return _custeioPecIndicadorMemo;
+    return { ..._custeioPecIndicadorMemo, serieMeta: sobMetaSerie };
+  }, [_custeioPecIndicadorMemo, _finSoberano.custeioPecSemJuros]);
 
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
@@ -2545,7 +2560,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: receitaPecSerieAnoAnt ?? undefined,
       serieMeta:   receitaPecSerieMeta ?? undefined,
     } : null,
-    custeioPecIndicador: _custeioPecIndicadorMemo,
+    custeioPecIndicador: _custeioPecIndicadorMerged,
     custoArrIndicador: monthlyData ? {
       label:     'CUSTO PRODUTIVO R$/@',
       titulo:    'Custo Produtivo R$/@',
@@ -2651,7 +2666,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       desfruteIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
-      custeioPecIndicador: _custeioPecIndicadorMemo,
+      custeioPecIndicador: _custeioPecIndicadorMerged,
       custoArrIndicador: null,
       precoArrIndicador: null,
       custoCabIndicador: null,
