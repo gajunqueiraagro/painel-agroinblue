@@ -23,7 +23,17 @@ import {
   agregaInvBovinos,
   agregaAmortizacoes,
   agregaDividendos,
+  agregaCusteioPecSemJurosMeta,
+  agregaJurosPecMeta,
+  agregaInvFazendaPecMeta,
+  agregaCusteioAgriSemJurosMeta,
+  agregaJurosAgriMeta,
+  agregaInvFazendaAgriMeta,
+  agregaInvBovinosMeta,
+  agregaAmortizacoesMeta,
+  agregaDividendosMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
+import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import {
   computePeriodGmd,
   rollingAvg,
@@ -45,6 +55,8 @@ interface Params {
   lancPecExterno?: Lancamento[];
   /** Lançamentos financeiros compartilhados — quando fornecido, o hook NÃO carrega via useFinanceiro. */
   lancFinExterno?: FinanceiroLancamento[];
+  /** Grid de planejamento financeiro (META) compartilhado — quando fornecido, o hook calcula serieMeta dos 13 indicadores soberanos. Default: undefined (slot serieMeta fica undefined). */
+  gridMetaExterno?: SubcentroGrid[];
 }
 
 export type StatusValidacaoArea =
@@ -348,7 +360,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, lancPecExterno, lancFinExterno }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, lancPecExterno, lancFinExterno, gridMetaExterno }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -2148,6 +2160,25 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       div,
     );
 
+    // ─── META — só calcula se grid disponível (A3) ───────────────────────
+    const hasGridMeta = !!gridMetaExterno && gridMetaExterno.length > 0;
+    const cusPecSemJ_M  = hasGridMeta ? agregaCusteioPecSemJurosMeta(gridMetaExterno!) : null;
+    const jurPec_M      = hasGridMeta ? agregaJurosPecMeta(gridMetaExterno!) : null;
+    const invFazPec_M   = hasGridMeta ? agregaInvFazendaPecMeta(gridMetaExterno!) : null;
+    const cusAgriSemJ_M = hasGridMeta ? agregaCusteioAgriSemJurosMeta(gridMetaExterno!) : null;
+    const jurAgri_M     = hasGridMeta ? agregaJurosAgriMeta(gridMetaExterno!) : null;
+    const invFazAgri_M  = hasGridMeta ? agregaInvFazendaAgriMeta(gridMetaExterno!) : null;
+    const invBov_M      = hasGridMeta ? agregaInvBovinosMeta(gridMetaExterno!) : null;
+    const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaExterno!) : null;
+    const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaExterno!) : null;
+    const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
+    const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
+    const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
+    const desembAgri_M  = (cusAgriComJ_M && invFazAgri_M) ? addArr12(cusAgriComJ_M, invFazAgri_M) : null;
+    const saidasTot_M   = (desembPec_M && desembAgri_M && invBov_M && amort_M && div_M)
+      ? addArr12(addArr12(addArr12(addArr12(desembPec_M, desembAgri_M), invBov_M), amort_M), div_M)
+      : null;
+
     const isPer = viewMode === 'periodo';
     const mesPos = mes;
     const buildInd = (
@@ -2155,6 +2186,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       label: string,
       titulo: string,
       subtitulo: string,
+      serie12Meta: number[] | null = null,
     ): IndicadorFinanceiroShape => {
       const mesSerie13 = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (serie12[i - 1] ?? NaN));
       const periodoSerie13 = cumSumTo13(serie12);
@@ -2167,60 +2199,87 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         if (curr == null || prev == null || prev === 0) return null;
         return ((curr - prev) / prev) * 100;
       })();
+
+      // Série META (mesmo formato 13 com NaN no [0]) e deltaMeta — só quando gridMeta foi fornecido
+      let serieMeta: number[] | undefined = undefined;
+      let deltaMeta: number | null = null;
+      if (serie12Meta && serie12Meta.length === 12) {
+        const mesSerie13Meta = Array.from({ length: 13 }, (_, i) => i === 0 ? NaN : (serie12Meta[i - 1] ?? NaN));
+        const periodoSerie13Meta = cumSumTo13(serie12Meta);
+        serieMeta = isPer ? periodoSerie13Meta : mesSerie13Meta;
+        const meta = safe(serieMeta[mesPos]);
+        if (valor != null && meta != null && meta !== 0) {
+          deltaMeta = ((valor - meta) / meta) * 100;
+        }
+      }
+
       return {
         label, titulo, subtitulo,
         valor, deltaMes,
         deltaAno:  null,
-        deltaMeta: null,
+        deltaMeta,
         serieAno,
         serieAnoAnt: undefined,
-        serieMeta:   undefined,
+        serieMeta,
       };
     };
 
     return {
       saidasTotais: buildInd(saidasTot, 'SAÍDAS TOTAIS', 'Saídas Totais',
         isPer ? 'Saídas operacionais acumuladas Jan→mês (caixa, exclui dedução de receitas)'
-              : 'Saídas operacionais no mês (caixa, exclui dedução de receitas)'),
+              : 'Saídas operacionais no mês (caixa, exclui dedução de receitas)',
+        saidasTot_M),
       jurosPec: buildInd(jurPec, 'JUROS PECUÁRIA', 'Juros Pecuária',
         isPer ? 'Juros pecuária acumulado Jan→mês (caixa)'
-              : 'Juros pecuária no mês (caixa)'),
+              : 'Juros pecuária no mês (caixa)',
+        jurPec_M),
       custeioPecComJuros: buildInd(cusPecComJ, 'CUSTEIO PEC. COM JUROS', 'Custeio Pec. com Juros',
         isPer ? 'Custeio Produção Pecuária + Juros acumulado Jan→mês (caixa)'
-              : 'Custeio Produção Pecuária + Juros no mês (caixa)'),
+              : 'Custeio Produção Pecuária + Juros no mês (caixa)',
+        cusPecComJ_M),
       investPec: buildInd(invFazPec, 'INV. FAZENDA PECUÁRIA', 'Investimento na Fazenda Pecuária',
         isPer ? 'Investimento na Fazenda escopo Pecuária acumulado Jan→mês (caixa)'
-              : 'Investimento na Fazenda escopo Pecuária no mês (caixa)'),
+              : 'Investimento na Fazenda escopo Pecuária no mês (caixa)',
+        invFazPec_M),
       desembolsoPec: buildInd(desembPec, 'DESEMBOLSO PECUÁRIA', 'Desembolso Pecuária',
         isPer ? 'Custeio Pec. com Juros + Inv. Fazenda Pec. acumulado Jan→mês (caixa)'
-              : 'Custeio Pec. com Juros + Inv. Fazenda Pec. no mês (caixa)'),
+              : 'Custeio Pec. com Juros + Inv. Fazenda Pec. no mês (caixa)',
+        desembPec_M),
       custeioAgri: buildInd(cusAgriSemJ, 'CUSTEIO AGRICULTURA', 'Custeio Agricultura',
         isPer ? 'Custo Fixo + Custo Variável Agricultura acumulado Jan→mês (caixa)'
-              : 'Custo Fixo + Custo Variável Agricultura no mês (caixa)'),
+              : 'Custo Fixo + Custo Variável Agricultura no mês (caixa)',
+        cusAgriSemJ_M),
       jurosAgri: buildInd(jurAgri, 'JUROS AGRICULTURA', 'Juros Agricultura',
         isPer ? 'Juros agricultura acumulado Jan→mês (caixa)'
-              : 'Juros agricultura no mês (caixa)'),
+              : 'Juros agricultura no mês (caixa)',
+        jurAgri_M),
       custeioAgriComJuros: buildInd(cusAgriComJ, 'CUSTEIO AGRI. COM JUROS', 'Custeio Agri. com Juros',
         isPer ? 'Custeio Produção Agri + Juros acumulado Jan→mês (caixa)'
-              : 'Custeio Produção Agri + Juros no mês (caixa)'),
+              : 'Custeio Produção Agri + Juros no mês (caixa)',
+        cusAgriComJ_M),
       investAgri: buildInd(invFazAgri, 'INV. FAZENDA AGRI.', 'Investimento na Fazenda Agricultura',
         isPer ? 'Investimento na Fazenda escopo Agricultura acumulado Jan→mês (caixa)'
-              : 'Investimento na Fazenda escopo Agricultura no mês (caixa)'),
+              : 'Investimento na Fazenda escopo Agricultura no mês (caixa)',
+        invFazAgri_M),
       desembolsoAgri: buildInd(desembAgri, 'DESEMBOLSO AGRICULTURA', 'Desembolso Agricultura',
         isPer ? 'Custeio Agri com Juros + Inv. Fazenda Agri acumulado Jan→mês (caixa)'
-              : 'Custeio Agri com Juros + Inv. Fazenda Agri no mês (caixa)'),
+              : 'Custeio Agri com Juros + Inv. Fazenda Agri no mês (caixa)',
+        desembAgri_M),
       investBovinos: buildInd(invBov, 'INV. EM BOVINOS', 'Investimento em Bovinos',
         isPer ? 'Investimento em Bovinos (reposição) acumulado Jan→mês (caixa)'
-              : 'Investimento em Bovinos (reposição) no mês (caixa)'),
+              : 'Investimento em Bovinos (reposição) no mês (caixa)',
+        invBov_M),
       amortizacoes: buildInd(amort, 'AMORTIZAÇÕES', 'Amortizações Financeiras',
         isPer ? 'Amortizações de financiamentos (principal) acumulado Jan→mês (caixa)'
-              : 'Amortizações de financiamentos (principal) no mês (caixa)'),
+              : 'Amortizações de financiamentos (principal) no mês (caixa)',
+        amort_M),
       dividendos: buildInd(div, 'DIVIDENDOS / RETIRADAS', 'Dividendos / Retiradas',
         isPer ? 'Dividendos e retiradas acumulado Jan→mês (caixa)'
-              : 'Dividendos e retiradas no mês (caixa)'),
+              : 'Dividendos e retiradas no mês (caixa)',
+        div_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lancFin, ano, mes, viewMode]);
+  }, [lancFin, ano, mes, viewMode, gridMetaExterno]);
 
   // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
   // Estabiliza a referência do objeto retornado para evitar render loop em
