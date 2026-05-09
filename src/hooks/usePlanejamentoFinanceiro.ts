@@ -94,9 +94,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
   const qc = useQueryClient();
 
-  const [savedData, setSavedData] = useState<PlanejamentoFinanceiroRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [lancamentosRebanho, setLancamentosRebanho] = useState<Map<string, number[]>>(new Map());
   const [lancamentosFinanciamento, setLancamentosFinanciamento] = useState<Map<string, number[]>>(new Map());
   const [lancamentosNutricao, setLancamentosNutricao] = useState<Map<string, number[]>>(new Map());
 
@@ -195,26 +193,22 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   });
   const lancamentosProjetos = lancamentosProjetosQuery.data ?? new Map<string, number[]>();
 
-  // ─── Load saved planejamento ──────────────────────────────
-  const loadSaved = useCallback(async () => {
-    if (!clienteId) { setLoading(false); return; }
-    // Global: load all fazendas; individual: load specific
-    setLoading(true);
-    try {
+  // ── Fase 1.6.B: loadSaved + loadLancamentosRebanho migrados ──
+  const savedDataQuery = useQuery<PlanejamentoFinanceiroRow[]>({
+    queryKey: ['ppf:saved', clienteId, fazendaId, ano],
+    queryFn: async () => {
       let query = supabase
         .from('planejamento_financeiro' as any)
         .select('*')
-        .eq('cliente_id', clienteId)
+        .eq('cliente_id', clienteId!)
         .eq('ano', ano)
         .eq('cenario', 'meta')
         .order('centro_custo')
         .order('subcentro')
         .order('mes');
-
       if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId);
+        query = query.eq('fazenda_id', fazendaId!);
       }
-
       const { data: rows, error } = await (query as any);
       if (error) throw error;
       const savedRows = (rows || []) as PlanejamentoFinanceiroRow[];
@@ -224,36 +218,32 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           ? { firstRow: savedRows[0], fazendasDistintas: new Set(savedRows.map(r => r.fazenda_id)).size }
           : null,
       );
-      setSavedData(savedRows);
-    } catch (e: any) {
-      console.error('Erro ao carregar planejamento:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [fazendaId, clienteId, ano]);
+      return savedRows;
+    },
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const savedData = savedDataQuery.data ?? [];
 
-  // ─── Load lancamentos rebanho (META) ──────────────────────
-  const loadLancamentosRebanho = useCallback(async () => {
-    if (!clienteId) { setLancamentosRebanho(new Map()); return; }
-    try {
+  const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
+    queryKey: ['ppf:rebanho', clienteId, fazendaId, ano],
+    queryFn: async () => {
       let query = supabase
         .from('lancamentos')
         .select('tipo, categoria, data, valor_total, boitel_lote_id')
-        .eq('cliente_id', clienteId)
+        .eq('cliente_id', clienteId!)
         .eq('cenario', 'meta')
         .eq('cancelado', false)
         .gte('data', `${ano}-01-01`)
         .lte('data', `${ano}-12-31`)
         .in('tipo', ['abate', 'venda', 'compra'])
         .not('valor_total', 'is', null);
-
       if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId);
+        query = query.eq('fazenda_id', fazendaId!);
       }
-
       const { data: rows, error } = await query;
       if (error) throw error;
-
       const result = new Map<string, number[]>();
       for (const r of (rows || [])) {
         const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria, !!r.boitel_lote_id);
@@ -263,21 +253,27 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
         result.get(subcentro)![mes - 1] += Math.abs(r.valor_total || 0);
       }
-
-      // Round to 2 decimals
       for (const [, arr] of result) {
         for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
       }
+      return result;
+    },
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const lancamentosRebanho = lancamentosRebanhoQuery.data ?? new Map<string, number[]>();
 
-      setLancamentosRebanho(result);
-    } catch (e: any) {
-      console.error('Erro ao carregar lancamentos rebanho:', e);
-      setLancamentosRebanho(new Map());
+  // ─── Load saved planejamento ──────────────────────────────
+  const loadSaved = useCallback(async () => {
+    if (!clienteId) return;
+    setLoading(true);
+    try {
+      await qc.invalidateQueries({ queryKey: ['ppf:saved', clienteId, fazendaId, ano] });
+    } finally {
+      setLoading(false);
     }
-  }, [clienteId, fazendaId, ano]);
-
-  useEffect(() => { loadSaved(); }, [loadSaved]);
-  useEffect(() => { loadLancamentosRebanho(); }, [loadLancamentosRebanho]);
+  }, [qc, clienteId, fazendaId, ano]);
 
   // ─── Load parcelas de financiamento (pendentes, ano META) ─
   const loadFinanciamentos = useCallback(async () => {
