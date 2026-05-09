@@ -42,17 +42,17 @@ function DrawerItem({
       className={cn(
         'w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-xs transition-colors duration-150',
         isActive
-          ? 'bg-muted text-foreground font-semibold shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-        item.primary && !isActive && 'font-semibold text-foreground',
+          ? 'bg-white/10 text-white font-semibold shadow-[inset_2px_0_0_0_hsl(var(--primary-foreground))]'
+          : 'text-white/85 hover:bg-white/[0.06] hover:text-white',
+        item.primary && !isActive && 'font-semibold text-white',
       )}
     >
       {item.primary && (
-        <Star className="h-3 w-3 shrink-0 text-amber-500 fill-amber-500" />
+        <Star className="h-3 w-3 shrink-0 text-amber-400 fill-amber-400" />
       )}
       <span className="flex-1 truncate">{item.label}</span>
       {isWrapper && (
-        <Circle className="h-1.5 w-1.5 shrink-0 fill-muted-foreground/40 text-muted-foreground/40" />
+        <Circle className="h-1.5 w-1.5 shrink-0 fill-white/40 text-white/40" />
       )}
     </button>
   );
@@ -84,7 +84,7 @@ export function V2ContextDrawer({
       <div
         className={cn(
           'absolute top-0 left-0 h-full w-60',
-          'bg-background border-r border-border/40 shadow-lg z-50',
+          'bg-primary/95 backdrop-blur-sm border-r border-white/10 shadow-xl z-50',
           'flex flex-col overflow-y-auto',
           'transition-transform duration-200',
           isOpen ? 'translate-x-0' : '-translate-x-full',
@@ -93,8 +93,8 @@ export function V2ContextDrawer({
         {grupo && (
           <>
             {/* Cabeçalho do grupo */}
-            <div className="px-4 py-4 border-b border-border/40 shrink-0">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/85">
+            <div className="px-4 py-4 border-b border-white/10 shrink-0">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-white/85">
                 {grupo.label}
               </p>
             </div>
@@ -103,7 +103,7 @@ export function V2ContextDrawer({
             <nav className="flex-1 py-4 px-2 space-y-6">
               {grupo.drawer.map((secao) => (
                 <div key={secao.titulo}>
-                  <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
+                  <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white/55 select-none">
                     {secao.titulo}
                   </p>
                   <div className="space-y-0.5">
