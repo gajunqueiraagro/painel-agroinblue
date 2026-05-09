@@ -202,6 +202,18 @@ const FONTE_FIN_SOBERANO_REAL: FonteIndicador = {
   observacao: 'Etapa 2C — bloco de auditoria visual. Caixa disponível (saldo) ainda em Etapa 2D.',
 };
 
+const FONTE_FIN_SOBERANO_META: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'planejamento_financeiro (via _finSoberano META)',
+  fonte_campo: 'serieMeta dos indicadores soberanos (PCD)',
+  regra_calculo: 'Σ Math.abs(grid.meses[i]) por mês — wrappers agrega*Meta(grid) usam os MESMOS predicados literais do Realizado (classificacao.ts: isCusteioProducaoPecuaria, isJurosPecuaria, isInvestimentoFazendaPecuaria etc.). PCD popula serieMeta no IndicadorFinanceiroShape via _finSoberano (gridMetaExterno).',
+  regra_prioridade: '1. Grid META do planejamento_financeiro do ano corrente; 2. vazio (zeros) se cliente sem META configurada',
+  tela_origem: '/planejamento-financeiro',
+  tela_label: 'Planejamento Financeiro / META',
+  permite_fallback: false,
+  observacao: 'Camada A (PC-100 META). UMA regra de classificação para Realizado e Meta — predicates literais em classificacao.ts.',
+};
+
 // ─── Endividamento (Realizado, Global do cliente) ───
 // Fonte: RPC fn_endividamento_mensal — agrega financiamento_parcelas JOIN financiamentos.
 // NUNCA usa financeiro_lancamentos_v2 para este bloco.
@@ -404,20 +416,20 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   // ─── Financeiro Soberano (Auditoria) — Etapa 2C ─────────────────────
   // Bloco renderizado em PainelConsultorTab (entre Financeiro Caixa e Patrimônio).
   // Usa os mesmos IDs nas 4 abas (mensal/medio/acumulado/media_periodo) — aba canônica = 'mensal'.
-  'sob_custeio_pec_sj':   { id: 'sob_custeio_pec_sj',   nome: 'Custeio Pec. s/ juros',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_juros_pec':        { id: 'sob_juros_pec',        nome: 'Juros Pecuária',            aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_custeio_pec_cj':   { id: 'sob_custeio_pec_cj',   nome: 'Custeio Pec. c/ juros',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_inv_faz_pec':      { id: 'sob_inv_faz_pec',      nome: 'Invest. Fazenda Pec.',      aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_desemb_pec':       { id: 'sob_desemb_pec',       nome: 'Desembolso Pecuária',       aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_custeio_agri_sj':  { id: 'sob_custeio_agri_sj',  nome: 'Custeio Agri. s/ juros',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_juros_agri':       { id: 'sob_juros_agri',       nome: 'Juros Agricultura',         aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_custeio_agri_cj':  { id: 'sob_custeio_agri_cj',  nome: 'Custeio Agri. c/ juros',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_inv_faz_agri':     { id: 'sob_inv_faz_agri',     nome: 'Invest. Fazenda Agri.',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_desemb_agri':      { id: 'sob_desemb_agri',      nome: 'Desembolso Agricultura',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_inv_bov':          { id: 'sob_inv_bov',          nome: 'Investimento em Bovinos',   aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_amort':            { id: 'sob_amort',            nome: 'Amortizações',              aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_div':              { id: 'sob_div',              nome: 'Dividendos / Retiradas',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
-  'sob_saidas_totais':    { id: 'sob_saidas_totais',    nome: 'Saídas Totais',             aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
+  'sob_custeio_pec_sj':   { id: 'sob_custeio_pec_sj',   nome: 'Custeio Pec. s/ juros',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_juros_pec':        { id: 'sob_juros_pec',        nome: 'Juros Pecuária',            aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_custeio_pec_cj':   { id: 'sob_custeio_pec_cj',   nome: 'Custeio Pec. c/ juros',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_inv_faz_pec':      { id: 'sob_inv_faz_pec',      nome: 'Invest. Fazenda Pec.',      aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_desemb_pec':       { id: 'sob_desemb_pec',       nome: 'Desembolso Pecuária',       aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_custeio_agri_sj':  { id: 'sob_custeio_agri_sj',  nome: 'Custeio Agri. s/ juros',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_juros_agri':       { id: 'sob_juros_agri',       nome: 'Juros Agricultura',         aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_custeio_agri_cj':  { id: 'sob_custeio_agri_cj',  nome: 'Custeio Agri. c/ juros',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_inv_faz_agri':     { id: 'sob_inv_faz_agri',     nome: 'Invest. Fazenda Agri.',     aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_desemb_agri':      { id: 'sob_desemb_agri',      nome: 'Desembolso Agricultura',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_inv_bov':          { id: 'sob_inv_bov',          nome: 'Investimento em Bovinos',   aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_amort':            { id: 'sob_amort',            nome: 'Amortizações',              aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_div':              { id: 'sob_div',              nome: 'Dividendos / Retiradas',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+  'sob_saidas_totais':    { id: 'sob_saidas_totais',    nome: 'Saídas Totais',             aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
 
   // ─── Endividamento — bloco PC-100 (Realizado/Global do cliente) ─────
   // Renderizado nas abas Valores Mensais e Acumulados — aba canônica = 'mensal'.

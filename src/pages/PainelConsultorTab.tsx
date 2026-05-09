@@ -1570,8 +1570,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   // chamamos usePCD com viewMode='mes'). NaNs são neutralizados para 0 — coluna em branco
   // só aconteceria por loading; o bloco fica oculto até pcdSoberano.custeioPecIndicador existir.
   const soberanoSerie = useMemo<SoberanoSerie12 | undefined>(() => {
-    const slice12 = (ind: { serieAno: number[] } | null | undefined) =>
-      ind ? ind.serieAno.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : 0)) : Array(12).fill(0);
+    // A5: slice12 cenario-aware. Em modo Meta, usa serieMeta (populada via gridMetaExterno em A4).
+    // Quando serieMeta é undefined (cliente sem META configurada), retorna Array(12).fill(0) — zeros.
+    // Meta NUNCA faz fallback para Realizado (regra do catálogo: permite_fallback: false).
+    const slice12 = (ind: { serieAno: number[]; serieMeta?: number[] } | null | undefined) => {
+      const serie = isPrevisto ? ind?.serieMeta : ind?.serieAno;
+      return serie ? serie.slice(1, 13).map(v => (typeof v === 'number' && !isNaN(v) ? v : 0)) : Array(12).fill(0);
+    };
     if (!pcdSoberano.custeioPecIndicador) return undefined;
     return {
       custeioPecSemJuros:  slice12(pcdSoberano.custeioPecIndicador),
@@ -1604,6 +1609,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     pcdSoberano.amortizacoesIndicador,
     pcdSoberano.dividendosIndicador,
     pcdSoberano.saidasTotaisIndicador,
+    isPrevisto,
   ]);
 
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
