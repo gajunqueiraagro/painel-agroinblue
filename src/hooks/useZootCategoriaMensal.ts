@@ -96,32 +96,67 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
         return rows.filter(r => r.cenario === cenario);
       }
 
-      // Global: pagina o cache (PostgREST default = 1000) e filtra explicitamente por
-      // fazenda_id IN (lista de fazendas do cliente) — não confia em cliente_id da cache.
+      // ───────────────────────────────────────────────────────────────────────
+      // Global: pagina o cache oficial (PostgREST default = 1000) e filtra
+      // explicitamente por fazenda_id IN (lista de fazendas do cliente) —
+      // não confia em cliente_id da cache.
+      //
+      // Ensure-on-empty: se a primeira leitura retornar 0 linhas (típico em
+      // ano novo cujo cache ainda não foi populado), chamamos UMA ÚNICA VEZ
+      // fn_zoot_cache_rebuild e re-paginamos. Isto NÃO é fallback — a fonte
+      // oficial continua sendo zoot_mensal_cache. É ensure operacional:
+      // garantir que o cache exista antes de ler o próprio cache.
+      //
+      // Por que NÃO usamos fn_zoot_cache_ensure aqui: ela depende de
+      // fn_zoot_cache_has_gap, que leva ~30s — inviável em UI. O rebuild
+      // direto leva ~2-3s para clientes típicos (1-3 fazendas).
+      // ───────────────────────────────────────────────────────────────────────
       const PAGE_SIZE = 1000;
-      const all: any[] = [];
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from('zoot_mensal_cache' as any)
-          .select('*')
-          .eq('ano', ano)
-          .eq('cenario', cenario)
-          .in('fazenda_id', fazendaIdsReais)
-          .order('mes')
-          .order('ordem_exibicao')
-          .range(from, from + PAGE_SIZE - 1);
+      const MAX_ENSURE_ATTEMPTS = 2;
+      let attempt = 0;
+      while (attempt < MAX_ENSURE_ATTEMPTS) {
+        const all: any[] = [];
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('zoot_mensal_cache' as any)
+            .select('*')
+            .eq('ano', ano)
+            .eq('cenario', cenario)
+            .in('fazenda_id', fazendaIdsReais)
+            .order('mes')
+            .order('ordem_exibicao')
+            .range(from, from + PAGE_SIZE - 1);
 
-        if (error) {
-          console.error('useZootCategoriaMensal error:', error);
+          if (error) {
+            console.error('useZootCategoriaMensal error:', error);
+            return [];
+          }
+          const page = data || [];
+          all.push(...page);
+          if (page.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+
+        if (all.length > 0 || attempt > 0) {
+          return all as unknown as ZootCategoriaMensal[];
+        }
+
+        // Cache vazio na primeira tentativa: rebuild oficial + retry único.
+        console.info('[zoot-cache] empty for', { clienteId, ano, cenario }, '— rebuilding…');
+        const tRebuild = Date.now();
+        const { error: rebuildError } = await supabase.rpc('fn_zoot_cache_rebuild' as any, {
+          p_cliente_id: clienteId,
+          p_ano: ano,
+        });
+        if (rebuildError) {
+          console.warn('[zoot-cache] fn_zoot_cache_rebuild failed:', rebuildError);
           return [];
         }
-        const page = data || [];
-        all.push(...page);
-        if (page.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
+        console.info('[zoot-cache] rebuild ok in', Date.now() - tRebuild, 'ms');
+        attempt++;
       }
-      return all as unknown as ZootCategoriaMensal[];
+      return [] as unknown as ZootCategoriaMensal[];
     },
     // Guard: se NÃO é global e fazendaId é o sentinel, desliga a query.
     enabled: effectiveGlobal ? (!!clienteId && fazendaIdsReais.length > 0) : (!!fazendaId && fazendaId !== '__global__'),
