@@ -2545,11 +2545,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: receitaPecSerieAnoAnt ?? undefined,
       serieMeta:   receitaPecSerieMeta ?? undefined,
     } : null,
-    // A6.1: alinha custeioPecIndicador (sob_custeio_pec_sj) com a fonte soberana —
-    // mesmo predicate dos 13 irmãos. _custeioPecIndicadorMemo (legado, view zoot +
-    // labels v1) deixava serieMeta zerada em modo Meta enquanto custeioPecComJurosIndicador
-    // e desembolsoPecIndicador (predicate-based) já mostravam valor.
-    custeioPecIndicador: _finSoberano.custeioPecSemJuros,
+    custeioPecIndicador: _custeioPecIndicadorMemo,
     custoArrIndicador: monthlyData ? {
       label:     'CUSTO PRODUTIVO R$/@',
       titulo:    'Custo Produtivo R$/@',
@@ -2655,9 +2651,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       desfruteIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
-      // A6.1: alinhado com a fonte soberana — preserva valor Realizado/Meta mesmo
-      // em meses incompletos (sob_custeio_pec_sj não depende de fechamento P1).
-      custeioPecIndicador: _finSoberano.custeioPecSemJuros,
+      custeioPecIndicador: _custeioPecIndicadorMemo,
       custoArrIndicador: null,
       precoArrIndicador: null,
       custoCabIndicador: null,
