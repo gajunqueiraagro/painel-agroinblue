@@ -235,7 +235,7 @@ export function IndicadorHistoricoModal({
       .filter((e: any) => allowedKeys.has(String(e.dataKey)) && e.value != null)
       .sort((a: any, b: any) => order.indexOf(a.dataKey) - order.indexOf(b.dataKey));
     return (
-      <div className="rounded-sm border border-border/25 bg-background/80 backdrop-blur-sm px-2 py-1 shadow-sm text-[11px] leading-tight">
+      <div className="rounded-sm border border-border/20 bg-background/60 backdrop-blur-[2px] px-2 py-1 text-[11px] leading-tight">
         <p className="font-medium text-foreground/85 text-[10px] mb-0.5">{label}</p>
         {entries.map((entry: any, i: number) => (
           <div key={i} className="flex items-center gap-1.5">
@@ -254,7 +254,7 @@ export function IndicadorHistoricoModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[85vh]"
+        className="w-full max-w-2xl mx-4 rounded-lg border border-border/40 bg-background shadow-xl flex flex-col max-h-[94vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header executivo (two-column) — fixo, fora do scroll */}
