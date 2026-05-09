@@ -220,16 +220,19 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
     }
   }
 
-  const colHeaders = isCab
-    ? ['Saldo Ini.', 'Ent.Ext', 'Evol.(E)', 'Saí.Ext', 'Evol.(S)', 'Saldo Fin.']
+  // Headers reorganizados: Saldo Inicial → [Kg/cab Inicial] → Entrada Externa →
+  // Saída Externa → Evol. Entrada → Evol. Saída → Saldo Final → [Kg/cab Final] → Prod. Bio
+  // (os blocos [Kg/cab ...] são renderizados como células fixas, fora deste array).
+  const movHeaders = isCab
+    ? ['Saldo Inicial', 'Entrada Externa', 'Saída Externa', 'Evol. Entrada', 'Evol. Saída', 'Saldo Final']
     : isKgM
-      ? ['Kg/cab Ini.', 'Kg/cab E.E', 'Kg/cab Ev.E', 'Kg/cab S.E', 'Kg/cab Ev.S', 'Kg/cab Fin.']
-      : ['Kg Tot.Ini.', 'Kg E.Ext', 'Kg Ev.(E)', 'Kg S.Ext', 'Kg Ev.(S)', 'Kg Tot.Fin.'];
+      ? ['Kg/cab Inicial', 'Kg/cab E.E', 'Kg/cab S.E', 'Kg/cab Ev.E', 'Kg/cab Ev.S', 'Kg/cab Final']
+      : ['Kg Tot.Inicial', 'Kg E.Ext', 'Kg S.Ext', 'Kg Ev.(E)', 'Kg Ev.(S)', 'Kg Tot.Final'];
 
-  const movFields: Array<'saldo_inicial' | 'entradas_externas' | 'evol_cat_entrada' | 'saidas_externas' | 'evol_cat_saida' | 'saldo_final'> =
-    ['saldo_inicial', 'entradas_externas', 'evol_cat_entrada', 'saidas_externas', 'evol_cat_saida', 'saldo_final'];
-  const totalFields: Array<'saldoInicial' | 'entradasExternas' | 'evolCatEntrada' | 'saidasExternas' | 'evolCatSaida' | 'saldoFinal'> =
-    ['saldoInicial', 'entradasExternas', 'evolCatEntrada', 'saidasExternas', 'evolCatSaida', 'saldoFinal'];
+  const movFields: Array<'saldo_inicial' | 'entradas_externas' | 'saidas_externas' | 'evol_cat_entrada' | 'evol_cat_saida' | 'saldo_final'> =
+    ['saldo_inicial', 'entradas_externas', 'saidas_externas', 'evol_cat_entrada', 'evol_cat_saida', 'saldo_final'];
+  const totalFields: Array<'saldoInicial' | 'entradasExternas' | 'saidasExternas' | 'evolCatEntrada' | 'evolCatSaida' | 'saldoFinal'> =
+    ['saldoInicial', 'entradasExternas', 'saidasExternas', 'evolCatEntrada', 'evolCatSaida', 'saldoFinal'];
 
   function movColor(field: string, v: number | null | undefined) {
     if (field === 'saldo_inicial' || field === 'saldo_final' || field === 'saldoInicial' || field === 'saldoFinal') return 'text-muted-foreground';
@@ -337,30 +340,32 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
           <div className="overflow-x-auto border rounded-lg">
             <table className="table-fixed text-[10px] border-collapse">
               <colgroup>
-                <col style={{ width: '80px' }} />
-                <col style={{ width: '52px' }} />
-                <col style={{ width: '48px' }} />
-                <col style={{ width: '48px' }} />
-                <col style={{ width: '48px' }} />
-                <col style={{ width: '48px' }} />
-                <col style={{ width: '52px' }} />
-                {/* fixed peso/cab ini + fin */}
-                <col style={{ width: '52px' }} />
-                <col style={{ width: '52px' }} />
-                {/* Dias, GMD */}
-                <col style={{ width: '30px' }} />
-                <col style={{ width: '48px' }} />
-                {/* Divergência (only in cabeça mode) */}
-                {isCab && <col style={{ width: '38px' }} />}
+                <col style={{ width: '80px' }} /> {/* Categoria */}
+                <col style={{ width: '64px' }} /> {/* Saldo Inicial */}
+                <col style={{ width: '60px' }} /> {/* Kg/cab Inicial */}
+                <col style={{ width: '60px' }} /> {/* Entrada Externa */}
+                <col style={{ width: '60px' }} /> {/* Saída Externa */}
+                <col style={{ width: '60px' }} /> {/* Evol. Entrada */}
+                <col style={{ width: '60px' }} /> {/* Evol. Saída */}
+                <col style={{ width: '64px' }} /> {/* Saldo Final */}
+                <col style={{ width: '60px' }} /> {/* Kg/cab Final */}
+                <col style={{ width: '60px' }} /> {/* Prod. Bio */}
+                <col style={{ width: '30px' }} /> {/* Dias */}
+                <col style={{ width: '48px' }} /> {/* GMD */}
+                {isCab && <col style={{ width: '38px' }} />} {/* Divergência */}
               </colgroup>
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-1 py-0.5 font-semibold text-muted-foreground border-b">Categoria</th>
-                  {colHeaders.map((h, i) => (
-                    <th key={i} className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{h}</th>
-                  ))}
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Kg/cab I</th>
-                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Kg/cab F</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-foreground border-b bg-muted/40">{movHeaders[0]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-foreground border-b bg-muted/40">Kg/cab Inicial</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{movHeaders[1]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{movHeaders[2]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{movHeaders[3]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">{movHeaders[4]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-foreground border-b bg-muted/40">{movHeaders[5]}</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-foreground border-b bg-muted/40">Kg/cab Final</th>
+                  <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b border-l-2 border-l-border">Prod. Bio</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-muted-foreground border-b">Dias</th>
                   <th className="text-right px-1 py-0.5 font-semibold text-primary border-b">GMD</th>
                   {isCab && <th className="text-right px-1 py-0.5 font-semibold text-red-500 border-b border-l-2 border-l-border">Div.</th>}
@@ -369,16 +374,24 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
               <tbody>
                 {rows.map(r => {
                   const hasDiv = r.divergencia !== 0;
+                  // Pré-calcula valores das 6 colunas de movimento (mesmo movVal, na nova ordem).
+                  const movCells = movFields.map(f => ({ f, ...movVal(r, f)! }));
                   return (
                     <tr key={r.categoria_id} className={`hover:bg-muted/20 border-b border-border/30 ${hasDiv ? 'bg-red-50/50' : ''}`}>
                       <td className="px-1 py-0.5 font-medium text-foreground truncate">{r.categoria_nome}</td>
-                      {movFields.map((f, i) => {
-                        const { v, dec } = movVal(r, f)!;
-                        const cls = (f === 'saldo_final') ? 'font-medium text-foreground' : movColor(f, v);
-                        return <td key={i} className={`text-right px-1 py-0.5 ${cls}`}>{fmt(v, dec)}</td>;
-                      })}
-                      <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.pesoCabIni, 1)}</td>
-                      <td className="text-right px-1 py-0.5 text-muted-foreground">{fmt(r.pesoCabFin, 1)}</td>
+                      {/* Bloco Inicial: Saldo Inicial + Kg/cab Inicial (mesma família visual) */}
+                      <td className={`text-right px-1 py-0.5 bg-muted/30 ${(movCells[0].f === 'saldo_final') ? 'font-medium text-foreground' : movColor(movCells[0].f, movCells[0].v)}`}>{fmt(movCells[0].v, movCells[0].dec)}</td>
+                      <td className="text-right px-1 py-0.5 bg-muted/30 text-muted-foreground">{fmt(r.pesoCabIni, 1)}</td>
+                      {/* Movimentações externas + evolução */}
+                      <td className={`text-right px-1 py-0.5 ${movColor(movCells[1].f, movCells[1].v)}`}>{fmt(movCells[1].v, movCells[1].dec)}</td>
+                      <td className={`text-right px-1 py-0.5 ${movColor(movCells[2].f, movCells[2].v)}`}>{fmt(movCells[2].v, movCells[2].dec)}</td>
+                      <td className={`text-right px-1 py-0.5 ${movColor(movCells[3].f, movCells[3].v)}`}>{fmt(movCells[3].v, movCells[3].dec)}</td>
+                      <td className={`text-right px-1 py-0.5 ${movColor(movCells[4].f, movCells[4].v)}`}>{fmt(movCells[4].v, movCells[4].dec)}</td>
+                      {/* Bloco Final: Saldo Final + Kg/cab Final */}
+                      <td className="text-right px-1 py-0.5 bg-muted/30 font-medium text-foreground">{fmt(movCells[5].v, movCells[5].dec)}</td>
+                      <td className="text-right px-1 py-0.5 bg-muted/30 text-muted-foreground">{fmt(r.pesoCabFin, 1)}</td>
+                      {/* Prod. Bio (ganho de peso) */}
+                      <td className="text-right px-1 py-0.5 text-muted-foreground border-l-2 border-l-border">{fmt(r.ganho, 0)}</td>
                       <td className="text-right px-1 py-0.5 text-muted-foreground">{r.dias || '–'}</td>
                       <td className={`text-right px-1 py-0.5 ${gmdColorClass(r.gmd)}`}>
                         {r.gmd !== null ? formatNum(r.gmd, 3) : '–'}
@@ -396,13 +409,25 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
                 <tfoot>
                   <tr className="bg-muted/30 font-bold border-t-2 border-border">
                     <td className="px-1 py-0.5 text-foreground">TOTAL</td>
-                    {totalFields.map((f, i) => {
-                      const { v, dec } = totalMovVal(f)!;
-                      const cls = (f === 'saldoFinal' || f === 'saldoInicial') ? 'text-foreground' : movColor(f, v);
-                      return <td key={i} className={`text-right px-1 py-0.5 ${cls}`}>{fmt(v, dec)}</td>;
-                    })}
-                    <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.pesoCabIni, 1)}</td>
-                    <td className="text-right px-1 py-0.5 text-foreground">{fmt(totals.pesoCabFin, 1)}</td>
+                    {(() => {
+                      const totalCells = totalFields.map(f => ({ f, ...totalMovVal(f)! }));
+                      return (
+                        <>
+                          {/* Bloco Inicial */}
+                          <td className="text-right px-1 py-0.5 text-foreground bg-muted/40">{fmt(totalCells[0].v, totalCells[0].dec)}</td>
+                          <td className="text-right px-1 py-0.5 text-foreground bg-muted/40">{fmt(totals.pesoCabIni, 1)}</td>
+                          {/* Movimentações */}
+                          <td className={`text-right px-1 py-0.5 ${movColor(totalCells[1].f, totalCells[1].v)}`}>{fmt(totalCells[1].v, totalCells[1].dec)}</td>
+                          <td className={`text-right px-1 py-0.5 ${movColor(totalCells[2].f, totalCells[2].v)}`}>{fmt(totalCells[2].v, totalCells[2].dec)}</td>
+                          <td className={`text-right px-1 py-0.5 ${movColor(totalCells[3].f, totalCells[3].v)}`}>{fmt(totalCells[3].v, totalCells[3].dec)}</td>
+                          <td className={`text-right px-1 py-0.5 ${movColor(totalCells[4].f, totalCells[4].v)}`}>{fmt(totalCells[4].v, totalCells[4].dec)}</td>
+                          {/* Bloco Final */}
+                          <td className="text-right px-1 py-0.5 text-foreground bg-muted/40">{fmt(totalCells[5].v, totalCells[5].dec)}</td>
+                          <td className="text-right px-1 py-0.5 text-foreground bg-muted/40">{fmt(totals.pesoCabFin, 1)}</td>
+                        </>
+                      );
+                    })()}
+                    <td className="text-right px-1 py-0.5 text-foreground border-l-2 border-l-border">{fmt(totals.ganho, 0)}</td>
                     <td className="text-right px-1 py-0.5 text-foreground">{totals.dias || '–'}</td>
                     <td className={`text-right px-1 py-0.5 ${gmdColorClass(totals.gmd)}`}>
                       {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'}
