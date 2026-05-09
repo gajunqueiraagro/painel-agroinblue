@@ -1273,7 +1273,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
   const { lancamentos: lancFin } = useFinanceiro();
 
-  const [ano, setAno] = useState(filtroGlobal?.ano || String(new Date().getFullYear()));
+  const ano = filtroGlobal?.ano || String(new Date().getFullYear());
   const [viewTab, setViewTab] = useState<ViewTab>('mensal');
   const [cenario, setCenario] = useState<Cenario>('realizado');
   const [valorRebanhoMes, setValorRebanhoMes] = useState<number[]>(Array(13).fill(0));
@@ -1297,14 +1297,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   // ─── Endividamento (Realizado/Global do cliente) — RPC fn_endividamento_mensal ───
   const endividamento = useEndividamentoMensal(anoNum);
-
-  const anosDisponiveis = useMemo(() => {
-    const s = new Set<string>();
-    s.add(String(new Date().getFullYear()));
-    s.add(String(new Date().getFullYear() - 1));
-    saldosIniciais.forEach(si => s.add(String(si.ano)));
-    return Array.from(s).sort().reverse();
-  }, [saldosIniciais]);
 
   const fazendaId = fazendaAtual?.id;
 
@@ -1770,16 +1762,6 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
               <ArrowLeft className="h-4 w-4" />
             </Button>
 
-            <Select value={ano} onValueChange={setAno}>
-              <SelectTrigger className="w-[72px] h-7 text-[11px] px-2 border-border/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {anosDisponiveis.map(a => (
-                  <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
 
             {/* Cenário toggle */}
             <div className="flex items-center rounded-md border border-border/50 overflow-hidden h-7">
