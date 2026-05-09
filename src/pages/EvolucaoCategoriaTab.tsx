@@ -339,15 +339,15 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                   <th className={`text-left px-1 py-1 font-bold sticky left-0 z-10 ${isRealizado ? 'bg-primary/10 text-primary' : 'bg-orange-500/10 text-orange-700'}`} style={{ width: 90 }}>
                     Categoria
                   </th>
-                  <th className="px-0.5 py-1 font-bold text-right text-foreground bg-foreground/5" style={{ width: 46 }}>Saldo Ini.</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground" style={{ width: 42 }}>Kg/cab Ini.</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 38 }}>Entr. Ext.</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 38 }}>Saídas Ext.</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 38 }}>Evol. Saída</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 38 }}>Evol. Entr.</th>
-                  <th className={`px-0.5 py-1 font-bold text-right bg-foreground/5 ${isRealizado ? 'text-primary' : 'text-orange-700'}`} style={{ width: 46 }}>Saldo Fin.</th>
-                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground" style={{ width: 42 }}>
-                    Kg/cab Fin.
+                  <th className="px-0.5 py-1 font-bold text-right text-foreground bg-foreground/5" style={{ width: 56 }}>Saldo Inicial</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground bg-foreground/5" style={{ width: 52 }}>Kg/cab Inicial</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 56 }}>Entrada Externa</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 56 }}>Saída Externa</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-green-700" style={{ width: 56 }}>Evolução Entrada</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-destructive" style={{ width: 56 }}>Evolução Saída</th>
+                  <th className={`px-0.5 py-1 font-bold text-right bg-foreground/5 ${isRealizado ? 'text-primary' : 'text-orange-700'}`} style={{ width: 56 }}>Saldo Final</th>
+                  <th className="px-0.5 py-1 font-bold text-right text-muted-foreground bg-foreground/5" style={{ width: 52 }}>
+                    Kg/cab Final
                     {!pastosFechados && <span className="block text-[7px] font-normal text-orange-500">s/ fech.</span>}
                   </th>
                   <th className="px-0.5 py-1 font-bold text-right text-blue-700" style={{ width: 42 }}>Prod. Bio</th>
@@ -385,7 +385,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-semibold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : 'text-foreground'}`}>
                         {isFutureMonth ? '' : getVal(d, 'saldo_inicial')}
                       </td>
-                      <td className="px-0.5 py-0.5 text-right text-muted-foreground">
+                      <td className="px-0.5 py-0.5 text-right text-muted-foreground bg-foreground/[0.03]">
                         {fmtPeso(d.peso_medio_inicial)}
                       </td>
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
@@ -394,11 +394,11 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'saidas_externas')}
                       </td>
-                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
-                        {getVal(d, 'evol_cat_saida')}
-                      </td>
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'evol_cat_entrada')}
+                      </td>
+                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_saida > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                        {getVal(d, 'evol_cat_saida')}
                       </td>
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
                         {isFutureMonth ? '' :
@@ -407,7 +407,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                             : getVal(d, 'saldo_final')
                         }
                       </td>
-                      <td className="px-0.5 py-0.5 text-right text-muted-foreground">
+                      <td className="px-0.5 py-0.5 text-right text-muted-foreground bg-foreground/[0.03]">
                         {showPesoFin ? fmtPeso(d.peso_medio_final) : '–'}
                       </td>
                       <td className={`px-0.5 py-0.5 text-right font-medium ${negClass(d.producao_biologica) || (d.producao_biologica > 0 ? 'text-blue-700' : 'text-muted-foreground/30')}`}>
@@ -426,13 +426,13 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                 <tr className={`border-t font-bold ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'} text-[9px]`}>
                   <td className={`px-1 py-1 text-foreground sticky left-0 z-10 ${isRealizado ? 'bg-primary/10' : 'bg-orange-500/10'}`}>TOTAL</td>
                   <td className="px-0.5 py-1 text-right text-foreground bg-foreground/[0.03]">{isFutureMonth ? '' : getTotalVal('si')}</td>
-                  <td className="px-0.5 py-1 text-right text-muted-foreground">{fmtPeso(totais.pesoMedioIni)}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground bg-foreground/[0.03]">{fmtPeso(totais.pesoMedioIni)}</td>
                   <td className="px-0.5 py-1 text-right text-green-700">{getTotalVal('entExt')}</td>
                   <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('saiExt')}</td>
-                  <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('evolOut')}</td>
                   <td className="px-0.5 py-1 text-right text-green-700">{getTotalVal('evolIn')}</td>
+                  <td className="px-0.5 py-1 text-right text-destructive">{getTotalVal('evolOut')}</td>
                   <td className={`px-0.5 py-1 text-right bg-foreground/[0.03] ${isRealizado ? 'text-primary' : 'text-orange-700'}`}>{isFutureMonth ? '' : getTotalVal('sf')}</td>
-                  <td className="px-0.5 py-1 text-right text-muted-foreground">{(pastosFechados || !isRealizado) ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
+                  <td className="px-0.5 py-1 text-right text-muted-foreground bg-foreground/[0.03]">{(pastosFechados || !isRealizado) ? fmtPeso(totais.pesoMedioFin) : '–'}</td>
                   <td className={`px-0.5 py-1 text-right ${negClass(totais.prodBio) || 'text-blue-700'}`}>{fmtProdBio(totais.prodBio)}</td>
                   <td className="px-0.5 py-1 text-right text-muted-foreground">{totais.diasMes || '–'}</td>
                   <td className={`px-0.5 py-1 text-right ${negClass(totais.gmd) || 'text-blue-700'}`}>{fmtGmd(totais.gmd)}</td>
@@ -460,12 +460,14 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
           </div>
 
           <div className="grid grid-cols-4 gap-x-4 gap-y-0.5 text-[9px]">
-            <div><span className="text-muted-foreground">SI:</span> <span className="font-medium text-foreground">{totais.si.toLocaleString('pt-BR')} cab</span></div>
-            <div><span className="text-muted-foreground">SF:</span> <span className="font-medium text-foreground">{totais.sf != null ? `${totais.sf.toLocaleString('pt-BR')} cab` : '—'}</span></div>
+            {/* Linha 1 — bloco inicial */}
+            <div><span className="text-muted-foreground">Saldo Inicial:</span> <span className="font-medium text-foreground">{totais.si.toLocaleString('pt-BR')} cab</span></div>
+            <div><span className="text-muted-foreground">Peso Inicial:</span> <span className="font-medium text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
             <div><span className="text-muted-foreground">Cab. Méd.:</span> <span className="font-medium text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</span></div>
             <div><span className="text-muted-foreground">Dias:</span> <span className="font-medium text-foreground">{totais.diasMes}</span></div>
-            <div><span className="text-muted-foreground">Peso Ini.:</span> <span className="font-medium text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
-            <div><span className="text-muted-foreground">Peso Fin.:</span> <span className="font-medium text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            {/* Linha 2 — bloco final + resultado */}
+            <div><span className="text-muted-foreground">Saldo Final:</span> <span className="font-medium text-foreground">{totais.sf != null ? `${totais.sf.toLocaleString('pt-BR')} cab` : '—'}</span></div>
+            <div><span className="text-muted-foreground">Peso Final:</span> <span className="font-medium text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
             <div><span className="text-muted-foreground">Prod. Bio:</span> <span className={`font-medium ${negClass(totais.prodBio) || 'text-foreground'}`}>{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
             <div><span className="text-muted-foreground">GMD:</span> <span className={`font-semibold ${negClass(totais.gmd) || 'text-blue-700'}`}>{totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/d` : '–'}</span></div>
           </div>
