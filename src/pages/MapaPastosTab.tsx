@@ -53,6 +53,27 @@ const CAT_SIGLAS: Record<string, string> = {
   mamotes_f: 'MF', desmama_f: 'DF', novilhas: 'N', vacas: 'V',
 };
 
+/**
+ * Estilo de badge da coluna Atividade — agrupado por uso semântico:
+ *   pecuaria  : cria, recria, engorda, reforma_pecuaria  (verde)
+ *   agricultura: agricultura                              (azul)
+ *   vedado    : app, reserva_legal, benfeitorias          (verde-claro/cinza)
+ *   default   : sem tipo definido                         (neutro)
+ */
+function getAtividadeBadgeClasses(tipo: string | null): string {
+  if (!tipo) return 'bg-muted/40 text-muted-foreground border-border/50';
+  if (tipo === 'cria' || tipo === 'recria' || tipo === 'engorda' || tipo === 'reforma_pecuaria') {
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  }
+  if (tipo === 'agricultura') {
+    return 'bg-sky-50 text-sky-700 border-sky-200';
+  }
+  if (tipo === 'app' || tipo === 'reserva_legal' || tipo === 'benfeitorias') {
+    return 'bg-lime-50 text-lime-700 border-lime-200';
+  }
+  return 'bg-muted/40 text-muted-foreground border-border/50';
+}
+
 interface MapaPastosTabProps {
   onBack?: () => void;
   filtroAnoInicial?: string;
@@ -471,7 +492,11 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                       <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
                         {row.pasto.nome}
                       </td>
-                      <td className="px-1 py-0.5 text-[11px] border-r border-border/30 text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">{tipoUsoLabel(row.tipoUso)}</td>
+                      <td className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
+                        <span className={`inline-flex items-center px-1.5 py-px rounded border text-[10px] font-medium ${getAtividadeBadgeClasses(row.tipoUso)}`}>
+                          {tipoUsoLabel(row.tipoUso)}
+                        </span>
+                      </td>
                       <td className="px-1 py-0.5 text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title={row.lote || ''} style={{ borderRight: blockBorder }}>
                         {row.lote || <span className="opacity-20">—</span>}
                       </td>
