@@ -393,7 +393,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   getQualidadeColor: (v: number | null) => string;
 }) {
   const colWidths = useMemo(() => {
-    const base = [115, 80, 120];
+    const base = [95, 80, 120];
     const cats = categorias.map(() => 44);
     const tail = [50, 50, 45, 42, 34];
     return [...base, ...cats, ...tail];
@@ -458,7 +458,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/30 bg-background">
       <div className="flex flex-1 min-h-0 overflow-x-auto">
-        <div className="flex min-h-0 flex-col mx-auto" style={{ width: tableWidth }}>
+        <div className="flex h-full min-h-0 flex-col mx-auto" style={{ width: tableWidth }}>
           {/* ── TABLE (THEAD sticky + TBODY + TFOOT) ── */}
           <div className="flex-1 min-h-0 overflow-y-auto pb-3">
             <table className="w-full border-separate border-spacing-0 text-[11px]" style={{ tableLayout: 'fixed' }}>
@@ -486,7 +486,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
-                  const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.3)' };
+                  const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.15)' };
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
                       <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
@@ -531,7 +531,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                         {row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 text-muted-foreground">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 2) : <span className="opacity-15">—</span>}</td>
+                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
                       <td className="px-0.5 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
                           <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
