@@ -1761,7 +1761,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
           {blocoRows.map((row, idx) => {
             // REGRA: Meta sem fonte = toda linha vazia
             const previstoSemFonte = isPrevisto && !hasPrevistoSource(row.indicadorId);
-            const tot = (previstoSemFonte || row.noTotal) ? null : totalForRow(row, viewTab, monthCutoff);
+            const tot = (previstoSemFonte || row.noTotal) ? null : totalForRow(row, viewTab, isPrevisto ? 12 : monthCutoff);
 
             return (
               <tr key={idx} className={`border-b border-border/20 hover:bg-muted/20 ${idx % 2 !== 0 ? 'bg-muted/10' : ''}`}>
@@ -1813,7 +1813,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       ? ''
                       : row.valores.some(v => isNaN(v))
                         ? '–'
-                        : (monthCutoff > 0 && tot !== null ? formatPainel(tot, row.format) : '')}
+                        : ((isPrevisto || monthCutoff > 0) && tot !== null ? formatPainel(tot, row.format) : '')}
                   </td>
                 )}
               </tr>
