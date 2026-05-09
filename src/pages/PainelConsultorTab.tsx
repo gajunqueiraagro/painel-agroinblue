@@ -22,6 +22,7 @@ import {
 } from '@/lib/painelConsultor/buildMonthlyDataFromView';
 import { useMetaGmd, type MetaGmdRow } from '@/hooks/useMetaGmd';
 import { useSnapshotStatus, type SnapshotStatusValue } from '@/hooks/useSnapshotStatus';
+import { useEndividamentoMensal, type EndividamentoSeries } from '@/hooks/useEndividamentoMensal';
 import { SnapshotStatusBanner } from '@/components/SnapshotStatusBanner';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -278,6 +279,46 @@ interface SoberanoSerie12 {
   saidasTotais:         number[];
 }
 
+/**
+ * Bloco "Endividamento" — Realizado/Global, abas Valores Mensais e Acumulados.
+ * Estoques (Dívida Inicial/Final) são mantidos como ponto-no-tempo (noTotal=true).
+ * Fluxos (Captação, Amortização, Juros) acumulam em modo='acumulado'.
+ */
+function buildBlocoEndividamento(
+  series: EndividamentoSeries,
+  modo: 'mensal' | 'acumulado',
+): Bloco {
+  const cum = (arr: number[]): number[] => {
+    const out: number[] = [];
+    let acc = 0;
+    for (const v of arr) { acc += v; out.push(acc); }
+    return out;
+  };
+  const fluxo = (arr: number[]) => modo === 'acumulado' ? cum(arr) : arr;
+  const estoque = (arr: number[]) => arr;
+
+  return {
+    nome: 'Endividamento',
+    rows: [
+      { indicador: 'Dívida Inicial Total', indicadorId: 'end_divida_inicial_total', format: 'money', valores: estoque(series.dividaInicialTotal), noTotal: true },
+      { indicador: '→ Pecuária',           indicadorId: 'end_divida_inicial_pec',   format: 'money', valores: estoque(series.dividaInicialPec),   noTotal: true },
+      { indicador: '→ Agricultura',        indicadorId: 'end_divida_inicial_agri',  format: 'money', valores: estoque(series.dividaInicialAgri),  noTotal: true },
+      { indicador: 'Captação Total',       indicadorId: 'end_captacao_total',       format: 'money', valores: fluxo(series.captacaoTotal) },
+      { indicador: '→ Pecuária',           indicadorId: 'end_captacao_pec',         format: 'money', valores: fluxo(series.captacaoPec) },
+      { indicador: '→ Agricultura',        indicadorId: 'end_captacao_agri',        format: 'money', valores: fluxo(series.captacaoAgri) },
+      { indicador: 'Amortização Total',    indicadorId: 'end_amortizacao_total',    format: 'money', valores: fluxo(series.amortizacaoTotal) },
+      { indicador: '→ Pecuária',           indicadorId: 'end_amortizacao_pec',      format: 'money', valores: fluxo(series.amortizacaoPec) },
+      { indicador: '→ Agricultura',        indicadorId: 'end_amortizacao_agri',     format: 'money', valores: fluxo(series.amortizacaoAgri) },
+      { indicador: 'Juros Total',          indicadorId: 'end_juros_total',          format: 'money', valores: fluxo(series.jurosTotal) },
+      { indicador: '→ Pecuária',           indicadorId: 'end_juros_pec',            format: 'money', valores: fluxo(series.jurosPec) },
+      { indicador: '→ Agricultura',        indicadorId: 'end_juros_agri',           format: 'money', valores: fluxo(series.jurosAgri) },
+      { indicador: 'Dívida Final Total',   indicadorId: 'end_divida_final_total',   format: 'money', valores: estoque(series.dividaFinalTotal), noTotal: true },
+      { indicador: '→ Pecuária',           indicadorId: 'end_divida_final_pec',     format: 'money', valores: estoque(series.dividaFinalPec),   noTotal: true },
+      { indicador: '→ Agricultura',        indicadorId: 'end_divida_final_agri',    format: 'money', valores: estoque(series.dividaFinalAgri),  noTotal: true },
+    ],
+  };
+}
+
 function buildBlocosForTab(
   d: MonthlyData,
   tab: ViewTab,
@@ -286,6 +327,7 @@ function buildBlocosForTab(
   pesoSnap?: PesoSnapshot,
   dezPesoSnap?: number,
   soberano?: SoberanoSerie12,
+  endividamento?: EndividamentoSeries,
 ): Bloco[] {
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -381,6 +423,16 @@ function buildBlocosForTab(
       }
     : null;
 
+  // ─── Bloco "Endividamento" — Realizado/Global, Mensal e Acumulado ────
+  // RPC fn_endividamento_mensal já retorna valores por mês (estoques + fluxos);
+  // buildBlocoEndividamento aplica acumulação só nos fluxos quando modo='acumulado'.
+  const blocoEndividamentoMensal: Bloco | null = endividamento
+    ? buildBlocoEndividamento(endividamento, 'mensal')
+    : null;
+  const blocoEndividamentoAcum: Bloco | null = endividamento
+    ? buildBlocoEndividamento(endividamento, 'acumulado')
+    : null;
+
   switch (tab) {
     case 'mensal':
       return [
@@ -415,6 +467,7 @@ function buildBlocosForTab(
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
+        ...(blocoEndividamentoMensal ? [blocoEndividamentoMensal] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -498,6 +551,7 @@ function buildBlocosForTab(
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
+        ...(blocoEndividamentoAcum ? [blocoEndividamentoAcum] : []),
         {
           nome: 'Patrimônio',
           rows: [
@@ -1241,6 +1295,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     lancFinExterno: lancFin.length > 0 ? lancFin : undefined,
   });
 
+  // ─── Endividamento (Realizado/Global do cliente) — RPC fn_endividamento_mensal ───
+  const endividamento = useEndividamentoMensal(anoNum);
+
   const anosDisponiveis = useMemo(() => {
     const s = new Set<string>();
     s.add(String(new Date().getFullYear()));
@@ -1553,8 +1610,8 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       arrobas: realPesoSnap.arrobas.slice(1),
     };
     const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie]);
+    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -1854,6 +1911,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-0.5">
+                {b.nome === 'Endividamento' && (
+                  <div className="text-[11px] text-muted-foreground italic px-2 py-1">
+                    Endividamento exibido em base GLOBAL do cliente.
+                  </div>
+                )}
                 {renderBlocoTable(b.rows)}
               </CollapsibleContent>
             </Collapsible>

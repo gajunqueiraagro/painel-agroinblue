@@ -202,6 +202,23 @@ const FONTE_FIN_SOBERANO_REAL: FonteIndicador = {
   observacao: 'Etapa 2C — bloco de auditoria visual. Caixa disponível (saldo) ainda em Etapa 2D.',
 };
 
+// ─── Endividamento (Realizado, Global do cliente) ───
+// Fonte: RPC fn_endividamento_mensal — agrega financiamento_parcelas JOIN financiamentos.
+// NUNCA usa financeiro_lancamentos_v2 para este bloco.
+const FONTE_ENDIVIDAMENTO_REAL: FonteIndicador = {
+  fonte_tipo: 'calculado',
+  fonte_tabela: 'financiamento_parcelas + financiamentos (via fn_endividamento_mensal)',
+  fonte_campo: 'divida_inicial / captacao / amortizacao / juros / divida_final por mes (split pec/agri)',
+  regra_calculo: 'D1 split por tipo_financiamento; D2 captação = (valor_total − valor_entrada) por data_contrato; '
+    + 'D3 dívida = principal em aberto; D4 quitados participam do histórico; D5 fonte parcelas JOIN financiamentos; '
+    + 'D6 cálculo server-side (não recalcular no front).',
+  regra_prioridade: '1. RPC fn_endividamento_mensal (consolidado do cliente)',
+  tela_origem: '/v2/painel-consultor',
+  tela_label: 'PC-100 / Endividamento',
+  permite_fallback: false,
+  observacao: 'Sempre GLOBAL do cliente, mesmo com fazenda específica selecionada.',
+};
+
 // ─── Financeiro Competência ───
 const FONTE_FIN_COMP_REAL: FonteIndicador = {
   fonte_tipo: 'financeiro_v2',
@@ -401,6 +418,25 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'sob_amort':            { id: 'sob_amort',            nome: 'Amortizações',              aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
   'sob_div':              { id: 'sob_div',              nome: 'Dividendos / Retiradas',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
   'sob_saidas_totais':    { id: 'sob_saidas_totais',    nome: 'Saídas Totais',             aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: SEM_PREVISTO },
+
+  // ─── Endividamento — bloco PC-100 (Realizado/Global do cliente) ─────
+  // Renderizado nas abas Valores Mensais e Acumulados — aba canônica = 'mensal'.
+  // Fonte: RPC fn_endividamento_mensal. Fora de escopo da META.
+  'end_divida_inicial_total': { id: 'end_divida_inicial_total', nome: 'Dívida Inicial Total', aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_divida_inicial_pec':   { id: 'end_divida_inicial_pec',   nome: '→ Pecuária',           aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_divida_inicial_agri':  { id: 'end_divida_inicial_agri',  nome: '→ Agricultura',        aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_captacao_total':       { id: 'end_captacao_total',       nome: 'Captação Total',       aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_captacao_pec':         { id: 'end_captacao_pec',         nome: '→ Pecuária',           aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_captacao_agri':        { id: 'end_captacao_agri',        nome: '→ Agricultura',        aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_amortizacao_total':    { id: 'end_amortizacao_total',    nome: 'Amortização Total',    aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_amortizacao_pec':      { id: 'end_amortizacao_pec',      nome: '→ Pecuária',           aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_amortizacao_agri':     { id: 'end_amortizacao_agri',     nome: '→ Agricultura',        aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_juros_total':          { id: 'end_juros_total',          nome: 'Juros Total',          aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_juros_pec':            { id: 'end_juros_pec',            nome: '→ Pecuária',           aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_juros_agri':           { id: 'end_juros_agri',           nome: '→ Agricultura',        aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_divida_final_total':   { id: 'end_divida_final_total',   nome: 'Dívida Final Total',   aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_divida_final_pec':     { id: 'end_divida_final_pec',     nome: '→ Pecuária',           aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
+  'end_divida_final_agri':    { id: 'end_divida_final_agri',    nome: '→ Agricultura',        aba: 'mensal', bloco: 'Endividamento', realizado: FONTE_ENDIVIDAMENTO_REAL, previsto: SEM_PREVISTO },
 };
 
 /** Lookup by indicator name (display name) */
