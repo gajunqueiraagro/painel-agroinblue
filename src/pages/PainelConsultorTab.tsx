@@ -1290,21 +1290,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const anoNum = Number(ano);
 
-  // ─── Indicadores financeiros SOBERANOS (Etapa 2C) — bloco "Financeiro Soberano (Auditoria)".
-  // Consome usePainelConsultorData passando lancFin/lancPec já carregados (sem refetch).
-  // viewMode='mes' garante que indicador.serieAno[1..12] seja RAW mensal — r() aplica
-  // a transformação por aba (mensal/medio/acumulado/media_periodo) dentro de buildBlocosForTab.
-  const pcdSoberano = usePainelConsultorData({
-    ano: anoNum,
-    mes: filtroGlobal?.mes || (new Date().getMonth() + 1),
-    viewMode: 'mes',
-    lancPecExterno: lancPec.length > 0 ? lancPec : undefined,
-    lancFinExterno: lancFin.length > 0 ? lancFin : undefined,
-  });
-
-  // ─── Endividamento (Realizado/Global do cliente) — RPC fn_endividamento_mensal ───
-  const endividamento = useEndividamentoMensal(anoNum);
-
+  // usePlanejamentoFinanceiro movido para CIMA (A4) — necessário para materializar
+  // gridMeta antes de chamar usePainelConsultorData. buildGridMeta passa a alimentar
+  // o slot serieMeta dos 13 indicadores soberanos via gridMetaExterno (somente quando
+  // cenario === 'meta', para evitar custo no Realizado).
   const fazendaId = fazendaAtual?.id;
 
   const {
@@ -1314,6 +1303,37 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     lancamentosRebanho: lancRebanhoMeta,
     lancamentosProjetos: lancProjetosMeta,
   } = usePlanejamentoFinanceiro(anoNum, fazendaId);
+
+  // Materializa grid META para alimentar usePainelConsultorData (A4).
+  // Gate: SOMENTE quando cenario === 'meta'. No Realizado, retorna undefined
+  // — evita custo de buildGridMeta() e mantém slot serieMeta dos indicadores
+  // soberanos como undefined (comportamento idêntico ao anterior).
+  const gridMetaPara_PCD = useMemo<SubcentroGrid[] | undefined>(
+    () => {
+      if (cenario !== 'meta') return undefined;
+      const grid = buildGridMeta?.() ?? [];
+      return grid.length > 0 ? grid : undefined;
+    },
+    [cenario, buildGridMeta],
+  );
+
+  // ─── Indicadores financeiros SOBERANOS (Etapa 2C) — bloco "Financeiro Soberano (Auditoria)".
+  // Consome usePainelConsultorData passando lancFin/lancPec já carregados (sem refetch).
+  // viewMode='mes' garante que indicador.serieAno[1..12] seja RAW mensal — r() aplica
+  // a transformação por aba (mensal/medio/acumulado/media_periodo) dentro de buildBlocosForTab.
+  // gridMetaExterno (A4) alimenta o slot serieMeta nos 13 indicadores soberanos
+  // — populado SOMENTE quando cenario === 'meta'.
+  const pcdSoberano = usePainelConsultorData({
+    ano: anoNum,
+    mes: filtroGlobal?.mes || (new Date().getMonth() + 1),
+    viewMode: 'mes',
+    lancPecExterno: lancPec.length > 0 ? lancPec : undefined,
+    lancFinExterno: lancFin.length > 0 ? lancFin : undefined,
+    gridMetaExterno: gridMetaPara_PCD,
+  });
+
+  // ─── Endividamento (Realizado/Global do cliente) — RPC fn_endividamento_mensal ───
+  const endividamento = useEndividamentoMensal(anoNum);
 
   // ─── Status dos pilares de governança (mês atual selecionado) ───
   const mesAtualRef = useMemo(() => {
