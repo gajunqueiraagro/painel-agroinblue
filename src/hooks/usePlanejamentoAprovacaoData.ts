@@ -1,5 +1,5 @@
 /**
- * usePlanejamentoAprovacaoData — V1 (A1) leitura executiva da META do ano.
+ * usePlanejamentoAprovacaoData — leitura executiva da META do ano.
  *
  * Camada única para a tela "Visão Geral Planejamento" (pré-aprovação da META).
  * Consome PC-100 (usePainelConsultorData) e gridMeta canônico
@@ -9,14 +9,28 @@
  * Regra de ouro: campo retorna null quando a fonte soberana não entrega
  * contrato seguro. UI exibe "Sem base validada" para esses campos.
  *
- * Mapeamento auditado em A1.0 com decisões humanas finais aplicadas.
- *
- * Etapa A1: meta info + abertura do ano + média histórica + alertas
- * entram nas etapas A2/A3/A4 (campos retornam stub aqui).
+ * A1: TopoCards/ProducaoVendas/CustosDesembolsos via PC-100 (META + ano-1).
+ * A2: meta_versoes.status, abertura do ano, flags de transparência de área.
+ * A3: média histórica 3a (pendente).
+ * A4: alertas leves (pendente).
  */
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
+import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
+import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
+
+// Cliente Supabase casteado de forma frouxa: alguns campos usados aqui
+// (`status` em meta_versoes pós-A2.1; `status_operacional` em fazendas;
+// várias colunas em fechamento_area_snapshot) ainda não estão refletidos
+// em src/integrations/supabase/types.ts. Mesmo padrão usado em outros
+// hooks canônicos (PC-100, useFechamentoArea). Trocar quando types.ts
+// for regenerado.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseLoose = any;
+const sbLoose = supabase as SupabaseLoose;
 
 // ─── Tipos públicos ────────────────────────────────────────────────────────
 
@@ -48,7 +62,9 @@ interface AberturaAno {
     | 'sem_base_validada'
     | null;
   area_produtiva_ha: number | null;
-  area_provisoria: boolean;
+  area_provisoria: boolean;                       // sempre true em V1
+  area_inclui_fazenda_sem_rebanho: boolean;       // NOVO A2
+  area_alerta: string | null;                     // NOVO A2
 }
 
 interface IndicadorComparativo {
@@ -152,16 +168,26 @@ function somaNulableSafe(values: (number | null)[]): number | null {
 
 // ─── Hook ──────────────────────────────────────────────────────────────────
 
+/**
+ * Hook executivo de leitura para Visão Geral Planejamento.
+ *
+ * IMPORTANTE: em modo Individual (fazendaId definido), o consumidor
+ * DEVE garantir que FazendaContext.fazendaAtual.id === fazendaId
+ * antes de chamar este hook. Isso porque hooks canônicos consumidos
+ * internamente (useRebanhoOficial, usePainelConsultorData) leem o
+ * FazendaContext em vez de receber fazendaId como parâmetro. Esta
+ * é convenção estabelecida em outros hooks executivos do projeto
+ * (usePainelConsultorData, usePlanejamentoFinanceiro).
+ *
+ * Em modo Global (fazendaId=null), o hook agrega todas as fazendas
+ * pec do cliente via clienteAtual.id do ClienteContext.
+ */
 export function usePlanejamentoAprovacaoData({
   clienteId,
   fazendaId,
   ano,
   isGlobal,
 }: Params): Result {
-  // isGlobal mantido na assinatura (contrato público); valor real vem do
-  // FazendaContext via hooks subordinados.
-  void isGlobal;
-
   // gridMeta canônico — único caminho permitido para alimentar serieMeta dos
   // indicadores _finSoberano do PC-100. Acesso direto a planejamento_financeiro
   // está proibido pela regra de ouro; usePlanejamentoFinanceiro é o hub oficial.
@@ -178,7 +204,225 @@ export function usePlanejamentoAprovacaoData({
     gridMetaExterno: gridMeta,
   });
 
-  const loading = !!ppfLoading || !!pc100.loading;
+  // ─── A2: hooks canônicos para abertura do ano ────────────────────────────
+  // useRebanhoOficial é o hub oficial declarado para qualquer leitura de
+  // rebanho. Em Individual, lê fazendaAtual.id do FazendaContext (ver JSDoc).
+  const rebanhoOficial = useRebanhoOficial({
+    ano,
+    cenario: 'realizado',
+    global: isGlobal,
+    enabled: !!clienteId,
+  });
+  // Destructure para deps explícitas no useMemo (exhaustive-deps).
+  const {
+    rawCategorias: rebanhoRawCategorias,
+    getFazendaMes: rebanhoGetFazendaMes,
+    loading: rebanhoLoading,
+  } = rebanhoOficial;
+
+  const snapshot = useSnapshotAreaAnual(
+    ano,
+    fazendaId ?? undefined,
+    isGlobal,
+    clienteId ?? undefined,
+  );
+
+  // ─── A2: queries declaradas (acesso direto autorizado) ───────────────────
+  // meta_versoes, valor_rebanho_fechamento, financeiro_saldos_bancarios_v2,
+  // fazendas, fechamento_area_snapshot, fechamento_pastos, fechamento_pasto_itens.
+  const metaQuery = useQuery({
+    queryKey: ['planej-meta-info', clienteId, fazendaId ?? 'global', ano],
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      // Cast `as any`: types do Supabase são gerados a partir do schema antes
+      // da migration A2.1; coluna `status` em meta_versoes ainda não aparece
+      // no types.ts. Padrão do codebase para esses casos.
+      let q = sbLoose.from('meta_versoes')
+        .select('id, status, created_at, user_id, usuario_email, fazenda_id')
+        .eq('cliente_id', clienteId)
+        .eq('ano', ano)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (fazendaId) {
+        q = q.eq('fazenda_id', fazendaId);
+      } else {
+        q = q.is('fazenda_id', null);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data?.[0] ?? null) as {
+        id: string;
+        status: string;
+        created_at: string;
+        user_id: string | null;
+        usuario_email: string | null;
+        fazenda_id: string | null;
+      } | null;
+    },
+  });
+
+  const vrfQuery = useQuery({
+    queryKey: ['planej-vrf-init', clienteId, fazendaId ?? 'global', ano],
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<{ valor: number | null; completo: boolean }> => {
+      const anoMesDez = `${ano - 1}-12`;
+
+      if (isGlobal) {
+        // Cast `as any`: status_operacional existe na tabela mas não nos
+        // types gerados (mesma situação de useFechamentoArea).
+        const { data: fazendas, error: errFaz } = await sbLoose.from('fazendas')
+          .select('id, nome')
+          .eq('cliente_id', clienteId)
+          .eq('tem_pecuaria', true)
+          .eq('status_operacional', 'ativa');
+        if (errFaz) throw errFaz;
+        const idsPec = ((fazendas ?? []) as { id: string }[]).map(f => f.id);
+        if (idsPec.length === 0) return { valor: null, completo: false };
+
+        const { data: vrf, error: errVrf } = await sbLoose.from('valor_rebanho_fechamento')
+          .select('fazenda_id, status, valor_total')
+          .eq('cliente_id', clienteId)
+          .eq('ano_mes', anoMesDez)
+          .eq('status', 'fechado')
+          .in('fazenda_id', idsPec);
+        if (errVrf) throw errVrf;
+
+        const fazendasComFechamento = new Set(((vrf ?? []) as { fazenda_id: string }[]).map(r => r.fazenda_id));
+        const todasFechadas = idsPec.every(id => fazendasComFechamento.has(id));
+
+        if (!todasFechadas) {
+          return { valor: null, completo: false };
+        }
+        const total = ((vrf ?? []) as { valor_total: number | null }[])
+          .reduce((acc, r) => acc + Number(r.valor_total ?? 0), 0);
+        return { valor: total, completo: true };
+      }
+
+      // Individual
+      if (!fazendaId) return { valor: null, completo: false };
+      const { data, error } = await sbLoose.from('valor_rebanho_fechamento')
+        .select('valor_total, status')
+        .eq('cliente_id', clienteId)
+        .eq('fazenda_id', fazendaId)
+        .eq('ano_mes', anoMesDez)
+        .eq('status', 'fechado')
+        .limit(1);
+      if (error) throw error;
+      const row = (data as { valor_total: number | null }[] | null)?.[0];
+      if (!row) return { valor: null, completo: false };
+      return { valor: Number(row.valor_total ?? 0), completo: true };
+    },
+  });
+
+  // Caixa pertence ao cliente/Administrativo, não à fazenda.
+  // Em modo Individual TAMBÉM somar todas as contas do cliente.
+  const caixaQuery = useQuery({
+    queryKey: ['planej-caixa-init', clienteId, ano],
+    enabled: !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<number | null> => {
+      const anoMesDez = `${ano - 1}-12`;
+      const { data, error } = await sbLoose.from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final')
+        .eq('cliente_id', clienteId)
+        .eq('ano_mes', anoMesDez);
+      if (error) throw error;
+      const rows = (data ?? []) as { saldo_final: number | null }[];
+      if (rows.length === 0) return null;
+      return rows.reduce((acc, r) => acc + Number(r.saldo_final ?? 0), 0);
+    },
+  });
+
+  // V1: detecção de transparência sobre BUG conhecido em useSnapshotAreaAnual.
+  // O hook canônico soma área Global incluindo fazendas pec ativas SEM rebanho
+  // efetivo. Não corrigimos a fonte agora (decisão arquitetural — área é dado
+  // histórico de uso do solo, não pode ser recalculada). Apenas sinalizamos
+  // via flag e mensagem para que a UI futura mostre alerta de transparência.
+  // Issue separada: "BUG ÁREA GLOBAL — useSnapshotAreaAnual soma fazendas pec
+  // ativas sem rebanho efetivo".
+  const areaBugQuery = useQuery({
+    queryKey: ['planej-area-bug-check', clienteId, ano],
+    enabled: !!clienteId && isGlobal,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    queryFn: async (): Promise<{
+      fazendasPec: { id: string; nome: string }[];
+      semRebanho: { id: string; nome: string; area: number }[];
+    }> => {
+      const anoMesJan = `${ano}-01`;
+
+      const { data: fazendasRaw, error: errFaz } = await sbLoose.from('fazendas')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('tem_pecuaria', true)
+        .eq('status_operacional', 'ativa');
+      if (errFaz) throw errFaz;
+      const fazendasPec = ((fazendasRaw ?? []) as { id: string; nome: string }[])
+        .map(f => ({ id: f.id, nome: f.nome }));
+      if (fazendasPec.length === 0) return { fazendasPec, semRebanho: [] };
+
+      const { data: snapsRaw, error: errSnap } = await sbLoose.from('fechamento_area_snapshot')
+        .select('fazenda_id, area_pecuaria_ha')
+        .eq('cliente_id', clienteId)
+        .eq('ano_mes', `${ano}-01-01`);
+      if (errSnap) throw errSnap;
+      const snaps = (snapsRaw ?? []) as { fazenda_id: string; area_pecuaria_ha: number | null }[];
+      const fazendasComArea = new Map<string, number>(
+        snaps
+          .filter(s => Number(s.area_pecuaria_ha) > 0)
+          .map(s => [s.fazenda_id, Number(s.area_pecuaria_ha)]),
+      );
+
+      const { data: fpRaw, error: errFp } = await sbLoose.from('fechamento_pastos')
+        .select('id, fazenda_id')
+        .eq('cliente_id', clienteId)
+        .eq('ano_mes', anoMesJan)
+        .eq('status', 'fechado');
+      if (errFp) throw errFp;
+      const fp = (fpRaw ?? []) as { id: string; fazenda_id: string }[];
+
+      const cabecasPorFazenda = new Map<string, number>();
+      if (fp.length > 0) {
+        const { data: fpiRaw, error: errFpi } = await sbLoose.from('fechamento_pasto_itens')
+          .select('fechamento_id, quantidade')
+          .in('fechamento_id', fp.map(r => r.id));
+        if (errFpi) throw errFpi;
+        const fpi = (fpiRaw ?? []) as { fechamento_id: string; quantidade: number | null }[];
+
+        const fechToFazenda = new Map<string, string>(fp.map(r => [r.id, r.fazenda_id]));
+        for (const item of fpi) {
+          const fid = fechToFazenda.get(item.fechamento_id);
+          if (!fid) continue;
+          const qtd = Number(item.quantidade ?? 0);
+          cabecasPorFazenda.set(fid, (cabecasPorFazenda.get(fid) ?? 0) + qtd);
+        }
+      }
+
+      const semRebanho = fazendasPec
+        .filter(f => fazendasComArea.has(f.id))
+        .filter(f => (cabecasPorFazenda.get(f.id) ?? 0) === 0)
+        .map(f => ({ id: f.id, nome: f.nome, area: fazendasComArea.get(f.id)! }));
+
+      return { fazendasPec, semRebanho };
+    },
+  });
+
+  const loading =
+    !!ppfLoading
+    || !!pc100.loading
+    || metaQuery.isLoading
+    || vrfQuery.isLoading
+    || caixaQuery.isLoading
+    || snapshot.loading
+    || areaBugQuery.isLoading
+    || !!rebanhoLoading;
 
   const data = useMemo<PlanejamentoAprovacaoData | null>(() => {
     if (!clienteId) return null;
@@ -221,22 +465,91 @@ export function usePlanejamentoAprovacaoData({
       rebanho_final_arrobas,
     };
 
-    // ─── AberturaAno (V1 stub — A2 popula) ────────────────────────────
+    // ─── AberturaAno ──────────────────────────────────────────────────
+    //
+    // V1: regra conservadora tudo-ou-nada. Em Global, se qualquer fazenda
+    // pec ativa não tem saldo Jan ou está com rebanho zero, retornamos null.
+    // Não somamos parcial para não exibir número incompleto sem aviso.
+    //
+    // Caso típico tratado: fazenda esvaziada antes/durante Dez/(ano-1) — o
+    // saldo_inicial Jan vem do P1 fechado Dez/(ano-1) e a regra dispara null.
+    // Caso NJ Sta. Luzia 2026 enquadra-se aqui.
+    //
+    // RISCO RESIDUAL ACEITO em V1: se fazenda for esvaziada DURANTE Jan via
+    // lançamento Realizado, saldo_inicial Jan ainda mostra o número Dez/(ano-1)
+    // (gate não dispara). Refinar em A3+ se aparecer caso real.
+    let rebanho_inicial_cabecas: number | null = null;
+    let rebanho_inicial_peso_medio: number | null = null;
+    if (isGlobal) {
+      const fazendasPec = areaBugQuery.data?.fazendasPec ?? [];
+      if (fazendasPec.length > 0) {
+        const cabecasPorFazenda = new Map<string, number>();
+        for (const r of rebanhoRawCategorias) {
+          if (r.mes !== 1) continue;
+          cabecasPorFazenda.set(
+            r.fazenda_id,
+            (cabecasPorFazenda.get(r.fazenda_id) ?? 0) + r.saldo_inicial,
+          );
+        }
+        const todasComRebanho = fazendasPec.every(
+          f => (cabecasPorFazenda.get(f.id) ?? 0) > 0,
+        );
+        if (todasComRebanho) {
+          const fazJan = rebanhoGetFazendaMes(1);
+          const cabecas = fazJan?.cabecasInicio ?? 0;
+          const pesoTotal = fazJan?.pesoInicioKg ?? 0;
+          if (cabecas > 0 && pesoTotal > 0) {
+            rebanho_inicial_cabecas = cabecas;
+            rebanho_inicial_peso_medio = pesoTotal / cabecas;
+          }
+        }
+      }
+    } else {
+      // Individual
+      const fazJan = rebanhoGetFazendaMes(1);
+      const cabecas = fazJan?.cabecasInicio ?? 0;
+      const pesoTotal = fazJan?.pesoInicioKg ?? 0;
+      if (cabecas > 0 && pesoTotal > 0) {
+        rebanho_inicial_cabecas = cabecas;
+        rebanho_inicial_peso_medio = pesoTotal / cabecas;
+      }
+    }
+
+    const valor_inicial_rebanho = vrfQuery.data?.valor ?? null;
+    const valor_inicial_p2_fechado = !!vrfQuery.data?.completo;
+
+    const caixa_inicial = caixaQuery.data ?? null;
+
+    const area_produtiva_ha = snapshot.fazendasAtivasCarregadas
+      ? (snapshot.areaMensal[0] ?? null)
+      : (isGlobal ? null : (snapshot.areaMensal[0] ?? null));
+    const area_provisoria = true;
+
+    const semRebanhoCount = areaBugQuery.data?.semRebanho.length ?? 0;
+    const area_inclui_fazenda_sem_rebanho = isGlobal && semRebanhoCount > 0;
+    const area_alerta = area_inclui_fazenda_sem_rebanho && areaBugQuery.data
+      ? `Área global pecuária inclui ${semRebanhoCount} fazenda(s) sem rebanho efetivo no período (${
+          areaBugQuery.data.semRebanho.map(f => `${f.nome}: ${f.area.toFixed(2)} ha`).join(', ')
+        }). Indicadores por hectare podem estar subestimados. Bug conhecido em useFechamentoArea — aguardar Módulo Oficial de Áreas.`
+      : null;
+
     // TODO(A1): divida_inicial retorna null porque a Camada B do PC-100
     // ainda não expõe saldo devedor de abertura. Hoje Camada B só entrega
     // fluxo (juros/amortizações). Não usar useFinanciamentosPainel direto
     // — regra de ouro. Quando Camada B evoluir, mudar divida_inicial_fonte
     // para 'pc100_camada_b'.
     const comoAnoComeca: AberturaAno = {
-      rebanho_inicial_cabecas: null,
-      rebanho_inicial_peso_medio: null,
-      valor_inicial_rebanho: null,
-      valor_inicial_p2_fechado: false,
-      caixa_inicial: null,
+      rebanho_inicial_cabecas,
+      rebanho_inicial_peso_medio,
+      valor_inicial_rebanho,
+      valor_inicial_p2_fechado,
+      caixa_inicial,
       divida_inicial: null,
       divida_inicial_fonte: 'camada_b_pendente',
-      area_produtiva_ha: null,
-      area_provisoria: true,
+      area_produtiva_ha,
+      area_provisoria,
+      area_inclui_fazenda_sem_rebanho,
+      area_alerta,
     };
 
     // ─── ProducaoVendas ───────────────────────────────────────────────
@@ -391,12 +704,15 @@ export function usePlanejamentoAprovacaoData({
       },
     ];
 
-    // ─── meta (V1 stub — A2 popula via meta_versoes) ──────────────────
+    // ─── meta (A2: query meta_versoes) ────────────────────────────────
+    const metaRow = metaQuery.data;
+    const metaStatus: 'rascunho' | 'aprovada' =
+      metaRow?.status === 'aprovada' ? 'aprovada' : 'rascunho';
     const metaInfo: MetaInfo = {
-      versao_id: null,
-      status: 'rascunho',
-      aprovada_em: null,
-      aprovada_por: null,
+      versao_id: metaRow?.id ?? null,
+      status: metaStatus,
+      aprovada_em: metaStatus === 'aprovada' ? (metaRow?.created_at ?? null) : null,
+      aprovada_por: metaStatus === 'aprovada' ? (metaRow?.usuario_email ?? null) : null,
     };
 
     // ─── alertas (V1 vazio — A4 popula) ───────────────────────────────
@@ -434,9 +750,22 @@ export function usePlanejamentoAprovacaoData({
         anos_validos_historico: 0,
       },
     };
-    // gridMeta não entra nos deps: ele só influencia data via pc100
+    // gridMeta não entra nos deps: só influencia data via pc100
     // (gridMetaExterno → _finSoberano.serieMeta). pc100 já cobre a invalidação.
-  }, [clienteId, loading, pc100]);
+  }, [
+    clienteId,
+    loading,
+    isGlobal,
+    pc100,
+    metaQuery.data,
+    vrfQuery.data,
+    caixaQuery.data,
+    snapshot.areaMensal,
+    snapshot.fazendasAtivasCarregadas,
+    areaBugQuery.data,
+    rebanhoRawCategorias,
+    rebanhoGetFazendaMes,
+  ]);
 
   if (!clienteId) {
     return { loading: false, error: null, data: null };
