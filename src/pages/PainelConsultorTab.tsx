@@ -1655,8 +1655,33 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     isPrevisto,
   ]);
 
+  // ─── C4.1 — Bloco "ÁREAS META — USO DO SOLO" ──────────────────────────
+  // Lê os 6 campos expostos pelo PC-100 (commit 13d4eefc). Área é dado
+  // ESTOQUE mensal — NÃO acumula em viewMode='periodo'. Construído fora dos
+  // builders para passar `valores` direto ao renderBlocoTable, sem
+  // transformação por viewTab. noTotal=true → coluna Total blank (estoque).
+  const areaPecMetaPorMes   = pcdSoberano.areaPecuariaMetaPorMes    ?? Array(12).fill(null);
+  const areaAgriMetaPorMes  = pcdSoberano.areaAgriculturaMetaPorMes ?? Array(12).fill(null);
+  const areaTotalMetaPorMes = pcdSoberano.areaTotalMetaPorMes       ?? Array(12).fill(null);
+  const isAreaMetaVazia =
+    areaPecMetaPorMes.every(v => v == null) &&
+    areaAgriMetaPorMes.every(v => v == null) &&
+    areaTotalMetaPorMes.every(v => v == null);
+  const blocoAreasMeta: Bloco = useMemo(() => {
+    const toNan = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
+    return {
+      nome: 'ÁREAS META — USO DO SOLO',
+      rows: [
+        { indicador: 'Área Pecuária META (ha)',    format: 'padrao', valores: toNan(areaPecMetaPorMes),   indicadorId: 'area_pec_meta',   noTotal: true },
+        { indicador: 'Área Agricultura META (ha)', format: 'padrao', valores: toNan(areaAgriMetaPorMes),  indicadorId: 'area_agri_meta',  noTotal: true },
+        { indicador: 'Área Total META (ha)',       format: 'padrao', valores: toNan(areaTotalMetaPorMes), indicadorId: 'area_total_meta', noTotal: true },
+      ],
+    };
+  }, [areaPecMetaPorMes, areaAgriMetaPorMes, areaTotalMetaPorMes]);
+
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
+    let result: Bloco[];
     if (isPrevisto) {
       // Valor reb. ini META: Jan = realizado Dez ano anterior, Fev+ = META final mês anterior
       const valorRebIniMeta = [valorRebanhoMes[0] ?? 0, ...valorRebanhoMetaMes.slice(0, 11)];
@@ -1668,21 +1693,37 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        return buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
+        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
+      } else {
+        // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
+        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
       }
-
-      // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-      return buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
+    } else {
+      // Realizado: slice(1) removes Dec prev year index for 12-month arrays
+      const realPesoSnap12: PesoSnapshot = {
+        cabecas: realPesoSnap.cabecas.slice(1),
+        pesoMedio: realPesoSnap.pesoMedio.slice(1),
+        arrobas: realPesoSnap.arrobas.slice(1),
+      };
+      const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
+      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined);
     }
-    // Realizado: slice(1) removes Dec prev year index for 12-month arrays
-    const realPesoSnap12: PesoSnapshot = {
-      cabecas: realPesoSnap.cabecas.slice(1),
-      pesoMedio: realPesoSnap.pesoMedio.slice(1),
-      arrobas: realPesoSnap.arrobas.slice(1),
-    };
-    const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-    return buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined);
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series]);
+
+    // C4.1 — injetar bloco ÁREAS META logo APÓS "Financeiro Soberano (Auditoria)";
+    // se Soberano ausente, antes de "Endividamento"; senão, no fim.
+    const idxSob = result.findIndex(b => b.nome === 'Financeiro Soberano (Auditoria)');
+    if (idxSob >= 0) {
+      result = [...result.slice(0, idxSob + 1), blocoAreasMeta, ...result.slice(idxSob + 1)];
+    } else {
+      const idxEnd = result.findIndex(b => b.nome === 'Endividamento');
+      if (idxEnd >= 0) {
+        result = [...result.slice(0, idxEnd), blocoAreasMeta, ...result.slice(idxEnd)];
+      } else {
+        result = [...result, blocoAreasMeta];
+      }
+    }
+    return result;
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreasMeta]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -1968,6 +2009,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       </Tooltip>
                     );
                   })()}
+                  {b.nome === 'ÁREAS META — USO DO SOLO' && isAreaMetaVazia && (
+                    <span className="inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal bg-muted text-muted-foreground border-border/60">
+                      Sem base validada
+                    </span>
+                  )}
                 </span>
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openBlocos[b.nome] ? 'rotate-180' : ''}`} />
               </CollapsibleTrigger>
@@ -1975,6 +2021,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 {b.nome === 'Endividamento' && (
                   <div className="text-[11px] text-muted-foreground italic px-2 py-1">
                     Endividamento exibido em base GLOBAL do cliente.
+                  </div>
+                )}
+                {b.nome === 'ÁREAS META — USO DO SOLO' && (
+                  <div className="text-[11px] text-muted-foreground italic px-2 py-1">
+                    Fonte oficial de área planejada por mês. Não acumulado no período.
                   </div>
                 )}
                 {renderBlocoTable(b.rows)}
