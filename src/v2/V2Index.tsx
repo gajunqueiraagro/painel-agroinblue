@@ -15,6 +15,7 @@ import { V2MobileNav } from './components/V2MobileNav';
 import { V2ContextDrawer } from './components/V2ContextDrawer';
 import { V2Home } from './pages/V2Home';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
+import { V2AreasMeta } from './pages/V2AreasMeta';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
 import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
@@ -500,6 +501,7 @@ export default function V2Index() {
         ocultarFiltrosPeriodo
       />
     );
+    if (section === 'areas-meta') return <V2AreasMeta ano={ano} />;
     if (section === 'meta-precos') {
       if (isGlobal) {
         return (
