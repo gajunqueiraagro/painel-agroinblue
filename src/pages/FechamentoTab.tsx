@@ -815,14 +815,6 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
           {/* ── COL 1: Contexto / Filtros ── */}
           <div className="flex flex-col gap-1.5 min-w-[120px]">
-            <div className="flex items-center gap-1.5">
-              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-                <SelectTrigger className="w-[68px] h-7 text-[11px] font-bold px-2"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {anosDisp.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
@@ -907,7 +899,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
-            <table className="text-[10px] border-collapse table-fixed w-full">
+            <table className="text-[10px] border-collapse table-fixed w-fit">
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
                   <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-20 border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Cabeças</th>
@@ -922,7 +914,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                       </Tooltip>
                     );
                   })}
-                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 min-w-[48px] border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Total</th>
+                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-[64px] border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Total</th>
                 </tr>
               </thead>
               <tbody>
