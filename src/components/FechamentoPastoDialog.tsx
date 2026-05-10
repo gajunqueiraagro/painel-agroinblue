@@ -152,7 +152,7 @@ export function FechamentoPastoDialog({
   const [status, setStatus] = useState(fechamento.status);
 
   const [loteMes, setLoteMes] = useState(fechamento.lote_mes || '');
-  const [tipoUsoMes, setTipoUsoMes] = useState(fechamento.tipo_uso_mes || '');
+  const [tipoUsoMes, setTipoUsoMes] = useState(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
   const [qualidadeMes, setQualidadeMes] = useState<number | null>(fechamento.qualidade_mes);
   const [observacaoMes, setObservacaoMes] = useState(fechamento.observacao_mes || '');
 
@@ -183,7 +183,7 @@ export function FechamentoPastoDialog({
             : { categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' };
         }));
         setLoteMes(fechamento.lote_mes || '');
-        setTipoUsoMes(fechamento.tipo_uso_mes || '');
+        setTipoUsoMes(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
         setQualidadeMes(fechamento.qualidade_mes);
         setObservacaoMes(fechamento.observacao_mes || '');
       } else {
