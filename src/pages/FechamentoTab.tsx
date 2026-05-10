@@ -186,9 +186,10 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     }
     supabase
       .from('fechamento_pastos')
-      .select('ano_mes, status, pastos!inner(ativo)')
+      .select('ano_mes, status, pastos!inner(ativo, tipo_uso)')
       .eq('fazenda_id', fazendaAtual.id)
       .eq('pastos.ativo', true)
+      .neq('pastos.tipo_uso', 'divergencia')
       .like('ano_mes', `${anoFiltro}-%`)
       .then(({ data }) => {
         if (!data) return;
