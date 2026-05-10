@@ -899,66 +899,74 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
-            <table className="text-[10px] border-collapse table-fixed w-fit">
+            <table className="text-[10px] border-collapse table-fixed w-[530px] min-w-[530px] max-w-[530px]">
+              {/* colgroup trava todas as larguras: 82 + 9*42 + 70 = 530px. Hover não recalcula. */}
+              <colgroup>
+                <col className="w-[82px]" />
+                {CAT_COLS.map(c => <col key={c.sigla} className="w-[42px]" />)}
+                <col className="w-[70px]" />
+              </colgroup>
               <thead>
                 <tr className="bg-blue-50 dark:bg-blue-950/20">
-                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-20 border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Cabeças</th>
+                  <th className="text-left font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-[82px] border-r-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30 overflow-hidden whitespace-nowrap">Cabeças</th>
                   {CAT_COLS.map((c, idx) => {
                     const hasSepRight = idx === 4;
                     return (
-                      <Tooltip key={c.sigla}>
-                        <TooltipTrigger asChild>
-                          <th className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 w-[38px] cursor-help${hasSepRight ? ' border-r-2 border-blue-300 dark:border-blue-700' : ''}`}>{c.sigla}</th>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs font-medium">{c.nome}</TooltipContent>
-                      </Tooltip>
+                      <th key={c.sigla} className={`text-center font-bold text-blue-900 dark:text-blue-200 px-1 py-1 w-[42px] overflow-hidden whitespace-nowrap${hasSepRight ? ' border-r-2 border-blue-300 dark:border-blue-700' : ''}`}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex w-full justify-center cursor-help">{c.sigla}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs font-medium">{c.nome}</TooltipContent>
+                        </Tooltip>
+                      </th>
                     );
                   })}
-                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-[64px] border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30">Total</th>
+                  <th className="text-center font-bold text-blue-900 dark:text-blue-200 px-2.5 py-1 w-[70px] border-l-2 border-blue-300 dark:border-blue-700 bg-blue-100/60 dark:bg-blue-900/30 overflow-hidden whitespace-nowrap">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {/* SISTEMA */}
                 <tr className="bg-muted/30">
-                  <td className="font-bold text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/50">Sistema</td>
+                  <td className="font-bold text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/50 w-[82px] overflow-hidden whitespace-nowrap">Sistema</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
-                    return <td key={c.sigla} className={`text-center text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
+                    return <td key={c.sigla} className={`text-center text-muted-foreground px-1 py-0.5 tabular-nums w-[42px] overflow-hidden whitespace-nowrap${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
                   })}
-                  <td className="text-center font-semibold text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/50">{formatNum(totalSistema, 0)}</td>
+                  <td className="text-center font-semibold text-muted-foreground px-1.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/50 w-[70px] overflow-hidden whitespace-nowrap">{formatNum(totalSistema, 0)}</td>
                 </tr>
                 {/* PASTO */}
                 <tr>
-                  <td className="font-bold text-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/20">Pasto</td>
+                  <td className="font-bold text-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[9px] bg-muted/20 w-[82px] overflow-hidden whitespace-nowrap">Pasto</td>
                   {CAT_COLS.map((c, idx) => {
                     const v = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
-                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
+                    return <td key={c.sigla} className={`text-center font-semibold text-foreground px-1 py-0.5 tabular-nums w-[42px] overflow-hidden whitespace-nowrap${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{v != null ? formatNum(v, 0) : '—'}</td>;
                   })}
-                  <td className="text-center font-bold text-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/20">{formatNum(totalPasto, 0)}</td>
+                  <td className="text-center font-bold text-foreground px-1.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/20 w-[70px] overflow-hidden whitespace-nowrap">{formatNum(totalPasto, 0)}</td>
                 </tr>
                 {/* DIFERENÇA */}
                 <tr className={`border-t-2 ${hasDivergencia ? 'border-red-400' : 'border-emerald-400'}`}>
-                  <td className={`font-extrabold px-2.5 py-1 border-r-2 border-border/40 text-[10px] ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
+                  <td className={`font-extrabold px-2.5 py-1 border-r-2 border-border/40 text-[10px] w-[82px] overflow-hidden whitespace-nowrap ${hasDivergencia ? 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20'}`}>Dif.</td>
                   {CAT_COLS.map((c, idx) => {
                     const pv = pastoDataByCat.has(c.codigo) ? pastoDataByCat.get(c.codigo)! : null;
                     const sv = saldoMap.has(c.codigo) ? saldoMap.get(c.codigo)! : null;
                     const dif = (pv != null || sv != null) ? (pv ?? 0) - (sv ?? 0) : null;
                     return (
-                      <td key={c.sigla} className={`text-center font-extrabold px-2 py-1 tabular-nums ${dif != null ? difCellClass(dif) : 'text-muted-foreground'}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
+                      <td key={c.sigla} className={`text-center font-extrabold px-1 py-1 tabular-nums w-[42px] overflow-hidden whitespace-nowrap ${dif != null ? difCellClass(dif) : 'text-muted-foreground'}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>
                         {dif != null ? fmtDif(dif) : '—'}
                       </td>
                     );
                   })}
-                  <td className={`text-center font-extrabold px-2.5 py-1 border-l-2 border-border/40 tabular-nums ${difCellClass(totalDiferenca)}`}>
+                  <td className={`text-center font-extrabold px-1.5 py-1 border-l-2 border-border/40 tabular-nums w-[70px] overflow-hidden whitespace-nowrap ${difCellClass(totalDiferenca)}`}>
                     {fmtDif(totalDiferenca)}
                   </td>
                 </tr>
                 {/* PESO */}
                 <tr className="border-t border-border/20 bg-muted/20">
-                  <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">Peso kg</td>
+                  <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30 w-[82px] overflow-hidden whitespace-nowrap">Peso kg</td>
                   {CAT_COLS.map((c, idx) => {
                     const peso = pesoMedioByCat.get(c.codigo);
-                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-2 py-0.5 tabular-nums${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{peso ? formatNum(peso, 1) : ''}</td>;
+                    return <td key={c.sigla} className={`text-center text-[9px] italic text-muted-foreground px-1 py-0.5 tabular-nums w-[42px] overflow-hidden whitespace-nowrap${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{peso ? formatNum(peso, 1) : ''}</td>;
                   })}
                   {(() => {
                     let totalPesoAcc = 0;
@@ -972,7 +980,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                     });
                     const pesoMedioTotal = totalCabAcc > 0 ? totalPesoAcc / totalCabAcc : null;
                     return (
-                      <td className="text-center text-[9px] italic text-muted-foreground px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums font-semibold bg-muted/30">
+                      <td className="text-center text-[9px] italic text-muted-foreground px-1.5 py-0.5 border-l-2 border-border/40 tabular-nums font-semibold bg-muted/30 w-[70px] overflow-hidden whitespace-nowrap">
                         {pesoMedioTotal ? formatNum(pesoMedioTotal, 1) : ''}
                       </td>
                     );
@@ -981,12 +989,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 {/* GMD — só após fechamento P1 de todos os pastos operacionais */}
                 {mesFechado && (
                   <tr className="bg-muted/20">
-                    <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30">GMD</td>
+                    <td className="text-muted-foreground px-2.5 py-0.5 border-r-2 border-border/40 text-[8px] italic bg-muted/30 w-[82px] overflow-hidden whitespace-nowrap">GMD</td>
                     {CAT_COLS.map((c, idx) => {
                       const g = gmdByCat.get(c.codigo);
-                      return <td key={c.sigla} className={`text-center text-[9px] italic px-2 py-0.5 tabular-nums ${gmdColor(g ?? null)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
+                      return <td key={c.sigla} className={`text-center text-[9px] italic px-1 py-0.5 tabular-nums w-[42px] overflow-hidden whitespace-nowrap ${gmdColor(g ?? null)}${idx === 4 ? ' border-r-2 border-border/40' : ''}`}>{g != null ? formatNum(g, 3) : ''}</td>;
                     })}
-                    <td className={`text-center text-[9px] italic px-2.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/30 ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
+                    <td className={`text-center text-[9px] italic px-1.5 py-0.5 border-l-2 border-border/40 tabular-nums bg-muted/30 w-[70px] overflow-hidden whitespace-nowrap ${gmdColor(gmdTotal)}`}>{gmdTotal != null ? formatNum(gmdTotal, 3) : ''}</td>
                   </tr>
                 )}
               </tbody>
