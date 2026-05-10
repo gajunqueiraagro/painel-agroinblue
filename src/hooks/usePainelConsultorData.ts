@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useSnapshotAreaAnual } from '@/hooks/useFechamentoArea';
+import { useAreaPlanejamento } from '@/hooks/useAreaPlanejamento';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useFinanceiro } from '@/hooks/useFinanceiro';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
@@ -98,6 +99,13 @@ export interface PainelConsultorDataResult {
   resultado: number | null;
   valorRebanhoMes: number | null;
   areaProdutivaMes: number | null;
+  /** C4 — Área META oficial (estoque mensal; NÃO acumula em viewMode='periodo'). */
+  areaPecuariaMetaMes: number | null;
+  areaAgriculturaMetaMes: number | null;
+  areaTotalMetaMes: number | null;
+  areaPecuariaMetaPorMes: (number | null)[];
+  areaAgriculturaMetaPorMes: (number | null)[];
+  areaTotalMetaPorMes: (number | null)[];
   lotUaHa: number | null;
   kgHa: number | null;
   arrHa: number | null;
@@ -380,6 +388,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal ? undefined : fazendaId,
     isGlobal,
     clienteAtual?.id,
+  );
+
+  // C4 — Área META oficial (dado estrutural; não acumula).
+  const { data: areaMetaData } = useAreaPlanejamento(
+    clienteAtual?.id ?? null,
+    isGlobal ? null : fazendaId ?? null,
+    ano,
+    isGlobal,
   );
 
   const {
@@ -2376,6 +2392,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return { ..._custeioPecIndicadorMemo, serieMeta: sobMetaSerie };
   }, [_custeioPecIndicadorMemo, _finSoberano.custeioPecSemJuros]);
 
+  // C4 — Área META: dado estrutural mensal/estoque (nunca acumula).
+  // Campos *Mes usam o mês selecionado; séries Por Mes mantêm Jan-Dez sem soma.
+  const areaMetaPorMes = areaMetaData?.porMes ?? null;
+  const areaMetaIdx = Math.max(0, Math.min(11, (mes ?? 1) - 1));
+  const areaPecuariaMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_pecuaria_ha) ?? Array(12).fill(null);
+  const areaAgriculturaMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_agricultura_ha) ?? Array(12).fill(null);
+  const areaTotalMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null);
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2413,6 +2440,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // Valor Rebanho e areaProdutivaMes: posição do mês selecionado — não soma, não média
     valorRebanhoMes: safe(monthlyData.valorRebFin[idx]),
     areaProdutivaMes: safe(areaMensal[idx]),
+
+    // C4 — Área META oficial (estoque mensal; não acumula em viewMode='periodo').
+    areaPecuariaMetaMes:    areaPecuariaMetaPorMes[areaMetaIdx]    ?? null,
+    areaAgriculturaMetaMes: areaAgriculturaMetaPorMes[areaMetaIdx] ?? null,
+    areaTotalMetaMes:       areaTotalMetaPorMes[areaMetaIdx]       ?? null,
+    areaPecuariaMetaPorMes,
+    areaAgriculturaMetaPorMes,
+    areaTotalMetaPorMes,
 
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,
