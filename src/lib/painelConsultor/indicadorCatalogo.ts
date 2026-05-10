@@ -243,6 +243,22 @@ const FONTE_FIN_COMP_REAL: FonteIndicador = {
   permite_fallback: false,
 };
 
+// ─── Áreas META — bloco "Uso do Solo" (C4.1) ────────────────────────────
+// Fonte oficial: tabela planejamento_area_meta. Estrutural/estoque mensal,
+// NÃO acumula em viewMode='periodo'. Mesma fonte usada em ambos os tabs
+// (Realizado e Meta) — é auditoria de fonte estrutural, não cenário.
+const FONTE_AREA_META: FonteIndicador = {
+  fonte_tipo: 'meta',
+  fonte_tabela: 'planejamento_area_meta',
+  fonte_campo: 'area_pecuaria_ha, area_agricultura_ha, area_total_ha (GENERATED)',
+  regra_calculo: 'Estoque mensal; NÃO acumula em viewMode periodo. Global = soma das fazendas pec do cliente; Individual = valor da fazenda.',
+  regra_prioridade: '1. planejamento_area_meta para o ano corrente; 2. null se mês não cadastrado',
+  tela_origem: '/v2?section=areas-meta',
+  tela_label: 'Áreas META',
+  permite_fallback: false,
+  observacao: 'Fonte estrutural mensal (área é estoque). Não acumula em período. Sem fallback ao realizado.',
+};
+
 /**
  * Catálogo completo — indexado por indicador_id.
  * Usado para tooltip, auditoria e regra de cenário.
@@ -430,6 +446,14 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'sob_amort':            { id: 'sob_amort',            nome: 'Amortizações',              aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
   'sob_div':              { id: 'sob_div',              nome: 'Dividendos / Retiradas',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
   'sob_saidas_totais':    { id: 'sob_saidas_totais',    nome: 'Saídas Totais',             aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
+
+  // ─── Áreas META — Uso do Solo (C4.1) ────────────────────────────────
+  // Renderizado em PainelConsultorTab entre Financeiro Soberano e Endividamento.
+  // Aba canônica = 'mensal' (visível em todas as 4 abas — auditoria estrutural).
+  // Mesma fonte (planejamento_area_meta) em ambos os cenários — área é estrutural.
+  'area_pec_meta':   { id: 'area_pec_meta',   nome: 'Área Pecuária META (ha)',    aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
+  'area_agri_meta':  { id: 'area_agri_meta',  nome: 'Área Agricultura META (ha)', aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
+  'area_total_meta': { id: 'area_total_meta', nome: 'Área Total META (ha)',       aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
 
   // ─── Endividamento — bloco PC-100 (Realizado/Global do cliente) ─────
   // Renderizado nas abas Valores Mensais e Acumulados — aba canônica = 'mensal'.
