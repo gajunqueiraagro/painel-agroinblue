@@ -106,6 +106,13 @@ export interface PainelConsultorDataResult {
   areaPecuariaMetaPorMes: (number | null)[];
   areaAgriculturaMetaPorMes: (number | null)[];
   areaTotalMetaPorMes: (number | null)[];
+  /** C4.2 — Área REALIZADA via snapshots de fechamento_pasto_itens. Estoque; NÃO acumula. */
+  areaPecuariaRealMes: number | null;
+  areaAgriculturaRealMes: number | null;
+  areaProdutivaRealMes: number | null;
+  areaPecuariaRealPorMes: (number | null)[];
+  areaAgriculturaRealPorMes: (number | null)[];
+  areaProdutivaRealPorMes: (number | null)[];
   lotUaHa: number | null;
   kgHa: number | null;
   arrHa: number | null;
@@ -2403,6 +2410,23 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const areaTotalMetaPorMes: (number | null)[] =
     areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null);
 
+  // C4.2 — Área REALIZADA via snapshots de useSnapshotAreaAnual (já no escopo, ~L368).
+  // snapshots: SnapshotAreaMes[] não-posicional (push por ordem dos rows do banco).
+  // Indexar via .find por mes (1-12). Estoque mensal; NÃO acumula.
+  const areaRealIdx = areaMetaIdx;
+  const areaPecuariaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_pecuaria_ha : null;
+  });
+  const areaAgriculturaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_agricultura_ha : null;
+  });
+  const areaProdutivaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_produtiva_ha : null;
+  });
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2448,6 +2472,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     areaPecuariaMetaPorMes,
     areaAgriculturaMetaPorMes,
     areaTotalMetaPorMes,
+
+    // C4.2 — Área REALIZADA via snapshots oficiais (estoque mensal; não acumula).
+    areaPecuariaRealMes:    areaPecuariaRealPorMes[areaRealIdx]    ?? null,
+    areaAgriculturaRealMes: areaAgriculturaRealPorMes[areaRealIdx] ?? null,
+    areaProdutivaRealMes:   areaProdutivaRealPorMes[areaRealIdx]   ?? null,
+    areaPecuariaRealPorMes,
+    areaAgriculturaRealPorMes,
+    areaProdutivaRealPorMes,
 
     // UA/ha: série oficial (mês = monthlyData.lotUaHa; período = rollingAvg PC-100)
     lotUaHa: uaHaValor,

@@ -1655,29 +1655,39 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     isPrevisto,
   ]);
 
-  // ─── C4.1 — Bloco "ÁREAS META — USO DO SOLO" ──────────────────────────
-  // Lê os 6 campos expostos pelo PC-100 (commit 13d4eefc). Área é dado
-  // ESTOQUE mensal — NÃO acumula em viewMode='periodo'. Construído fora dos
-  // builders para passar `valores` direto ao renderBlocoTable, sem
-  // transformação por viewTab. noTotal=true → coluna Total blank (estoque).
+  // ─── C4.2 — Bloco "ÁREAS — USO DO SOLO" (tab-aware) ───────────────────
+  // Estoque mensal — NÃO acumula em viewMode='periodo'.
+  // Tab Realizado → snapshots oficiais (areaPecuariaRealPorMes etc).
+  // Tab Meta      → planejamento_area_meta (areaPecuariaMetaPorMes etc).
+  // SEM fallback entre as duas fontes.
   const areaPecMetaPorMes   = pcdSoberano.areaPecuariaMetaPorMes    ?? Array(12).fill(null);
   const areaAgriMetaPorMes  = pcdSoberano.areaAgriculturaMetaPorMes ?? Array(12).fill(null);
   const areaTotalMetaPorMes = pcdSoberano.areaTotalMetaPorMes       ?? Array(12).fill(null);
-  const isAreaMetaVazia =
-    areaPecMetaPorMes.every(v => v == null) &&
-    areaAgriMetaPorMes.every(v => v == null) &&
-    areaTotalMetaPorMes.every(v => v == null);
-  const blocoAreasMeta: Bloco = useMemo(() => {
+  const areaPecRealPorMes   = pcdSoberano.areaPecuariaRealPorMes    ?? Array(12).fill(null);
+  const areaAgriRealPorMes  = pcdSoberano.areaAgriculturaRealPorMes ?? Array(12).fill(null);
+  const areaProdRealPorMes  = pcdSoberano.areaProdutivaRealPorMes   ?? Array(12).fill(null);
+
+  // Tab ativa decide a fonte exibida. isPrevisto=true → Meta; false → Realizado.
+  const areaPecAtiva   = isPrevisto ? areaPecMetaPorMes   : areaPecRealPorMes;
+  const areaAgriAtiva  = isPrevisto ? areaAgriMetaPorMes  : areaAgriRealPorMes;
+  const areaTotalAtiva = isPrevisto ? areaTotalMetaPorMes : areaProdRealPorMes;
+
+  const isAreaVazia =
+    areaPecAtiva.every(v => v == null) &&
+    areaAgriAtiva.every(v => v == null) &&
+    areaTotalAtiva.every(v => v == null);
+
+  const blocoAreas: Bloco = useMemo(() => {
     const toNan = (arr: (number | null)[]): number[] => arr.map(v => v == null ? NaN : v);
     return {
-      nome: 'ÁREAS META — USO DO SOLO',
+      nome: 'ÁREAS — USO DO SOLO',
       rows: [
-        { indicador: 'Área Pecuária META (ha)',    format: 'padrao', valores: toNan(areaPecMetaPorMes),   indicadorId: 'area_pec_meta',   noTotal: true },
-        { indicador: 'Área Agricultura META (ha)', format: 'padrao', valores: toNan(areaAgriMetaPorMes),  indicadorId: 'area_agri_meta',  noTotal: true },
-        { indicador: 'Área Total META (ha)',       format: 'padrao', valores: toNan(areaTotalMetaPorMes), indicadorId: 'area_total_meta', noTotal: true },
+        { indicador: 'Área Pecuária (ha)',    format: 'padrao', valores: toNan(areaPecAtiva),   indicadorId: 'area_pec',   noTotal: true },
+        { indicador: 'Área Agricultura (ha)', format: 'padrao', valores: toNan(areaAgriAtiva),  indicadorId: 'area_agri',  noTotal: true },
+        { indicador: 'Área Total (ha)',       format: 'padrao', valores: toNan(areaTotalAtiva), indicadorId: 'area_total', noTotal: true },
       ],
     };
-  }, [areaPecMetaPorMes, areaAgriMetaPorMes, areaTotalMetaPorMes]);
+  }, [areaPecAtiva, areaAgriAtiva, areaTotalAtiva]);
 
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
@@ -1713,17 +1723,17 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     // se Soberano ausente, antes de "Endividamento"; senão, no fim.
     const idxSob = result.findIndex(b => b.nome === 'Financeiro Soberano (Auditoria)');
     if (idxSob >= 0) {
-      result = [...result.slice(0, idxSob + 1), blocoAreasMeta, ...result.slice(idxSob + 1)];
+      result = [...result.slice(0, idxSob + 1), blocoAreas, ...result.slice(idxSob + 1)];
     } else {
       const idxEnd = result.findIndex(b => b.nome === 'Endividamento');
       if (idxEnd >= 0) {
-        result = [...result.slice(0, idxEnd), blocoAreasMeta, ...result.slice(idxEnd)];
+        result = [...result.slice(0, idxEnd), blocoAreas, ...result.slice(idxEnd)];
       } else {
-        result = [...result, blocoAreasMeta];
+        result = [...result, blocoAreas];
       }
     }
     return result;
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreasMeta]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas]);
 
   useEffect(() => {
     if (blocos.length > 0) {
@@ -2009,7 +2019,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                       </Tooltip>
                     );
                   })()}
-                  {b.nome === 'ÁREAS META — USO DO SOLO' && isAreaMetaVazia && (
+                  {b.nome === 'ÁREAS — USO DO SOLO' && isAreaVazia && (
                     <span className="inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border leading-relaxed normal-case tracking-normal bg-muted text-muted-foreground border-border/60">
                       Sem base validada
                     </span>
@@ -2023,9 +2033,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                     Endividamento exibido em base GLOBAL do cliente.
                   </div>
                 )}
-                {b.nome === 'ÁREAS META — USO DO SOLO' && (
+                {b.nome === 'ÁREAS — USO DO SOLO' && (
                   <div className="text-[11px] text-muted-foreground italic px-2 py-1">
-                    Fonte oficial de área planejada por mês. Não acumulado no período.
+                    Realizado: snapshot oficial P1. Meta: planejamento oficial. Estoque mensal — não acumula no período.
                   </div>
                 )}
                 {renderBlocoTable(b.rows)}

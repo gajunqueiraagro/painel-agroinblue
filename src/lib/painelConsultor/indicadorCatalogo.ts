@@ -243,10 +243,10 @@ const FONTE_FIN_COMP_REAL: FonteIndicador = {
   permite_fallback: false,
 };
 
-// ─── Áreas META — bloco "Uso do Solo" (C4.1) ────────────────────────────
-// Fonte oficial: tabela planejamento_area_meta. Estrutural/estoque mensal,
-// NÃO acumula em viewMode='periodo'. Mesma fonte usada em ambos os tabs
-// (Realizado e Meta) — é auditoria de fonte estrutural, não cenário.
+// ─── Áreas — bloco "Uso do Solo" (C4.1 / C4.2) ───────────────────────────
+// Bloco aparece em AMBOS os tabs (Realizado e Meta), com fontes distintas.
+// Estrutural/estoque mensal — NÃO acumula em viewMode='periodo'.
+// SEM fallback entre as duas fontes (regra soberana).
 const FONTE_AREA_META: FonteIndicador = {
   fonte_tipo: 'meta',
   fonte_tabela: 'planejamento_area_meta',
@@ -257,6 +257,18 @@ const FONTE_AREA_META: FonteIndicador = {
   tela_label: 'Áreas META',
   permite_fallback: false,
   observacao: 'Fonte estrutural mensal (área é estoque). Não acumula em período. Sem fallback ao realizado.',
+};
+
+const FONTE_AREA_REAL: FonteIndicador = {
+  fonte_tipo: 'fechamento',
+  fonte_tabela: 'fechamento_area_snapshot (via useSnapshotAreaAnual)',
+  fonte_campo: 'area_pecuaria_ha, area_agricultura_ha, area_produtiva_ha',
+  regra_calculo: 'Estoque mensal; NÃO acumula em viewMode periodo. Global = soma dos snapshots das fazendas pec ativas; Individual = snapshot da fazenda.',
+  regra_prioridade: '1. Snapshot oficial P1 (fechamento de pastos); 2. null se mês sem snapshot',
+  tela_origem: '/fechamento',
+  tela_label: 'Fechamento de Pastos',
+  permite_fallback: false,
+  observacao: 'Snapshot oficial de área (fechamento P1). Sem fallback à META.',
 };
 
 /**
@@ -447,13 +459,15 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'sob_div':              { id: 'sob_div',              nome: 'Dividendos / Retiradas',    aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
   'sob_saidas_totais':    { id: 'sob_saidas_totais',    nome: 'Saídas Totais',             aba: 'mensal', bloco: 'Financeiro Soberano (Auditoria)', realizado: FONTE_FIN_SOBERANO_REAL, previsto: FONTE_FIN_SOBERANO_META },
 
-  // ─── Áreas META — Uso do Solo (C4.1) ────────────────────────────────
+  // ─── Áreas — Uso do Solo (C4.2) ─────────────────────────────────────
   // Renderizado em PainelConsultorTab entre Financeiro Soberano e Endividamento.
   // Aba canônica = 'mensal' (visível em todas as 4 abas — auditoria estrutural).
-  // Mesma fonte (planejamento_area_meta) em ambos os cenários — área é estrutural.
-  'area_pec_meta':   { id: 'area_pec_meta',   nome: 'Área Pecuária META (ha)',    aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
-  'area_agri_meta':  { id: 'area_agri_meta',  nome: 'Área Agricultura META (ha)', aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
-  'area_total_meta': { id: 'area_total_meta', nome: 'Área Total META (ha)',       aba: 'mensal', bloco: 'ÁREAS META — USO DO SOLO', realizado: FONTE_AREA_META, previsto: FONTE_AREA_META },
+  // Tab Realizado → FONTE_AREA_REAL (snapshot P1).
+  // Tab Meta      → FONTE_AREA_META (planejamento_area_meta).
+  // SEM fallback entre as duas fontes.
+  'area_pec':   { id: 'area_pec',   nome: 'Área Pecuária (ha)',    aba: 'mensal', bloco: 'ÁREAS — USO DO SOLO', realizado: FONTE_AREA_REAL, previsto: FONTE_AREA_META },
+  'area_agri':  { id: 'area_agri',  nome: 'Área Agricultura (ha)', aba: 'mensal', bloco: 'ÁREAS — USO DO SOLO', realizado: FONTE_AREA_REAL, previsto: FONTE_AREA_META },
+  'area_total': { id: 'area_total', nome: 'Área Total (ha)',       aba: 'mensal', bloco: 'ÁREAS — USO DO SOLO', realizado: FONTE_AREA_REAL, previsto: FONTE_AREA_META },
 
   // ─── Endividamento — bloco PC-100 (Realizado/Global do cliente) ─────
   // Renderizado nas abas Valores Mensais e Acumulados — aba canônica = 'mensal'.
