@@ -101,16 +101,47 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
       // explicitamente por fazenda_id IN (lista de fazendas do cliente) —
       // não confia em cliente_id da cache.
       //
-      // Ensure-on-empty: se a primeira leitura retornar 0 linhas (típico em
-      // ano novo cujo cache ainda não foi populado), chamamos UMA ÚNICA VEZ
-      // fn_zoot_cache_rebuild e re-paginamos. Isto NÃO é fallback — a fonte
-      // oficial continua sendo zoot_mensal_cache. É ensure operacional:
-      // garantir que o cache exista antes de ler o próprio cache.
+      // Ensure-on-partial: cache pode estar vazio OU parcialmente populado
+      // (ex: tem fazenda A mas não fazenda B após import/migration). Em ambos
+      // os casos, disparamos UMA ÚNICA VEZ fn_zoot_cache_rebuild e re-paginamos.
+      // Isto NÃO é fallback — a fonte oficial continua sendo zoot_mensal_cache.
+      // É ensure operacional: garantir que o cache esteja completo antes de
+      // entregar ao consumidor.
       //
-      // Por que NÃO usamos fn_zoot_cache_ensure aqui: ela depende de
-      // fn_zoot_cache_has_gap, que leva ~30s — inviável em UI. O rebuild
-      // direto leva ~2-3s para clientes típicos (1-3 fazendas).
+      // Critério "fazendas esperadas": fazendas pec ativas com saldo_inicial > 0
+      // em Jan(ano). Vem de saldos_iniciais (custo ~10ms). Fazendas esvaziadas
+      // (saldo=0) são naturalmente excluídas — não esperamos cache para elas.
+      //
+      // Por que NÃO usamos fn_zoot_cache_has_gap aqui: ela depende de
+      // vw_zoot_categoria_mensal (CTE recursiva ~30s) — inviável em UI.
+      // O rebuild direto leva ~2-3s para clientes típicos (1-3 fazendas).
       // ───────────────────────────────────────────────────────────────────────
+
+      const { data: siRows, error: siError } = await supabase
+        .from('saldos_iniciais')
+        .select('fazenda_id, quantidade')
+        .eq('cliente_id', clienteId)
+        .eq('ano', ano)
+        .eq('mes', 1)
+        .in('fazenda_id', fazendaIdsReais);
+
+      if (siError) {
+        console.warn('[zoot-cache] saldos_iniciais lookup failed, falling back to legacy guard:', siError);
+      }
+
+      const fazendaTotais = new Map<string, number>();
+      const siRowsTyped = (siRows ?? []) as Array<{ fazenda_id: string; quantidade: number | null }>;
+      for (const r of siRowsTyped) {
+        const id = r.fazenda_id;
+        const qtd = Number(r.quantidade ?? 0);
+        fazendaTotais.set(id, (fazendaTotais.get(id) ?? 0) + qtd);
+      }
+      const fazendasEsperadas = new Set<string>(
+        Array.from(fazendaTotais.entries())
+          .filter(([, qtd]) => qtd > 0)
+          .map(([id]) => id),
+      );
+
       const PAGE_SIZE = 1000;
       const MAX_ENSURE_ATTEMPTS = 2;
       let attempt = 0;
@@ -138,12 +169,28 @@ export function useZootCategoriaMensal({ ano, cenario, global = false }: UseZoot
           from += PAGE_SIZE;
         }
 
-        if (all.length > 0 || attempt > 0) {
+        const fazendasNoCache = new Set<string>(all.map(r => r.fazenda_id as string));
+        const cacheCobreEsperadas = siError
+          ? all.length > 0
+          : Array.from(fazendasEsperadas).every(id => fazendasNoCache.has(id));
+
+        if (cacheCobreEsperadas || attempt > 0) {
           return all as unknown as ZootCategoriaMensal[];
         }
 
-        // Cache vazio na primeira tentativa: rebuild oficial + retry único.
-        console.info('[zoot-cache] empty for', { clienteId, ano, cenario }, '— rebuilding…');
+        const ausentes = Array.from(fazendasEsperadas).filter(id => !fazendasNoCache.has(id));
+        if (all.length === 0) {
+          console.info('[zoot-cache] empty for', { clienteId, ano, cenario }, '— rebuilding…');
+        } else {
+          console.warn('[zoot-cache-partial]', {
+            clienteId,
+            ano,
+            cenario,
+            esperadas: Array.from(fazendasEsperadas),
+            presentes: Array.from(fazendasNoCache),
+            ausentes,
+          });
+        }
         const tRebuild = Date.now();
         const { error: rebuildError } = await supabase.rpc('fn_zoot_cache_rebuild' as any, {
           p_cliente_id: clienteId,
