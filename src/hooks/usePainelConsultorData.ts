@@ -365,7 +365,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
-  const { areaMensal, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
+  const { areaMensal, snapshots, totalFazendasAtivas, fazendasAtivasCarregadas, fazendasComSnapPorMes, fazendasComP1PorMes, temP1FechadoPorMes, loading: loadingArea } = useSnapshotAreaAnual(
     ano,
     isGlobal ? undefined : fazendaId,
     isGlobal,
@@ -990,6 +990,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const idx = mesRef - 1;
 
   const statusArea: StatusValidacaoArea = (() => {
+    // Status reflete EXISTÊNCIA de snapshot/P1, não valor da área pecuária.
+    // Área operacional pecuária = 0 é resultado válido (ex: pasto com
+    // tipo_uso='agricultura' tem área pec efetiva zero, mas snapshot existe e
+    // mês está OK). Indicadores por hectare continuam virando NaN/"—" no
+    // consumidor — isso é correto e independente de status.
     if (loadingArea) return 'carregando';
     if (isGlobal) {
       // Aguardar query de fazendas ativas completar antes de julgar
@@ -999,10 +1004,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       const comSnap = fazendasComSnapPorMes[idx] ?? 0;
       if (comP1 === 0) return 'ok';
       if (comSnap < comP1) return 'incompleto';
-      if ((areaMensal[idx] ?? 0) <= 0) return 'sem_snapshot';
       return 'ok';
     }
-    if ((areaMensal[idx] ?? 0) > 0) return 'ok';
+    const temSnap = snapshots.some(s => s.mes === idx + 1);
+    if (temSnap) return 'ok';
     if (temP1FechadoPorMes[idx]) return 'p1_fechado_sem_snap';
     return 'p1_aberto';
   })();
