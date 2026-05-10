@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { isOperacionalPecuaria } from '@/lib/pastos/tiposUso';
 
 export interface SnapshotAreaMes {
   mes: number;              // 1–12
@@ -72,9 +73,25 @@ export function useSnapshotAreaAnual(
             .eq('tem_pecuaria', true)
         : Promise.resolve({ data: null as null, error: null });
 
-      const [snapRes, fazRes] = await Promise.all([
+      // Query paralela: pastos fechados + relacao cadastral, para recalculo de area_pecuaria_ha
+      // usando isOperacionalPecuaria sobre tipo_uso_efetivo = COALESCE(tipo_uso_mes, tipo_uso).
+      // Snapshots historicos ficam intactos; apenas a leitura do hook usa a regra oficial nova.
+      let pastosQuery = supabase
+        .from('fechamento_pastos')
+        .select('fazenda_id, ano_mes, tipo_uso_mes, pasto:pastos!inner(area_produtiva_ha, tipo_uso)')
+        .eq('cliente_id', clienteId)
+        .eq('status', 'fechado')
+        .gte('ano_mes', `${ano}-01`)
+        .lte('ano_mes', `${ano}-12`);
+
+      if (!isGlobal && fazendaId) {
+        pastosQuery = pastosQuery.eq('fazenda_id', fazendaId);
+      }
+
+      const [snapRes, fazRes, pastosRes] = await Promise.all([
         snapshotsQuery,
         fazendasAtivasQuery,
+        pastosQuery,
       ]);
 
       const fazendaIdsGlobal = isGlobal ? (fazRes.data ?? []).map((f: any) => f.id) : [];
@@ -113,6 +130,39 @@ export function useSnapshotAreaAnual(
         return;
       }
 
+      // Flag explicita de sucesso da query de pastos. NAO usar Map.size como proxy:
+      // um cliente pode legitimamente ter zero pastos operacionais pecuarios em todo o ano,
+      // e nesse caso o resultado correto eh zero, nao fallback ao snapshot antigo.
+      const pastosQueryOk = !pastosRes.error && Array.isArray(pastosRes.data);
+      if (pastosRes.error) {
+        console.warn(
+          '[useFechamentoArea] query fechamento_pastos falhou; usando area_pecuaria_ha do snapshot como fallback:',
+          pastosRes.error,
+        );
+      }
+
+      // Construir mapa de area pecuaria recalculada por (fazenda_id, ano_mes 'YYYY-MM').
+      // Aplicar isOperacionalPecuaria ao tipo efetivo = COALESCE(tipo_uso_mes, tipo_uso).
+      const pecRecalcPorFazendaMes = new Map<string, number>();
+      if (pastosQueryOk) {
+        type PastoRow = {
+          fazenda_id: string;
+          ano_mes: string;
+          tipo_uso_mes: string | null;
+          pasto: { area_produtiva_ha: number | null; tipo_uso: string | null } | null;
+        };
+        const pastosRows = (pastosRes.data ?? []) as unknown as PastoRow[];
+        for (const row of pastosRows) {
+          const tipoEfetivo: string | null =
+            row.tipo_uso_mes || row.pasto?.tipo_uso || null;
+          if (!isOperacionalPecuaria(tipoEfetivo)) continue;
+          const area = Number(row.pasto?.area_produtiva_ha) || 0;
+          if (area <= 0) continue;
+          const key = `${row.fazenda_id}|${row.ano_mes}`;
+          pecRecalcPorFazendaMes.set(key, (pecRecalcPorFazendaMes.get(key) || 0) + area);
+        }
+      }
+
       const data = snapRes.data;
 
       // Montar array de 12 posições a partir dos snapshots
@@ -121,7 +171,17 @@ export function useSnapshotAreaAnual(
 
       for (const row of data) {
         const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
-        const pec = Number(row.area_pecuaria_ha) || 0;
+        // Chave do recalculado: ano_mes do snapshot eh DATE ('YYYY-MM-DD'); converter pra 'YYYY-MM'
+        // para casar com fechamento_pastos.ano_mes (TEXT).
+        const anoMesKey = (row as unknown as { ano_mes: string }).ano_mes.slice(0, 7);
+        const fazMesKey = `${(row as unknown as { fazenda_id: string }).fazenda_id}|${anoMesKey}`;
+        // Regra de fallback explicita:
+        //   pastosQueryOk=true  -> usar SEMPRE o recalculado (?? 0 quando faz+mes nao tem entrada,
+        //                          o que eh resultado correto: nenhum pasto operacional pecuario).
+        //   pastosQueryOk=false -> degradar para o snapshot antigo (campo area_pecuaria_ha).
+        const pec = pastosQueryOk
+          ? (pecRecalcPorFazendaMes.get(fazMesKey) ?? 0)
+          : (Number(row.area_pecuaria_ha) || 0);
         const agric = Number(row.area_agricultura_ha) || 0;
         const prod = Number(row.area_produtiva_ha) || 0;
 
