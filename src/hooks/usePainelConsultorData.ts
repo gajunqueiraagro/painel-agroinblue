@@ -405,6 +405,41 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal,
   );
 
+  // C4 / C4.2 — Derivações por cenário (movidas pra cá para serem consumidas
+  // pelos callsites de monthlyData / monthlyDataMeta / kgHaPorMes / kgHaPorMesMeta).
+  // Estoque mensal; NÃO acumula em viewMode='periodo'.
+  const areaMetaPorMes = areaMetaData?.porMes ?? null;
+  const areaMetaIdx = Math.max(0, Math.min(11, (mes ?? 1) - 1));
+  const areaPecuariaMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_pecuaria_ha) ?? Array(12).fill(null);
+  const areaAgriculturaMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_agricultura_ha) ?? Array(12).fill(null);
+  const areaTotalMetaPorMes: (number | null)[] =
+    areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null);
+
+  // C4.2 — Área REALIZADA via snapshots (já no escopo). Estoque mensal; NÃO acumula.
+  // snapshots: SnapshotAreaMes[] não-posicional — indexar via .find por mes.
+  const areaRealIdx = areaMetaIdx;
+  const areaPecuariaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_pecuaria_ha : null;
+  });
+  const areaAgriculturaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_agricultura_ha : null;
+  });
+  const areaProdutivaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
+    const s = snapshots.find(x => x.mes === i + 1);
+    return s ? s.area_produtiva_ha : null;
+  });
+
+  // C5.1 — séries number[] para buildMonthlyDataFromView e divisores diretos
+  // (kg/ha). null → NaN; buildMonthlyDataFromView trata NaN como ausência via
+  // fallback interno → 0, e calcularIndicadoresEficienciaArea retorna NaN
+  // quando área = 0. Cadeia preserva "sem base validada".
+  const areaPecuariaRealNumPorMes: number[] = areaPecuariaRealPorMes.map(v => v ?? NaN);
+  const areaPecuariaMetaNumPorMes: number[] = areaPecuariaMetaPorMes.map(v => v ?? NaN);
+
   const {
     rawCategorias: viewDataRealizado,
     loading: loadingRebanho,
@@ -983,10 +1018,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         0,
         valorRebanhoMes,
         isGlobal,
-        areaMensal,
+        areaPecuariaRealNumPorMes,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaMensal, valorRebanhoMes],
+    [viewTotals, viewDataRealizado, lancFin, lancPec, ano, isGlobal, areaPecuariaRealNumPorMes, valorRebanhoMes],
   );
 
   const monthlyDataMeta = useMemo(
@@ -1001,11 +1036,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             0,
             Array(13).fill(NaN),
             isGlobal,
-            areaMensal,
+            areaPecuariaMetaNumPorMes,
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotalsMeta, viewDataMeta, carregarMetaEffective, ano, isGlobal, areaMensal],
+    [viewTotalsMeta, viewDataMeta, carregarMetaEffective, ano, isGlobal, areaPecuariaMetaNumPorMes],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
@@ -1076,11 +1111,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
   const incompletoOverride = isGlobal && !dadosCompletos && !loading;
 
-  // kgHaPorMes (mensal): peso vivo total do rebanho / área produtiva
-  // Mantido aqui por ser usado abaixo no bloco kgHaIndicador (oficial PC-100).
-  const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) =>
-    p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
-  );
+  // kgHaPorMes (mensal): peso vivo total do rebanho / área pecuária REALIZADA.
+  // C5.1: tab-aware — denominador = areaPecuariaRealPorMes (snapshot oficial),
+  // não mais areaMensal genérico. Sem fallback à META.
+  const kgHaPorMes = (monthlyData.pesoTotalFin ?? []).map((p, i) => {
+    const area = areaPecuariaRealPorMes[i] ?? 0;
+    return p > 0 && area > 0 ? p / area : NaN;
+  });
 
   // ── Cabeças/Rebanho oficial (1-based, length 13) ──
   // monthlyData.cabFin é 0-based (índice 0=Jan); converter para 1-based.
@@ -1506,10 +1543,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
 
   // Meta — monthlyDataMeta.pesoTotalFin / areaMensal (mesma área do realizado).
+  // C5.1: tab-aware — denominador = areaPecuariaMetaPorMes (planejamento_area_meta),
+  // não mais areaMensal. Sem fallback ao realizado.
   const kgHaPorMesMeta = monthlyDataMeta
-    ? (monthlyDataMeta.pesoTotalFin ?? []).map((p, i) =>
-        p > 0 && (areaMensal[i] ?? 0) > 0 ? p / areaMensal[i] : NaN
-      )
+    ? (monthlyDataMeta.pesoTotalFin ?? []).map((p, i) => {
+        const area = areaPecuariaMetaPorMes[i] ?? 0;
+        return p > 0 && area > 0 ? p / area : NaN;
+      })
     : null;
 
   const kgHaMesMetaSerie13 = kgHaPorMesMeta
@@ -2399,33 +2439,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return { ..._custeioPecIndicadorMemo, serieMeta: sobMetaSerie };
   }, [_custeioPecIndicadorMemo, _finSoberano.custeioPecSemJuros]);
 
-  // C4 — Área META: dado estrutural mensal/estoque (nunca acumula).
-  // Campos *Mes usam o mês selecionado; séries Por Mes mantêm Jan-Dez sem soma.
-  const areaMetaPorMes = areaMetaData?.porMes ?? null;
-  const areaMetaIdx = Math.max(0, Math.min(11, (mes ?? 1) - 1));
-  const areaPecuariaMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_pecuaria_ha) ?? Array(12).fill(null);
-  const areaAgriculturaMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_agricultura_ha) ?? Array(12).fill(null);
-  const areaTotalMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null);
-
-  // C4.2 — Área REALIZADA via snapshots de useSnapshotAreaAnual (já no escopo, ~L368).
-  // snapshots: SnapshotAreaMes[] não-posicional (push por ordem dos rows do banco).
-  // Indexar via .find por mes (1-12). Estoque mensal; NÃO acumula.
-  const areaRealIdx = areaMetaIdx;
-  const areaPecuariaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_pecuaria_ha : null;
-  });
-  const areaAgriculturaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_agricultura_ha : null;
-  });
-  const areaProdutivaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_produtiva_ha : null;
-  });
+  // C5.1: derivações de áreas por cenário foram movidas para CIMA (após
+  // useAreaPlanejamento, ~L398) para serem consumidas por monthlyData,
+  // monthlyDataMeta, kgHaPorMes, kgHaPorMesMeta. Não duplicar aqui.
 
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
