@@ -189,7 +189,7 @@ export function FechamentoPastoDialog({
       } else {
         // No saved items — pasto não iniciado → everything blank
         setLoteMes('');
-        setTipoUsoMes('');
+        setTipoUsoMes(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
         setQualidadeMes(null);
         setObservacaoMes('');
       }
