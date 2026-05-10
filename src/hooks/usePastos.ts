@@ -45,16 +45,9 @@ export function isPastoAtivoNoMes(pasto: { data_inicio?: string | null }, anoMes
   return pasto.data_inicio <= primeiroDiaMes;
 }
 
-export const TIPOS_USO = [
-  { value: 'cria', label: 'Cria' },
-  { value: 'recria', label: 'Recria' },
-  { value: 'engorda', label: 'Engorda' },
-  { value: 'reforma_pecuaria', label: 'Reforma Pecuária' },
-  { value: 'agricultura', label: 'Agricultura' },
-  { value: 'app', label: 'APP' },
-  { value: 'reserva_legal', label: 'Reserva Legal' },
-  { value: 'benfeitorias', label: 'Benfeitorias' },
-];
+// Re-export da fonte única — NÃO definir lista local.
+// Fonte oficial: src/lib/pastos/tiposUso.ts
+export { TIPOS_USO_OPTIONS_FLAT as TIPOS_USO } from '@/lib/pastos/tiposUso';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cache module-level — dedupe de fetches simultâneos entre instâncias do hook.

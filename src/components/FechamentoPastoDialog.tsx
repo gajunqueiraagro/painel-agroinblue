@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TIPOS_USO_OPTIONS_AGRUPADAS, TIPOS_USO_EXIGEM_REBANHO, labelDoTipoUso } from '@/lib/pastos/tiposUso';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Lock, Copy, Save, LockOpen } from 'lucide-react';
 import { calcUA } from '@/lib/calculos/zootecnicos';
@@ -14,17 +15,6 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
 
-const TIPOS_USO_OPTIONS = [
-  { value: 'pecuaria', label: 'Pecuária' },
-  { value: 'vedado', label: 'Vedado' },
-  { value: 'agricultura', label: 'Agricultura' },
-  { value: 'app', label: 'APP' },
-  { value: 'reserva_legal', label: 'Reserva Legal' },
-  { value: 'benfeitorias', label: 'Benfeitorias' },
-  { value: 'divergencia', label: '⚠️ Divergência do Campeiro' },
-];
-
-const TIPOS_USO_EXIGEM_REBANHO = ['pecuaria'];
 const QUALIDADE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
 
 // ── Regra definitiva de separação MACHOS x FÊMEAS ──
@@ -304,7 +294,7 @@ export function FechamentoPastoDialog({
   const totalMachos = catsMachos.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
   const totalFemeas = catsFemeas.reduce((s, c) => s + (getItem(c.id)?.quantidade || 0), 0);
 
-  const exigeRebanho = TIPOS_USO_EXIGEM_REBANHO.includes(tipoUsoMes);
+  const exigeRebanho = (TIPOS_USO_EXIGEM_REBANHO as readonly string[]).includes(tipoUsoMes);
   const isDivergencia = pasto.tipo_uso === 'divergencia' || tipoUsoMes === 'divergencia';
   const itensComQtd = itens.filter(i => i.quantidade > 0).map(item => ({ ...item, cat: categorias.find(c => c.id === item.categoria_id) }));
 
@@ -319,7 +309,7 @@ export function FechamentoPastoDialog({
     : exigeRebanho
     ? total > 0 && itensComQtd.some(i => i.peso_medio_kg)
     : true;
-  const tipoUsoLabel = TIPOS_USO_OPTIONS.find(t => t.value === tipoUsoMes)?.label || tipoUsoMes;
+  const tipoUsoLabel = labelDoTipoUso(tipoUsoMes);
 
   // CategoriaCard is defined outside the component to avoid re-mount on parent re-render
 
@@ -394,7 +384,12 @@ export function FechamentoPastoDialog({
               <Select value={tipoUsoMes} onValueChange={setTipoUsoMes} disabled={inputsDisabled}>
                 <SelectTrigger className="h-7 text-xs px-1.5 bg-white/10 border-white/15 text-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {TIPOS_USO_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  {TIPOS_USO_OPTIONS_AGRUPADAS.map(g => (
+                    <SelectGroup key={g.grupo}>
+                      <SelectLabel>{g.label}</SelectLabel>
+                      {g.options.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

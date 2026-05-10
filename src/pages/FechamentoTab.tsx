@@ -626,7 +626,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             cliente_id: fazendaAtual!.cliente_id!,
             ano_mes: anoMes,
             status: 'fechado',
-            tipo_uso_mes: isPastoOperacional(pasto, null) ? 'pecuario' : 'vedado',
+            tipo_uso_mes: pasto.tipo_uso || null,
             responsavel_nome: FECHAMENTO_GLOBAL_MARKER,
           };
         });
