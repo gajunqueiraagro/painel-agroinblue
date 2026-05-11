@@ -186,6 +186,18 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
   // Paginada para segurança (cliente com muitas fazendas × ano inteiro).
   type AreaRow = { fazenda_id: string; ano_mes: string; area_pecuaria_ha: number | null };
 
+  // Helper: converte 'YYYY-MM' em par de bordas {dataInicio: 'YYYY-MM-01', dataFim: 'YYYY-MM-(ult.dia)'}.
+  // fechamento_area_snapshot.ano_mes é column DATE — filtros por string '2026-01'
+  // dependeriam de cast implícito do Postgres. Bordas full date evitam ambiguidade.
+  const bordasDoMes = (anoMes: string): { dataInicio: string; dataFim: string } => {
+    const [ano, mes] = anoMes.split('-').map(Number);
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    return {
+      dataInicio: `${anoMes}-01`,
+      dataFim: `${anoMes}-${String(ultimoDia).padStart(2, '0')}`,
+    };
+  };
+
   const areaSnap = useQuery<AreaRow[]>({
     queryKey: ['area-snap', clienteId, isGlobal ? 'global' : fazendaId, periodoInicio, periodoFim],
     enabled,
@@ -193,13 +205,15 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
       const acc: AreaRow[] = [];
       let offset = 0;
       const PAGE = 1000;
+      const { dataInicio } = bordasDoMes(periodoInicio);
+      const { dataFim } = bordasDoMes(periodoFim);
       while (true) {
         let q = (supabase
           .from('fechamento_area_snapshot' as any)
           .select('fazenda_id, ano_mes, area_pecuaria_ha') as any)
           .eq('cliente_id', clienteId!)
-          .gte('ano_mes', periodoInicio)
-          .lte('ano_mes', periodoFim)
+          .gte('ano_mes', dataInicio)
+          .lte('ano_mes', dataFim)
           .order('ano_mes', { ascending: true })
           .range(offset, offset + PAGE - 1);
         if (!isGlobal && fazendaId) q = q.eq('fazenda_id', fazendaId);
@@ -223,13 +237,15 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
       const acc: AreaRow[] = [];
       let offset = 0;
       const PAGE = 1000;
+      const dataInicio = `${anoAnterior}-01-01`;
+      const dataFim = `${anoAnterior}-12-31`;
       while (true) {
         let q = (supabase
           .from('fechamento_area_snapshot' as any)
           .select('fazenda_id, ano_mes, area_pecuaria_ha') as any)
           .eq('cliente_id', clienteId!)
-          .gte('ano_mes', `${anoAnterior}-01`)
-          .lte('ano_mes', `${anoAnterior}-12`)
+          .gte('ano_mes', dataInicio)
+          .lte('ano_mes', dataFim)
           .order('ano_mes', { ascending: true })
           .range(offset, offset + PAGE - 1);
         if (!isGlobal && fazendaId) q = q.eq('fazenda_id', fazendaId);
@@ -346,18 +362,27 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     const rebanhoMensalMeta = adaptarRebanhoMensal((rebMeta as any)?.totaisPorMes ?? {}, anoCorrente);
 
     // Enriquecimento: areaProdutivaPec por mês a partir de fechamento_area_snapshot.
-    // Quando isGlobal, somar a área pecuária de todas as fazendas que reportaram
-    // snapshot naquele mês. Quando fazenda específica, usar o valor único.
-    const indexarAreaPorMes = (rows: AreaRow[]): Map<string, number> => {
+    // Normalização: fechamento_area_snapshot.ano_mes é column DATE — vem
+    // '2026-04-01' do banco. rebanhoMensal.ano_mes é text 'YYYY-MM'. Chave
+    // do índice usa slice(0,7) para casar os dois formatos.
+    // Quando isGlobal, soma a área pecuária de todas as fazendas que reportaram
+    // snapshot naquele mês. Quando fazenda específica, sobrescreve (cada
+    // (fazenda, mês) deve ter linha única — last-one-wins é defensivo).
+    const indexarAreaPorMes = (rows: AreaRow[], somar: boolean): Map<string, number> => {
       const map = new Map<string, number>();
       for (const r of rows) {
         if (r.area_pecuaria_ha == null || !Number.isFinite(r.area_pecuaria_ha)) continue;
-        map.set(r.ano_mes, (map.get(r.ano_mes) ?? 0) + r.area_pecuaria_ha);
+        const chave = String(r.ano_mes).slice(0, 7);
+        if (somar) {
+          map.set(chave, (map.get(chave) ?? 0) + Number(r.area_pecuaria_ha));
+        } else {
+          map.set(chave, Number(r.area_pecuaria_ha));
+        }
       }
       return map;
     };
-    const areaPorMesCorr = indexarAreaPorMes(areaSnap.data ?? []);
-    const areaPorMesAnt = indexarAreaPorMes(areaSnapAnt.data ?? []);
+    const areaPorMesCorr = indexarAreaPorMes(areaSnap.data ?? [], isGlobal);
+    const areaPorMesAnt = indexarAreaPorMes(areaSnapAnt.data ?? [], isGlobal);
     for (const r of rebanhoMensal) {
       const a = areaPorMesCorr.get(r.ano_mes);
       if (a != null) r.areaProdutivaPec = a;
