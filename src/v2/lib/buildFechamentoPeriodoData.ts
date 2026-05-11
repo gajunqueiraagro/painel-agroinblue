@@ -530,17 +530,12 @@ function buildCabecalho(
     .reduce<number | null>((acc, s) => (acc ?? 0) + (s.saldo_final ?? 0), null);
   const caixaFinal = mkComp(caixaR, null, caixaA);
 
-  // Resultado período = Receita Operacional total - Desembolso Pec
-  // Receita Operacional = todos os lancs com macro='Receita Operacional' e tipo_operacao='1-Entradas'
-  const isRecOpEntr = (l: FinanceiroLancamento) =>
-    l.macro_custo === 'Receita Operacional' && l.tipo_operacao === '1-Entradas';
-  const isMetaRecOp = (r: MetaGridRow) => r.macro_custo === 'Receita Operacional';
-  const recOpR = somaLanc(lancamentosRealizados, meses, isRecOpEntr);
-  const recOpM = somaMeta(metaGrid, meses, isMetaRecOp);
-  const recOpA = somaLanc(lancamentosAnoAnterior, mesesAnoAnt, isRecOpEntr);
-  const resultadoR = nullableSub(recOpR, desembolsoR);
-  const resultadoM = nullableSub(recOpM, desembolsoM);
-  const resultadoA = nullableSub(recOpA, desembolsoA);
+  // Resultado período = Receita Pecuária − Desembolso Pec (escopo pecuária puro).
+  // Antes misturava Receita Operacional total (incluía agri/outras) com desembolso
+  // só pecuária — quebrava consistência com a linha "(=) Lucro Líquido" da DRE.
+  const resultadoR = nullableSub(receitaPecR, desembolsoR);
+  const resultadoM = nullableSub(receitaPecM, desembolsoM);
+  const resultadoA = nullableSub(receitaPecA, desembolsoA);
   const resultadoPeriodo = mkComp(resultadoR, resultadoM, resultadoA);
 
   // Geração de caixa = todas entradas - todas saídas (exclui transferências)
