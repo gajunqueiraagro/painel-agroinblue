@@ -191,7 +191,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -401,6 +401,106 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ]);
 
   const loadingKgHaHistorico = modalIndicador === 'kgHa' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── custeioPec histórico oficial PC-100 (Opção B 7º indicador) ──
+  const custeioPecHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'custeioPec') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum,     valor: custeioPecIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.custeioPecIndicador, histArr5.custeioPecIndicador,
+    histArr4.custeioPecIndicador, histArr3.custeioPecIndicador,
+    histArr2.custeioPecIndicador, dadosAnoAnt.custeioPecIndicador,
+    custeioPecIndicador,
+  ]);
+
+  const loadingCusteioPecHistorico = modalIndicador === 'custeioPec' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── custoArr histórico oficial PC-100 (Opção B 8º indicador) ──
+  const custoArrHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'custoArr') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.custoArrIndicador?.valor ?? null },
+      { ano: anoNum,     valor: custoArrIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.custoArrIndicador, histArr5.custoArrIndicador,
+    histArr4.custoArrIndicador, histArr3.custoArrIndicador,
+    histArr2.custoArrIndicador, dadosAnoAnt.custoArrIndicador,
+    custoArrIndicador,
+  ]);
+
+  const loadingCustoArrHistorico = modalIndicador === 'custoArr' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── custoCab histórico oficial PC-100 (Opção B 9º indicador) ──
+  const custoCabHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'custoCab') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.custoCabIndicador?.valor ?? null },
+      { ano: anoNum,     valor: custoCabIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.custoCabIndicador, histArr5.custoCabIndicador,
+    histArr4.custoCabIndicador, histArr3.custoCabIndicador,
+    histArr2.custoCabIndicador, dadosAnoAnt.custoCabIndicador,
+    custoCabIndicador,
+  ]);
+
+  const loadingCustoCabHistorico = modalIndicador === 'custoCab' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── margemArr histórico oficial PC-100 (Opção B 10º indicador) ──
+  const margemArrHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'margemArr') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.margemArrIndicador?.valor ?? null },
+      { ano: anoNum,     valor: margemArrIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.margemArrIndicador, histArr5.margemArrIndicador,
+    histArr4.margemArrIndicador, histArr3.margemArrIndicador,
+    histArr2.margemArrIndicador, dadosAnoAnt.margemArrIndicador,
+    margemArrIndicador,
+  ]);
+
+  const loadingMargemArrHistorico = modalIndicador === 'margemArr' && (
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
@@ -1124,9 +1224,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custeioPecIndicador?.deltaMes ?? null}
           deltaAno={custeioPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={custeioPecHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingCusteioPecHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -1149,9 +1249,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoArrIndicador?.deltaMes ?? null}
           deltaAno={custoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={custoArrHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingCustoArrHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -1199,9 +1299,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={custoCabIndicador?.deltaMes ?? null}
           deltaAno={custoCabIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={custoCabHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingCustoCabHistorico}
           corPrincipal="vermelho"
         />
       )}
@@ -1224,9 +1324,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={margemArrIndicador?.deltaMes ?? null}
           deltaAno={margemArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={margemArrHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingMargemArrHistorico}
           corPrincipal={(margemArrIndicador?.valor ?? 0) >= 0 ? 'azul' : 'vermelho'}
         />
       )}
