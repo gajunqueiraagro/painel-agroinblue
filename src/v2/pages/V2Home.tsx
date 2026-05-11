@@ -405,75 +405,132 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     histArr3.loading || histArr2.loading
   );
 
-  // ── areaProdutivaPec séries para gráfico superior do modal (Opção B 6º) ──
-  // Estoque mensal (posição). Não acumula no período. Fontes oficiais já
-  // expostas pelo PC-100 — sem cálculo paralelo.
+  // Helper local: média acumulada Jan→mes (1-based) ignorando null/NaN.
+  // Usado para Área Produtiva Pec. no modo período (estoque com semântica média,
+  // mesmo padrão de Cabeças/UA-ha/KG-ha no PC-100).
+  const mediaAcumuladaArea = (porMes: ReadonlyArray<number | null> | null | undefined, ateMes: number): number | null => {
+    if (!porMes || ateMes < 1 || ateMes > 12) return null;
+    let soma = 0, n = 0;
+    for (let i = 0; i < ateMes; i++) {
+      const v = porMes[i];
+      if (v != null && !isNaN(v)) { soma += v; n++; }
+    }
+    return n > 0 ? soma / n : null;
+  };
+
+  // ── Área Produtiva Pecuária — semântica estoque com média acumulada no período ──
+  // Mesmo padrão de Cabeças/UA-ha/KG-ha: no mês usa valor pontual; no período usa
+  // média Jan→mesAtual. Card e modal mostram labels/subtítulos dinâmicos.
+  const isPeriodoArea = viewMode === 'periodo';
+
+  // Valor do card e do topo do modal
+  const areaProdutivaPecValor = useMemo<number | null>(() => {
+    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaRealPorMes, mesNum);
+    return areaPecuariaRealMes ?? null;
+  }, [isPeriodoArea, areaPecuariaRealPorMes, areaPecuariaRealMes, mesNum]);
+
+  // Valor do mês anterior (para deltaMes) — média Jan→mes-1 no período, ou valor mes-1 no mês
+  const areaProdutivaPecValorMesAnt = useMemo<number | null>(() => {
+    if (mesNum <= 1) return null;
+    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaRealPorMes, mesNum - 1);
+    return dadosMesAnt.areaPecuariaRealMes ?? null;
+  }, [isPeriodoArea, areaPecuariaRealPorMes, dadosMesAnt.areaPecuariaRealMes, mesNum]);
+
+  // Valor do ano anterior no mesmo mês/período
+  const areaProdutivaPecValorAnoAnt = useMemo<number | null>(() => {
+    if (isPeriodoArea) return mediaAcumuladaArea(dadosAnoAnt.areaPecuariaRealPorMes, mesNum);
+    return dadosAnoAnt.areaPecuariaRealMes ?? null;
+  }, [isPeriodoArea, dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes, mesNum]);
+
+  // Valor da META no mesmo mês/período
+  const areaProdutivaPecValorMeta = useMemo<number | null>(() => {
+    if (isPeriodoArea) return mediaAcumuladaArea(areaPecuariaMetaPorMes, mesNum);
+    return areaPecuariaMetaPorMes?.[mesNum - 1] ?? null;
+  }, [isPeriodoArea, areaPecuariaMetaPorMes, mesNum]);
+
+  // Séries para o gráfico superior do modal — 13 elementos, idx 0 = NaN, idx 1..12 = Jan..Dez
+  // No período: cada idx m contém média Jan→m (curva monotônica suavizada).
+  // No mês: cada idx m contém o valor pontual do mês m (mesmo que o histórico atual).
   const areaProdutivaPecSerieAno = useMemo<number[]>(() => {
-    return Array.from({ length: 13 }, (_, i) =>
-      i === 0 ? NaN : (areaPecuariaRealPorMes?.[i - 1] ?? NaN)
-    );
-  }, [areaPecuariaRealPorMes]);
+    return Array.from({ length: 13 }, (_, i) => {
+      if (i === 0) return NaN;
+      const v = isPeriodoArea
+        ? mediaAcumuladaArea(areaPecuariaRealPorMes, i)
+        : (areaPecuariaRealPorMes?.[i - 1] ?? null);
+      return v == null ? NaN : v;
+    });
+  }, [isPeriodoArea, areaPecuariaRealPorMes]);
 
   const areaProdutivaPecSerieAnoAnt = useMemo<number[] | undefined>(() => {
     const arr = dadosAnoAnt.areaPecuariaRealPorMes;
     if (!arr) return undefined;
-    return Array.from({ length: 13 }, (_, i) =>
-      i === 0 ? NaN : (arr[i - 1] ?? NaN)
-    );
-  }, [dadosAnoAnt.areaPecuariaRealPorMes]);
+    return Array.from({ length: 13 }, (_, i) => {
+      if (i === 0) return NaN;
+      const v = isPeriodoArea
+        ? mediaAcumuladaArea(arr, i)
+        : (arr[i - 1] ?? null);
+      return v == null ? NaN : v;
+    });
+  }, [isPeriodoArea, dadosAnoAnt.areaPecuariaRealPorMes]);
 
   const areaProdutivaPecSerieMeta = useMemo<number[] | undefined>(() => {
     if (!areaPecuariaMetaPorMes) return undefined;
-    return Array.from({ length: 13 }, (_, i) =>
-      i === 0 ? NaN : (areaPecuariaMetaPorMes[i - 1] ?? NaN)
-    );
-  }, [areaPecuariaMetaPorMes]);
+    return Array.from({ length: 13 }, (_, i) => {
+      if (i === 0) return NaN;
+      const v = isPeriodoArea
+        ? mediaAcumuladaArea(areaPecuariaMetaPorMes, i)
+        : (areaPecuariaMetaPorMes[i - 1] ?? null);
+      return v == null ? NaN : v;
+    });
+  }, [isPeriodoArea, areaPecuariaMetaPorMes]);
 
-  // Deltas — estoque, sem acumulação
+  // Deltas — recomputados sobre o novo areaProdutivaPecValor (não mais lendo serieAno[mesNum] direto)
   const areaProdutivaPecDeltaMes = useMemo<number | null>(() => {
-    if (mesNum <= 1) return null;
-    const curr = areaProdutivaPecSerieAno[mesNum];
-    const prev = areaProdutivaPecSerieAno[mesNum - 1];
-    if (curr == null || isNaN(curr) || prev == null || isNaN(prev) || prev === 0) return null;
+    const curr = areaProdutivaPecValor;
+    const prev = areaProdutivaPecValorMesAnt;
+    if (curr == null || prev == null || prev === 0) return null;
     return ((curr - prev) / prev) * 100;
-  }, [areaProdutivaPecSerieAno, mesNum]);
+  }, [areaProdutivaPecValor, areaProdutivaPecValorMesAnt]);
 
   const areaProdutivaPecDeltaAno = useMemo<number | null>(() => {
-    if (!areaProdutivaPecSerieAnoAnt) return null;
-    const curr = areaProdutivaPecSerieAno[mesNum];
-    const ant  = areaProdutivaPecSerieAnoAnt[mesNum];
-    if (curr == null || isNaN(curr) || ant == null || isNaN(ant) || ant === 0) return null;
+    const curr = areaProdutivaPecValor;
+    const ant = areaProdutivaPecValorAnoAnt;
+    if (curr == null || ant == null || ant === 0) return null;
     return ((curr - ant) / ant) * 100;
-  }, [areaProdutivaPecSerieAno, areaProdutivaPecSerieAnoAnt, mesNum]);
+  }, [areaProdutivaPecValor, areaProdutivaPecValorAnoAnt]);
 
   const areaProdutivaPecDeltaMeta = useMemo<number | null>(() => {
-    if (!areaProdutivaPecSerieMeta) return null;
-    const curr = areaProdutivaPecSerieAno[mesNum];
-    const meta = areaProdutivaPecSerieMeta[mesNum];
-    if (curr == null || isNaN(curr) || meta == null || isNaN(meta) || meta === 0) return null;
+    const curr = areaProdutivaPecValor;
+    const meta = areaProdutivaPecValorMeta;
+    if (curr == null || meta == null || meta === 0) return null;
     return ((curr - meta) / meta) * 100;
-  }, [areaProdutivaPecSerieAno, areaProdutivaPecSerieMeta, mesNum]);
+  }, [areaProdutivaPecValor, areaProdutivaPecValorMeta]);
 
-  // ── areaProdutivaPec histórico oficial PC-100 (barras inferiores) ──
-  // Estoque do mês selecionado em cada ano. histArr2..6 e dadosAnoAnt já
-  // expõem areaPecuariaRealMes (useSnapshotAreaAnual é sempre incondicional).
+  // Histórico inferior — barras por ano: no período = média Jan→mes; no mês = valor do mes em cada ano
   const areaProdutivaPecHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
     if (modalIndicador !== 'areaProdutivaPec') return [];
+    const computar = (porMes: ReadonlyArray<number | null> | null | undefined, valorMes: number | null | undefined): number | null => {
+      if (isPeriodoArea) return mediaAcumuladaArea(porMes, mesNum);
+      return valorMes ?? null;
+    };
     return [
-      { ano: anoNum - 6, valor: histArr6.areaPecuariaRealMes ?? null },
-      { ano: anoNum - 5, valor: histArr5.areaPecuariaRealMes ?? null },
-      { ano: anoNum - 4, valor: histArr4.areaPecuariaRealMes ?? null },
-      { ano: anoNum - 3, valor: histArr3.areaPecuariaRealMes ?? null },
-      { ano: anoNum - 2, valor: histArr2.areaPecuariaRealMes ?? null },
-      { ano: anoNum - 1, valor: dadosAnoAnt.areaPecuariaRealMes ?? null },
-      { ano: anoNum,     valor: areaPecuariaRealMes ?? null },
+      { ano: anoNum - 6, valor: computar(histArr6.areaPecuariaRealPorMes, histArr6.areaPecuariaRealMes) },
+      { ano: anoNum - 5, valor: computar(histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes) },
+      { ano: anoNum - 4, valor: computar(histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes) },
+      { ano: anoNum - 3, valor: computar(histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes) },
+      { ano: anoNum - 2, valor: computar(histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes) },
+      { ano: anoNum - 1, valor: computar(dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes) },
+      { ano: anoNum,     valor: areaProdutivaPecValor },
     ];
   }, [
-    modalIndicador, anoNum,
-    histArr6.areaPecuariaRealMes, histArr5.areaPecuariaRealMes,
-    histArr4.areaPecuariaRealMes, histArr3.areaPecuariaRealMes,
-    histArr2.areaPecuariaRealMes, dadosAnoAnt.areaPecuariaRealMes,
-    areaPecuariaRealMes,
+    modalIndicador, anoNum, mesNum, isPeriodoArea,
+    histArr6.areaPecuariaRealPorMes, histArr6.areaPecuariaRealMes,
+    histArr5.areaPecuariaRealPorMes, histArr5.areaPecuariaRealMes,
+    histArr4.areaPecuariaRealPorMes, histArr4.areaPecuariaRealMes,
+    histArr3.areaPecuariaRealPorMes, histArr3.areaPecuariaRealMes,
+    histArr2.areaPecuariaRealPorMes, histArr2.areaPecuariaRealMes,
+    dadosAnoAnt.areaPecuariaRealPorMes, dadosAnoAnt.areaPecuariaRealMes,
+    areaProdutivaPecValor,
   ]);
 
   const loadingAreaProdutivaPecHistorico = modalIndicador === 'areaProdutivaPec' && (
@@ -672,10 +729,13 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
-          <MetricTile label="Área Produtiva Pecuária" value={fmtN(areaPecuariaRealMes ?? null, 0)} unit="ha"
+          <MetricTile
+            label={isPeriodoArea ? 'Área Produtiva Pec. média no período' : 'Área Produtiva Pecuária'}
+            value={fmtN(areaProdutivaPecValor, 0)} unit="ha"
             loading={statusArea === 'carregando'} status={msgArea(statusArea)}
-            deltaMes={vsMes(areaPecuariaRealMes ?? null, dadosMesAnt.areaPecuariaRealMes)}
-            deltaAno={vsAno(areaPecuariaRealMes ?? null, dadosAnoAnt.areaPecuariaRealMes)}
+            deltaMes={areaProdutivaPecDeltaMes}
+            deltaAno={areaProdutivaPecDeltaAno}
+            deltaMeta={areaProdutivaPecDeltaMeta}
             onClick={() => setModalIndicador('areaProdutivaPec')} />
           <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={uaHaIndicador?.deltaMes ?? null}
@@ -955,7 +1015,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           open onClose={() => setModalIndicador(null)}
           titulo="Área Produtiva Pecuária"
           unidade="ha" formatoValor="inteiro"
-          subtitulo="Área pecuária produtiva no mês"
+          subtitulo={isPeriodoArea ? 'Área pecuária produtiva média no período' : 'Área pecuária produtiva no mês'}
           mesAtual={mesNum} anoAtual={anoNum}
           serieAno={areaProdutivaPecSerieAno}
           serieAnoAnt={areaProdutivaPecSerieAnoAnt}
