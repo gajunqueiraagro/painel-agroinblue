@@ -820,7 +820,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     () => ({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) }),
   );
   useEffect(() => {
+    // ── DIAG-RUNTIME (remover após valid) ──
+    const __diagDeps = { carregarMetaEffective, ano, isGlobal, fazendaId, cid_resolved: clienteAtual?.id };
+    console.log('[DIAG-pecMeta12] ENTRY', __diagDeps);
+    if (typeof window !== 'undefined') (window as any).__DIAG_pecMeta12_entry = __diagDeps;
+    // ── /DIAG-RUNTIME ──
+
     if (!carregarMetaEffective) {
+      console.log('[DIAG-pecMeta12] EXIT: !carregarMetaEffective');
       setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
       return;
     }
@@ -844,6 +851,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             // Deps em transição — clienteAtual?.id ainda não resolveu.
             // Não tocar state: preserva último valor real até effect re-disparar com cid resolvido.
             // Fix Marco 1.1.B-FIX-3: bug de race causava Receitas Pec sumir após cache hit.
+            console.log('[DIAG-pecMeta12] EXIT: isGlobal && !cid');
             return;
           }
           q = q.eq('cliente_id', cid);
@@ -853,10 +861,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           // Deps em transição — fazendaId ainda não resolveu OU está em '__global__' sem isGlobal=true.
           // Não tocar state: preserva último valor real até effect re-disparar.
           // Fix Marco 1.1.B-FIX-3.
+          console.log('[DIAG-pecMeta12] EXIT: !isGlobal && (!fazendaId || __global__)');
           return;
         }
+
+        console.log('[DIAG-pecMeta12] FETCHING from=' + from);
         const { data, error } = await q.order('data').range(from, from + PAGE - 1);
-        if (cancelled) return;
+        if (cancelled) {
+          console.log('[DIAG-pecMeta12] CANCELLED after fetch');
+          return;
+        }
+        console.log('[DIAG-pecMeta12] FETCH RESULT', { error: error?.message, dataLen: data?.length, sample: data?.slice(0, 2) });
+
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
         if (data.length < PAGE) break;
@@ -874,6 +890,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         rec[m - 1]    += vt;
         desfArr[m - 1] += (qtd * pmk) / 30;
       }
+      console.log('[DIAG-pecMeta12] FINAL setState', { allRowsLen: allRows.length, recSum: rec.reduce((a, v) => a + v, 0), desfArrSum: desfArr.reduce((a, v) => a + v, 0) });
+      if (typeof window !== 'undefined') (window as any).__DIAG_pecMeta12_result = { allRowsLen: allRows.length, rec, desfArr };
       setPecMeta12({ rec, desfArr });
     };
     load();
