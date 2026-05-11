@@ -66,13 +66,18 @@ export interface BuildPlanejamentoVisaoGeralInput {
    * PC-100 anual META com comparativos.
    * Chamar como: usePainelConsultorData({ ano, mes: 12, viewMode: 'periodo',
    *   carregarMeta: true, incluirComparativos: true })
-   * As séries .serieMeta e .serieAnoAnt já vêm com 12 valores mensais.
+   *
+   * Importante: em viewMode='periodo' as séries serieMeta e serieAnoAnt vêm
+   * com 13 elementos cumulativos: [NaN, jan_acum, fev_acum, ..., dez_acum].
+   * Por isso lemos serie[12] para anual e serie[mesAtual] para Jan→mesAtual,
+   * em vez de somar a série inteira.
    */
   painel: PainelConsultorDataResult | null;
 
   /**
    * Grid do planejamento_financeiro do ano corrente (META).
    * Chamar como: usePlanejamentoFinanceiro(ano, fazendaId).buildGrid()
+   * Diferente do PC-100: meses[12] vem NÃO-cumulativo nativo.
    */
   grid: SubcentroGrid[];
 
@@ -103,140 +108,108 @@ function pctDelta(curr: number | null, prev: number | null): number | null {
   return ((curr - prev) / Math.abs(prev)) * 100;
 }
 
+/**
+ * Lê valor pontual de uma série cumulativa do PC-100 (modo viewMode='periodo').
+ *
+ * O PC-100 retorna serieMeta/serieAnoAnt com 13 elementos em modo período:
+ *   [NaN, jan_acum, fev_acum, ..., dez_acum]
+ *
+ * - Para valor anual:        serie[12]
+ * - Para Jan→mesAtual:       serie[mesAtual]
+ * - Para um mês específico:  serie[mes_1indexed]
+ *
+ * Retorna null se índice fora dos limites, série ausente ou valor inválido.
+ */
+function valorPonto(serie: number[] | undefined, idx: number): number | null {
+  if (!serie || serie.length === 0) return null;
+  const i = Math.min(Math.max(idx, 0), serie.length - 1);
+  const v = serie[i];
+  return v != null && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Média simples de uma série mensal NÃO-cumulativa (Jan..Dez).
+ * Para indicadores que vêm direto do painel sem passar pelo cumSum do PC-100,
+ * tipicamente arrays de 12 elementos (não 13).
+ *
+ * Filtra NaN/null/undefined antes de computar.
+ */
+function mediaSerieMensal(serie: (number | null)[] | number[] | undefined, ate?: number): number | null {
+  if (!serie) return null;
+  const lim = ate ?? serie.length;
+  const vals: number[] = [];
+  for (let i = 0; i < Math.min(lim, serie.length); i++) {
+    const v = serie[i];
+    if (v != null && Number.isFinite(v as number)) vals.push(v as number);
+  }
+  if (vals.length === 0) return null;
+  return vals.reduce((a, v) => a + v, 0) / vals.length;
+}
+
 // ─── FÁBRICAS DE COMPARATIVO ──────────────────────────────────────────────────
 
 /**
- * Para indicadores ACUMULADOS (somam ao longo do ano):
- * receitas, custos, investimentos, arrobas produzidas.
+ * Comparativo para indicadores do PC-100 (qualquer tipo: acumulado, taxa, média).
+ *
+ * Funciona porque em viewMode='periodo' o PC-100 retorna serieMeta/serieAnoAnt
+ * com pontos já calculados conforme a semântica do indicador:
+ *   - Fluxos (receita, custo, arrobas): cumSum mês a mês
+ *   - Taxas (custo R$/@, preço): ratio (Σ num) / (Σ den) acumulado
+ *   - Médias (desfrute, lotação): valor por ponto representativo
+ *
+ * Lê ponto específico da série em vez de somar (essa era a causa raiz do
+ * "Custeio Pec inflado" antes do fix).
  */
-function buildComparativoAcumulado(
+function buildComparativoPonto(
   serieMeta: number[] | undefined,
   serieAnoAnt: number[] | undefined,
   mesAtual: number,
   origem: OrigemMetric,
+  tipoSemantica: TipoSemantica,
   formato: FormatoExibicao,
 ): ComparativoDuplo {
-  const metaAnual = sumAnual(serieMeta);
-  const metaAcum = sumAcumMes(serieMeta, mesAtual);
-  const anoAntAnual = sumAnual(serieAnoAnt);
-  const anoAntAcum = sumAcumMes(serieAnoAnt, mesAtual);
+  const metaAnual = valorPonto(serieMeta, 12);
+  const metaAcum = valorPonto(serieMeta, mesAtual);
+  const anoAntAnual = valorPonto(serieAnoAnt, 12);
+  const anoAntAcum = valorPonto(serieAnoAnt, mesAtual);
 
   return {
-    valor: metaAnual || null,
+    valor: metaAnual,
     origem,
-    tipoSemantica: 'acumulado',
+    tipoSemantica,
     formato,
-    vsAnoFechado: {
-      valor: anoAntAnual || null,
-      delta: pctDelta(metaAnual || null, anoAntAnual || null),
-    },
-    vsMesmoPeriodo: {
-      valor: anoAntAcum || null,
-      delta: pctDelta(metaAcum || null, anoAntAcum || null),
-    },
+    vsAnoFechado: { valor: anoAntAnual, delta: pctDelta(metaAnual, anoAntAnual) },
+    vsMesmoPeriodo: { valor: anoAntAcum, delta: pctDelta(metaAcum, anoAntAcum) },
   };
 }
 
 /**
- * Para indicadores ESTOQUE (posição em momento específico):
- * cabeças início (mês 1), cabeças final (mês 12), peso médio final.
+ * Comparativo para indicador de ESTOQUE (posição em momento específico).
+ * Ex: cabeças inicial (Jan = idx 1), cabeças final (Dez = idx 12),
+ *     peso médio final (Dez = idx 12).
+ *
+ * mesAlvo: 1 (início = Jan) ou 12 (final = Dez)
  */
-function buildComparativoEstoque(
+function buildComparativoEstoquePonto(
   serieMeta: number[] | undefined,
   serieAnoAnt: number[] | undefined,
-  mesAlvo: 0 | 11,             // 0 = Jan, 11 = Dez
+  mesAlvo: 1 | 12,
   mesAtual: number,
   origem: OrigemMetric,
   formato: FormatoExibicao,
 ): ComparativoDuplo {
-  const valMeta = serieMeta?.[mesAlvo] ?? null;
-  const valAnoAnt = serieAnoAnt?.[mesAlvo] ?? null;
-  const idxAtual = Math.min(Math.max(mesAtual - 1, 0), 11);
-  const valMetaAtual = serieMeta?.[idxAtual] ?? null;
-  const valAnoAntAtual = serieAnoAnt?.[idxAtual] ?? null;
+  const metaAlvo = valorPonto(serieMeta, mesAlvo);
+  const anoAntAlvo = valorPonto(serieAnoAnt, mesAlvo);
+  const metaAtual = valorPonto(serieMeta, mesAtual);
+  const anoAntAtual = valorPonto(serieAnoAnt, mesAtual);
 
   return {
-    valor: valMeta,
+    valor: metaAlvo,
     origem,
     tipoSemantica: 'estoque',
     formato,
-    vsAnoFechado: {
-      valor: valAnoAnt,
-      delta: pctDelta(valMeta, valAnoAnt),
-    },
-    vsMesmoPeriodo: {
-      valor: valAnoAntAtual,
-      delta: pctDelta(valMetaAtual, valAnoAntAtual),
-    },
-  };
-}
-
-/**
- * Para indicadores MÉDIA simples (ignorando null/NaN):
- * lotação média, área produtiva média.
- */
-function buildComparativoMedia(
-  serieMeta: number[] | undefined,
-  serieAnoAnt: number[] | undefined,
-  mesAtual: number,
-  origem: OrigemMetric,
-  formato: FormatoExibicao,
-): ComparativoDuplo {
-  const mean = (serie: number[] | undefined, ate?: number): number | null => {
-    if (!serie) return null;
-    const lim = ate ?? 12;
-    const vals = serie.slice(0, lim).filter(v => v != null && Number.isFinite(v));
-    if (vals.length === 0) return null;
-    return vals.reduce((a, v) => a + v, 0) / vals.length;
-  };
-
-  const metaAnual = mean(serieMeta);
-  const metaAcum = mean(serieMeta, mesAtual);
-  const anoAntAnual = mean(serieAnoAnt);
-  const anoAntAcum = mean(serieAnoAnt, mesAtual);
-
-  return {
-    valor: metaAnual,
-    origem,
-    tipoSemantica: 'media',
-    formato,
-    vsAnoFechado: { valor: anoAntAnual, delta: pctDelta(metaAnual, anoAntAnual) },
-    vsMesmoPeriodo: { valor: anoAntAcum, delta: pctDelta(metaAcum, anoAntAcum) },
-  };
-}
-
-/**
- * Para indicadores TAXA (razão de somas):
- * custo R$/@, preço R$/@, margem R$/@, receita/cab, custo/cab, desfrute %.
- * Calculado como (Σ numerador) / (Σ denominador) no período correspondente.
- */
-function buildComparativoTaxa(
-  numMeta: number[] | undefined,
-  denMeta: number[] | undefined,
-  numAnoAnt: number[] | undefined,
-  denAnoAnt: number[] | undefined,
-  mesAtual: number,
-  origem: OrigemMetric,
-  formato: FormatoExibicao,
-): ComparativoDuplo {
-  const taxa = (num: number[] | undefined, den: number[] | undefined, ate?: number): number | null => {
-    const sumN = sumAnual(ate != null ? num?.slice(0, ate) : num);
-    const sumD = sumAnual(ate != null ? den?.slice(0, ate) : den);
-    return sumD > 0 ? sumN / sumD : null;
-  };
-
-  const metaAnual = taxa(numMeta, denMeta);
-  const metaAcum = taxa(numMeta, denMeta, mesAtual);
-  const anoAntAnual = taxa(numAnoAnt, denAnoAnt);
-  const anoAntAcum = taxa(numAnoAnt, denAnoAnt, mesAtual);
-
-  return {
-    valor: metaAnual,
-    origem,
-    tipoSemantica: 'taxa',
-    formato,
-    vsAnoFechado: { valor: anoAntAnual, delta: pctDelta(metaAnual, anoAntAnual) },
-    vsMesmoPeriodo: { valor: anoAntAcum, delta: pctDelta(metaAcum, anoAntAcum) },
+    vsAnoFechado: { valor: anoAntAlvo, delta: pctDelta(metaAlvo, anoAntAlvo) },
+    vsMesmoPeriodo: { valor: anoAntAtual, delta: pctDelta(metaAtual, anoAntAtual) },
   };
 }
 
@@ -342,10 +315,10 @@ function buildBloco1Macro(
 
   // Receitas Pecuária — origem PC-100 receitaPecIndicador
   const receitasPecuaria = painel?.receitaPecIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.receitaPecIndicador.serieMeta,
         painel.receitaPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
@@ -389,73 +362,73 @@ function buildBloco1Macro(
 
   // Custeio Pecuária — PC-100 custeioPecIndicador (já agrega Custo Var + Fixo Pec, SEM juros)
   const custeioPecuaria = painel?.custeioPecIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.custeioPecIndicador.serieMeta,
         painel.custeioPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Custeio Agricultura — PC-100 custeioAgriIndicador
   const custeioAgricultura = painel?.custeioAgriIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.custeioAgriIndicador.serieMeta,
         painel.custeioAgriIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Investimentos Pecuária — PC-100 investPecIndicador
   const investimentosPecuaria = painel?.investPecIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.investPecIndicador.serieMeta,
         painel.investPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Investimentos Agricultura — PC-100 investAgriIndicador
   const investimentosAgricultura = painel?.investAgriIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.investAgriIndicador.serieMeta,
         painel.investAgriIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Reposição Bovinos — PC-100 investBovinosIndicador
   const reposicaoBovinos = painel?.investBovinosIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.investBovinosIndicador.serieMeta,
         painel.investBovinosIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Amortizações — PC-100 amortizacoesIndicador
   const amortizacoes = painel?.amortizacoesIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.amortizacoesIndicador.serieMeta,
         painel.amortizacoesIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Dividendos — PC-100 dividendosIndicador
   const dividendos = painel?.dividendosIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.dividendosIndicador.serieMeta,
         painel.dividendosIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Total Saídas — PC-100 saidasTotaisIndicador
   const totalSaidas = painel?.saidasTotaisIndicador
-    ? buildComparativoAcumulado(
+    ? buildComparativoPonto(
         painel.saidasTotaisIndicador.serieMeta,
         painel.saidasTotaisIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'moeda',
+        mesAtual, 'pc100', 'acumulado', 'moeda',
       )
     : emptyComparativo('pc100', 'acumulado', 'moeda');
 
@@ -519,7 +492,7 @@ function buildBloco1Macro(
 
 function buildBloco2Producao(
   input: BuildPlanejamentoVisaoGeralInput,
-  _warnings: string[],
+  warnings: string[],
 ): Bloco2Producao {
   const { painel, mesAtual } = input;
   if (!painel) {
@@ -549,78 +522,77 @@ function buildBloco2Producao(
   const pesoSerieMeta = painel.pesoMedioIndicador?.serieMeta;
   const pesoSerieAnoAnt = painel.pesoMedioIndicador?.serieAnoAnt;
 
-  return {
-    cabecasInicial: buildComparativoEstoque(cabSerieMeta, cabSerieAnoAnt, 0, mesAtual, 'pc100', 'cabecas'),
-    cabecasFinal: buildComparativoEstoque(cabSerieMeta, cabSerieAnoAnt, 11, mesAtual, 'pc100', 'cabecas'),
-    pesoMedioFinal: buildComparativoEstoque(pesoSerieMeta, pesoSerieAnoAnt, 11, mesAtual, 'pc100', 'kg'),
+  warnings.push('arrobasDesfrutadas: derivação receitaPec/precoArr requer divisão ponto-a-ponto de séries cumulativas — Marco 1.1.D');
+  warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
 
-    arrobasProduzidas: buildComparativoAcumulado(
+  return {
+    cabecasInicial: buildComparativoEstoquePonto(cabSerieMeta, cabSerieAnoAnt, 1, mesAtual, 'pc100', 'cabecas'),
+    cabecasFinal: buildComparativoEstoquePonto(cabSerieMeta, cabSerieAnoAnt, 12, mesAtual, 'pc100', 'cabecas'),
+    pesoMedioFinal: buildComparativoEstoquePonto(pesoSerieMeta, pesoSerieAnoAnt, 12, mesAtual, 'pc100', 'kg'),
+
+    arrobasProduzidas: buildComparativoPonto(
       painel.arrobasIndicador?.serieMeta,
       painel.arrobasIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'arrobas',
+      mesAtual, 'pc100', 'acumulado', 'arrobas',
     ),
 
-    // arrobasDesfrutadas = receitaPec / precoArr (acumulado) — derivado
-    arrobasDesfrutadas: buildComparativoTaxa(
-      painel.receitaPecIndicador?.serieMeta,
-      painel.precoArrIndicador?.serieMeta,
-      painel.receitaPecIndicador?.serieAnoAnt,
-      painel.precoArrIndicador?.serieAnoAnt,
-      mesAtual, 'derivado', 'arrobas',
-    ),
+    // Derivação 2 séries cumulativas — Marco 1.1.D
+    arrobasDesfrutadas: emptyComparativo('derivado', 'acumulado', 'arrobas'),
 
-    desfrutePct: buildComparativoMedia(
+    desfrutePct: buildComparativoPonto(
       painel.desfruteIndicador?.serieMeta,
       painel.desfruteIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'percentual',
+      mesAtual, 'pc100', 'taxa', 'percentual',
     ),
 
-    lotacaoMedia: buildComparativoMedia(
+    lotacaoMedia: buildComparativoPonto(
       painel.uaHaIndicador?.serieMeta,
       painel.uaHaIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'ua_ha',
+      mesAtual, 'pc100', 'media', 'ua_ha',
     ),
 
-    areaProdutivaMedia: buildComparativoMedia(
-      // Usar areaPecuariaMetaPorMes (vem direto do painel) — series mensais
-      // Como não há .serieMeta/.serieAnoAnt para áreas, usar arrays do painel
-      painel.areaPecuariaMetaPorMes?.map(v => v ?? NaN) ?? undefined,
-      painel.areaPecuariaRealPorMes?.map(v => v ?? NaN) ?? undefined,
-      mesAtual, 'pc100', 'hectares',
+    // areaPecuariaMetaPorMes/areaPecuariaRealPorMes vêm mensais não-cumulativos direto do painel.
+    // Não passam pelo cumSum do PC-100 — usar média simples local.
+    areaProdutivaMedia: (() => {
+      const metaAnual = mediaSerieMensal(painel.areaPecuariaMetaPorMes);
+      const metaAcum = mediaSerieMensal(painel.areaPecuariaMetaPorMes, mesAtual);
+      const anoAntAnual = mediaSerieMensal(painel.areaPecuariaRealPorMes);
+      const anoAntAcum = mediaSerieMensal(painel.areaPecuariaRealPorMes, mesAtual);
+      return {
+        valor: metaAnual,
+        origem: 'pc100',
+        tipoSemantica: 'media',
+        formato: 'hectares',
+        vsAnoFechado: { valor: anoAntAnual, delta: pctDelta(metaAnual, anoAntAnual) },
+        vsMesmoPeriodo: { valor: anoAntAcum, delta: pctDelta(metaAcum, anoAntAcum) },
+      } as ComparativoDuplo;
+    })(),
+
+    custoArr: buildComparativoPonto(
+      painel.custoArrIndicador?.serieMeta,
+      painel.custoArrIndicador?.serieAnoAnt,
+      mesAtual, 'pc100', 'taxa', 'moeda',
     ),
 
-    custoArr: buildComparativoTaxa(
-      painel.custeioPecIndicador?.serieMeta,
-      painel.arrobasIndicador?.serieMeta,
-      painel.custeioPecIndicador?.serieAnoAnt,
-      painel.arrobasIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'moeda',
-    ),
-
-    precoArr: buildComparativoMedia(
+    precoArr: buildComparativoPonto(
       painel.precoArrIndicador?.serieMeta,
       painel.precoArrIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'moeda',
+      mesAtual, 'pc100', 'taxa', 'moeda',
     ),
 
-    margemArr: buildComparativoMedia(
+    margemArr: buildComparativoPonto(
       painel.margemArrIndicador?.serieMeta,
       painel.margemArrIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'moeda',
+      mesAtual, 'pc100', 'taxa', 'moeda',
     ),
 
-    receitaCab: buildComparativoTaxa(
-      painel.receitaPecIndicador?.serieMeta,
-      cabSerieMeta,
-      painel.receitaPecIndicador?.serieAnoAnt,
-      cabSerieAnoAnt,
-      mesAtual, 'derivado', 'moeda',
-    ),
+    // Derivação 2 séries cumulativas — Marco 1.1.D
+    receitaCab: emptyComparativo('derivado', 'taxa', 'moeda'),
 
-    custoCab: buildComparativoMedia(
+    custoCab: buildComparativoPonto(
       painel.custoCabIndicador?.serieMeta,
       painel.custoCabIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'moeda',
+      mesAtual, 'pc100', 'taxa', 'moeda',
     ),
   };
 }
@@ -650,7 +622,7 @@ function buildBloco4Financeiro(
   const empty = (): ComparativoDuplo => emptyComparativo('pc100', 'acumulado', 'moeda');
 
   const fromIndicator = (ind: { serieMeta?: number[]; serieAnoAnt?: number[] } | null | undefined): ComparativoDuplo =>
-    ind ? buildComparativoAcumulado(ind.serieMeta, ind.serieAnoAnt, mesAtual, 'pc100', 'moeda') : empty();
+    ind ? buildComparativoPonto(ind.serieMeta, ind.serieAnoAnt, mesAtual, 'pc100', 'acumulado', 'moeda') : empty();
 
   const juros = fromIndicator(painel?.jurosPecIndicador);
   const amortizacoes = fromIndicator(painel?.amortizacoesIndicador);
@@ -659,7 +631,7 @@ function buildBloco4Financeiro(
   const reposicaoBovinos = fromIndicator(painel?.investBovinosIndicador);
   const dividendos = fromIndicator(painel?.dividendosIndicador);
 
-  // Desembolso Total = soma dos 6 acima
+  // Desembolso Total = soma dos 6 acima (campos .valor são pontuais, não cumulativos)
   const desembolsoMetaTotal = [juros, amortizacoes, investimentosPecuaria, investimentosAgricultura, reposicaoBovinos, dividendos]
     .reduce((acc, c) => acc + safeNum(c.valor), 0);
   const desembolsoAnoAntTotal = [juros, amortizacoes, investimentosPecuaria, investimentosAgricultura, reposicaoBovinos, dividendos]
