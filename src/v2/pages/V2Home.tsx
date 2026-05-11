@@ -190,7 +190,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -325,6 +325,31 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ]);
 
   const loadingPesoMedioHistorico = modalIndicador === 'pesoMedio' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── gmd histórico oficial PC-100 (Opção B 3º indicador) ──
+  const gmdHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'gmd') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.gmdIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.gmdIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.gmdIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.gmdIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.gmdIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.gmdIndicador?.valor ?? null },
+      { ano: anoNum,     valor: gmdIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.gmdIndicador, histArr5.gmdIndicador,
+    histArr4.gmdIndicador, histArr3.gmdIndicador,
+    histArr2.gmdIndicador, dadosAnoAnt.gmdIndicador,
+    gmdIndicador,
+  ]);
+
+  const loadingGmdHistorico = modalIndicador === 'gmd' && (
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
@@ -746,9 +771,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={gmdIndicador?.deltaMes ?? null}
           deltaAno={gmdIndicador?.deltaAno ?? null}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={gmdHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingGmdHistorico}
         />
       )}
       {modalIndicador === 'uaHa' && (
