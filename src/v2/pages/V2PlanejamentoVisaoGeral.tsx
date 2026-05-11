@@ -14,8 +14,6 @@ import { useMemo } from 'react';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useCliente } from '@/contexts/ClienteContext';
-import { useReceitaPecMetaIndependente } from '@/v2/hooks/useReceitaPecMetaIndependente';
 import { V2PageContent } from '@/v2/components/V2PageShell';
 import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
 import { BlocoMacroExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoMacroExecutivo';
@@ -31,7 +29,6 @@ interface Props {
 
 export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
-  const { clienteAtual } = useCliente();
 
   // PC-100 anual META + comparativos ano-1 internos
   const painel = usePainelConsultorData({
@@ -46,16 +43,6 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
   const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
 
-  // Fonte INDEPENDENTE para Receita Pec META — bypass do bug do PC-100
-  // (ver Marco 1.1.B-FIX-3-FINAL).
-  const receitaPecMetaInd = useReceitaPecMetaIndependente({
-    ano,
-    clienteId: clienteAtual?.id,
-    fazendaId: isGlobal ? undefined : fazendaAtual?.id,
-    isGlobal,
-    enabled: true,
-  });
-
   // Monta DTO via camada oficial
   const dto = useMemo(() => buildPlanejamentoVisaoGeralData({
     ano,
@@ -66,19 +53,9 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     painel,
     grid,
     saldoInicial: planFin.saldoInicial,
-    receitaPecMetaIndependente: receitaPecMetaInd.error ? undefined : {
-      serieMensal: receitaPecMetaInd.serieMensal,
-      serieAcumulada: receitaPecMetaInd.serieAcumulada,
-      totalAnual: receitaPecMetaInd.totalAnual,
-    },
-  }), [
-    ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
-    painel, grid, planFin.saldoInicial,
-    receitaPecMetaInd.serieMensal, receitaPecMetaInd.serieAcumulada,
-    receitaPecMetaInd.totalAnual, receitaPecMetaInd.error,
-  ]);
+  }), [ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome, painel, grid, planFin.saldoInicial]);
 
-  const loading = painel.loading || planFin.loading || receitaPecMetaInd.loading;
+  const loading = painel.loading || planFin.loading;
 
   // Gate estrito: enquanto qualquer fonte oficial está carregando, mostra
   // loading. Não renderizar DTO parcial — sem keep-previous, sem fallback.

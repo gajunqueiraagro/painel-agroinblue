@@ -83,19 +83,6 @@ export interface BuildPlanejamentoVisaoGeralInput {
 
   /** Saldo inicial bancário do ano META (snapshot Dez ano-1). */
   saldoInicial: number;
-
-  /**
-   * Fonte INDEPENDENTE de Receita Pecuária META (bypass do bug PC-100).
-   *
-   * Quando passada, sobrescreve painel.receitaPecIndicador.serieMeta no
-   * cálculo do valor META de receitasPecuaria (BLOCO 1). Ano-1 (vsAnoFechado)
-   * continua via painel (não afetado pelo bug). Ver Marco 1.1.B-FIX-3-FINAL.
-   */
-  receitaPecMetaIndependente?: {
-    serieMensal: number[];      // 12 elementos, Jan..Dez (não-cumulativo)
-    serieAcumulada: number[];   // 12 elementos cumulativos
-    totalAnual: number;
-  };
 }
 
 // ─── HELPERS NUMÉRICOS ────────────────────────────────────────────────────────
@@ -324,29 +311,16 @@ function buildBloco1Macro(
   input: BuildPlanejamentoVisaoGeralInput,
   warnings: string[],
 ): Bloco1Macro {
-  const { painel, grid, saldoInicial, mesAtual, receitaPecMetaIndependente } = input;
+  const { painel, grid, saldoInicial, mesAtual } = input;
 
-  // Receitas Pecuária — origem PC-100 receitaPecIndicador.
-  // FIX Marco 1.1.B-FIX-3-FINAL: usar fonte independente quando disponível.
-  // PC-100 tem bug no pipeline pecMeta12 → receitaPecIndicador (diagnosticado
-  // em DIAG-RUNTIME). Quando receitaPecMetaIndependente é passado, usa direto;
-  // senão fallback ao painel (que pode estar null por causa do bug).
-  const receitasPecuaria: ComparativoDuplo = (() => {
-    if (receitaPecMetaIndependente) {
-      // Série mensal não-cumulativa → cumulativa em 13 elementos
-      // para reutilizar buildComparativoPonto (que espera serie[12] e serie[mesAtual]).
-      const serieMeta13: number[] = [NaN, ...receitaPecMetaIndependente.serieAcumulada];
-      const serieAnoAnt = painel?.receitaPecIndicador?.serieAnoAnt; // ano-1 continua via painel
-      return buildComparativoPonto(serieMeta13, serieAnoAnt, mesAtual, 'pc100', 'acumulado', 'moeda');
-    }
-    return painel?.receitaPecIndicador
-      ? buildComparativoPonto(
-          painel.receitaPecIndicador.serieMeta,
-          painel.receitaPecIndicador.serieAnoAnt,
-          mesAtual, 'pc100', 'acumulado', 'moeda',
-        )
-      : emptyComparativo('pc100', 'acumulado', 'moeda');
-  })();
+  // Receitas Pecuária — origem PC-100 receitaPecIndicador
+  const receitasPecuaria = painel?.receitaPecIndicador
+    ? buildComparativoPonto(
+        painel.receitaPecIndicador.serieMeta,
+        painel.receitaPecIndicador.serieAnoAnt,
+        mesAtual, 'pc100', 'acumulado', 'moeda',
+      )
+    : emptyComparativo('pc100', 'acumulado', 'moeda');
 
   // Outras Receitas — do grid: macro='Receita Operacional' AND grupo != 'Receita Pecuária'
   const serieOutrasReceitas = somarSerieGrid(grid, r =>
