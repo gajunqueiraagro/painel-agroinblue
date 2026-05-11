@@ -58,6 +58,8 @@ interface Params {
   lancFinExterno?: FinanceiroLancamento[];
   /** Grid de planejamento financeiro (META) compartilhado — quando fornecido, o hook calcula serieMeta dos 13 indicadores soberanos. Default: undefined (slot serieMeta fica undefined). */
   gridMetaExterno?: SubcentroGrid[];
+  /** Quando false, hooks internos pesados (rebanho, lançamentos, financeiro) ficam com enabled:false; o hook segue retornando o shape esperado mas com indicadores null. useSnapshotAreaAnual segue rodando (não aceita enabled). Default: true. */
+  enabled?: boolean;
 }
 
 export type StatusValidacaoArea =
@@ -375,7 +377,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, lancPecExterno, lancFinExterno, gridMetaExterno }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -464,7 +466,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const {
     rawCategorias: viewDataRealizado,
     loading: loadingRebanho,
-  } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal });
+  } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal, enabled });
 
   // Meta é carregada quando carregarMeta=true OU incluirComparativos=true
   // (cabecasIndicador.deltaMeta precisa de seriesMeta).
@@ -472,7 +474,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const {
     rawCategorias: viewDataMetaRaw,
-  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: carregarMetaEffective });
+  } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: enabled && carregarMetaEffective });
 
   const viewDataMeta = carregarMetaEffective ? viewDataMetaRaw : null;
 
@@ -482,7 +484,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     ano: ano - 1,
     cenario: 'realizado',
     global: isGlobal,
-    enabled: incluirComparativos === true,
+    enabled: enabled && incluirComparativos === true,
   });
 
   const viewTotalsAnoAnt = useMemo(
@@ -507,10 +509,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const usarLancFinExterno = Array.isArray(lancFinExterno) && lancFinExterno.length > 0;
 
   const { lancamentos: lancPecInterno, loading: loadingLancInterno } =
-    useLancamentos({ enabled: !usarLancPecExterno });
+    useLancamentos({ enabled: enabled && !usarLancPecExterno });
 
   const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
-    useFinanceiro({ enabled: !usarLancFinExterno });
+    useFinanceiro({ enabled: enabled && !usarLancFinExterno });
 
   const lancPec    = usarLancPecExterno ? lancPecExterno! : lancPecInterno;
   const lancFin    = usarLancFinExterno ? lancFinExterno! : lancFinInterno;

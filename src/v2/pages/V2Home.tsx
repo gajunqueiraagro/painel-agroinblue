@@ -187,6 +187,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     loading: loadingPainel,
   } = usePainelConsultorData({ ano: anoNum, mes: mesNum, viewMode, incluirComparativos: true, ...sharedLanc });
 
+  // ── Histórico OFICIAL PC-100 para indicador 'arrobas' (Opção B piloto) ──
+  // Substitui useHistoricoIndicador apenas para 'arrobas'. Outros indicadores
+  // continuam via useHistoricoIndicador.
+  const modalArrobasOpen = modalIndicador === 'arrobas';
+
   // ── Histórico multi-ano (auxiliar legado, só dispara com modal aberto p/ indicador permitido) ──
   // Desfrute usa fonte oficial separada (lancamentos), via useHistoricoIndicador branch específico.
   // uaHa/kgHa: branch específico que cruza fechamento_area_snapshot + zoot_mensal_cache.
@@ -257,6 +262,44 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     viewMode,
     ...sharedLanc,
   });
+
+  // 5 chamadas históricas lazy — só carregam quando modal de arrobas abre.
+  // anoAtual-1 já vem de dadosAnoAnt (acima). anoAtual vem da chamada principal (L188).
+  // Não passar sharedLanc — cada ano histórico carrega seus próprios lançamentos via PC-100 interno.
+  // carregarMeta=false e incluirComparativos=false (lean) para minimizar queries.
+  const histArr2 = usePainelConsultorData({ ano: anoNum - 2, mes: mesNum, viewMode, enabled: modalArrobasOpen });
+  const histArr3 = usePainelConsultorData({ ano: anoNum - 3, mes: mesNum, viewMode, enabled: modalArrobasOpen });
+  const histArr4 = usePainelConsultorData({ ano: anoNum - 4, mes: mesNum, viewMode, enabled: modalArrobasOpen });
+  const histArr5 = usePainelConsultorData({ ano: anoNum - 5, mes: mesNum, viewMode, enabled: modalArrobasOpen });
+  const histArr6 = usePainelConsultorData({ ano: anoNum - 6, mes: mesNum, viewMode, enabled: modalArrobasOpen });
+
+  const arrobasHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (!modalArrobasOpen) return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.arrobasIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.arrobasIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.arrobasIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.arrobasIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.arrobasIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.arrobasIndicador?.valor ?? null },
+      { ano: anoNum,     valor: arrobasIndicador?.valor ?? null },
+    ];
+  }, [
+    modalArrobasOpen, anoNum,
+    histArr6.arrobasIndicador, histArr5.arrobasIndicador,
+    histArr4.arrobasIndicador, histArr3.arrobasIndicador,
+    histArr2.arrobasIndicador, dadosAnoAnt.arrobasIndicador,
+    arrobasIndicador,
+  ]);
+
+  const loadingArrobasHistorico = modalArrobasOpen && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // Meta histórica não migra agora — array vazio. O modal vai exibir só a barra "Meta {anoAtual}"
+  // via lookup em historicoMeta.find(h => h.ano === anoAtual), que continua null.
+  const arrobasHistoricoMetaOficial: Array<{ ano: number; valor: number | null }> = [];
 
   const calcVar = (atual: number | null, base: number | null): number | null => {
     if (atual == null || base == null || base === 0) return null;
@@ -652,9 +695,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={arrobasIndicador?.deltaMes ?? null}
           deltaAno={arrobasIndicador?.deltaAno ?? null}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={arrobasHistoricoOficial}
+          historicoMeta={arrobasHistoricoMetaOficial}
+          loadingHistorico={loadingArrobasHistorico}
         />
       )}
       {modalIndicador === 'gmd' && (
