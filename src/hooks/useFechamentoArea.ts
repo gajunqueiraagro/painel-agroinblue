@@ -88,10 +88,33 @@ export function useSnapshotAreaAnual(
         pastosQuery = pastosQuery.eq('fazenda_id', fazendaId);
       }
 
+      // Helper interno paginador — busca todas as rows em batches de 1000.
+      // PostgREST trunca em 1000 rows por request sem .range(). NJ 2025 tem
+      // 1.152 rows (96 pastos x 12 meses) — sem pagination perde os meses finais.
+      // Cada .range() em um builder do supabase-js produz uma nova thenable
+      // (builder é imutável), então reusar o mesmo `builder` como base é seguro.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fetchPastosRowsPaginado = async (builder: any): Promise<{ data: unknown[]; error: unknown }> => {
+        const PAGE_SIZE = 1000;
+        const out: unknown[] = [];
+        let from = 0;
+        let safety = 0;
+        while (safety < 50) {
+          const batch = await builder.range(from, from + PAGE_SIZE - 1);
+          if (batch.error) return { data: out, error: batch.error };
+          const rows = (batch.data ?? []) as unknown[];
+          out.push(...rows);
+          if (rows.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+          safety++;
+        }
+        return { data: out, error: null };
+      };
+
       const [snapRes, fazRes, pastosRes] = await Promise.all([
         snapshotsQuery,
         fazendasAtivasQuery,
-        pastosQuery,
+        fetchPastosRowsPaginado(pastosQuery),
       ]);
 
       const fazendaIdsGlobal = isGlobal ? (fazRes.data ?? []).map((f: any) => f.id) : [];
@@ -169,6 +192,10 @@ export function useSnapshotAreaAnual(
       const arr = Array(12).fill(0);
       const snaps: SnapshotAreaMes[] = [];
 
+      // NOTA: agric e prod_total continuam vindo do snapshot mesmo quando
+      // pec eh recalculada. Mistura conhecida — sera revisada em commit
+      // posterior. Objetivo deste commit: impedir perda silenciosa de pec
+      // e paginacao truncando query de fechamento_pastos.
       for (const row of data) {
         const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
         // Chave do recalculado: ano_mes do snapshot eh DATE ('YYYY-MM-DD'); converter pra 'YYYY-MM'
@@ -176,16 +203,39 @@ export function useSnapshotAreaAnual(
         const anoMesKey = (row as unknown as { ano_mes: string }).ano_mes.slice(0, 7);
         const fazMesKey = `${(row as unknown as { fazenda_id: string }).fazenda_id}|${anoMesKey}`;
         // Regra de fallback explicita:
-        //   pastosQueryOk=true  -> usar SEMPRE o recalculado (?? 0 quando faz+mes nao tem entrada,
-        //                          o que eh resultado correto: nenhum pasto operacional pecuario).
-        //   pastosQueryOk=false -> degradar para o snapshot antigo (campo area_pecuaria_ha).
-        const pec = pastosQueryOk
-          ? (pecRecalcPorFazendaMes.get(fazMesKey) ?? 0)
-          : (Number(row.area_pecuaria_ha) || 0);
+        //   pastosQueryOk=false              -> degradar para o snapshot antigo (area_pecuaria_ha).
+        //   recalc definido                  -> usar recalc (inclui zero valido = sem pasto pec).
+        //   recalc undefined + snap > 0      -> base incompleta; usar snap e warn.
+        //   recalc undefined + snap nulo/0   -> mes sem pec valido (zero).
+        let pec: number;
+        if (!pastosQueryOk) {
+          pec = Number(row.area_pecuaria_ha ?? 0);
+        } else {
+          const recalc = pecRecalcPorFazendaMes.get(fazMesKey);
+          if (recalc !== undefined) {
+            pec = recalc;
+          } else {
+            const snapVal = Number(row.area_pecuaria_ha ?? 0);
+            if (snapVal > 0) {
+              console.warn(
+                '[useFechamentoArea] recalculo ausente, fallback snapshot:',
+                {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  fazenda_id: (row as any).fazenda_id,
+                  ano_mes: anoMesKey,
+                  snapVal,
+                },
+              );
+              pec = snapVal;
+            } else {
+              pec = 0;
+            }
+          }
+        }
         const agric = Number(row.area_agricultura_ha) || 0;
         const prod = Number(row.area_produtiva_ha) || 0;
 
-        arr[mesIdx] = isGlobal ? arr[mesIdx] + pec : pec;
+        arr[mesIdx] = isGlobal ? (arr[mesIdx] || 0) + pec : pec;
 
         const existing = snaps.find(s => s.mes === mesIdx + 1);
         if (existing) {
