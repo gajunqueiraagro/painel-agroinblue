@@ -414,14 +414,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       { ano: anoNum - 4, valor: histArr4.custeioPecIndicador?.valor ?? null },
       { ano: anoNum - 3, valor: histArr3.custeioPecIndicador?.valor ?? null },
       { ano: anoNum - 2, valor: histArr2.custeioPecIndicador?.valor ?? null },
-      { ano: anoNum - 1, valor: dadosAnoAnt.custeioPecIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(custeioPecIndicador?.serieAnoAnt, mesNum) },
       { ano: anoNum,     valor: custeioPecIndicador?.valor ?? null },
     ];
   }, [
-    modalIndicador, anoNum,
+    modalIndicador, anoNum, mesNum,
     histArr6.custeioPecIndicador, histArr5.custeioPecIndicador,
     histArr4.custeioPecIndicador, histArr3.custeioPecIndicador,
-    histArr2.custeioPecIndicador, dadosAnoAnt.custeioPecIndicador,
+    histArr2.custeioPecIndicador,
     custeioPecIndicador,
   ]);
 
@@ -439,14 +439,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       { ano: anoNum - 4, valor: histArr4.custoArrIndicador?.valor ?? null },
       { ano: anoNum - 3, valor: histArr3.custoArrIndicador?.valor ?? null },
       { ano: anoNum - 2, valor: histArr2.custoArrIndicador?.valor ?? null },
-      { ano: anoNum - 1, valor: dadosAnoAnt.custoArrIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(custoArrIndicador?.serieAnoAnt, mesNum) },
       { ano: anoNum,     valor: custoArrIndicador?.valor ?? null },
     ];
   }, [
-    modalIndicador, anoNum,
+    modalIndicador, anoNum, mesNum,
     histArr6.custoArrIndicador, histArr5.custoArrIndicador,
     histArr4.custoArrIndicador, histArr3.custoArrIndicador,
-    histArr2.custoArrIndicador, dadosAnoAnt.custoArrIndicador,
+    histArr2.custoArrIndicador,
     custoArrIndicador,
   ]);
 
@@ -464,14 +464,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       { ano: anoNum - 4, valor: histArr4.custoCabIndicador?.valor ?? null },
       { ano: anoNum - 3, valor: histArr3.custoCabIndicador?.valor ?? null },
       { ano: anoNum - 2, valor: histArr2.custoCabIndicador?.valor ?? null },
-      { ano: anoNum - 1, valor: dadosAnoAnt.custoCabIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(custoCabIndicador?.serieAnoAnt, mesNum) },
       { ano: anoNum,     valor: custoCabIndicador?.valor ?? null },
     ];
   }, [
-    modalIndicador, anoNum,
+    modalIndicador, anoNum, mesNum,
     histArr6.custoCabIndicador, histArr5.custoCabIndicador,
     histArr4.custoCabIndicador, histArr3.custoCabIndicador,
-    histArr2.custoCabIndicador, dadosAnoAnt.custoCabIndicador,
+    histArr2.custoCabIndicador,
     custoCabIndicador,
   ]);
 
@@ -489,14 +489,14 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       { ano: anoNum - 4, valor: histArr4.margemArrIndicador?.valor ?? null },
       { ano: anoNum - 3, valor: histArr3.margemArrIndicador?.valor ?? null },
       { ano: anoNum - 2, valor: histArr2.margemArrIndicador?.valor ?? null },
-      { ano: anoNum - 1, valor: dadosAnoAnt.margemArrIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(margemArrIndicador?.serieAnoAnt, mesNum) },
       { ano: anoNum,     valor: margemArrIndicador?.valor ?? null },
     ];
   }, [
-    modalIndicador, anoNum,
+    modalIndicador, anoNum, mesNum,
     histArr6.margemArrIndicador, histArr5.margemArrIndicador,
     histArr4.margemArrIndicador, histArr3.margemArrIndicador,
-    histArr2.margemArrIndicador, dadosAnoAnt.margemArrIndicador,
+    histArr2.margemArrIndicador,
     margemArrIndicador,
   ]);
 
@@ -516,6 +516,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       if (v != null && !isNaN(v)) { soma += v; n++; }
     }
     return n > 0 ? soma / n : null;
+  };
+
+  // Helper: lê o ano-1 financeiro pela série oficial da chamada principal,
+  // a mesma fonte usada pela linha cinza do gráfico superior.
+  // Evita usar dadosAnoAnt para financeiros, pois essa chamada recebe sharedLanc
+  // do ano atual e pode zerar indicadores financeiros do ano anterior.
+  const safeSerieAnoAnt = (serie: number[] | undefined, idx: number): number | null => {
+    const v = serie?.[idx];
+    return v != null && !isNaN(v) ? v : null;
   };
 
   // ── Área Produtiva Pecuária — semântica estoque com média acumulada no período ──
