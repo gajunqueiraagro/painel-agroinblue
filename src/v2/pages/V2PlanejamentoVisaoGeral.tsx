@@ -43,7 +43,9 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
   const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
 
-  // Monta DTO via camada oficial
+  // Monta DTO via camada oficial.
+  // Marco 1.1.D: extrasGrid traz as 4 fontes que não entram em buildGrid()
+  // mas integram o Fluxo de Caixa META (rebanho, financiamento, nutrição, projetos).
   const dto = useMemo(() => buildPlanejamentoVisaoGeralData({
     ano,
     mesAtual: mes,
@@ -53,7 +55,18 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     painel,
     grid,
     saldoInicial: planFin.saldoInicial,
-  }), [ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome, painel, grid, planFin.saldoInicial]);
+    extrasGrid: {
+      lancamentosRebanho: planFin.lancamentosRebanho,
+      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
+      lancamentosNutricao: planFin.lancamentosNutricao,
+      lancamentosProjetos: planFin.lancamentosProjetos,
+    },
+  }), [
+    ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
+    painel, grid, planFin.saldoInicial,
+    planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
+    planFin.lancamentosNutricao, planFin.lancamentosProjetos,
+  ]);
 
   const loading = painel.loading || planFin.loading;
 

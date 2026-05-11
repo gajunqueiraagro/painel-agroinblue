@@ -83,7 +83,26 @@ export interface BuildPlanejamentoVisaoGeralInput {
 
   /** Saldo inicial bancário do ano META (snapshot Dez ano-1). */
   saldoInicial: number;
+
+  /**
+   * Marco 1.1.D — Extras da grade META, unidos ao grid base por subcentro.
+   * Fontes adicionais expostas por usePlanejamentoFinanceiro que NÃO entram
+   * no buildGrid() (são merged na tela de Fluxo de Caixa META):
+   *  - lancamentosRebanho: lancamentos cenario=meta tipo=abate/venda/compra
+   *  - lancamentosFinanciamento: financiamento_parcelas pendentes do ano
+   *  - lancamentosNutricao: Cria/Recria/Engorda auto-calculado
+   *  - lancamentosProjetos: meta_projetos_investimento
+   */
+  extrasGrid?: ExtrasGrid;
 }
+
+/** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
+export type ExtrasGrid = {
+  lancamentosRebanho: Map<string, number[]>;       // subcentro → meses[12]
+  lancamentosFinanciamento: Map<string, number[]>;
+  lancamentosNutricao: Map<string, number[]>;
+  lancamentosProjetos: Map<string, number[]>;
+};
 
 // ─── HELPERS NUMÉRICOS ────────────────────────────────────────────────────────
 
@@ -144,6 +163,143 @@ function mediaSerieMensal(serie: (number | null)[] | number[] | undefined, ate?:
   }
   if (vals.length === 0) return null;
   return vals.reduce((a, v) => a + v, 0) / vals.length;
+}
+
+// ─── HELPERS DE GRID + EXTRAS (Marco 1.1.D) ──────────────────────────────────
+
+/**
+ * Marco 1.1.D — Soma anual de subcentros por filtro macro/grupo,
+ * unificando grid base (planejamento_financeiro) com as 4 Maps de extras
+ * (rebanho, financiamento, nutrição, projetos) — exatamente como faz
+ * a tela de Fluxo de Caixa META.
+ *
+ * Filtro recebe (row) do grid e retorna soma total. Para anual usar ate=12.
+ * Para acumulado Jan→mesAtual usar ate=mesAtual.
+ */
+function somarGridEExtras(
+  grid: SubcentroGrid[],
+  extras: ExtrasGrid | undefined,
+  filter: (row: SubcentroGrid) => boolean,
+  ate: number = 12,
+): number {
+  let total = 0;
+  // 1) Soma do grid base (planejamento_financeiro)
+  for (const row of grid) {
+    if (!filter(row)) continue;
+    for (let i = 0; i < ate && i < row.meses.length; i++) {
+      total += Number(row.meses[i]) || 0;
+    }
+  }
+  // 2) Para cada Map de extras: somar APENAS os subcentros que passam no filter
+  // — descobrimos os subcentros válidos via grid (lookup macro/grupo).
+  if (extras) {
+    const subcentrosValidos = new Set<string>();
+    for (const row of grid) {
+      if (filter(row)) subcentrosValidos.add(row.subcentro);
+    }
+    const maps = [
+      extras.lancamentosRebanho,
+      extras.lancamentosFinanciamento,
+      extras.lancamentosNutricao,
+      extras.lancamentosProjetos,
+    ];
+    for (const m of maps) {
+      for (const [subcentro, meses] of m.entries()) {
+        if (!subcentrosValidos.has(subcentro)) continue;
+        for (let i = 0; i < ate && i < meses.length; i++) {
+          total += Number(meses[i]) || 0;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Marco 1.1.D — Saldo mensal "líquido" do Fluxo de Caixa META:
+ * receitas - saídas = saldo_mes[12].
+ * Caixa Final = saldoInicial + Σ saldo_mes.
+ *
+ * Convenção: macros que entram positivo: 'Receita Operacional', 'Entrada Financeira'.
+ * Macros que saem (subtraem): 'Custeio Produção', 'Investimento na Fazenda',
+ * 'Investimento em Bovinos', 'Saída Financeira', 'Dividendos', 'Deduções de Receitas'.
+ * Macro 'Transferências' NÃO entra (neutro).
+ */
+function calcularSaldoMensal(
+  grid: SubcentroGrid[],
+  extras: ExtrasGrid | undefined,
+): number[] {
+  const ENTRADAS_MACROS = new Set(['Receita Operacional', 'Entrada Financeira']);
+  const SAIDAS_MACROS = new Set([
+    'Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos',
+    'Saída Financeira', 'Dividendos', 'Deduções de Receitas',
+  ]);
+  const saldoMes = new Array(12).fill(0);
+
+  // 1) Grid base
+  for (const row of grid) {
+    if (!row.macro_custo) continue;
+    const sign = ENTRADAS_MACROS.has(row.macro_custo) ? 1 :
+                 SAIDAS_MACROS.has(row.macro_custo) ? -1 : 0;
+    if (sign === 0) continue;
+    for (let i = 0; i < 12; i++) {
+      saldoMes[i] += sign * (Number(row.meses[i]) || 0);
+    }
+  }
+  // 2) Extras (mapear subcentro → macro via grid lookup)
+  if (extras) {
+    const subToMacro = new Map<string, string>();
+    for (const row of grid) {
+      if (row.macro_custo && !subToMacro.has(row.subcentro)) {
+        subToMacro.set(row.subcentro, row.macro_custo);
+      }
+    }
+    const maps = [
+      extras.lancamentosRebanho,
+      extras.lancamentosFinanciamento,
+      extras.lancamentosNutricao,
+      extras.lancamentosProjetos,
+    ];
+    for (const m of maps) {
+      for (const [subcentro, meses] of m.entries()) {
+        const macro = subToMacro.get(subcentro);
+        if (!macro) continue;
+        const sign = ENTRADAS_MACROS.has(macro) ? 1 :
+                     SAIDAS_MACROS.has(macro) ? -1 : 0;
+        if (sign === 0) continue;
+        for (let i = 0; i < 12 && i < meses.length; i++) {
+          saldoMes[i] += sign * (Number(meses[i]) || 0);
+        }
+      }
+    }
+  }
+  return saldoMes;
+}
+
+/**
+ * Marco 1.1.D — Constrói ComparativoDuplo a partir de soma de grid+extras.
+ * Anual = ate=12. Acum Jan→mesAtual = ate=mesAtual.
+ * Comparativo vs ano-1 (serieAnoAnt) NÃO disponível na grade META;
+ * fica null (Marco 1.1.E poderá adicionar via segundo buildGrid do ano-1).
+ */
+function buildComparativoGrid(
+  grid: SubcentroGrid[],
+  extras: ExtrasGrid | undefined,
+  filter: (row: SubcentroGrid) => boolean,
+  _mesAtual: number,
+  origem: OrigemMetric,
+  tipoSemantica: TipoSemantica,
+  formato: FormatoExibicao,
+): ComparativoDuplo {
+  const anual = somarGridEExtras(grid, extras, filter, 12);
+  return {
+    valor: anual,
+    origem,
+    tipoSemantica,
+    formato,
+    vsAnoFechado: { valor: null, delta: null },     // Marco 1.1.E
+    vsMesmoPeriodo: { valor: null, delta: null },   // Marco 1.1.E
+  };
 }
 
 // ─── FÁBRICAS DE COMPARATIVO ──────────────────────────────────────────────────
@@ -307,184 +463,146 @@ function agruparPorCentro(
 
 // ─── BLOCKS ───────────────────────────────────────────────────────────────────
 
+/**
+ * Marco 1.1.D — BLOCO 1 soberano via grade META (grid + 4 extras).
+ *
+ * Fonte oficial: usePlanejamentoFinanceiro (buildGrid + lancamentosRebanho
+ * + lancamentosFinanciamento + lancamentosNutricao + lancamentosProjetos)
+ * — mesma fonte do Fluxo de Caixa META. PC-100 NÃO é mais consultado aqui.
+ *
+ * Comparativo vs ano-1 (vsAnoFechado / vsMesmoPeriodo) fica null em todos
+ * os campos — Marco 1.1.E vai adicionar via segundo buildGrid do ano-1.
+ */
 function buildBloco1Macro(
-  input: BuildPlanejamentoVisaoGeralInput,
-  warnings: string[],
+  grid: SubcentroGrid[],
+  extras: ExtrasGrid | undefined,
+  mesAtual: number,
+  saldoInicial: number,
 ): Bloco1Macro {
-  const { painel, grid, saldoInicial, mesAtual } = input;
-
-  // Receitas Pecuária — origem PC-100 receitaPecIndicador
-  const receitasPecuaria = painel?.receitaPecIndicador
-    ? buildComparativoPonto(
-        painel.receitaPecIndicador.serieMeta,
-        painel.receitaPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Outras Receitas — do grid: macro='Receita Operacional' AND grupo != 'Receita Pecuária'
-  const serieOutrasReceitas = somarSerieGrid(grid, r =>
-    r.macro_custo === MACRO_RECEITAS && r.grupo_custo !== GRUPO_RECEITA_PECUARIA
+  // ENTRADAS
+  const receitasPecuaria = buildComparativoGrid(
+    grid, extras,
+    r => r.grupo_custo === GRUPO_RECEITA_PECUARIA,
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
-  warnings.push('outrasReceitas: vsAnoFechado e vsMesmoPeriodo = null (grid ano-1 não carregado no Marco 1.1.B)');
-  const outrasReceitas: ComparativoDuplo = {
-    valor: sumAnual(serieOutrasReceitas) || null,
-    origem: 'planejamento_financeiro',
-    tipoSemantica: 'acumulado',
-    formato: 'moeda',
-    vsAnoFechado: { valor: null, delta: null },
-    vsMesmoPeriodo: { valor: null, delta: null },
-  };
-
-  // Entradas Financeiras — do grid: macro='Entrada Financeira'
-  const serieEntradasFin = somarSerieGrid(grid, r =>
-    r.macro_custo === MACRO_ENTRADA_FINANCEIRA
+  const outrasReceitas = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === MACRO_RECEITAS
+      && r.grupo_custo !== GRUPO_RECEITA_PECUARIA,
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
-  warnings.push('entradasFinanceiras: vsAnoFechado e vsMesmoPeriodo = null (grid ano-1 não carregado no Marco 1.1.B)');
-  const entradasFinanceiras: ComparativoDuplo = {
-    valor: sumAnual(serieEntradasFin) || null,
-    origem: 'planejamento_financeiro',
-    tipoSemantica: 'acumulado',
-    formato: 'moeda',
-    vsAnoFechado: { valor: null, delta: null },
-    vsMesmoPeriodo: { valor: null, delta: null },
-  };
+  const entradasFinanceiras = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const totalEntradas = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === MACRO_RECEITAS
+      || r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
 
-  // Total Entradas = Receita Operacional + Entrada Financeira
-  const totalEntradas: ComparativoDuplo = {
-    valor: (safeNum(receitasPecuaria.valor) + safeNum(outrasReceitas.valor) + safeNum(entradasFinanceiras.valor)) || null,
-    origem: 'misto',
-    tipoSemantica: 'acumulado',
-    formato: 'moeda',
-    vsAnoFechado: { valor: null, delta: null },
-    vsMesmoPeriodo: { valor: null, delta: null },
-  };
+  // SAÍDAS — Custeio Pec separado de juros (SEM juros), custeio agri, invest, dividendos
+  const custeioPecuaria = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Custeio Produção'
+      && (r.grupo_custo === 'Custo Fixo Pecuária'
+       || r.grupo_custo === 'Custo Variável Pecuária'),
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const custeioAgricultura = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Custeio Produção'
+      && (r.grupo_custo === 'Custo Fixo Agricultura'
+       || r.grupo_custo === 'Custo Variável Agricultura'),
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const investimentosPecuaria = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Investimento na Fazenda'
+      && r.escopo_negocio === 'pecuaria',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const investimentosAgricultura = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Investimento na Fazenda'
+      && r.escopo_negocio === 'agricultura',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const reposicaoBovinos = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Investimento em Bovinos',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const amortizacoes = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Saída Financeira',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const dividendos = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Dividendos',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  // Total Saídas = soma das 6 macros de saída (inclui Deduções de Receitas)
+  const totalSaidas = buildComparativoGrid(
+    grid, extras,
+    r => r.macro_custo === 'Custeio Produção'
+      || r.macro_custo === 'Investimento na Fazenda'
+      || r.macro_custo === 'Investimento em Bovinos'
+      || r.macro_custo === 'Saída Financeira'
+      || r.macro_custo === 'Dividendos'
+      || r.macro_custo === 'Deduções de Receitas',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
 
-  // Custeio Pecuária — PC-100 custeioPecIndicador (já agrega Custo Var + Fixo Pec, SEM juros)
-  const custeioPecuaria = painel?.custeioPecIndicador
-    ? buildComparativoPonto(
-        painel.custeioPecIndicador.serieMeta,
-        painel.custeioPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Custeio Agricultura — PC-100 custeioAgriIndicador
-  const custeioAgricultura = painel?.custeioAgriIndicador
-    ? buildComparativoPonto(
-        painel.custeioAgriIndicador.serieMeta,
-        painel.custeioAgriIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Investimentos Pecuária — PC-100 investPecIndicador
-  const investimentosPecuaria = painel?.investPecIndicador
-    ? buildComparativoPonto(
-        painel.investPecIndicador.serieMeta,
-        painel.investPecIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Investimentos Agricultura — PC-100 investAgriIndicador
-  const investimentosAgricultura = painel?.investAgriIndicador
-    ? buildComparativoPonto(
-        painel.investAgriIndicador.serieMeta,
-        painel.investAgriIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Reposição Bovinos — PC-100 investBovinosIndicador
-  const reposicaoBovinos = painel?.investBovinosIndicador
-    ? buildComparativoPonto(
-        painel.investBovinosIndicador.serieMeta,
-        painel.investBovinosIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Amortizações — PC-100 amortizacoesIndicador
-  const amortizacoes = painel?.amortizacoesIndicador
-    ? buildComparativoPonto(
-        painel.amortizacoesIndicador.serieMeta,
-        painel.amortizacoesIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Dividendos — PC-100 dividendosIndicador
-  const dividendos = painel?.dividendosIndicador
-    ? buildComparativoPonto(
-        painel.dividendosIndicador.serieMeta,
-        painel.dividendosIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Total Saídas — PC-100 saidasTotaisIndicador
-  const totalSaidas = painel?.saidasTotaisIndicador
-    ? buildComparativoPonto(
-        painel.saidasTotaisIndicador.serieMeta,
-        painel.saidasTotaisIndicador.serieAnoAnt,
-        mesAtual, 'pc100', 'acumulado', 'moeda',
-      )
-    : emptyComparativo('pc100', 'acumulado', 'moeda');
-
-  // Geração Operacional = Receita Operacional (Pec + Outras) − Custeio Produção (Pec + Agri, SEM juros, SEM investimentos)
-  const geracaoOperacionalMeta = (safeNum(receitasPecuaria.valor) + safeNum(outrasReceitas.valor))
-    - (safeNum(custeioPecuaria.valor) + safeNum(custeioAgricultura.valor));
-  const geracaoOperacionalAnoAnt = (safeNum(receitasPecuaria.vsAnoFechado.valor) + 0 /* outrasReceitas ano-1 indisponível */)
-    - (safeNum(custeioPecuaria.vsAnoFechado.valor) + safeNum(custeioAgricultura.vsAnoFechado.valor));
-  warnings.push('geracaoOperacional: vsAnoFechado parcial (outrasReceitas ano-1 = 0). Resolver em Marco 1.1.C/D.');
-
+  // RESULTADO
   const geracaoOperacional: ComparativoDuplo = {
-    valor: geracaoOperacionalMeta,
+    valor: safeNum(receitasPecuaria.valor) + safeNum(outrasReceitas.valor)
+         - safeNum(custeioPecuaria.valor) - safeNum(custeioAgricultura.valor),
     origem: 'derivado',
     tipoSemantica: 'acumulado',
     formato: 'moeda',
-    vsAnoFechado: {
-      valor: geracaoOperacionalAnoAnt,
-      delta: pctDelta(geracaoOperacionalMeta, geracaoOperacionalAnoAnt),
-    },
+    vsAnoFechado: { valor: null, delta: null },
     vsMesmoPeriodo: { valor: null, delta: null },
   };
 
-  // Geração Caixa = Total Entradas − Total Saídas
-  const geracaoCaixaMeta = safeNum(totalEntradas.valor) - safeNum(totalSaidas.valor);
-  const geracaoCaixaAnoAnt = 0 - safeNum(totalSaidas.vsAnoFechado.valor); // totalEntradas ano-1 indisponível
-  warnings.push('geracaoCaixa: vsAnoFechado parcial (totalEntradas ano-1 = 0). Resolver em Marco 1.1.C/D.');
-
+  // Caixa Final = saldoInicial + Σ saldoMes (mensal: receitas − saídas)
+  const saldoMensal = calcularSaldoMensal(grid, extras);
+  const totalSaldoMes = saldoMensal.reduce((a, v) => a + v, 0);
   const geracaoCaixa: ComparativoDuplo = {
-    valor: geracaoCaixaMeta,
+    valor: totalSaldoMes,
     origem: 'derivado',
     tipoSemantica: 'acumulado',
     formato: 'moeda',
-    vsAnoFechado: {
-      valor: geracaoCaixaAnoAnt,
-      delta: pctDelta(geracaoCaixaMeta, geracaoCaixaAnoAnt),
-    },
+    vsAnoFechado: { valor: null, delta: null },
     vsMesmoPeriodo: { valor: null, delta: null },
   };
-
-  // Caixa Final = saldoInicial + Geração Caixa
-  const caixaFinalMeta = saldoInicial + geracaoCaixaMeta;
   const caixaFinal: ComparativoDuplo = {
-    valor: caixaFinalMeta,
-    origem: 'misto',
+    valor: saldoInicial + totalSaldoMes,
+    origem: 'derivado',
     tipoSemantica: 'estoque',
     formato: 'moeda',
-    vsAnoFechado: { valor: null, delta: null },     // Marco 1.1.C/D
+    vsAnoFechado: { valor: null, delta: null },
     vsMesmoPeriodo: { valor: null, delta: null },
   };
-  warnings.push('caixaFinal: comparativos ano-1 indisponíveis no Marco 1.1.B (precisa saldoInicial ano-1).');
 
   return {
-    receitasPecuaria, outrasReceitas, entradasFinanceiras, totalEntradas,
-    custeioPecuaria, custeioAgricultura, investimentosPecuaria, investimentosAgricultura,
-    reposicaoBovinos, amortizacoes, dividendos, totalSaidas,
-    geracaoOperacional, geracaoCaixa,
+    receitasPecuaria,
+    outrasReceitas,
+    entradasFinanceiras,
+    totalEntradas,
+    custeioPecuaria,
+    custeioAgricultura,
+    investimentosPecuaria,
+    investimentosAgricultura,
+    reposicaoBovinos,
+    amortizacoes,
+    dividendos,
+    totalSaidas,
+    geracaoOperacional,
+    geracaoCaixa,
     saldoInicial,
     caixaFinal,
   };
@@ -688,9 +806,14 @@ export function buildPlanejamentoVisaoGeralData(
 ): PlanejamentoVisaoGeralDTO {
   const warnings: string[] = [];
 
-  const bloco1 = buildBloco1Macro(input, warnings);
+  // Marco 1.1.D — BLOCO 1 soberano via grid + extras (Fluxo de Caixa META).
+  const bloco1 = buildBloco1Macro(input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial);
   const bloco2 = buildBloco2Producao(input, warnings);
   const bloco3 = buildBloco3Custos(input, warnings);
+  // TODO Marco 1.1.D-secondary: aplicar buildComparativoGrid também ao BLOCO 4
+  // (Juros Pec, Amortizações, Invest Pec/Agri, Reposição Bovinos, Dividendos).
+  // Por ora continua via PC-100 — pode mostrar valores que não batem com BLOCO 1.
+  warnings.push('BLOCO 4 (Financeiro/Capital): ainda via PC-100. Migrar para grade META no Marco 1.1.D-secondary.');
   const bloco4 = buildBloco4Financeiro(input, warnings);
   const bloco5 = buildBloco5RebanhoStub(warnings);
 
