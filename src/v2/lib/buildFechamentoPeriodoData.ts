@@ -98,6 +98,16 @@ function nullableSub(a: number | null, b: number | null): number | null {
   return (a ?? 0) - (b ?? 0);
 }
 
+/**
+ * Soma N valores nullable. Retorna null somente se TODOS forem null;
+ * caso contrário, soma os não-null (tratando null como 0).
+ */
+function somaCompNullable(...vals: (number | null)[]): number | null {
+  const validos = vals.filter((v): v is number => v != null);
+  if (validos.length === 0) return null;
+  return validos.reduce((a, b) => a + b, 0);
+}
+
 /** Divisão que retorna null se denominador inválido (null, 0, NaN). */
 function safeDiv(num: number | null, den: number | null): number | null {
   if (num == null || den == null) return null;
@@ -202,6 +212,16 @@ const isMetaCustoVarPec  = (r: MetaGridRow) => r.grupo_custo === 'Custo Variáve
 const isMetaJurosPec     = (r: MetaGridRow) => r.grupo_custo === 'Juros de Financiamento Pecuária';
 const isMetaCusteioPec   = (r: MetaGridRow) => isMetaCustoFixoPec(r) || isMetaCustoVarPec(r);
 const isMetaReceitaPec   = (r: MetaGridRow) => r.grupo_custo === 'Receita Pecuária';
+
+// Investimento na Fazenda Pecuária — separado do custeio.
+const isInvFazendaPec = (l: FinanceiroLancamento) =>
+  l.tipo_operacao === '2-Saídas'
+  && l.macro_custo === 'Investimento na Fazenda'
+  && l.escopo_negocio === 'pecuaria';
+
+const isMetaInvFazendaPec = (r: MetaGridRow) =>
+  r.macro_custo === 'Investimento na Fazenda'
+  && r.escopo_negocio === 'pecuaria';
 
 // ─────────────────────────────────────────────────────────────
 // REBANHO HELPERS
@@ -452,10 +472,16 @@ function buildCabecalho(
   const jurosA = somaLanc(lancamentosAnoAnterior, mesesAnoAnt, isJurosPec);
   const jurosFinanciamentoPec = mkComp(jurosR, jurosM, jurosA);
 
-  // Desembolso = Custeio + Juros
-  const desembolsoR = nullableSum(custeioPecR, jurosR);
-  const desembolsoM = nullableSum(custeioPecM, jurosM);
-  const desembolsoA = nullableSum(custeioPecA, jurosA);
+  // Investimento na Fazenda Pec (escopo='pecuaria')
+  const invFazR = somaLanc(lancamentosRealizados, meses, isInvFazendaPec);
+  const invFazM = somaMeta(metaGrid, meses, isMetaInvFazendaPec);
+  const invFazA = somaLanc(lancamentosAnoAnterior, mesesAnoAnt, isInvFazendaPec);
+  const investimentosFazendaPec = mkComp(invFazR, invFazM, invFazA);
+
+  // Desembolso = Custeio + Inv Fazenda + Juros (3 componentes, null somente se TODOS null)
+  const desembolsoR = somaCompNullable(custeioPecR, invFazR, jurosR);
+  const desembolsoM = somaCompNullable(custeioPecM, invFazM, jurosM);
+  const desembolsoA = somaCompNullable(custeioPecA, invFazA, jurosA);
   const desembolsoPecuaria = mkComp(desembolsoR, desembolsoM, desembolsoA);
 
   // @ Produzidas
@@ -538,6 +564,7 @@ function buildCabecalho(
     receitaPecuaria,
     custeioPecuaria,
     jurosFinanciamentoPec,
+    investimentosFazendaPec,
     desembolsoPecuaria,
     custoRsArroba,
     margemRsArroba,
@@ -736,12 +763,18 @@ function buildAnalisePecuaria(
     serieLanc(meses, lancamentosRealizados, mesesAnoAnt, lancamentosAnoAnterior, metaGrid, isJurosPec, isMetaJurosPec),
   );
 
-  // Desembolso = soma série custeio + juros
+  const invFazPec = ind(
+    'Investimentos Fazenda Pec.', 'R$',
+    cabecalho.investimentosFazendaPec,
+    serieLanc(meses, lancamentosRealizados, mesesAnoAnt, lancamentosAnoAnterior, metaGrid, isInvFazendaPec, isMetaInvFazendaPec),
+  );
+
+  // Desembolso = soma série custeio + invFazenda + juros (null somente se TODOS null no mês)
   const desembolsoSerie: SerieMensal[] = meses.map((m, i) => ({
     ano_mes: m,
-    realizado: nullableSum(custeioPec.serie[i].realizado, jurosPec.serie[i].realizado),
-    meta: nullableSum(custeioPec.serie[i].meta, jurosPec.serie[i].meta),
-    anoAnterior: nullableSum(custeioPec.serie[i].anoAnterior, jurosPec.serie[i].anoAnterior),
+    realizado: somaCompNullable(custeioPec.serie[i].realizado, invFazPec.serie[i].realizado, jurosPec.serie[i].realizado),
+    meta: somaCompNullable(custeioPec.serie[i].meta, invFazPec.serie[i].meta, jurosPec.serie[i].meta),
+    anoAnterior: somaCompNullable(custeioPec.serie[i].anoAnterior, invFazPec.serie[i].anoAnterior, jurosPec.serie[i].anoAnterior),
   }));
   const desembolso = ind('Desembolso Pecuária', 'R$', cabecalho.desembolsoPecuaria, desembolsoSerie);
 
@@ -877,6 +910,7 @@ function buildAnalisePecuaria(
     receitaPecuaria: receitaPec,
     custeioPecuaria: custeioPec,
     jurosFinanciamentoPec: jurosPec,
+    investimentosFazendaPec: invFazPec,
     desembolsoPecuaria: desembolso,
     custoRsArroba: custoArroba,
     precoMedioArroba,

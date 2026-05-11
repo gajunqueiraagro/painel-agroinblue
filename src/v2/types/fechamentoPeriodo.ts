@@ -48,10 +48,12 @@ export type CabecalhoExecutivo = {
   /** financeiro_saldos_bancarios_v2.saldo_final do último mês, soma todas as contas */
   caixaFinal: Comparativo;
   receitaPecuaria: Comparativo;
-  /** Custo Fixo Pecuária + Custo Variável Pecuária — sem juros */
+  /** Custo Fixo Pecuária + Custo Variável Pecuária — sem juros, sem investimento */
   custeioPecuaria: Comparativo;
   jurosFinanciamentoPec: Comparativo;
-  /** custeioPecuaria + jurosFinanciamentoPec */
+  /** macro='Investimento na Fazenda' AND escopo='pecuaria' */
+  investimentosFazendaPec: Comparativo;
+  /** custeioPecuaria + investimentosFazendaPec + jurosFinanciamentoPec */
   desembolsoPecuaria: Comparativo;
   /** desembolsoPecuaria / arrobasDesfrutadas — null se denominador 0/null */
   custoRsArroba: Comparativo;
@@ -110,6 +112,9 @@ export type AnalisePecuaria = {
   receitaPecuaria: IndicadorPecuaria;
   custeioPecuaria: IndicadorPecuaria;
   jurosFinanciamentoPec: IndicadorPecuaria;
+  /** macro='Investimento na Fazenda' AND escopo='pecuaria' */
+  investimentosFazendaPec: IndicadorPecuaria;
+  /** custeio + invFazendaPec + juros */
   desembolsoPecuaria: IndicadorPecuaria;
   custoRsArroba: IndicadorPecuaria;
   precoMedioArroba: IndicadorPecuaria;
