@@ -57,11 +57,22 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
 
   const loading = painel.loading || planFin.loading;
 
-  if (loading && !dto.bloco1_macroExecutivo.receitasPecuaria.valor) {
+  // Gate estrito: enquanto qualquer fonte oficial está carregando, mostra
+  // loading. Não renderizar DTO parcial — sem keep-previous, sem fallback.
+  // Se loading=false e algum valor ainda vier null, é estado final legítimo
+  // (dado realmente ausente) ou bug do PC-100/build a ser diagnosticado
+  // separadamente, NÃO uma transição de loading que devamos mascarar.
+  if (loading) {
     return (
       <V2PageContent>
-        <div className="text-sm text-muted-foreground py-8 text-center">
-          Carregando cockpit anual...
+        <header className="mb-4">
+          <h1 className="text-xl font-bold text-foreground">Visão Geral Planejamento {ano}</h1>
+          <p className="text-xs text-muted-foreground">
+            {isGlobal ? 'Todas as fazendas' : `Fazenda: ${fazendaAtual?.nome ?? '—'}`}
+          </p>
+        </header>
+        <div className="text-sm text-muted-foreground py-12 text-center">
+          Carregando cockpit anual…
         </div>
       </V2PageContent>
     );
