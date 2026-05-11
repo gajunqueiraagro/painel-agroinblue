@@ -410,35 +410,56 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // Estoque mensal; NÃO acumula em viewMode='periodo'.
   const areaMetaPorMes = areaMetaData?.porMes ?? null;
   const areaMetaIdx = Math.max(0, Math.min(11, (mes ?? 1) - 1));
-  const areaPecuariaMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_pecuaria_ha) ?? Array(12).fill(null);
-  const areaAgriculturaMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_agricultura_ha) ?? Array(12).fill(null);
-  const areaTotalMetaPorMes: (number | null)[] =
-    areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null);
+  const areaPecuariaMetaPorMes = useMemo<(number | null)[]>(
+    () => areaMetaPorMes?.map(m => m.area_pecuaria_ha) ?? Array(12).fill(null),
+    [areaMetaPorMes],
+  );
+  const areaAgriculturaMetaPorMes = useMemo<(number | null)[]>(
+    () => areaMetaPorMes?.map(m => m.area_agricultura_ha) ?? Array(12).fill(null),
+    [areaMetaPorMes],
+  );
+  const areaTotalMetaPorMes = useMemo<(number | null)[]>(
+    () => areaMetaPorMes?.map(m => m.area_total_ha) ?? Array(12).fill(null),
+    [areaMetaPorMes],
+  );
 
   // C4.2 — Área REALIZADA via snapshots (já no escopo). Estoque mensal; NÃO acumula.
   // snapshots: SnapshotAreaMes[] não-posicional — indexar via .find por mes.
   const areaRealIdx = areaMetaIdx;
-  const areaPecuariaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_pecuaria_ha : null;
-  });
-  const areaAgriculturaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_agricultura_ha : null;
-  });
-  const areaProdutivaRealPorMes: (number | null)[] = Array.from({ length: 12 }, (_, i) => {
-    const s = snapshots.find(x => x.mes === i + 1);
-    return s ? s.area_produtiva_ha : null;
-  });
+  const areaPecuariaRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_pecuaria_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaAgriculturaRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_agricultura_ha : null;
+    }),
+    [snapshots],
+  );
+  const areaProdutivaRealPorMes = useMemo<(number | null)[]>(
+    () => Array.from({ length: 12 }, (_, i) => {
+      const s = snapshots.find(x => x.mes === i + 1);
+      return s ? s.area_produtiva_ha : null;
+    }),
+    [snapshots],
+  );
 
   // C5.1 — séries number[] para buildMonthlyDataFromView e divisores diretos
   // (kg/ha). null → NaN; buildMonthlyDataFromView trata NaN como ausência via
   // fallback interno → 0, e calcularIndicadoresEficienciaArea retorna NaN
   // quando área = 0. Cadeia preserva "sem base validada".
-  const areaPecuariaRealNumPorMes: number[] = areaPecuariaRealPorMes.map(v => v ?? NaN);
-  const areaPecuariaMetaNumPorMes: number[] = areaPecuariaMetaPorMes.map(v => v ?? NaN);
+  const areaPecuariaRealNumPorMes = useMemo<number[]>(
+    () => areaPecuariaRealPorMes.map(v => v ?? NaN),
+    [areaPecuariaRealPorMes],
+  );
+  const areaPecuariaMetaNumPorMes = useMemo<number[]>(
+    () => areaPecuariaMetaPorMes.map(v => v ?? NaN),
+    [areaPecuariaMetaPorMes],
+  );
 
   const {
     rawCategorias: viewDataRealizado,
