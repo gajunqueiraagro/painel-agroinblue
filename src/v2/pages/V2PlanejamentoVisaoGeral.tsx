@@ -98,7 +98,7 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         <p className="text-xs text-muted-foreground">
           {dto.escopo === 'global' ? 'Todas as fazendas' : `Fazenda: ${dto.fazendaNome ?? '—'}`}
           {' · '}
-          Comparativos: META {ano} vs Realizado {ano - 1} (anual completo e Jan–{mesNomeAbreviado(mes)})
+          META {ano} — anual planejado
         </p>
       </header>
 
@@ -120,9 +120,4 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
       )}
     </V2PageContent>
   );
-}
-
-function mesNomeAbreviado(mes: number): string {
-  const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return nomes[Math.max(0, Math.min(11, mes - 1))] ?? '';
 }
