@@ -190,7 +190,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -350,6 +350,31 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ]);
 
   const loadingGmdHistorico = modalIndicador === 'gmd' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // ── uaHa histórico oficial PC-100 (Opção B 4º indicador) ──
+  const uaHaHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'uaHa') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.uaHaIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.uaHaIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.uaHaIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.uaHaIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.uaHaIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.uaHaIndicador?.valor ?? null },
+      { ano: anoNum,     valor: uaHaIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.uaHaIndicador, histArr5.uaHaIndicador,
+    histArr4.uaHaIndicador, histArr3.uaHaIndicador,
+    histArr2.uaHaIndicador, dadosAnoAnt.uaHaIndicador,
+    uaHaIndicador,
+  ]);
+
+  const loadingUaHaHistorico = modalIndicador === 'uaHa' && (
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
@@ -794,9 +819,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           anoInicio={anoNum - 6}
           deltaMes={uaHaIndicador?.deltaMes ?? null}
           deltaAno={uaHaIndicador?.deltaAno ?? null}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={uaHaHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingUaHaHistorico}
         />
       )}
       {modalIndicador === 'kgHa' && (
