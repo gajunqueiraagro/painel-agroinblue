@@ -181,38 +181,49 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // statusPilares: combinar P1 (fechamento_pastos) + P2 (valor_rebanho_fechamento)
+  // statusPilares: combinar P1 (fechamento_pastos) + P2 (valor_rebanho_fechamento).
+  // Paginação obrigatória nas duas tabelas (Supabase REST 1000-row limit).
   const statusPil = useQuery<StatusPilarMensal[]>({
-    queryKey: ['statpil', clienteId, periodoInicio, periodoFim],
+    queryKey: ['statpil', clienteId, isGlobal ? 'global' : fazendaId, periodoInicio, periodoFim],
     enabled,
     queryFn: async () => {
-      const { data: p1, error: e1 } = await (supabase
-        .from('fechamento_pastos')
-        .select('fazenda_id, ano_mes, status') as any)
-        .eq('cliente_id', clienteId!)
-        .gte('ano_mes', periodoInicio)
-        .lte('ano_mes', periodoFim);
-      if (e1) throw e1;
+      type Row = { fazenda_id: string; ano_mes: string; status: string };
+      const PAGE = 1000;
 
-      const { data: p2, error: e2 } = await (supabase
-        .from('valor_rebanho_fechamento')
-        .select('fazenda_id, ano_mes, status') as any)
-        .eq('cliente_id', clienteId!)
-        .gte('ano_mes', periodoInicio)
-        .lte('ano_mes', periodoFim);
-      if (e2) throw e2;
+      const fetchPaginado = async (
+        tabela: 'fechamento_pastos' | 'valor_rebanho_fechamento',
+      ): Promise<Row[]> => {
+        const acc: Row[] = [];
+        let offset = 0;
+        while (true) {
+          let q = (supabase
+            .from(tabela)
+            .select('fazenda_id, ano_mes, status') as any)
+            .eq('cliente_id', clienteId!)
+            .gte('ano_mes', periodoInicio)
+            .lte('ano_mes', periodoFim)
+            .order('ano_mes', { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (!isGlobal && fazendaId) q = q.eq('fazenda_id', fazendaId);
+          const { data, error } = await q;
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          acc.push(...(data as Row[]));
+          if (data.length < PAGE) break;
+          offset += PAGE;
+          if (offset > 50000) break; // safeguard contra loop infinito
+        }
+        return acc;
+      };
+
+      const [p1, p2] = await Promise.all([
+        fetchPaginado('fechamento_pastos'),
+        fetchPaginado('valor_rebanho_fechamento'),
+      ]);
 
       const map = new Map<string, StatusPilarMensal>();
       const k = (f: string, m: string) => `${f}|${m}`;
-      for (const r of (p1 ?? []) as Array<{ fazenda_id: string; ano_mes: string; status: string }>) {
-        map.set(k(r.fazenda_id, r.ano_mes), {
-          fazenda_id: r.fazenda_id,
-          ano_mes: r.ano_mes,
-          p1_oficial: r.status === 'fechado',
-          p2_oficial: false,
-        });
-      }
-      for (const r of (p2 ?? []) as Array<{ fazenda_id: string; ano_mes: string; status: string }>) {
+      for (const r of p1) {
         const key = k(r.fazenda_id, r.ano_mes);
         const cur = map.get(key) ?? {
           fazenda_id: r.fazenda_id,
@@ -220,7 +231,18 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
           p1_oficial: false,
           p2_oficial: false,
         };
-        cur.p2_oficial = r.status === 'fechado';
+        if (r.status === 'fechado') cur.p1_oficial = true;
+        map.set(key, cur);
+      }
+      for (const r of p2) {
+        const key = k(r.fazenda_id, r.ano_mes);
+        const cur = map.get(key) ?? {
+          fazenda_id: r.fazenda_id,
+          ano_mes: r.ano_mes,
+          p1_oficial: false,
+          p2_oficial: false,
+        };
+        if (r.status === 'fechado') cur.p2_oficial = true;
         map.set(key, cur);
       }
       return Array.from(map.values());

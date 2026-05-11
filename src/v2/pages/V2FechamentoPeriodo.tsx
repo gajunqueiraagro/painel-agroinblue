@@ -33,24 +33,37 @@ export default function V2FechamentoPeriodo() {
 
   const clienteId = clienteAtual?.id;
 
-  // Carrega lista de meses P1 fechados (cliente inteiro) para calcular default
+  // Carrega lista de meses P1 fechados (cliente inteiro) para calcular default.
+  // Paginação obrigatória: Supabase REST limita 1000 linhas por chamada e
+  // fechamento_pastos pode ter milhares de linhas (1 por pasto × mês).
   const statusPilDefault = useQuery<StatusPilarMensal[]>({
     queryKey: ['default-period-pilares', clienteId],
     enabled: !!clienteId,
     queryFn: async () => {
-      const { data, error } = await (supabase
-        .from('fechamento_pastos')
-        .select('fazenda_id, ano_mes, status') as any)
-        .eq('cliente_id', clienteId!)
-        .eq('status', 'fechado');
-      if (error) throw error;
-      return ((data ?? []) as Array<{ fazenda_id: string; ano_mes: string; status: string }>)
-        .map(r => ({
-          fazenda_id: r.fazenda_id,
-          ano_mes: r.ano_mes,
-          p1_oficial: true,
-          p2_oficial: false,
-        }));
+      const todos: Array<{ fazenda_id: string; ano_mes: string }> = [];
+      let offset = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await (supabase
+          .from('fechamento_pastos')
+          .select('fazenda_id, ano_mes') as any)
+          .eq('cliente_id', clienteId!)
+          .eq('status', 'fechado')
+          .order('ano_mes', { ascending: false })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        todos.push(...(data as Array<{ fazenda_id: string; ano_mes: string }>));
+        if (data.length < PAGE) break;
+        offset += PAGE;
+        if (offset > 50000) break; // safeguard contra loop infinito
+      }
+      return todos.map(r => ({
+        fazenda_id: r.fazenda_id,
+        ano_mes: r.ano_mes,
+        p1_oficial: true,
+        p2_oficial: false,
+      }));
     },
     staleTime: 5 * 60 * 1000,
   });
