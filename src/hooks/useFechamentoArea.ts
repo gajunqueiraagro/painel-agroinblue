@@ -119,25 +119,30 @@ export function useSnapshotAreaAnual(
 
       const fazendaIdsGlobal = isGlobal ? (fazRes.data ?? []).map((f: any) => f.id) : [];
 
-      const p1Res = await (
-        isGlobal && fazendaIdsGlobal.length > 0
-          ? supabase
+      // Paginar igual a pastosQuery: PostgREST trunca em 1000 rows sem .range().
+      // NJ Global 2025 (1.296 rows pos backfill Sta. Luzia) ficava com meses
+      // finais incompletos e disparava dadosCompletos=false silenciosamente.
+      const p1Res = isGlobal && fazendaIdsGlobal.length > 0
+        ? await fetchPastosRowsPaginado(
+            supabase
               .from('fechamento_pastos')
               .select('fazenda_id, ano_mes')
               .in('fazenda_id', fazendaIdsGlobal)
               .eq('status', 'fechado')
               .gte('ano_mes', `${ano}-01`)
               .lte('ano_mes', `${ano}-99`)
-          : !isGlobal && fazendaId
-            ? supabase
+          )
+        : (!isGlobal && fazendaId)
+          ? await fetchPastosRowsPaginado(
+              supabase
                 .from('fechamento_pastos')
                 .select('ano_mes')
                 .eq('fazenda_id', fazendaId)
                 .eq('status', 'fechado')
                 .gte('ano_mes', `${ano}-01`)
                 .lte('ano_mes', `${ano}-99`)
-            : Promise.resolve({ data: null as null, error: null })
-      );
+            )
+          : { data: null as null, error: null };
 
       if (cancelled) return;
 
@@ -290,8 +295,8 @@ export function useSnapshotAreaAnual(
       // Processar P1 (fazenda específica) — erro não-crítico
       const p1Mensal = Array(12).fill(false);
       if (!isGlobal && fazendaId && p1Res.data) {
-        for (const row of p1Res.data) {
-          const mesIdx = parseInt((row.ano_mes as string).split('-')[1], 10) - 1;
+        for (const row of p1Res.data as Array<{ ano_mes: string }>) {
+          const mesIdx = parseInt(row.ano_mes.split('-')[1], 10) - 1;
           if (mesIdx >= 0 && mesIdx < 12) p1Mensal[mesIdx] = true;
         }
       }
