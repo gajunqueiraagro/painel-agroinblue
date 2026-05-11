@@ -180,7 +180,8 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   const {
     cabecas, pesoMedio, gmd, arrobas, desfrute,
     receita, desembolso, resultado, valorRebanhoMes: valorReb,
-    areaProdutivaMes, lotUaHa, kgHa, statusArea, faltandoCount,
+    areaProdutivaMes, areaPecuariaRealMes, areaPecuariaRealPorMes, areaPecuariaMetaPorMes,
+    lotUaHa, kgHa, statusArea, faltandoCount,
     dadosCompletos,
     seriesMensais, seriesMeta, cabecasIndicador, pesoMedioIndicador, gmdIndicador, uaHaIndicador, kgHaIndicador, arrobasIndicador, desfruteIndicador, valorRebanhoIndicador,
     receitaPecIndicador, custeioPecIndicador, custoArrIndicador, precoArrIndicador, custoCabIndicador, margemArrIndicador,
@@ -190,7 +191,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -404,6 +405,82 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     histArr3.loading || histArr2.loading
   );
 
+  // ── areaProdutivaPec séries para gráfico superior do modal (Opção B 6º) ──
+  // Estoque mensal (posição). Não acumula no período. Fontes oficiais já
+  // expostas pelo PC-100 — sem cálculo paralelo.
+  const areaProdutivaPecSerieAno = useMemo<number[]>(() => {
+    return Array.from({ length: 13 }, (_, i) =>
+      i === 0 ? NaN : (areaPecuariaRealPorMes?.[i - 1] ?? NaN)
+    );
+  }, [areaPecuariaRealPorMes]);
+
+  const areaProdutivaPecSerieAnoAnt = useMemo<number[] | undefined>(() => {
+    const arr = dadosAnoAnt.areaPecuariaRealPorMes;
+    if (!arr) return undefined;
+    return Array.from({ length: 13 }, (_, i) =>
+      i === 0 ? NaN : (arr[i - 1] ?? NaN)
+    );
+  }, [dadosAnoAnt.areaPecuariaRealPorMes]);
+
+  const areaProdutivaPecSerieMeta = useMemo<number[] | undefined>(() => {
+    if (!areaPecuariaMetaPorMes) return undefined;
+    return Array.from({ length: 13 }, (_, i) =>
+      i === 0 ? NaN : (areaPecuariaMetaPorMes[i - 1] ?? NaN)
+    );
+  }, [areaPecuariaMetaPorMes]);
+
+  // Deltas — estoque, sem acumulação
+  const areaProdutivaPecDeltaMes = useMemo<number | null>(() => {
+    if (mesNum <= 1) return null;
+    const curr = areaProdutivaPecSerieAno[mesNum];
+    const prev = areaProdutivaPecSerieAno[mesNum - 1];
+    if (curr == null || isNaN(curr) || prev == null || isNaN(prev) || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  }, [areaProdutivaPecSerieAno, mesNum]);
+
+  const areaProdutivaPecDeltaAno = useMemo<number | null>(() => {
+    if (!areaProdutivaPecSerieAnoAnt) return null;
+    const curr = areaProdutivaPecSerieAno[mesNum];
+    const ant  = areaProdutivaPecSerieAnoAnt[mesNum];
+    if (curr == null || isNaN(curr) || ant == null || isNaN(ant) || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  }, [areaProdutivaPecSerieAno, areaProdutivaPecSerieAnoAnt, mesNum]);
+
+  const areaProdutivaPecDeltaMeta = useMemo<number | null>(() => {
+    if (!areaProdutivaPecSerieMeta) return null;
+    const curr = areaProdutivaPecSerieAno[mesNum];
+    const meta = areaProdutivaPecSerieMeta[mesNum];
+    if (curr == null || isNaN(curr) || meta == null || isNaN(meta) || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  }, [areaProdutivaPecSerieAno, areaProdutivaPecSerieMeta, mesNum]);
+
+  // ── areaProdutivaPec histórico oficial PC-100 (barras inferiores) ──
+  // Estoque do mês selecionado em cada ano. histArr2..6 e dadosAnoAnt já
+  // expõem areaPecuariaRealMes (useSnapshotAreaAnual é sempre incondicional).
+  const areaProdutivaPecHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'areaProdutivaPec') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.areaPecuariaRealMes ?? null },
+      { ano: anoNum - 5, valor: histArr5.areaPecuariaRealMes ?? null },
+      { ano: anoNum - 4, valor: histArr4.areaPecuariaRealMes ?? null },
+      { ano: anoNum - 3, valor: histArr3.areaPecuariaRealMes ?? null },
+      { ano: anoNum - 2, valor: histArr2.areaPecuariaRealMes ?? null },
+      { ano: anoNum - 1, valor: dadosAnoAnt.areaPecuariaRealMes ?? null },
+      { ano: anoNum,     valor: areaPecuariaRealMes ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum,
+    histArr6.areaPecuariaRealMes, histArr5.areaPecuariaRealMes,
+    histArr4.areaPecuariaRealMes, histArr3.areaPecuariaRealMes,
+    histArr2.areaPecuariaRealMes, dadosAnoAnt.areaPecuariaRealMes,
+    areaPecuariaRealMes,
+  ]);
+
+  const loadingAreaProdutivaPecHistorico = modalIndicador === 'areaProdutivaPec' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
   const calcVar = (atual: number | null, base: number | null): number | null => {
     if (atual == null || base == null || base === 0) return null;
     return ((atual - base) / base) * 100;
@@ -595,10 +672,11 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
         </SectionBlock>
 
         <SectionBlock title="Eficiência" subtitle="do uso da área">
-          <MetricTile label="Área produtiva" value={fmtN(areaProdutivaMes, 0)} unit="ha"
+          <MetricTile label="Área Produtiva Pecuária" value={fmtN(areaPecuariaRealMes ?? null, 0)} unit="ha"
             loading={statusArea === 'carregando'} status={msgArea(statusArea)}
-            deltaMes={vsMes(areaProdutivaMes, dadosMesAnt.areaProdutivaMes)}
-            deltaAno={vsAno(areaProdutivaMes, dadosAnoAnt.areaProdutivaMes)} />
+            deltaMes={vsMes(areaPecuariaRealMes ?? null, dadosMesAnt.areaPecuariaRealMes)}
+            deltaAno={vsAno(areaPecuariaRealMes ?? null, dadosAnoAnt.areaPecuariaRealMes)}
+            onClick={() => setModalIndicador('areaProdutivaPec')} />
           <MetricTile label={uaHaIndicador?.label ?? 'UA/HA NO MÊS'} value={fmtN(uaHaIndicador?.valor ?? null, 2)} loading={statusArea === 'carregando'} status={statusArea !== 'ok' ? msgArea(statusArea) : null}
             deltaMes={uaHaIndicador?.deltaMes ?? null}
             deltaAno={uaHaIndicador?.deltaAno ?? null}
@@ -870,6 +948,30 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           historicoAno={kgHaHistoricoOficial}
           historicoMeta={[]}
           loadingHistorico={loadingKgHaHistorico}
+        />
+      )}
+      {modalIndicador === 'areaProdutivaPec' && (
+        <IndicadorHistoricoModal
+          open onClose={() => setModalIndicador(null)}
+          titulo="Área Produtiva Pecuária"
+          unidade="ha" formatoValor="inteiro"
+          subtitulo="Área pecuária produtiva no mês"
+          mesAtual={mesNum} anoAtual={anoNum}
+          serieAno={areaProdutivaPecSerieAno}
+          serieAnoAnt={areaProdutivaPecSerieAnoAnt}
+          serieMeta={areaProdutivaPecSerieMeta}
+          tipoAcumulado="posicao"
+          indicadorKey="areaProdutivaPec"
+          clienteId={clienteAtual?.id}
+          fazendaId={isGlobal ? null : fazendaAtual?.id}
+          fazendaIds={fazendaIdsPecuaria}
+          anoInicio={anoNum - 6}
+          deltaMes={areaProdutivaPecDeltaMes}
+          deltaAno={areaProdutivaPecDeltaAno}
+          viewMode={viewMode}
+          historicoAno={areaProdutivaPecHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingAreaProdutivaPecHistorico}
         />
       )}
       {modalIndicador === 'desfrute' && (
