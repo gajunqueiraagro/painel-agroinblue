@@ -13,6 +13,7 @@
  *  - financeiro_saldos_bancarios_v2
  *  - fechamento_pastos (status P1)
  *  - valor_rebanho_fechamento (status P2)
+ *  - fechamento_area_snapshot (area_pecuaria_ha por fazenda+mês)
  *
  * Quando tudo carregou, chama buildFechamentoPeriodoData e devolve o DTO.
  */
@@ -181,6 +182,70 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Área Produtiva Pec — fechamento_area_snapshot (1 linha por fazenda+mês).
+  // Paginada para segurança (cliente com muitas fazendas × ano inteiro).
+  type AreaRow = { fazenda_id: string; ano_mes: string; area_pecuaria_ha: number | null };
+
+  const areaSnap = useQuery<AreaRow[]>({
+    queryKey: ['area-snap', clienteId, isGlobal ? 'global' : fazendaId, periodoInicio, periodoFim],
+    enabled,
+    queryFn: async () => {
+      const acc: AreaRow[] = [];
+      let offset = 0;
+      const PAGE = 1000;
+      while (true) {
+        let q = (supabase
+          .from('fechamento_area_snapshot' as any)
+          .select('fazenda_id, ano_mes, area_pecuaria_ha') as any)
+          .eq('cliente_id', clienteId!)
+          .gte('ano_mes', periodoInicio)
+          .lte('ano_mes', periodoFim)
+          .order('ano_mes', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (!isGlobal && fazendaId) q = q.eq('fazenda_id', fazendaId);
+        const { data, error } = await q;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        acc.push(...(data as AreaRow[]));
+        if (data.length < PAGE) break;
+        offset += PAGE;
+        if (offset > 50000) break;
+      }
+      return acc;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const areaSnapAnt = useQuery<AreaRow[]>({
+    queryKey: ['area-snap-ant', clienteId, isGlobal ? 'global' : fazendaId, anoAnterior],
+    enabled,
+    queryFn: async () => {
+      const acc: AreaRow[] = [];
+      let offset = 0;
+      const PAGE = 1000;
+      while (true) {
+        let q = (supabase
+          .from('fechamento_area_snapshot' as any)
+          .select('fazenda_id, ano_mes, area_pecuaria_ha') as any)
+          .eq('cliente_id', clienteId!)
+          .gte('ano_mes', `${anoAnterior}-01`)
+          .lte('ano_mes', `${anoAnterior}-12`)
+          .order('ano_mes', { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (!isGlobal && fazendaId) q = q.eq('fazenda_id', fazendaId);
+        const { data, error } = await q;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        acc.push(...(data as AreaRow[]));
+        if (data.length < PAGE) break;
+        offset += PAGE;
+        if (offset > 50000) break;
+      }
+      return acc;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // statusPilares: combinar P1 (fechamento_pastos) + P2 (valor_rebanho_fechamento).
   // Paginação obrigatória nas duas tabelas (Supabase REST 1000-row limit).
   const statusPil = useQuery<StatusPilarMensal[]>({
@@ -258,7 +323,8 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     planFin.loading ||
     valorReb.isLoading || valorRebAnt.isLoading ||
     saldosBan.isLoading || saldosBanAnt.isLoading ||
-    statusPil.isLoading;
+    statusPil.isLoading ||
+    areaSnap.isLoading || areaSnapAnt.isLoading;
 
   const error: Error | null =
     (valorReb.error as Error | null) ??
@@ -266,6 +332,8 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     (saldosBan.error as Error | null) ??
     (saldosBanAnt.error as Error | null) ??
     (statusPil.error as Error | null) ??
+    (areaSnap.error as Error | null) ??
+    (areaSnapAnt.error as Error | null) ??
     null;
 
   // DTO
@@ -276,6 +344,28 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     const rebanhoMensal = adaptarRebanhoMensal((rebCorr as any)?.totaisPorMes ?? {}, anoCorrente);
     const rebanhoMensalAnt = adaptarRebanhoMensal((rebAnt as any)?.totaisPorMes ?? {}, anoAnterior);
     const rebanhoMensalMeta = adaptarRebanhoMensal((rebMeta as any)?.totaisPorMes ?? {}, anoCorrente);
+
+    // Enriquecimento: areaProdutivaPec por mês a partir de fechamento_area_snapshot.
+    // Quando isGlobal, somar a área pecuária de todas as fazendas que reportaram
+    // snapshot naquele mês. Quando fazenda específica, usar o valor único.
+    const indexarAreaPorMes = (rows: AreaRow[]): Map<string, number> => {
+      const map = new Map<string, number>();
+      for (const r of rows) {
+        if (r.area_pecuaria_ha == null || !Number.isFinite(r.area_pecuaria_ha)) continue;
+        map.set(r.ano_mes, (map.get(r.ano_mes) ?? 0) + r.area_pecuaria_ha);
+      }
+      return map;
+    };
+    const areaPorMesCorr = indexarAreaPorMes(areaSnap.data ?? []);
+    const areaPorMesAnt = indexarAreaPorMes(areaSnapAnt.data ?? []);
+    for (const r of rebanhoMensal) {
+      const a = areaPorMesCorr.get(r.ano_mes);
+      if (a != null) r.areaProdutivaPec = a;
+    }
+    for (const r of rebanhoMensalAnt) {
+      const a = areaPorMesAnt.get(r.ano_mes);
+      if (a != null) r.areaProdutivaPec = a;
+    }
 
     return buildFechamentoPeriodoData({
       clienteId,
@@ -304,6 +394,7 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
     (rebCorr as any)?.totaisPorMes, (rebAnt as any)?.totaisPorMes, (rebMeta as any)?.totaisPorMes,
     (lancCorr as any)?.lancamentos, (lancAnt as any)?.lancamentos,
     valorReb.data, valorRebAnt.data, saldosBan.data, saldosBanAnt.data, statusPil.data,
+    areaSnap.data, areaSnapAnt.data,
   ]);
 
   return { dto, loading, error };
