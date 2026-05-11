@@ -214,14 +214,14 @@ const isMetaCusteioPec   = (r: MetaGridRow) => isMetaCustoFixoPec(r) || isMetaCu
 const isMetaReceitaPec   = (r: MetaGridRow) => r.grupo_custo === 'Receita Pecuária';
 
 // Investimento na Fazenda Pecuária — separado do custeio.
+// Usa grupo_custo='Investimento Pecuária' (mais robusto que macro+escopo
+// porque meta_projetos_investimento entra no metaGrid sem escopo_negocio).
 const isInvFazendaPec = (l: FinanceiroLancamento) =>
   l.tipo_operacao === '2-Saídas'
-  && l.macro_custo === 'Investimento na Fazenda'
-  && l.escopo_negocio === 'pecuaria';
+  && l.grupo_custo === 'Investimento Pecuária';
 
 const isMetaInvFazendaPec = (r: MetaGridRow) =>
-  r.macro_custo === 'Investimento na Fazenda'
-  && r.escopo_negocio === 'pecuaria';
+  r.grupo_custo === 'Investimento Pecuária';
 
 // ─────────────────────────────────────────────────────────────
 // REBANHO HELPERS
