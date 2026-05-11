@@ -43,7 +43,8 @@ export type V2Section =
   | 'dre-executivo'          // (em construção)
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
-  | 'validacoes';            // (em construção)
+  | 'validacoes'             // (em construção)
+  | 'fechamento-periodo';    // Marco 2.4 — cockpit Fechamento do Período
 
 export type ItemStatus = 'ready' | 'needs-wrapper';
 
@@ -152,10 +153,11 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Visão Executiva',
         itens: [
-          { id: 'painel-consultor', label: 'PC-100',                       status: 'ready' },
-          { id: 'indicadores-zoot', label: 'Indicadores',                  status: 'needs-wrapper' },
-          { id: 'valor-rebanho',    label: 'Evolução Patrimonial',         status: 'needs-wrapper' },
-          { id: 'dre-executivo',    label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
+          { id: 'painel-consultor',    label: 'PC-100',                       status: 'ready' },
+          { id: 'fechamento-periodo',  label: 'Fechamento do Período',        status: 'ready' },
+          { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
+          { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper' },
+          { id: 'dre-executivo',       label: 'DRE Executivo (em construção)', status: 'needs-wrapper' },
         ],
       },
     ],
@@ -227,12 +229,13 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'meta-cenario': 'planejamento', 'meta-consolidacao': 'planejamento', 'meta-metas': 'planejamento',
 
   // ── executivo ──
-  'painel-consultor': 'executivo',
-  'painel-anual':     'executivo',
-  'auditoria-anual':  'executivo',
-  'indicadores-zoot': 'executivo',
-  'valor-rebanho':    'executivo',
-  'dre-executivo':    'executivo',
+  'painel-consultor':    'executivo',
+  'painel-anual':        'executivo',
+  'auditoria-anual':     'executivo',
+  'indicadores-zoot':    'executivo',
+  'valor-rebanho':       'executivo',
+  'dre-executivo':       'executivo',
+  'fechamento-periodo':  'executivo',
 
   // ── auditoria ──
   'auditoria-tecnica': 'auditoria',

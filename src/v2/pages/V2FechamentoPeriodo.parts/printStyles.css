@@ -1,0 +1,200 @@
+/* Print + screen layout for V2FechamentoPeriodo (Marco 2.4). */
+
+.fechamento-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.fechamento-print-area {
+  background: white;
+  color: #111;
+}
+
+.pagina-fechamento {
+  background: white;
+  padding: 24px;
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.pagina-fechamento h1 {
+  font-size: 20pt;
+  margin: 0 0 8pt 0;
+  color: #111;
+}
+.pagina-fechamento h2 {
+  font-size: 14pt;
+  margin: 12pt 0 6pt 0;
+  color: #111;
+}
+.pagina-fechamento h3 {
+  font-size: 11pt;
+  margin: 8pt 0 4pt 0;
+  color: #111;
+}
+
+.capa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #2c3e50;
+  padding-bottom: 16px;
+  margin-bottom: 24px;
+}
+.capa-logo { width: 150px; height: auto; }
+.capa-meta { margin: 24px 0; line-height: 2; font-size: 11pt; }
+.capa-resumo p { margin: 8px 0; line-height: 1.6; }
+
+.fechamento-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+  margin: 8px 0;
+}
+.fechamento-table th, .fechamento-table td {
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  text-align: left;
+}
+.fechamento-table th {
+  font-weight: 600;
+  background: #f3f4f6;
+}
+.fechamento-table td.num,
+.fechamento-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fechamento-table tr.linha-total td {
+  font-weight: 700;
+  background: #f9fafb;
+  border-top: 2px solid #6b7280;
+}
+.fechamento-table tr.linha-sub td:first-child {
+  padding-left: 24px;
+  color: #4b5563;
+}
+
+.dif-positiva { color: #16a34a; font-weight: 600; }
+.dif-negativa { color: #dc2626; font-weight: 600; }
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.card-mini {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 10px;
+}
+.card-mini-titulo {
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+}
+.card-mini-valor {
+  font-size: 14pt;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.tabelas-lado-a-lado {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.fluxo-graficos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.cards-resumo-global {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.card-resumo {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 16px;
+}
+.card-resumo h3 { margin-top: 0; }
+.card-resumo p { margin: 6px 0; font-size: 10pt; }
+
+.header-filtro {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+.header-filtro label {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #374151;
+}
+.header-filtro input[type="month"] {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11pt;
+}
+.header-filtro .btn-imprimir {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  margin-left: auto;
+}
+.header-filtro .btn-imprimir:hover {
+  background: #1d4ed8;
+}
+.header-filtro .btn-imprimir:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.subgrupo-rank {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+}
+.subgrupo-rank-header {
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media print {
+  .v2-sidebar, .v2-mobile-nav, .header-filtro, .no-print {
+    display: none !important;
+  }
+  body { background: white !important; }
+  .fechamento-container { padding: 0; }
+  .pagina-fechamento {
+    page-break-after: always;
+    border: none;
+    margin: 0;
+    padding: 15mm;
+  }
+  @page { size: A4 portrait; margin: 0; }
+  .fechamento-print-area { font-size: 10pt; }
+}

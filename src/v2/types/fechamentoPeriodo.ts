@@ -316,7 +316,7 @@ export type SaldoBancario = {
   conta_bancaria_id: string;
 };
 
-export type StatusPilar = {
+export type StatusPilarMensal = {
   fazenda_id: string;
   ano_mes: string;
   p1_oficial: boolean;
@@ -359,5 +359,5 @@ export type BuildFechamentoPeriodoInput = {
   saldosBancarios: SaldoBancario[];
   saldosBancariosAnoAnterior: SaldoBancario[];
 
-  statusPilares: StatusPilar[];
+  statusPilares: StatusPilarMensal[];
 };
