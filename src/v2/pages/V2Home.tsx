@@ -405,6 +405,15 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
     histArr3.loading || histArr2.loading
   );
 
+  // Helper: lê o ano-1 financeiro pela série oficial da chamada principal,
+  // a mesma fonte usada pela linha cinza do gráfico superior.
+  // Evita usar dadosAnoAnt para financeiros, pois essa chamada recebe sharedLanc
+  // do ano atual e pode zerar indicadores financeiros do ano anterior.
+  const safeSerieAnoAnt = (serie: number[] | undefined, idx: number): number | null => {
+    const v = serie?.[idx];
+    return v != null && !isNaN(v) ? v : null;
+  };
+
   // ── custeioPec histórico oficial PC-100 (Opção B 7º indicador) ──
   const custeioPecHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
     if (modalIndicador !== 'custeioPec') return [];
@@ -516,15 +525,6 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
       if (v != null && !isNaN(v)) { soma += v; n++; }
     }
     return n > 0 ? soma / n : null;
-  };
-
-  // Helper: lê o ano-1 financeiro pela série oficial da chamada principal,
-  // a mesma fonte usada pela linha cinza do gráfico superior.
-  // Evita usar dadosAnoAnt para financeiros, pois essa chamada recebe sharedLanc
-  // do ano atual e pode zerar indicadores financeiros do ano anterior.
-  const safeSerieAnoAnt = (serie: number[] | undefined, idx: number): number | null => {
-    const v = serie?.[idx];
-    return v != null && !isNaN(v) ? v : null;
   };
 
   // ── Área Produtiva Pecuária — semântica estoque com média acumulada no período ──
