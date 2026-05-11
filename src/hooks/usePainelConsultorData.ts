@@ -841,18 +841,14 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           .lte('data', `${ano}-12-31`);
         if (isGlobal) {
           if (!cid) {
-            // Deps em transição — clienteAtual?.id ainda não resolveu.
-            // Não tocar state: preserva último valor real até effect re-disparar com cid resolvido.
-            // Fix Marco 1.1.B-FIX-3: bug de race causava Receitas Pec sumir após cache hit.
+            if (!cancelled) setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
             return;
           }
           q = q.eq('cliente_id', cid);
         } else if (fazendaId && fazendaId !== '__global__') {
           q = q.eq('fazenda_id', fazendaId);
         } else {
-          // Deps em transição — fazendaId ainda não resolveu OU está em '__global__' sem isGlobal=true.
-          // Não tocar state: preserva último valor real até effect re-disparar.
-          // Fix Marco 1.1.B-FIX-3.
+          if (!cancelled) setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
           return;
         }
         const { data, error } = await q.order('data').range(from, from + PAGE - 1);
