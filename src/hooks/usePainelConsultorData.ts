@@ -751,8 +751,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return () => { cancelled = true; };
   }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
 
-  // Pec ano-1 (cenario='realizado', TIPOS_DESFRUTE) — agrega Σ valor_total e Σ qtd*pesoMedio/30
-  // por mês. Suporta Receita Pec ano-1 e Preço de Venda R$/@ ano-1 (mesma fonte oficial).
+  // Pec ano-1 (cenario='realizado', TIPOS_DESFRUTE) — agrega Σ valor_total e Σ arrobas
+  // (abate: peso_carcaca_kg/15; venda/consumo: peso_medio_kg/30) por mês.
+  // Suporta Receita Pec ano-1 e Preço de Venda R$/@ ano-1 (mesma fonte oficial).
   const [pecAnoAnt12, setPecAnoAnt12] = useState<{ rec: number[]; desfArr: number[] }>(
     () => ({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) }),
   );
@@ -771,7 +772,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, peso_medio_kg, valor_total, data')
+          .select('tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
           .eq('cancelado', false)
           .eq('cenario', 'realizado')
           .eq('status_operacional', 'realizado')
@@ -804,10 +805,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const m = parseInt(String(r.data ?? '').slice(5, 7));
         if (isNaN(m) || m < 1 || m > 12) continue;
         const qtd = Number(r.quantidade) || 0;
-        const pmk = Number(r.peso_medio_kg) || 0;
         const vt  = Math.abs(Number(r.valor_total) || 0);
-        rec[m - 1]    += vt;
-        desfArr[m - 1] += (qtd * pmk) / 30;
+        rec[m - 1] += vt;
+        if (r.tipo === 'abate') {
+          const pc = Number(r.peso_carcaca_kg) || 0;
+          if (pc > 0) desfArr[m - 1] += (qtd * pc) / 15;
+        } else {
+          const pmk = Number(r.peso_medio_kg) || 0;
+          if (pmk > 0) desfArr[m - 1] += (qtd * pmk) / 30;
+        }
       }
       setPecAnoAnt12({ rec, desfArr });
     };
@@ -833,7 +839,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, peso_medio_kg, valor_total, data')
+          .select('tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
           .eq('cancelado', false)
           .eq('cenario', 'meta')
           .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
@@ -865,10 +871,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const m = parseInt(String(r.data ?? '').slice(5, 7));
         if (isNaN(m) || m < 1 || m > 12) continue;
         const qtd = Number(r.quantidade) || 0;
-        const pmk = Number(r.peso_medio_kg) || 0;
         const vt  = Math.abs(Number(r.valor_total) || 0);
-        rec[m - 1]    += vt;
-        desfArr[m - 1] += (qtd * pmk) / 30;
+        rec[m - 1] += vt;
+        if (r.tipo === 'abate') {
+          const pc = Number(r.peso_carcaca_kg) || 0;
+          if (pc > 0) desfArr[m - 1] += (qtd * pc) / 15;
+        } else {
+          const pmk = Number(r.peso_medio_kg) || 0;
+          if (pmk > 0) desfArr[m - 1] += (qtd * pmk) / 30;
+        }
       }
       setPecMeta12({ rec, desfArr });
     };
