@@ -30,7 +30,7 @@ export type Lente = 'cab' | 'arroba_total' | 'arroba_media' | 'preco_arroba' | '
 
 export type TipoMov =
   | 'nascimentos' | 'compras' | 'transf_entradas' | 'soma_entradas'
-  | 'vendas' | 'abates' | 'consumos' | 'mortes'
+  | 'vendas' | 'abates' | 'consumos' | 'mortes' | 'transf_saidas'
   | 'soma_saidas' | 'desfrute' | 'desfrute_pct';
 
 export type PorLente = Record<Lente, number | null>;
@@ -94,7 +94,10 @@ function getTiposLancDeMov(isGlobal: boolean): Record<TipoMov, Lancamento['tipo'
     abates:          ['abate'],
     consumos:        ['consumo'],
     mortes:          ['morte'],
-    soma_saidas:     ['venda', 'abate', 'consumo', 'morte'],
+    transf_saidas:   ['transferencia_saida'],
+    soma_saidas:     isGlobal
+      ? ['venda', 'abate', 'consumo', 'morte']
+      : ['venda', 'abate', 'consumo', 'morte', 'transferencia_saida'],
     desfrute:        ['abate', 'venda', 'consumo'], // TIPOS_DESFRUTE_GLOBAL — cab/@/valor incluem consumo
     desfrute_pct:    ['abate', 'venda', 'consumo'], // mesmo agreg; valorPorLente força % p/ qualquer lente
   };
@@ -116,6 +119,7 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
   abates:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
   consumos:        new Set(['cab', 'arroba_total', 'arroba_media']),
   mortes:          new Set(['cab', 'arroba_total', 'arroba_media']),
+  transf_saidas:   new Set(['cab']),
   soma_saidas:     new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
   desfrute:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
   desfrute_pct:    new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
@@ -123,7 +127,7 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
 
 const TIPOS_TODOS: TipoMov[] = [
   'nascimentos', 'compras', 'transf_entradas', 'soma_entradas',
-  'vendas', 'abates', 'consumos', 'mortes',
+  'vendas', 'abates', 'consumos', 'mortes', 'transf_saidas',
   'soma_saidas', 'desfrute', 'desfrute_pct',
 ];
 

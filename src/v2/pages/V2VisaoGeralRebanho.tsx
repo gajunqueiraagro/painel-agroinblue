@@ -29,45 +29,48 @@ interface Props {
 interface CardConfig {
   id: TipoMov;
   label: string;
-  grupo: 'entradas' | 'saidas-esq' | 'saidas-dir';
-  /** Σ Entradas, Σ Saídas, Desfrute — borda destacada. */
+  grupo: 'entradas-mov' | 'entradas-total' | 'saidas-mov' | 'saidas-resumo';
+  /** Σ Entradas, Σ Saídas, Desfrutes — borda destacada. */
   destaque?: boolean;
   /** Lentes em que o card mostra dado real; outras renderizam '—' atenuado. */
   lentesAplicaveis: Lente[];
   /** Para Mortes, "sobe = ruim": inverter cor das variações. */
   invertCor?: boolean;
-  /** Card só renderiza em modo individual (ex: Transf. Entradas — em Global é interno). */
+  /** Card só renderiza em modo individual (Transf. Entradas/Saídas — em Global é interno). */
   soOndeIndividual?: boolean;
 }
 
 const CARDS: CardConfig[] = [
-  // ENTRADAS
-  { id: 'nascimentos',     label: 'Nascimentos', grupo: 'entradas',
+  // === ENTRADAS — container de movimentações (esq) ===
+  { id: 'nascimentos',     label: 'Nascimentos', grupo: 'entradas-mov',
     lentesAplicaveis: ['cab'] },
-  { id: 'compras',         label: 'Compras', grupo: 'entradas',
+  { id: 'compras',         label: 'Compras', grupo: 'entradas-mov',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'transf_entradas', label: 'Transf. Entradas', grupo: 'entradas',
-    lentesAplicaveis: ['cab'],
-    soOndeIndividual: true },
-  { id: 'soma_entradas',   label: 'Σ Entradas', grupo: 'entradas', destaque: true,
+  { id: 'transf_entradas', label: 'Transf. Entradas', grupo: 'entradas-mov',
+    lentesAplicaveis: ['cab'], soOndeIndividual: true },
+
+  // === ENTRADAS — total (dir) ===
+  { id: 'soma_entradas',   label: 'Σ Entradas', grupo: 'entradas-total', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
 
-  // SAÍDAS - ESQUERDA: vendas, abates, consumos, mortes (2x2)
-  { id: 'vendas',          label: 'Vendas', grupo: 'saidas-esq',
+  // === SAÍDAS — container de movimentações (esq) ===
+  { id: 'vendas',          label: 'Vendas', grupo: 'saidas-mov',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'abates',          label: 'Abates', grupo: 'saidas-esq',
+  { id: 'abates',          label: 'Abates', grupo: 'saidas-mov',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'consumos',        label: 'Consumos', grupo: 'saidas-esq',
+  { id: 'consumos',        label: 'Consumos', grupo: 'saidas-mov',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
-  { id: 'mortes',          label: 'Mortes', grupo: 'saidas-esq', invertCor: true,
+  { id: 'mortes',          label: 'Mortes', grupo: 'saidas-mov', invertCor: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
+  { id: 'transf_saidas',   label: 'Transf. Saídas', grupo: 'saidas-mov',
+    lentesAplicaveis: ['cab'], soOndeIndividual: true },
 
-  // SAÍDAS - DIREITA: 2 cards de desfrute lado a lado + Σ Saídas abaixo
-  { id: 'desfrute',        label: 'Total Desfrute', grupo: 'saidas-dir', destaque: true,
+  // === SAÍDAS — resumo (dir: 2 desfrutes em cima, Σ Saídas embaixo) ===
+  { id: 'desfrute',        label: 'Total Desfrute', grupo: 'saidas-resumo', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'desfrute_pct',    label: 'Desfrute %', grupo: 'saidas-dir', destaque: true,
+  { id: 'desfrute_pct',    label: 'Desfrute %', grupo: 'saidas-resumo', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'soma_saidas',     label: 'Σ Saídas', grupo: 'saidas-dir', destaque: true,
+  { id: 'soma_saidas',     label: 'Σ Saídas', grupo: 'saidas-resumo', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
 ];
 
@@ -151,11 +154,12 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
     setModalAberto(tipo);
   };
 
-  const entradas = CARDS.filter(c =>
-    c.grupo === 'entradas' && (!c.soOndeIndividual || !isGlobal),
-  );
-  const saidasEsq = CARDS.filter(c => c.grupo === 'saidas-esq');
-  const saidasDir = CARDS.filter(c => c.grupo === 'saidas-dir');
+  const filtroIndividual = (c: CardConfig) => !c.soOndeIndividual || !isGlobal;
+
+  const entradasMov   = CARDS.filter(c => c.grupo === 'entradas-mov'   && filtroIndividual(c));
+  const entradasTotal = CARDS.filter(c => c.grupo === 'entradas-total');
+  const saidasMov     = CARDS.filter(c => c.grupo === 'saidas-mov'     && filtroIndividual(c));
+  const saidasResumo  = CARDS.filter(c => c.grupo === 'saidas-resumo');
 
   // Dados do modal (quando aberto). Modal recebe CardData inteiro + decide
   // internamente qual lente/viewMode renderizar.
@@ -189,41 +193,71 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         )}
       </div>
 
-      {/* ENTRADAS — 3 cards (Global) ou 4 cards (Individual com Transf. Entradas) */}
+      {/* ENTRADAS — 2 containers lado a lado: mov (esq, 2fr) + total (dir, 1fr) */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Entradas
         </h2>
-        <div className={cn(
-          'grid gap-3',
-          isGlobal ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4',
-        )}>
-          {entradas.map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-3">
+          {/* Container movimentações */}
+          <div className="bg-muted/30 rounded-lg p-3">
+            <div className={cn(
+              'grid gap-2',
+              entradasMov.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
+            )}>
+              {entradasMov.map(c => (
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+              ))}
+            </div>
+          </div>
+          {/* Container total */}
+          <div className="bg-muted/30 rounded-lg p-3">
+            <div className="grid grid-cols-1 gap-2 h-full">
+              {entradasTotal.map(c => (
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* SAÍDAS — 2 colunas: esq 2x2 (vendas/abates/consumos/mortes); dir (2 desfrutes lado a lado + Σ Saídas) */}
+      {/* SAÍDAS — 2 containers: mov (esq, 3fr) + resumo (dir, 2fr) */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Saídas
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            {saidasEsq.map(c => (
-              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-3">
+          {/* Container movimentações: vendas, abates, consumos, mortes (+ transf.saidas em Individual full-width) */}
+          <div className="bg-muted/30 rounded-lg p-3">
+            <div className="grid grid-cols-2 gap-2">
+              {saidasMov.slice(0, 4).map(c => (
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+              ))}
+              {/* Transf. Saídas (5º card em Individual) ocupa linha inteira */}
+              {saidasMov.length > 4 && (
+                <div className="col-span-2">
+                  <CardKpi
+                    cfg={saidasMov[4]}
+                    lente={lente}
+                    data={porTipo?.[saidasMov[4].id]}
+                    onClick={() => abrirModal(saidasMov[4].id)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="grid grid-cols-2 gap-3">
-              {saidasDir.slice(0, 2).map(c => (
+          {/* Container resumo: 2 desfrutes em cima, Σ Saídas full embaixo */}
+          <div className="bg-muted/30 rounded-lg p-3">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                {saidasResumo.slice(0, 2).map(c => (
+                  <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+                ))}
+              </div>
+              {saidasResumo.slice(2).map(c => (
                 <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
               ))}
             </div>
-            {saidasDir.slice(2).map(c => (
-              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-            ))}
           </div>
         </div>
       </section>
