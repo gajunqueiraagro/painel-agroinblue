@@ -14,6 +14,7 @@ import {
   buildDesfruteCabMensal,
   TIPOS_DESFRUTE_OFICIAL,
 } from '@/lib/calculos/painelConsultorIndicadores';
+import { calcArrobasSafe } from '@/lib/calculos/economicos';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import type { Lancamento } from '@/types/cattle';
 import {
@@ -153,9 +154,11 @@ export function buildMonthlyDataFromView(
   // mesPrefix already defined above
   // desfruteCab oficial — vem do helper compartilhado.
   const desfruteCab = buildDesfruteCabMensal(lancPec, ano);
+  // Por lançamento via calcArrobasSafe: abate usa pesoCarcacaKg/15, venda/consumo
+  // usam pesoMedioKg/30. Convenção alinhada com V2 Visão Geral Rebanho.
   const desfrute_arr = mk(m => desfruteLancs
     .filter(l => l.data.startsWith(mesPrefix(m)))
-    .reduce((s, l) => s + (l.quantidade * (l.pesoMedioKg || 0)) / 30, 0));
+    .reduce((s, l) => s + calcArrobasSafe(l), 0));
 
   // ── Receita pecuária por competência: valorTotal de abate+venda+consumo ──
   const recPecCompMes = (m: number) => desfruteLancs

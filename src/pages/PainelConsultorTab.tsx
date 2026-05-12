@@ -45,6 +45,7 @@ import { formatPainel, type PainelFormatType } from '@/lib/calculos/formatters';
 import {
   calcAreaProdutivaPecuaria,
 } from '@/lib/calculos/zootecnicos';
+import { calcArrobasSafe, TIPOS_DESFRUTE_GLOBAL } from '@/lib/calculos/economicos';
 import { supabase } from '@/integrations/supabase/client';
 import type { MetaCategoriaMes } from '@/hooks/useMetaConsolidacao';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
@@ -644,7 +645,7 @@ function buildBlocoSoberano(
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[]): Bloco[] {
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -708,7 +709,11 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   });
   const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
   const desfruteCab = saidas;
-  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
+  // Desfrute @ vem pré-calculado por lançamento (calcArrobasSafe + TIPOS_DESFRUTE_GLOBAL).
+  // abate: pesoCarcacaKg/15; venda/consumo: pesoMedioKg/30; exclui transferencia_saida.
+  const desfrute_arr = arrobasSaidasMensal
+    ? arrobasSaidasMensal.map(v => v > 0 ? v : NaN)
+    : saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
 
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -932,7 +937,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[]): Bloco[] {
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -1000,7 +1005,11 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : NaN);
   const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : NaN);
   const desfruteCab = saidas;
-  const desfrute_arr = saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
+  // Desfrute @ vem pré-calculado por lançamento (calcArrobasSafe + TIPOS_DESFRUTE_GLOBAL).
+  // abate: pesoCarcacaKg/15; venda/consumo: pesoMedioKg/30; exclui transferencia_saida.
+  const desfrute_arr = arrobasSaidasMensal
+    ? arrobasSaidasMensal.map(v => v > 0 ? v : NaN)
+    : saidas.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 30 : NaN);
 
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
@@ -1689,6 +1698,24 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     };
   }, [areaPecAtiva, areaAgriAtiva, areaTotalAtiva]);
 
+  // @ produzidas METa — Σ por mês via calcArrobasSafe (abate/15 c/ carcaça,
+  // venda/consumo/30) sobre lançamentos cenario='meta'. Filtro TIPOS_DESFRUTE_GLOBAL
+  // (exclui transferencia_saida — convenção V2 Visão Geral Rebanho).
+  const arrobasSaidasMeta12 = useMemo(() => {
+    const arr = new Array(12).fill(0);
+    const tiposSet = new Set<string>(TIPOS_DESFRUTE_GLOBAL);
+    for (const l of lancPec) {
+      if (l.cenario !== 'meta') continue;
+      if (!tiposSet.has(l.tipo)) continue;
+      const dataAno = Number(l.data.substring(0, 4));
+      if (dataAno !== anoNum) continue;
+      const mes = Number(l.data.substring(5, 7));
+      if (mes < 1 || mes > 12) continue;
+      arr[mes - 1] += calcArrobasSafe(l);
+    }
+    return arr;
+  }, [lancPec, anoNum]);
+
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
     let result: Bloco[];
@@ -1703,10 +1730,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
+        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12);
       } else {
         // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie);
+        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12);
       }
     } else {
       // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -1733,7 +1760,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       }
     }
     return result;
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas, arrobasSaidasMeta12]);
 
   useEffect(() => {
     if (blocos.length > 0) {
