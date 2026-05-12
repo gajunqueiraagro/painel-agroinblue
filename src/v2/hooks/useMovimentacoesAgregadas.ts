@@ -50,8 +50,14 @@ export type CardData = {
   mesAnoAnt: PorLente;
   /** Valor agregado META no período corrente. */
   meta: PorLente;
-  /** Série Jan-Dez pré-calculada para cada lente — usado pelo modal Jan-Dez. */
+  /** Série Jan-Dez pré-calculada para cada lente — valor de CADA mês.
+   *  Modal usa em viewMode='mes' (barras). */
   seriesJanDez: Record<Lente, SeriesJanDez>;
+  /** Série Jan-Dez ACUMULADA por mês: cada ponto [m] = agregado para os
+   *  meses [1..m]. Para taxas/médias (preco_arroba, arroba_media, desfrute cab)
+   *  usa Σ numerador / Σ denominador — NÃO média de médias. Modal usa em
+   *  viewMode='periodo' (linha crescente). */
+  seriesAcumulada: Record<Lente, SeriesJanDez>;
 };
 
 export type MovimentacoesAgregadas = {
@@ -268,17 +274,25 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
         aRecMeta       = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, mesesPeriodo);
       }
 
-      // Séries Jan-Dez pré-calculadas por lente (consumidas pelo modal na Fase 4).
-      const seriesJanDez = {} as Record<Lente, SeriesJanDez>;
+      // Séries Jan-Dez por lente.
+      //   seriesJanDez[lente]   = valor isolado de CADA mês m (gráfico "Por mês" = barras)
+      //   seriesAcumulada[lente] = agregado Jan→m para CADA m — taxas/médias usam
+      //     Σ numerador / Σ denominador, reaproveitando valorPorLente com Agreg acumulado
+      //     (NÃO é média de médias). Gráfico "Acumulado" = linha crescente.
+      const seriesJanDez   = {} as Record<Lente, SeriesJanDez>;
+      const seriesAcumulada = {} as Record<Lente, SeriesJanDez>;
       for (const lente of LENTES_TODAS) {
         const real:    number[] = [0]; // [0] = Dez ano-1 (placeholder zero)
         const anoAntS: number[] = [0];
         const metaS:   number[] = [0];
+        const realAcum:    number[] = [0];
+        const anoAntAcum:  number[] = [0];
+        const metaAcum:    number[] = [0];
         for (let m = 1; m <= 12; m++) {
+          // ── Mês isolado [m] ──
           const aR = somarAgreg(agCorr,   tiposLanc, [m]);
           const aA = somarAgreg(agAnoAnt, tiposLanc, [m]);
           const aM = somarAgreg(agMeta,   tiposLanc, [m]);
-          // Sub-agreg só de receita por mês — necessário p/ desfrute+preco_arroba.
           let aRec_R: Agreg | undefined;
           let aRec_A: Agreg | undefined;
           let aRec_M: Agreg | undefined;
@@ -290,8 +304,26 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
           real.push(   valorPorLente(tipo, lente, aR, saldoInicialAnoCorr, aRec_R) ?? 0);
           anoAntS.push(valorPorLente(tipo, lente, aA, saldoInicialAnoAnt,  aRec_A) ?? 0);
           metaS.push(  valorPorLente(tipo, lente, aM, saldoInicialMeta,    aRec_M) ?? 0);
+
+          // ── Acumulado Jan→m: sempre via Σ raw + valorPorLente (taxa/média correta) ──
+          const mesesAteM = Array.from({ length: m }, (_, i) => i + 1);
+          const aR_acum = somarAgreg(agCorr,   tiposLanc, mesesAteM);
+          const aA_acum = somarAgreg(agAnoAnt, tiposLanc, mesesAteM);
+          const aM_acum = somarAgreg(agMeta,   tiposLanc, mesesAteM);
+          let aRec_R_acum: Agreg | undefined;
+          let aRec_A_acum: Agreg | undefined;
+          let aRec_M_acum: Agreg | undefined;
+          if (tipo === 'desfrute' && lente === 'preco_arroba') {
+            aRec_R_acum = somarAgreg(agCorr,   TIPOS_DESFRUTE_RECEITA, mesesAteM);
+            aRec_A_acum = somarAgreg(agAnoAnt, TIPOS_DESFRUTE_RECEITA, mesesAteM);
+            aRec_M_acum = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, mesesAteM);
+          }
+          realAcum.push(   valorPorLente(tipo, lente, aR_acum, saldoInicialAnoCorr, aRec_R_acum) ?? 0);
+          anoAntAcum.push( valorPorLente(tipo, lente, aA_acum, saldoInicialAnoAnt,  aRec_A_acum) ?? 0);
+          metaAcum.push(   valorPorLente(tipo, lente, aM_acum, saldoInicialMeta,    aRec_M_acum) ?? 0);
         }
-        seriesJanDez[lente] = { real, anoAnt: anoAntS, meta: metaS };
+        seriesJanDez[lente]    = { real, anoAnt: anoAntS, meta: metaS };
+        seriesAcumulada[lente] = { real: realAcum, anoAnt: anoAntAcum, meta: metaAcum };
       }
 
       result[tipo] = {
@@ -300,6 +332,7 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
         mesAnoAnt: porLente(tipo, aMesAnoAnt, saldoInicialAnoAnt,  aRecMesAnoAnt),
         meta:      porLente(tipo, aMeta,      saldoInicialMeta,    aRecMeta),
         seriesJanDez,
+        seriesAcumulada,
       };
     }
 

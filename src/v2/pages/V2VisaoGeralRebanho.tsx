@@ -168,9 +168,12 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const entradas = CARDS.filter(c => c.grupo === 'entradas');
   const saidas = CARDS.filter(c => c.grupo === 'saidas');
 
-  // Dados do modal (quando aberto)
+  // Dados do modal (quando aberto) — séries mensal + acumulada (vêm prontas do hook).
   const cfgModal = modalAberto ? CARDS.find(c => c.id === modalAberto) : null;
-  const dadosModal = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto].seriesJanDez[lente] : null;
+  const cardModalData = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto] : null;
+  const dadosModal     = cardModalData ? cardModalData.seriesJanDez[lente]    : null;
+  const dadosModalAcum = cardModalData ? cardModalData.seriesAcumulada[lente] : null;
+  const lenteLabel     = LENTES.find(l => l.id === lente)?.label;
 
   return (
     <div className="px-4 py-4 space-y-6 max-w-7xl mx-auto">
@@ -229,7 +232,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
       </section>
 
       {/* MODAL Jan-Dez — uma instância, renderiza só quando aberto */}
-      {modalAberto && cfgModal && dadosModal && (
+      {modalAberto && cfgModal && dadosModal && dadosModalAcum && (
         <MovimentacaoHistoricoModal
           open={true}
           onClose={() => setModalAberto(null)}
@@ -241,8 +244,11 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
           serieAno={dadosModal.real}
           serieAnoAnt={dadosModal.anoAnt}
           serieMeta={dadosModal.meta}
-          tipoAcumulado={getTipoAcumulado(modalAberto, lente)}
+          serieAnoAcum={dadosModalAcum.real}
+          serieAnoAntAcum={dadosModalAcum.anoAnt}
+          serieMetaAcum={dadosModalAcum.meta}
           corPrincipal={getCorPrincipal(modalAberto)}
+          lenteLabel={lenteLabel}
           viewModeInicial={viewMode}
         />
       )}
