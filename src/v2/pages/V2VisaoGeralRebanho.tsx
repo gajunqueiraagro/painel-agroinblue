@@ -17,6 +17,7 @@ import {
   type TipoMov,
   type CardData,
 } from '@/v2/hooks/useMovimentacoesAgregadas';
+import { MovimentacaoHistoricoModal } from '@/v2/components/MovimentacaoHistoricoModal';
 
 interface Props {
   ano: number;
@@ -109,15 +110,67 @@ function corDelta(d: number | null, invert = false): string {
   return positivo ? 'text-emerald-600' : 'text-rose-600';
 }
 
+// ─── Helpers do modal ───────────────────────────────────────────────────────
+
+/** Unidade textual para o cabeçalho do modal. Desfrute+cab é %. */
+function getUnidade(tipo: TipoMov, lente: Lente): string {
+  if (tipo === 'desfrute' && lente === 'cab') return '%';
+  switch (lente) {
+    case 'cab':          return 'cab';
+    case 'arroba_total': return '@';
+    case 'arroba_media': return '@/cab';
+    case 'preco_arroba': return 'R$/@';
+    case 'valor_total':  return 'R$';
+  }
+}
+
+/** Formato de número para o modal. */
+function getFormato(lente: Lente, tipo: TipoMov): 'inteiro' | 'decimal1' | 'decimal2' | 'moeda' | 'moedaAbreviada' {
+  if (tipo === 'desfrute' && lente === 'cab') return 'decimal1'; // %
+  switch (lente) {
+    case 'cab':          return 'inteiro';
+    case 'arroba_total': return 'inteiro';
+    case 'arroba_media': return 'decimal1';
+    case 'preco_arroba': return 'moeda';
+    case 'valor_total':  return 'moedaAbreviada';
+  }
+}
+
+/** Semântica de agregação — metadata, modal não usa internamente. */
+function getTipoAcumulado(tipo: TipoMov, lente: Lente): 'soma' | 'media' {
+  // Desfrute lente cab é % ratio — média; outras são somas mensais.
+  if (tipo === 'desfrute' && lente === 'cab') return 'media';
+  // Médias e razões também: arroba_media, preco_arroba são taxas.
+  if (lente === 'arroba_media' || lente === 'preco_arroba') return 'media';
+  return 'soma';
+}
+
+/** Cor primária — Mortes em vermelho (subir = ruim). */
+function getCorPrincipal(tipo: TipoMov): 'azul' | 'vermelho' {
+  if (tipo === 'mortes') return 'vermelho';
+  return 'azul';
+}
+
 // ─── Componente principal ───────────────────────────────────────────────────
 
 export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const [lente, setLente] = useState<Lente>('cab');
+  const [modalAberto, setModalAberto] = useState<TipoMov | null>(null);
 
   const { porTipo, loading } = useMovimentacoesAgregadas({ ano, mes, viewMode });
 
+  const abrirModal = (tipo: TipoMov) => {
+    const cfg = CARDS.find(c => c.id === tipo);
+    if (!cfg?.lentesAplicaveis.includes(lente)) return; // não abre em card atenuado
+    setModalAberto(tipo);
+  };
+
   const entradas = CARDS.filter(c => c.grupo === 'entradas');
   const saidas = CARDS.filter(c => c.grupo === 'saidas');
+
+  // Dados do modal (quando aberto)
+  const cfgModal = modalAberto ? CARDS.find(c => c.id === modalAberto) : null;
+  const dadosModal = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto].seriesJanDez[lente] : null;
 
   return (
     <div className="px-4 py-4 space-y-6 max-w-7xl mx-auto">
@@ -153,7 +206,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {entradas.map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
           ))}
         </div>
       </section>
@@ -165,20 +218,43 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {saidas.slice(0, 4).map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
           ))}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           {saidas.slice(4).map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
           ))}
         </div>
       </section>
+
+      {/* MODAL Jan-Dez — uma instância, renderiza só quando aberto */}
+      {modalAberto && cfgModal && dadosModal && (
+        <MovimentacaoHistoricoModal
+          open={true}
+          onClose={() => setModalAberto(null)}
+          titulo={cfgModal.label}
+          unidade={getUnidade(modalAberto, lente)}
+          formatoValor={getFormato(lente, modalAberto)}
+          mesAtual={mes}
+          anoAtual={ano}
+          serieAno={dadosModal.real}
+          serieAnoAnt={dadosModal.anoAnt}
+          serieMeta={dadosModal.meta}
+          tipoAcumulado={getTipoAcumulado(modalAberto, lente)}
+          corPrincipal={getCorPrincipal(modalAberto)}
+        />
+      )}
     </div>
   );
 }
 
-function CardKpi({ cfg, lente, data }: { cfg: CardConfig; lente: Lente; data?: CardData }) {
+function CardKpi({ cfg, lente, data, onClick }: {
+  cfg: CardConfig;
+  lente: Lente;
+  data?: CardData;
+  onClick?: () => void;
+}) {
   const aplicavel = cfg.lentesAplicaveis.includes(lente);
 
   const valor       = aplicavel && data ? data.mesAtual[lente]  : null;
@@ -191,12 +267,15 @@ function CardKpi({ cfg, lente, data }: { cfg: CardConfig; lente: Lente; data?: C
   const deltaMeta = pctDelta(valor, valorMeta);
 
   return (
-    <Card className={cn(
-      'p-4 transition-shadow',
-      aplicavel && 'hover:shadow-md cursor-pointer',
-      cfg.destaque && 'border-primary/30',
-      !aplicavel && 'opacity-50',
-    )}>
+    <Card
+      onClick={aplicavel ? onClick : undefined}
+      className={cn(
+        'p-4 transition-shadow',
+        aplicavel && 'hover:shadow-md cursor-pointer',
+        cfg.destaque && 'border-primary/30',
+        !aplicavel && 'opacity-50',
+      )}
+    >
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 truncate">
         {cfg.label}
       </div>
