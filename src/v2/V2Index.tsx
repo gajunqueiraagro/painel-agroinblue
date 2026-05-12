@@ -18,6 +18,7 @@ import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { V2AreasMeta } from './pages/V2AreasMeta';
 import { V2PlanejamentoVisaoGeral } from './pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from './pages/V2FechamentoPeriodo';
+import V2VisaoGeralRebanho from './pages/V2VisaoGeralRebanho';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
 import { EvolucaoCategoriaTab } from '@/pages/EvolucaoCategoriaTab';
@@ -624,6 +625,7 @@ export default function V2Index() {
     if (section === 'config-bancario') return <FinV2ContasTab />;
     if (section === 'config-auditoria') return <AuditoriaTab />;
     if (section === 'config-fazendas') return <V2Fazendas />;
+    if (section === 'rebanho-home') return <V2VisaoGeralRebanho />;
 
     // ── Placeholders "Em construção" (PR Reorganização Sidebar) ──
     // Rotas existem no menu mas ainda não têm componente dedicado.
