@@ -235,6 +235,10 @@ export function FinV2ContasTab() {
       toast.error('Informe o mês inicial da conta.');
       return;
     }
+    if (saldoInicialOficial.trim() === '') {
+      toast.error('Informe o saldo inicial da conta.');
+      return;
+    }
     setIsSaving(true);
     try {
       const displayName = nomeExibicao.trim();
@@ -266,7 +270,11 @@ export function FinV2ContasTab() {
       if (editing) {
         const { error } = await supabase.from('financeiro_contas_bancarias').update(payloadComSaldo).eq('id', editing.id);
         if (error) { toast.error('Erro ao atualizar'); return; }
-        if (payloadComSaldo.saldo_inicial_oficial !== null && editing.saldo_inicial_oficial === null && payloadComSaldo.mes_inicio) {
+        // Permite UPDATE do saldo v2 mesmo quando a conta já tinha
+        // saldo_inicial_oficial preenchido (ex: 0 herdado de migração).
+        // Proteção contra sobrescrita inadvertida é feita abaixo via
+        // existRow.origem_saldo_inicial === 'manual'.
+        if (payloadComSaldo.saldo_inicial_oficial !== null && payloadComSaldo.mes_inicio) {
           const saldo = payloadComSaldo.saldo_inicial_oficial;
           const { data: existRow } = await supabase
             .from('financeiro_saldos_bancarios_v2')
@@ -587,40 +595,39 @@ export function FinV2ContasTab() {
             </Collapsible>
           </div>
 
-          {(!editing || editing.saldo_inicial_oficial === null) && (
-            <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-3">
-              <p className="text-[11px] font-semibold text-amber-700">⚠ Saldo inicial da conta</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px]">
-                    Mês inicial <span className="text-red-500">*</span>
-                  </Label>
-                  <input
-                    type="month"
-                    value={mesInicio}
-                    onChange={e => setMesInicio(e.target.value)}
-                    className="w-full border rounded px-2 py-1 text-[11px] mt-0.5"
-                    required
-                  />
-                  <p className="text-[9px] text-muted-foreground mt-0.5">Primeiro mês de operação</p>
-                </div>
-                <div>
-                  <Label className="text-[11px]">
-                    Saldo inicial (R$) <span className="text-red-500">*</span>
-                  </Label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={saldoInicialOficial}
-                    onChange={e => setSaldoInicialOficial(e.target.value)}
-                    placeholder="0,00"
-                    className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right font-mono"
-                  />
-                  <p className="text-[9px] text-muted-foreground mt-0.5">Saldo real no início do período</p>
-                </div>
+          <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-3">
+            <p className="text-[11px] font-semibold text-amber-700">⚠ Saldo inicial da conta</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px]">
+                  Mês inicial <span className="text-red-500">*</span>
+                </Label>
+                <input
+                  type="month"
+                  value={mesInicio}
+                  onChange={e => setMesInicio(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5"
+                  required
+                />
+                <p className="text-[9px] text-muted-foreground mt-0.5">Primeiro mês de operação</p>
+              </div>
+              <div>
+                <Label className="text-[11px]">
+                  Saldo inicial (R$) <span className="text-red-500">*</span>
+                </Label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={saldoInicialOficial}
+                  onChange={e => setSaldoInicialOficial(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right font-mono"
+                  required
+                />
+                <p className="text-[9px] text-muted-foreground mt-0.5">Saldo real no início do período</p>
               </div>
             </div>
-          )}
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
