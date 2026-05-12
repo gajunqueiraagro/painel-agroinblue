@@ -692,81 +692,26 @@ export default function V2Index() {
   }
 
   return (
-    <div className="h-screen bg-background overflow-hidden">
+    <div className="h-screen bg-background overflow-hidden flex">
 
-      {/* ── Desktop: flex simples — drawer é overlay, não empurra layout ── */}
-      <div className="hidden md:flex h-screen bg-background">
-        {/* SIDEBAR */}
-        {!intensivo && <V2Sidebar
+      {/* SIDEBAR (desktop) — chrome lateral, oculto no mobile via className */}
+      {!intensivo && (
+        <V2Sidebar
           activeSection={section}
           onNavigate={setSection}
           drawerAtivo={drawerAtivo}
           onDrawerToggle={setDrawerAtivo}
           clienteSelector={clienteSelector}
           fazendaSelector={fazendaSelector}
-        />}
-        {/* MAIN */}
-        <div className="flex-1 min-w-0 flex flex-col relative">
-          {/* HEADER */}
-          <div className="shrink-0">
-            <V2FilterBar
-              ano={ano}
-              mes={mes}
-              onAnoChange={setAno}
-              onMesChange={setMes}
-              tipo={periodoTipo}
-              showFazenda={false}
-              className="shrink-0"
-              modo={section === 'financeiro-dashboard' ? modo : undefined}
-              onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
-            />
-          </div>
-          {/* SUB-NAV FINANCEIRO */}
-          {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
-            <div className="shrink-0 flex items-center gap-1 px-4 py-1.5 border-b border-border bg-background">
-              <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
-              {([
-                { id: 'financeiro-dashboard', label: 'Dashboard' },
-                { id: 'fluxo-caixa',          label: 'Fluxo de Caixa' },
-                { id: 'rateio-adm',            label: 'Rateio ADM' },
-                { id: 'importacao-extratos',   label: 'Importação' },
-              ] as const).map(({ id, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setSection(id)}
-                  className={`px-2.5 py-0.5 rounded text-[11px] transition-colors ${
-                    section === id
-                      ? 'bg-primary text-primary-foreground font-semibold'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* SCROLL */}
-          <section className={intensivo
-            ? "flex-1 min-h-0 w-full overflow-auto bg-background"
-            : "flex-1 min-h-0 min-w-0 overflow-auto"
-          }>
-            <div className="w-full min-w-0">
-              {renderContent()}
-            </div>
-          </section>
-          {/* Drawer overlay */}
-          <V2ContextDrawer
-            grupoAtivo={drawerAtivo}
-            activeSection={section}
-            onSelect={handleSelect}
-            onClose={() => setDrawerAtivo(null)}
-          />
-        </div>
-      </div>
+          className="hidden md:flex"
+        />
+      )}
 
-      {/* ── Mobile: layout original preservado, sem drawer ────────────── */}
-      <div className="flex flex-col h-screen md:hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm">
+      {/* MAIN COLUMN — chrome superior + conteúdo único + drawer overlay */}
+      <div className="flex-1 min-w-0 flex flex-col relative">
+
+        {/* HEADER MOBILE — Agroinblue + seletores (oculto em desktop) */}
+        <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm">
           <span className="text-sm font-bold">Agroinblue</span>
           <div className="flex items-center gap-1">
             {clientes.length > 1 && (
@@ -781,14 +726,69 @@ export default function V2Index() {
             )}
           </div>
         </div>
-        <V2FilterBar ano={ano} mes={mes} onAnoChange={setAno} onMesChange={setMes} tipo={periodoTipo} showFazenda={false} />
-        <div className="flex-1 min-h-0 min-w-0 overflow-auto pb-16">
-          <div className="w-full min-w-0">
+
+        {/* FILTER BAR — comum a ambos os layouts */}
+        <div className="shrink-0">
+          <V2FilterBar
+            ano={ano}
+            mes={mes}
+            onAnoChange={setAno}
+            onMesChange={setMes}
+            tipo={periodoTipo}
+            showFazenda={false}
+            className="shrink-0"
+            modo={section === 'financeiro-dashboard' ? modo : undefined}
+            onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
+          />
+        </div>
+
+        {/* SUB-NAV FINANCEIRO — desktop apenas */}
+        {['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
+          <div className="hidden md:flex shrink-0 items-center gap-1 px-4 py-1.5 border-b border-border bg-background">
+            <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
+            {([
+              { id: 'financeiro-dashboard', label: 'Dashboard' },
+              { id: 'fluxo-caixa',          label: 'Fluxo de Caixa' },
+              { id: 'rateio-adm',            label: 'Rateio ADM' },
+              { id: 'importacao-extratos',   label: 'Importação' },
+            ] as const).map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setSection(id)}
+                className={`px-2.5 py-0.5 rounded text-[11px] transition-colors ${
+                  section === id
+                    ? 'bg-primary text-primary-foreground font-semibold'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* SCROLL — chamada ÚNICA de renderContent() */}
+        <section className={intensivo
+          ? "flex-1 min-h-0 w-full overflow-auto bg-background"
+          : "flex-1 min-h-0 min-w-0 overflow-auto"
+        }>
+          <div className="w-full min-w-0 pb-16 md:pb-0">
             {renderContent()}
           </div>
-        </div>
-        <V2MobileNav activeSection={section} onNavigate={setSection} />
+        </section>
+
+        {/* Drawer overlay desktop — ancorado no MAIN (relative). No mobile drawerAtivo
+            sempre é null (V2MobileNav não dispara onDrawerToggle), então retorna null. */}
+        <V2ContextDrawer
+          grupoAtivo={drawerAtivo}
+          activeSection={section}
+          onSelect={handleSelect}
+          onClose={() => setDrawerAtivo(null)}
+        />
       </div>
+
+      {/* MOBILE BOTTOM NAV — fixed bottom-0 + md:hidden internos no componente */}
+      <V2MobileNav activeSection={section} onNavigate={setSection} />
 
     </div>
   );

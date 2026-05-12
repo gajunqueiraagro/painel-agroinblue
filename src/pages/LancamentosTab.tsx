@@ -277,25 +277,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   // Etapa 1 — modal envolve o formulário; aberto por clique nos cards de tipo.
   const [lancModalOpen, setLancModalOpen] = useState(false);
-  // TEMP DEBUG modal duplicado — remover após diagnóstico
-  const __dbgInstanceIdRef = useRef(Math.random().toString(36).slice(2, 8));
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('[MODAL-DUP][mount]', { instanceId: __dbgInstanceIdRef.current });
-    return () => {
-      // eslint-disable-next-line no-console
-      console.log('[MODAL-DUP][unmount]', { instanceId: __dbgInstanceIdRef.current });
-    };
-  }, []);
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('[MODAL-DUP][lancModalOpen]', {
-      instanceId: __dbgInstanceIdRef.current,
-      lancModalOpen,
-      abateParaEditar: !!abateParaEditar,
-      detalheId,
-    });
-  }, [lancModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
