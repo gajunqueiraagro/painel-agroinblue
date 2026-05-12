@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload, Sparkles, Save, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -139,6 +139,24 @@ function stripUncertain(value: unknown): string {
 
 export default function CadernoImportTab() {
   const navigate = useNavigate();
+  const location = useLocation();
+  /**
+   * Botão Voltar — origem inferida via location.state.from.
+   * Quando entrou via V2 (Card "Movimentações por Foto" do Lançamentos Zootécnicos),
+   * retorna para /v2 e dispara restauração da section via sessionStorage.
+   * Caso contrário (entrada legada via menu V1), retorna para /.
+   */
+  const handleVoltar = () => {
+    const from = (location.state as { from?: string } | null)?.from;
+    if (from === 'v2-lancamentos-zoot') {
+      try {
+        sessionStorage.setItem('v2:autoSection', 'lancamentos-zoot');
+      } catch { /* sessionStorage indisponível */ }
+      navigate('/v2');
+    } else {
+      navigate('/');
+    }
+  };
   const { fazendas, fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const fazendasList = useMemo(
@@ -386,7 +404,7 @@ export default function CadernoImportTab() {
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="sm" onClick={handleVoltar}>
               <ArrowLeft className="h-4 w-4" /> Voltar
             </Button>
             <h1 className="text-xl font-bold">📓 Importação de Caderno</h1>

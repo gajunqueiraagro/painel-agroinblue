@@ -182,7 +182,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
           {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
           <button
             type="button"
-            onClick={() => navigate('/caderno-importacao')}
+            onClick={() => navigate('/caderno-importacao', { state: { from: 'v2-lancamentos-zoot' } })}
             className="group relative overflow-hidden text-left rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 p-5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
           >
             <div className="flex items-start gap-4">
@@ -257,7 +257,19 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
 }
 
 export default function V2Index() {
-  const [section, setSection] = useState<V2Section>('home');
+  // Restauração de section ao retornar de telas globais (ex: /caderno-importacao).
+  // Mesmo padrão do flag 'fechamento:autoOpenMapaImport' já usado no projeto.
+  const sectionInicial: V2Section = (() => {
+    try {
+      const auto = sessionStorage.getItem('v2:autoSection') as V2Section | null;
+      if (auto) {
+        sessionStorage.removeItem('v2:autoSection');
+        return auto;
+      }
+    } catch { /* sessionStorage indisponível */ }
+    return 'home';
+  })();
+  const [section, setSection] = useState<V2Section>(sectionInicial);
   const mesAnterior = new Date().getMonth() === 0 ? 12 : new Date().getMonth();
   const anoMesAnterior = new Date().getMonth() === 0
     ? String(new Date().getFullYear() - 1)
