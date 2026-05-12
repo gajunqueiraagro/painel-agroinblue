@@ -277,8 +277,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [aba, setAba] = useState<Aba>(abaInicial || 'entrada');
   // Etapa 1 — modal envolve o formulário; aberto por clique nos cards de tipo.
   const [lancModalOpen, setLancModalOpen] = useState(false);
-  /** Banner inline mostrado quando usuário tenta editar lançamento em modo Global. */
-  const [globalEditAlert, setGlobalEditAlert] = useState(false);
   const [tipo, setTipo] = useState<TipoMovimentacao>('nascimento');
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
@@ -784,12 +782,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   }, [onReturnFromEdit]);
 
   const loadAbateForEdit = useCallback((l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
@@ -966,20 +958,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       });
     }
 
-    // Store pending fornecedor match in ref (will be applied by effect when list is ready).
-    // Inclui l.frigorifico na cadeia de fallback — campo onde abates antigos sem
-    // detalhesSnapshot guardam o nome do frigorífico ("Minerva Bataguassu" etc).
+    // Store pending fornecedor match in ref (will be applied by effect when list is ready)
     pendingFornecedorMatch.current = {
       tipo: 'abate',
       id: snap?.fornecedorId,
-      nome: snap?.fornecedorNome || l.frigorifico || l.fazendaDestino,
+      nome: snap?.fornecedorNome || l.fazendaDestino,
       lancamentoId: l.id,
     };
 
     // Try immediate match if fornecedores already loaded
     const matchedFornecedor = matchFornecedor(abateFornecedores, {
       id: snap?.fornecedorId,
-      nome: snap?.fornecedorNome || l.frigorifico || l.compradorFornecedor || l.fazendaDestino,
+      nome: snap?.fornecedorNome || l.compradorFornecedor || l.fazendaDestino,
     });
 
     if (matchedFornecedor) {
@@ -993,7 +983,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load abate for editing when navigated from another tab
   useEffect(() => {
@@ -1094,16 +1084,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           }
         });
     }
-  }, [abateFornecedores, isGlobal]);
+  }, [abateFornecedores]);
 
   // Load venda into form for editing
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
@@ -1287,7 +1271,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load venda for editing when navigated from another tab
   useEffect(() => {
@@ -1299,12 +1283,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // Load compra into form for editing
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
@@ -1440,16 +1418,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // ── Transferência Saída — load for edit ──
   const loadTransferenciaForEdit = useCallback((l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
     }
@@ -1488,7 +1460,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   // Auto-load compra for editing when navigated from another tab
   useEffect(() => {
@@ -1506,12 +1478,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ── Morte: load into form for editing ──
   const loadMorteForEdit = useCallback((l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
     }
@@ -1534,7 +1500,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   useEffect(() => {
     if (morteParaEditar) {
@@ -1544,12 +1510,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
   // ── Consumo: load into form for editing ──
   const loadConsumoForEdit = useCallback((l: Lancamento) => {
-    if (isGlobal) {
-      setGlobalEditAlert(true);
-      setTimeout(() => setGlobalEditAlert(false), 6000);
-      setDetalheId(null);
-      return;
-    }
     if (!onReturnFromEdit) {
       internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
     }
@@ -1569,7 +1529,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setEditingAbateId(l.id);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
-  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit, isGlobal]);
+  }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
 
   useEffect(() => {
     if (consumoParaEditar) {
@@ -3126,24 +3086,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       {/* Master lock banner — derivado da data atual do form */}
       {data && <MasterLockBanner anoMes={data.slice(0, 7)} className="mb-2" />}
-
-      {/* Banner inline: tentativa de editar lançamento em modo Global */}
-      {globalEditAlert && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 px-4 py-3 rounded-md mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">Modo Global ativo</span>
-            <span className="text-sm">Selecione uma fazenda específica no seletor lateral para editar lançamentos.</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setGlobalEditAlert(false)}
-            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 text-lg leading-none px-1"
-            aria-label="Fechar"
-          >
-            ×
-          </button>
-        </div>
-      )}
 
       {/* ── P1 governance banner ── */}
       {p1Oficial && !isCenarioMeta && (
