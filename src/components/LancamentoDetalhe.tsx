@@ -64,6 +64,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const lancAnoMes = useMemo(() => lancamento.data?.slice(0, 7), [lancamento.data]);
   const { status: statusPilaresLanc } = useStatusPilares(fazendaId, lancAnoMes);
   const p1Oficial = statusPilaresLanc.p1_mapa_pastos.status === 'oficial';
+  // P1 fechado bloqueia apenas cenario='realizado'. Meta é projeção (trigger
+  // trg_guard_lancamento_mes_fechado_p1 bypassa Meta no banco) — front segue
+  // a mesma regra. Base é lancamento.cenario original (não form pendente).
+  const effectiveP1Oficial = p1Oficial && !lancamentoIsMeta;
 
   // Campos zootécnicos estruturais (afetam conciliação, saldo, GMD, fluxo)
   const CAMPOS_ESTRUTURAIS: (keyof Lancamento)[] = [
@@ -228,7 +232,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     };
 
     // P1 selective block: only block if structural fields changed
-    if (p1Oficial && temAlteracaoEstrutural(lancamento, dados as Partial<Lancamento>)) {
+    if (effectiveP1Oficial && temAlteracaoEstrutural(lancamento, dados as Partial<Lancamento>)) {
       setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais (peso, preço, observação) podem ser editados.');
       return;
     }
@@ -272,7 +276,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
     };
 
-    if (p1Oficial && temAlteracaoEstrutural(lancamento, dados)) {
+    if (effectiveP1Oficial && temAlteracaoEstrutural(lancamento, dados)) {
       setP1BloqueioMsg('Alteração não salva. Este mês está fechado no Mapa de Pastos. Campos zootécnicos que afetam conciliação (data, quantidade, categoria, fazenda) não podem ser alterados após o fechamento. Campos financeiros/comerciais podem ser editados.');
       return;
     }
@@ -586,7 +590,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               )}
 
               {/* ── P1 governance banner ── */}
-              {p1Oficial && (
+              {effectiveP1Oficial && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded px-2 py-1">
                   <p className="text-[9px] text-destructive font-medium">
                     🔒 Mês fechado (P1 oficial). Reabra o período para alterar campos estruturais ou excluir.
@@ -610,7 +614,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     <Button variant="default" size="sm" className="flex-1 h-7 text-[10px] font-bold" onClick={handleEditClick}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos || p1Oficial}>
+                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={handleRemoverClick} disabled={checkingVinculos || effectiveP1Oficial}>
                       <Trash2 className="h-3 w-3 mr-1" /> Apagar
                     </Button>
                   </>
@@ -854,7 +858,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
           canEditMeta={canEditMeta}
-          p1Oficial={p1Oficial}
+          p1Oficial={effectiveP1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
         />
@@ -868,7 +872,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
           canEditMeta={canEditMeta}
-          p1Oficial={p1Oficial}
+          p1Oficial={effectiveP1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
         />
@@ -882,7 +886,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
           canEditMeta={canEditMeta}
-          p1Oficial={p1Oficial}
+          p1Oficial={effectiveP1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
           outrasFazendas={outrasFazendas}
@@ -897,7 +901,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
           canEditMeta={canEditMeta}
-          p1Oficial={p1Oficial}
+          p1Oficial={effectiveP1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
           nomeFazenda={nomeFazenda}
         />
@@ -910,7 +914,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           onSalvar={onEditar}
           onRemover={async () => { await onRemover(lancamento.id); onClose(); }}
           podeRemover={true}
-          p1Oficial={p1Oficial}
+          p1Oficial={effectiveP1Oficial}
           temAlteracaoEstrutural={temAlteracaoEstrutural}
         />
 
@@ -953,7 +957,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
           </DialogHeader>
           <div className="space-y-3">
             {/* P1 governance notice */}
-            {p1Oficial && (
+            {effectiveP1Oficial && (
               <div className="bg-destructive/10 border border-destructive/30 rounded px-2 py-1.5">
                 <p className="text-[9px] text-destructive font-medium">
                   🔒 Mês fechado (P1 oficial). Campos estruturais estão bloqueados. Apenas peso, preço e observação podem ser alterados.
@@ -963,16 +967,16 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="font-bold text-foreground">Data</Label>
-                <Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className="mt-1" disabled={p1Oficial} />
+                <Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} className="mt-1" disabled={effectiveP1Oficial} />
               </div>
               <div>
                 <Label className="font-bold text-foreground">Quantidade</Label>
-                <Input type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} className="mt-1" min="1" disabled={p1Oficial} />
+                <Input type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: Number(e.target.value) }))} className="mt-1" min="1" disabled={effectiveP1Oficial} />
               </div>
             </div>
             <div>
               <Label className="font-bold text-foreground">Categoria</Label>
-              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v as Categoria }))} disabled={p1Oficial}>
+              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v as Categoria }))} disabled={effectiveP1Oficial}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -982,7 +986,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             {form.tipo === 'reclassificacao' && (
               <div>
                 <Label className="font-bold text-foreground">Categoria Destino</Label>
-                <Select value={form.categoriaDestino || ''} onValueChange={v => setForm(f => ({ ...f, categoriaDestino: v as Categoria }))} disabled={p1Oficial}>
+                <Select value={form.categoriaDestino || ''} onValueChange={v => setForm(f => ({ ...f, categoriaDestino: v as Categoria }))} disabled={effectiveP1Oficial}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIAS.filter(c => c.value !== form.categoria).map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
@@ -1010,7 +1014,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   {isSaidaAuto ? (
                     <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                   ) : (
-                    <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" disabled={p1Oficial} />
+                    <Input value={form.fazendaOrigem || ''} onChange={e => setForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-1" disabled={effectiveP1Oficial} />
                   )}
                 </div>
               )}
@@ -1021,7 +1025,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {isEntradaAuto ? (
                   <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                 ) : isTransSaida && outrasFazendas.length > 0 ? (
-                  <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))} disabled={p1Oficial}>
+                  <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))} disabled={effectiveP1Oficial}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
                     <SelectContent>
                       {outrasFazendas.map(f => (
@@ -1035,7 +1039,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                     onChange={e => setForm(f => ({ ...f, fazendaDestino: e.target.value }))}
                     placeholder={form.tipo === 'morte' ? 'Ex: Raio, Picada de cobra' : form.tipo === 'consumo' ? 'Ex: Consumo interno' : 'Ex: Faz. Santa Cruz'}
                     className="mt-1"
-                    disabled={p1Oficial}
+                    disabled={effectiveP1Oficial}
                   />
                 )}
               </div>
@@ -1047,7 +1051,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 <Label className="font-bold text-foreground">Status</Label>
                 <div className="flex gap-1 mt-1">
                   {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
-                    const disabled = (s.value === 'meta' && !canEditMeta) || p1Oficial;
+                    const disabled = (s.value === 'meta' && !canEditMeta) || effectiveP1Oficial;
                     return (
                     <button
                       key={s.value}
@@ -1088,7 +1092,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1 touch-target" onClick={() => setEditando(false)}>Cancelar</Button>
-              <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos || p1Oficial}>
+              <Button variant="destructive" className="touch-target" onClick={handleRemoverClick} disabled={checkingVinculos || effectiveP1Oficial}>
                 <Trash2 className="h-4 w-4" />
               </Button>
               <Button className="flex-1 touch-target" onClick={handleSalvar}>Salvar</Button>
