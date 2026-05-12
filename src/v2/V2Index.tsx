@@ -54,6 +54,8 @@ import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { Camera, Sparkles } from 'lucide-react';
 
 /**
  * V2 → Financeiro → Financiamentos.
@@ -122,12 +124,15 @@ interface V2LancamentosWrapperProps {
   onReturnFromEdit?: () => void;
   /** Atalho do card "Chuvas" — navega para a tela de Chuvas. */
   onNavegarChuvas?: () => void;
+  /** Atalho do card "Rebanho em Pastos por Foto" — seta flag + navega para Fechamento Pastos. */
+  onNavegarMapaRebanho?: () => void;
   /** Cenário inicial — 'meta' para Planejamento → Lançamentos META Zoo. */
   cenarioInicial?: 'realizado' | 'meta';
   /** Restringe cenários disponíveis no seletor de Status (ex.: ['meta']). */
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
+  const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
   const {
@@ -168,21 +173,86 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
     return filtered.filter(l => l.tipo !== 'transferencia_entrada' && l.tipo !== 'transferencia_saida');
   }, [lancamentos, isGlobal]);
 
+  const mostrarCardsIA = cenarioInicial !== 'meta';
+
   return (
-    <LancamentosTab
-      lancamentos={lancamentosVisiveis}
-      onAdicionar={wrappedAdicionar as any}
-      onEditar={wrappedEditar as any}
-      onRemover={wrappedRemover as any}
-      onCountFinanceiros={countFinanceirosVinculados}
-      abateParaEditar={abateParaEditar}
-      vendaParaEditar={vendaParaEditar}
-      onReturnFromEdit={onReturnFromEdit}
-      onNavegarChuvas={onNavegarChuvas}
-      cenarioInicial={cenarioInicial}
-      cenariosPermitidos={cenariosPermitidos}
-      abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
-    />
+    <div className="w-full">
+      {mostrarCardsIA && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pt-4">
+          {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
+          <button
+            type="button"
+            onClick={() => navigate('/caderno-importacao')}
+            className="group relative overflow-hidden text-left rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 p-5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                <Camera className="w-6 h-6 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    Lançar com IA
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-foreground">
+                  Movimentações por Foto
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Extração automática via foto do caderno do peão
+                </p>
+              </div>
+            </div>
+          </button>
+
+          {/* Card 2: Rebanho em Pastos por Foto — placeholder; handler real ainda aguarda confirmação */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onNavegarMapaRebanho) onNavegarMapaRebanho();
+              else alert('aguardando confirmação Gabriel — handler pendente');
+            }}
+            className="group relative overflow-hidden text-left rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 p-5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                <Camera className="w-6 h-6 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                    Lançar com IA
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-foreground">
+                  Rebanho em Pastos por Foto
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Importar Mapa do Rebanho via IA
+                </p>
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      <LancamentosTab
+        lancamentos={lancamentosVisiveis}
+        onAdicionar={wrappedAdicionar as any}
+        onEditar={wrappedEditar as any}
+        onRemover={wrappedRemover as any}
+        onCountFinanceiros={countFinanceirosVinculados}
+        abateParaEditar={abateParaEditar}
+        vendaParaEditar={vendaParaEditar}
+        onReturnFromEdit={onReturnFromEdit}
+        onNavegarChuvas={onNavegarChuvas}
+        cenarioInicial={cenarioInicial}
+        cenariosPermitidos={cenariosPermitidos}
+        abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
+      />
+    </div>
   );
 }
 
@@ -424,6 +494,14 @@ export default function V2Index() {
           setSection('conferencia-lancamentos');
         }}
         onNavegarChuvas={() => setSection('chuvas')}
+        onNavegarMapaRebanho={() => {
+          // Mesma estratégia do hub legado LancarZooHubTab:
+          // seta flag em sessionStorage, FechamentoTab abre o modal ao montar.
+          try {
+            sessionStorage.setItem('fechamento:autoOpenMapaImport', '1');
+          } catch { /* sessionStorage indisponível */ }
+          setSection('fechamento');
+        }}
       />
     );
     // Lançamentos META Zoo — mesma tela de Lançamentos Zootécnicos, mas travada em
