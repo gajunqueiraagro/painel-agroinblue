@@ -930,7 +930,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         bonusListaTrace: toArroba(l.bonusListaTrace),
         descontoQualidade: toArroba(l.descontoQualidade),
         funruralPct: funruralPctCalc,
-        funruralReais: '',
+        funruralReais: l.descontoFunrural ? String(l.descontoFunrural) : '',
         outrosDescontos: l.outrosDescontos ? String(l.outrosDescontos) : '',
         notaFiscal: l.notaFiscal || '',
         formaReceb: 'avista',
@@ -940,6 +940,21 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         pedido: l.pedido || '',
         instrucao: l.instrucao || '',
         docAcerto: l.docAcerto || '',
+        // Path B (fallback sem detalhesSnapshot): popular campos que antes ficavam undefined,
+        // causando initialData.pesoCarcacaKgManual=undefined → dialog abrir com 4 campos de
+        // carcaça em branco → user salvar sobrescrevendo banco com NULL. Espelha campos
+        // disponíveis no Lancamento (cattle.ts).
+        pesoCarcacaKgManual: l.pesoCarcacaKg ? String(l.pesoCarcacaKg) : '',
+        bonusPrecoceReais: l.bonusPrecoce ? String(l.bonusPrecoce) : '',
+        bonusQualidadeReais: l.bonusQualidade ? String(l.bonusQualidade) : '',
+        bonusListaTraceReais: l.bonusListaTrace ? String(l.bonusListaTrace) : '',
+        descontoQualidadeReais: l.descontoQualidade ? String(l.descontoQualidade) : '',
+        outrosDescontosArroba: '',
+        pesoTotalKgNF: l.pesoTotal ? String(l.pesoTotal) : '',
+        valorBrutoOverride: '',
+        anexoNfUrl: l.anexoNfUrl || '',
+        anexoAcertoUrl: l.anexoAcertoUrl || '',
+        observacoesInternas: l.observacao || '',
       });
     }
 
