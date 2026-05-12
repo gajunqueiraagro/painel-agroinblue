@@ -108,12 +108,20 @@ function fmtVar(v: number | null): string {
   return `${sinal} ${Math.abs(v).toFixed(0)}%`;
 }
 
-/** Cor da variação. cor='vermelho' (ex: Mortes) inverte (queda=verde). */
+/** Cor da variação na tabela (icon ↑↓ + texto pequeno). */
 function corVar(v: number | null, cor: 'azul' | 'vermelho'): string {
   if (v == null || isNaN(v) || Math.abs(v) < 0.5) return 'text-muted-foreground/50';
   const subiu = v > 0;
   const eBom = cor === 'vermelho' ? !subiu : subiu;
   return eBom ? 'text-emerald-600' : 'text-red-600';
+}
+
+/** Cor das variações do header (↗/↙ + percentagem). Padrão IndicadorHistoricoModal. */
+function corDelta(d: number | null, cor: 'azul' | 'vermelho'): string {
+  if (d == null || isNaN(d) || Math.abs(d) < 0.05) return 'text-muted-foreground';
+  const subiu = d > 0;
+  const eBom = cor === 'vermelho' ? !subiu : subiu;
+  return eBom ? 'text-green-600' : 'text-red-500';
 }
 
 function normalize(s: number[] | undefined): (number | null)[] {
@@ -182,6 +190,17 @@ export function MovimentacaoHistoricoModal({
   };
 
   const valorAtual = get(sAno, mesAtual);
+
+  // Variações vs mês ant / ano ant / META. Séries já refletem viewMode:
+  //   - "Por mês":   compara valor mensal isolado
+  //   - "Acumulado": compara Jan→m vs Jan→(m-1) / vs ano-1 Jan→m / vs Meta Jan→m
+  const valorMesAnt = mesAtual > 1 ? get(sAno, mesAtual - 1) : null;
+  const valorAnoAnt = get(sAnoAnt, mesAtual);
+  const valorMeta   = get(sMeta, mesAtual);
+
+  const deltaMes  = calcVar(valorAtual, valorMesAnt);
+  const deltaAno  = calcVar(valorAtual, valorAnoAnt);
+  const deltaMeta = calcVar(valorAtual, valorMeta);
 
   const hasAnoAnt = sAnoAnt.some(v => v != null);
   const hasMeta   = sMeta.some(v => v != null);
@@ -295,6 +314,24 @@ export function MovimentacaoHistoricoModal({
                 {MESES_LABELS[mesAtual - 1]} {anoAtual}
               </span>
             </div>
+            {deltaMes != null && (
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${corDelta(deltaMes, corPrincipal)}`}>
+                <span>{deltaMes >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaMes >= 0 ? '+' : ''}{deltaMes.toFixed(1)}% vs mês</span>
+              </div>
+            )}
+            {deltaAno != null && (
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${corDelta(deltaAno, corPrincipal)}`}>
+                <span>{deltaAno >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaAno >= 0 ? '+' : ''}{deltaAno.toFixed(1)}% vs ano ant.</span>
+              </div>
+            )}
+            {deltaMeta != null && (
+              <div className={`text-[10px] font-normal leading-[1.2] flex items-center justify-end gap-0.5 ${corDelta(deltaMeta, corPrincipal)}`}>
+                <span>{deltaMeta >= 0 ? '↗' : '↙'}</span>
+                <span>{deltaMeta >= 0 ? '+' : ''}{deltaMeta.toFixed(1)}% vs META</span>
+              </div>
+            )}
           </div>
         </div>
 
