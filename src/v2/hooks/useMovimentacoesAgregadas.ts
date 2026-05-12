@@ -76,8 +76,15 @@ const TIPOS_LANC_DE_MOV: Record<TipoMov, Lancamento['tipo'][]> = {
   consumos:      ['consumo'],
   mortes:        ['morte'],
   soma_saidas:   ['venda', 'abate', 'consumo', 'morte'],
-  desfrute:      ['abate', 'venda', 'consumo'], // TIPOS_DESFRUTE_GLOBAL
+  desfrute:      ['abate', 'venda', 'consumo'], // TIPOS_DESFRUTE_GLOBAL — cab/@/valor incluem consumo
 };
+
+/**
+ * Sub-conjunto de desfrute usado apenas na lente preco_arroba: abates + vendas.
+ * Consumo é excluído porque não gera receita — média ponderada de R$/@ só
+ * faz sentido com tipos que têm valor associado.
+ */
+const TIPOS_DESFRUTE_RECEITA: Lancamento['tipo'][] = ['abate', 'venda'];
 
 const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
   nascimentos:   new Set(['cab']),
@@ -88,7 +95,7 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
   consumos:      new Set(['cab', 'arroba_total', 'arroba_media']),
   mortes:        new Set(['cab', 'arroba_total', 'arroba_media']),
   soma_saidas:   new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
-  desfrute:      new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
+  desfrute:      new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
 };
 
 const TIPOS_TODOS: TipoMov[] = [
@@ -145,12 +152,19 @@ function somarAgreg(
   return out;
 }
 
-/** Deriva valor de um card num Agreg dado uma lente. */
+/**
+ * Deriva valor de um card num Agreg dado uma lente.
+ *
+ * agregReceita: sub-agreg só de abate+venda — usado APENAS quando tipo='desfrute'
+ * e lente='preco_arroba'. Consumo é excluído porque não gera receita (média
+ * ponderada de R$/@ só faz sentido com tipos que têm valor associado).
+ */
 function valorPorLente(
   tipo: TipoMov,
   lente: Lente,
   agreg: Agreg,
   saldoInicialAno: number,
+  agregReceita?: Agreg,
 ): number | null {
   if (!LENTES_APLICAVEIS[tipo].has(lente)) return null;
   switch (lente) {
@@ -161,11 +175,14 @@ function valorPorLente(
       return agreg.arrobas;
     case 'arroba_media':
       return agreg.cab > 0 ? agreg.arrobas / agreg.cab : null;
-    case 'preco_arroba':
-      // Compras e Vendas/Abates: Σ valor / Σ arrobas. Null se zero (evita 0%
-      // virar valor cosmético — Gabriel pediu explicitamente null).
-      if (agreg.arrobas <= 0 || agreg.valor <= 0) return null;
-      return agreg.valor / agreg.arrobas;
+    case 'preco_arroba': {
+      // Desfrute usa sub-agreg só de receita (abate+venda); demais cards usam
+      // a agregação padrão. Null se denominador <=0 (não zero — evita exibir
+      // R$ 0,00 enganoso).
+      const base = (tipo === 'desfrute' && agregReceita) ? agregReceita : agreg;
+      if (base.arrobas <= 0 || base.valor <= 0) return null;
+      return base.valor / base.arrobas;
+    }
     case 'valor_total':
       return agreg.valor;
   }
@@ -220,9 +237,10 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
       tipo: TipoMov,
       a: Agreg,
       saldoInicial: number,
+      aReceita?: Agreg,
     ): PorLente => {
       const out = {} as PorLente;
-      for (const l of LENTES_TODAS) out[l] = valorPorLente(tipo, l, a, saldoInicial);
+      for (const l of LENTES_TODAS) out[l] = valorPorLente(tipo, l, a, saldoInicial, aReceita);
       return out;
     };
 
@@ -237,6 +255,19 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
       const aMesAnoAnt = somarAgreg(agAnoAnt, tiposLanc, mesesPeriodo);
       const aMeta      = somarAgreg(agMeta,   tiposLanc, mesesPeriodo);
 
+      // Para Desfrute na lente preco_arroba: sub-agreg só com abate+venda
+      // (consumo excluído porque não gera receita).
+      let aRecMesAtual: Agreg | undefined;
+      let aRecMesAnt:   Agreg | undefined;
+      let aRecMesAnoAnt: Agreg | undefined;
+      let aRecMeta:     Agreg | undefined;
+      if (tipo === 'desfrute') {
+        aRecMesAtual   = somarAgreg(agCorr,   TIPOS_DESFRUTE_RECEITA, mesesPeriodo);
+        aRecMesAnt     = mesAntNum ? somarAgreg(agCorr, TIPOS_DESFRUTE_RECEITA, mesesPeriodoAnt) : emptyAgreg();
+        aRecMesAnoAnt  = somarAgreg(agAnoAnt, TIPOS_DESFRUTE_RECEITA, mesesPeriodo);
+        aRecMeta       = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, mesesPeriodo);
+      }
+
       // Séries Jan-Dez pré-calculadas por lente (consumidas pelo modal na Fase 4).
       const seriesJanDez = {} as Record<Lente, SeriesJanDez>;
       for (const lente of LENTES_TODAS) {
@@ -247,18 +278,27 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
           const aR = somarAgreg(agCorr,   tiposLanc, [m]);
           const aA = somarAgreg(agAnoAnt, tiposLanc, [m]);
           const aM = somarAgreg(agMeta,   tiposLanc, [m]);
-          real.push(   valorPorLente(tipo, lente, aR, saldoInicialAnoCorr) ?? 0);
-          anoAntS.push(valorPorLente(tipo, lente, aA, saldoInicialAnoAnt)  ?? 0);
-          metaS.push(  valorPorLente(tipo, lente, aM, saldoInicialMeta)    ?? 0);
+          // Sub-agreg só de receita por mês — necessário p/ desfrute+preco_arroba.
+          let aRec_R: Agreg | undefined;
+          let aRec_A: Agreg | undefined;
+          let aRec_M: Agreg | undefined;
+          if (tipo === 'desfrute' && lente === 'preco_arroba') {
+            aRec_R = somarAgreg(agCorr,   TIPOS_DESFRUTE_RECEITA, [m]);
+            aRec_A = somarAgreg(agAnoAnt, TIPOS_DESFRUTE_RECEITA, [m]);
+            aRec_M = somarAgreg(agMeta,   TIPOS_DESFRUTE_RECEITA, [m]);
+          }
+          real.push(   valorPorLente(tipo, lente, aR, saldoInicialAnoCorr, aRec_R) ?? 0);
+          anoAntS.push(valorPorLente(tipo, lente, aA, saldoInicialAnoAnt,  aRec_A) ?? 0);
+          metaS.push(  valorPorLente(tipo, lente, aM, saldoInicialMeta,    aRec_M) ?? 0);
         }
         seriesJanDez[lente] = { real, anoAnt: anoAntS, meta: metaS };
       }
 
       result[tipo] = {
-        mesAtual:  porLente(tipo, aMesAtual,  saldoInicialAnoCorr),
-        mesAnt:    porLente(tipo, aMesAnt,    saldoInicialAnoCorr),
-        mesAnoAnt: porLente(tipo, aMesAnoAnt, saldoInicialAnoAnt),
-        meta:      porLente(tipo, aMeta,      saldoInicialMeta),
+        mesAtual:  porLente(tipo, aMesAtual,  saldoInicialAnoCorr, aRecMesAtual),
+        mesAnt:    porLente(tipo, aMesAnt,    saldoInicialAnoCorr, aRecMesAnt),
+        mesAnoAnt: porLente(tipo, aMesAnoAnt, saldoInicialAnoAnt,  aRecMesAnoAnt),
+        meta:      porLente(tipo, aMeta,      saldoInicialMeta,    aRecMeta),
         seriesJanDez,
       };
     }

@@ -54,7 +54,7 @@ const CARDS: CardConfig[] = [
   { id: 'soma_saidas',   label: 'Σ Saídas', grupo: 'saidas', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
   { id: 'desfrute',      label: 'Desfrute', grupo: 'saidas', destaque: true,
-    lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
+    lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
 ];
 
 const LENTES: { id: Lente; label: string }[] = [
