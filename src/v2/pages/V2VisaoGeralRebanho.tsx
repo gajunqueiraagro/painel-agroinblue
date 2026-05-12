@@ -110,42 +110,8 @@ function corDelta(d: number | null, invert = false): string {
   return positivo ? 'text-emerald-600' : 'text-rose-600';
 }
 
-// ─── Helpers do modal ───────────────────────────────────────────────────────
+// ─── Helper de cor do modal (Mortes em vermelho) ─────────────────────────────
 
-/** Unidade textual para o cabeçalho do modal. Desfrute+cab é %. */
-function getUnidade(tipo: TipoMov, lente: Lente): string {
-  if (tipo === 'desfrute' && lente === 'cab') return '%';
-  switch (lente) {
-    case 'cab':          return 'cab';
-    case 'arroba_total': return '@';
-    case 'arroba_media': return '@/cab';
-    case 'preco_arroba': return 'R$/@';
-    case 'valor_total':  return 'R$';
-  }
-}
-
-/** Formato de número para o modal. */
-function getFormato(lente: Lente, tipo: TipoMov): 'inteiro' | 'decimal1' | 'decimal2' | 'moeda' | 'moedaAbreviada' {
-  if (tipo === 'desfrute' && lente === 'cab') return 'decimal1'; // %
-  switch (lente) {
-    case 'cab':          return 'inteiro';
-    case 'arroba_total': return 'inteiro';
-    case 'arroba_media': return 'decimal1';
-    case 'preco_arroba': return 'moeda';
-    case 'valor_total':  return 'moedaAbreviada';
-  }
-}
-
-/** Semântica de agregação — metadata, modal não usa internamente. */
-function getTipoAcumulado(tipo: TipoMov, lente: Lente): 'soma' | 'media' {
-  // Desfrute lente cab é % ratio — média; outras são somas mensais.
-  if (tipo === 'desfrute' && lente === 'cab') return 'media';
-  // Médias e razões também: arroba_media, preco_arroba são taxas.
-  if (lente === 'arroba_media' || lente === 'preco_arroba') return 'media';
-  return 'soma';
-}
-
-/** Cor primária — Mortes em vermelho (subir = ruim). */
 function getCorPrincipal(tipo: TipoMov): 'azul' | 'vermelho' {
   if (tipo === 'mortes') return 'vermelho';
   return 'azul';
@@ -168,12 +134,10 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const entradas = CARDS.filter(c => c.grupo === 'entradas');
   const saidas = CARDS.filter(c => c.grupo === 'saidas');
 
-  // Dados do modal (quando aberto) — séries mensal + acumulada (vêm prontas do hook).
+  // Dados do modal (quando aberto). Modal recebe CardData inteiro + decide
+  // internamente qual lente/viewMode renderizar.
   const cfgModal = modalAberto ? CARDS.find(c => c.id === modalAberto) : null;
   const cardModalData = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto] : null;
-  const dadosModal     = cardModalData ? cardModalData.seriesJanDez[lente]    : null;
-  const dadosModalAcum = cardModalData ? cardModalData.seriesAcumulada[lente] : null;
-  const lenteLabel     = LENTES.find(l => l.id === lente)?.label;
 
   return (
     <div className="px-4 py-4 space-y-6 max-w-7xl mx-auto">
@@ -232,24 +196,19 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
       </section>
 
       {/* MODAL Jan-Dez — uma instância, renderiza só quando aberto */}
-      {modalAberto && cfgModal && dadosModal && dadosModalAcum && (
+      {modalAberto && cfgModal && cardModalData && (
         <MovimentacaoHistoricoModal
           open={true}
           onClose={() => setModalAberto(null)}
           titulo={cfgModal.label}
-          unidade={getUnidade(modalAberto, lente)}
-          formatoValor={getFormato(lente, modalAberto)}
+          tipo={modalAberto}
+          data={cardModalData}
+          lenteInicial={lente}
+          lentesAplicaveis={cfgModal.lentesAplicaveis}
           mesAtual={mes}
           anoAtual={ano}
-          serieAno={dadosModal.real}
-          serieAnoAnt={dadosModal.anoAnt}
-          serieMeta={dadosModal.meta}
-          serieAnoAcum={dadosModalAcum.real}
-          serieAnoAntAcum={dadosModalAcum.anoAnt}
-          serieMetaAcum={dadosModalAcum.meta}
-          corPrincipal={getCorPrincipal(modalAberto)}
-          lenteLabel={lenteLabel}
           viewModeInicial={viewMode}
+          corPrincipal={getCorPrincipal(modalAberto)}
         />
       )}
     </div>

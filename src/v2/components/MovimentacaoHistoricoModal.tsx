@@ -1,15 +1,17 @@
 /**
  * MovimentacaoHistoricoModal — modal Jan-Dez para os 9 cards de Movimentação.
  *
- * Refinamento UX (Gabriel):
- *  - 2 conjuntos de séries via prop: mensal (mes a mes) + acumulada (Jan→m).
- *    O modal NÃO calcula acumulado — vem pronto do hook (taxa/média usa
- *    Σ numerador / Σ denominador, evita "média de médias").
- *  - Toggle interno "Por mês / Acumulado" alterna qual conjunto renderizar.
- *  - Gráfico: BARRAS em "Por mês" (valores discretos), LINHA em "Acumulado"
- *    (curva crescente). Ano-1 e META continuam linhas dashed em ambos modos.
- *  - Tabela: SEMPRE vertical (linhas=meses, colunas=séries + variações).
- *  - Subtítulo único: "{lenteLabel} · Por mês" ou "{lenteLabel} · Acumulado Jan→{mes}".
+ * Recebe CardData inteiro (com todas as 5 lentes pré-calculadas pelo hook).
+ * Modal tem state local de lente + viewMode — independente da tela. Tela
+ * passa lenteInicial + viewModeInicial como ponto de partida; usuário pode
+ * navegar entre lentes/modos dentro do modal sem afetar os 9 cards.
+ *
+ * Conceito:
+ *  - "Por mês": gráfico de BARRAS (valores discretos mensais)
+ *  - "Acumulado": gráfico de LINHA (curva crescente)
+ *  - Tabela: sempre vertical (linhas=meses, colunas=séries+variações)
+ *  - Acumulado correto: hook entrega seriesAcumulada já com taxa/média via
+ *    Σ numerador / Σ denominador (não "média de médias")
  *
  * Continua SEPARADO do IndicadorHistoricoModal (V2Home).
  */
@@ -19,33 +21,61 @@ import { cn } from '@/lib/utils';
 import {
   ComposedChart, Line, Bar, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
+import type { CardData, Lente, TipoMov } from '@/v2/hooks/useMovimentacoesAgregadas';
 
 export interface MovimentacaoHistoricoModalProps {
   open: boolean;
   onClose: () => void;
+  /** Label do card (ex: 'Abates', 'Vendas'). */
   titulo: string;
-  unidade?: string;
-  formatoValor: 'inteiro' | 'decimal1' | 'decimal2' | 'moeda' | 'moedaAbreviada';
-  /** Mês selecionado (1-12) — destaca linha da tabela; em "Acumulado" define janela Jan→m. */
+  /** TipoMov — usado para escolher formato de número adequado à lente. */
+  tipo: TipoMov;
+  /** CardData completo com todas as 5 lentes pré-calculadas. */
+  data: CardData;
+  /** Lente atual da tela — modal inicia nela mas pode mudar internamente. */
+  lenteInicial: Lente;
+  /** Lentes aplicáveis ao card — define quais botões aparecem no filtro. */
+  lentesAplicaveis: Lente[];
   mesAtual: number;
   anoAtual: number;
-  /** Séries 13 posições: [0]=Dez ano-1 (zero placeholder), [1..12]=Jan..Dez. */
-  serieAno: number[];
-  serieAnoAnt?: number[];
-  serieMeta?: number[];
-  /** Séries ACUMULADAS Jan→m (idem 13 pos). Usadas quando viewMode='periodo'. */
-  serieAnoAcum?: number[];
-  serieAnoAntAcum?: number[];
-  serieMetaAcum?: number[];
-  /** Cor principal: 'azul' (default) ou 'vermelho' — Mortes inverte interpretação das variações. */
-  corPrincipal?: 'azul' | 'vermelho';
-  /** Label da lente atual (ex: '@ Média', 'R$/@', 'Cabeças'). Usado no subtítulo. */
-  lenteLabel?: string;
-  /** viewMode inicial do toggle interno; default 'mes'. */
   viewModeInicial?: 'mes' | 'periodo';
+  /** Cor principal — 'vermelho' (ex: Mortes) inverte interpretação das variações. */
+  corPrincipal?: 'azul' | 'vermelho';
 }
 
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+const LENTES_LABELS: Record<Lente, string> = {
+  cab:          'Cabeças',
+  arroba_total: '@ Totais',
+  arroba_media: '@ Média',
+  preco_arroba: 'R$/@',
+  valor_total:  'R$ Total',
+};
+
+// ─── Helpers de lente (locais ao modal — dependem do state de lente) ────────
+
+function getUnidade(tipo: TipoMov, lente: Lente): string {
+  if (tipo === 'desfrute' && lente === 'cab') return '%';
+  switch (lente) {
+    case 'cab':          return 'cab';
+    case 'arroba_total': return '@';
+    case 'arroba_media': return '@/cab';
+    case 'preco_arroba': return 'R$/@';
+    case 'valor_total':  return 'R$';
+  }
+}
+
+function getFormato(tipo: TipoMov, lente: Lente): 'inteiro' | 'decimal1' | 'decimal2' | 'moeda' | 'moedaAbreviada' {
+  if (tipo === 'desfrute' && lente === 'cab') return 'decimal1'; // %
+  switch (lente) {
+    case 'cab':          return 'inteiro';
+    case 'arroba_total': return 'inteiro';
+    case 'arroba_media': return 'decimal1';
+    case 'preco_arroba': return 'moeda';
+    case 'valor_total':  return 'moedaAbreviada';
+  }
+}
 
 // ─── Formatadores ───────────────────────────────────────────────────────────
 
@@ -78,15 +108,13 @@ function fmtVar(v: number | null): string {
   return `${sinal} ${Math.abs(v).toFixed(0)}%`;
 }
 
-/** Cor da variação. cor='vermelho' (ex: Mortes) inverte interpretação (queda=verde). */
+/** Cor da variação. cor='vermelho' (ex: Mortes) inverte (queda=verde). */
 function corVar(v: number | null, cor: 'azul' | 'vermelho'): string {
   if (v == null || isNaN(v) || Math.abs(v) < 0.5) return 'text-muted-foreground/50';
   const subiu = v > 0;
   const eBom = cor === 'vermelho' ? !subiu : subiu;
   return eBom ? 'text-emerald-600' : 'text-red-600';
 }
-
-// ─── Normalização ───────────────────────────────────────────────────────────
 
 function normalize(s: number[] | undefined): (number | null)[] {
   if (!s) return Array(13).fill(null);
@@ -97,15 +125,15 @@ function normalize(s: number[] | undefined): (number | null)[] {
 
 export function MovimentacaoHistoricoModal({
   open, onClose,
-  titulo, unidade,
-  formatoValor,
+  titulo, tipo,
+  data,
+  lenteInicial,
+  lentesAplicaveis,
   mesAtual, anoAtual,
-  serieAno, serieAnoAnt, serieMeta,
-  serieAnoAcum, serieAnoAntAcum, serieMetaAcum,
-  corPrincipal = 'azul',
-  lenteLabel,
   viewModeInicial = 'mes',
+  corPrincipal = 'azul',
 }: MovimentacaoHistoricoModalProps) {
+  const [lente, setLente] = useState<Lente>(lenteInicial);
   const [viewMode, setViewMode] = useState<'mes' | 'periodo'>(viewModeInicial);
 
   if (!open) return null;
@@ -113,6 +141,9 @@ export function MovimentacaoHistoricoModal({
   const COR_ATUAL = corPrincipal === 'vermelho'
     ? { stroke: '#DC2626', dotLight: '#FCA5A5', text: 'text-red-700' }
     : { stroke: '#185FA5', dotLight: '#B5D4F4', text: 'text-primary' };
+
+  const unidade = getUnidade(tipo, lente);
+  const formatoValor = getFormato(tipo, lente);
 
   const fmtValor = (v: number | null | undefined): string => {
     if (formatoValor === 'inteiro')        return fmtN(v, 0) + (unidade ? ' ' + unidade : '');
@@ -138,9 +169,12 @@ export function MovimentacaoHistoricoModal({
   };
 
   // Escolhe conjunto de séries conforme viewMode (vêm prontas do hook).
-  const sAno    = viewMode === 'periodo' ? normalize(serieAnoAcum)    : normalize(serieAno);
-  const sAnoAnt = viewMode === 'periodo' ? normalize(serieAnoAntAcum) : normalize(serieAnoAnt);
-  const sMeta   = viewMode === 'periodo' ? normalize(serieMetaAcum)   : normalize(serieMeta);
+  const seriesPorMes = data.seriesJanDez[lente];
+  const seriesAcum   = data.seriesAcumulada[lente];
+
+  const sAno    = viewMode === 'periodo' ? normalize(seriesAcum.real)   : normalize(seriesPorMes.real);
+  const sAnoAnt = viewMode === 'periodo' ? normalize(seriesAcum.anoAnt) : normalize(seriesPorMes.anoAnt);
+  const sMeta   = viewMode === 'periodo' ? normalize(seriesAcum.meta)   : normalize(seriesPorMes.meta);
 
   const get = (s: (number | null)[], mes: number): number | null => {
     if (mes < 1 || mes > 12) return null;
@@ -149,11 +183,9 @@ export function MovimentacaoHistoricoModal({
 
   const valorAtual = get(sAno, mesAtual);
 
-  // Detecta presença das séries comparativas p/ render condicional.
   const hasAnoAnt = sAnoAnt.some(v => v != null);
   const hasMeta   = sMeta.some(v => v != null);
 
-  // Dados do gráfico (Jan-Dez).
   const dadosGrafico = MESES_LABELS.map((mes, idx) => {
     const m = idx + 1;
     const atual       = m <= mesAtual ? get(sAno, m) : null;
@@ -193,7 +225,7 @@ export function MovimentacaoHistoricoModal({
     );
   };
 
-  const subtitleInfo = `${lenteLabel ?? ''}${lenteLabel ? ' · ' : ''}${
+  const subtitleInfo = `${LENTES_LABELS[lente]} · ${
     viewMode === 'mes' ? 'Por mês' : `Acumulado Jan→${MESES_LABELS[mesAtual - 1]}`
   }`;
 
@@ -211,6 +243,25 @@ export function MovimentacaoHistoricoModal({
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
             <p className="text-[11px] font-light text-muted-foreground/85 mt-0.5">{subtitleInfo}</p>
+
+            {/* Filtro de lente — só aparece se card tem mais de uma lente aplicável */}
+            {lentesAplicaveis.length > 1 && (
+              <div className="mt-2 inline-flex bg-muted rounded-md p-0.5 gap-0.5 flex-wrap">
+                {lentesAplicaveis.map(l => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setLente(l)}
+                    className={cn(
+                      'px-2.5 py-1 rounded text-[11px] font-medium transition-colors',
+                      lente === l ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {LENTES_LABELS[l]}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Toggle Por mês / Acumulado */}
             <div className="mt-2 inline-flex bg-muted rounded-md p-0.5 gap-0.5">
@@ -249,7 +300,7 @@ export function MovimentacaoHistoricoModal({
 
         {/* Corpo rolável */}
         <div className="flex-1 overflow-y-auto">
-          {/* Gráfico Jan-Dez — barras em 'mes', linha em 'periodo'. */}
+          {/* Gráfico Jan-Dez — barras em 'mes', linha em 'periodo' */}
           <div className="px-3 pb-2 pt-3">
             <ResponsiveContainer width="100%" height={210}>
               <ComposedChart data={dadosGrafico} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
@@ -258,7 +309,6 @@ export function MovimentacaoHistoricoModal({
                 <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
                 <Tooltip content={<CustomTooltip />} />
 
-                {/* Areas só em 'periodo' — sob a linha. Em 'mes' (barras), areas confundem. */}
                 {viewMode === 'periodo' && hasAnoAnt && (
                   <Area
                     type="monotone" dataKey="anoAnteriorArea" stroke="none"
@@ -276,7 +326,6 @@ export function MovimentacaoHistoricoModal({
                   />
                 )}
 
-                {/* Ano-1 e META: linhas dashed em ambos modos. */}
                 {hasAnoAnt && (
                   <Line
                     type="monotone" dataKey="anoAnterior"
@@ -294,7 +343,6 @@ export function MovimentacaoHistoricoModal({
                   />
                 )}
 
-                {/* Real: BARRAS em 'mes', LINHA em 'periodo'. */}
                 {viewMode === 'mes' ? (
                   <Bar
                     dataKey="atual"
