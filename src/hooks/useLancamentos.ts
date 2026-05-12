@@ -148,12 +148,32 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
   const fazendaId = fazendaAtual?.id;
   const clienteId = clienteAtual?.id || fazendaAtual?.cliente_id;
 
+  // Hash estável das fazendas — invalida cache em modo Global quando a lista
+  // de fazendas muda (ex: troca de cliente). Sem isso, queryKey ficava idêntica
+  // ('global') e cache contaminado entre clientes era preservado.
+  const fazendasHash = useMemo(
+    () => fazendas
+      .filter(f => f.id !== '__global__')
+      .map(f => f.id)
+      .sort()
+      .join('|'),
+    [fazendas],
+  );
+
+  // Detecta race: cliente já mudou no context mas o array `fazendas` ainda
+  // contém entradas do cliente anterior (FazendaContext reload async).
+  // Quando inconsistente, gate de enabled abaixo segura a query.
+  const fazendasConsistentes = useMemo(
+    () => fazendas.length === 0 || fazendas.some(f => f.cliente_id === clienteId),
+    [fazendas, clienteId],
+  );
+
   // queryKey segue spec da Fase 1.5. Não inclui `enabled` para evitar criar
   // entrada de cache separada quando consumer alterna enabled — assim, ao
   // re-habilitar, o cache existente é reutilizado.
   const queryKey = useMemo(
-    () => ['lancamentos-zoo', clienteId, cenario, anoFiltro ?? 'all', isGlobal ? 'global' : fazendaId] as const,
-    [clienteId, cenario, anoFiltro, isGlobal, fazendaId],
+    () => ['lancamentos-zoo', clienteId, cenario, anoFiltro ?? 'all', isGlobal ? `global-${fazendasHash}` : fazendaId] as const,
+    [clienteId, cenario, anoFiltro, isGlobal, fazendaId, fazendasHash],
   );
 
   const invalidateZootQueries = useCallback(async () => {
@@ -167,7 +187,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
 
   const query = useQuery<LancamentosQueryData>({
     queryKey,
-    enabled: enabled && !!clienteId && !!fazendaId && (!isGlobal || fazendas.length > 0),
+    enabled: enabled && !!clienteId && !!fazendaId && (!isGlobal || (fazendas.length > 0 && fazendasConsistentes)),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     queryFn: async (): Promise<LancamentosQueryData> => {
