@@ -56,7 +56,9 @@ const LENTES_LABELS: Record<Lente, string> = {
 // ─── Helpers de lente (locais ao modal — dependem do state de lente) ────────
 
 function getUnidade(tipo: TipoMov, lente: Lente): string {
-  if (tipo === 'desfrute' && lente === 'cab') return '%';
+  // 'desfrute_pct' sempre %, independente da lente.
+  // 'desfrute' agora segue lente normal (cab = Σ cabeças desfrutadas).
+  if (tipo === 'desfrute_pct') return '%';
   switch (lente) {
     case 'cab':          return 'cab';
     case 'arroba_total': return '@';
@@ -67,7 +69,7 @@ function getUnidade(tipo: TipoMov, lente: Lente): string {
 }
 
 function getFormato(tipo: TipoMov, lente: Lente): 'inteiro' | 'decimal1' | 'decimal2' | 'moeda' | 'moedaAbreviada' {
-  if (tipo === 'desfrute' && lente === 'cab') return 'decimal1'; // %
+  if (tipo === 'desfrute_pct') return 'decimal1'; // %
   switch (lente) {
     case 'cab':          return 'inteiro';
     case 'arroba_total': return 'inteiro';

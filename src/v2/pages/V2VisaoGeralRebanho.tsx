@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useFazenda } from '@/contexts/FazendaContext';
 import {
   useMovimentacoesAgregadas,
   type Lente,
@@ -28,34 +29,46 @@ interface Props {
 interface CardConfig {
   id: TipoMov;
   label: string;
-  grupo: 'entradas' | 'saidas';
+  grupo: 'entradas' | 'saidas-esq' | 'saidas-dir';
   /** Σ Entradas, Σ Saídas, Desfrute — borda destacada. */
   destaque?: boolean;
   /** Lentes em que o card mostra dado real; outras renderizam '—' atenuado. */
   lentesAplicaveis: Lente[];
   /** Para Mortes, "sobe = ruim": inverter cor das variações. */
   invertCor?: boolean;
+  /** Card só renderiza em modo individual (ex: Transf. Entradas — em Global é interno). */
+  soOndeIndividual?: boolean;
 }
 
 const CARDS: CardConfig[] = [
-  { id: 'nascimentos',   label: 'Nascimentos', grupo: 'entradas',
+  // ENTRADAS
+  { id: 'nascimentos',     label: 'Nascimentos', grupo: 'entradas',
     lentesAplicaveis: ['cab'] },
-  { id: 'compras',       label: 'Compras', grupo: 'entradas',
+  { id: 'compras',         label: 'Compras', grupo: 'entradas',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'soma_entradas', label: 'Σ Entradas', grupo: 'entradas', destaque: true,
+  { id: 'transf_entradas', label: 'Transf. Entradas', grupo: 'entradas',
+    lentesAplicaveis: ['cab'],
+    soOndeIndividual: true },
+  { id: 'soma_entradas',   label: 'Σ Entradas', grupo: 'entradas', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
-  { id: 'vendas',        label: 'Vendas', grupo: 'saidas',
+
+  // SAÍDAS - ESQUERDA: vendas, abates, consumos, mortes (2x2)
+  { id: 'vendas',          label: 'Vendas', grupo: 'saidas-esq',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'abates',        label: 'Abates', grupo: 'saidas',
+  { id: 'abates',          label: 'Abates', grupo: 'saidas-esq',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'consumos',      label: 'Consumos', grupo: 'saidas',
+  { id: 'consumos',        label: 'Consumos', grupo: 'saidas-esq',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
-  { id: 'mortes',        label: 'Mortes', grupo: 'saidas', invertCor: true,
+  { id: 'mortes',          label: 'Mortes', grupo: 'saidas-esq', invertCor: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
-  { id: 'soma_saidas',   label: 'Σ Saídas', grupo: 'saidas', destaque: true,
+
+  // SAÍDAS - DIREITA: 2 cards de desfrute lado a lado + Σ Saídas abaixo
+  { id: 'desfrute',        label: 'Total Desfrute', grupo: 'saidas-dir', destaque: true,
+    lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
+  { id: 'desfrute_pct',    label: 'Desfrute %', grupo: 'saidas-dir', destaque: true,
+    lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
+  { id: 'soma_saidas',     label: 'Σ Saídas', grupo: 'saidas-dir', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
-  { id: 'desfrute',      label: 'Desfrute', grupo: 'saidas', destaque: true,
-    lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
 ];
 
 const LENTES: { id: Lente; label: string }[] = [
@@ -70,7 +83,9 @@ const LENTES: { id: Lente; label: string }[] = [
 
 function formatar(v: number | null, tipo: TipoMov, lente: Lente): string {
   if (v == null || !Number.isFinite(v)) return '—';
-  if (tipo === 'desfrute' && lente === 'cab') {
+  // 'desfrute_pct' sempre formata como % independente da lente.
+  // 'desfrute' agora segue lente normal (cab = Σ cabeças desfrutadas).
+  if (tipo === 'desfrute_pct') {
     return `${v.toFixed(1).replace('.', ',')}%`;
   }
   switch (lente) {
@@ -123,7 +138,12 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const [lente, setLente] = useState<Lente>('cab');
   const [modalAberto, setModalAberto] = useState<TipoMov | null>(null);
 
-  const { porTipo, loading } = useMovimentacoesAgregadas({ ano, mes, viewMode });
+  // isGlobal vem do FazendaContext (mesmo do resto do V2). Em modo Global,
+  // transf entrada vira movimento interno (excluído de Σ Entradas) e o card
+  // Transf. Entradas é ocultado.
+  const { isGlobal } = useFazenda();
+
+  const { porTipo, loading } = useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal });
 
   const abrirModal = (tipo: TipoMov) => {
     const cfg = CARDS.find(c => c.id === tipo);
@@ -131,8 +151,11 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
     setModalAberto(tipo);
   };
 
-  const entradas = CARDS.filter(c => c.grupo === 'entradas');
-  const saidas = CARDS.filter(c => c.grupo === 'saidas');
+  const entradas = CARDS.filter(c =>
+    c.grupo === 'entradas' && (!c.soOndeIndividual || !isGlobal),
+  );
+  const saidasEsq = CARDS.filter(c => c.grupo === 'saidas-esq');
+  const saidasDir = CARDS.filter(c => c.grupo === 'saidas-dir');
 
   // Dados do modal (quando aberto). Modal recebe CardData inteiro + decide
   // internamente qual lente/viewMode renderizar.
@@ -166,32 +189,42 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         )}
       </div>
 
-      {/* ENTRADAS */}
+      {/* ENTRADAS — 3 cards (Global) ou 4 cards (Individual com Transf. Entradas) */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Entradas
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className={cn(
+          'grid gap-3',
+          isGlobal ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-4',
+        )}>
           {entradas.map(c => (
             <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
           ))}
         </div>
       </section>
 
-      {/* SAÍDAS */}
+      {/* SAÍDAS — 2 colunas: esq 2x2 (vendas/abates/consumos/mortes); dir (2 desfrutes lado a lado + Σ Saídas) */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Saídas
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {saidas.slice(0, 4).map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-          {saidas.slice(4).map(c => (
-            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            {saidasEsq.map(c => (
+              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              {saidasDir.slice(0, 2).map(c => (
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+              ))}
+            </div>
+            {saidasDir.slice(2).map(c => (
+              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+            ))}
+          </div>
         </div>
       </section>
 

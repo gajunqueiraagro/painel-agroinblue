@@ -29,8 +29,9 @@ import type { Lancamento } from '@/types/cattle';
 export type Lente = 'cab' | 'arroba_total' | 'arroba_media' | 'preco_arroba' | 'valor_total';
 
 export type TipoMov =
-  | 'nascimentos' | 'compras' | 'soma_entradas'
-  | 'vendas' | 'abates' | 'consumos' | 'mortes' | 'soma_saidas' | 'desfrute';
+  | 'nascimentos' | 'compras' | 'transf_entradas' | 'soma_entradas'
+  | 'vendas' | 'abates' | 'consumos' | 'mortes'
+  | 'soma_saidas' | 'desfrute' | 'desfrute_pct';
 
 export type PorLente = Record<Lente, number | null>;
 
@@ -69,21 +70,35 @@ interface Args {
   ano: number;
   mes: number; // 1..12
   viewMode: 'mes' | 'periodo';
+  /** Quando true, Σ Entradas exclui transf entrada (movimentação interna do cliente). */
+  isGlobal: boolean;
 }
 
 // ─── CONSTANTES ──────────────────────────────────────────────────────────────
 
-const TIPOS_LANC_DE_MOV: Record<TipoMov, Lancamento['tipo'][]> = {
-  nascimentos:   ['nascimento'],
-  compras:       ['compra'],
-  soma_entradas: ['nascimento', 'compra'],
-  vendas:        ['venda'],
-  abates:        ['abate'],
-  consumos:      ['consumo'],
-  mortes:        ['morte'],
-  soma_saidas:   ['venda', 'abate', 'consumo', 'morte'],
-  desfrute:      ['abate', 'venda', 'consumo'], // TIPOS_DESFRUTE_GLOBAL — cab/@/valor incluem consumo
-};
+/**
+ * Mapeamento TipoMov → tipos brutos de Lancamento. Função (não const) porque
+ * Σ Entradas DEPENDE do escopo: em Global, transferência entrada é interna
+ * (movimenta entre fazendas do mesmo cliente) e não deve compor o total; em
+ * Individual, vira entrada real para a fazenda específica.
+ */
+function getTiposLancDeMov(isGlobal: boolean): Record<TipoMov, Lancamento['tipo'][]> {
+  return {
+    nascimentos:     ['nascimento'],
+    compras:         ['compra'],
+    transf_entradas: ['transferencia_entrada'],
+    soma_entradas:   isGlobal
+      ? ['nascimento', 'compra']
+      : ['nascimento', 'compra', 'transferencia_entrada'],
+    vendas:          ['venda'],
+    abates:          ['abate'],
+    consumos:        ['consumo'],
+    mortes:          ['morte'],
+    soma_saidas:     ['venda', 'abate', 'consumo', 'morte'],
+    desfrute:        ['abate', 'venda', 'consumo'], // TIPOS_DESFRUTE_GLOBAL — cab/@/valor incluem consumo
+    desfrute_pct:    ['abate', 'venda', 'consumo'], // mesmo agreg; valorPorLente força % p/ qualquer lente
+  };
+}
 
 /**
  * Sub-conjunto de desfrute usado apenas na lente preco_arroba: abates + vendas.
@@ -93,20 +108,23 @@ const TIPOS_LANC_DE_MOV: Record<TipoMov, Lancamento['tipo'][]> = {
 const TIPOS_DESFRUTE_RECEITA: Lancamento['tipo'][] = ['abate', 'venda'];
 
 const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
-  nascimentos:   new Set(['cab']),
-  compras:       new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  soma_entradas: new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
-  vendas:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  abates:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  consumos:      new Set(['cab', 'arroba_total', 'arroba_media']),
-  mortes:        new Set(['cab', 'arroba_total', 'arroba_media']),
-  soma_saidas:   new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
-  desfrute:      new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  nascimentos:     new Set(['cab']),
+  compras:         new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  transf_entradas: new Set(['cab']),
+  soma_entradas:   new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
+  vendas:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  abates:          new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  consumos:        new Set(['cab', 'arroba_total', 'arroba_media']),
+  mortes:          new Set(['cab', 'arroba_total', 'arroba_media']),
+  soma_saidas:     new Set(['cab', 'arroba_total', 'arroba_media', 'valor_total']),
+  desfrute:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
+  desfrute_pct:    new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
 };
 
 const TIPOS_TODOS: TipoMov[] = [
-  'nascimentos', 'compras', 'soma_entradas',
-  'vendas', 'abates', 'consumos', 'mortes', 'soma_saidas', 'desfrute',
+  'nascimentos', 'compras', 'transf_entradas', 'soma_entradas',
+  'vendas', 'abates', 'consumos', 'mortes',
+  'soma_saidas', 'desfrute', 'desfrute_pct',
 ];
 
 const LENTES_TODAS: Lente[] = ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'];
@@ -173,9 +191,17 @@ function valorPorLente(
   agregReceita?: Agreg,
 ): number | null {
   if (!LENTES_APLICAVEIS[tipo].has(lente)) return null;
+
+  // Desfrute % sempre retorna percentual (cab desfrutadas / saldo_inicial_ano × 100),
+  // independente da lente da tela. Card próprio.
+  if (tipo === 'desfrute_pct') {
+    return calcDesfrute(agreg.cab, saldoInicialAno);
+  }
+
   switch (lente) {
     case 'cab':
-      if (tipo === 'desfrute') return calcDesfrute(agreg.cab, saldoInicialAno);
+      // Antes 'desfrute' em cab retornava %; agora retorna Σ cabeças desfrutadas.
+      // O % foi extraído para o card próprio 'desfrute_pct'.
       return agreg.cab;
     case 'arroba_total':
       return agreg.arrobas;
@@ -211,7 +237,7 @@ function calcularSaldoInicialAno(saldos: SaldoInicialLike[], ano: number): numbe
 
 // ─── HOOK ────────────────────────────────────────────────────────────────────
 
-export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): MovimentacoesAgregadas {
+export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal }: Args): MovimentacoesAgregadas {
   // 3 useLancamentos com queryKeys distintos (TanStack Query cacheia separado).
   const corr   = useLancamentos({ cenario: 'realizado', ano });
   const anoAnt = useLancamentos({ cenario: 'realizado', ano: ano - 1 });
@@ -224,6 +250,10 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
   const lancMeta = meta.lancamentos ?? [];
   const saldosCorr = corr.saldosIniciais ?? [];
   const saldosAnoAnt = anoAnt.saldosIniciais ?? [];
+
+  // Mapeamento tipo → tipos brutos depende de isGlobal (Σ Entradas inclui ou
+  // não transf entrada conforme escopo). Memoizado para estabilidade.
+  const TIPOS_LANC_DE_MOV = useMemo(() => getTiposLancDeMov(isGlobal), [isGlobal]);
 
   const porTipo = useMemo<Record<TipoMov, CardData>>(() => {
     const agCorr   = agregarPorMesPorTipo(lancCorr);
@@ -337,7 +367,7 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode }: Args): Movimen
     }
 
     return result;
-  }, [lancCorr, lancAnoAnt, lancMeta, saldosCorr, saldosAnoAnt, ano, mes, viewMode]);
+  }, [lancCorr, lancAnoAnt, lancMeta, saldosCorr, saldosAnoAnt, ano, mes, viewMode, TIPOS_LANC_DE_MOV]);
 
   return { loading, porTipo };
 }
