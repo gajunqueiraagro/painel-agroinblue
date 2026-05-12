@@ -3,7 +3,7 @@ import type { V2Section } from './navGrupos';
 export type PeriodoTipo = 'nenhum' | 'ano' | 'ano-mes';
 
 export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
-  'rebanho-home':          'nenhum',
+  'rebanho-home':          'ano-mes',
   'pastos':                'nenhum',
   'chuvas':                'ano',
   'lancamentos-zoot':      'nenhum',

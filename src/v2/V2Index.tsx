@@ -625,7 +625,13 @@ export default function V2Index() {
     if (section === 'config-bancario') return <FinV2ContasTab />;
     if (section === 'config-auditoria') return <AuditoriaTab />;
     if (section === 'config-fazendas') return <V2Fazendas />;
-    if (section === 'rebanho-home') return <V2VisaoGeralRebanho />;
+    if (section === 'rebanho-home') return (
+      <V2VisaoGeralRebanho
+        ano={Number(ano)}
+        mes={mes === '0' ? new Date().getMonth() + 1 : Number(mes)}
+        viewMode={viewMode}
+      />
+    );
 
     // ── Placeholders "Em construção" (PR Reorganização Sidebar) ──
     // Rotas existem no menu mas ainda não têm componente dedicado.

@@ -1,24 +1,28 @@
 /**
  * V2VisaoGeralRebanho — Tela Rebanho/Visão Geral (section 'rebanho-home').
  *
- * Fase 2 do Marco "9 Cards de Movimentação": estrutura visual sem dados reais.
+ * Fase 3 do Marco "9 Cards de Movimentação": dados reais via useMovimentacoesAgregadas.
+ * Modal Jan-Dez por card é a Fase 4 (próximo commit).
+ *
  * Lente global controla qual métrica os 9 cards exibem simultaneamente.
  * Cards onde a lente não se aplica aparecem atenuados com '—'.
- *
- * Próximas fases:
- *  - Fase 3: plugar dados via useMovimentacoesAgregadas (ano/anoAnt/meta)
- *  - Fase 4: modal Jan-Dez por card (MovimentacaoHistoricoModal)
  */
 
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import {
+  useMovimentacoesAgregadas,
+  type Lente,
+  type TipoMov,
+  type CardData,
+} from '@/v2/hooks/useMovimentacoesAgregadas';
 
-export type Lente = 'cab' | 'arroba_total' | 'arroba_media' | 'preco_arroba' | 'valor_total';
-
-export type TipoMov =
-  | 'nascimentos' | 'compras' | 'soma_entradas'
-  | 'vendas' | 'abates' | 'consumos' | 'mortes' | 'soma_saidas' | 'desfrute';
+interface Props {
+  ano: number;
+  mes: number; // 1..12
+  viewMode: 'mes' | 'periodo';
+}
 
 interface CardConfig {
   id: TipoMov;
@@ -28,26 +32,28 @@ interface CardConfig {
   destaque?: boolean;
   /** Lentes em que o card mostra dado real; outras renderizam '—' atenuado. */
   lentesAplicaveis: Lente[];
+  /** Para Mortes, "sobe = ruim": inverter cor das variações. */
+  invertCor?: boolean;
 }
 
 const CARDS: CardConfig[] = [
-  { id: 'nascimentos',  label: 'Nascimentos', grupo: 'entradas',
+  { id: 'nascimentos',   label: 'Nascimentos', grupo: 'entradas',
     lentesAplicaveis: ['cab'] },
-  { id: 'compras',      label: 'Compras', grupo: 'entradas',
+  { id: 'compras',       label: 'Compras', grupo: 'entradas',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
   { id: 'soma_entradas', label: 'Σ Entradas', grupo: 'entradas', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
-  { id: 'vendas',       label: 'Vendas', grupo: 'saidas',
+  { id: 'vendas',        label: 'Vendas', grupo: 'saidas',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'abates',       label: 'Abates', grupo: 'saidas',
+  { id: 'abates',        label: 'Abates', grupo: 'saidas',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'] },
-  { id: 'consumos',     label: 'Consumos', grupo: 'saidas',
+  { id: 'consumos',      label: 'Consumos', grupo: 'saidas',
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
-  { id: 'mortes',       label: 'Mortes', grupo: 'saidas',
+  { id: 'mortes',        label: 'Mortes', grupo: 'saidas', invertCor: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media'] },
-  { id: 'soma_saidas',  label: 'Σ Saídas', grupo: 'saidas', destaque: true,
+  { id: 'soma_saidas',   label: 'Σ Saídas', grupo: 'saidas', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
-  { id: 'desfrute',     label: 'Desfrute', grupo: 'saidas', destaque: true,
+  { id: 'desfrute',      label: 'Desfrute', grupo: 'saidas', destaque: true,
     lentesAplicaveis: ['cab', 'arroba_total', 'arroba_media', 'valor_total'] },
 ];
 
@@ -59,8 +65,56 @@ const LENTES: { id: Lente; label: string }[] = [
   { id: 'valor_total',  label: 'R$ Total' },
 ];
 
-export default function V2VisaoGeralRebanho() {
+// ─── Formatadores ────────────────────────────────────────────────────────────
+
+function formatar(v: number | null, tipo: TipoMov, lente: Lente): string {
+  if (v == null || !Number.isFinite(v)) return '—';
+  if (tipo === 'desfrute' && lente === 'cab') {
+    return `${v.toFixed(1).replace('.', ',')}%`;
+  }
+  switch (lente) {
+    case 'cab':
+      return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v);
+    case 'arroba_total':
+      return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)} @`;
+    case 'arroba_media':
+      return `${v.toFixed(1).replace('.', ',')} @/cab`;
+    case 'preco_arroba':
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency', currency: 'BRL', maximumFractionDigits: 2,
+      }).format(v);
+    case 'valor_total':
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency', currency: 'BRL', maximumFractionDigits: 0,
+      }).format(v);
+  }
+}
+
+function pctDelta(curr: number | null, base: number | null): number | null {
+  if (curr == null || base == null) return null;
+  if (base === 0 || !Number.isFinite(base)) return null;
+  return ((curr - base) / Math.abs(base)) * 100;
+}
+
+function fmtDelta(d: number | null): string {
+  if (d == null || !Number.isFinite(d)) return '—';
+  const sign = d > 0 ? '+' : '';
+  return `${sign}${d.toFixed(1).replace('.', ',')}%`;
+}
+
+/** Cor da variação. invertCor=true (Mortes): subir é ruim. */
+function corDelta(d: number | null, invert = false): string {
+  if (d == null || !Number.isFinite(d) || Math.abs(d) < 0.05) return 'text-muted-foreground';
+  const positivo = invert ? d < 0 : d > 0;
+  return positivo ? 'text-emerald-600' : 'text-rose-600';
+}
+
+// ─── Componente principal ───────────────────────────────────────────────────
+
+export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const [lente, setLente] = useState<Lente>('cab');
+
+  const { porTipo, loading } = useMovimentacoesAgregadas({ ano, mes, viewMode });
 
   const entradas = CARDS.filter(c => c.grupo === 'entradas');
   const saidas = CARDS.filter(c => c.grupo === 'saidas');
@@ -87,6 +141,9 @@ export default function V2VisaoGeralRebanho() {
             </button>
           ))}
         </div>
+        {loading && (
+          <span className="text-xs text-muted-foreground ml-3">Carregando…</span>
+        )}
       </div>
 
       {/* ENTRADAS */}
@@ -95,7 +152,9 @@ export default function V2VisaoGeralRebanho() {
           Entradas
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {entradas.map(c => <CardKpi key={c.id} cfg={c} lente={lente} />)}
+          {entradas.map(c => (
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+          ))}
         </div>
       </section>
 
@@ -105,18 +164,31 @@ export default function V2VisaoGeralRebanho() {
           Saídas
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {saidas.slice(0, 4).map(c => <CardKpi key={c.id} cfg={c} lente={lente} />)}
+          {saidas.slice(0, 4).map(c => (
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+          ))}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-          {saidas.slice(4).map(c => <CardKpi key={c.id} cfg={c} lente={lente} />)}
+          {saidas.slice(4).map(c => (
+            <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} />
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function CardKpi({ cfg, lente }: { cfg: CardConfig; lente: Lente }) {
+function CardKpi({ cfg, lente, data }: { cfg: CardConfig; lente: Lente; data?: CardData }) {
   const aplicavel = cfg.lentesAplicaveis.includes(lente);
+
+  const valor       = aplicavel && data ? data.mesAtual[lente]  : null;
+  const valorMesAnt = aplicavel && data ? data.mesAnt[lente]    : null;
+  const valorAnoAnt = aplicavel && data ? data.mesAnoAnt[lente] : null;
+  const valorMeta   = aplicavel && data ? data.meta[lente]      : null;
+
+  const deltaMes  = pctDelta(valor, valorMesAnt);
+  const deltaAno  = pctDelta(valor, valorAnoAnt);
+  const deltaMeta = pctDelta(valor, valorMeta);
 
   return (
     <Card className={cn(
@@ -129,12 +201,20 @@ function CardKpi({ cfg, lente }: { cfg: CardConfig; lente: Lente }) {
         {cfg.label}
       </div>
       <div className="text-2xl font-bold tabular-nums">
-        {aplicavel ? '—' : <span className="text-muted-foreground">—</span>}
+        {aplicavel
+          ? formatar(valor, cfg.id, lente)
+          : <span className="text-muted-foreground">—</span>}
       </div>
-      <div className="text-[10px] text-muted-foreground mt-2 space-y-0.5">
-        <div>— vs mês ant.</div>
-        <div>— vs ano ant.</div>
-        <div>— vs META</div>
+      <div className="text-[10px] mt-2 space-y-0.5">
+        <div className={corDelta(deltaMes, cfg.invertCor)}>
+          {fmtDelta(deltaMes)} vs mês ant.
+        </div>
+        <div className={corDelta(deltaAno, cfg.invertCor)}>
+          {fmtDelta(deltaAno)} vs ano ant.
+        </div>
+        <div className={corDelta(deltaMeta, cfg.invertCor)}>
+          {fmtDelta(deltaMeta)} vs META
+        </div>
       </div>
     </Card>
   );
