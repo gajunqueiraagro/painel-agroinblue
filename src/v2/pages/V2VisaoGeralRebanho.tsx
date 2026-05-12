@@ -243,6 +243,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
           serieMeta={dadosModal.meta}
           tipoAcumulado={getTipoAcumulado(modalAberto, lente)}
           corPrincipal={getCorPrincipal(modalAberto)}
+          viewModeInicial={viewMode}
         />
       )}
     </div>
