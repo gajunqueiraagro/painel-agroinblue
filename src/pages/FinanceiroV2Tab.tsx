@@ -874,34 +874,38 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   }, [modoIntensivo, onIntensiveToggle]);
 
   const actionButtons = (
-    <div className="flex items-center gap-1">
-      {!mesFechadoAtivo && (
-        <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
-          <Plus className="h-3 w-3" /> Novo
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        {!mesFechadoAtivo && (
+          <Button size="sm" onClick={() => { setEditingLanc(null); setDialogOpen(true); }} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
+            <Plus className="h-3 w-3" /> Novo
+          </Button>
+        )}
+        <FinanceiroV2ExportMenu
+          lancamentos={sortedLancamentos}
+          fornecedores={hook.fornecedores}
+          ano={ano}
+          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+          totalCount={totalLancamentosFiltrados}
+        />
+      </div>
+      <div className="flex items-center gap-1">
+        {onBack && (
+          <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5" title="Voltar">
+            <ChevronLeft className="h-3 w-3" /> Voltar
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant={modoIntensivo ? "default" : "outline"}
+          onClick={() => toggleIntensivo()}
+          className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
+          title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
+        >
+          {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+          {modoIntensivo ? 'Sair' : 'Intensivo'}
         </Button>
-      )}
-      <FinanceiroV2ExportMenu
-        lancamentos={sortedLancamentos}
-        fornecedores={hook.fornecedores}
-        ano={ano}
-        fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-        totalCount={totalLancamentosFiltrados}
-      />
-      {onBack && (
-        <Button size="sm" variant="outline" onClick={onBack} className="h-6 text-[10px] gap-0.5 px-1.5" title="Voltar">
-          <ChevronLeft className="h-3 w-3" /> Voltar
-        </Button>
-      )}
-      <Button
-        size="sm"
-        variant={modoIntensivo ? "default" : "outline"}
-        onClick={() => toggleIntensivo()}
-        className={cn("h-6 text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
-        title={modoIntensivo ? "Sair do Modo Intensivo" : "Modo Intensivo"}
-      >
-        {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-        {modoIntensivo ? 'Sair' : 'Intensivo'}
-      </Button>
+      </div>
     </div>
   );
 
@@ -1361,11 +1365,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 28 }} />
                 <col style={{ width: 60 }} />
                 <col style={{ width: 60 }} />
-                <col style={modoIntensivo ? { width: 280 } : undefined} />
+                <col style={{ width: modoIntensivo ? 280 : 160 }} />
                 <col style={{ width: 140 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 90 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 75 }} />
                 <col style={{ width: 100 }} />
                 <col style={{ width: modoIntensivo ? 110 : 100 }} />
                 <col style={{ width: 58 }} />
