@@ -1656,7 +1656,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (e) e.preventDefault();
 
     // ─── Gate de master lock: bloqueia se o mês da data está fechado ───
-    if (data && !masterLock.isMaster) {
+    // Meta (cenario='meta') é permitido em qualquer mês — trigger trg_guard_lancamento_mes_fechado_p1
+    // no banco também tem bypass equivalente.
+    if (data && !isCenarioMeta && !masterLock.isMaster) {
       const anoMesData = data.slice(0, 7); // 'YYYY-MM'
       if (!masterLock.isUnlocked(anoMesData)) {
         const locked = await masterLock.checkLockNow(anoMesData);
