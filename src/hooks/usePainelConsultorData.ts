@@ -656,7 +656,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, data')
+          .select('id, tipo, quantidade, data')
           .eq('cancelado', false)
           .eq('cenario', 'realizado')
           .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
@@ -675,7 +675,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           return;
         }
 
-        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('data', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -683,7 +686,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
-      const lite = allRows.map((r: any) => ({
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
+      const lite = dedupRows.map((r: any) => ({
         tipo: r.tipo,
         quantidade: Number(r.quantidade) || 0,
         data: r.data,
@@ -713,7 +724,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, data')
+          .select('id, tipo, quantidade, data')
           .eq('cancelado', false)
           .eq('cenario', 'meta')
           .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
@@ -731,7 +742,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           if (!cancelled) setDesfruteMetaMes12(Array(12).fill(0));
           return;
         }
-        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('data', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -739,7 +753,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
-      const lite = allRows.map((r: any) => ({
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
+      const lite = dedupRows.map((r: any) => ({
         tipo: r.tipo,
         quantidade: Number(r.quantidade) || 0,
         data: r.data,
@@ -772,7 +794,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
+          .select('id, tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
           .eq('cancelado', false)
           .eq('cenario', 'realizado')
           .eq('status_operacional', 'realizado')
@@ -791,7 +813,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           if (!cancelled) setPecAnoAnt12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
           return;
         }
-        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('data', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -799,9 +824,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
       const rec = Array(12).fill(0);
       const desfArr = Array(12).fill(0);
-      for (const r of allRows) {
+      for (const r of dedupRows) {
         const m = parseInt(String(r.data ?? '').slice(5, 7));
         if (isNaN(m) || m < 1 || m > 12) continue;
         const qtd = Number(r.quantidade) || 0;
@@ -839,7 +872,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = supabase
           .from('lancamentos')
-          .select('tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
+          .select('id, tipo, quantidade, peso_medio_kg, peso_carcaca_kg, valor_total, data')
           .eq('cancelado', false)
           .eq('cenario', 'meta')
           .in('tipo', [...TIPOS_DESFRUTE_OFICIAL] as string[])
@@ -857,7 +890,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           if (!cancelled) setPecMeta12({ rec: Array(12).fill(0), desfArr: Array(12).fill(0) });
           return;
         }
-        const { data, error } = await q.order('data').range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('data', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -865,9 +901,17 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
       const rec = Array(12).fill(0);
       const desfArr = Array(12).fill(0);
-      for (const r of allRows) {
+      for (const r of dedupRows) {
         const m = parseInt(String(r.data ?? '').slice(5, 7));
         if (isNaN(m) || m < 1 || m > 12) continue;
         const qtd = Number(r.quantidade) || 0;
@@ -906,7 +950,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = (supabase
           .from('financeiro_lancamentos_v2')
-          .select('data_pagamento, valor, grupo_custo') as any)
+          .select('id, data_pagamento, valor, grupo_custo') as any)
           .eq('cancelado', false)
           .eq('sem_movimentacao_caixa', false)
           .eq('status_transacao', 'realizado')
@@ -926,7 +970,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           if (!cancelled) setCusteioPecAnoAnt12(Array(12).fill(0));
           return;
         }
-        const { data, error } = await q.range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('data_pagamento', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -934,8 +981,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
       const out = Array(12).fill(0);
-      for (const r of allRows) {
+      for (const r of dedupRows) {
         const m = parseInt(String(r.data_pagamento ?? '').slice(5, 7));
         if (isNaN(m) || m < 1 || m > 12) continue;
         out[m - 1] += Math.abs(Number(r.valor) || 0);
@@ -963,7 +1018,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       while (true) {
         let q = (supabase
           .from('planejamento_financeiro' as any)
-          .select('mes, valor_planejado, grupo_custo') as any)
+          .select('id, mes, valor_planejado, grupo_custo') as any)
           .eq('ano', ano)
           .eq('cenario', 'meta')
           .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária']);
@@ -979,7 +1034,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
           if (!cancelled) setCusteioPecMeta12(Array(12).fill(0));
           return;
         }
-        const { data, error } = await q.range(from, from + PAGE - 1);
+        const { data, error } = await q
+          .order('mes', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
         allRows.push(...data);
@@ -987,8 +1045,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         from += PAGE;
       }
       if (cancelled) return;
+      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
+      // entre páginas se a ordenação não for totalmente determinística.
+      const seenIds = new Set<string>();
+      const dedupRows = allRows.filter((r: any) => {
+        if (!r?.id || seenIds.has(r.id)) return false;
+        seenIds.add(r.id);
+        return true;
+      });
       const out = Array(12).fill(0);
-      for (const r of allRows) {
+      for (const r of dedupRows) {
         const m = Number(r.mes);
         if (!Number.isInteger(m) || m < 1 || m > 12) continue;
         out[m - 1] += Number(r.valor_planejado) || 0;
