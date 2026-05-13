@@ -160,12 +160,20 @@ export async function criarMirrorParcela(
   parcela: ParcelaInput,
   financiamento: FinanciamentoInput,
 ): Promise<{ lancamentoIdPrincipal: string | null; lancamentoIdJuros: string | null }> {
-  // Idempotência: usa IDs oficiais da parcela — observacao não é vínculo
-  if (parcela.lancamento_id || parcela.lancamento_juros_id) {
-    return {
-      lancamentoIdPrincipal: parcela.lancamento_id ?? null,
-      lancamentoIdJuros: parcela.lancamento_juros_id ?? null,
-    };
+  // Idempotência: SEMPRE consultar o banco — input do caller pode estar incompleto
+  const { data: parcelaDb, error: selErr } = await supabase
+    .from('financiamento_parcelas')
+    .select('lancamento_id, lancamento_juros_id')
+    .eq('id', parcela.id)
+    .maybeSingle();
+  if (selErr) {
+    console.error('[parcelaMirror] erro consultando parcela:', selErr);
+    return { lancamentoIdPrincipal: null, lancamentoIdJuros: null };
+  }
+  const dbPrincipal = parcelaDb?.lancamento_id ?? null;
+  const dbJuros = parcelaDb?.lancamento_juros_id ?? null;
+  if (dbPrincipal || dbJuros) {
+    return { lancamentoIdPrincipal: dbPrincipal, lancamentoIdJuros: dbJuros };
   }
   const tipo = financiamento.tipo_financiamento;
   if (tipo !== 'pecuaria' && tipo !== 'agricultura') {
@@ -221,7 +229,15 @@ export async function criarMirrorParcela(
       .from('financiamento_parcelas')
       .update(updateParcela)
       .eq('id', parcela.id);
-    if (upErr) console.error('[parcelaMirror] erro update IDs na parcela:', upErr);
+    if (upErr) {
+      // CRÍTICO: rollback dos lançamentos criados para evitar órfãos
+      console.error('[parcelaMirror] UPDATE parcela falhou, cancelando lançamentos:', upErr);
+      const idsParaCancelar = [lancamentoIdPrincipal, lancamentoIdJuros].filter(Boolean) as string[];
+      if (idsParaCancelar.length > 0) {
+        await supabase.from('financeiro_lancamentos_v2').update({ cancelado: true }).in('id', idsParaCancelar);
+      }
+      return { lancamentoIdPrincipal: null, lancamentoIdJuros: null };
+    }
   }
 
   return { lancamentoIdPrincipal, lancamentoIdJuros };
