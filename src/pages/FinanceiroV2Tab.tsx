@@ -126,7 +126,13 @@ function fmtDate(d: string | null) {
   if (!d) return '-';
   try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
 }
+// Display compacto: só o número (tipo vai no tooltip)
 function formatNF(l: LancamentoV2): string {
+  return l.numero_documento?.trim() || '-';
+}
+
+// Tooltip mantém info completa (tipo + número formatado)
+function formatDocCompleto(l: LancamentoV2): string {
   return formatDocumento((l as any).tipo_documento, l.numero_documento);
 }
 
@@ -1363,15 +1369,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               */}
               <colgroup>
                 <col style={{ width: 28 }} />
-                <col style={{ width: 60 }} />
-                <col style={{ width: 60 }} />
-                <col style={{ width: modoIntensivo ? 280 : 160 }} />
+                <col style={{ width: 50 }} />
+                <col style={{ width: 50 }} />
+                <col style={{ width: modoIntensivo ? 280 : 200 }} />
                 <col style={{ width: 140 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 80 }} />
-                <col style={{ width: 75 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: modoIntensivo ? 110 : 100 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: modoIntensivo ? 110 : 70 }} />
                 <col style={{ width: 58 }} />
                 <col style={{ width: 36 }} />
               </colgroup>
@@ -1432,7 +1438,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className={`text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight ${l.sinal > 0 ? 'text-success' : 'text-destructive'}`}>
                           {fmtValor(l.valor, l.sinal)}
                         </td>
-                        <td className="font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatNF(l)}>{formatNF(l)}</td>
+                        <td className="font-mono text-muted-foreground text-center px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
                         <td className={`text-center px-1 py-1 align-middle text-[11px] leading-tight ${stColor}`}>{stLabel}</td>
                         <td className="!py-0 px-0 w-[40px] align-middle">
                           <div className="flex items-center justify-center gap-0.5">
