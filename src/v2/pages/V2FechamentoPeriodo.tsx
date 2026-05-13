@@ -20,6 +20,7 @@ import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
 import HeaderFiltro from './V2FechamentoPeriodo.parts/HeaderFiltro';
 import Capa from './V2FechamentoPeriodo.parts/Capa';
+import ResultadoDestaque from './V2FechamentoPeriodo.parts/ResultadoDestaque';
 import EvolucaoOperacao from './V2FechamentoPeriodo.parts/EvolucaoOperacao';
 import AnaliseZootecnica from './V2FechamentoPeriodo.parts/AnaliseZootecnica';
 import FluxoCaixa from './V2FechamentoPeriodo.parts/FluxoCaixa';
@@ -109,6 +110,7 @@ export default function V2FechamentoPeriodo() {
       {dto && (
         <div className="fechamento-print-area">
           <Capa dto={dto} nomeCliente={clienteAtual?.nome} nomeFazenda={nomeFazenda} />
+          <ResultadoDestaque dto={dto} />
           <EvolucaoOperacao dto={dto} />
           <AnaliseZootecnica dto={dto} />
           <FluxoCaixa dto={dto} />
