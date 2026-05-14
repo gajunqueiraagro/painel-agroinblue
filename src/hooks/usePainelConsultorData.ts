@@ -22,6 +22,8 @@ import { montarCentrosCusto } from '@/lib/painelConsultor/financeiro/centrosCust
 import type { PC100_Financeiro } from '@/lib/painelConsultor/financeiro/types';
 import { useSaldoCaixaMensal } from '@/hooks/useSaldoCaixaMensal';
 import { montarCaixaIndicador } from '@/lib/painelConsultor/financeiro/caixaIndicador';
+import { calcularRunway } from '@/lib/painelConsultor/executivo/calcularRunway';
+import type { PC100_Executivo } from '@/lib/painelConsultor/executivo/types';
 import {
   agregaCusteioPecSemJuros,
   agregaJurosPec,
@@ -387,6 +389,9 @@ export interface PainelConsultorDataResult {
 
   /** Domínio financeiro · breakdowns financeiros (Fase 0 Step 2.4). */
   financeiro: PC100_Financeiro;
+
+  /** Domínio executivo · derivações de leitura (Step 2.1*). */
+  executivo: PC100_Executivo;
 
   loading: boolean;
 }
@@ -2631,6 +2636,39 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isPeriodo:   viewMode === 'periodo',
   });
 
+  // ─── Step 2.1*: Runway (executivo) ─────────────────────────────
+  // Consome caixaIndicador.serieAno (estoque, mes-agnostic) e a série
+  // mensal de saídas totais. saidasTotaisIndicador.serieAno depende
+  // de viewMode (acumulada em 'periodo'). Para runway precisamos da
+  // série MENSAL não-acumulada: quando viewMode='periodo', invertemos
+  // o cumSum para recuperar a série mensal correta.
+  const _saidasMesSerieParaRunway: number[] | null = (() => {
+    const ind = _finSoberano?.saidasTotais;
+    if (!ind || !Array.isArray(ind.serieAno) || ind.serieAno.length !== 13) {
+      return null;
+    }
+    if (viewMode !== 'periodo') return ind.serieAno;
+    // viewMode='periodo': inverter cumSum (serieAno está acumulada)
+    const out: number[] = new Array(13).fill(NaN);
+    for (let m = 1; m <= 12; m++) {
+      const curr = ind.serieAno[m];
+      const prev = m === 1 ? 0 : ind.serieAno[m - 1];
+      if (Number.isFinite(curr)) {
+        out[m] = Number.isFinite(prev) ? curr - prev : curr;
+      }
+    }
+    return out;
+  })();
+
+  const _runwayResolved = (caixaIndicadorResolved && _saidasMesSerieParaRunway)
+    ? calcularRunway({
+        caixaSerie:  caixaIndicadorResolved.serieAno,
+        saidasSerie: _saidasMesSerieParaRunway,
+        mes,
+      })
+    : null;
+  const executivo: PC100_Executivo = { runway: _runwayResolved };
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2913,6 +2951,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
     rebanho,
     financeiro,
+    executivo,
 
     loading,
   };
@@ -2972,6 +3011,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       // Step 2.4: dominio financeiro preservado (centrosCusto vem de lancFin, que
       // independe de P1 — analogo aos *Indicadores financeiros soberanos acima).
       financeiro,
+      // Step 2.1*: runway preservado — depende apenas de caixa + saidas totais,
+      // ambos soberanos e independentes de P1.
+      executivo,
     };
   }
 
