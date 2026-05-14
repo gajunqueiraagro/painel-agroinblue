@@ -14,6 +14,8 @@ import {
 } from '@/hooks/useRebanhoOficial';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/lib/painelConsultor/buildMonthlyDataFromView';
+import { montarComposicaoCategoria } from '@/lib/painelConsultor/rebanho/composicaoCategoria';
+import type { PC100_Rebanho } from '@/lib/painelConsultor/rebanho/types';
 import {
   agregaCusteioPecSemJuros,
   agregaJurosPec,
@@ -374,6 +376,9 @@ export interface PainelConsultorDataResult {
   dividendosIndicador:          IndicadorFinanceiroShape | null;
   caixaIndicador:               IndicadorFinanceiroShape | null;
 
+  /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
+  rebanho: PC100_Rebanho;
+
   loading: boolean;
 }
 
@@ -465,6 +470,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const {
     rawCategorias: viewDataRealizado,
+    getCategoriasDetalhe,
     loading: loadingRebanho,
   } = useRebanhoOficial({ ano, cenario: 'realizado', global: isGlobal, enabled });
 
@@ -2543,6 +2549,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // useAreaPlanejamento, ~L398) para serem consumidas por monthlyData,
   // monthlyDataMeta, kgHaPorMes, kgHaPorMesMeta. Não duplicar aqui.
 
+  // ─── DOMÍNIO REBANHO — Step 2.2: composicaoCategoria ────────────
+  // Snapshot do mês de referência. Independente de viewMode (composição
+  // é estado pontual, não acumulado). null durante loading/incompleto.
+  const rebanho: PC100_Rebanho = {
+    composicaoCategoria: getCategoriasDetalhe
+      ? montarComposicaoCategoria(getCategoriasDetalhe(mes))
+      : null,
+  };
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2823,6 +2838,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     dividendosIndicador:          _finSoberano.dividendos,
     caixaIndicador:               null,
 
+    rebanho,
+
     loading,
   };
 
@@ -2874,6 +2891,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       amortizacoesIndicador:        _finSoberano.amortizacoes,
       dividendosIndicador:          _finSoberano.dividendos,
       caixaIndicador:               null,
+      // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
+      // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
+      // retorna null quando vazio).
+      rebanho,
     };
   }
 
