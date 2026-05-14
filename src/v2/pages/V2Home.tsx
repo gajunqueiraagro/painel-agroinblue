@@ -191,7 +191,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr', 'precoArr'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -510,6 +510,35 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ]);
 
   const loadingMargemArrHistorico = modalIndicador === 'margemArr' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // precoArr migrado do hook legado useHistoricoIndicador para o histórico oficial PC-100.
+  // Motivo: divergência matemática no histórico multi-ano causada por fórmula paralela
+  // baseada em peso_vivo/30 para abates.
+
+  // ── precoArr histórico oficial PC-100 (Opção B — 11º indicador) ──
+  const precoArrHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'precoArr') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.precoArrIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.precoArrIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.precoArrIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.precoArrIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.precoArrIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(precoArrIndicador?.serieAnoAnt, mesNum) },
+      { ano: anoNum,     valor: precoArrIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum, mesNum,
+    histArr6.precoArrIndicador, histArr5.precoArrIndicador,
+    histArr4.precoArrIndicador, histArr3.precoArrIndicador,
+    histArr2.precoArrIndicador,
+    precoArrIndicador,
+  ]);
+
+  const loadingPrecoArrHistorico = modalIndicador === 'precoArr' && (
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
@@ -1283,9 +1312,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={precoArrIndicador?.deltaMes ?? null}
           deltaAno={precoArrIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={precoArrHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingPrecoArrHistorico}
           corPrincipal="azul"
         />
       )}
