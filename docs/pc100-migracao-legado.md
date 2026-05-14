@@ -1,6 +1,6 @@
 # PC-100 · Mapa de Migração do Legado
 
-**Última atualização:** 14/05/2026 (após commit `4417da37` — migração de `precoArr`)
+**Última atualização:** 14/05/2026 (após commits `4417da37` migração precoArr + `5d485fa5` consolidação receitaPec)
 **Branch auditada:** `proto`
 **Status:** Documento vivo · atualizar a cada migração concluída ou novo caminho paralelo descoberto
 
@@ -29,7 +29,7 @@ Mapear todos os indicadores, modais, hooks e queries diretas que ainda operam fo
 
 ---
 
-## 2 · Indicadores MIGRATED (11)
+## 2 · Indicadores MIGRATED (12)
 
 Consomem `precoArrIndicador.valor`, `custoArrIndicador.valor` etc. através do padrão `{indicador}HistoricoOficial` em `V2Home.tsx` que reusa `usePainelConsultorData` com `ano: anoNum - k`.
 
@@ -46,16 +46,16 @@ Consomem `precoArrIndicador.valor`, `custoArrIndicador.valor` etc. através do p
 | 9 | `custoCab` | Visão Geral V2 → modal | PC-100 `custoCabIndicador` | `useHistoricoIndicador` (branch unificada) | ✅ Migrado | `custeioPec / cabMediaMes` |
 | 10 | `margemArr` | Visão Geral V2 → modal | PC-100 `margemArrIndicador` | `useHistoricoIndicador` (branch unificada) | ✅ Migrado | `precoArr − custoArr` |
 | 11 | `precoArr` | Visão Geral V2 → modal | PC-100 `precoArrIndicador` | `useHistoricoIndicador` (branch `receitaPec/precoArr`) | ✅ Migrado (`4417da37`, 14/05/2026) | `recPecComp / desfrute_arr` |
+| 12 | `receitaPec` | Visão Geral V2 → modal | PC-100 `receitaPecIndicador` | `useHistoricoIndicador` (branch `receitaPec/precoArr`) | ✅ Migrado (`5d485fa5`, 14/05/2026) | Consolidação arquitetural — PC-100 e legado já usavam mesma fonte (`lancamentos` zoo) |
 
 ---
 
-## 3 · Indicadores ainda LEGADO (4 identificados)
+## 3 · Indicadores ainda LEGADO (3 identificados)
 
 Consomem `useHistoricoIndicador` diretamente. `V2Home.tsx` mantém em `HIST_KEYS_PERMITIDAS` mas NÃO incluiu em `MIGRATED_HISTORICO_KEYS`.
 
 | Indicador | Onde aparece | Hook/fonte legado | Branch no hook | Divergência conhecida | Prioridade |
 |---|---|---|---|---|---|
-| **`receitaPec`** | Modal "Receitas Pecuárias Competência" (V2Home) | `useHistoricoIndicador` → tabela `lancamentos` | L398, L467 | **Sim** — Σ `valor_total` direto de `lancamentos`, em vez de `recPecComp` classificado via `financeiro_lancamentos_v2`. Filtro `tipo IN (abate, venda, consumo)` + `cenario IN (realizado, meta)` | 🔴 **Alta** — mesma família de bug do `precoArr` |
 | `cabecas` | Modal "Cabeças" (V2Home) | `useHistoricoIndicador` → tabela `zoot_mensal_cache` raw | L848 | **Provável** — `zoot_mensal_cache` raw NÃO aplica overlay de fechamento (`useRebanhoOficial`). Pode divergir em meses com `fechamento_pasto_itens` oficial | 🟡 Média |
 | `desfrute` | Modal "Desfrute (Cab.)" (V2Home) | `useHistoricoIndicador` → tabela `lancamentos` (branch específica) | L314 | **Não auditado ainda** — usa fonte separada (`abate+venda+consumo` direto de `lancamentos`), divergente da definição oficial `abate+venda` | 🟡 Média |
 | `valorRebanho` | Modal "Valor do Rebanho" (V2Home) | `useHistoricoIndicador` → view `valor_rebanho_realizado_validado` | L238 | **Não auditado ainda** — lê snapshot direto, sem normalização entre fazendas no modo Global | 🟢 Baixa (snapshot é fonte oficial de patrimônio) |
@@ -121,11 +121,13 @@ Consomem `useHistoricoIndicador` diretamente. `V2Home.tsx` mantém em `HIST_KEYS
 | Indicador | Cenário | Valor legado | Valor PC-100 oficial | Δ | Causa raiz | Status |
 |---|---|---|---|---|---|---|
 | `precoArr` | NJ Global, Jan-Abr/2025, "No período" | R$ 340,51 | R$ 322,12 (banco oficial: R$ 322,40) | +5,7% | (a) `peso_vivo/30` em vez de `peso_carcaca_kg/15` para abate; (b) inclusão de `consumo` no denominador; (c) numerador `Σ valor_total` direto em vez de `recPecComp` classificado | ✅ **Corrigido** via commit `4417da37` (14/05/2026) |
-| `receitaPec` | NJ Global, Jan-Abr/2025 | (não validado neste documento) | A confirmar no step de migração de `receitaPec` | Não medido com rigor | Mesma fórmula problemática — `Σ valor_total` direto de `lancamentos` (inclui consumo) vs `recPecComp` classificado via `financeiro_lancamentos_v2` | 🔴 **Pendente** — backlog |
+| `receitaPec` | NJ Global, Jan-Abr/2025 | n/a — mesma fonte | n/a — mesma fonte | Sem divergência relevante | Auditoria 14/05/2026 confirmou: `recPecComp` (PC-100) e legado usam ambos `lancamentos` zoo (tipo IN abate/venda/consumo). Σ medido = R$ 6.868.286,87 em ambos os caminhos | ✅ **Consolidado arquiteturalmente** via `5d485fa5` (sem mudança de valores; trilho único PC-100). Barra "Meta 2026" deixou de ser exibida por seguir padrão MIGRATED `historicoMeta={[]}`, igual aos outros 11 indicadores migrados |
 | `cabecas`, `pesoMedio`, `arrobas`, `gmd` | Meses com `fechamento_pasto_itens` oficial | (zoot_mensal_cache raw) | (com overlay via `useRebanhoOficial`) | Não medido | `zoot_mensal_cache` raw NÃO aplica overlay de fechamento | 🟡 **Não medido** — possível divergência silenciosa |
 | `desfrute` | n/a | (lancamentos abate+venda+consumo) | (definição oficial: abate+venda) | Não medido | Inclui `consumo` no numerador | 🟡 **Não medido** |
 | `valorRebanho` | n/a | (snapshot direto) | (snapshot direto — mesma fonte) | Não medido | Provavelmente paridade total — não há transformação | 🟢 **Não há causa identificada** |
 | R$/@ patrimônio (PainelConsultorTab) | n/a | `valor_rebanho_realizado_validado.preco_arroba_medio` | n/a (PC-100 não expõe este indicador) | n/a | Semântica diferente — patrimônio vs venda. Não é bug, mas é caminho paralelo | 🟢 **Não é bug** — convenção aceitável |
+
+**Nota sobre divergência paralela (não relacionada a este modal):** Existe divergência entre `lancamentos` zoo (Σ valor_total para tipo IN abate/venda/consumo = R$ 6.868.286,87 NJ 2025 Jan-Abr) e `financeiro_lancamentos_v2` (Σ valor com macro="Receita Operacional" + grupo="Receita Pecuária" = R$ 6.479.717,67) — divergência material ainda não auditada em profundidade. Essa diferença pode envolver competência, classificação contábil, estornos ou regras de plano de contas, e reside na camada de classificação financeira, **não** no modal `receitaPec` (ambos legado e PC-100 usam `lancamentos` zoo). Não está no escopo desta migração e deve ser investigada separadamente.
 
 ---
 
@@ -133,7 +135,6 @@ Consomem `useHistoricoIndicador` diretamente. `V2Home.tsx` mantém em `HIST_KEYS
 
 | Prioridade | Indicador | Motivo | Custo estimado |
 |---|---|---|---|
-| 🔴 **P1** | `receitaPec` | Mesma causa raiz do `precoArr`. Divergência conhecida qualitativamente. Padrão de migração 100% disponível (4 edições análogas) | Marginal — 4 edições em `V2Home.tsx` |
 | 🟡 **P2** | `cabecas`, `pesoMedio`, `arrobas`, `gmd` (legado para mês com fechamento oficial) | Possível divergência silenciosa em meses oficiais. Requer medição antes da decisão | Médio — precisa auditar magnitude da divergência antes |
 | 🟡 **P2** | `desfrute` | Inclui `consumo` no numerador divergindo da definição oficial. Não medido | Médio — precisa medir antes |
 | 🟢 **P3** | `valorRebanho` | Sem divergência identificada. Migração seria principalmente arquitetural | Médio-alto — requer criar `valorRebanhoIndicador` que reproduza snapshot, ou aceitar caminho paralelo como oficial |
@@ -185,6 +186,7 @@ Consomem `useHistoricoIndicador` diretamente. `V2Home.tsx` mantém em `HIST_KEYS
 |---|---|---|---|
 | (anterior, não datado neste doc) | `arrobas`, `pesoMedio`, `gmd`, `uaHa`, `kgHa`, `areaProdutivaPec`, `custeioPec`, `custoArr`, `custoCab`, `margemArr` | (10 indicadores) | (anterior) |
 | 14/05/2026 | `precoArr` | `4417da37` | Modal NJ Global Jan-Abr/2025: R$ 340,51 → R$ 322,12 (banco oficial: R$ 322,40) |
+| 14/05/2026 | `receitaPec` | `5d485fa5` | Consolidação arquitetural — sem alteração de valores realizados (legado e PC-100 usavam mesma fonte `lancamentos` zoo). Barra "Meta 2026" deixou de ser exibida por seguir padrão MIGRATED `historicoMeta={[]}` |
 
 ---
 
