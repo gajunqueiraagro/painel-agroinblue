@@ -7,6 +7,7 @@ import FazendaSetup from '@/pages/FazendaSetup';
 import Index from '@/pages/Index';
 import CadernoImportTab from '@/pages/CadernoImportTab';
 import ResumoOperacionalPage from '@/pages/ResumoOperacionalPage';
+import LeituraExecutivaPage from '@/pages/LeituraExecutivaPage';
 import V2Index from '@/v2/V2Index';
 import V3Index from '@/v3/V3Index';
 import LayoutLab from '@/pages/LayoutLab';
@@ -51,6 +52,7 @@ export default function AppRouter() {
       <Route path="/v3/*" element={<V3Index />} />
       <Route path="/layout-lab" element={<LayoutLab />} />
       <Route path="/resumo-operacional" element={<ResumoOperacionalPage />} />
+      <Route path="/v2/leitura-executiva" element={<LeituraExecutivaPage />} />
       <Route path="/" element={<Index />} />
       <Route path="*" element={<Index />} />
     </Routes>
