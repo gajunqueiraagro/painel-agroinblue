@@ -17,6 +17,8 @@ import { buildMonthlyDataFromView } from '@/lib/painelConsultor/buildMonthlyData
 import { montarComposicaoCategoria } from '@/lib/painelConsultor/rebanho/composicaoCategoria';
 import { montarComposicaoFazenda } from '@/lib/painelConsultor/rebanho/composicaoFazenda';
 import type { PC100_Rebanho } from '@/lib/painelConsultor/rebanho/types';
+import { montarCentrosCusto } from '@/lib/painelConsultor/financeiro/centrosCusto';
+import type { PC100_Financeiro } from '@/lib/painelConsultor/financeiro/types';
 import {
   agregaCusteioPecSemJuros,
   agregaJurosPec,
@@ -379,6 +381,9 @@ export interface PainelConsultorDataResult {
 
   /** Domínio rebanho · estruturas executivas (Fase 0 Step 2.2). */
   rebanho: PC100_Rebanho;
+
+  /** Domínio financeiro · breakdowns financeiros (Fase 0 Step 2.4). */
+  financeiro: PC100_Financeiro;
 
   loading: boolean;
 }
@@ -2573,6 +2578,19 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     ),
   };
 
+  // ─── DOMÍNIO FINANCEIRO — Step 2.4: centrosCusto ───────────────
+  // Consome o MESMO lancFin que agregaCusteioPecSemJuros usa.
+  // Aplica viewMode internamente (mes/periodo).
+  // Cross-validation: totalRealizado === custeioPecIndicador.valor.
+  const financeiro: PC100_Financeiro = {
+    centrosCusto: montarCentrosCusto({
+      lancFin,
+      ano,
+      mes,
+      viewMode,
+    }),
+  };
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2854,6 +2872,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     caixaIndicador:               null,
 
     rebanho,
+    financeiro,
 
     loading,
   };
@@ -2910,6 +2929,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
       rebanho,
+      // Step 2.4: dominio financeiro preservado (centrosCusto vem de lancFin, que
+      // independe de P1 — analogo aos *Indicadores financeiros soberanos acima).
+      financeiro,
     };
   }
 
