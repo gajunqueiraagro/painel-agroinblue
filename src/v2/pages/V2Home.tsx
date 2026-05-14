@@ -191,7 +191,7 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   // ── Histórico OFICIAL PC-100 (Opção B) ──
   // Lista de indicadores cujo histórico inferior consome fonte oficial PC-100
   // em vez de useHistoricoIndicador (cache raw). Adicionar novos aqui conforme migração.
-  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr', 'precoArr'] as const;
+  const MIGRATED_HISTORICO_KEYS = ['arrobas', 'pesoMedio', 'gmd', 'uaHa', 'kgHa', 'areaProdutivaPec', 'custeioPec', 'custoArr', 'custoCab', 'margemArr', 'precoArr', 'receitaPec'] as const;
   const modalUsaHistoricoOficial =
     !!modalIndicador &&
     (MIGRATED_HISTORICO_KEYS as readonly string[]).includes(modalIndicador);
@@ -539,6 +539,36 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
   ]);
 
   const loadingPrecoArrHistorico = modalIndicador === 'precoArr' && (
+    histArr6.loading || histArr5.loading || histArr4.loading ||
+    histArr3.loading || histArr2.loading
+  );
+
+  // receitaPec migrado do hook legado useHistoricoIndicador para o historico oficial PC-100.
+  // Motivo: divergencia matematica no historico multi-ano causada por formula paralela
+  // que soma SUM(valor_total) direto de lancamentos (inclui consumo) em vez de
+  // recPecComp classificado via financeiro_lancamentos_v2.
+
+  // --- receitaPec historico oficial PC-100 (Opcao B - 12 indicador) ---
+  const receitaPecHistoricoOficial = useMemo<Array<{ ano: number; valor: number | null }>>(() => {
+    if (modalIndicador !== 'receitaPec') return [];
+    return [
+      { ano: anoNum - 6, valor: histArr6.receitaPecIndicador?.valor ?? null },
+      { ano: anoNum - 5, valor: histArr5.receitaPecIndicador?.valor ?? null },
+      { ano: anoNum - 4, valor: histArr4.receitaPecIndicador?.valor ?? null },
+      { ano: anoNum - 3, valor: histArr3.receitaPecIndicador?.valor ?? null },
+      { ano: anoNum - 2, valor: histArr2.receitaPecIndicador?.valor ?? null },
+      { ano: anoNum - 1, valor: safeSerieAnoAnt(receitaPecIndicador?.serieAnoAnt, mesNum) },
+      { ano: anoNum,     valor: receitaPecIndicador?.valor ?? null },
+    ];
+  }, [
+    modalIndicador, anoNum, mesNum,
+    histArr6.receitaPecIndicador, histArr5.receitaPecIndicador,
+    histArr4.receitaPecIndicador, histArr3.receitaPecIndicador,
+    histArr2.receitaPecIndicador,
+    receitaPecIndicador,
+  ]);
+
+  const loadingReceitaPecHistorico = modalIndicador === 'receitaPec' && (
     histArr6.loading || histArr5.loading || histArr4.loading ||
     histArr3.loading || histArr2.loading
   );
@@ -1237,9 +1267,9 @@ export function V2Home({ ano, mes, viewMode = 'mes', onViewModeChange }: {
           deltaMes={receitaPecIndicador?.deltaMes ?? null}
           deltaAno={receitaPecIndicador?.deltaAno ?? null}
           viewMode={viewMode}
-          historicoAno={historicoAno}
-          historicoMeta={historicoAnoMeta}
-          loadingHistorico={loadingHistorico}
+          historicoAno={receitaPecHistoricoOficial}
+          historicoMeta={[]}
+          loadingHistorico={loadingReceitaPecHistorico}
           corPrincipal="azul"
         />
       )}
