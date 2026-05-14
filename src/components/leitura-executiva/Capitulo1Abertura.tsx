@@ -15,6 +15,7 @@
  *   - Setas de delta em var(--gold), nunca verde/vermelho
  */
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
+import { useCliente } from '@/contexts/ClienteContext';
 
 interface Props {
   ano: number;
@@ -68,9 +69,30 @@ const mesAnteriorNome = (m: number): string => {
   return mesNome(m - 1);
 };
 
+/** Trimestre 1..4 a partir do mês 1..12. */
+const trimestreDoMes = (m: number): number => Math.ceil(m / 3);
+
+/**
+ * Sigla do cliente — iniciais das palavras significativas em uppercase.
+ * Ignora artigos/preposições curtas (de, do, da, dos, das, e).
+ * Ex: "NJ Pecuária" → "NJ"; "Santa Rita Agro" → "SRA";
+ *     "Fazenda do Vale" → "FV".
+ */
+const PALAVRAS_IGNORADAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e']);
+const siglaCliente = (nome: string | null | undefined): string => {
+  if (!nome) return '';
+  const palavras = nome
+    .trim()
+    .split(/\s+/)
+    .filter(p => p.length > 0 && !PALAVRAS_IGNORADAS.has(p.toLowerCase()));
+  if (palavras.length === 0) return '';
+  return palavras.map(p => p.charAt(0).toUpperCase()).join('');
+};
+
 // ─── Componente ────────────────────────────────────────────────────
 
 export default function Capitulo1Abertura({ ano, mes }: Props) {
+  const { clienteAtual } = useCliente();
   const pc100 = usePainelConsultorData({
     ano,
     mes,
@@ -122,6 +144,14 @@ export default function Capitulo1Abertura({ ano, mes }: Props) {
   const mesPrev       = mesAnteriorNome(mes);
   const mesInicioStr  = 'dezembro'; // serieAno[0] é sempre Dez do ano anterior
 
+  // Header — brand + doc-id
+  const nomeCliente   = clienteAtual?.nome ?? '';
+  const sigla         = siglaCliente(nomeCliente);
+  const trimestre     = trimestreDoMes(mes);
+  const docId         = sigla
+    ? `Confidencial · ${sigla}-${ano}-Q${trimestre}`
+    : `Confidencial · ${ano}-Q${trimestre}`;
+
   return (
     <div className="cap1-leitura">
       <style>{CAP1_STYLES}</style>
@@ -131,8 +161,20 @@ export default function Capitulo1Abertura({ ano, mes }: Props) {
       </aside>
 
       <article className="cap1-leitura__page">
+        <div className="cap1-leitura__topbar">
+          <span className="cap1-leitura__brand">
+            <span className="cap1-leitura__brand-firm">Agroinblue</span>
+            <span className="cap1-leitura__brand-dot">·</span>
+            <span className="cap1-leitura__brand-name">Leitura Executiva</span>
+          </span>
+          <span className="cap1-leitura__docid">{docId}</span>
+        </div>
+
         <header className="cap1-leitura__header">
           <p className="cap1-leitura__eyebrow">Leitura Executiva · Cap I</p>
+          {nomeCliente && (
+            <p className="cap1-leitura__cliente">{nomeCliente}</p>
+          )}
           <h1 className="cap1-leitura__title">
             <span className="cap1-leitura__title-prefix">—01</span>
             <span className="cap1-leitura__title-text">Abertura</span>
@@ -257,10 +299,56 @@ const CAP1_STYLES = `
     margin: 0 auto;
     padding: 80px 64px 96px;
   }
+  .cap1-leitura__topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 96px;
+  }
+  .cap1-leitura__brand {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .cap1-leitura__brand-firm {
+    font-style: normal;
+  }
+  .cap1-leitura__brand-dot {
+    color: var(--gold);
+  }
+  .cap1-leitura__brand-name {
+    font-style: italic;
+  }
+  .cap1-leitura__docid {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    white-space: nowrap;
+  }
   .cap1-leitura__header {
     border-bottom: 1px solid var(--line);
     padding-bottom: 28px;
     margin-bottom: 48px;
+  }
+  .cap1-leitura__cliente {
+    margin: 14px 0 8px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: 0.01em;
+    color: var(--ink-soft);
   }
   .cap1-leitura__eyebrow {
     font-size: 11px;
