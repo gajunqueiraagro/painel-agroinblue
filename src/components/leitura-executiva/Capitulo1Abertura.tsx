@@ -88,8 +88,19 @@ export default function Capitulo1Abertura({ ano, mes }: Props) {
   }
 
   // Coleta de números (todos do PC-100, nada hardcoded)
-  const cabecas       = pc100.cabecas;
-  const cabDelta      = pc100.cabecasIndicador?.deltaMes ?? null;
+  // Rebanho: ESTOQUE — usar cabecasIndicador.serieAno[mes] (foto do mês),
+  // NÃO pc100.cabecas que em viewMode='periodo' devolve média do trimestre.
+  // O delta também é recalculado manualmente vs serieAno[mes-1] para a mesma razão.
+  const cabecasSerie  = pc100.cabecasIndicador?.serieAno ?? null;
+  const cabecasRaw    = cabecasSerie?.[mes];
+  const cabecasPrev   = cabecasSerie?.[mes - 1];
+  const cabecas       = (cabecasRaw != null && Number.isFinite(cabecasRaw)) ? cabecasRaw : null;
+  const cabDelta      = (cabecas != null
+                         && cabecasPrev != null
+                         && Number.isFinite(cabecasPrev)
+                         && cabecasPrev !== 0)
+    ? ((cabecas - cabecasPrev) / cabecasPrev) * 100
+    : null;
 
   const valorRebanho  = pc100.valorRebanhoMes;
   const rebDelta      = pc100.valorRebanhoIndicador?.deltaMes ?? null;
