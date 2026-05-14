@@ -83,7 +83,7 @@ export type StatusValidacaoArea =
  * Não substitui os indicadores existentes — usado apenas pelos campos
  * novos da Etapa 2B (saídas totais, juros, desembolsos, caixa…).
  */
-interface IndicadorFinanceiroShape {
+export interface IndicadorFinanceiroShape {
   label:        string;
   titulo:       string;
   subtitulo:    string;
