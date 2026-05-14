@@ -24,7 +24,22 @@ export interface ItemComposicaoCategoria {
   pctPeso:        number;          // 0..1
 }
 
+export interface ItemComposicaoFazenda {
+  fazendaId:        string;
+  fazenda:          string;            // nome resolvido
+  cabecas:          number;             // cab
+  pesoTotalKg:      number;             // kg
+  pesoMedioKg:      number;             // kg/cab (derivado)
+  gmd:              number | null;      // kg/dia (ponderado por cabecas)
+  pctRebanho:       number;             // 0..1
+  pctPeso:          number;             // 0..1
+  areaProdutivaHa:  number | null;      // ha — null até existir fonte oficial por fazenda
+  uaHa:             number | null;      // UA/ha — idem
+  arrobasHa:        number | null;      // @PV/ha — idem
+}
+
 export interface PC100_Rebanho {
   composicaoCategoria: ItemComposicaoCategoria[] | null;
-  // composicaoFazenda e movimentacoes virão nos Steps 2.3 e 2.5
+  composicaoFazenda:   ItemComposicaoFazenda[] | null;
+  // movimentacoes virá no Step 2.5
 }
