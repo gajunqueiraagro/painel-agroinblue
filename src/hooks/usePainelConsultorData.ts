@@ -16,6 +16,7 @@ import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/lib/painelConsultor/buildMonthlyDataFromView';
 import { montarComposicaoCategoria } from '@/lib/painelConsultor/rebanho/composicaoCategoria';
 import { montarComposicaoFazenda } from '@/lib/painelConsultor/rebanho/composicaoFazenda';
+import { montarMovimentacoes } from '@/lib/painelConsultor/rebanho/movimentacoes';
 import type { PC100_Rebanho } from '@/lib/painelConsultor/rebanho/types';
 import { montarCentrosCusto } from '@/lib/painelConsultor/financeiro/centrosCusto';
 import type { PC100_Financeiro } from '@/lib/painelConsultor/financeiro/types';
@@ -2566,6 +2567,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     () => new Set((fazendasComPecuaria ?? []).map(f => f.id)),
     [fazendasComPecuaria],
   );
+  // Step 2.5: movimentações por tipo e natureza.
+  // lancPec já vem com cancelado=false e cenario='realizado' aplicados
+  // pelo useLancamentos upstream. Aqui aplicamos só o recorte temporal
+  // (viewMode mes/periodo).
+  // Cross-validation: movimentacoes.porNatureza[op].cabecas
+  // === desfruteIndicador.valor (modo 'mes').
   const rebanho: PC100_Rebanho = {
     composicaoCategoria: getCategoriasDetalhe
       ? montarComposicaoCategoria(getCategoriasDetalhe(mes))
@@ -2576,6 +2583,12 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       fazendaNomesMap,
       fazendasComPecuariaIds,
     ),
+    movimentacoes: montarMovimentacoes({
+      lancPec,
+      ano,
+      mes,
+      viewMode,
+    }),
   };
 
   // ─── DOMÍNIO FINANCEIRO — Step 2.4: centrosCusto ───────────────
