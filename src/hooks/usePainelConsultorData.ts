@@ -15,6 +15,7 @@ import {
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { buildMonthlyDataFromView } from '@/lib/painelConsultor/buildMonthlyDataFromView';
 import { montarComposicaoCategoria } from '@/lib/painelConsultor/rebanho/composicaoCategoria';
+import { montarComposicaoFazenda } from '@/lib/painelConsultor/rebanho/composicaoFazenda';
 import type { PC100_Rebanho } from '@/lib/painelConsultor/rebanho/types';
 import {
   agregaCusteioPecSemJuros,
@@ -383,7 +384,7 @@ export interface PainelConsultorDataResult {
 }
 
 export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno }: Params): PainelConsultorDataResult {
-  const { fazendaAtual, isGlobal } = useFazenda();
+  const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
 
@@ -2549,13 +2550,27 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   // useAreaPlanejamento, ~L398) para serem consumidas por monthlyData,
   // monthlyDataMeta, kgHaPorMes, kgHaPorMesMeta. Não duplicar aqui.
 
-  // ─── DOMÍNIO REBANHO — Step 2.2: composicaoCategoria ────────────
+  // ─── DOMÍNIO REBANHO — Steps 2.2 + 2.3: composicao por Categoria/Fazenda
   // Snapshot do mês de referência. Independente de viewMode (composição
   // é estado pontual, não acumulado). null durante loading/incompleto.
+  const fazendaNomesMap = useMemo(
+    () => new Map((fazendasComPecuaria ?? []).map(f => [f.id, f.nome])),
+    [fazendasComPecuaria],
+  );
+  const fazendasComPecuariaIds = useMemo(
+    () => new Set((fazendasComPecuaria ?? []).map(f => f.id)),
+    [fazendasComPecuaria],
+  );
   const rebanho: PC100_Rebanho = {
     composicaoCategoria: getCategoriasDetalhe
       ? montarComposicaoCategoria(getCategoriasDetalhe(mes))
       : null,
+    composicaoFazenda: montarComposicaoFazenda(
+      viewDataRealizado,
+      mes,
+      fazendaNomesMap,
+      fazendasComPecuariaIds,
+    ),
   };
 
   const baseReturn: PainelConsultorDataResult = {
