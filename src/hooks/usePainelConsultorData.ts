@@ -20,6 +20,8 @@ import { montarMovimentacoes } from '@/lib/painelConsultor/rebanho/movimentacoes
 import type { PC100_Rebanho } from '@/lib/painelConsultor/rebanho/types';
 import { montarCentrosCusto } from '@/lib/painelConsultor/financeiro/centrosCusto';
 import type { PC100_Financeiro } from '@/lib/painelConsultor/financeiro/types';
+import { useSaldoCaixaMensal } from '@/hooks/useSaldoCaixaMensal';
+import { montarCaixaIndicador } from '@/lib/painelConsultor/financeiro/caixaIndicador';
 import {
   agregaCusteioPecSemJuros,
   agregaJurosPec,
@@ -526,6 +528,19 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   const { lancamentos: lancFinInterno, loading: loadingFinInterno } =
     useFinanceiro({ enabled: enabled && !usarLancFinExterno });
+
+  // Etapa 2D — caixaIndicador.
+  // Caixa: fonte oficial de saldo bancário consolidado por cliente
+  // (financeiro_saldos_bancarios_v2). Escopo CLIENTE — não depende
+  // da fazenda selecionada nem é afetado por modo Global/Individual.
+  const {
+    serieAno: caixaSerieAno,
+    serieAnoAnt: caixaSerieAnoAnt,
+  } = useSaldoCaixaMensal({
+    clienteId: clienteAtual?.id ?? null,
+    ano,
+    enabled,
+  });
 
   const lancPec    = usarLancPecExterno ? lancPecExterno! : lancPecInterno;
   const lancFin    = usarLancFinExterno ? lancFinExterno! : lancFinInterno;
@@ -2604,6 +2619,18 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     }),
   };
 
+  // ─── Etapa 2D: caixaIndicador (estoque, escopo CLIENTE) ─────────
+  // Saldo bancário consolidado do cliente. serieAno e valor são
+  // IDÊNTICOS em viewMode='mes' e 'periodo' (regra estoque). Mesmo
+  // valor é retornado em baseReturn e incompletoOverride — caixa
+  // independe de P1 das fazendas.
+  const caixaIndicadorResolved = montarCaixaIndicador({
+    serieAno:    caixaSerieAno,
+    serieAnoAnt: caixaSerieAnoAnt,
+    mes,
+    isPeriodo:   viewMode === 'periodo',
+  });
+
   const baseReturn: PainelConsultorDataResult = {
     cabecas: isPeriodo
       ? meanArr(sliceUpTo(monthlyData.cabFin, idx))
@@ -2882,7 +2909,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     investBovinosIndicador:       _finSoberano.investBovinos,
     amortizacoesIndicador:        _finSoberano.amortizacoes,
     dividendosIndicador:          _finSoberano.dividendos,
-    caixaIndicador:               null,
+    caixaIndicador:               caixaIndicadorResolved,
 
     rebanho,
     financeiro,
@@ -2937,7 +2964,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       investBovinosIndicador:       _finSoberano.investBovinos,
       amortizacoesIndicador:        _finSoberano.amortizacoes,
       dividendosIndicador:          _finSoberano.dividendos,
-      caixaIndicador:               null,
+      caixaIndicador:               caixaIndicadorResolved,
       // Step 2.2: dominio rebanho preservado (composicao depende de getCategoriasDetalhe,
       // que pode existir mesmo em estado incompleto — funcao filtra saldoFinal > 0 e
       // retorna null quando vazio).
