@@ -426,17 +426,56 @@ export function isDeducaoReceitas(l: LancamentoClassificavel): boolean {
 // classificam puramente por macro + escopo.
 // ---------------------------------------------------------------------------
 
+/**
+ * Determina escopo de uma RECEITA — exclusivo para predicates de receita.
+ *
+ * Por que separado de getEscopo(): o getEscopo global busca apenas
+ * "agricultura" literal em centro_custo, falhando para "Receita Agrícola"
+ * (com í). Resultado: Receita Agrícola e Outras Receitas vazavam para
+ * Receita Pecuária via fallback ('pec').
+ *
+ * Esta função usa palavras-chave amplas (com e sem acento) em
+ * grupo + centro + subcentro, cobrindo nomes do plano de contas oficial:
+ *   - agri:    "Receita Agrícola", "Venda de Soja/Amendoim/Milho", etc.
+ *   - pec:     "Receita Pecuária", "Abates", "Venda de Desmama/Bovinos/Boitel"
+ *   - outras:  "Rendimentos Financeiros", "Outras Receitas" e demais.
+ *
+ * Ordem importa: agri é testado ANTES de pec para evitar que termos
+ * agrícolas isolados sejam capturados por defaults pecuários.
+ *
+ * IMPORTANTE: getEscopo() global PERMANECE inalterado — esta função é
+ * estritamente local aos predicates de receita. Não usar fora deste
+ * arquivo nem para classificação de saídas/escopo geral.
+ */
+function getEscopoReceita(l: LancamentoClassificavel): Escopo {
+  const texto = norm(`${l.grupo_custo ?? ''} ${l.centro_custo ?? ''} ${l.subcentro ?? ''}`);
+  if (
+    texto.includes('agricola') || texto.includes('agrícola') ||
+    texto.includes('agricultura') ||
+    texto.includes('amendoim') ||
+    texto.includes('soja') ||
+    texto.includes('milho')
+  ) return 'agri';
+  if (
+    texto.includes('pecuaria') || texto.includes('pecuária') ||
+    texto.includes('abates') ||
+    texto.includes('bovinos') ||
+    texto.includes('boitel') ||
+    texto.includes('desmama') ||
+    texto.includes('machos') ||
+    texto.includes('femeas') || texto.includes('fêmeas')
+  ) return 'pec';
+  return 'outras';
+}
+
 export const isReceitaPecuaria = (l: LancamentoClassificavel): boolean =>
-  isReceita(l) && getEscopo(l) === 'pec';
+  isReceita(l) && getEscopoReceita(l) === 'pec';
 
 export const isReceitaAgricola = (l: LancamentoClassificavel): boolean =>
-  isReceita(l) && getEscopo(l) === 'agri';
+  isReceita(l) && getEscopoReceita(l) === 'agri';
 
-export const isOutrasReceitas = (l: LancamentoClassificavel): boolean => {
-  if (!isReceita(l)) return false;
-  const e = getEscopo(l);
-  return e !== 'pec' && e !== 'agri';
-};
+export const isOutrasReceitas = (l: LancamentoClassificavel): boolean =>
+  isReceita(l) && getEscopoReceita(l) === 'outras';
 
 /**
  * Entrada financeira (Aportes + Captação Pec + Captação Agri).
