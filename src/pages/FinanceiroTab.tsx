@@ -156,83 +156,6 @@ function SortableHeader({ label, align, sortKey, currentKey, currentDir, onSort,
   );
 }
 
-/* ── Summary panel ── */
-function ResumoLateral({ lancamentos, subAba, anoFiltro, mesFiltro, statusFiltro, categoriaFiltro }: {
-  lancamentos: Lancamento[];
-  subAba: SubAba;
-  anoFiltro: string;
-  mesFiltro: string;
-  statusFiltro: StatusFiltro;
-  categoriaFiltro: string;
-}) {
-  const statusLabel = getStatusFiltroLabel(statusFiltro);
-  const mesLabel = mesFiltro === 'todos' ? 'Todos' : (MESES_OPTIONS.find(m => m.value === mesFiltro)?.label || mesFiltro);
-  const tipoLabel = SUB_ABA_LABELS[subAba]?.label || subAba;
-  const catLabel = categoriaFiltro === 'todas' ? 'Todas' : (CATEGORIAS.find(c => c.value === categoriaFiltro)?.label || categoriaFiltro);
-
-  const stats = useMemo(() => {
-    const totals = lancamentos.reduce((acc, l) => {
-      const c = calcIndicadoresLancamento(l);
-      acc.qtd += l.quantidade;
-      acc.pesoVivoTotal += (l.pesoMedioKg ?? 0) * l.quantidade;
-      acc.arrobasTotal += c.pesoTotalArrobas;
-      acc.valorTotal += c.valorFinal;
-      acc.rendSum += c.rendimento * l.quantidade;
-      return acc;
-    }, { qtd: 0, pesoVivoTotal: 0, arrobasTotal: 0, valorTotal: 0, rendSum: 0 });
-
-    const pesoMedio = totals.qtd > 0 ? totals.pesoVivoTotal / totals.qtd : 0;
-    const arrobaMedio = totals.qtd > 0 ? totals.arrobasTotal / totals.qtd : 0;
-    const rendMedio = totals.qtd > 0 ? totals.rendSum / totals.qtd : 0;
-    const liqArroba = totals.arrobasTotal > 0 ? totals.valorTotal / totals.arrobasTotal : 0;
-    const liqCabeca = totals.qtd > 0 ? totals.valorTotal / totals.qtd : 0;
-    return { ...totals, pesoMedio, arrobaMedio, rendMedio, liqArroba, liqCabeca };
-  }, [lancamentos]);
-
-  const kpiItems: { label: string; value: string; highlight?: boolean }[] = [
-    { label: 'Qtde', value: formatCabecas(stats.qtd) },
-    { label: 'Peso médio', value: formatKg(stats.pesoMedio) },
-    ...(subAba === 'abate' ? [{ label: 'RC%', value: stats.rendMedio ? formatPercent(stats.rendMedio) : '-' }] : []),
-    { label: 'Peso @', value: formatArroba(stats.arrobaMedio) },
-    { label: 'Valor total', value: formatMoeda(stats.valorTotal), highlight: true },
-    { label: 'R$/Líq @', value: formatMoeda(stats.liqArroba) },
-    { label: 'Líq/Cab', value: formatMoeda(stats.liqCabeca) },
-  ];
-
-  return (
-    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden sticky top-2">
-      {/* Header */}
-      <div className="bg-primary px-3 py-2.5">
-        <h3 className="text-[11px] font-bold text-primary-foreground tracking-wide uppercase">{tipoLabel}</h3>
-      </div>
-      {/* Filters applied */}
-      <div className="px-3 py-2 bg-muted/40 border-b border-border">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px]">
-          <div className="text-muted-foreground">Ano</div>
-          <div className="font-bold text-foreground">{anoFiltro}</div>
-          <div className="text-muted-foreground">Mês</div>
-          <div className="font-bold text-foreground">{mesLabel}</div>
-          <div className="text-muted-foreground">Categoria</div>
-          <div className="font-bold text-foreground">{catLabel}</div>
-          <div className="text-muted-foreground">Status</div>
-          <div className="font-bold text-foreground">{statusLabel}</div>
-        </div>
-      </div>
-      {/* KPIs */}
-      <div className="px-3 py-2 space-y-1.5">
-        {kpiItems.map((kpi) => (
-          <div key={kpi.label} className="flex items-baseline justify-between">
-            <span className="text-[9px] text-muted-foreground uppercase tracking-wide">{kpi.label}</span>
-            <span className={`font-bold tabular-nums ${kpi.highlight ? 'text-[13px] text-primary' : 'text-[11px] text-foreground'}`}>
-              {kpi.value}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* ── Sort helper ── */
 function useSortableTable() {
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -965,10 +888,9 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
         </div>
       </div>
 
-      {/* ── Content area: table (left ~70%) + summary panel (right ~30%) ── */}
-      <div className="flex gap-3 px-2 pt-1.5 pb-4">
-        {/* Table column */}
-        <div className="flex-[7] min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
+      {/* ── Content area: tabela em largura total ── */}
+      <div className="px-2 pt-1.5 pb-4">
+        <div className="min-w-0 rounded-md border border-border/70 bg-card shadow-sm overflow-x-auto">
           {topTab === 'todas' ? (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} showTipo isGlobal={isGlobal} fazendaMap={fazendaMap} />
           ) : subAba === 'abate' ? (
@@ -976,18 +898,6 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
           ) : (
             <UnifiedTable lancamentos={filtrados} onEdit={(l) => setDetalheId(l.id)} subTipo={subAba} isGlobal={isGlobal} fazendaMap={fazendaMap} />
           )}
-        </div>
-
-        {/* Summary panel */}
-        <div className="flex-[3] min-w-[180px] max-w-[260px] flex-shrink-0 hidden md:block">
-          <ResumoLateral
-            lancamentos={filtrados}
-            subAba={subAba}
-            anoFiltro={anoFiltro}
-            mesFiltro={mesFiltro}
-            statusFiltro={statusFiltro}
-            categoriaFiltro={categoriaFiltro}
-          />
         </div>
       </div>
 
