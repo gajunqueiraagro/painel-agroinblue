@@ -882,6 +882,7 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
                 subAba={subAba as 'abate' | 'compra' | 'venda'}
                 ano={anoFiltro}
                 fazendaNome={fazendaAtual?.nome}
+                isGlobal={isGlobal}
               />
             </div>
           )}

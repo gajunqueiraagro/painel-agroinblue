@@ -43,6 +43,8 @@ interface Props {
   subAba: SubAba;
   ano: string;
   fazendaNome?: string;
+  /** Quando true, PDF mostra coluna "Origem" e usa "Global" no escopo. */
+  isGlobal?: boolean;
 }
 
 const SUB_ABA_LABELS: Record<SubAba, string> = {
@@ -141,66 +143,244 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
   return lines.join('\n');
 }
 
-// ── PDF generation ──
-async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string) {
+// ── PDF generation — PDF executivo AGROinBLUE ──
+// Paleta:
+//   Header tabela #1E3A5F  → [30, 58, 95]
+//   Linha TOTAL  #24466B  → [36, 70, 107]
+//   Zebra        #F7FAFC  → [247, 250, 252]
+//   Bordas       #D9E2EC  → [217, 226, 236]
+//   Resumo bg    #EFF6FF  → [239, 246, 255]
+//
+// R$/@ na tabela = c.liqArroba (valorFinal/pesoTotalArrobas), NÃO l.precoArroba.
+// Linha TOTAL: somas (Qtd, Total) + médias ponderadas oficiais.
+// Resumo Executivo final: consolidação dos mesmos indicadores.
+async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string, isGlobal?: boolean) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const titulo = SUB_ABA_LABELS[subAba];
+  const escopoLabel = isGlobal ? 'Global' : (fazendaNome || '—');
 
-  let currentY = 5;
+  // ─── Cabeçalho executivo: ESQ texto + DIR logo ────────────
+  const HEADER_LEFT_X = 10;
+  const LOGO_H = 22;
+  const LOGO_W = LOGO_H * 2; // logo 2.2x do antigo (12mm → 22mm = ~1.83x; w dobra → 44mm)
+  const LOGO_Y = 8;
+  const LOGO_X = pageW - 10 - LOGO_W;
+
   try {
     const logoData = await loadLogoBase64();
-    currentY = addLogoToDoc(doc, logoData, currentY, pageW / 2);
+    doc.addImage(logoData, 'PNG', LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
   } catch { /* skip logo if fails */ }
 
+  // Título
   doc.setFontSize(16);
-  doc.text(`${titulo} - ${ano}`, pageW / 2, currentY + 5, { align: 'center' });
-  currentY += 12;
-  if (fazendaNome) {
-    doc.setFontSize(11);
-    doc.text(fazendaNome, pageW / 2, currentY, { align: 'center' });
-    currentY += 7;
-  }
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 58, 95);
+  doc.text(`${titulo} — ${ano}`, HEADER_LEFT_X, 14);
 
+  // Escopo
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text(escopoLabel, HEADER_LEFT_X, 21);
+
+  // Estatísticas
   const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
-  doc.setFontSize(10);
-  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, pageW / 2, currentY, { align: 'center' });
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, HEADER_LEFT_X, 27);
 
-  const startY = currentY + 4;
+  // Reset
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
 
-  if (subAba === 'abate') {
-    const head = [['Data', 'NF', 'Qtd', 'Categoria', 'Destino', 'Rend.', 'P.@', 'R$/@', 'Total', 'Líq/@', 'Líq/Cab']];
-    const body = lancamentos.map(l => {
-      const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+  // ─── Agregados consolidados (fonte oficial: calcIndicadoresLancamento) ─
+  const agg = lancamentos.reduce(
+    (acc, l) => {
       const c = calcIndicadoresLancamento(l);
-      return [
-        format(parseISO(l.data), 'dd/MM/yy'), l.notaFiscal || '-', String(l.quantidade), cat, l.fazendaDestino || '-',
-        c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '-', fmtValor(c.pesoArroba), fmtValor(l.precoArroba),
-        fmtValor(c.valorFinal), fmtValor(c.liqArroba), fmtValor(c.liqCabeca),
-      ];
-    });
-    const totalValor = lancamentos.reduce((s, l) => s + calcIndicadoresLancamento(l).valorFinal, 0);
-    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmtValor(totalValor), '', '']);
-    autoTable(doc, { startY, head, body, theme: 'grid', headStyles: { fillColor: [34, 120, 74], fontSize: 7 }, bodyStyles: { fontSize: 7 }, margin: { left: 10, right: 10 } });
-  } else {
-    const campoLocal = subAba === 'compra' ? 'Origem' : 'Destino';
-    const head = [['Data', 'NF', 'Qtd', 'Categoria', campoLocal, 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg']];
-    const body = lancamentos.map(l => {
-      const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
-      const c = calcIndicadoresLancamento(l);
-      const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
-      return [
-        format(parseISO(l.data), 'dd/MM/yy'), l.notaFiscal || '-', String(l.quantidade), cat, local || '-',
-        fmtValor(l.pesoMedioKg), fmtValor(c.pesoArroba), fmtValor(l.precoArroba),
-        fmtValor(c.valorFinal), fmtValor(c.liqCabeca), fmtValor(c.liqKg),
-      ];
-    });
-    const totalValor = lancamentos.reduce((s, l) => s + calcIndicadoresLancamento(l).valorFinal, 0);
-    body.push(['TOTAL', '', String(totalQtd), '', '', '', '', '', fmtValor(totalValor), '', '']);
-    autoTable(doc, { startY, head, body, theme: 'grid', headStyles: { fillColor: [34, 120, 74], fontSize: 7 }, bodyStyles: { fontSize: 7 }, margin: { left: 10, right: 10 } });
+      acc.qtd += l.quantidade;
+      acc.pesoVivoSum += (l.pesoMedioKg ?? 0) * l.quantidade;
+      acc.pesoArrobaSum += c.pesoTotalArrobas;
+      acc.pesoTotalKgSum += c.pesoTotalKg;
+      acc.valorFinalSum += c.valorFinal;
+      acc.rendSum += (c.rendimento ?? 0) * l.quantidade;
+      return acc;
+    },
+    { qtd: 0, pesoVivoSum: 0, pesoArrobaSum: 0, pesoTotalKgSum: 0, valorFinalSum: 0, rendSum: 0 },
+  );
+
+  const pesoVivoMedio = agg.qtd > 0 ? agg.pesoVivoSum / agg.qtd : 0;
+  const pesoArrobaMedio = agg.qtd > 0 ? agg.pesoArrobaSum / agg.qtd : 0;
+  const liqArrobaConsolidado = agg.pesoArrobaSum > 0 ? agg.valorFinalSum / agg.pesoArrobaSum : 0;
+  const liqCabConsolidado = agg.qtd > 0 ? agg.valorFinalSum / agg.qtd : 0;
+  const liqKgConsolidado = agg.pesoTotalKgSum > 0 ? agg.valorFinalSum / agg.pesoTotalKgSum : 0;
+  const rendMedio = agg.qtd > 0 ? agg.rendSum / agg.qtd : 0;
+
+  // ─── Tabela ───────────────────────────────────────────────
+  // Colunas: Data | Qtd | Categoria | [Origem] | Destino | P.Vivo | P.@ | R$/@ | Total | Líq/Cab | Líq/kg | NF
+  // Origem só em Global.
+  const head = [[
+    'Data', 'Qtd', 'Categoria',
+    ...(isGlobal ? ['Origem'] : []),
+    'Destino', 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg', 'NF',
+  ]];
+
+  const body = lancamentos.map(l => {
+    const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
+    const c = calcIndicadoresLancamento(l);
+    const destino = subAba === 'compra' ? '—' : (l.fazendaDestino || '—');
+    const origem = l.fazendaOrigem || '—';
+    return [
+      format(parseISO(l.data), 'dd/MM/yy'),
+      String(l.quantidade),
+      cat,
+      ...(isGlobal ? [origem] : []),
+      destino,
+      fmtValor(l.pesoMedioKg),
+      fmtValor(c.pesoArroba),
+      fmtValor(c.liqArroba),
+      fmtValor(c.valorFinal),
+      fmtValor(c.liqCabeca),
+      fmtValor(c.liqKg),
+      l.notaFiscal || '—',
+    ];
+  });
+
+  // Linha TOTAL: somas + médias ponderadas
+  const totalRow = [
+    'TOTAL',
+    String(agg.qtd),
+    '',
+    ...(isGlobal ? [''] : []),
+    '',
+    fmtValor(pesoVivoMedio),
+    fmtValor(pesoArrobaMedio),
+    fmtValor(liqArrobaConsolidado),
+    fmtValor(agg.valorFinalSum),
+    fmtValor(liqCabConsolidado),
+    fmtValor(liqKgConsolidado),
+    '',
+  ];
+
+  autoTable(doc, {
+    startY: 34,
+    head,
+    body,
+    foot: [totalRow],
+    theme: 'grid',
+    styles: {
+      fontSize: 9.5,
+      cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
+      lineColor: [217, 226, 236],
+      lineWidth: 0.1,
+      textColor: [50, 50, 50],
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: [255, 255, 255],
+      fontSize: 10.5,
+      fontStyle: 'bold',
+      halign: 'center',
+      lineColor: [30, 58, 95],
+    },
+    bodyStyles: {
+      valign: 'middle',
+    },
+    alternateRowStyles: {
+      fillColor: [247, 250, 252],
+    },
+    footStyles: {
+      fillColor: [36, 70, 107],
+      textColor: [255, 255, 255],
+      fontSize: 10,
+      fontStyle: 'bold',
+      lineWidth: 0.3,
+      lineColor: [30, 58, 95],
+    },
+    columnStyles: {
+      0: { halign: 'left' },
+      1: { halign: 'right' },
+      // demais colunas numéricas alinhadas à direita; categorias/locais à esquerda
+    },
+    didParseCell: (data) => {
+      // Numéricas (P.Vivo, P.@, R$/@, Total, Líq/Cab, Líq/kg) → align right
+      // Posições variam com isGlobal. Calcular pelo header text.
+      const colHeader = head[0][data.column.index] || '';
+      const isNumeric = ['Qtd', 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg'].includes(colHeader);
+      if (isNumeric) {
+        data.cell.styles.halign = 'right';
+      }
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  // ─── Resumo Executivo ─────────────────────────────────────
+  const lastY = (doc as any).lastAutoTable?.finalY ?? 100;
+  const resumoStartY = lastY + 8;
+
+  const resumoItems: { label: string; value: string }[] = [
+    { label: 'Qtd Total', value: `${agg.qtd} cab` },
+    { label: 'Peso Médio', value: formatKg(pesoVivoMedio) },
+    { label: 'Peso Arroba Médio', value: formatArroba(pesoArrobaMedio) },
+    ...(subAba === 'abate' ? [{ label: 'Rendimento Médio', value: rendMedio ? formatPercent(rendMedio) : '—' }] : []),
+    { label: 'Preço Médio R$/@', value: formatMoeda(liqArrobaConsolidado) },
+    { label: 'Líquido Médio/Cab', value: formatMoeda(liqCabConsolidado) },
+    { label: 'Valor Total', value: formatMoeda(agg.valorFinalSum) },
+  ];
+
+  // Layout 2 colunas
+  const half = Math.ceil(resumoItems.length / 2);
+  const col1 = resumoItems.slice(0, half);
+  const col2 = resumoItems.slice(half);
+  const rows = Math.max(col1.length, col2.length);
+  const resumoBody: string[][] = [];
+  for (let i = 0; i < rows; i++) {
+    resumoBody.push([
+      col1[i]?.label || '',
+      col1[i]?.value || '',
+      col2[i]?.label || '',
+      col2[i]?.value || '',
+    ]);
   }
 
-  doc.save(`financeiro_${subAba}_${ano}.pdf`);
+  autoTable(doc, {
+    startY: resumoStartY,
+    head: [['RESUMO EXECUTIVO', '', '', '']],
+    body: resumoBody,
+    theme: 'grid',
+    styles: {
+      fontSize: 10,
+      cellPadding: { top: 2.8, bottom: 2.8, left: 4, right: 4 },
+      lineColor: [217, 226, 236],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: [255, 255, 255],
+      fontSize: 11,
+      fontStyle: 'bold',
+      halign: 'left',
+      lineColor: [30, 58, 95],
+    },
+    bodyStyles: {
+      fillColor: [239, 246, 255],
+    },
+    columnStyles: {
+      0: { textColor: [100, 100, 100], cellWidth: 60 },
+      1: { fontStyle: 'bold', textColor: [30, 58, 95], cellWidth: 80, halign: 'right' },
+      2: { textColor: [100, 100, 100], cellWidth: 60 },
+      3: { fontStyle: 'bold', textColor: [30, 58, 95], cellWidth: 80, halign: 'right' },
+    },
+    margin: { left: 10, right: 10 },
+    willDrawCell: (data) => {
+      // Header tem 4 colunas mas só primeira deve mostrar texto — esconder os outros 3
+      if (data.section === 'head' && data.column.index > 0) {
+        data.cell.text = [];
+      }
+    },
+  });
+
+  doc.save(`movimentacoes_${subAba}_${ano}.pdf`);
 }
 
 async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
@@ -297,7 +477,7 @@ function shareWhatsApp(text: string) {
 }
 
 // ── Export for full table ──
-export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: Props) {
+export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome, isGlobal }: Props) {
   const [open, setOpen] = useState(false);
 
   if (lancamentos.length === 0) return null;
@@ -314,7 +494,7 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome }: 
           <DialogTitle>Exportar {SUB_ABA_LABELS[subAba]}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaNome); setOpen(false); toast.success('PDF exportado!'); }}>
+          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaNome, isGlobal); setOpen(false); toast.success('PDF exportado!'); }}>
             <FileText className="h-5 w-5 text-destructive" />
             Exportar PDF
           </Button>
