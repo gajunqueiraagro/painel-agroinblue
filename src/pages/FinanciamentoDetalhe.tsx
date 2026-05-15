@@ -349,9 +349,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             <Pencil className="h-3 w-3" /> Editar
           </Button>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-xs">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs pb-3">
           <Info label="Descrição" value={fin.descricao} />
-          <Info label="Nº Contrato" value={fin.numero_contrato || '—'} />
           <Info label="Tipo" value={fin.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
           <Info label="Credor" value={fin.financeiro_fornecedores?.nome ?? '—'} />
           <Info label="Status">
@@ -359,14 +358,15 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               {fin.status}
             </span>
           </Info>
-          <Info label="Valor total" value={fmt(Number(fin.valor_total))} />
-          <Info label="Valor entrada" value={fmt(Number(fin.valor_entrada))} />
+          <Info label="Nº Contrato" value={fin.numero_contrato || '—'} />
           <Info label="Taxa juros" value={`${Number(fin.taxa_juros_mensal).toFixed(2)}% a.m.`} />
           <Info label="Data contrato" value={fmtDate(fin.data_contrato)} />
-          <Info label="1ª parcela" value={fmtDate(fin.data_primeira_parcela)} />
           <Info label="Total parcelas" value={String(fin.total_parcelas)} />
+          <Info label="Valor total" value={fmt(Number(fin.valor_total))} />
           <Info label="Conta bancária" value={(fin.financeiro_contas_bancarias as any)?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || '—'} />
-          {fin.observacao && <Info label="Observação" value={fin.observacao} className="col-span-2 sm:col-span-3" />}
+          <Info label="Valor entrada" value={fmt(Number(fin.valor_entrada))} />
+          <Info label="1ª parcela" value={fmtDate(fin.data_primeira_parcela)} />
+          {fin.observacao && <Info label="Observação" value={fin.observacao} className="col-span-1 sm:col-span-2" />}
         </CardContent>
       </Card>
 
@@ -637,9 +637,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 /* ── Helper component ── */
 function Info({ label, value, children, className = '' }: { label: string; value?: string; children?: React.ReactNode; className?: string }) {
   return (
-    <div className={className}>
-      <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-      {children ?? <p className="font-medium">{value}</p>}
+    <div className={`flex items-baseline gap-2 min-w-0 ${className}`}>
+      <span className="text-[11px] text-muted-foreground shrink-0">{label}:</span>
+      {children ?? <span className="font-medium truncate">{value}</span>}
     </div>
   );
 }
