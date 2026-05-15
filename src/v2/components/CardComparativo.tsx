@@ -21,6 +21,8 @@ interface CardComparativoProps {
   titulo: string;
   dado: ComparativoDuplo;
   className?: string;
+  /** Override de classes no <div> do valor principal — usado para cor de texto por categoria econômica. */
+  valorClassName?: string;
   /** Quando true, esconde o card se valor for null. Default: false. */
   hideQuandoVazio?: boolean;
 }
@@ -51,7 +53,7 @@ function formatar(valor: number | null, formato: FormatoExibicao): string {
   }
 }
 
-export function CardComparativo({ titulo, dado, className, hideQuandoVazio = false }: CardComparativoProps) {
+export function CardComparativo({ titulo, dado, className, valorClassName, hideQuandoVazio = false }: CardComparativoProps) {
   if (hideQuandoVazio && dado.valor == null) return null;
 
   return (
@@ -65,7 +67,7 @@ export function CardComparativo({ titulo, dado, className, hideQuandoVazio = fal
         {titulo}
       </div>
 
-      <div className="text-lg font-bold text-foreground tabular-nums truncate">
+      <div className={cn('text-lg font-bold text-foreground tabular-nums truncate', valorClassName)}>
         {formatar(dado.valor, dado.formato)}
       </div>
     </div>
