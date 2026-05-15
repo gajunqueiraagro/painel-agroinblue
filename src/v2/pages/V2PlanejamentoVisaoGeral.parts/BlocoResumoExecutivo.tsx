@@ -76,6 +76,50 @@ function montarLinhaDifAno(
 
 // ─── Sub-componentes ──────────────────────────────────────────────────
 
+// Cores das séries do gráfico — espelham strokes dos <Area>.
+const COR_META = '#f97316'; // laranja (mesma da linha META no gráfico)
+const COR_REAL = '#374151'; // gray-700 (mais escuro que o stroke #9ca3af, melhor contraste no tooltip)
+
+interface TooltipPayloadItem {
+  dataKey?: string | number;
+  value?: number;
+  name?: string;
+}
+
+function FluxoCaixaTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div
+      className="rounded-md border border-border/50 bg-background/80 backdrop-blur-sm px-2.5 py-2 shadow-sm text-[11px]"
+      style={{ WebkitBackdropFilter: 'blur(4px)' }}
+    >
+      <div className="text-foreground font-medium mb-1">{label}</div>
+      {payload.map(p => {
+        const isMeta = p.dataKey === 'META 2026';
+        const color = isMeta ? COR_META : COR_REAL;
+        return (
+          <div key={String(p.dataKey)} className="flex items-center gap-2 tabular-nums">
+            <span style={{ color }} className={isMeta ? 'font-bold' : 'font-semibold'}>
+              {String(p.dataKey)}:
+            </span>
+            <span style={{ color }} className={isMeta ? 'font-bold' : 'font-medium'}>
+              {typeof p.value === 'number' ? fmtBRL(p.value) : '—'}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DeltaBadge({ delta }: { delta: number }) {
   const positivo = delta >= 0;
   const cls = positivo
@@ -244,18 +288,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
                 width={56}
               />
               <Tooltip
-                formatter={(v: number) => fmtBRL(v)}
-                labelStyle={{ fontSize: 11, color: 'hsl(var(--foreground))' }}
-                contentStyle={{
-                  fontSize: 11,
-                  backgroundColor: 'hsl(var(--background) / 0.8)',
-                  border: '1px solid hsl(var(--border) / 0.5)',
-                  borderRadius: 6,
-                  backdropFilter: 'blur(4px)',
-                  WebkitBackdropFilter: 'blur(4px)',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                }}
-                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                content={<FluxoCaixaTooltip />}
                 cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeWidth: 1 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -278,8 +311,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
         </div>
 
         <div className="lg:col-span-2 flex flex-col gap-2">
-          <CardTotal titulo="Total Entradas" linha={data.totalEntradas} variant="sky" />
-          <CardTotal titulo="Total Saídas" linha={data.totalSaidas} variant="rose" />
+          <CardTotal titulo="Total Entradas META" linha={data.totalEntradas} variant="sky" />
+          <CardTotal titulo="Total Saídas META" linha={data.totalSaidas} variant="rose" />
           <div className="grid grid-cols-2 gap-2">
             <CardTotal titulo="Saldo Caixa Final Meta" linha={montarLinhaSaldoFinal(data)} variant="neutral" metaOnly />
             <CardTotal
