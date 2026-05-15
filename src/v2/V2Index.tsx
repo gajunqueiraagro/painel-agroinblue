@@ -179,28 +179,28 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   return (
     <div className="w-full">
       {mostrarCardsIA && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-4 pt-3">
           {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
           <button
             type="button"
             onClick={() => navigate('/caderno-importacao', { state: { from: 'v2-lancamentos-zoot' } })}
-            className="group relative overflow-hidden text-left rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 p-5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
+            className="group relative overflow-hidden text-left rounded-lg border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-3 py-2 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
           >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-                <Camera className="w-6 h-6 text-amber-700 dark:text-amber-400" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-md bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                     Lançar com IA
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-foreground">
+                <h3 className="text-sm font-bold text-foreground leading-tight truncate">
                   Movimentações por Foto
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[10px] text-muted-foreground leading-snug truncate">
                   Extração automática via foto do caderno do peão
                 </p>
               </div>
@@ -214,23 +214,23 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
               if (onNavegarMapaRebanho) onNavegarMapaRebanho();
               else alert('aguardando confirmação Gabriel — handler pendente');
             }}
-            className="group relative overflow-hidden text-left rounded-xl border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 p-5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all"
+            className="group relative overflow-hidden text-left rounded-lg border border-amber-200 dark:border-amber-800/50 bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20 px-3 py-2 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all"
           >
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
-                <Camera className="w-6 h-6 text-amber-700 dark:text-amber-400" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-md bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                <Camera className="w-4 h-4 text-amber-700 dark:text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                     Lançar com IA
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-foreground">
+                <h3 className="text-sm font-bold text-foreground leading-tight truncate">
                   Rebanho em Pastos por Foto
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[10px] text-muted-foreground leading-snug truncate">
                   Importar Mapa do Rebanho via IA
                 </p>
               </div>

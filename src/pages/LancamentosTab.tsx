@@ -2230,13 +2230,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       !it.navOnly && it.aba === aba && (it.aba === 'reclassificacao' || tipo === it.value);
 
     return (
-      <div className="space-y-3 mb-4">
+      <div className="space-y-2 mb-2">
         {TIPO_CARDS_GROUPS.map(g => (
           <div key={g.grupo}>
-            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
               {g.label}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
               {g.items
                 // Esconde Chuvas se o parent não passou callback de navegação.
                 .filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))
@@ -2250,7 +2250,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     type="button"
                     onClick={() => handleClick(it)}
                     disabled={disabled}
-                    className={`flex items-start gap-2.5 p-3 rounded-lg border-2 transition-all text-left ${
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md border-2 transition-all text-left ${
                       active
                         ? 'border-primary bg-primary/10 shadow-sm'
                         : disabled
@@ -2258,10 +2258,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                           : 'border-border hover:border-primary/40 hover:bg-muted/40'
                     }`}
                   >
-                    <span className="text-2xl shrink-0 leading-none mt-0.5">{it.icon}</span>
+                    <span className="text-lg shrink-0 leading-none">{it.icon}</span>
                     <div className="min-w-0">
-                      <div className="text-sm font-bold leading-tight text-foreground">{it.label}</div>
-                      <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">{it.desc}</div>
+                      <div className="text-xs font-bold leading-tight text-foreground truncate">{it.label}</div>
+                      <div className="text-[10px] text-muted-foreground leading-snug truncate">{it.desc}</div>
                     </div>
                   </button>
                 );
@@ -2283,10 +2283,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           </button>
         )}
         {renderTipoCards()}
-        <div className="bg-orange-50 dark:bg-orange-950/30 border-2 border-orange-200 dark:border-orange-800 rounded-md p-6 text-center space-y-3">
-          <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto" />
-          <h3 className="font-bold text-foreground text-lg">Lançamento bloqueado</h3>
-          <p className="text-sm text-muted-foreground max-w-xl mx-auto">
+        <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md px-3 py-2">
+          <div className="flex items-center gap-2 mb-0.5">
+            <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0" />
+            <h3 className="font-semibold text-foreground text-sm">Lançamento bloqueado</h3>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
             {isGlobal
               ? 'Selecione uma fazenda específica para realizar lançamentos. O modo Global é apenas para consulta.'
               : 'Fazendas administrativas não permitem lançamentos zootécnicos.'}
