@@ -206,7 +206,7 @@ export interface Bloco2Producao {
   arrobasDesfrutadas: ComparativoDuplo;     // tipoSemantica: 'acumulado' — derivado: receitaPec / precoArr
 
   // Taxas/Médias
-  desfrutePct: ComparativoDuplo;            // tipoSemantica: 'media'
+  desfrutePct: ComparativoDuplo;            // tipoSemantica: 'acumulado' — DESFRUTE (CAB.), espelha PC-100 desfruteIndicador (contagem acumulada de animais)
   lotacaoMedia: ComparativoDuplo;           // tipoSemantica: 'media'
   areaProdutivaMedia: ComparativoDuplo;     // tipoSemantica: 'media'
 

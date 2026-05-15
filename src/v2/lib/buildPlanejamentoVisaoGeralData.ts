@@ -655,7 +655,7 @@ function buildBloco2Producao(
       valorRebanhoFinal: empty('moeda', 'estoque'),
       arrobasProduzidas: empty('arrobas', 'acumulado'),
       arrobasDesfrutadas: empty('arrobas', 'acumulado'),
-      desfrutePct: empty('percentual', 'taxa'),
+      desfrutePct: empty('cabecas', 'acumulado'),
       lotacaoMedia: empty('ua_ha', 'media'),
       areaProdutivaMedia: empty('hectares', 'media'),
       custoArr: empty('moeda', 'taxa'),
@@ -700,10 +700,13 @@ function buildBloco2Producao(
     // Derivação 2 séries cumulativas — Marco 1.1.D
     arrobasDesfrutadas: emptyComparativo('derivado', 'acumulado', 'arrobas'),
 
+    // PC-100 desfruteIndicador é por design DESFRUTE (CAB.) — contagem acumulada
+    // de animais (abate+venda+consumo) no período. NÃO é taxa percentual.
+    // Espelhar a fonte oficial: formato 'cabecas', semântica 'acumulado'.
     desfrutePct: buildComparativoPonto(
       painel.desfruteIndicador?.serieMeta,
       painel.desfruteIndicador?.serieAnoAnt,
-      mesAtual, 'pc100', 'taxa', 'percentual',
+      mesAtual, 'pc100', 'acumulado', 'cabecas',
     ),
 
     lotacaoMedia: buildComparativoPonto(
