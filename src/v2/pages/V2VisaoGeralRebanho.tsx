@@ -167,7 +167,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   const cardModalData = modalAberto && porTipo?.[modalAberto] ? porTipo[modalAberto] : null;
 
   return (
-    <div className="px-4 py-4 space-y-6 max-w-7xl mx-auto">
+    <div className="px-4 py-3 space-y-3 max-w-7xl mx-auto">
       {/* FILTRO DE LENTE */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs text-muted-foreground uppercase tracking-wider mr-2">Lente:</span>
@@ -178,7 +178,7 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
               type="button"
               onClick={() => setLente(l.id)}
               className={cn(
-                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                'px-3 py-1 rounded-md text-xs font-medium transition-colors',
                 lente === l.id
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -193,71 +193,64 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
         )}
       </div>
 
-      {/* ENTRADAS — 2 containers lado a lado: mov (esq, 2fr) + total (dir, 1fr) */}
+      {/* ENTRADAS — Card unificado de movimentações + Σ Entradas como card resumo */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
           Entradas
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-3">
-          {/* Container movimentações */}
-          <div className="bg-muted/30 rounded-lg p-3">
+        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+          <Card className="p-2 shadow-sm">
             <div className={cn(
-              'grid gap-2',
+              'grid gap-1',
               entradasMov.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
             )}>
               {entradasMov.map(c => (
-                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} flat />
               ))}
             </div>
-          </div>
-          {/* Container total */}
-          <div className="bg-muted/30 rounded-lg p-3">
-            <div className="grid grid-cols-1 gap-2 h-full">
-              {entradasTotal.map(c => (
-                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-              ))}
-            </div>
+          </Card>
+          <div className="grid grid-cols-1 gap-2">
+            {entradasTotal.map(c => (
+              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+            ))}
           </div>
         </div>
       </section>
 
-      {/* SAÍDAS — 2 containers: mov (esq, 3fr) + resumo (dir, 2fr) */}
+      {/* SAÍDAS — Card unificado de movimentações + cards resumo (Desfrute/Σ Saídas) */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
           Saídas
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-3">
-          {/* Container movimentações: vendas, abates, consumos, mortes (+ transf.saidas em Individual full-width) */}
-          <div className="bg-muted/30 rounded-lg p-3">
-            <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-2">
+          <Card className="p-2 shadow-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
               {saidasMov.slice(0, 4).map(c => (
-                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+                <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} flat />
               ))}
               {/* Transf. Saídas (5º card em Individual) ocupa linha inteira */}
               {saidasMov.length > 4 && (
-                <div className="col-span-2">
+                <div className="col-span-2 sm:col-span-4">
                   <CardKpi
                     cfg={saidasMov[4]}
                     lente={lente}
                     data={porTipo?.[saidasMov[4].id]}
                     onClick={() => abrirModal(saidasMov[4].id)}
+                    flat
                   />
                 </div>
               )}
             </div>
-          </div>
-          {/* Container resumo: 2 desfrutes em cima, Σ Saídas full embaixo */}
-          <div className="bg-muted/30 rounded-lg p-3">
-            <div className="grid grid-cols-1 gap-2">
-              <div className="grid grid-cols-2 gap-2">
-                {saidasResumo.slice(0, 2).map(c => (
-                  <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
-                ))}
-              </div>
-              {saidasResumo.slice(2).map(c => (
+          </Card>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              {saidasResumo.slice(0, 2).map(c => (
                 <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
               ))}
             </div>
+            {saidasResumo.slice(2).map(c => (
+              <CardKpi key={c.id} cfg={c} lente={lente} data={porTipo?.[c.id]} onClick={() => abrirModal(c.id)} />
+            ))}
           </div>
         </div>
       </section>
@@ -282,11 +275,13 @@ export default function V2VisaoGeralRebanho({ ano, mes, viewMode }: Props) {
   );
 }
 
-function CardKpi({ cfg, lente, data, onClick }: {
+function CardKpi({ cfg, lente, data, onClick, flat = false }: {
   cfg: CardConfig;
   lente: Lente;
   data?: CardData;
   onClick?: () => void;
+  /** Quando true, renderiza sem borda/sombra própria — usado dentro de um Card container. */
+  flat?: boolean;
 }) {
   const aplicavel = cfg.lentesAplicaveis.includes(lente);
 
@@ -299,25 +294,17 @@ function CardKpi({ cfg, lente, data, onClick }: {
   const deltaAno  = pctDelta(valor, valorAnoAnt);
   const deltaMeta = pctDelta(valor, valorMeta);
 
-  return (
-    <Card
-      onClick={aplicavel ? onClick : undefined}
-      className={cn(
-        'p-4 transition-shadow',
-        aplicavel && 'hover:shadow-md cursor-pointer',
-        cfg.destaque && 'border-primary/30',
-        !aplicavel && 'opacity-50',
-      )}
-    >
-      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 truncate">
+  const inner = (
+    <>
+      <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5 truncate">
         {cfg.label}
       </div>
-      <div className="text-2xl font-bold tabular-nums">
+      <div className={cn('font-bold tabular-nums leading-tight', flat ? 'text-lg' : 'text-xl')}>
         {aplicavel
           ? formatar(valor, cfg.id, lente)
           : <span className="text-muted-foreground">—</span>}
       </div>
-      <div className="text-[10px] mt-2 space-y-0.5">
+      <div className="text-[10px] mt-1 space-y-0.5">
         <div className={corDelta(deltaMes, cfg.invertCor)}>
           {fmtDelta(deltaMes)} vs mês ant.
         </div>
@@ -328,6 +315,35 @@ function CardKpi({ cfg, lente, data, onClick }: {
           {fmtDelta(deltaMeta)} vs META
         </div>
       </div>
+    </>
+  );
+
+  if (flat) {
+    return (
+      <div
+        onClick={aplicavel ? onClick : undefined}
+        className={cn(
+          'p-2 rounded-md transition-colors',
+          aplicavel && 'hover:bg-muted/40 cursor-pointer',
+          !aplicavel && 'opacity-50',
+        )}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Card
+      onClick={aplicavel ? onClick : undefined}
+      className={cn(
+        'p-2.5 transition-shadow shadow-sm',
+        aplicavel && 'hover:shadow-md cursor-pointer',
+        cfg.destaque && 'border-primary/30',
+        !aplicavel && 'opacity-50',
+      )}
+    >
+      {inner}
     </Card>
   );
 }
