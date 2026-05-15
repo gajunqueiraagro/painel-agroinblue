@@ -44,6 +44,17 @@ export interface PlanoContasRow {
   ordem_exibicao: number;
 }
 
+/** Raw financeiro_lancamentos_v2 row used by Bloco 1 (Real 2025). */
+export interface Real2025Row {
+  macro_custo: string | null;
+  grupo_custo: string | null;
+  escopo_negocio: string | null;
+  tipo_operacao: string | null;
+  subcentro: string | null;
+  valor: number;
+  ano_mes: string;
+}
+
 /** In-memory grid value per subcentro key */
 export interface SubcentroGrid {
   macro_custo: string | null;
@@ -225,6 +236,42 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     gcTime: 10 * 60 * 1000,
   });
   const savedData = savedDataQuery.data ?? [];
+
+  // Real 2025 — base financeira (financeiro_lancamentos_v2).
+  // Não filtra por fazenda: comparativo executivo é sempre client-wide.
+  // Filtros estritos: cancelado=false, sem_movimentacao_caixa=false,
+  // status_transacao='realizado', cenario='realizado', ano_mes LIKE '2025-%'.
+  const real2025Query = useQuery<Real2025Row[]>({
+    queryKey: ['real2025-financeiro', clienteId],
+    queryFn: async () => {
+      const PAGE = 1000;
+      let all: Real2025Row[] = [];
+      let from = 0;
+      while (true) {
+        const { data: rows, error } = await (supabase
+          .from('financeiro_lancamentos_v2')
+          .select('macro_custo, grupo_custo, escopo_negocio, tipo_operacao, subcentro, valor, ano_mes')
+          .eq('cliente_id', clienteId!)
+          .eq('cancelado', false)
+          .eq('sem_movimentacao_caixa', false)
+          .eq('status_transacao', 'realizado')
+          .eq('cenario', 'realizado')
+          .like('ano_mes', '2025-%')
+          .range(from, from + PAGE - 1) as any);
+        if (error) throw error;
+        if (!rows || rows.length === 0) break;
+        all = all.concat(rows as Real2025Row[]);
+        if (rows.length < PAGE) break;
+        from += PAGE;
+      }
+      return all;
+    },
+    enabled: !!clienteId,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+  const real2025Rows = real2025Query.data ?? [];
+  const real2025Loading = real2025Query.isLoading;
 
   const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
     queryKey: ['ppf:rebanho', clienteId, fazendaId, ano],
@@ -964,6 +1011,9 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     lancamentosFinanciamento,
     lancamentosNutricao,
     lancamentosProjetos,
+    metaRowsRaw: savedData,
+    real2025Rows,
+    real2025Loading,
     reloadNutricao: loadNutricao,
     reloadProjetos: () => qc.invalidateQueries({ queryKey: ['ppf:projetos'] }),
     reload: loadSaved,

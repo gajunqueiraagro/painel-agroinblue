@@ -16,7 +16,8 @@ import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { V2PageContent } from '@/v2/components/V2PageShell';
 import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
-import { BlocoMacroExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoMacroExecutivo';
+import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
+import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
@@ -68,6 +69,13 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     planFin.lancamentosNutricao, planFin.lancamentosProjetos,
   ]);
 
+  // Bloco 1 MVP: META 2026 (planejamento_financeiro) vs Real 2025
+  // (financeiro_lancamentos_v2). Fontes independentes do PC-100/buildPlanejamento.
+  const dadosBloco1 = useMemo(() => {
+    if (planFin.real2025Loading) return null;
+    return buildBlocoResumoExecutivo(planFin.metaRowsRaw, planFin.real2025Rows);
+  }, [planFin.metaRowsRaw, planFin.real2025Rows, planFin.real2025Loading]);
+
   const loading = painel.loading || planFin.loading;
 
   // Gate estrito: enquanto qualquer fonte oficial está carregando, mostra
@@ -102,7 +110,7 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         </p>
       </header>
 
-      <BlocoMacroExecutivo data={dto.bloco1_macroExecutivo} />
+      <BlocoResumoExecutivo data={dadosBloco1} />
       <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
       <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
       <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
