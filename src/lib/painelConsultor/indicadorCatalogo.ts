@@ -184,6 +184,22 @@ const FONTE_FIN_CAIXA_REAL: FonteIndicador = {
   permite_fallback: false,
 };
 
+// ─── Saldo Bancário Consolidado (estoque) ───
+// Fonte oficial do indicador "Saldo Final de Caixa" do PC-100.
+// Mesma cadeia já consumida por LE Cap.1, ResumoTab, FechExecResumo,
+// V2Home, AnaliseTrimestral via pc100.caixaIndicador.
+export const FONTE_SALDO_BANCARIO_V2: FonteIndicador = {
+  fonte_tipo: 'financeiro_v2',
+  fonte_tabela: 'financeiro_saldos_bancarios_v2',
+  fonte_campo: 'saldo_final',
+  regra_calculo: 'SUM(saldo_final) por (cliente_id, ano_mes) — estoque, foto do fim do mês',
+  regra_prioridade: '1. Saldo bancário consolidado oficial via pc100.caixaIndicador',
+  tela_origem: '/financeiro-v2',
+  tela_label: 'Financeiro V2 / Saldos',
+  permite_fallback: false,
+  observacao: 'Estoque (foto do fim do mês). Não acumula. Aba "acumulado" do PC-100 deliberadamente não consome esta fonte.',
+};
+
 // ─── Financeiro Soberano (Auditoria) — agregadores literais 1T26 ───
 // Mesma fonte de FONTE_FIN_CAIXA_REAL (financeiro_lancamentos_v2 realizado),
 // porém classificação por predicados literais oficiais
@@ -349,18 +365,21 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'res_oper_medio': { id: 'res_oper_medio', nome: 'Res. oper. médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'ebitda_medio': { id: 'ebitda_medio', nome: 'EBITDA médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'res_caixa_medio': { id: 'res_caixa_medio', nome: 'Res. caixa médio', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'saldo_caixa_medio': { id: 'saldo_caixa_medio', nome: 'Saldo Final de Caixa', aba: 'media_periodo', bloco: 'Financeiro Médio', realizado: FONTE_SALDO_BANCARIO_V2, previsto: SEM_PREVISTO },
 
   // — Mensal > Financeiro (Caixa) —
   'ent_fin_mensal': { id: 'ent_fin_mensal', nome: 'Entradas Financeiras Mensais', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'sai_fin_mensal': { id: 'sai_fin_mensal', nome: 'Saídas Financeiras Mensais', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'rec_pec_mensal': { id: 'rec_pec_mensal', nome: 'Receita Pecuária Mensal', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'res_caixa_mensal': { id: 'res_caixa_mensal', nome: 'Resultado de Caixa Mensal', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'saldo_caixa_mensal': { id: 'saldo_caixa_mensal', nome: 'Saldo Final de Caixa', aba: 'mensal', bloco: 'Financeiro (Caixa)', realizado: FONTE_SALDO_BANCARIO_V2, previsto: SEM_PREVISTO },
 
   // — Médio > Financeiro (Caixa) —
   'ent_fin_med': { id: 'ent_fin_med', nome: 'Entradas Financeiras Médias', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'sai_fin_med': { id: 'sai_fin_med', nome: 'Saídas Financeiras Médias', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'rec_pec_med': { id: 'rec_pec_med', nome: 'Receita Pecuária Média', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
   'res_caixa_med': { id: 'res_caixa_med', nome: 'Resultado de Caixa Médio', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },
+  'saldo_caixa_med': { id: 'saldo_caixa_med', nome: 'Saldo Final de Caixa', aba: 'medio', bloco: 'Financeiro (Caixa)', realizado: FONTE_SALDO_BANCARIO_V2, previsto: SEM_PREVISTO },
 
   // — Período > Financeiro (Caixa) —
   'ent_fin_periodo': { id: 'ent_fin_periodo', nome: 'Entradas Financeiras do Período', aba: 'media_periodo', bloco: 'Financeiro (Caixa)', realizado: FONTE_FIN_CAIXA_REAL, previsto: FONTE_META_PLANEJAMENTO },

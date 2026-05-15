@@ -329,7 +329,12 @@ function buildBlocosForTab(
   dezPesoSnap?: number,
   soberano?: SoberanoSerie12,
   endividamento?: EndividamentoSeries,
+  caixaSaldoMensal?: number[],
 ): Bloco[] {
+  // Saldo bancário consolidado (estoque) Jan..Dez — alimenta linha "Saldo Final de Caixa".
+  // Fonte oficial: pc100.caixaIndicador.serieAno (length 13; slice(1) = Jan..Dez).
+  // NaN[12] quando indisponível — renderiza '—'.
+  const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   const r = (indicador: string, format: PainelFormatType, raw: number[], indicadorId?: string, noTotal?: boolean): Row => {
     let valores: number[];
     switch (tab) {
@@ -465,6 +470,7 @@ function buildBlocosForTab(
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -509,6 +515,7 @@ function buildBlocosForTab(
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -596,6 +603,7 @@ function buildBlocosForTab(
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -645,7 +653,9 @@ function buildBlocoSoberano(
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[]): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[]): Bloco[] {
+  // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
+  const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   const byMes = indexByMes(rows);
   const get = (field: keyof ZootMensal): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -796,6 +806,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -838,6 +849,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -919,6 +931,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -937,7 +950,9 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[]): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[]): Bloco[] {
+  // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
+  const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   // Aggregate across all categories per month
   const agg = (field: keyof MetaCategoriaMes): number[] =>
     Array.from({ length: 12 }, (_, i) => {
@@ -1098,6 +1113,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_mensal'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_mensal'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_mensal'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_mensal'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -1140,6 +1156,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_med'),
             r('Receita Pecuária', 'money', finRecPec, 'rec_pec_med'),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_med'),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_med'),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -1221,6 +1238,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Saídas Financeiras', 'money', finSaidas, 'sai_fin_periodo'),
             r('Receita Pecuária', 'money', finRecPec, 'receita_media', true),
             r('Resultado de Caixa', 'money', finResCaixa, 'res_caixa_medio', true),
+            r('Saldo Final de Caixa', 'money', _saldoCaixaMes12, 'saldo_caixa_medio', true),
           ],
         },
         ...(blocoSoberano ? [blocoSoberano] : []),
@@ -1730,10 +1748,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12);
+        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
       } else {
         // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12);
+        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
       }
     } else {
       // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -1743,7 +1761,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         arrobas: realPesoSnap.arrobas.slice(1),
       };
       const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined);
+      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
     }
 
     // C4.1 — injetar bloco ÁREAS META logo APÓS "Financeiro Soberano (Auditoria)";
