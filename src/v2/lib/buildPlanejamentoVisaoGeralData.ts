@@ -369,6 +369,37 @@ function buildComparativoEstoquePonto(
   };
 }
 
+/**
+ * Comparativo de FOTO/PONTO 0-indexed — para `painel.seriesMeta` cuja convenção
+ * é Jan=[0]..Dez=[11] (diferente das séries dos indicadores agregados, que são
+ * 1-indexed com 13 posições).
+ *
+ * Uso: cards de foto final (Rebanho Final META, Peso Médio Final META) que
+ * precisam de `seriesMeta[11]` = Dez, NÃO da média do período entregue pelos
+ * indicadores quando viewMode='periodo'.
+ *
+ * ano-ant: não disponível em `seriesMeta` (que é só META 2026); marcar null
+ * para evitar fallback inventado misturando convenções de série. Card mostra
+ * "— vs ano ant." sem comparativo.
+ */
+function buildComparativoEstoquePontoZeroIndexed(
+  seriesMeta: number[] | undefined,
+  idxZeroBased: number,
+  origem: OrigemMetric,
+  formato: FormatoExibicao,
+): ComparativoDuplo {
+  const v = seriesMeta && seriesMeta.length > idxZeroBased ? seriesMeta[idxZeroBased] : null;
+  const valor = v != null && Number.isFinite(v) ? v : null;
+  return {
+    valor,
+    origem,
+    tipoSemantica: 'estoque',
+    formato,
+    vsAnoFechado: { valor: null, delta: null },
+    vsMesmoPeriodo: { valor: null, delta: null },
+  };
+}
+
 // ─── HELPERS DE GRID ──────────────────────────────────────────────────────────
 
 /**
@@ -643,21 +674,22 @@ function buildBloco2Producao(
 
   warnings.push('arrobasDesfrutadas: derivação receitaPec/precoArr requer divisão ponto-a-ponto de séries cumulativas — Marco 1.1.D');
   warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
+  warnings.push('valorRebanhoFinal META: painel.seriesMeta não expõe valorRebFin — GAP do PC-100, card exibe "—"');
+  warnings.push('cabecasFinal/pesoMedioFinal META: cards de FOTO 0-indexed em painel.seriesMeta. Comparativo Dez ano-ant não disponível na mesma convenção — vsAnoFechado=null, card exibe "— vs ano ant." (GAP/follow-up)');
 
-  // Rebanho Médio META: cabMediaAcumMeta já está em painel.cabecasIndicador.serieMetaIndicador
-  // quando o hook é chamado com viewMode='periodo' (V2PlanejamentoVisaoGeral). Em modo 'mes' seria
-  // cabFinMetaSerie13 — não é o caso. Aqui consumimos serieMetaIndicador como média do período.
-  // Valor do Rebanho Final META: painel.valorRebanhoIndicador.serieMeta — fonte só Fazenda
-  // (subtitulo oficial do hook). Em Global, serieMeta vem NaN → exibe '—'. Sem fallback.
+  // Rebanho Final META: FOTO Dez (idx 11 em painel.seriesMeta.cabFin, 0-indexed).
+  //   NÃO usar cabecasIndicador.serieMetaIndicador aqui — em viewMode='periodo'
+  //   essa série retorna cabMediaAcumMeta (MÉDIA), não foto final.
+  // Peso Médio Final META: idem — painel.seriesMeta.pesoMedioFin[11] (foto Dez).
+  // Rebanho Médio META: este SIM é média do período. Consome
+  //   painel.cabecasIndicador.serieMetaIndicador (= cabMediaAcumMeta em modo 'periodo').
+  // Valor do Rebanho Final META: GAP do PC-100 — painel.seriesMeta não expõe valorRebFin
+  //   para META. Sem fonte oficial pronta → emptyComparativo, exibe '—'. Sem fallback.
   return {
-    cabecasFinal: buildComparativoEstoquePonto(cabSerieMeta, cabSerieAnoAnt, 12, mesAtual, 'pc100', 'cabecas'),
+    cabecasFinal: buildComparativoEstoquePontoZeroIndexed(painel.seriesMeta?.cabFin, 11, 'pc100', 'cabecas'),
     rebanhoMedio: buildComparativoPonto(cabSerieMeta, cabSerieAnoAnt, mesAtual, 'pc100', 'media', 'cabecas'),
-    pesoMedioFinal: buildComparativoEstoquePonto(pesoSerieMeta, pesoSerieAnoAnt, 12, mesAtual, 'pc100', 'kg'),
-    valorRebanhoFinal: buildComparativoEstoquePonto(
-      painel.valorRebanhoIndicador?.serieMeta,
-      painel.valorRebanhoIndicador?.serieAnoAnt,
-      12, mesAtual, 'pc100', 'moeda',
-    ),
+    pesoMedioFinal: buildComparativoEstoquePontoZeroIndexed(painel.seriesMeta?.pesoMedioFin, 11, 'pc100', 'kg'),
+    valorRebanhoFinal: emptyComparativo('pc100', 'estoque', 'moeda'),
 
     arrobasProduzidas: buildComparativoPonto(
       painel.arrobasIndicador?.serieMeta,
