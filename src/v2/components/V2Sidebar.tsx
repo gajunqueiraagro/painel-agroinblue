@@ -71,7 +71,7 @@ export function V2Sidebar({
 
   return (
     <aside className={cn(
-      'flex flex-col w-56 shrink-0 h-screen bg-primary text-primary-foreground overflow-hidden',
+      'flex flex-col w-52 shrink-0 h-screen bg-primary text-primary-foreground overflow-hidden',
       className,
     )}>
 
