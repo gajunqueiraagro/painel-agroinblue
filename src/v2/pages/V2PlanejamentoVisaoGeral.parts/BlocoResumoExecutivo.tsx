@@ -122,7 +122,6 @@ export function BlocoResumoExecutivo({ data }: Props) {
     mes: nome,
     'META 2026': data.serieMeta[i] ?? 0,
     'REAL 2025': data.serieReal[i] ?? 0,
-    'META linear': data.serieMetaLinear[i] ?? 0,
   }));
 
   return (
@@ -130,6 +129,7 @@ export function BlocoResumoExecutivo({ data }: Props) {
       <h2 className="text-base font-bold text-foreground mb-1">Resumo Macro Executivo</h2>
       <p className="text-xs text-muted-foreground mb-3">
         META 2026 (planejamento financeiro) vs Real 2025 (financeiro lançamentos).
+        Gráfico: saldo acumulado projetado mês a mês.
       </p>
 
       {!data.conciliado && (
@@ -182,14 +182,6 @@ export function BlocoResumoExecutivo({ data }: Props) {
                 stroke="#9ca3af"
                 strokeWidth={2}
                 fill="url(#g-real)"
-              />
-              <Area
-                type="monotone"
-                dataKey="META linear"
-                stroke="#9a3412"
-                strokeDasharray="4 4"
-                strokeWidth={1.5}
-                fill="none"
               />
             </AreaChart>
           </ResponsiveContainer>

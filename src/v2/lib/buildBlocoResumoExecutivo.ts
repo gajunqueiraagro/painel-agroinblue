@@ -56,6 +56,8 @@ import {
 export interface BuildBlocoInput {
   lancFin2025: FinanceiroLancamento[];
   gridMeta2026: SubcentroGrid[];
+  /** Saldo bancário consolidado Dez/N-1 — fonte oficial: planFin.saldoInicial. */
+  saldoInicialMeta: number;
 }
 
 const ANO_REAL = 2025;
@@ -91,7 +93,7 @@ const makeLinha = (label: string, metaArr: number[], realArr: number[]): LinhaEx
 // ─── Builder ─────────────────────────────────────────────────────────
 
 export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoExecutivoData {
-  const { lancFin2025, gridMeta2026 } = input;
+  const { lancFin2025, gridMeta2026, saldoInicialMeta } = input;
 
   // 15 buckets REAL 2025 — number[12] cada
   const rReceitaPec    = agregaReceitaPec(lancFin2025, ANO_REAL);
@@ -176,11 +178,32 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
     delta: calcDelta(totalSaidasMeta, totalSaidasReal),
   };
 
-  // Séries mensais (saldo líquido entrada - saída)
-  const serieMeta = subArrays(totalEntradasMetaArr, totalSaidasMetaArr);
-  const serieReal = subArrays(totalEntradasRealArr, totalSaidasRealArr);
-  const liquidoAnualMeta = totalEntradasMeta - totalSaidasMeta;
-  const serieMetaLinear = new Array(12).fill(liquidoAnualMeta / 12);
+  // Séries mensais — SALDO ACUMULADO (posição de caixa projetada).
+  //
+  // META 2026: parte do saldoInicialMeta (Dez/N-1, fonte oficial: tabela
+  //   financeiro_saldos_bancarios_v2) e acumula (entradas - saídas) mês a mês.
+  //   Reproduz a coluna "Saldo Acumulado" da tela Fluxo de Caixa META oficial.
+  //
+  // Real 2025: ainda não temos saldo inicial Dez/2024 disponível neste builder.
+  //   A série representa "fluxo acumulado do ano" a partir de zero, não a
+  //   posição absoluta de caixa. Comparação visual com META fica enviesada por
+  //   offset, mas tendência relativa (slope mensal) permanece honesta.
+  //   Backlog: expor saldoInicialReal para alinhar bases.
+  //
+  // serieMetaLinear: mantido como array zerado por compatibilidade de tipo
+  //   (BlocoResumoExecutivoData). Não é mais renderizado pelo componente —
+  //   a linha tracejada "META linear" foi removida nesta revisão.
+  const serieMeta = new Array(12).fill(0);
+  const serieReal = new Array(12).fill(0);
+  let accMeta = saldoInicialMeta;
+  let accReal = 0;
+  for (let i = 0; i < 12; i++) {
+    accMeta += (totalEntradasMetaArr[i] ?? 0) - (totalSaidasMetaArr[i] ?? 0);
+    accReal += (totalEntradasRealArr[i] ?? 0) - (totalSaidasRealArr[i] ?? 0);
+    serieMeta[i] = accMeta;
+    serieReal[i] = accReal;
+  }
+  const serieMetaLinear = new Array(12).fill(0);
 
   // Conciliação: total absoluto bruto do grid vs soma dos 15 buckets META.
   // Detecta rows com macro/grupo que não caem em nenhum predicate oficial.

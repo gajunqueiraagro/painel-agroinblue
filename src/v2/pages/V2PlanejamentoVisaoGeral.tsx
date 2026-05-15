@@ -92,13 +92,16 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
 
   // Bloco 1: META 2026 (consolidado) vs Real 2025 (lancFin2025 via useFinanceiro).
   // Zero classificação aqui — builder delega tudo aos agregadores oficiais.
+  // saldoInicialMeta vem do hook usePlanejamentoFinanceiro (Dez/N-1 oficial),
+  // usado pelo gráfico de saldo acumulado projetado.
   const dadosBloco1 = useMemo(() => {
     if (planFin.lancFin2025Loading) return null;
     return buildBlocoResumoExecutivo({
       lancFin2025: planFin.lancFin2025,
       gridMeta2026: gridMetaConsolidado,
+      saldoInicialMeta: planFin.saldoInicial,
     });
-  }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading]);
+  }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading, planFin.saldoInicial]);
 
   const loading = painel.loading || planFin.loading;
 
