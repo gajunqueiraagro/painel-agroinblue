@@ -204,36 +204,43 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   const cenarioLabel = inferCenarioLabel(lancamentos);
   const escopoBase = isGlobal ? 'Global' : (fazendaNome || '—');
   const escopoLabel = cenarioLabel ? `${escopoBase} • ${cenarioLabel}` : escopoBase;
-
-  // ─── Cabeçalho executivo: ESQ texto + DIR logo ────────────
-  const HEADER_LEFT_X = 10;
-  const LOGO_H = 22;
-  const LOGO_W = LOGO_H * 2;
-  const LOGO_Y = 8;
-  const LOGO_X = pageW - 10 - LOGO_W;
-
-  try {
-    const logoData = await loadLogoBase64();
-    doc.addImage(logoData, 'PNG', LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
-  } catch { /* skip logo if fails */ }
-
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 58, 95);
-  doc.text(`${titulo} — ${ano}`, HEADER_LEFT_X, 14);
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text(escopoLabel, HEADER_LEFT_X, 21);
-
   const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
-  doc.setFontSize(9);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, HEADER_LEFT_X, 27);
+  const statsLabel = `${lancamentos.length} registros | ${totalQtd} cabeças`;
 
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  // ─── Carrega logo uma vez (compartilhado entre páginas) ──
+  let logoData: string | null = null;
+  try { logoData = await loadLogoBase64(); } catch { /* skip */ }
+
+  // Layout do header (mesmo em todas as páginas):
+  //   título (16pt bold #1E3A5F) y=14
+  //   escopo (11pt cinza médio)  y=21
+  //   stats  (9pt cinza claro)   y=27
+  //   logo 44×22 mm canto sup. dir. y=8
+  // Conteúdo começa em y=34 (margin.top das autoTables).
+  // Footer ocupa últimos ~10mm; margin.bottom=14 reserva o espaço.
+  const HEADER_TOP_RESERVED = 34;
+  const FOOTER_BOTTOM_RESERVED = 14;
+  const LOGO_W = 44;
+  const LOGO_H = 22;
+
+  const drawPageHeader = () => {
+    if (logoData) {
+      doc.addImage(logoData, 'PNG', pageW - 10 - LOGO_W, 8, LOGO_W, LOGO_H);
+    }
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text(`${titulo} — ${ano}`, 10, 14);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(escopoLabel, 10, 21);
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(statsLabel, 10, 27);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+  };
 
   // ─── Agregados ────────────────────────────────────────────
   const agg = agregarLancs(lancamentos);
@@ -330,7 +337,8 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
         data.cell.styles.halign = 'right';
       }
     },
-    margin: { left: 10, right: 10 },
+    didDrawPage: () => drawPageHeader(),
+    margin: { top: HEADER_TOP_RESERVED, bottom: FOOTER_BOTTOM_RESERVED, left: 10, right: 10 },
   });
 
   // ─── Resumo Executivo (grid 3 col, render manual) ─────────
@@ -359,10 +367,11 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   const resumoRows = Math.ceil(resumoItems.length / RESUMO_COLS);
   const resumoBoxH = RESUMO_TITLE_H + resumoRows * RESUMO_ROW_H + 3;
 
-  // Page break se não couber
-  if (resumoStartY + resumoBoxH > pageH - 10) {
+  // Page break se não couber (respeita espaço reservado do footer)
+  if (resumoStartY + resumoBoxH > pageH - FOOTER_BOTTOM_RESERVED) {
     doc.addPage();
-    resumoStartY = 12;
+    drawPageHeader();
+    resumoStartY = HEADER_TOP_RESERVED;
   }
 
   // Title bar (azul escuro)
@@ -491,16 +500,36 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
           data.cell.styles.halign = 'right';
         }
       },
-      margin: { left: 10, right: 10 },
+      didDrawPage: () => drawPageHeader(),
+      margin: { top: HEADER_TOP_RESERVED, bottom: FOOTER_BOTTOM_RESERVED, left: 10, right: 10 },
     });
 
-    // Título "RESUMO POR CATEGORIA" acima da tabela
+    // Título "RESUMO POR CATEGORIA" acima da tabela (só na primeira página dessa seção)
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 58, 95);
     doc.text('RESUMO POR CATEGORIA', 10, catY - 3);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'normal');
+  }
+
+  // ─── Footer executivo em TODAS as páginas (paginação X de Y) ──
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const footerY = pageH - 8;
+    // Linha separadora discreta
+    doc.setDrawColor(217, 226, 236);
+    doc.setLineWidth(0.1);
+    doc.line(10, footerY - 4, pageW - 10, footerY - 4);
+    // Texto cinza médio 8pt
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(130, 130, 130);
+    doc.text('AGROinBLUE • Gestão Rural Inteligente', 10, footerY);
+    doc.text('Versão PDF v2', pageW / 2, footerY, { align: 'center' });
+    doc.text(`Página ${p} de ${totalPages}`, pageW - 10, footerY, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
   }
 
   doc.save(`movimentacoes_${subAba}_${ano}.pdf`);
