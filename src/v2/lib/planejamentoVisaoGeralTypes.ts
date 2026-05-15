@@ -195,10 +195,11 @@ export interface Bloco1Macro {
 // ─── BLOCO 2 — Produção Pecuária ──────────────────────────────────────────────
 
 export interface Bloco2Producao {
-  // Posições (estoque)
-  cabecasInicial: ComparativoDuplo;         // tipoSemantica: 'estoque'
-  cabecasFinal: ComparativoDuplo;           // tipoSemantica: 'estoque'
+  // Posições (estoque + médias estruturais)
+  cabecasFinal: ComparativoDuplo;           // tipoSemantica: 'estoque' — "Rebanho Final META"
+  rebanhoMedio: ComparativoDuplo;           // tipoSemantica: 'media'   — média acumulada Jan→mêsAtual (cabMediaAcumMeta)
   pesoMedioFinal: ComparativoDuplo;         // tipoSemantica: 'estoque'
+  valorRebanhoFinal: ComparativoDuplo;      // tipoSemantica: 'estoque' — patrimônio Dez META; — em Global (fonte META só Fazenda)
 
   // Produção (acumulado)
   arrobasProduzidas: ComparativoDuplo;      // tipoSemantica: 'acumulado'

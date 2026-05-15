@@ -618,9 +618,10 @@ function buildBloco2Producao(
     const empty = (formato: FormatoExibicao, sem: TipoSemantica): ComparativoDuplo =>
       emptyComparativo('pc100', sem, formato);
     return {
-      cabecasInicial: empty('cabecas', 'estoque'),
       cabecasFinal: empty('cabecas', 'estoque'),
+      rebanhoMedio: empty('cabecas', 'media'),
       pesoMedioFinal: empty('kg', 'estoque'),
+      valorRebanhoFinal: empty('moeda', 'estoque'),
       arrobasProduzidas: empty('arrobas', 'acumulado'),
       arrobasDesfrutadas: empty('arrobas', 'acumulado'),
       desfrutePct: empty('percentual', 'taxa'),
@@ -643,10 +644,20 @@ function buildBloco2Producao(
   warnings.push('arrobasDesfrutadas: derivação receitaPec/precoArr requer divisão ponto-a-ponto de séries cumulativas — Marco 1.1.D');
   warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
 
+  // Rebanho Médio META: cabMediaAcumMeta já está em painel.cabecasIndicador.serieMetaIndicador
+  // quando o hook é chamado com viewMode='periodo' (V2PlanejamentoVisaoGeral). Em modo 'mes' seria
+  // cabFinMetaSerie13 — não é o caso. Aqui consumimos serieMetaIndicador como média do período.
+  // Valor do Rebanho Final META: painel.valorRebanhoIndicador.serieMeta — fonte só Fazenda
+  // (subtitulo oficial do hook). Em Global, serieMeta vem NaN → exibe '—'. Sem fallback.
   return {
-    cabecasInicial: buildComparativoEstoquePonto(cabSerieMeta, cabSerieAnoAnt, 1, mesAtual, 'pc100', 'cabecas'),
     cabecasFinal: buildComparativoEstoquePonto(cabSerieMeta, cabSerieAnoAnt, 12, mesAtual, 'pc100', 'cabecas'),
+    rebanhoMedio: buildComparativoPonto(cabSerieMeta, cabSerieAnoAnt, mesAtual, 'pc100', 'media', 'cabecas'),
     pesoMedioFinal: buildComparativoEstoquePonto(pesoSerieMeta, pesoSerieAnoAnt, 12, mesAtual, 'pc100', 'kg'),
+    valorRebanhoFinal: buildComparativoEstoquePonto(
+      painel.valorRebanhoIndicador?.serieMeta,
+      painel.valorRebanhoIndicador?.serieAnoAnt,
+      12, mesAtual, 'pc100', 'moeda',
+    ),
 
     arrobasProduzidas: buildComparativoPonto(
       painel.arrobasIndicador?.serieMeta,

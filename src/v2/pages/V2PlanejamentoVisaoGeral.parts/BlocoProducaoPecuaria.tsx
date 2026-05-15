@@ -17,14 +17,16 @@ interface Props {
 }
 
 // ─── Paletas por contexto econômico ──────────────────────────────────
-const PALETA_NEUTRO = 'bg-orange-50/40 border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/40 hover:bg-orange-50/60 transition-colors';
-const PALETA_CUSTO  = 'bg-red-50/40 border-red-100 dark:bg-red-950/20 dark:border-red-900/40 hover:bg-red-50/60 transition-colors';
-const PALETA_RECEITA = 'bg-blue-50/40 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/40 hover:bg-blue-50/60 transition-colors';
-const PALETA_MARGEM = 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/40 hover:bg-emerald-50/60 transition-colors';
+const PALETA_NEUTRO    = 'bg-orange-50/40 border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/40 hover:bg-orange-50/60 transition-colors';
+const PALETA_PATRIMONIO = 'bg-blue-50/40 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/40 hover:bg-blue-50/60 transition-colors';
+const PALETA_CUSTO     = 'bg-red-50/40 border-red-100 dark:bg-red-950/20 dark:border-red-900/40 hover:bg-red-50/60 transition-colors';
+const PALETA_RECEITA   = 'bg-blue-50/40 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/40 hover:bg-blue-50/60 transition-colors';
+const PALETA_MARGEM    = 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/40 hover:bg-emerald-50/60 transition-colors';
 
-const VALOR_CUSTO   = 'text-red-700 dark:text-red-300';
-const VALOR_RECEITA = 'text-blue-800 dark:text-blue-200';
-const VALOR_MARGEM  = 'text-emerald-700 dark:text-emerald-300';
+const VALOR_CUSTO      = 'text-red-700 dark:text-red-300';
+const VALOR_RECEITA    = 'text-blue-800 dark:text-blue-200';
+const VALOR_MARGEM     = 'text-emerald-700 dark:text-emerald-300';
+const VALOR_PATRIMONIO = 'text-blue-800 dark:text-blue-200';
 
 function SecaoTitulo({ children }: { children: React.ReactNode }) {
   return (
@@ -43,11 +45,12 @@ export function BlocoProducaoPecuaria({ data }: Props) {
       </p>
 
       <SecaoTitulo>Posições</SecaoTitulo>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <CardComparativo titulo="Cabeças Inicial META"        dado={data.cabecasInicial}      className={PALETA_NEUTRO} />
-        <CardComparativo titulo="Cabeças Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO} />
-        <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO} />
-        <CardComparativo titulo="Área Produtiva Média META - Pecuária" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+        <CardComparativo titulo="Rebanho Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
+        <CardComparativo titulo="Rebanho Médio META"          dado={data.rebanhoMedio}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
+        <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO}     mostrarVsAnoAnt />
+        <CardComparativo titulo="Valor do Rebanho Final META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt />
+        <CardComparativo titulo="Área Produtiva Média META - Pecuária" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>
 
       <SecaoTitulo>Produção</SecaoTitulo>
