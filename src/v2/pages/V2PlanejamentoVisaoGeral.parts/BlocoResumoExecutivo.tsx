@@ -1,5 +1,5 @@
 /**
- * BLOCO 1 — Resumo Macro Executivo MVP.
+ * BLOCO 1 — Fluxo de Caixa Previsto.
  * META 2026 (planejamento_financeiro) vs Real 2025 (financeiro_lancamentos_v2).
  * Zero cálculo aqui — recebe DTO pronto de buildBlocoResumoExecutivo.
  *
@@ -94,17 +94,17 @@ function LinhaRow({ linha, destaque = false }: { linha: LinhaExecutiva; destaque
   return (
     <div
       className={cn(
-        'grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center py-0.5 border-b border-border/30 last:border-0',
-        destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20 py-1',
+        'grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center py-[2px] border-b border-border/30 last:border-0',
+        destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20 py-[4px]',
       )}
     >
-      <div className={cn('text-xs truncate', destaque ? 'text-foreground uppercase tracking-wide text-[11px]' : 'text-foreground')}>
+      <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
         {linha.label}
       </div>
-      <div className={cn('text-xs tabular-nums text-right', destaque ? 'text-foreground' : 'text-foreground/80')}>
+      <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground' : 'text-foreground/80')}>
         {fmtBRL(linha.meta)}
       </div>
-      <div className={cn('text-xs tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
+      <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
         {fmtBRL(linha.real)}
       </div>
       <div className="text-right">
@@ -120,10 +120,13 @@ function CardTotal({
   titulo,
   linha,
   variant = 'neutral',
+  metaOnly = false,
 }: {
   titulo: string;
   linha: LinhaExecutiva;
   variant?: CardVariant;
+  /** Quando true, esconde linha "Real …" e badge Δ% — card META-only. */
+  metaOnly?: boolean;
 }) {
   const variantCls: Record<CardVariant, { card: string; label: string }> = {
     sky: {
@@ -149,12 +152,14 @@ function CardTotal({
       <div className="text-base font-bold text-foreground tabular-nums truncate leading-tight">
         {fmtBRL(linha.meta)}
       </div>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-[10px] text-muted-foreground truncate">
-          Real {fmtBRL(linha.real)}
-        </span>
-        <DeltaBadge delta={linha.delta} />
-      </div>
+      {!metaOnly && (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] text-muted-foreground truncate">
+            Real {fmtBRL(linha.real)}
+          </span>
+          <DeltaBadge delta={linha.delta} />
+        </div>
+      )}
     </div>
   );
 }
@@ -201,7 +206,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
 
   return (
     <section className="bg-card border border-border rounded-lg p-4 mb-4">
-      <h2 className="text-base font-bold text-foreground mb-1">Resumo Macro Executivo</h2>
+      <h2 className="text-base font-bold text-foreground mb-1">Fluxo de Caixa Previsto</h2>
       <p className="text-xs text-muted-foreground mb-3">
         META 2026 (planejamento financeiro) vs Real 2025 (financeiro lançamentos).
         Gráfico: saldo acumulado projetado mês a mês.
@@ -240,8 +245,18 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
               />
               <Tooltip
                 formatter={(v: number) => fmtBRL(v)}
-                labelStyle={{ fontSize: 11 }}
-                contentStyle={{ fontSize: 11 }}
+                labelStyle={{ fontSize: 11, color: 'hsl(var(--foreground))' }}
+                contentStyle={{
+                  fontSize: 11,
+                  backgroundColor: 'hsl(var(--background) / 0.8)',
+                  border: '1px solid hsl(var(--border) / 0.5)',
+                  borderRadius: 6,
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeWidth: 1 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area
@@ -266,11 +281,12 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
           <CardTotal titulo="Total Entradas" linha={data.totalEntradas} variant="sky" />
           <CardTotal titulo="Total Saídas" linha={data.totalSaidas} variant="rose" />
           <div className="grid grid-cols-2 gap-2">
-            <CardTotal titulo="Saldo Caixa Final" linha={montarLinhaSaldoFinal(data)} variant="neutral" />
+            <CardTotal titulo="Saldo Caixa Final Meta" linha={montarLinhaSaldoFinal(data)} variant="neutral" metaOnly />
             <CardTotal
-              titulo="Dif. Caixa no Ano"
+              titulo="Dif. Caixa no Ano - Meta"
               linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
               variant="neutral"
+              metaOnly
             />
           </div>
         </div>
@@ -281,7 +297,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
             Entradas
           </h3>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
             <div className="text-right">META 2026</div>
             <div className="text-right">REAL 2025</div>
@@ -297,7 +313,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
             Saídas
           </h3>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
             <div className="text-right">META 2026</div>
             <div className="text-right">REAL 2025</div>
