@@ -17,6 +17,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { V2PageContent } from '@/v2/components/V2PageShell';
 import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
+import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
@@ -69,15 +70,35 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     planFin.lancamentosNutricao, planFin.lancamentosProjetos,
   ]);
 
-  // Bloco 1: META 2026 (gridMeta2026) vs Real 2025 (lancFin2025 via useFinanceiro).
+  // Grid META consolidado: mesmo shape de gridMeta2026, mas com as 4 fontes
+  // auto (rebanho/nutrição/financiamento/projetos) somadas ao ajuste manual.
+  // Espelha exatamente o que a tela Fluxo de Caixa META já renderiza.
+  // Fonte única — Bloco 1 vira espelho da tela oficial, sem reconstrução paralela.
+  const gridMetaConsolidado = useMemo(
+    () => composeGridMetaConsolidado(planFin.gridMeta2026, {
+      lancamentosRebanho: planFin.lancamentosRebanho,
+      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
+      lancamentosNutricao: planFin.lancamentosNutricao,
+      lancamentosProjetos: planFin.lancamentosProjetos,
+    }),
+    [
+      planFin.gridMeta2026,
+      planFin.lancamentosRebanho,
+      planFin.lancamentosFinanciamento,
+      planFin.lancamentosNutricao,
+      planFin.lancamentosProjetos,
+    ],
+  );
+
+  // Bloco 1: META 2026 (consolidado) vs Real 2025 (lancFin2025 via useFinanceiro).
   // Zero classificação aqui — builder delega tudo aos agregadores oficiais.
   const dadosBloco1 = useMemo(() => {
     if (planFin.lancFin2025Loading) return null;
     return buildBlocoResumoExecutivo({
       lancFin2025: planFin.lancFin2025,
-      gridMeta2026: planFin.gridMeta2026,
+      gridMeta2026: gridMetaConsolidado,
     });
-  }, [planFin.lancFin2025, planFin.gridMeta2026, planFin.lancFin2025Loading]);
+  }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading]);
 
   const loading = painel.loading || planFin.loading;
 
