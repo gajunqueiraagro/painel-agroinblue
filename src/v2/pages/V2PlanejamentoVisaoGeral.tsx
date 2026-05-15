@@ -32,13 +32,17 @@ interface Props {
 export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
 
-  // PC-100 anual META + comparativos ano-1 internos
+  // PC-100 anual META + comparativos ano-1 internos.
+  // preservarMetaQuandoGlobalIncompleto=true: o Bloco "Produção Pecuária" precisa
+  // de séries META mesmo quando P1 do realizado não está fechado em todas as
+  // fazendas pec do cliente. O flag NÃO altera proteção do PC-100 Realizado Global.
   const painel = usePainelConsultorData({
     ano,
     mes: 12,
     viewMode: 'periodo',
     carregarMeta: true,
     incluirComparativos: true,
+    preservarMetaQuandoGlobalIncompleto: true,
   });
 
   // Planejamento financeiro do ano (grid META + saldo inicial)

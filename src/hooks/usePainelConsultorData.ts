@@ -70,6 +70,23 @@ interface Params {
   gridMetaExterno?: SubcentroGrid[];
   /** Quando false, hooks internos pesados (rebanho, lançamentos, financeiro) ficam com enabled:false; o hook segue retornando o shape esperado mas com indicadores null. useSnapshotAreaAnual segue rodando (não aceita enabled). Default: true. */
   enabled?: boolean;
+  /**
+   * Quando true, o `incompletoOverride` (que neutraliza o realizado global
+   * quando P1 não está fechado em todas as fazendas pec) é DESLIGADO,
+   * permitindo que séries META sejam entregues mesmo nesse cenário.
+   *
+   * REGRA: este flag NÃO altera `dadosCompletos`, NÃO preserva séries
+   * REALIZADO, NÃO interfere em validação de P1. Só evita o retorno
+   * terminal nulo que bloqueia o consumidor de receber as séries META.
+   *
+   * Default: false (comportamento histórico — Painel Consultor / Realizado
+   * Global continua protegido pelo override).
+   *
+   * Consumidor oficial: V2 Planejamento > Visão Geral, que precisa renderizar
+   * META 2026 do Bloco "Produção Pecuária" independentemente do P1 do
+   * realizado estar completo.
+   */
+  preservarMetaQuandoGlobalIncompleto?: boolean;
 }
 
 export type StatusValidacaoArea =
@@ -396,7 +413,7 @@ export interface PainelConsultorDataResult {
   loading: boolean;
 }
 
-export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno }: Params): PainelConsultorDataResult {
+export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMeta = false, incluirComparativos = false, enabled = true, lancPecExterno, lancFinExterno, gridMetaExterno, preservarMetaQuandoGlobalIncompleto = false }: Params): PainelConsultorDataResult {
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
   const fazendaId = fazendaAtual?.id;
   const { clienteAtual } = useCliente();
@@ -1242,7 +1259,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const comP1 = fazendasComP1PorMes[idx] ?? 0;
     return comP1 >= totalFazendasAtivas;
   })();
-  const incompletoOverride = isGlobal && !dadosCompletos && !loading;
+  const incompletoOverride = isGlobal && !dadosCompletos && !loading && !preservarMetaQuandoGlobalIncompleto;
 
   // kgHaPorMes (mensal): peso vivo total do rebanho / área pecuária REALIZADA.
   // C5.1: tab-aware — denominador = areaPecuariaRealPorMes (snapshot oficial),
