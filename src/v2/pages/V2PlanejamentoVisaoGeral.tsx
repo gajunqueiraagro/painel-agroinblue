@@ -69,12 +69,15 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     planFin.lancamentosNutricao, planFin.lancamentosProjetos,
   ]);
 
-  // Bloco 1 MVP: META 2026 (planejamento_financeiro) vs Real 2025
-  // (financeiro_lancamentos_v2). Fontes independentes do PC-100/buildPlanejamento.
+  // Bloco 1: META 2026 (gridMeta2026) vs Real 2025 (lancFin2025 via useFinanceiro).
+  // Zero classificação aqui — builder delega tudo aos agregadores oficiais.
   const dadosBloco1 = useMemo(() => {
-    if (planFin.real2025Loading) return null;
-    return buildBlocoResumoExecutivo(planFin.metaRowsRaw, planFin.real2025Rows);
-  }, [planFin.metaRowsRaw, planFin.real2025Rows, planFin.real2025Loading]);
+    if (planFin.lancFin2025Loading) return null;
+    return buildBlocoResumoExecutivo({
+      lancFin2025: planFin.lancFin2025,
+      gridMeta2026: planFin.gridMeta2026,
+    });
+  }, [planFin.lancFin2025, planFin.gridMeta2026, planFin.lancFin2025Loading]);
 
   const loading = painel.loading || planFin.loading;
 

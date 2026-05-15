@@ -26,6 +26,7 @@ import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import {
   isRealizado as isFinRealizado,
   isSaida as isFinSaida,
+  isEntrada as isFinEntrada,
   isCusteioProducaoPecuaria,
   isCusteioProducaoAgricultura,
   isJurosPecuaria,
@@ -35,6 +36,13 @@ import {
   isReposicaoBovinos,
   isAmortizacao,
   isDividendoOuRetirada,
+  isDeducaoReceitas,
+  isReceitaPecuaria,
+  isReceitaAgricola,
+  isOutrasReceitas,
+  isEntradaFinanceira,
+  isAmortizacaoPecuaria,
+  isAmortizacaoAgricultura,
   datePagtoMes,
   datePagtoAno,
   type LancamentoClassificavel,
@@ -106,6 +114,27 @@ export function makeRealizadoSource(
     items: lancFin,
     toClassificavel: (l) => l,
     passesBase: (l) => isFinRealizado(l) && isFinSaida(l) && datePagtoAno(l) === ano,
+    forEachContribution: (l, emit) => {
+      const m = datePagtoMes(l);
+      if (m && m >= 1 && m <= 12) {
+        emit(m - 1, Math.abs(Number(l.valor) || 0));
+      }
+    },
+  };
+}
+
+/**
+ * Adapter REALIZADO (entradas): equivalente a makeRealizadoSource mas
+ * filtra pelo lado de entrada. Usado por agregadores de entrada do Bloco 1.
+ */
+export function makeRealizadoSourceEntrada(
+  lancFin: FinanceiroLancamento[],
+  ano: number,
+): AggregaSource<FinanceiroLancamento> {
+  return {
+    items: lancFin,
+    toClassificavel: (l) => l,
+    passesBase: (l) => isFinRealizado(l) && isFinEntrada(l) && datePagtoAno(l) === ano,
     forEachContribution: (l, emit) => {
       const m = datePagtoMes(l);
       if (m && m >= 1 && m <= 12) {
@@ -199,6 +228,43 @@ export function agregaDividendos(lancFin: FinanceiroLancamento[], ano: number): 
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDividendoOuRetirada);
 }
 
+// ─── Atômicos REALIZADO — Bloco 1 Executivo ──────────────────────────
+
+export function agregaReceitaPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaPecuaria);
+}
+
+export function agregaReceitaAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaAgricola);
+}
+
+export function agregaOutrasReceitas(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isOutrasReceitas);
+}
+
+export function agregaEntradasFinanceiras(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isEntradaFinanceira);
+}
+
+/**
+ * Dedução de Receitas — ajuste de entrada. No banco aparece tanto como
+ * entrada (sinal de redução) quanto como saída (alguns clientes legados),
+ * portanto agregamos os dois lados e somamos.
+ */
+export function agregaDeducoes(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  const entrada = agregaPorPredicadoGenerico(makeRealizadoSourceEntrada(lancFin, ano), isDeducaoReceitas);
+  const saida   = agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas);
+  return addArrays(entrada, saida);
+}
+
+export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoPecuaria);
+}
+
+export function agregaAmortizacaoAgri(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoAgricultura);
+}
+
 // ─── Derivados REALIZADO (somas de atômicos) ─────────────────────────
 
 export function agregaCusteioPecComJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
@@ -281,6 +347,36 @@ export function agregaAmortizacoesMeta(grid: SubcentroGrid[]): number[] {
 
 export function agregaDividendosMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isDividendoOuRetirada);
+}
+
+// ─── Atômicos META — Bloco 1 Executivo ───────────────────────────────
+
+export function agregaReceitaPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isReceitaPecuaria);
+}
+
+export function agregaReceitaAgriMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isReceitaAgricola);
+}
+
+export function agregaOutrasReceitasMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isOutrasReceitas);
+}
+
+export function agregaEntradasFinanceirasMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isEntradaFinanceira);
+}
+
+export function agregaDeducoesMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isDeducaoReceitas);
+}
+
+export function agregaAmortizacaoPecMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isAmortizacaoPecuaria);
+}
+
+export function agregaAmortizacaoAgriMeta(grid: SubcentroGrid[]): number[] {
+  return agregaPorPredicadoGenerico(makeMetaSource(grid), isAmortizacaoAgricultura);
 }
 
 // ─── Derivados META (somas de atômicos) ──────────────────────────────

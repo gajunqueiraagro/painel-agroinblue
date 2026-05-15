@@ -3,12 +3,13 @@
  *
  * Simplified: load, save (bulk upsert), import realizado anterior, saldo inicial, dividendos.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
@@ -42,17 +43,6 @@ export interface PlanoContasRow {
   subcentro: string | null;
   escopo_negocio: string | null;
   ordem_exibicao: number;
-}
-
-/** Raw financeiro_lancamentos_v2 row used by Bloco 1 (Real 2025). */
-export interface Real2025Row {
-  macro_custo: string | null;
-  grupo_custo: string | null;
-  escopo_negocio: string | null;
-  tipo_operacao: string | null;
-  subcentro: string | null;
-  valor: number;
-  ano_mes: string;
 }
 
 /** In-memory grid value per subcentro key */
@@ -237,41 +227,13 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   });
   const savedData = savedDataQuery.data ?? [];
 
-  // Real 2025 — base financeira (financeiro_lancamentos_v2).
-  // Não filtra por fazenda: comparativo executivo é sempre client-wide.
-  // Filtros estritos: cancelado=false, sem_movimentacao_caixa=false,
-  // status_transacao='realizado', cenario='realizado', ano_mes LIKE '2025-%'.
-  const real2025Query = useQuery<Real2025Row[]>({
-    queryKey: ['real2025-financeiro', clienteId],
-    queryFn: async () => {
-      const PAGE = 1000;
-      let all: Real2025Row[] = [];
-      let from = 0;
-      while (true) {
-        const { data: rows, error } = await (supabase
-          .from('financeiro_lancamentos_v2')
-          .select('macro_custo, grupo_custo, escopo_negocio, tipo_operacao, subcentro, valor, ano_mes')
-          .eq('cliente_id', clienteId!)
-          .eq('cancelado', false)
-          .eq('sem_movimentacao_caixa', false)
-          .eq('status_transacao', 'realizado')
-          .eq('cenario', 'realizado')
-          .like('ano_mes', '2025-%')
-          .range(from, from + PAGE - 1) as any);
-        if (error) throw error;
-        if (!rows || rows.length === 0) break;
-        all = all.concat(rows as Real2025Row[]);
-        if (rows.length < PAGE) break;
-        from += PAGE;
-      }
-      return all;
-    },
-    enabled: !!clienteId,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
-  });
-  const real2025Rows = real2025Query.data ?? [];
-  const real2025Loading = real2025Query.isLoading;
+  // Real 2025 — consumido via useFinanceiro (single filtering source).
+  // O hook já aplica os filtros de caixa puro: cancelado=false,
+  // sem_movimentacao_caixa=false, status_transacao='realizado',
+  // cenario='realizado'. Datas via data_pagamento (range Jan→Dez).
+  const real2025 = useFinanceiro({ ano: 2025 });
+  const lancFin2025: FinanceiroLancamento[] = real2025.lancamentos ?? [];
+  const lancFin2025Loading = real2025.loading;
 
   const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
     queryKey: ['ppf:rebanho', clienteId, fazendaId, ano],
@@ -666,6 +628,10 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     return Array.from(map.values()).sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
   }, [planoContas, savedData, dividendos]);
 
+  // Grid META já materializado — consumido pelo Bloco 1 e demais blocos
+  // que dependem do shape SubcentroGrid[]. Reflete o ano passado ao hook.
+  const gridMeta2026 = useMemo(() => buildGrid(), [buildGrid]);
+
   // ─── Import realizado from previous year (returns grid, does NOT save) ──
   const importarRealizado = useCallback(async (): Promise<SubcentroGrid[] | null> => {
     if (!isValidFazenda(fazendaId) || !clienteId) return null;
@@ -1011,9 +977,9 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     lancamentosFinanciamento,
     lancamentosNutricao,
     lancamentosProjetos,
-    metaRowsRaw: savedData,
-    real2025Rows,
-    real2025Loading,
+    gridMeta2026,
+    lancFin2025,
+    lancFin2025Loading,
     reloadNutricao: loadNutricao,
     reloadProjetos: () => qc.invalidateQueries({ queryKey: ['ppf:projetos'] }),
     reload: loadSaved,

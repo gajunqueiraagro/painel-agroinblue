@@ -418,6 +418,41 @@ export function isDeducaoReceitas(l: LancamentoClassificavel): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Bloco 1 Executivo — predicates atômicos por macro/escopo.
+//
+// Nenhum desses predicates checa isEntrada/isSaida. O sentido (entrada vs
+// saída) é garantido upstream pelo adapter de fonte (makeRealizadoSource
+// vs makeRealizadoSourceEntrada). Em META não há sentido — predicates
+// classificam puramente por macro + escopo.
+// ---------------------------------------------------------------------------
+
+export const isReceitaPecuaria = (l: LancamentoClassificavel): boolean =>
+  isReceita(l) && getEscopo(l) === 'pec';
+
+export const isReceitaAgricola = (l: LancamentoClassificavel): boolean =>
+  isReceita(l) && getEscopo(l) === 'agri';
+
+export const isOutrasReceitas = (l: LancamentoClassificavel): boolean => {
+  if (!isReceita(l)) return false;
+  const e = getEscopo(l);
+  return e !== 'pec' && e !== 'agri';
+};
+
+/**
+ * Entrada financeira (Aportes + Captação Pec + Captação Agri).
+ * canonicalMacro normaliza tanto "Entrada Financeira" quanto
+ * "Outras Entradas Financeiras" para 'outras entradas financeiras'.
+ */
+export const isEntradaFinanceira = (l: LancamentoClassificavel): boolean =>
+  canonicalMacro(l) === 'outras entradas financeiras';
+
+export const isAmortizacaoPecuaria = (l: LancamentoClassificavel): boolean =>
+  isAmortizacao(l) && getEscopo(l) === 'pec';
+
+export const isAmortizacaoAgricultura = (l: LancamentoClassificavel): boolean =>
+  isAmortizacao(l) && getEscopo(l) === 'agri';
+
+// ---------------------------------------------------------------------------
 // CLASSIFICADOR SOBERANO OFICIAL — categoria única por saída
 //
 // Mutualidade exclusiva via cascata explícita. Ordem oficial aprovada:
