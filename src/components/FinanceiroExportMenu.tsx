@@ -153,49 +153,25 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
 //
 // R$/@ na tabela = c.liqArroba (valorFinal/pesoTotalArrobas), NÃO l.precoArroba.
 // Linha TOTAL: somas (Qtd, Total) + médias ponderadas oficiais.
-// Resumo Executivo final: consolidação dos mesmos indicadores.
-async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string, isGlobal?: boolean) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const titulo = SUB_ABA_LABELS[subAba];
-  const escopoLabel = isGlobal ? 'Global' : (fazendaNome || '—');
+// Resumo Executivo final: consolidação dos mesmos indicadores (render manual,
+// grid 3 col, label cinza pequeno + valor bold azul abaixo).
+// Resumo por Categoria: agregação por categoria com mesmas fórmulas oficiais.
 
-  // ─── Cabeçalho executivo: ESQ texto + DIR logo ────────────
-  const HEADER_LEFT_X = 10;
-  const LOGO_H = 22;
-  const LOGO_W = LOGO_H * 2; // logo 2.2x do antigo (12mm → 22mm = ~1.83x; w dobra → 44mm)
-  const LOGO_Y = 8;
-  const LOGO_X = pageW - 10 - LOGO_W;
+/** Infere cenário do dataset (todos os lançamentos da tela passam pelo mesmo filtro). */
+function inferCenarioLabel(lancs: Lancamento[]): string {
+  if (lancs.length === 0) return '';
+  const allMeta = lancs.every(l => l.cenario === 'meta');
+  if (allMeta) return 'META';
+  const allRealizado = lancs.every(l => l.statusOperacional === 'realizado');
+  if (allRealizado) return 'Realizado';
+  const allProgramado = lancs.every(l => l.statusOperacional === 'programado');
+  if (allProgramado) return 'Programado';
+  return 'Misto';
+}
 
-  try {
-    const logoData = await loadLogoBase64();
-    doc.addImage(logoData, 'PNG', LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
-  } catch { /* skip logo if fails */ }
-
-  // Título
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 58, 95);
-  doc.text(`${titulo} — ${ano}`, HEADER_LEFT_X, 14);
-
-  // Escopo
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text(escopoLabel, HEADER_LEFT_X, 21);
-
-  // Estatísticas
-  const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
-  doc.setFontSize(9);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, HEADER_LEFT_X, 27);
-
-  // Reset
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
-
-  // ─── Agregados consolidados (fonte oficial: calcIndicadoresLancamento) ─
-  const agg = lancamentos.reduce(
+/** Agregação consolidada — usa apenas calcIndicadoresLancamento (fonte oficial). */
+function agregarLancs(lancs: Lancamento[]) {
+  const a = lancs.reduce(
     (acc, l) => {
       const c = calcIndicadoresLancamento(l);
       acc.qtd += l.quantidade;
@@ -208,21 +184,70 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     },
     { qtd: 0, pesoVivoSum: 0, pesoArrobaSum: 0, pesoTotalKgSum: 0, valorFinalSum: 0, rendSum: 0 },
   );
+  return {
+    ...a,
+    pesoVivoMedio: a.qtd > 0 ? a.pesoVivoSum / a.qtd : 0,
+    pesoArrobaMedio: a.qtd > 0 ? a.pesoArrobaSum / a.qtd : 0,
+    liqArrobaConsolidado: a.pesoArrobaSum > 0 ? a.valorFinalSum / a.pesoArrobaSum : 0,
+    liqCabConsolidado: a.qtd > 0 ? a.valorFinalSum / a.qtd : 0,
+    liqKgConsolidado: a.pesoTotalKgSum > 0 ? a.valorFinalSum / a.pesoTotalKgSum : 0,
+    rendMedio: a.qtd > 0 ? a.rendSum / a.qtd : 0,
+  };
+}
 
-  const pesoVivoMedio = agg.qtd > 0 ? agg.pesoVivoSum / agg.qtd : 0;
-  const pesoArrobaMedio = agg.qtd > 0 ? agg.pesoArrobaSum / agg.qtd : 0;
-  const liqArrobaConsolidado = agg.pesoArrobaSum > 0 ? agg.valorFinalSum / agg.pesoArrobaSum : 0;
-  const liqCabConsolidado = agg.qtd > 0 ? agg.valorFinalSum / agg.qtd : 0;
-  const liqKgConsolidado = agg.pesoTotalKgSum > 0 ? agg.valorFinalSum / agg.pesoTotalKgSum : 0;
-  const rendMedio = agg.qtd > 0 ? agg.rendSum / agg.qtd : 0;
+async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string, isGlobal?: boolean) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const titulo = SUB_ABA_LABELS[subAba];
+  const isAbate = subAba === 'abate';
+  const cenarioLabel = inferCenarioLabel(lancamentos);
+  const escopoBase = isGlobal ? 'Global' : (fazendaNome || '—');
+  const escopoLabel = cenarioLabel ? `${escopoBase} • ${cenarioLabel}` : escopoBase;
+
+  // ─── Cabeçalho executivo: ESQ texto + DIR logo ────────────
+  const HEADER_LEFT_X = 10;
+  const LOGO_H = 22;
+  const LOGO_W = LOGO_H * 2;
+  const LOGO_Y = 8;
+  const LOGO_X = pageW - 10 - LOGO_W;
+
+  try {
+    const logoData = await loadLogoBase64();
+    doc.addImage(logoData, 'PNG', LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
+  } catch { /* skip logo if fails */ }
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 58, 95);
+  doc.text(`${titulo} — ${ano}`, HEADER_LEFT_X, 14);
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text(escopoLabel, HEADER_LEFT_X, 21);
+
+  const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`${lancamentos.length} registros | ${totalQtd} cabeças`, HEADER_LEFT_X, 27);
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+
+  // ─── Agregados ────────────────────────────────────────────
+  const agg = agregarLancs(lancamentos);
 
   // ─── Tabela ───────────────────────────────────────────────
-  // Colunas: Data | Qtd | Categoria | [Origem] | Destino | P.Vivo | P.@ | R$/@ | Total | Líq/Cab | Líq/kg | NF
-  // Origem só em Global.
+  // Ordem: Data | Qtd | Categoria | [Origem*] | Destino | P.Vivo | [RC%**] | P.@ | R$/@ | Total | Líq/Cab | Líq/kg | NF
+  //   * Origem só em Global
+  //   ** RC% só em abate
   const head = [[
     'Data', 'Qtd', 'Categoria',
     ...(isGlobal ? ['Origem'] : []),
-    'Destino', 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg', 'NF',
+    'Destino', 'P.Vivo',
+    ...(isAbate ? ['RC%'] : []),
+    'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg', 'NF',
   ]];
 
   const body = lancamentos.map(l => {
@@ -237,6 +262,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
       ...(isGlobal ? [origem] : []),
       destino,
       fmtValor(l.pesoMedioKg),
+      ...(isAbate ? [c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '—'] : []),
       fmtValor(c.pesoArroba),
       fmtValor(c.liqArroba),
       fmtValor(c.valorFinal),
@@ -246,21 +272,23 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     ];
   });
 
-  // Linha TOTAL: somas + médias ponderadas
   const totalRow = [
     'TOTAL',
     String(agg.qtd),
     '',
     ...(isGlobal ? [''] : []),
     '',
-    fmtValor(pesoVivoMedio),
-    fmtValor(pesoArrobaMedio),
-    fmtValor(liqArrobaConsolidado),
+    fmtValor(agg.pesoVivoMedio),
+    ...(isAbate ? [agg.rendMedio ? fmtValor(agg.rendMedio, 1) + '%' : '—'] : []),
+    fmtValor(agg.pesoArrobaMedio),
+    fmtValor(agg.liqArrobaConsolidado),
     fmtValor(agg.valorFinalSum),
-    fmtValor(liqCabConsolidado),
-    fmtValor(liqKgConsolidado),
+    fmtValor(agg.liqCabConsolidado),
+    fmtValor(agg.liqKgConsolidado),
     '',
   ];
+
+  const numericCols: ReadonlySet<string> = new Set(['Qtd', 'P.Vivo', 'RC%', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg']);
 
   autoTable(doc, {
     startY: 34,
@@ -283,12 +311,8 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
       halign: 'center',
       lineColor: [30, 58, 95],
     },
-    bodyStyles: {
-      valign: 'middle',
-    },
-    alternateRowStyles: {
-      fillColor: [247, 250, 252],
-    },
+    bodyStyles: { valign: 'middle' },
+    alternateRowStyles: { fillColor: [247, 250, 252] },
     footStyles: {
       fillColor: [36, 70, 107],
       textColor: [255, 255, 255],
@@ -299,86 +323,185 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     },
     columnStyles: {
       0: { halign: 'left' },
-      1: { halign: 'right' },
-      // demais colunas numéricas alinhadas à direita; categorias/locais à esquerda
     },
     didParseCell: (data) => {
-      // Numéricas (P.Vivo, P.@, R$/@, Total, Líq/Cab, Líq/kg) → align right
-      // Posições variam com isGlobal. Calcular pelo header text.
       const colHeader = head[0][data.column.index] || '';
-      const isNumeric = ['Qtd', 'P.Vivo', 'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg'].includes(colHeader);
-      if (isNumeric) {
+      if (numericCols.has(colHeader)) {
         data.cell.styles.halign = 'right';
       }
     },
     margin: { left: 10, right: 10 },
   });
 
-  // ─── Resumo Executivo ─────────────────────────────────────
+  // ─── Resumo Executivo (grid 3 col, render manual) ─────────
   const lastY = (doc as any).lastAutoTable?.finalY ?? 100;
-  const resumoStartY = lastY + 8;
+  let resumoStartY = lastY + 8;
 
+  // 6 items para vendas/compras (2 rows × 3 cols); +2 para abate (rendimento + líq/kg)
   const resumoItems: { label: string; value: string }[] = [
     { label: 'Qtd Total', value: `${agg.qtd} cab` },
-    { label: 'Peso Médio', value: formatKg(pesoVivoMedio) },
-    { label: 'Peso Arroba Médio', value: formatArroba(pesoArrobaMedio) },
-    ...(subAba === 'abate' ? [{ label: 'Rendimento Médio', value: rendMedio ? formatPercent(rendMedio) : '—' }] : []),
-    { label: 'Preço Médio R$/@', value: formatMoeda(liqArrobaConsolidado) },
-    { label: 'Líquido Médio/Cab', value: formatMoeda(liqCabConsolidado) },
+    { label: 'Peso Médio', value: formatKg(agg.pesoVivoMedio) },
+    { label: 'Preço Médio R$/@', value: formatMoeda(agg.liqArrobaConsolidado) },
+    { label: 'Peso Arroba Médio', value: formatArroba(agg.pesoArrobaMedio) },
+    { label: 'Líq Médio/Cab', value: formatMoeda(agg.liqCabConsolidado) },
     { label: 'Valor Total', value: formatMoeda(agg.valorFinalSum) },
+    ...(isAbate
+      ? [
+          { label: 'Rendimento Médio', value: agg.rendMedio ? formatPercent(agg.rendMedio) : '—' },
+          { label: 'Líq Médio/kg', value: formatMoeda(agg.liqKgConsolidado) },
+        ]
+      : []),
   ];
 
-  // Layout 2 colunas
-  const half = Math.ceil(resumoItems.length / 2);
-  const col1 = resumoItems.slice(0, half);
-  const col2 = resumoItems.slice(half);
-  const rows = Math.max(col1.length, col2.length);
-  const resumoBody: string[][] = [];
-  for (let i = 0; i < rows; i++) {
-    resumoBody.push([
-      col1[i]?.label || '',
-      col1[i]?.value || '',
-      col2[i]?.label || '',
-      col2[i]?.value || '',
-    ]);
+  const RESUMO_COLS = 3;
+  const RESUMO_ROW_H = 12;
+  const RESUMO_TITLE_H = 8;
+  const resumoRows = Math.ceil(resumoItems.length / RESUMO_COLS);
+  const resumoBoxH = RESUMO_TITLE_H + resumoRows * RESUMO_ROW_H + 3;
+
+  // Page break se não couber
+  if (resumoStartY + resumoBoxH > pageH - 10) {
+    doc.addPage();
+    resumoStartY = 12;
   }
 
-  autoTable(doc, {
-    startY: resumoStartY,
-    head: [['RESUMO EXECUTIVO', '', '', '']],
-    body: resumoBody,
-    theme: 'grid',
-    styles: {
-      fontSize: 10,
-      cellPadding: { top: 2.8, bottom: 2.8, left: 4, right: 4 },
-      lineColor: [217, 226, 236],
-      lineWidth: 0.1,
-    },
-    headStyles: {
-      fillColor: [30, 58, 95],
-      textColor: [255, 255, 255],
-      fontSize: 11,
-      fontStyle: 'bold',
-      halign: 'left',
-      lineColor: [30, 58, 95],
-    },
-    bodyStyles: {
-      fillColor: [239, 246, 255],
-    },
-    columnStyles: {
-      0: { textColor: [100, 100, 100], cellWidth: 60 },
-      1: { fontStyle: 'bold', textColor: [30, 58, 95], cellWidth: 80, halign: 'right' },
-      2: { textColor: [100, 100, 100], cellWidth: 60 },
-      3: { fontStyle: 'bold', textColor: [30, 58, 95], cellWidth: 80, halign: 'right' },
-    },
-    margin: { left: 10, right: 10 },
-    willDrawCell: (data) => {
-      // Header tem 4 colunas mas só primeira deve mostrar texto — esconder os outros 3
-      if (data.section === 'head' && data.column.index > 0) {
-        data.cell.text = [];
-      }
-    },
+  // Title bar (azul escuro)
+  doc.setFillColor(30, 58, 95);
+  doc.rect(10, resumoStartY, pageW - 20, RESUMO_TITLE_H, 'F');
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('RESUMO EXECUTIVO', 13, resumoStartY + 5.8);
+
+  // Content box (azul claro)
+  const contentY = resumoStartY + RESUMO_TITLE_H;
+  doc.setFillColor(239, 246, 255);
+  doc.setDrawColor(217, 226, 236);
+  doc.setLineWidth(0.1);
+  doc.rect(10, contentY, pageW - 20, resumoRows * RESUMO_ROW_H + 3, 'FD');
+
+  // Grid 3 col
+  const innerW = pageW - 20;
+  const colW = innerW / RESUMO_COLS;
+  resumoItems.forEach((it, i) => {
+    const col = i % RESUMO_COLS;
+    const row = Math.floor(i / RESUMO_COLS);
+    const x = 10 + col * colW + 5;
+    const y = contentY + 4 + row * RESUMO_ROW_H;
+    // Label (cinza pequeno)
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(110, 110, 110);
+    doc.text(it.label, x, y);
+    // Value (azul bold maior, logo abaixo)
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text(it.value, x, y + 5.5);
   });
+
+  // Reset
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+
+  // ─── Resumo por Categoria ─────────────────────────────────
+  const porCategoria = new Map<string, Lancamento[]>();
+  for (const l of lancamentos) {
+    const cat = l.categoria;
+    if (!porCategoria.has(cat)) porCategoria.set(cat, []);
+    porCategoria.get(cat)!.push(l);
+  }
+
+  const catRows = Array.from(porCategoria.entries())
+    .map(([catKey, lancs]) => {
+      const catLabel = CATEGORIAS.find(c => c.value === catKey)?.label ?? catKey;
+      const a = agregarLancs(lancs);
+      return { catLabel, a };
+    })
+    .sort((a, b) => a.catLabel.localeCompare(b.catLabel, 'pt-BR'));
+
+  if (catRows.length > 0) {
+    const headCat = [[
+      'Categoria', 'Qtd', 'Peso Médio', 'Peso @',
+      ...(isAbate ? ['RC%'] : []),
+      'R$/@', 'Valor Total', 'Líq/Cab',
+    ]];
+
+    const bodyCat = catRows.map(({ catLabel, a }) => [
+      catLabel,
+      String(a.qtd),
+      fmtValor(a.pesoVivoMedio),
+      fmtValor(a.pesoArrobaMedio),
+      ...(isAbate ? [a.rendMedio ? fmtValor(a.rendMedio, 1) + '%' : '—'] : []),
+      fmtValor(a.liqArrobaConsolidado),
+      fmtValor(a.valorFinalSum),
+      fmtValor(a.liqCabConsolidado),
+    ]);
+
+    // Foot row: agregação total (mesma que linha TOTAL da tabela)
+    const footCat = [[
+      'TOTAL',
+      String(agg.qtd),
+      fmtValor(agg.pesoVivoMedio),
+      fmtValor(agg.pesoArrobaMedio),
+      ...(isAbate ? [agg.rendMedio ? fmtValor(agg.rendMedio, 1) + '%' : '—'] : []),
+      fmtValor(agg.liqArrobaConsolidado),
+      fmtValor(agg.valorFinalSum),
+      fmtValor(agg.liqCabConsolidado),
+    ]];
+
+    const catY = contentY + resumoRows * RESUMO_ROW_H + 11;
+    const catNumericCols: ReadonlySet<string> = new Set(['Qtd', 'Peso Médio', 'Peso @', 'RC%', 'R$/@', 'Valor Total', 'Líq/Cab']);
+
+    autoTable(doc, {
+      startY: catY,
+      head: headCat,
+      body: bodyCat,
+      foot: footCat,
+      theme: 'grid',
+      styles: {
+        fontSize: 9.5,
+        cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 },
+        lineColor: [217, 226, 236],
+        lineWidth: 0.1,
+        textColor: [50, 50, 50],
+      },
+      headStyles: {
+        fillColor: [30, 58, 95],
+        textColor: [255, 255, 255],
+        fontSize: 10.5,
+        fontStyle: 'bold',
+        halign: 'center',
+        lineColor: [30, 58, 95],
+      },
+      bodyStyles: { valign: 'middle' },
+      alternateRowStyles: { fillColor: [247, 250, 252] },
+      footStyles: {
+        fillColor: [36, 70, 107],
+        textColor: [255, 255, 255],
+        fontSize: 10,
+        fontStyle: 'bold',
+        lineWidth: 0.3,
+        lineColor: [30, 58, 95],
+      },
+      columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+      didParseCell: (data) => {
+        const colHeader = headCat[0][data.column.index] || '';
+        if (catNumericCols.has(colHeader)) {
+          data.cell.styles.halign = 'right';
+        }
+      },
+      margin: { left: 10, right: 10 },
+    });
+
+    // Título "RESUMO POR CATEGORIA" acima da tabela
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 58, 95);
+    doc.text('RESUMO POR CATEGORIA', 10, catY - 3);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+  }
 
   doc.save(`movimentacoes_${subAba}_${ano}.pdf`);
 }
