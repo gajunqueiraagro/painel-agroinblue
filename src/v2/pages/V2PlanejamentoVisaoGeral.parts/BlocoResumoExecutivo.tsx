@@ -2,6 +2,11 @@
  * BLOCO 1 — Resumo Macro Executivo MVP.
  * META 2026 (planejamento_financeiro) vs Real 2025 (financeiro_lancamentos_v2).
  * Zero cálculo aqui — recebe DTO pronto de buildBlocoResumoExecutivo.
+ *
+ * Helpers locais (`calcDeltaLocal`, `montarLinhaSaldoFinal`, `montarLinhaDifAno`)
+ * apenas selecionam elementos de array já presentes no DTO e replicam a
+ * mesma fórmula de delta do builder. Pendência registrada: extrair para
+ * util compartilhada em sessão separada.
  */
 
 import {
@@ -14,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { cn } from '@/lib/utils';
 import type {
   BlocoResumoExecutivoData,
   LinhaExecutiva,
@@ -21,6 +27,10 @@ import type {
 
 interface Props {
   data: BlocoResumoExecutivoData | null;
+  /** Saldo bancário consolidado Dez/N-1 — fonte: planFin.saldoInicial. */
+  saldoInicialMeta: number;
+  /** Saldo bancário consolidado Dez/N-2 — fonte: pc100.caixaIndicador.serieAnoAnt[0]. */
+  saldoInicialReal: number;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -38,6 +48,34 @@ const fmtPct = (v: number): string => {
   return `${sinal}${pct.toFixed(1)}%`;
 };
 
+// ─── Helpers locais (replicam regra calcDelta do builder) ─────────────
+
+function calcDeltaLocal(meta: number, real: number): number {
+  if (!Number.isFinite(meta) || !Number.isFinite(real)) return 0;
+  if (meta <= 0 && real <= 0) return 0;
+  return (meta - real) / (real || 1);
+}
+
+function montarLinhaSaldoFinal(data: BlocoResumoExecutivoData): LinhaExecutiva {
+  const meta = data.serieMeta[11];
+  const real = data.serieReal[11];
+  return { label: 'Saldo Caixa Final', meta, real, delta: calcDeltaLocal(meta, real) };
+}
+
+function montarLinhaDifAno(
+  data: BlocoResumoExecutivoData,
+  saldoInicialMeta: number,
+  saldoInicialReal: number,
+): LinhaExecutiva {
+  const meta = data.serieMeta[11] - saldoInicialMeta;
+  const real = Number.isFinite(saldoInicialReal)
+    ? data.serieReal[11] - saldoInicialReal
+    : NaN;
+  return { label: 'Dif. Caixa no Ano', meta, real, delta: calcDeltaLocal(meta, real) };
+}
+
+// ─── Sub-componentes ──────────────────────────────────────────────────
+
 function DeltaBadge({ delta }: { delta: number }) {
   const positivo = delta >= 0;
   const cls = positivo
@@ -52,12 +90,21 @@ function DeltaBadge({ delta }: { delta: number }) {
   );
 }
 
-function LinhaRow({ linha }: { linha: LinhaExecutiva }) {
+function LinhaRow({ linha, destaque = false }: { linha: LinhaExecutiva; destaque?: boolean }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center py-1 border-b border-border/30 last:border-0">
-      <div className="text-xs text-foreground truncate">{linha.label}</div>
-      <div className="text-xs text-foreground/80 tabular-nums text-right">{fmtBRL(linha.meta)}</div>
-      <div className="text-xs text-muted-foreground tabular-nums text-right">
+    <div
+      className={cn(
+        'grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center py-0.5 border-b border-border/30 last:border-0',
+        destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20 py-1',
+      )}
+    >
+      <div className={cn('text-xs truncate', destaque ? 'text-foreground uppercase tracking-wide text-[11px]' : 'text-foreground')}>
+        {linha.label}
+      </div>
+      <div className={cn('text-xs tabular-nums text-right', destaque ? 'text-foreground' : 'text-foreground/80')}>
+        {fmtBRL(linha.meta)}
+      </div>
+      <div className={cn('text-xs tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
         {fmtBRL(linha.real)}
       </div>
       <div className="text-right">
@@ -67,18 +114,44 @@ function LinhaRow({ linha }: { linha: LinhaExecutiva }) {
   );
 }
 
-function CardTotal({ titulo, linha }: { titulo: string; linha: LinhaExecutiva }) {
+type CardVariant = 'sky' | 'rose' | 'neutral';
+
+function CardTotal({
+  titulo,
+  linha,
+  variant = 'neutral',
+}: {
+  titulo: string;
+  linha: LinhaExecutiva;
+  variant?: CardVariant;
+}) {
+  const variantCls: Record<CardVariant, { card: string; label: string }> = {
+    sky: {
+      card: 'bg-sky-50 border-sky-200 dark:bg-sky-950/30 dark:border-sky-900/50',
+      label: 'text-sky-800 dark:text-sky-200',
+    },
+    rose: {
+      card: 'bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/50',
+      label: 'text-rose-800 dark:text-rose-200',
+    },
+    neutral: {
+      card: 'bg-card border-border',
+      label: 'text-muted-foreground',
+    },
+  };
+  const v = variantCls[variant];
+
   return (
-    <div className="bg-card border border-border rounded-md p-3 flex flex-col gap-1.5 min-w-0">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
+    <div className={cn('border rounded-md p-2.5 flex flex-col gap-1 min-w-0', v.card)}>
+      <div className={cn('text-[10px] font-semibold uppercase tracking-wide truncate', v.label)}>
         {titulo}
       </div>
-      <div className="text-lg font-bold text-foreground tabular-nums truncate">
+      <div className="text-base font-bold text-foreground tabular-nums truncate leading-tight">
         {fmtBRL(linha.meta)}
       </div>
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-[10px] text-muted-foreground truncate">
-          Real 2025: {fmtBRL(linha.real)}
+          Real {fmtBRL(linha.real)}
         </span>
         <DeltaBadge delta={linha.delta} />
       </div>
@@ -86,7 +159,9 @@ function CardTotal({ titulo, linha }: { titulo: string; linha: LinhaExecutiva })
   );
 }
 
-export function BlocoResumoExecutivo({ data }: Props) {
+// ─── Componente principal ─────────────────────────────────────────────
+
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -188,14 +263,22 @@ export function BlocoResumoExecutivo({ data }: Props) {
         </div>
 
         <div className="lg:col-span-2 flex flex-col gap-2">
-          <CardTotal titulo="Total Entradas" linha={data.totalEntradas} />
-          <CardTotal titulo="Total Saídas" linha={data.totalSaidas} />
+          <CardTotal titulo="Total Entradas" linha={data.totalEntradas} variant="sky" />
+          <CardTotal titulo="Total Saídas" linha={data.totalSaidas} variant="rose" />
+          <div className="grid grid-cols-2 gap-2">
+            <CardTotal titulo="Saldo Caixa Final" linha={montarLinhaSaldoFinal(data)} variant="neutral" />
+            <CardTotal
+              titulo="Dif. Caixa no Ano"
+              linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
+              variant="neutral"
+            />
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
             Entradas
           </h3>
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
@@ -204,13 +287,14 @@ export function BlocoResumoExecutivo({ data }: Props) {
             <div className="text-right">REAL 2025</div>
             <div className="text-right">Δ%</div>
           </div>
+          <LinhaRow linha={data.totalEntradas} destaque />
           {linhasEntrada.map(l => (
             <LinhaRow key={l.label} linha={l} />
           ))}
         </div>
 
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
             Saídas
           </h3>
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
@@ -219,6 +303,7 @@ export function BlocoResumoExecutivo({ data }: Props) {
             <div className="text-right">REAL 2025</div>
             <div className="text-right">Δ%</div>
           </div>
+          <LinhaRow linha={data.totalSaidas} destaque />
           {linhasSaida.map(l => (
             <LinhaRow key={l.label} linha={l} />
           ))}

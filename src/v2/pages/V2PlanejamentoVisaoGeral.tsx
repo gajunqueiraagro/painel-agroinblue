@@ -138,7 +138,11 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         </p>
       </header>
 
-      <BlocoResumoExecutivo data={dadosBloco1} />
+      <BlocoResumoExecutivo
+        data={dadosBloco1}
+        saldoInicialMeta={planFin.saldoInicial}
+        saldoInicialReal={painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN}
+      />
       <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
       <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
       <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
