@@ -92,16 +92,17 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
 
   // Bloco 1: META 2026 (consolidado) vs Real 2025 (lancFin2025 via useFinanceiro).
   // Zero classificação aqui — builder delega tudo aos agregadores oficiais.
-  // saldoInicialMeta vem do hook usePlanejamentoFinanceiro (Dez/N-1 oficial),
-  // usado pelo gráfico de saldo acumulado projetado.
+  // saldoInicialMeta vem do hook usePlanejamentoFinanceiro (Dez/N-1 oficial).
+  // serieReal do gráfico = saldo bancário oficial do PC-100 (caixaIndicador.serieAnoAnt).
   const dadosBloco1 = useMemo(() => {
     if (planFin.lancFin2025Loading) return null;
     return buildBlocoResumoExecutivo({
       lancFin2025: planFin.lancFin2025,
       gridMeta2026: gridMetaConsolidado,
       saldoInicialMeta: planFin.saldoInicial,
+      caixaSaldoAnoAntMensal: painel.caixaIndicador?.serieAnoAnt?.slice(1),
     });
-  }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading, planFin.saldoInicial]);
+  }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading, planFin.saldoInicial, painel.caixaIndicador]);
 
   const loading = painel.loading || planFin.loading;
 

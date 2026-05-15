@@ -58,6 +58,13 @@ export interface BuildBlocoInput {
   gridMeta2026: SubcentroGrid[];
   /** Saldo bancário consolidado Dez/N-1 — fonte oficial: planFin.saldoInicial. */
   saldoInicialMeta: number;
+  /**
+   * Saldo bancário consolidado Jan..Dez do ano anterior — fonte oficial
+   * PC-100: pc100.caixaIndicador.serieAnoAnt.slice(1) (length 12).
+   * Alimenta a linha REAL do gráfico de saldo acumulado.
+   * Undefined/null → NaN[12] → linha vazia no Recharts (sem fallback).
+   */
+  caixaSaldoAnoAntMensal?: number[];
 }
 
 const ANO_REAL = 2025;
@@ -93,7 +100,7 @@ const makeLinha = (label: string, metaArr: number[], realArr: number[]): LinhaEx
 // ─── Builder ─────────────────────────────────────────────────────────
 
 export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoExecutivoData {
-  const { lancFin2025, gridMeta2026, saldoInicialMeta } = input;
+  const { lancFin2025, gridMeta2026, saldoInicialMeta, caixaSaldoAnoAntMensal } = input;
 
   // 15 buckets REAL 2025 — number[12] cada
   const rReceitaPec    = agregaReceitaPec(lancFin2025, ANO_REAL);
@@ -183,25 +190,22 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   // META 2026: parte do saldoInicialMeta (Dez/N-1, fonte oficial: tabela
   //   financeiro_saldos_bancarios_v2) e acumula (entradas - saídas) mês a mês.
   //   Reproduz a coluna "Saldo Acumulado" da tela Fluxo de Caixa META oficial.
+  //   Futuro/projeção — não há saldo bancário registrado para META.
   //
-  // Real 2025: ainda não temos saldo inicial Dez/2024 disponível neste builder.
-  //   A série representa "fluxo acumulado do ano" a partir de zero, não a
-  //   posição absoluta de caixa. Comparação visual com META fica enviesada por
-  //   offset, mas tendência relativa (slope mensal) permanece honesta.
-  //   Backlog: expor saldoInicialReal para alinhar bases.
+  // REAL ano-1: saldo bancário consolidado oficial via PC-100
+  //   (pc100.caixaIndicador.serieAnoAnt.slice(1)) — mesma fonte usada por
+  //   LE Cap.1, ResumoTab, FechExecResumo, V2Home, AnaliseTrimestral e PC-100.
+  //   Fonte única soberana — sem cálculo paralelo. NaN[12] quando indisponível.
   //
   // serieMetaLinear: mantido como array zerado por compatibilidade de tipo
   //   (BlocoResumoExecutivoData). Não é mais renderizado pelo componente —
   //   a linha tracejada "META linear" foi removida nesta revisão.
+  const serieReal: number[] = caixaSaldoAnoAntMensal ?? Array(12).fill(NaN);
   const serieMeta = new Array(12).fill(0);
-  const serieReal = new Array(12).fill(0);
   let accMeta = saldoInicialMeta;
-  let accReal = 0;
   for (let i = 0; i < 12; i++) {
     accMeta += (totalEntradasMetaArr[i] ?? 0) - (totalSaidasMetaArr[i] ?? 0);
-    accReal += (totalEntradasRealArr[i] ?? 0) - (totalSaidasRealArr[i] ?? 0);
     serieMeta[i] = accMeta;
-    serieReal[i] = accReal;
   }
   const serieMetaLinear = new Array(12).fill(0);
 
