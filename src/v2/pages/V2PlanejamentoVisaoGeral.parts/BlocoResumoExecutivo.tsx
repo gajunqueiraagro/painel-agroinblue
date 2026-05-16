@@ -80,6 +80,11 @@ function montarLinhaDifAno(
 const COR_META = '#f97316'; // laranja (mesma da linha META no gráfico)
 const COR_REAL = '#374151'; // gray-700 (mais escuro que o stroke #9ca3af, melhor contraste no tooltip)
 
+// Classe utilitária para a coluna META 2026 — identidade laranja do
+// Planejamento (espelha COR_META=#f97316 = orange-500). Aplicada no header
+// da coluna e em todos os valores. REAL 2025 e Δ% NÃO usam esta classe.
+const META_COLUNA = 'text-orange-500 dark:text-orange-400';
+
 interface TooltipPayloadItem {
   dataKey?: string | number;
   value?: number;
@@ -145,7 +150,7 @@ function LinhaRow({ linha, destaque = false }: { linha: LinhaExecutiva; destaque
       <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
         {linha.label}
       </div>
-      <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground' : 'text-foreground/80')}>
+      <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
         {fmtBRL(linha.meta)}
       </div>
       <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
@@ -332,7 +337,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className="text-right">META 2026</div>
+            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">REAL 2025</div>
             <div className="text-right">Δ%</div>
           </div>
@@ -348,7 +353,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className="text-right">META 2026</div>
+            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">REAL 2025</div>
             <div className="text-right">Δ%</div>
           </div>
