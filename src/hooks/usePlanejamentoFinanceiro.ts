@@ -878,6 +878,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           .eq('cliente_id', clienteId)
           .eq('ano', ano)
           .eq('cenario', 'meta')
+          .eq('origem', 'manual')
           .range(from, from + PAGE - 1) as any);
         if (error) throw error;
         if (!data || data.length === 0) break;
@@ -943,8 +944,12 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
 
       // Insert snapshot rows in batches
       if (rows.length > 0) {
-        // Strip ids so new ones are generated
-        const clean = rows.map(({ id, created_at, updated_at, ...rest }: any) => rest);
+        // Strip ids so new ones are generated.
+        // Defesa Opção A: snapshots antigos podem conter rebanho_auto/parcela_auto;
+        // filtramos para garantir que apenas linhas manual sejam reinseridas.
+        const clean = rows
+          .filter((r: any) => r.origem === 'manual')
+          .map(({ id, created_at, updated_at, ...rest }: any) => rest);
         for (let i = 0; i < clean.length; i += 500) {
           const batch = clean.slice(i, i + 500);
           const { error } = await (supabase
