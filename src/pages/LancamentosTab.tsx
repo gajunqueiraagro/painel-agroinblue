@@ -3119,6 +3119,49 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {isVenda && (
+        <div className="flex items-center gap-2 pt-3 border-t mt-3">
+          {editingAbateId && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelEdit}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+          )}
+          {(vendaDetalhes || (tipoPeso === 'boitel' && boitelDataForResumo)) && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (tipoPeso === 'boitel') {
+                  vendaFinanceiroRef.current?.openBoitelDialog();
+                } else {
+                  setVendaDialogOpen(true);
+                }
+              }}
+              disabled={submitting}
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              {tipoPeso === 'boitel' ? 'Editar Planejamento' : 'Editar Financeiro'}
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting || !(vendaDetalhes || (tipoPeso === 'boitel' && boitelDataForResumo))}
+          >
+            {submitting
+              ? 'Registrando...'
+              : editingAbateId ? 'Salvar Alterações' : 'Registrar Venda'}
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 

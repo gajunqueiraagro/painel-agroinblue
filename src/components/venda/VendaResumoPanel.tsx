@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { AlertTriangle, CheckCircle, Edit, DollarSign, Calculator } from 'lucide-react';
+import { AlertTriangle, CheckCircle, DollarSign, Calculator } from 'lucide-react';
 import type { VendaDetalhes } from './VendaDetalhesDialog';
 import type { VendaCalculation } from '@/lib/calculos/venda';
 import type { BoitelData } from '@/components/BoitelPlanningDialog';
@@ -81,13 +81,6 @@ export function VendaResumoPanel({
           </>
         )}
 
-        {hasData && (
-          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
-            <Edit className="h-3 w-3" />
-            Editar Planejamento Boitel
-          </Button>
-        )}
-
         {!hasData && (
           <>
             <Separator />
@@ -101,18 +94,6 @@ export function VendaResumoPanel({
             </Button>
           </>
         )}
-
-        <Separator />
-        <div className="flex items-center gap-1.5">
-          {onCancelEdit && (
-            <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
-              Cancelar
-            </Button>
-          )}
-          <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting || !hasData}>
-            {submitting ? 'Registrando...' : (registerLabel || 'Registrar Venda')}
-          </Button>
-        </div>
       </div>
     );
   }
@@ -202,26 +183,8 @@ export function VendaResumoPanel({
             <CheckCircle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Detalhes financeiros preenchidos</span>
           </div>
-
-          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
-            <Edit className="h-3 w-3" />
-            Editar Detalhes
-          </Button>
         </>
       )}
-
-      <Separator />
-
-      <div className="flex items-center gap-1.5">
-        {onCancelEdit && (
-          <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
-            Cancelar
-          </Button>
-        )}
-        <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
-          {submitting ? 'Registrando...' : (registerLabel || 'Registrar Venda')}
-        </Button>
-      </div>
     </div>
   );
 }
