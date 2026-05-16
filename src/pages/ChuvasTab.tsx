@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CloudRain, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { ChuvasGlobalView } from './ChuvasGlobalView';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -173,9 +174,16 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
               </SelectContent>
             </Select>
             )}
-            <span className="text-sm font-semibold text-muted-foreground">
-              Total: {yearTotal.toFixed(1)} mm
-            </span>
+            {!isGlobal && (
+              <span className="text-sm font-semibold text-muted-foreground">
+                Total: {yearTotal.toFixed(1)} mm
+              </span>
+            )}
+            {isGlobal && (
+              <span className="text-sm font-semibold text-muted-foreground">
+                Comparativo entre fazendas — {anoFiltro}
+              </span>
+            )}
           </div>
 
           {!isGlobal && (
@@ -210,6 +218,11 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
         </div>
       </div>
 
+      {/* Bifurcação: Global → painel comparativo entre fazendas (não soma).
+          Fazenda individual → heatmap operacional atual (intacto). */}
+      {isGlobal ? (
+        <ChuvasGlobalView anoFiltro={anoFiltro} />
+      ) : (
       <div className="px-2">
 
       {/* Matrix table — densidade tipo planilha executiva, header AGROinBLUE */}
@@ -350,6 +363,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
         </table>
       </div>
       </div>
+      )}
     </div>
   );
 }
