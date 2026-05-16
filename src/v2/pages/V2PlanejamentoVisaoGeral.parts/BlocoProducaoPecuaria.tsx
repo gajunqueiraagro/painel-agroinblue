@@ -56,7 +56,7 @@ export function BlocoProducaoPecuaria({ data }: Props) {
       <SecaoTitulo>Produção</SecaoTitulo>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <CardComparativo titulo="Arrobas Produzidas META"   dado={data.arrobasProduzidas}  className={PALETA_NEUTRO} mostrarVsAnoAnt />
-        <CardComparativo titulo="Arrobas Desfrutadas META"  dado={data.arrobasDesfrutadas} className={PALETA_NEUTRO} />
+        <CardComparativo titulo="Arrobas Desfrutadas META"  dado={data.arrobasDesfrutadas} className={PALETA_NEUTRO} mostrarVsAnoAnt />
         <CardComparativo titulo="Desfrute (Cab.) META"      dado={data.desfrutePct}        className={PALETA_NEUTRO} mostrarVsAnoAnt />
         <CardComparativo titulo="Lotação Média META"        dado={data.lotacaoMedia}       className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>

@@ -672,7 +672,6 @@ function buildBloco2Producao(
   const pesoSerieMeta = painel.pesoMedioIndicador?.serieMeta;
   const pesoSerieAnoAnt = painel.pesoMedioIndicador?.serieAnoAnt;
 
-  warnings.push('arrobasDesfrutadas: derivação receitaPec/precoArr requer divisão ponto-a-ponto de séries cumulativas — Marco 1.1.D');
   warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
   warnings.push('valorRebanhoFinal META: painel.seriesMeta não expõe valorRebFin — GAP do PC-100, card exibe "—"');
   warnings.push('cabecasFinal/pesoMedioFinal META: cards de FOTO 0-indexed em painel.seriesMeta. Comparativo Dez ano-ant não disponível na mesma convenção — vsAnoFechado=null, card exibe "— vs ano ant." (GAP/follow-up)');
@@ -697,8 +696,14 @@ function buildBloco2Producao(
       mesAtual, 'pc100', 'acumulado', 'arrobas',
     ),
 
-    // Derivação 2 séries cumulativas — Marco 1.1.D
-    arrobasDesfrutadas: emptyComparativo('derivado', 'acumulado', 'arrobas'),
+    // Consome fonte oficial PC-100: painel.desfruteArrIndicador (Σ arrobas
+    // desfrutadas = abate+venda+consumo). Valor exibido = total anual META
+    // via valorPonto(serieMeta, 12). Sem derivação receitaPec/precoArr.
+    arrobasDesfrutadas: buildComparativoPonto(
+      painel.desfruteArrIndicador?.serieMeta,
+      painel.desfruteArrIndicador?.serieAnoAnt,
+      mesAtual, 'pc100', 'acumulado', 'arrobas',
+    ),
 
     // PC-100 desfruteIndicador é por design DESFRUTE (CAB.) — contagem acumulada
     // de animais (abate+venda+consumo) no período. NÃO é taxa percentual.
