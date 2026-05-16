@@ -31,6 +31,12 @@ interface Props {
   saldoInicialMeta: number;
   /** Saldo bancário consolidado Dez/N-2 — fonte: pc100.caixaIndicador.serieAnoAnt[0]. */
   saldoInicialReal: number;
+  /**
+   * Quando true, embaça o gráfico de Fluxo de Caixa + cards "Saldo Caixa
+   * Final Meta" e "Dif. Caixa no Ano - Meta" (visões Administrativo/Fazenda).
+   * Cards Total Entradas/Saídas + tabelas Entradas/Saídas continuam nítidos.
+   */
+  desfocarDashboard?: boolean;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -215,7 +221,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -269,7 +275,13 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 mb-4">
-        <div className="lg:col-span-3 border border-border rounded-md p-2 h-72">
+        <div
+          className={cn(
+            'lg:col-span-3 border border-border rounded-md p-2 h-72 relative',
+            desfocarDashboard && 'overflow-hidden',
+          )}
+        >
+          <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none', 'w-full h-full')}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <defs>
@@ -313,19 +325,38 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal 
               />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
+          {desfocarDashboard && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-[2px]">
+              <span className="text-xs font-semibold text-foreground/70 bg-background/80 border border-border rounded-md px-3 py-1.5">
+                Indisponível neste escopo
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="lg:col-span-2 flex flex-col gap-2">
           <CardTotal titulo="Total Entradas META" linha={data.totalEntradas} variant="sky" />
           <CardTotal titulo="Total Saídas META" linha={data.totalSaidas} variant="rose" />
-          <div className="grid grid-cols-2 gap-2">
-            <CardTotal titulo="Saldo Caixa Final Meta" linha={montarLinhaSaldoFinal(data)} variant="neutral" metaOnly />
-            <CardTotal
-              titulo="Dif. Caixa no Ano - Meta"
-              linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
-              variant="neutral"
-              metaOnly
-            />
+          <div className={cn('grid grid-cols-2 gap-2 relative')}>
+            <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
+              <CardTotal titulo="Saldo Caixa Final Meta" linha={montarLinhaSaldoFinal(data)} variant="neutral" metaOnly />
+            </div>
+            <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
+              <CardTotal
+                titulo="Dif. Caixa no Ano - Meta"
+                linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
+                variant="neutral"
+                metaOnly
+              />
+            </div>
+            {desfocarDashboard && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-[10px] font-semibold text-foreground/70 bg-background/80 border border-border rounded px-2 py-0.5">
+                  Indisponível
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

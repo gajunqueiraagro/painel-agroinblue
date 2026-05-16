@@ -23,6 +23,7 @@ import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoPro
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
 import { BlocoMovimentacaoRebanho } from './V2PlanejamentoVisaoGeral.parts/BlocoMovimentacaoRebanho';
+import { BlocoRateioAdministrativo } from './V2PlanejamentoVisaoGeral.parts/BlocoRateioAdministrativo';
 
 interface Props {
   ano: number;
@@ -31,6 +32,18 @@ interface Props {
 
 export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
+
+  // Filtro atual da tela determina o layout. 3 modos:
+  //   - Global:          layout completo (como hoje)
+  //   - Administrativo:  fazenda sem pecuária (tem_pecuaria === false). Sem
+  //                      Produção/Movimentação; Financeiro/Capital sobe.
+  //   - Fazenda operacional: pecuária ativa. Sem Financeiro/Capital
+  //                      (rateio cobre depois); mantém Produção/Movimentação.
+  const isAdministrativo = !isGlobal && fazendaAtual?.tem_pecuaria === false;
+  const isFazendaOperacional = !isGlobal && !isAdministrativo;
+  // Gráfico de Fluxo + cards Saldo Caixa Final / Dif. Caixa: desfocados
+  // em Administrativo e Fazenda operacional (escopo não-consolidado).
+  const desfocarDashboard = !isGlobal;
 
   // PC-100 anual META + comparativos ano-1 internos.
   // preservarMetaQuandoGlobalIncompleto=true: o Bloco "Produção Pecuária" precisa
@@ -146,11 +159,34 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         data={dadosBloco1}
         saldoInicialMeta={planFin.saldoInicial}
         saldoInicialReal={painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN}
+        desfocarDashboard={desfocarDashboard}
       />
-      <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
-      <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
-      <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
-      <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
+
+      {/* Layout por filtro ────────────────────────────────────────────
+          - Global:          Produção → Estrutura → Financeiro/Capital → Movimentação
+          - Administrativo:  Estrutura → Financeiro/Capital (sobe) → Rateio Adm
+          - Fazenda op.:     Produção → Estrutura → Movimentação → Rateio Adm */}
+      {isAdministrativo ? (
+        <>
+          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
+          <BlocoRateioAdministrativo />
+        </>
+      ) : isFazendaOperacional ? (
+        <>
+          <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
+          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
+          <BlocoRateioAdministrativo />
+        </>
+      ) : (
+        <>
+          <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
+          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
+          <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
+        </>
+      )}
 
       {dto.warnings.length > 0 && (
         <details className="mt-4 text-[10px] text-muted-foreground/70 px-2">
