@@ -1,3 +1,17 @@
+/**
+ * ChuvasTab — Lançamento + heatmap diário de pluviometria.
+ *
+ * Pendência registrada — PARTE 2 (Painel Analítico):
+ *   • Modo Fazenda: análise pluviométrica detalhada (acumulado anual,
+ *     mensal, histórico, intervalo sem chuva, heatmap, ranking).
+ *   • Modo Global: comparativo entre fazendas ativas (pecuárias E agrícolas)
+ *     — NUNCA soma simples de mm. A leitura oficial pluviométrica é por
+ *     estação/fazenda. Se exibir total global, deve ser explicitamente
+ *     "soma operacional", não pluviometria oficial.
+ *   • Tela separada (sub-tab "Análise") OU rota nova — decisão pendente.
+ *
+ * Não implementar PARTE 2 sem direcionamento explícito.
+ */
 import { useState, useMemo, useEffect } from 'react';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -198,14 +212,14 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
       <div className="px-2">
 
-      {/* Matrix table — densidade tipo planilha executiva */}
+      {/* Matrix table — densidade tipo planilha executiva, header AGROinBLUE */}
       <div className="overflow-auto max-h-[calc(100vh-140px)]">
         <table className="w-full text-[11px] tabular-nums leading-tight border-collapse min-w-[640px]">
           <thead className="sticky top-0 z-20">
-            <tr className="bg-muted/50">
-              <th className="border border-border px-1 py-0.5 text-center sticky left-0 bg-muted/50 z-30 w-8 font-semibold">Dia</th>
+            <tr className="bg-[#1E3A5F] text-white">
+              <th className="border border-[#24466B] px-1 py-0.5 text-center sticky left-0 bg-[#1E3A5F] z-30 w-8 font-semibold">Dia</th>
               {MESES.map((m, i) => (
-                <th key={i} className="border border-border px-1 py-0.5 text-center min-w-[44px] font-semibold">{m}</th>
+                <th key={i} className="border border-[#24466B] px-1 py-0.5 text-center min-w-[44px] font-semibold">{m}</th>
               ))}
             </tr>
           </thead>
@@ -260,12 +274,12 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
             {/* === TOTALS SECTION === */}
             {/* Current year monthly total */}
-            <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
-              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 text-center">
+            <tr className="bg-blue-100/70 dark:bg-blue-900/30 font-bold border-t-2 border-[#1E3A5F]/40">
+              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-100/70 dark:bg-blue-900/30 z-10 text-center text-[#1E3A5F] dark:text-blue-200">
                 Total
               </td>
               {monthlyTotals.map((t, i) => (
-                <td key={i} className="border border-border px-1 py-0.5 text-center text-blue-700 dark:text-blue-300">
+                <td key={i} className="border border-border px-1 py-0.5 text-center text-[#1E3A5F] dark:text-blue-200 font-bold">
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
@@ -296,12 +310,12 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
             {/* === ACCUMULATED SECTION === */}
             {/* Current year accumulated */}
-            <tr className="bg-blue-100 dark:bg-blue-900/30 font-bold">
-              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-100 dark:bg-blue-900/30 z-10 text-center">
+            <tr className="bg-blue-200/60 dark:bg-blue-900/40 font-bold border-t border-[#1E3A5F]/30">
+              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-200/60 dark:bg-blue-900/40 z-10 text-center text-[#1E3A5F] dark:text-blue-100">
                 Acum.
               </td>
               {accumulatedTotals.map((t, i) => (
-                <td key={i} className="border border-border px-1 py-0.5 text-center text-blue-800 dark:text-blue-200">
+                <td key={i} className="border border-border px-1 py-0.5 text-center text-[#1E3A5F] dark:text-blue-100 font-bold">
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
