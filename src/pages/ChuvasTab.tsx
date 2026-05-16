@@ -198,23 +198,22 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
       <div className="px-2">
 
-      {/* Matrix table */}
+      {/* Matrix table — densidade tipo planilha executiva */}
       <div className="overflow-auto max-h-[calc(100vh-140px)]">
-        <table className="w-full text-xs border-collapse min-w-[750px]">
+        <table className="w-full text-[11px] tabular-nums leading-tight border-collapse min-w-[640px]">
           <thead className="sticky top-0 z-20">
             <tr className="bg-muted/50">
-              <th className="border border-border px-1 py-1 text-left sticky left-0 bg-muted/50 z-30 w-10">Dia</th>
+              <th className="border border-border px-1 py-0.5 text-center sticky left-0 bg-muted/50 z-30 w-8 font-semibold">Dia</th>
               {MESES.map((m, i) => (
-                <th key={i} className="border border-border px-1 py-1 text-center min-w-[52px]">{m}</th>
+                <th key={i} className="border border-border px-1 py-0.5 text-center min-w-[44px] font-semibold">{m}</th>
               ))}
-              
             </tr>
           </thead>
           <tbody>
             {/* Day rows */}
             {Array.from({ length: maxDays }, (_, dia) => (
               <tr key={dia} className="hover:bg-muted/20">
-                <td className="border border-border px-1 py-0.5 font-semibold text-muted-foreground sticky left-0 bg-background z-10">
+                <td className="border border-border px-1 py-0 text-center font-semibold text-muted-foreground sticky left-0 bg-background z-10">
                   {dia + 1}
                 </td>
                 {Array.from({ length: 12 }, (_, mes) => {
@@ -240,7 +239,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
                           onBlur={handleCellSave}
                           onKeyDown={e => e.key === 'Enter' && handleCellSave()}
                           autoFocus
-                          className="h-6 w-full text-xs p-1 rounded-none border-0"
+                          className="h-5 w-full text-[11px] px-1 rounded-none border-0 text-center tabular-nums"
                         />
                       </td>
                     );
@@ -249,25 +248,24 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
                   return (
                     <td
                       key={mes}
-                      className={`border border-border px-1 py-0.5 text-center cursor-pointer transition-colors ${getCellColor(mm)}`}
+                      className={`border border-border px-1 py-0 text-center cursor-pointer transition-colors ${getCellColor(mm)}`}
                       onClick={() => handleCellClick(dia, mes)}
                     >
                       {mm > 0 ? mm.toFixed(1) : ''}
                     </td>
                   );
                 })}
-                
               </tr>
             ))}
 
             {/* === TOTALS SECTION === */}
             {/* Current year monthly total */}
             <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
-              <td className="border border-border px-1 py-1 sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 text-xs">
+              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 text-center">
                 Total
               </td>
               {monthlyTotals.map((t, i) => (
-                <td key={i} className="border border-border px-1 py-1 text-center text-blue-700 dark:text-blue-300">
+                <td key={i} className="border border-border px-1 py-0.5 text-center text-blue-700 dark:text-blue-300">
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
@@ -281,15 +279,14 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
                 const m = parseInt(key.slice(0, 2)) - 1;
                 if (m >= 0 && m < 12) mTotals[m] += mm;
               });
-              const yTotal = mTotals.reduce((a, b) => a + b, 0);
 
               return (
                 <tr key={`total-${year}`} className="bg-muted/30 text-muted-foreground">
-                  <td className="border border-border px-1 py-1 sticky left-0 bg-muted/30 z-10 text-xs font-semibold">
+                  <td className="border border-border px-1 py-0.5 sticky left-0 bg-muted/30 z-10 text-center font-semibold">
                     {year}
                   </td>
                   {mTotals.map((t, i) => (
-                    <td key={i} className="border border-border px-1 py-1 text-center text-xs">
+                    <td key={i} className="border border-border px-1 py-0.5 text-center">
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
@@ -300,11 +297,11 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
             {/* === ACCUMULATED SECTION === */}
             {/* Current year accumulated */}
             <tr className="bg-blue-100 dark:bg-blue-900/30 font-bold">
-              <td className="border border-border px-1 py-1 sticky left-0 bg-blue-100 dark:bg-blue-900/30 z-10 text-xs">
+              <td className="border border-border px-1 py-0.5 sticky left-0 bg-blue-100 dark:bg-blue-900/30 z-10 text-center">
                 Acum.
               </td>
               {accumulatedTotals.map((t, i) => (
-                <td key={i} className="border border-border px-1 py-1 text-center text-blue-800 dark:text-blue-200">
+                <td key={i} className="border border-border px-1 py-0.5 text-center text-blue-800 dark:text-blue-200">
                   {t > 0 ? t.toFixed(1) : '-'}
                 </td>
               ))}
@@ -324,11 +321,11 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
               return (
                 <tr key={`acum-${year}`} className="bg-muted/20 text-muted-foreground">
-                  <td className="border border-border px-1 py-1 sticky left-0 bg-muted/20 z-10 text-xs font-semibold">
+                  <td className="border border-border px-1 py-0.5 sticky left-0 bg-muted/20 z-10 text-center font-semibold">
                     {year}
                   </td>
                   {acc.map((t, i) => (
-                    <td key={i} className="border border-border px-1 py-1 text-center text-xs">
+                    <td key={i} className="border border-border px-1 py-0.5 text-center">
                       {t > 0 ? t.toFixed(1) : '-'}
                     </td>
                   ))}
