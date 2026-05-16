@@ -1348,6 +1348,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { lancamentos: lancPec, saldosIniciais } = useLancamentos();
+  // useLancamentos() default cenario='realizado' — para arrobasSaidasMeta12 precisamos
+  // de lançamentos META explicitamente. Sem isso o array fica sempre zerado e Desfrute(@) META vazio.
+  const { lancamentos: lancPecMeta } = useLancamentos({ cenario: 'meta' });
   const { lancamentos: lancFin } = useFinanceiro();
 
   const ano = filtroGlobal?.ano || String(new Date().getFullYear());
@@ -1722,8 +1725,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   const arrobasSaidasMeta12 = useMemo(() => {
     const arr = new Array(12).fill(0);
     const tiposSet = new Set<string>(TIPOS_DESFRUTE_GLOBAL);
-    for (const l of lancPec) {
-      if (l.cenario !== 'meta') continue;
+    for (const l of lancPecMeta) {
       if (!tiposSet.has(l.tipo)) continue;
       const dataAno = Number(l.data.substring(0, 4));
       if (dataAno !== anoNum) continue;
@@ -1732,7 +1734,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       arr[mes - 1] += calcArrobasSafe(l);
     }
     return arr;
-  }, [lancPec, anoNum]);
+  }, [lancPecMeta, anoNum]);
 
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
