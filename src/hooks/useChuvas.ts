@@ -44,22 +44,39 @@ export function useChuvas() {
   useEffect(() => { loadData(); }, [loadData]);
 
   const salvarChuva = async (data: string, milimetros: number, observacao?: string) => {
-    if (!fazendaId || fazendaId === '__global__') return;
+    // Hard-block: lançamento exige fazenda individual (regra do módulo Chuvas).
+    if (!fazendaId || fazendaId === '__global__' || isGlobal) {
+      toast.error('Selecione uma fazenda para lançar chuvas (Global não permite edição).');
+      return;
+    }
+    const clienteId = fazendaAtual?.cliente_id;
+    if (!clienteId) {
+      console.error('[useChuvas] cliente_id ausente em fazendaAtual', { fazendaAtual });
+      toast.error('Fazenda sem cliente vinculado — contate o suporte.');
+      return;
+    }
 
     const { error } = await supabase.from('chuvas').upsert({
       fazenda_id: fazendaId,
-      cliente_id: fazendaAtual?.cliente_id!,
+      cliente_id: clienteId,
       data,
       milimetros,
       observacao: observacao || null,
     }, { onConflict: 'fazenda_id,data' });
 
     if (error) {
-      toast.error('Erro ao salvar chuva');
-    } else {
-      toast.success('Chuva registrada');
-      await loadData();
+      console.error('[useChuvas] erro ao salvar chuva', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload: { fazenda_id: fazendaId, cliente_id: clienteId, data, milimetros },
+      });
+      toast.error(`Erro ao salvar chuva: ${error.message}`);
+      return;
     }
+    toast.success('Chuva registrada');
+    await loadData();
   };
 
   const removerChuva = async (id: string) => {

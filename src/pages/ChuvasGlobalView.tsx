@@ -16,7 +16,7 @@ import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
   totalPeriodo,
-  diasSemChuvaPeriodo,
+  maiorIntervaloEntreChuvasPeriodo,
   maiorChuvaDiaPeriodo,
   comparativoMesmoPeriodo,
 } from '@/lib/chuvas/analitica';
@@ -62,10 +62,10 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
   const metricas = useMemo(() => {
     return ativasContexto.map(f => {
       const acum = totalPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
-      const diasSem = diasSemChuvaPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
+      const maiorIntervalo = maiorIntervaloEntreChuvasPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
       const maiorDia = maiorChuvaDiaPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
       const comp = comparativoMesmoPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
-      return { fazenda: f, acum, diasSem, maiorDia, comp };
+      return { fazenda: f, acum, maiorIntervalo, maiorDia, comp };
     });
   }, [ativasContexto, chuvas, anoFiltro, mesFiltro]);
 
@@ -83,8 +83,11 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
     [...ativasComChuva].sort((a, b) => b.maiorDia.mm - a.maiorDia.mm).slice(0, 2),
     [ativasComChuva]);
 
-  const topDiasSemChuva = useMemo(() =>
-    [...ativasComChuva].sort((a, b) => b.diasSem - a.diasSem).slice(0, 2),
+  const topMaiorIntervalo = useMemo(() =>
+    [...ativasComChuva]
+      .filter(m => m.maiorIntervalo.dias > 0)
+      .sort((a, b) => b.maiorIntervalo.dias - a.maiorIntervalo.dias)
+      .slice(0, 2),
     [ativasComChuva]);
 
   const somaOperacional = useMemo(() =>
@@ -147,13 +150,17 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
             }))}
         />
 
-        {/* Card 4 — Dias sem chuva no período (TOP 2) */}
+        {/* Card 4 — Maior intervalo entre chuvas registradas (TOP 2)
+            Gap entre dois registros com mm > 0 — não infere dias secos por
+            ausência de lançamento. */}
         <CardLista
-          label="Dias sem chuva"
-          itens={topDiasSemChuva.map(m => ({
+          label="Maior intervalo entre chuvas"
+          itens={topMaiorIntervalo.map(m => ({
             nome: m.fazenda.nome,
-            valor: `${fmtInt(m.diasSem)} dias`,
-            sub: `Jan–${mesLabel}`,
+            valor: `${fmtInt(m.maiorIntervalo.dias)} dias`,
+            sub: m.maiorIntervalo.inicio && m.maiorIntervalo.fim
+              ? `${fmtDataBR(m.maiorIntervalo.inicio)} → ${fmtDataBR(m.maiorIntervalo.fim)}`
+              : `Jan–${mesLabel}`,
           }))}
         />
       </div>

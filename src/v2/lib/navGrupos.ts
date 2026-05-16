@@ -6,7 +6,7 @@
 export type V2Section =
   | 'home'
   // rebanho
-  | 'rebanho-home' | 'pastos' | 'chuvas' | 'lancamentos-zoot'
+  | 'rebanho-home' | 'pastos' | 'chuvas' | 'chuvas-lancamento' | 'lancamentos-zoot'
   | 'mapa-pastos' | 'fechamento' | 'meta-gmd' | 'mapa-geo-pastos'
   | 'conferencia-lancamentos' | 'conferencia-mensal'
   | 'resumo-pastos' | 'evolucao-categoria' | 'auditoria-tecnica'
@@ -88,7 +88,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'conferencia-mensal',      label: 'Conferência Mensal',     status: 'ready' },
           { id: 'mapa-pastos',             label: 'Mapa Pastos',            status: 'ready' },
           { id: 'mapa-geo-pastos',         label: 'Geo Pastos',             status: 'ready' },
-          { id: 'chuvas',                  label: 'Chuvas (em construção)', status: 'needs-wrapper' },
+          { id: 'chuvas',                  label: 'Chuvas',                 status: 'ready' },
         ],
       },
     ],
@@ -203,6 +203,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
 export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // ── rebanho ──
   'rebanho-home': 'rebanho', 'pastos': 'rebanho', 'chuvas': 'rebanho',
+  'chuvas-lancamento': 'rebanho',
   'lancamentos-zoot': 'rebanho',
   'mapa-pastos': 'rebanho', 'fechamento': 'rebanho',
   'mapa-geo-pastos': 'rebanho', 'resumo-pastos': 'rebanho',

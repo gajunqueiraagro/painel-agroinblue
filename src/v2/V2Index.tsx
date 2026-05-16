@@ -506,7 +506,7 @@ export default function V2Index() {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');
         }}
-        onNavegarChuvas={() => setSection('chuvas')}
+        onNavegarChuvas={() => setSection('chuvas-lancamento')}
         onNavegarMapaRebanho={() => {
           // Mesma estratégia do hub legado LancarZooHubTab:
           // seta flag em sessionStorage, FechamentoTab abre o modal ao montar.
@@ -523,11 +523,14 @@ export default function V2Index() {
       <V2LancamentosWrapper
         cenarioInicial="meta"
         cenariosPermitidos={['meta']}
-        onNavegarChuvas={() => setSection('chuvas')}
+        onNavegarChuvas={() => setSection('chuvas-lancamento')}
       />
     );
     if (section === 'chuvas') return (
-      <ChuvasTab anoInicial={ano} />
+      <ChuvasTab anoInicial={ano} mode="analitico" />
+    );
+    if (section === 'chuvas-lancamento') return (
+      <ChuvasTab anoInicial={ano} mode="operacional" />
     );
     if (section === 'pastos') return (
       <PastosTab />

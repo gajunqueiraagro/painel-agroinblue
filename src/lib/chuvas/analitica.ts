@@ -215,11 +215,65 @@ export function diasComChuvaPeriodo(chuvas: Chuva[], ano: number, mesLimite: num
 }
 
 /**
- * Dias SEM chuva no período = diasNoPeriodo − diasComChuvaPeriodo.
- * Definição executiva (não confundir com "maior estiagem contínua").
+ * @deprecated Semanticamente inválido enquanto o lançamento for opcional
+ * (só registramos dias com chuva → ausência de registro ≠ dia seco). Pode ser
+ * reaproveitado quando houver lançamento diário obrigatório, estação
+ * meteorológica integrada ou confirmação explícita de dias secos. Use
+ * `maiorIntervaloEntreChuvasPeriodo` no painel executivo.
  */
 export function diasSemChuvaPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): number {
   return Math.max(0, diasNoPeriodo(ano, mesLimite) - diasComChuvaPeriodo(chuvas, ano, mesLimite, fazendaId));
+}
+
+/**
+ * Maior intervalo (em dias) entre dois registros consecutivos com mm > 0
+ * dentro do período (01/jan → fim do mesLimite, inclusive).
+ *
+ * Semântica: gap entre chuvas REGISTRADAS — não infere dias secos por ausência
+ * de lançamento. Retorna `dias` = (data_chuva_seguinte − data_chuva_anterior),
+ * em dias corridos. Se houver < 2 registros de chuva > 0 no período, retorna
+ * `{ dias: 0, inicio: null, fim: null }` (não há gap mensurável).
+ *
+ * `inicio` = data do registro com chuva ANTES do gap.
+ * `fim`    = data do registro com chuva APÓS o gap.
+ */
+export interface MaiorIntervaloEntreChuvas {
+  dias: number;
+  inicio: string | null; // YYYY-MM-DD (chuva antes do gap)
+  fim: string | null;    // YYYY-MM-DD (chuva após o gap)
+}
+
+export function maiorIntervaloEntreChuvasPeriodo(
+  chuvas: Chuva[],
+  ano: number,
+  mesLimite: number,
+  fazendaId?: string,
+): MaiorIntervaloEntreChuvas {
+  const datasComChuva = Array.from(new Set(
+    filtrarPeriodo(chuvas, ano, mesLimite, fazendaId)
+      .filter(c => c.milimetros > 0)
+      .map(c => c.data),
+  )).sort();
+
+  if (datasComChuva.length < 2) return { dias: 0, inicio: null, fim: null };
+
+  let maior: MaiorIntervaloEntreChuvas = { dias: 0, inicio: null, fim: null };
+  for (let i = 1; i < datasComChuva.length; i++) {
+    const dias = diffDias(datasComChuva[i - 1], datasComChuva[i]);
+    if (dias > maior.dias) {
+      maior = { dias, inicio: datasComChuva[i - 1], fim: datasComChuva[i] };
+    }
+  }
+  return maior;
+}
+
+/** Diferença em dias corridos entre duas datas ISO YYYY-MM-DD (b − a). */
+function diffDias(aIso: string, bIso: string): number {
+  const [ay, am, ad] = aIso.split('-').map(Number);
+  const [by, bm, bd] = bIso.split('-').map(Number);
+  const a = Date.UTC(ay, am - 1, ad);
+  const b = Date.UTC(by, bm - 1, bd);
+  return Math.round((b - a) / 86400000);
 }
 
 /** Maior evento diário (mm) no período. */
