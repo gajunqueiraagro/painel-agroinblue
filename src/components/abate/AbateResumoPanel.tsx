@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatMoeda, formatKg } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { AlertTriangle, CheckCircle, Edit, Tag } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Tag } from 'lucide-react';
 import type { AbateDetalhes } from './AbateDetalhesDialog';
 import type { AbateCalculation } from '@/lib/calculos/abate';
 
@@ -108,11 +108,6 @@ export function AbateResumoPanel({
             <CheckCircle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Detalhes financeiros preenchidos</span>
           </div>
-
-          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
-            <Edit className="h-3 w-3" />
-            Editar Detalhes
-          </Button>
         </>
       )}
     </div>

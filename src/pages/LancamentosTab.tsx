@@ -26,7 +26,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info } from 'lucide-react';
+import { ChevronRight, ChevronDown, ArrowLeft, AlertTriangle, LogIn, LogOut, RefreshCw, Clock, Info, Edit } from 'lucide-react';
 import { LancamentoDetalhe } from '@/components/LancamentoDetalhe';
 import { ReclassificacaoFormFields, useReclassificacaoState } from '@/components/ReclassificacaoForm';
 import { ReclassificacaoResumoPanel } from '@/components/ReclassificacaoResumoPanel';
@@ -3018,6 +3018,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               disabled={submitting}
             >
               Cancelar
+            </Button>
+          )}
+          {abateDetalhes && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAbateDialogOpen(true)}
+              disabled={submitting}
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              Editar Financeiro
             </Button>
           )}
           <Button
