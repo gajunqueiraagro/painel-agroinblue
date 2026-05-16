@@ -308,7 +308,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const p1Oficial = statusPilaresForm.p1_mapa_pastos.status === 'oficial';
   const [showReabrirP1, setShowReabrirP1] = useState(false);
 
-  const internalEditOrigin = useRef<{ aba: Aba; anoFiltro: string; mesFiltro: string } | null>(null);
+  // Snapshot completo do contexto operacional ao abrir uma edição. Restaurado
+  // ao salvar/cancelar para que o usuário retorne EXATAMENTE ao grid original
+  // (cenário, tipo e filtros preservados — sem voltar para 'realizado'/data de hoje).
+  const internalEditOrigin = useRef<{
+    aba: Aba;
+    anoFiltro: string;
+    mesFiltro: string;
+    statusOp: StatusOperacional | 'meta';
+    tipo: TipoMovimentacao;
+  } | null>(null);
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   // Default 'realizado'. Quando `cenarioInicial='meta'` (Planejamento → Lançamentos
   // META Zoo), abre já em META. Usuário pode trocar manualmente depois.
@@ -758,24 +767,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd'));
     setObservacao(''); setStatusOp(defaultCenario);
     resetFinancialFields();
-    // Restore internal origin context if editing from within the same tab
+    // Restaurar contexto operacional original (cenário/tipo/aba/filtros) —
+    // SOBRESCREVE os defaults que o reset acima aplicou (setStatusOp(defaultCenario)).
     const ctx = internalEditOrigin.current;
     if (ctx) {
       setAba(ctx.aba);
       setAnoFiltro(ctx.anoFiltro);
       setMesFiltro(ctx.mesFiltro);
+      setStatusOp(ctx.statusOp);
+      setTipo(ctx.tipo);
       internalEditOrigin.current = null;
     }
     if (onReturnFromEdit) onReturnFromEdit();
   }, [onReturnFromEdit]);
 
-  // Helper: restore edit origin context (internal or external)
+  // Helper: restore edit origin context (internal or external).
+  // SEMPRE chamado APÓS o reset de campos no handleSubmit — restaura
+  // statusOp/tipo/aba/filtros para o que estavam no momento da abertura
+  // do modal, sobrescrevendo os defaults aplicados pelo reset.
   const restoreEditOrigin = useCallback(() => {
     const ctx = internalEditOrigin.current;
     if (ctx) {
       setAba(ctx.aba);
       setAnoFiltro(ctx.anoFiltro);
       setMesFiltro(ctx.mesFiltro);
+      setStatusOp(ctx.statusOp);
+      setTipo(ctx.tipo);
       internalEditOrigin.current = null;
     }
     onReturnFromEdit?.();
@@ -784,7 +801,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadAbateForEdit = useCallback((l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     // 1. Set tab & type
     setAba('saida');
@@ -1090,7 +1107,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadVendaForEdit = useCallback(async (l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     // 1. Set tab & type
     setAba('saida');
@@ -1285,7 +1302,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const loadCompraForEdit = useCallback(async (l: Lancamento) => {
     // Save current context before switching to edit mode
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     setAba('entrada');
     setTipo('compra');
@@ -1423,7 +1440,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ── Transferência Saída — load for edit ──
   const loadTransferenciaForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     setAba('saida');
     setTipo('transferencia_saida');
@@ -1479,7 +1496,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ── Morte: load into form for editing ──
   const loadMorteForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     setAba('saida');
     setTipo('morte');
@@ -1511,7 +1528,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   // ── Consumo: load into form for editing ──
   const loadConsumoForEdit = useCallback((l: Lancamento) => {
     if (!onReturnFromEdit) {
-      internalEditOrigin.current = { aba, anoFiltro, mesFiltro };
+      internalEditOrigin.current = { aba, anoFiltro, mesFiltro, statusOp, tipo };
     }
     setAba('saida');
     setTipo('consumo');

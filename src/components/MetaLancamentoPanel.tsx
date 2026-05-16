@@ -355,8 +355,9 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
   const loading = loadingRebanho || loadingParams;
 
   // ── Stepper state ──
-  // Etapas 1, 2 e 3 abertas por padrão (recolhíveis); etapa 4 (Financeiro) foi removida do painel.
-  const [openSteps, setOpenSteps] = useState<Set<number>>(() => new Set([1, 2, 3]));
+  // Todas as etapas FECHADAS por padrão — usuário expande manualmente para evitar
+  // empurrar o formulário para baixo e poluir o fluxo operacional.
+  const [openSteps, setOpenSteps] = useState<Set<number>>(() => new Set());
   const handleToggleOpen = useCallback((step: number) => {
     setOpenSteps(prev => {
       const next = new Set(prev);
