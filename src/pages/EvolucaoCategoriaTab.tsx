@@ -59,7 +59,66 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
 
   const dadosMes = useMemo(() => {
     const mesData = viewData.filter(d => d.mes === mesNum);
-    const byCode = new Map(mesData.map(d => [d.categoria_codigo, d]));
+
+    // Em modo Global, viewData pode trazer múltiplas fazendas com o mesmo
+    // categoria_codigo. O Map original (mesData.map(d => [d.codigo, d]))
+    // sobrescrevia registros e mantinha apenas a última fazenda — bug que
+    // ocultava categorias agregadas.
+    //
+    // Agora: agregamos por categoria_codigo somando campos brutos e
+    // RECALCULANDO derivados (peso médio, GMD) pós-soma. Médias nunca são
+    // somadas. Em modo individual, só existe 1 registro por código →
+    // comportamento idêntico ao anterior (entra no if/!acc e segue).
+    const byCode = new Map<string, typeof mesData[number]>();
+    for (const d of mesData) {
+      const acc = byCode.get(d.categoria_codigo);
+      if (!acc) {
+        byCode.set(d.categoria_codigo, { ...d });
+        continue;
+      }
+      // Soma de campos brutos (todas as fazendas com mesmo código)
+      acc.saldo_inicial += d.saldo_inicial;
+      acc.saldo_final += d.saldo_final;
+      acc.entradas_externas += d.entradas_externas;
+      acc.saidas_externas += d.saidas_externas;
+      acc.evol_cat_entrada += d.evol_cat_entrada;
+      acc.evol_cat_saida += d.evol_cat_saida;
+      acc.peso_total_inicial += d.peso_total_inicial;
+      acc.peso_total_final += d.peso_total_final;
+      acc.peso_entradas_externas += d.peso_entradas_externas;
+      acc.peso_saidas_externas += d.peso_saidas_externas;
+      acc.peso_evol_cat_entrada += d.peso_evol_cat_entrada;
+      acc.peso_evol_cat_saida += d.peso_evol_cat_saida;
+      acc.producao_biologica += d.producao_biologica;
+      // saldo_sistema: null+null=null, null+N=N, N+null=N, N+M=N+M
+      if (acc.saldo_sistema == null && d.saldo_sistema == null) {
+        acc.saldo_sistema = null;
+      } else {
+        acc.saldo_sistema = (acc.saldo_sistema ?? 0) + (d.saldo_sistema ?? 0);
+      }
+      // saldo_p1: mesma regra de null
+      if (acc.saldo_p1 == null && d.saldo_p1 == null) {
+        acc.saldo_p1 = null;
+      } else {
+        acc.saldo_p1 = (acc.saldo_p1 ?? 0) + (d.saldo_p1 ?? 0);
+      }
+      // fazenda_id agregado em Global — limpar (não faz sentido único)
+      acc.fazenda_id = '';
+    }
+
+    // Recalcular derivados POR CATEGORIA após a soma (nunca somar médias)
+    for (const acc of byCode.values()) {
+      acc.peso_medio_inicial = acc.saldo_inicial > 0
+        ? acc.peso_total_inicial / acc.saldo_inicial
+        : null;
+      acc.peso_medio_final = acc.saldo_final > 0
+        ? acc.peso_total_final / acc.saldo_final
+        : null;
+      const cabMediaCat = (acc.saldo_inicial + acc.saldo_final) / 2;
+      acc.gmd = cabMediaCat > 0 && acc.dias_mes > 0
+        ? acc.producao_biologica / cabMediaCat / acc.dias_mes
+        : null;
+    }
 
     const result = allCatCodes.map(cat => {
       const existing = byCode.get(cat.codigo);
