@@ -1135,14 +1135,19 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) tryClose(); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-0">
-         <DialogTitle className="text-[13px] font-bold flex items-center gap-2">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden p-0 flex flex-col">
+        {/* ── Header sticky ── */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b px-5 py-3">
+          <DialogHeader className="pb-0">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Tag className="h-4 w-4 text-primary" />
               Detalhes do Abate
             </DialogTitle>
-        </DialogHeader>
+          </DialogHeader>
+        </div>
 
+        {/* ── Conteúdo com scroll interno ── */}
+        <div className="flex-1 overflow-y-auto px-5 py-3">
         {/* ── Tabs Meta / Programado / Realizado ── */}
         <Tabs value={activeTab} onValueChange={isPrevisto ? undefined : setActiveTab} className="w-full">
           {isPrevisto ? (
@@ -1362,11 +1367,12 @@ export function AbateDetalhesDialog({ open, onClose, onSave, initialData, quanti
             </div>
           </TabsContent>
         </Tabs>
+        </div>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-2 pt-2 border-t mt-1">
-          <Button variant="outline" size="sm" onClick={tryClose} className="h-7 text-[11px]">Cancelar</Button>
-          <Button size="sm" onClick={handleSave} className="h-7 text-[11px]">Salvar</Button>
+        {/* ── Footer sticky ── */}
+        <div className="sticky bottom-0 z-10 bg-background border-t px-5 py-3 flex items-center gap-2">
+          <Button variant="outline" onClick={tryClose}>Cancelar</Button>
+          <Button onClick={handleSave} size="lg" className="font-bold">Confirmar lançamento</Button>
         </div>
       </DialogContent>
     </Dialog>
