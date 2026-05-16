@@ -540,7 +540,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           await supabase.from('financeiro_lancamentos_v2')
             .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
-          await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id, usuario_id: userId || null,
             acao: 'recalculo_financeiro_venda', movimentacao_id: targetLancamentoId,
@@ -726,7 +727,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       }
       console.log('[VendaFinanceiro] SUCCESS', insertedData);
 
-      await mirrorMetaToPlanejamento(inserts);
+      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+      // await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       toast.success(`${inserts.length} lançamento(s) financeiro(s) de venda gerado(s)!`);

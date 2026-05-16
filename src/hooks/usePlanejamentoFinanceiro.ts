@@ -204,6 +204,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         .eq('cliente_id', clienteId!)
         .eq('ano', ano)
         .eq('cenario', 'meta')
+        .eq('origem', 'manual')
         .order('centro_custo')
         .order('subcentro')
         .order('mes');

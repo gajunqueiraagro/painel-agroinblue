@@ -215,29 +215,33 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       }
 
       // 2. Criar/garantir mirror via IDs oficiais (idempotente por lancamento_id/lancamento_juros_id)
-      const { lancamentoIdPrincipal, lancamentoIdJuros } = await criarMirrorParcela(supabase as any, {
-        id: parcela.id,
-        cliente_id: financiamento.cliente_id,
-        fazenda_id: financiamento.fazenda_id,
-        data_vencimento: dataPagamento,
-        valor_principal: parcela.valor_principal,
-        valor_juros: parcela.valor_juros,
-        lancamento_id: lancamentoIdEfetivo,
-        lancamento_juros_id: lancamentoJurosIdEfetivo,
-      }, {
-        id: financiamento.id,
-        cliente_id: financiamento.cliente_id,
-        fazenda_id: financiamento.fazenda_id,
-        tipo_financiamento: tipo,
-        descricao: financiamento.descricao ?? null,
-        numero_contrato: financiamento.numero_contrato ?? null,
-        credor_id: financiamento.credor_id ?? null,
-        data_contrato: financiamento.data_contrato ?? null,
-      });
+      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+      // const { lancamentoIdPrincipal, lancamentoIdJuros } = await criarMirrorParcela(supabase as any, {
+      //   id: parcela.id,
+      //   cliente_id: financiamento.cliente_id,
+      //   fazenda_id: financiamento.fazenda_id,
+      //   data_vencimento: dataPagamento,
+      //   valor_principal: parcela.valor_principal,
+      //   valor_juros: parcela.valor_juros,
+      //   lancamento_id: lancamentoIdEfetivo,
+      //   lancamento_juros_id: lancamentoJurosIdEfetivo,
+      // }, {
+      //   id: financiamento.id,
+      //   cliente_id: financiamento.cliente_id,
+      //   fazenda_id: financiamento.fazenda_id,
+      //   tipo_financiamento: tipo,
+      //   descricao: financiamento.descricao ?? null,
+      //   numero_contrato: financiamento.numero_contrato ?? null,
+      //   credor_id: financiamento.credor_id ?? null,
+      //   data_contrato: financiamento.data_contrato ?? null,
+      // });
+      const lancamentoIdPrincipal: string | null = null;
+      const lancamentoIdJuros: string | null = null;
 
       // 3. Setar status realizado + conta bancária + data real de pagamento via IDs oficiais
       const anoMes = dataPagamento.slice(0, 7);
-      await atualizarStatusMirror(supabase as any, lancamentoIdPrincipal, lancamentoIdJuros, dataPagamento, contaBancariaId);
+      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+      // await atualizarStatusMirror(supabase as any, lancamentoIdPrincipal, lancamentoIdJuros, dataPagamento, contaBancariaId);
       // Atualizar ano_mes para refletir o mês efetivo de pagamento
       const idsParaAtualizar = [lancamentoIdPrincipal, lancamentoIdJuros].filter(Boolean) as string[];
       if (idsParaAtualizar.length > 0) {
@@ -305,107 +309,115 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
 
       if (status === 'cancelado' || saindoDePago) {
         // Remove mirror e desvincula a parcela.
-        await deletarMirrorParcela(supabase as any, parcela.id);
+        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+        // await deletarMirrorParcela(supabase as any, parcela.id);
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
         // Se saindoDePago e não cancelado, e ainda há valor → recria mirror programado para o novo vencimento.
         if (status !== 'cancelado' && tipoValido && (principal > 0 || juros > 0)) {
-          await criarMirrorParcela(supabase as any, {
-            id: parcela.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            data_vencimento: dataVencimento,
-            valor_principal: principal,
-            valor_juros: juros,
-            lancamento_id: null,
-          }, {
-            id: financiamento.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            tipo_financiamento: tipo,
-            descricao: financiamento.descricao ?? null,
-            numero_contrato: financiamento.numero_contrato ?? null,
-            credor_id: financiamento.credor_id ?? null,
-            data_contrato: financiamento.data_contrato ?? null,
-          });
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await criarMirrorParcela(supabase as any, {
+          //   id: parcela.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   data_vencimento: dataVencimento,
+          //   valor_principal: principal,
+          //   valor_juros: juros,
+          //   lancamento_id: null,
+          // }, {
+          //   id: financiamento.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   tipo_financiamento: tipo,
+          //   descricao: financiamento.descricao ?? null,
+          //   numero_contrato: financiamento.numero_contrato ?? null,
+          //   credor_id: financiamento.credor_id ?? null,
+          //   data_contrato: financiamento.data_contrato ?? null,
+          // });
         }
       } else if (indoParaPago || ehPagoComMudancas) {
         // Recria mirror com novos valores/data e marca como realizado.
-        await deletarMirrorParcela(supabase as any, parcela.id);
+        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+        // await deletarMirrorParcela(supabase as any, parcela.id);
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
         if (tipoValido && (principal > 0 || juros > 0)) {
-          const { lancamentoIdPrincipal: newLancId, lancamentoIdJuros: newJurosId } =
-            await criarMirrorParcela(supabase as any, {
-            id: parcela.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            data_vencimento: dataPagamento || dataVencimento,
-            valor_principal: principal,
-            valor_juros: juros,
-            lancamento_id: null,
-          }, {
-            id: financiamento.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            tipo_financiamento: tipo,
-            descricao: financiamento.descricao ?? null,
-            numero_contrato: financiamento.numero_contrato ?? null,
-            credor_id: financiamento.credor_id ?? null,
-            data_contrato: financiamento.data_contrato ?? null,
-          });
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // const { lancamentoIdPrincipal: newLancId, lancamentoIdJuros: newJurosId } =
+          //   await criarMirrorParcela(supabase as any, {
+          //   id: parcela.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   data_vencimento: dataPagamento || dataVencimento,
+          //   valor_principal: principal,
+          //   valor_juros: juros,
+          //   lancamento_id: null,
+          // }, {
+          //   id: financiamento.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   tipo_financiamento: tipo,
+          //   descricao: financiamento.descricao ?? null,
+          //   numero_contrato: financiamento.numero_contrato ?? null,
+          //   credor_id: financiamento.credor_id ?? null,
+          //   data_contrato: financiamento.data_contrato ?? null,
+          // });
           if (dataPagamento) {
-            await atualizarStatusMirror(
-            supabase as any,
-            newLancId,
-            newJurosId,
-            dataPagamento,
-            contaBancariaId,
-          );
+            // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+            // await atualizarStatusMirror(
+            //   supabase as any,
+            //   newLancId,
+            //   newJurosId,
+            //   dataPagamento,
+            //   contaBancariaId,
+            // );
           }
         }
       } else if (valoresMudaram || dataMudou) {
         // Pendente com valores/data alterados — recria mirror programado.
-        await deletarMirrorParcela(supabase as any, parcela.id);
+        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+        // await deletarMirrorParcela(supabase as any, parcela.id);
         await supabase
           .from('financiamento_parcelas')
           .update({ lancamento_id: null })
           .eq('id', parcela.id);
         if (tipoValido && (principal > 0 || juros > 0)) {
-          await criarMirrorParcela(supabase as any, {
-            id: parcela.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            data_vencimento: dataVencimento,
-            valor_principal: principal,
-            valor_juros: juros,
-            lancamento_id: null,
-          }, {
-            id: financiamento.id,
-            cliente_id: financiamento.cliente_id,
-            fazenda_id: financiamento.fazenda_id,
-            tipo_financiamento: tipo,
-            descricao: financiamento.descricao ?? null,
-            numero_contrato: financiamento.numero_contrato ?? null,
-            credor_id: financiamento.credor_id ?? null,
-            data_contrato: financiamento.data_contrato ?? null,
-          });
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await criarMirrorParcela(supabase as any, {
+          //   id: parcela.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   data_vencimento: dataVencimento,
+          //   valor_principal: principal,
+          //   valor_juros: juros,
+          //   lancamento_id: null,
+          // }, {
+          //   id: financiamento.id,
+          //   cliente_id: financiamento.cliente_id,
+          //   fazenda_id: financiamento.fazenda_id,
+          //   tipo_financiamento: tipo,
+          //   descricao: financiamento.descricao ?? null,
+          //   numero_contrato: financiamento.numero_contrato ?? null,
+          //   credor_id: financiamento.credor_id ?? null,
+          //   data_contrato: financiamento.data_contrato ?? null,
+          // });
         }
       } else if (contaMudou) {
         // Apenas a conta bancária mudou — atualiza in-place os lançamentos vinculados
         // (principal e juros) sem deletar/recriar. atualizarStatusMirror já cobre ambos.
         if (parcela.lancamento_id || parcela.lancamento_juros_id) {
-          await atualizarStatusMirror(
-            supabase as any,
-            parcela.lancamento_id ?? null,
-            parcela.lancamento_juros_id ?? null,
-            dataPagamento,
-            contaBancariaId,
-          );
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await atualizarStatusMirror(
+          //   supabase as any,
+          //   parcela.lancamento_id ?? null,
+          //   parcela.lancamento_juros_id ?? null,
+          //   dataPagamento,
+          //   contaBancariaId,
+          // );
         }
       }
 

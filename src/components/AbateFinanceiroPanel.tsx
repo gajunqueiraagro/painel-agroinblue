@@ -218,7 +218,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
             })
             .in('id', oldIds);
 
-          await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
 
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id,
@@ -379,7 +380,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       }
       console.log('[AbateFinanceiro] INSERT OK', insertedData?.length, 'records');
 
-      await mirrorMetaToPlanejamento(inserts);
+      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+      // await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       const msg = mode === 'update'

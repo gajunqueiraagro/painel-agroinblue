@@ -267,7 +267,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
 
-          await deleteMetaPlanejamentoByMovimentacao(effectiveId, clienteAtual.id);
+          // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+          // await deleteMetaPlanejamentoByMovimentacao(effectiveId, clienteAtual.id);
 
           await supabase.from('audit_log_movimentacoes').insert({
             cliente_id: clienteAtual.id,
@@ -413,7 +414,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       const { error } = await supabase.from('financeiro_lancamentos_v2').insert(inserts);
       if (error) throw error;
 
-      await mirrorMetaToPlanejamento(inserts);
+      // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+      // await mirrorMetaToPlanejamento(inserts);
 
       setGerado(true);
       const msg = mode === 'update'

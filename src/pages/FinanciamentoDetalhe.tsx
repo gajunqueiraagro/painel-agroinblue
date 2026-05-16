@@ -243,8 +243,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         .select('id')
         .eq('financiamento_id', id);
       if (pRows && pRows.length > 0) {
-        const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
-        await Promise.all(pRows.map((p: any) => deletarMirrorParcela(supabase as any, p.id)));
+        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+        // const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
+        // await Promise.all(pRows.map((p: any) => deletarMirrorParcela(supabase as any, p.id)));
       }
       await supabase.from('financiamento_parcelas').delete().eq('financiamento_id', id);
       const { error } = await supabase.from('financiamentos').delete().eq('id', id);
@@ -291,14 +292,15 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         .eq('id', editingCell.parcelaId)
         .maybeSingle();
       if (parcelaAtualizada?.lancamento_id || parcelaAtualizada?.lancamento_juros_id) {
-        const { atualizarValoresMirror } = await import('@/lib/financiamentos/parcelaMirror');
-        await atualizarValoresMirror(
-          supabase as any,
-          parcelaAtualizada.lancamento_id ?? null,
-          parcelaAtualizada.lancamento_juros_id ?? null,
-          Number(parcelaAtualizada.valor_principal) || 0,
-          Number(parcelaAtualizada.valor_juros) || 0,
-        );
+        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+        // const { atualizarValoresMirror } = await import('@/lib/financiamentos/parcelaMirror');
+        // await atualizarValoresMirror(
+        //   supabase as any,
+        //   parcelaAtualizada.lancamento_id ?? null,
+        //   parcelaAtualizada.lancamento_juros_id ?? null,
+        //   Number(parcelaAtualizada.valor_principal) || 0,
+        //   Number(parcelaAtualizada.valor_juros) || 0,
+        // );
       }
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
       qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });

@@ -168,7 +168,8 @@ export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams)
     return false;
   }
 
-  await mirrorMetaToPlanejamento(inserts);
+  // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
+  // await mirrorMetaToPlanejamento(inserts);
 
   toast.success(`${inserts.length} lançamento(s) financeiro(s) gerado(s) com sucesso!`);
   return true;
