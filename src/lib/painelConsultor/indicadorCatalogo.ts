@@ -327,15 +327,6 @@ export const CATALOGO_INDICADORES: Record<string, IndicadorMeta> = {
   'desfrute_arr': { id: 'desfrute_arr', nome: 'Desfrute (@)', aba: 'medio', bloco: 'Produção', realizado: FONTE_ZOOT_VIEW_REAL, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'custo_arr_prod': { id: 'custo_arr_prod', nome: 'Custo/@prod', aba: 'medio', bloco: 'Produção', realizado: FONTE_FIN_COMP_REAL, previsto: SEM_PREVISTO },
 
-  // ─── Médio > Indicadores Econômicos ───
-  // IDs consumidos pelo bloco "Indicadores Econômicos" do PainelConsultorTab
-  // (4 linhas inseridas entre Produção e Financeiro (Caixa) — Realizado lê
-  // serieAno, META lê serieMeta de pcd.{custoArr,precoArr,margemArr,custoCab}Indicador).
-  'custo_arr':  { id: 'custo_arr',  nome: 'Custo Produtivo R$/@',    aba: 'medio', bloco: 'Indicadores Econômicos', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
-  'preco_arr':  { id: 'preco_arr',  nome: 'Preço de Venda R$/@',     aba: 'medio', bloco: 'Indicadores Econômicos', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
-  'margem_arr': { id: 'margem_arr', nome: 'Margem R$/@',             aba: 'medio', bloco: 'Indicadores Econômicos', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
-  'custo_cab':  { id: 'custo_cab',  nome: 'Custo por Cabeça R$/cab', aba: 'medio', bloco: 'Indicadores Econômicos', realizado: FONTE_FIN_COMP_REAL, previsto: FONTE_META_PLANEJAMENTO },
-
   // ─── Médio > Estrutura ───
   'area_prod': { id: 'area_prod', nome: 'Área prod. (ha)', aba: 'medio', bloco: 'Estrutura', realizado: { ...FONTE_ZOOT_VIEW_REAL, fonte_tabela: 'pastos', fonte_campo: 'area_ha (onde entra_conciliacao=true)', tela_origem: '/pastos', tela_label: 'Mapa de Pastos' }, previsto: FONTE_ZOOT_VIEW_PREVISTO },
   'reb_medio': { id: 'reb_medio', nome: 'Reb. médio (cab)', aba: 'medio', bloco: 'Estrutura', realizado: FONTE_REBANHO_REAL, previsto: FONTE_REBANHO_PREVISTO },

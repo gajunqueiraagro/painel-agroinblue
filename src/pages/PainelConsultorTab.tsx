@@ -448,22 +448,6 @@ function buildBlocosForTab(
     ? buildBlocoEndividamento(endividamento, 'acumulado')
     : null;
 
-  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
-  // Indicadores prontos do PC-100 (custoArr/precoArr/margemArr/custoCab).
-  // Realizado → serieAno. Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
-  const _serie12IE = (s?: number[]): number[] =>
-    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
-  const _pickAno = (ind?: { serieAno?: number[] } | null): number[] => _serie12IE(ind?.serieAno);
-  const blocoIndEcon: Bloco = {
-    nome: 'Indicadores Econômicos',
-    rows: [
-      r('Custo Produtivo R$/@',    'money', _pickAno(pcd?.custoArrIndicador),  'custo_arr'),
-      r('Preço de Venda R$/@',     'money', _pickAno(pcd?.precoArrIndicador),  'preco_arr'),
-      r('Margem R$/@',             'money', _pickAno(pcd?.margemArrIndicador), 'margem_arr'),
-      r('Custo por Cabeça R$/cab', 'money', _pickAno(pcd?.custoCabIndicador),  'custo_cab'),
-    ],
-  };
-
   switch (tab) {
     case 'mensal':
       return [
@@ -488,7 +472,6 @@ function buildBlocosForTab(
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -534,7 +517,6 @@ function buildBlocosForTab(
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -576,7 +558,6 @@ function buildBlocosForTab(
             r('Desfrute Acumulado (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -624,7 +605,6 @@ function buildBlocosForTab(
             r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -809,22 +789,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
-  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
-  // META → serieMeta. Sem fallback p/ serieAno (real) — se serieMeta não vier, NaN/—.
-  // Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
-  const _serie12IE = (s?: number[]): number[] =>
-    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
-  const _pickMeta = (ind?: { serieMeta?: number[] } | null): number[] => _serie12IE(ind?.serieMeta);
-  const blocoIndEcon: Bloco = {
-    nome: 'Indicadores Econômicos',
-    rows: [
-      r('Custo Produtivo R$/@',    'money', _pickMeta(pcd?.custoArrIndicador),  'custo_arr'),
-      r('Preço de Venda R$/@',     'money', _pickMeta(pcd?.precoArrIndicador),  'preco_arr'),
-      r('Margem R$/@',             'money', _pickMeta(pcd?.margemArrIndicador), 'margem_arr'),
-      r('Custo por Cabeça R$/cab', 'money', _pickMeta(pcd?.custoCabIndicador),  'custo_cab'),
-    ],
-  };
-
   switch (tab) {
     case 'mensal':
       return [
@@ -849,7 +813,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -893,7 +856,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -934,7 +896,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -977,7 +938,6 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1141,22 +1101,6 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
-  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
-  // META → serieMeta. Sem fallback p/ serieAno (real) — se serieMeta não vier, NaN/—.
-  // Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
-  const _serie12IE = (s?: number[]): number[] =>
-    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
-  const _pickMeta = (ind?: { serieMeta?: number[] } | null): number[] => _serie12IE(ind?.serieMeta);
-  const blocoIndEcon: Bloco = {
-    nome: 'Indicadores Econômicos',
-    rows: [
-      r('Custo Produtivo R$/@',    'money', _pickMeta(pcd?.custoArrIndicador),  'custo_arr'),
-      r('Preço de Venda R$/@',     'money', _pickMeta(pcd?.precoArrIndicador),  'preco_arr'),
-      r('Margem R$/@',             'money', _pickMeta(pcd?.margemArrIndicador), 'margem_arr'),
-      r('Custo por Cabeça R$/cab', 'money', _pickMeta(pcd?.custoCabIndicador),  'custo_cab'),
-    ],
-  };
-
   switch (tab) {
     case 'mensal':
       return [
@@ -1181,7 +1125,6 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1225,7 +1168,6 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1266,7 +1208,6 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1309,7 +1250,6 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
-        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
