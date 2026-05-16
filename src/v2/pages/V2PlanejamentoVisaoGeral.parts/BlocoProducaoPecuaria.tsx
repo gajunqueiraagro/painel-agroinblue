@@ -49,25 +49,25 @@ export function BlocoProducaoPecuaria({ data }: Props) {
         <CardComparativo titulo="Rebanho Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
         <CardComparativo titulo="Rebanho Médio META"          dado={data.rebanhoMedio}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
         <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO}     mostrarVsAnoAnt />
-        <CardComparativo titulo="Valor do Rebanho Final META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt />
-        <CardComparativo titulo="Área Produtiva Média META - Pecuária" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} mostrarVsAnoAnt />
+        <CardComparativo titulo="Valor Reb. META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt />
+        <CardComparativo titulo="Área Prod. Pec. META" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>
 
       <SecaoTitulo>Produção</SecaoTitulo>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <CardComparativo titulo="Arrobas Produzidas META"   dado={data.arrobasProduzidas}  className={PALETA_NEUTRO} />
+        <CardComparativo titulo="Arrobas Produzidas META"   dado={data.arrobasProduzidas}  className={PALETA_NEUTRO} mostrarVsAnoAnt />
         <CardComparativo titulo="Arrobas Desfrutadas META"  dado={data.arrobasDesfrutadas} className={PALETA_NEUTRO} />
-        <CardComparativo titulo="Desfrute (Cab.) META"      dado={data.desfrutePct}        className={PALETA_NEUTRO} />
-        <CardComparativo titulo="Lotação Média META"        dado={data.lotacaoMedia}       className={PALETA_NEUTRO} />
+        <CardComparativo titulo="Desfrute (Cab.) META"      dado={data.desfrutePct}        className={PALETA_NEUTRO} mostrarVsAnoAnt />
+        <CardComparativo titulo="Lotação Média META"        dado={data.lotacaoMedia}       className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>
 
       <SecaoTitulo>Indicadores Econômicos</SecaoTitulo>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-        <CardComparativo titulo="Custo R$/@ META"           dado={data.custoArr}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO} />
-        <CardComparativo titulo="Preço de Venda R$/@ META"  dado={data.precoArr}    className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} />
-        <CardComparativo titulo="Margem R$/@ META"          dado={data.margemArr}   className={PALETA_MARGEM}  valorClassName={VALOR_MARGEM} />
+        <CardComparativo titulo="Custo R$/@ META"           dado={data.custoArr}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
+        <CardComparativo titulo="Venda R$/@ META"           dado={data.precoArr}    className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} mostrarVsAnoAnt />
+        <CardComparativo titulo="Margem R$/@ META"          dado={data.margemArr}   className={PALETA_MARGEM}  valorClassName={VALOR_MARGEM}  mostrarVsAnoAnt />
         <CardComparativo titulo="Receita/Cab META"          dado={data.receitaCab}  className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} />
-        <CardComparativo titulo="Custo/Cab mês META"        dado={data.custoCab}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO} />
+        <CardComparativo titulo="Custo/Cab mês META"        dado={data.custoCab}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
       </div>
     </section>
   );
