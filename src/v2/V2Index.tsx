@@ -147,10 +147,11 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   const { loadData: metaLoadData } = useLancamentos('meta');
 
   const noOp = async (_id?: string) => { toast.error('Selecione uma fazenda específica para editar lançamentos.'); };
-  const canEditZoo = canEdit('zootecnico') && !isGlobal;
+  const canAddZoo = canEdit('zootecnico') && !isGlobal;
+  const canEditZoo = canEdit('zootecnico');
   const canDeleteZoo = canEdit('zootecnico');
 
-  const wrappedAdicionar = canEditZoo
+  const wrappedAdicionar = canAddZoo
     ? (async (lancamento: any) => {
         const result = await adicionarLancamento(lancamento);
         if (result && lancamento.statusOperacional === null) metaLoadData();

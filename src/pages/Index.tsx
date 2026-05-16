@@ -210,11 +210,12 @@ const Index = () => {
 
   // Wrap edit actions based on permissions
   const noOp = async () => {};
-  const canEditZoo = canEdit('zootecnico') && !isGlobal;
+  const canAddZoo = canEdit('zootecnico') && !isGlobal;
+  const canEditZoo = canEdit('zootecnico');
   const canEditFin = canEdit('financeiro') && !isGlobal;
 
   // Wrap adicionarLancamento to also reload meta data when a META record is saved
-  const wrappedAdicionar = canEditZoo ? (async (lancamento: Omit<Lancamento, 'id'>) => {
+  const wrappedAdicionar = canAddZoo ? (async (lancamento: Omit<Lancamento, 'id'>) => {
     const result = await adicionarLancamento(lancamento);
     if (result && lancamento.statusOperacional === null) {
       metaLoadData();
@@ -841,7 +842,7 @@ const Index = () => {
       {canEditMeta && activeTab === 'meta_movimentacoes' && (
         <LancamentosTab
           lancamentos={metaLancamentosFiltrados}
-          onAdicionar={canEditZoo ? (metaAdicionar as any) : noOp}
+          onAdicionar={canAddZoo ? (metaAdicionar as any) : noOp}
           onEditar={canEditZoo ? (metaEditar as any) : noOp}
           onRemover={canEditZoo ? (metaRemover as any) : noOp}
           onBackToConciliacao={() => {

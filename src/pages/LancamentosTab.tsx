@@ -288,6 +288,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [detalheId, setDetalheId] = useState<string | null>(null);
   const [lastSavedLancamentoId, setLastSavedLancamentoId] = useState<string | null>(null);
   const [editingAbateId, setEditingAbateId] = useState<string | null>(null);
+  const [editingFazendaId, setEditingFazendaId] = useState<string | null>(null);
   const [editingReclassId, setEditingReclassId] = useState<string | null>(null);
   /** Lancamento original antes da edição — para detectar alterações estruturais */
   const editOriginalRef = useRef<Lancamento | null>(null);
@@ -762,6 +763,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = null;
     setP1BloqueioMsg(null);
     setEditingAbateId(null);
+    setEditingFazendaId(null);
     setQuantidade(''); setCategoria(''); setPesoKg('');
     setFazendaOrigem(''); setFazendaDestino('');
     setData(format(new Date(), 'yyyy-MM-dd'));
@@ -795,6 +797,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       setTipo(ctx.tipo);
       internalEditOrigin.current = null;
     }
+    setEditingFazendaId(null);
     onReturnFromEdit?.();
   }, [onReturnFromEdit]);
 
@@ -998,6 +1001,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1286,6 +1290,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [abateFornecedores, clienteAtual, fazendaAtual, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1433,6 +1438,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [abateFornecedores, aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1475,6 +1481,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1515,6 +1522,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1544,6 +1552,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     editOriginalRef.current = l;
     setP1BloqueioMsg(null);
     setEditingAbateId(l.id);
+    setEditingFazendaId(l.fazendaId ?? null);
     setDetalheId(null);
     setLastSavedLancamentoId(null);
   }, [aba, anoFiltro, mesFiltro, onReturnFromEdit]);
@@ -1659,7 +1668,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
   const triggerZootCacheRefresh = (dateStr: string, includeReclassificacao = false, mes?: number) => {
-    const fazendaId = fazendaAtual?.id;
+    const fazendaId = editingFazendaId ?? fazendaAtual?.id;
     if (!fazendaId || !dateStr) return;
     const p_ano = Number(dateStr.slice(0, 4));
     const args = mes ? { p_fazenda_id: fazendaId, p_ano, p_mes: mes } : { p_fazenda_id: fazendaId, p_ano };
@@ -1745,6 +1754,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         : (isAbate && abateDetalhes ? (parseNumericValue(abateDetalhes.precoArroba) || undefined) : (numOrUndef(precoArroba) || undefined));
     const tipoPesoFinal = isVenda ? vendaTipoPreco : abTipoPeso;
     const tipoVendaFinal = isVenda ? tipoPeso : abTipoVenda; // tipoPeso state holds desmama/gado_adulto/boitel for venda
+
+    // Em EDIÇÃO em modo Global, preserva a fazenda real do lançamento;
+    // em CRIAÇÃO, cai pro fazendaAtual.id (criação em Global está bloqueada).
+    const effectiveFazendaId = editingFazendaId ?? fazendaAtual?.id;
 
     const lancamentoDados: Partial<Omit<Lancamento, 'id'>> = {
       data, tipo, quantidade: parseNumericValue(quantidade), categoria: categoria as Categoria,
@@ -1939,7 +1952,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             compraDetalhes,
             lancamentoId: editingAbateId,
             clienteId: clienteAtual.id,
-            fazendaId: fazendaAtual.id,
+            fazendaId: effectiveFazendaId,
             quantidade: parseNumericValue(quantidade) || 0,
             pesoKg: parseNumericValue(pesoKg) || 0,
             data,
@@ -1982,7 +1995,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               compraDetalhes,
               lancamentoId: returnedId,
               clienteId: clienteAtual.id,
-              fazendaId: fazendaAtual.id,
+              fazendaId: effectiveFazendaId,
               quantidade: parseNumericValue(quantidade) || 0,
               pesoKg: parseNumericValue(pesoKg) || 0,
               data,
