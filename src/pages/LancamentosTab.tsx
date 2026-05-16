@@ -2304,7 +2304,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
   // ===== BLOCKED VIEW =====
-  if (bloqueado && (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')) {
+  // editingAbateId é state GENÉRICO usado pelos 6 loaders zoot
+  // (Abate/Venda/Compra/Transferência/Consumo/Morte/Nascimento).
+  // editingReclassId é o state da reclassificação.
+  // Em edição com lançamento carregado, liberar UI APENAS quando em Global.
+  // Administrativo NUNCA libera (nem edição), por design conceitual.
+  const isEditingExisting = editingAbateId !== null || editingReclassId !== null;
+  if (
+    (isAdministrativo || (isGlobal && !isEditingExisting)) &&
+    (aba === 'entrada' || aba === 'saida' || aba === 'reclassificacao')
+  ) {
     return (
       <div className="p-4 animate-fade-in pb-20 max-w-7xl mx-auto">
         {onBackToConciliacao && (
