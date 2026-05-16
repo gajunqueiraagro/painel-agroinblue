@@ -171,6 +171,23 @@ export interface PainelConsultorDataResult {
     arrobasProd:  number[];
     gmd:          number[];
   } | null;
+  /**
+   * Foto Dez ano-1 REALIZADO — saldo final cabeças (= rebanho INICIAL do ano).
+   * Independente de viewMode (não é média acumulada). Fonte: cabFinAnoAntSerie[12].
+   */
+  cabecasFinFotoAnoAnt: number | null;
+  /**
+   * Foto Dez ano-1 REALIZADO — peso médio final ponderado (peso_total/cab).
+   * Independente de viewMode. Fonte: pesoMedioFinAnoAnt13[12].
+   */
+  pesoMedioFinFotoAnoAnt: number | null;
+  /**
+   * Peso médio final META Dez/ano — snapshot validado oficial (mesma fonte
+   * usada pela tabela Rebanho META). Ponderado por cabeças no Global.
+   * Fonte: valor_rebanho_meta_validada.peso_medio_kg × cabecas / Σcabecas.
+   * null quando snapshot ausente — não inverte para view zoot.
+   */
+  pesoMedioFinMetaSnap: number | null;
   /** Indicador de Cabeças/Rebanho com tudo pronto para o card e o modal. */
   cabecasIndicador: {
     label:     string;
@@ -1131,12 +1148,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   }, [carregarMetaEffective, gridMetaConsolidado]);
 
   // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
+  // Estendido: lê também `peso_medio_kg` e `cabecas` para expor pesoMedioFinMetaSnap
+  // (mesma fórmula do PainelConsultorTab.metaPesoSnap — ponderação por cabeças).
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
+  const [pesoMedioFinMetaSnap12, setPesoMedioFinMetaSnap12] = useState<number[]>(() => Array(12).fill(NaN));
   useEffect(() => {
     const cid = clienteAtual?.id;
-    if (!cid) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
+    if (!cid) {
+      setValorRebanhoMetaMes(Array(12).fill(NaN));
+      setPesoMedioFinMetaSnap12(Array(12).fill(NaN));
+      return;
+    }
     if (!isGlobal && (!fazendaId || fazendaId === '__global__')) {
       setValorRebanhoMetaMes(Array(12).fill(NaN));
+      setPesoMedioFinMetaSnap12(Array(12).fill(NaN));
       return;
     }
     let cancelled = false;
@@ -1145,25 +1170,36 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // é considerado autoritativo independente do status (ver auditoria meta).
     let q = supabase
       .from('valor_rebanho_meta_validada' as any)
-      .select('ano_mes, valor_total')
+      .select('ano_mes, valor_total, peso_medio_kg, cabecas')
       .eq('cliente_id', cid)
       .in('ano_mes', meses);
     if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
     q.then(({ data, error }) => {
       if (cancelled) return;
-      if (error || !data) { setValorRebanhoMetaMes(Array(12).fill(NaN)); return; }
+      if (error || !data) {
+        setValorRebanhoMetaMes(Array(12).fill(NaN));
+        setPesoMedioFinMetaSnap12(Array(12).fill(NaN));
+        return;
+      }
       // Agregação por ano_mes — soma de fazendas validadas no Global; 1 só registro p/ Fazenda.
       const valor = Array(12).fill(0);
       const tem   = Array(12).fill(false);
+      const cab   = Array(12).fill(0);
+      const pTot  = Array(12).fill(0); // peso_medio × cabecas (numerador para ponderação)
       for (const r of data as any[]) {
         const idx = meses.indexOf(r.ano_mes);
         if (idx < 0) continue;
-        const v = Number(r.valor_total) || 0;
+        const v   = Number(r.valor_total)   || 0;
+        const c   = Number(r.cabecas)       || 0;
+        const pm0 = Number(r.peso_medio_kg) || 0;
         valor[idx] += v;
         tem[idx] = true;
+        cab[idx]  += c;
+        pTot[idx] += pm0 * c;
       }
       // Mês sem nenhum registro → NaN (não 0); preserva semântica "sem meta".
       setValorRebanhoMetaMes(valor.map((v, i) => tem[i] ? v : NaN));
+      setPesoMedioFinMetaSnap12(pTot.map((pt, i) => (tem[i] && cab[i] > 0) ? pt / cab[i] : NaN));
     });
     return () => { cancelled = true; };
   }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
@@ -2855,6 +2891,15 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       arrobasProd:  monthlyDataMeta.arrobasProd,
       gmd:          monthlyDataMeta.gmd,
     } : null,
+    cabecasFinFotoAnoAnt: cabFinAnoAntSerie && Number.isFinite(cabFinAnoAntSerie[12])
+      ? cabFinAnoAntSerie[12]
+      : null,
+    pesoMedioFinFotoAnoAnt: pesoMedioFinAnoAnt13 && Number.isFinite(pesoMedioFinAnoAnt13[12])
+      ? pesoMedioFinAnoAnt13[12]
+      : null,
+    pesoMedioFinMetaSnap: Number.isFinite(pesoMedioFinMetaSnap12[11])
+      ? pesoMedioFinMetaSnap12[11]
+      : null,
     cabecasIndicador: monthlyData ? {
       label:     isPeriodo ? 'REBANHO MÉDIO' : 'CABEÇAS',
       titulo:    isPeriodo ? 'Rebanho Médio no período' : 'Rebanho Final do mês',
@@ -3094,6 +3139,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       dadosCompletos: false,
       seriesMensais: null,
       seriesMeta: null,
+      cabecasFinFotoAnoAnt: null,
+      pesoMedioFinFotoAnoAnt: null,
+      pesoMedioFinMetaSnap: null,
       cabecasIndicador: null,
       pesoMedioIndicador: null,
       gmdIndicador: null,

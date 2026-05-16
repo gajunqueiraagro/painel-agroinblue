@@ -382,6 +382,39 @@ function buildComparativoEstoquePonto(
  * para evitar fallback inventado misturando convenções de série. Card mostra
  * "— vs ano ant." sem comparativo.
  */
+/**
+ * Comparativo do card "Peso Médio Final META".
+ *
+ * Valor: prioriza snapshot validado (`pesoMedioFinMetaSnap`) — mesma fonte
+ * usada pela tabela Rebanho META. Se ausente, usa view zoot ponderada
+ * (`seriesMeta.pesoMedioFin[11]`). Snapshot pode divergir da view porque
+ * representa o peso validado oficialmente vs cálculo pesoTotal/cab da view.
+ *
+ * Base "início ano": foto Dez ano-1 ponderada (`pesoMedioFinFotoAnoAnt`).
+ * Delta = (valor - base) / base × 100.
+ */
+function buildComparativoPesoFinalMeta(
+  snapMeta: number | null | undefined,
+  viewMetaDez: number | null,
+  baseInicioAno: number | null | undefined,
+): ComparativoDuplo {
+  const fromSnap = snapMeta != null && Number.isFinite(snapMeta) ? snapMeta : null;
+  const fromView = viewMetaDez != null && Number.isFinite(viewMetaDez) ? viewMetaDez : null;
+  const valor = fromSnap ?? fromView;
+  const base = baseInicioAno != null && Number.isFinite(baseInicioAno) && baseInicioAno !== 0
+    ? baseInicioAno
+    : null;
+  const delta = valor != null && base != null ? ((valor - base) / base) * 100 : null;
+  return {
+    valor,
+    origem: 'pc100',
+    tipoSemantica: 'estoque',
+    formato: 'kg',
+    vsAnoFechado: { valor: base, delta },
+    vsMesmoPeriodo: { valor: null, delta: null },
+  };
+}
+
 function buildComparativoEstoquePontoZeroIndexed(
   seriesMeta: number[] | undefined,
   idxZeroBased: number,
@@ -685,7 +718,7 @@ function buildBloco2Producao(
 
   warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
   warnings.push('valorRebanhoFinal META: painel.seriesMeta não expõe valorRebFin — GAP do PC-100, card exibe "—"');
-  warnings.push('cabecasFinal/pesoMedioFinal META: cards de FOTO 0-indexed em painel.seriesMeta. Comparativo agora é vs INÍCIO DO ANO (Dez ano-1 REALIZADO via *Indicador.serieAnoAnt[12]) — label "vs início ano".');
+  warnings.push('cabecasFinal/pesoMedioFinal META: foto Dez. Comparativo vs INÍCIO DO ANO usa cabecasFinFotoAnoAnt / pesoMedioFinFotoAnoAnt (foto Dez ano-1 REALIZADO, independente de viewMode). Peso final META usa pesoMedioFinMetaSnap (snapshot validado, mesma fonte da tabela Rebanho META).');
 
   // Rebanho Final META: FOTO Dez (idx 11 em painel.seriesMeta.cabFin, 0-indexed).
   //   NÃO usar cabecasIndicador.serieMetaIndicador aqui — em viewMode='periodo'
@@ -696,17 +729,23 @@ function buildBloco2Producao(
   // Valor do Rebanho Final META: GAP do PC-100 — painel.seriesMeta não expõe valorRebFin
   //   para META. Sem fonte oficial pronta → emptyComparativo, exibe '—'. Sem fallback.
   return {
-    // Comparativo vs INÍCIO DO ANO (Rebanho/Peso de Dez ano-1 REALIZADO).
-    // Fonte: cabecasIndicador.serieAnoAnt[12] / pesoMedioIndicador.serieAnoAnt[12]
-    // (length 13, 1-based, [12]=Dez ano-1 — saldo final realizado do ano anterior).
+    // Comparativo vs INÍCIO DO ANO (foto Dez ano-1 REALIZADO).
+    //   - Cabeças: painel.cabecasFinFotoAnoAnt (= cabFinAnoAntSerie[12], foto)
+    //   - Peso:    painel.pesoMedioFinFotoAnoAnt (= pesoMedioFinAnoAnt13[12], foto)
+    // Não usar *Indicador.serieAnoAnt[12]: em viewMode='periodo' essa série
+    // retorna média acumulada, não foto — causa bug do delta invertido.
     cabecasFinal: buildComparativoEstoquePontoZeroIndexed(
       painel.seriesMeta?.cabFin, 11, 'pc100', 'cabecas',
-      painel.cabecasIndicador?.serieAnoAnt?.[12] ?? null,
+      painel.cabecasFinFotoAnoAnt,
     ),
     rebanhoMedio: buildComparativoPonto(cabSerieMeta, cabSerieAnoAnt, mesAtual, 'pc100', 'media', 'cabecas'),
-    pesoMedioFinal: buildComparativoEstoquePontoZeroIndexed(
-      painel.seriesMeta?.pesoMedioFin, 11, 'pc100', 'kg',
-      painel.pesoMedioIndicador?.serieAnoAnt?.[12] ?? null,
+    // Peso Final META: usa pesoMedioFinMetaSnap (snapshot validado, mesma
+    // fonte da tabela Rebanho META). Quando ausente, cai para seriesMeta
+    // (view zoot ponderada). Comparativo vs início ano usa foto Dez ano-1.
+    pesoMedioFinal: buildComparativoPesoFinalMeta(
+      painel.pesoMedioFinMetaSnap,
+      painel.seriesMeta?.pesoMedioFin?.[11] ?? null,
+      painel.pesoMedioFinFotoAnoAnt,
     ),
     valorRebanhoFinal: emptyComparativo('pc100', 'estoque', 'moeda'),
 
