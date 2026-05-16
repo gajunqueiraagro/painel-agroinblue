@@ -175,21 +175,21 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-3 md:p-4 space-y-3">
       {/* Header */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start gap-3 justify-between">
+        <CardHeader className="py-3 px-4">
+          <div className="flex flex-wrap items-start gap-2 justify-between">
             <div>
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-base flex items-center gap-2">
                 Áreas META — Planejamento
                 {isGlobal && (
-                  <Badge variant="secondary" className="gap-1">
+                  <Badge variant="secondary" className="gap-1 h-5 text-[10px] px-1.5 bg-orange-100 text-orange-800 border-orange-200">
                     <Globe className="h-3 w-3" /> Global • soma das fazendas
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs mt-0.5">
                 {isGlobal
                   ? 'Leitura agregada de todas as fazendas do cliente. Para editar, selecione uma fazenda.'
                   : `Edite a área pecuária e agrícola META mês a mês para ${fazendaAtual?.nome ?? 'esta fazenda'}.`}
@@ -197,7 +197,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
             </div>
             <div className="flex items-center gap-2">
               <Select value={String(anoLocal)} onValueChange={(v) => setAnoLocal(Number(v))}>
-                <SelectTrigger className="w-28 h-8 text-sm">
+                <SelectTrigger className="w-24 h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -209,6 +209,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                   size="sm"
                   onClick={handleSalvar}
                   disabled={!dirty || saving || loading}
+                  className="h-8"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Save className="h-4 w-4 mr-1.5" />}
                   Salvar
@@ -247,32 +248,32 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
         )}
       </Card>
 
-      {/* Tabela */}
+      {/* Tabela — compacta, paleta META (laranja muito leve), sem scroll horizontal em notebook padrão */}
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0">
           {loading ? (
-            <div className="p-4 space-y-2">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
+            <div className="p-3 space-y-2">
+              <Skeleton className="h-7 w-full" />
+              <Skeleton className="h-7 w-full" />
+              <Skeleton className="h-7 w-full" />
             </div>
           ) : (
-            <table className="w-full text-xs">
-              <thead className="bg-muted/50 border-b">
+            <table className="w-full text-xs tabular-nums">
+              <thead className="bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200/60 dark:border-orange-900/40">
                 <tr>
-                  <th className="text-left p-2 font-medium sticky left-0 bg-muted/50 min-w-[120px]">Linha (ha)</th>
+                  <th className="text-left px-2 py-1.5 font-semibold sticky left-0 bg-orange-50 dark:bg-orange-950/20 min-w-[100px] text-orange-900 dark:text-orange-200">Linha (ha)</th>
                   {MESES.map(m => (
-                    <th key={m} className="p-2 font-medium text-center min-w-[68px]">{m}</th>
+                    <th key={m} className="px-1 py-1.5 font-semibold text-center min-w-[56px] text-orange-900 dark:text-orange-200">{m}</th>
                   ))}
-                  <th className="p-2 font-medium text-center bg-muted min-w-[80px]">Média</th>
+                  <th className="px-2 py-1.5 font-semibold text-center bg-orange-100/60 dark:bg-orange-900/30 min-w-[68px] text-orange-900 dark:text-orange-200">Média</th>
                 </tr>
               </thead>
               <tbody>
                 {/* Pecuária */}
-                <tr className="border-b">
-                  <td className="p-2 font-medium sticky left-0 bg-background">Pecuária</td>
+                <tr className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
+                  <td className="px-2 py-1 font-medium sticky left-0 bg-background">Pecuária</td>
                   {linhas.map((l, idx) => (
-                    <td key={l.mes} className="p-1 text-center">
+                    <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
                         <span className="text-muted-foreground">
                           {fmt(data?.porMes[idx]?.area_pecuaria_ha ?? null)}
@@ -283,7 +284,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-7 w-full text-xs text-right px-1.5"
+                          className="h-6 w-full text-xs text-right px-1 tabular-nums"
                           value={l.pec}
                           onChange={(e) => onChangeCelula(idx, 'pec', e.target.value)}
                           disabled={saving}
@@ -292,14 +293,14 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="p-2 text-center font-medium bg-muted/40">{fmt(mediaPec)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15">{fmt(mediaPec)}</td>
                 </tr>
 
                 {/* Agricultura */}
-                <tr className="border-b">
-                  <td className="p-2 font-medium sticky left-0 bg-background">Agricultura</td>
+                <tr className="border-b border-border/60 hover:bg-orange-50/40 dark:hover:bg-orange-950/10 transition-colors">
+                  <td className="px-2 py-1 font-medium sticky left-0 bg-background">Agricultura</td>
                   {linhas.map((l, idx) => (
-                    <td key={l.mes} className="p-1 text-center">
+                    <td key={l.mes} className="px-0.5 py-0.5 text-center">
                       {isGlobal ? (
                         <span className="text-muted-foreground">
                           {fmt(data?.porMes[idx]?.area_agricultura_ha ?? null)}
@@ -310,7 +311,7 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                           inputMode="decimal"
                           step="0.1"
                           min="0"
-                          className="h-7 w-full text-xs text-right px-1.5"
+                          className="h-6 w-full text-xs text-right px-1 tabular-nums"
                           value={l.agric}
                           onChange={(e) => onChangeCelula(idx, 'agric', e.target.value)}
                           disabled={saving}
@@ -319,18 +320,18 @@ export function V2AreasMeta({ ano: anoInicial }: Props) {
                       )}
                     </td>
                   ))}
-                  <td className="p-2 text-center font-medium bg-muted/40">{fmt(mediaAgr)}</td>
+                  <td className="px-2 py-1 text-center font-medium bg-orange-50/60 dark:bg-orange-950/15">{fmt(mediaAgr)}</td>
                 </tr>
 
-                {/* Total — sempre read-only */}
-                <tr className="bg-primary/5">
-                  <td className="p-2 font-semibold sticky left-0 bg-primary/5">Total</td>
+                {/* Total — sempre read-only, paleta META destaque */}
+                <tr className="bg-orange-100/50 dark:bg-orange-900/25 border-t-2 border-orange-200/70 dark:border-orange-900/50">
+                  <td className="px-2 py-1.5 font-semibold sticky left-0 bg-orange-100/50 dark:bg-orange-900/25 text-orange-900 dark:text-orange-200">Total</td>
                   {linhas.map((_, idx) => (
-                    <td key={idx} className="p-2 text-center font-semibold">
+                    <td key={idx} className="px-1 py-1.5 text-center font-semibold text-orange-900 dark:text-orange-200">
                       {fmt(totalsLocal[idx])}
                     </td>
                   ))}
-                  <td className="p-2 text-center font-semibold bg-primary/10">{fmt(mediaTot)}</td>
+                  <td className="px-2 py-1.5 text-center font-semibold bg-orange-200/40 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200">{fmt(mediaTot)}</td>
                 </tr>
               </tbody>
             </table>
