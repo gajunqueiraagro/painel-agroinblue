@@ -115,19 +115,6 @@ export function AbateResumoPanel({
           </Button>
         </>
       )}
-
-      <Separator />
-
-      <div className="flex items-center gap-1.5">
-        {onCancelEdit && (
-          <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
-            Cancelar
-          </Button>
-        )}
-        <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
-          {submitting ? 'Registrando...' : (registerLabel || 'Registrar Abate')}
-        </Button>
-      </div>
     </div>
   );
 }

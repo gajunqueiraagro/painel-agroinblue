@@ -3008,6 +3008,32 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {isAbate && (
+        <div className="flex items-center gap-2 pt-3 border-t mt-3">
+          {editingAbateId && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelEdit}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting || !abateDetalhes}
+          >
+            {submitting
+              ? 'Registrando...'
+              : editingAbateId ? 'Salvar Alterações do Abate' : 'Registrar Abate'}
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 
