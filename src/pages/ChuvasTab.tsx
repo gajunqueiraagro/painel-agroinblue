@@ -296,7 +296,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
             <tr className="bg-[#24466B] text-white/90">
               {Array.from({ length: 12 }, (_, i) => (
                 <Fragment key={i}>
-                  <th className="border border-[#1E3A5F] px-0.5 py-0 text-center text-[9px] font-medium">Dia</th>
+                  <th className="border border-[#1E3A5F] px-0.5 py-0 text-center text-[9px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">Dia</th>
                   <th className="border border-[#1E3A5F] px-0.5 py-0 text-center text-[9px] font-medium">mm</th>
                 </Fragment>
               ))}
@@ -338,7 +338,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
                   if (isEditing) {
                     return (
                       <Fragment key={mes}>
-                        <td className="border border-border px-0.5 py-0 text-center text-muted-foreground">{d}</td>
+                        <td className="border border-border px-0.5 py-0 text-center text-muted-foreground bg-slate-100 dark:bg-slate-800/40">{d}</td>
                         <td className="border border-border p-0 overflow-hidden">
                           <Input
                             type="number"
@@ -358,7 +358,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
 
                   return (
                     <Fragment key={mes}>
-                      <td className="border border-border px-0.5 py-0 text-center text-muted-foreground">{d}</td>
+                      <td className="border border-border px-0.5 py-0 text-center text-muted-foreground bg-slate-100 dark:bg-slate-800/40">{d}</td>
                       <td
                         className={`border border-border px-0.5 py-0 text-center cursor-pointer transition-colors ${getCellColor(mm)}`}
                         onClick={() => handleCellClick(dia, mes)}
