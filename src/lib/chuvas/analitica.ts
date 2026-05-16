@@ -173,3 +173,77 @@ export function comparativoAnoAnt(chuvas: Chuva[], ano: number, fazendaId?: stri
   const deltaPct = totalAnoAnt > 0 ? (deltaMm / totalAnoAnt) * 100 : null;
   return { totalAtual, totalAnoAnt, deltaMm, deltaPct };
 }
+
+// ─── PERÍODO (01/jan/ano → último dia do mesLimite) ──────────────────
+//
+// Convenção executiva: análise climática Global usa SEMPRE período
+// 01/jan/ano → último dia do mês filtrado (inclusive), mesmo se o mês
+// ainda estiver em andamento. Para Maio/2026: período = 01/01/2026 a
+// 31/05/2026. Mesma janela aplicada ao ano anterior para comparativo.
+
+/** Filtra Chuva[] do início do ano até o último dia do mesLimite (inclusive). */
+function filtrarPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): Chuva[] {
+  return chuvas.filter(c => {
+    const y = parseInt(c.data.slice(0, 4), 10);
+    const m = parseInt(c.data.slice(5, 7), 10);
+    if (y !== ano) return false;
+    if (m > mesLimite) return false;
+    if (fazendaId && c.fazendaId !== fazendaId) return false;
+    return true;
+  });
+}
+
+/** Total de dias no período 01/jan → último dia do mesLimite. */
+export function diasNoPeriodo(ano: number, mesLimite: number): number {
+  let acum = 0;
+  for (let m = 1; m <= mesLimite; m++) acum += fimDoMes(ano, m);
+  return acum;
+}
+
+/** Soma de mm no período. */
+export function totalPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): number {
+  return filtrarPeriodo(chuvas, ano, mesLimite, fazendaId).reduce((s, c) => s + c.milimetros, 0);
+}
+
+/** Dias distintos com mm > 0 no período. */
+export function diasComChuvaPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): number {
+  const dias = new Set<string>();
+  for (const c of filtrarPeriodo(chuvas, ano, mesLimite, fazendaId)) {
+    if (c.milimetros > 0) dias.add(c.data);
+  }
+  return dias.size;
+}
+
+/**
+ * Dias SEM chuva no período = diasNoPeriodo − diasComChuvaPeriodo.
+ * Definição executiva (não confundir com "maior estiagem contínua").
+ */
+export function diasSemChuvaPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): number {
+  return Math.max(0, diasNoPeriodo(ano, mesLimite) - diasComChuvaPeriodo(chuvas, ano, mesLimite, fazendaId));
+}
+
+/** Maior evento diário (mm) no período. */
+export function maiorChuvaDiaPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): MaiorChuvaDia {
+  const map = new Map<string, number>();
+  for (const c of filtrarPeriodo(chuvas, ano, mesLimite, fazendaId)) {
+    map.set(c.data, (map.get(c.data) ?? 0) + c.milimetros);
+  }
+  let max = 0;
+  let data: string | null = null;
+  for (const [d, mm] of map) {
+    if (mm > max) { max = mm; data = d; }
+  }
+  return { data, mm: max };
+}
+
+/**
+ * Comparativo de acumulado no MESMO período do ano anterior.
+ * Ex: Filtro Maio/2026 → compara Jan-Mai/2026 vs Jan-Mai/2025.
+ */
+export function comparativoMesmoPeriodo(chuvas: Chuva[], ano: number, mesLimite: number, fazendaId?: string): ComparativoAnoAnt {
+  const totalAtual = totalPeriodo(chuvas, ano, mesLimite, fazendaId);
+  const totalAnoAnt = totalPeriodo(chuvas, ano - 1, mesLimite, fazendaId);
+  const deltaMm = totalAtual - totalAnoAnt;
+  const deltaPct = totalAnoAnt > 0 ? (deltaMm / totalAnoAnt) * 100 : null;
+  return { totalAtual, totalAnoAnt, deltaMm, deltaPct };
+}

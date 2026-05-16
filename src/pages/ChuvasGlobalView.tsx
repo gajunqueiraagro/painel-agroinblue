@@ -1,25 +1,27 @@
 /**
- * ChuvasGlobalView — visão comparativa entre fazendas (modo Global).
+ * ChuvasGlobalView — visão executiva climática (modo Global).
  *
- * Regra de produto: pluviometria é por estação/fazenda — em Global NUNCA
- * tratar como soma única. Esta tela mostra cada fazenda separadamente.
- *
- * Se um total agregado for exibido, é rotulado como "soma operacional dos
- * registros — não representa pluviometria oficial".
- *
- * Layout: cards superiores, gráfico horizontal comparativo, tabela.
+ * Regras de produto:
+ *   • Pluviometria é por estação/fazenda. NUNCA somar mm como leitura oficial.
+ *   • Fazenda monitorada = tem ≥ 1 registro de chuva > 0 no período filtrado.
+ *     Administrativo (e quaisquer fazendas sem chuva) é excluído automaticamente
+ *     dos rankings — não há filtro por nome, é definição por dado real.
+ *   • Período de análise: 01/jan do ano → último dia do mês filtrado (inclusive),
+ *     mesmo se o mês ainda estiver em andamento. Comparativo ano-1 usa MESMA janela.
+ *   • Soma operacional no rodapé é informativa, NÃO pluviometria oficial.
  */
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useChuvas } from '@/hooks/useChuvas';
 import { useFazenda } from '@/contexts/FazendaContext';
 import {
-  totalAno,
-  diasComChuva,
-  maiorChuvaDia,
-  maiorIntervaloSemChuva,
-  comparativoAnoAnt,
+  totalPeriodo,
+  diasSemChuvaPeriodo,
+  maiorChuvaDiaPeriodo,
+  comparativoMesmoPeriodo,
 } from '@/lib/chuvas/analitica';
+
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function fmt(n: number, dec = 1): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -35,208 +37,269 @@ function fmtDataBR(dataIso: string | null | undefined): string {
   return `${d}/${m}/${y}`;
 }
 
-interface Props {
-  anoFiltro: number;
+function fmtPct(pct: number | null): { texto: string; cor: string } {
+  if (pct == null) return { texto: '—', cor: 'text-muted-foreground' };
+  const sinal = pct >= 0 ? '+' : '';
+  const cor = pct > 0
+    ? 'text-emerald-700 dark:text-emerald-300'
+    : pct < 0
+      ? 'text-rose-700 dark:text-rose-300'
+      : 'text-muted-foreground';
+  return { texto: `${sinal}${fmt(pct)}%`, cor };
 }
 
-export function ChuvasGlobalView({ anoFiltro }: Props) {
+interface Props {
+  anoFiltro: number;
+  mesFiltro: number; // 1..12 — limite superior do período de análise
+}
+
+export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
   const { chuvas } = useChuvas();
   const { fazendas } = useFazenda();
-  const ativas = useMemo(() => fazendas.filter(f => f.id !== '__global__'), [fazendas]);
+  const ativasContexto = useMemo(() => fazendas.filter(f => f.id !== '__global__'), [fazendas]);
 
+  // Métricas por fazenda — sempre no PERÍODO (01/jan → fim do mesFiltro)
   const metricas = useMemo(() => {
-    return ativas.map(f => {
-      const acum = totalAno(chuvas, anoFiltro, f.id);
-      const dias = diasComChuva(chuvas, anoFiltro, f.id);
-      const maiorGap = maiorIntervaloSemChuva(chuvas, anoFiltro, f.id);
-      const maiorDia = maiorChuvaDia(chuvas, anoFiltro, f.id);
-      const comp = comparativoAnoAnt(chuvas, anoFiltro, f.id);
-      return { fazenda: f, acum, dias, maiorGap, maiorDia, comp };
+    return ativasContexto.map(f => {
+      const acum = totalPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
+      const diasSem = diasSemChuvaPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
+      const maiorDia = maiorChuvaDiaPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
+      const comp = comparativoMesmoPeriodo(chuvas, anoFiltro, mesFiltro, f.id);
+      return { fazenda: f, acum, diasSem, maiorDia, comp };
     });
-  }, [ativas, chuvas, anoFiltro]);
+  }, [ativasContexto, chuvas, anoFiltro, mesFiltro]);
 
-  const insights = useMemo(() => {
-    if (metricas.length === 0) return null;
-    const maisChuvosa = metricas.reduce((a, b) => (b.acum > a.acum ? b : a));
-    const maisSeca = metricas.reduce((a, b) => (b.acum < a.acum ? b : a));
-    const maiorEstiagem = metricas.reduce((a, b) => {
-      const da = a.maiorGap?.dias ?? 0;
-      const db = b.maiorGap?.dias ?? 0;
-      return db > da ? b : a;
-    });
-    const somaOp = metricas.reduce((s, m) => s + m.acum, 0);
-    return { maisChuvosa, maisSeca, maiorEstiagem, somaOp };
-  }, [metricas]);
+  // Fazenda monitorada = ≥ 1 registro de chuva > 0 no período.
+  // Excluído automaticamente: Administrativo (sem dados de chuva) e qualquer
+  // fazenda sem registros no período.
+  const ativasComChuva = useMemo(() => metricas.filter(m => m.acum > 0), [metricas]);
 
-  // Dados do gráfico horizontal — ordenado da maior → menor acumulada
-  const chartData = useMemo(() => {
-    return [...metricas]
+  // Rankings (TOP 2)
+  const topAcumuladas = useMemo(() =>
+    [...ativasComChuva].sort((a, b) => b.acum - a.acum).slice(0, 2),
+    [ativasComChuva]);
+
+  const topMaiorChuva = useMemo(() =>
+    [...ativasComChuva].sort((a, b) => b.maiorDia.mm - a.maiorDia.mm).slice(0, 2),
+    [ativasComChuva]);
+
+  const topDiasSemChuva = useMemo(() =>
+    [...ativasComChuva].sort((a, b) => b.diasSem - a.diasSem).slice(0, 2),
+    [ativasComChuva]);
+
+  const somaOperacional = useMemo(() =>
+    ativasComChuva.reduce((s, m) => s + m.acum, 0),
+    [ativasComChuva]);
+
+  // Gráfico — ordenado da maior → menor acumulada
+  const chartData = useMemo(() =>
+    [...ativasComChuva]
       .sort((a, b) => b.acum - a.acum)
-      .map(m => ({
-        nome: m.fazenda.nome,
-        mm: Math.round(m.acum * 10) / 10,
-      }));
-  }, [metricas]);
+      .map(m => ({ nome: m.fazenda.nome, mm: Math.round(m.acum * 10) / 10 })),
+    [ativasComChuva]);
 
-  if (ativas.length === 0) {
+  const mesLabel = MESES_ABREV[mesFiltro - 1] ?? '';
+  const periodoLabel = `${mesLabel}/${anoFiltro}`;
+
+  if (ativasComChuva.length === 0) {
     return (
       <div className="px-4 py-6 text-sm text-muted-foreground">
-        Nenhuma fazenda ativa para este cliente.
+        Nenhuma fazenda com chuva registrada no período (Jan–{mesLabel}/{anoFiltro}).
       </div>
     );
   }
 
   return (
     <div className="px-3 py-3 space-y-3">
-      {/* Cards superiores compactos */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <CardKpi
+      {/* Linha 1 — 4 cards executivos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+        {/* Card 1 — Fazendas monitoradas */}
+        <CardSingle
           label="Fazendas monitoradas"
-          value={fmtInt(ativas.length)}
+          value={fmtInt(ativasComChuva.length)}
+          sub={`Período Jan–${mesLabel}/${anoFiltro}`}
         />
-        <CardKpi
-          label="Mais chuvosa"
-          value={insights?.maisChuvosa.fazenda.nome ?? '—'}
-          sub={insights ? `${fmt(insights.maisChuvosa.acum)} mm` : ''}
-          accent="emerald"
+
+        {/* Card 2 — Chuvas acumuladas (TOP 2 vs ano-1 mesmo período) */}
+        <CardLista
+          label="Chuvas acumuladas"
+          itens={topAcumuladas.map(m => {
+            const pct = fmtPct(m.comp.deltaPct);
+            return {
+              nome: m.fazenda.nome,
+              valor: `${fmt(m.acum)} mm`,
+              sub: `vs ${anoFiltro - 1}`,
+              extra: pct.texto,
+              extraCor: pct.cor,
+            };
+          })}
         />
-        <CardKpi
-          label="Mais seca"
-          value={insights?.maisSeca.fazenda.nome ?? '—'}
-          sub={insights ? `${fmt(insights.maisSeca.acum)} mm` : ''}
-          accent="amber"
+
+        {/* Card 3 — Maior chuva/dia (TOP 2) */}
+        <CardLista
+          label="Maior chuva/dia"
+          itens={topMaiorChuva
+            .filter(m => m.maiorDia.data)
+            .map(m => ({
+              nome: m.fazenda.nome,
+              valor: `${fmt(m.maiorDia.mm)} mm`,
+              sub: fmtDataBR(m.maiorDia.data),
+            }))}
         />
-        <CardKpi
-          label="Maior estiagem"
-          value={insights?.maiorEstiagem.fazenda.nome ?? '—'}
-          sub={insights?.maiorEstiagem.maiorGap ? `${insights.maiorEstiagem.maiorGap.dias} dias sem chuva` : '—'}
-          accent="rose"
+
+        {/* Card 4 — Dias sem chuva no período (TOP 2) */}
+        <CardLista
+          label="Dias sem chuva"
+          itens={topDiasSemChuva.map(m => ({
+            nome: m.fazenda.nome,
+            valor: `${fmtInt(m.diasSem)} dias`,
+            sub: `Jan–${mesLabel}`,
+          }))}
         />
       </div>
 
-      {/* Gráfico horizontal comparativo */}
-      <div className="bg-card border border-border rounded-md px-3 py-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-          Chuva acumulada {anoFiltro} (mm) — ordenado por fazenda
+      {/* Linha 2 — Gráfico (≈55%) + Tabela (≈45%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[11fr_9fr] gap-2">
+        {/* Gráfico horizontal */}
+        <div className="bg-card border border-border rounded-md px-3 py-2 flex flex-col">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+            Chuvas acumuladas até {periodoLabel} (mm)
+          </div>
+          <div style={{ minHeight: 420, flex: 1 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 4, right: 28, bottom: 4, left: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v: number) => fmt(v, 0)}
+                  stroke="hsl(var(--muted-foreground))"
+                />
+                <YAxis
+                  type="category"
+                  dataKey="nome"
+                  tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }}
+                  width={130}
+                  stroke="hsl(var(--muted-foreground))"
+                />
+                <Tooltip
+                  cursor={{ fill: 'hsl(var(--muted) / 0.3)' }}
+                  formatter={(v: number) => [`${fmt(v)} mm`, 'Acumulado']}
+                  contentStyle={{
+                    fontSize: 11,
+                    backgroundColor: 'hsl(var(--background) / 0.9)',
+                    border: '1px solid hsl(var(--border) / 0.5)',
+                    borderRadius: 6,
+                    backdropFilter: 'blur(4px)',
+                  }}
+                />
+                <Bar dataKey="mm" fill="#1E3A5F" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-        <div style={{ height: Math.max(60, chartData.length * 26) }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 4, right: 24, bottom: 4, left: 4 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 10 }}
-                tickFormatter={(v: number) => fmt(v, 0)}
-                stroke="hsl(var(--muted-foreground))"
-              />
-              <YAxis
-                type="category"
-                dataKey="nome"
-                tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }}
-                width={110}
-                stroke="hsl(var(--muted-foreground))"
-              />
-              <Tooltip
-                cursor={{ fill: 'hsl(var(--muted) / 0.3)' }}
-                formatter={(v: number) => [`${fmt(v)} mm`, 'Acum.']}
-                contentStyle={{
-                  fontSize: 11,
-                  backgroundColor: 'hsl(var(--background) / 0.9)',
-                  border: '1px solid hsl(var(--border) / 0.5)',
-                  borderRadius: 6,
-                  backdropFilter: 'blur(4px)',
-                }}
-              />
-              <Bar dataKey="mm" fill="#1E3A5F" radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
-      {/* Tabela comparativa */}
-      <div className="rounded-md border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px] tabular-nums leading-tight">
-            <thead className="bg-[#1E3A5F] text-white">
-              <tr>
-                <th className="px-2 py-1.5 text-left font-semibold border border-[#24466B]">Fazenda</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro}</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro - 1}</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Δ%</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Dias c/ chuva</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Maior estiagem</th>
-                <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Maior chuva/dia</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metricas.map(m => (
-                <tr key={m.fazenda.id} className="border-b border-border/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/10">
-                  <td className="px-2 py-1 font-medium border-r border-border/40">{m.fazenda.nome}</td>
-                  <td className="px-2 py-1 text-right border-r border-border/40 font-medium">{fmt(m.acum)} mm</td>
-                  <td className="px-2 py-1 text-right border-r border-border/40 text-muted-foreground">
-                    {m.comp.totalAnoAnt > 0 ? `${fmt(m.comp.totalAnoAnt)} mm` : '—'}
-                  </td>
-                  <td className={`px-2 py-1 text-right border-r border-border/40 font-medium ${
-                    m.comp.deltaPct == null ? 'text-muted-foreground'
-                      : m.comp.deltaPct > 0 ? 'text-emerald-700 dark:text-emerald-300'
-                      : m.comp.deltaPct < 0 ? 'text-rose-700 dark:text-rose-300'
-                      : ''
-                  }`}>
-                    {m.comp.deltaPct != null
-                      ? `${m.comp.deltaPct > 0 ? '+' : ''}${fmt(m.comp.deltaPct)}%`
-                      : '—'}
-                  </td>
-                  <td className="px-2 py-1 text-right border-r border-border/40">{fmtInt(m.dias)}</td>
-                  <td className="px-2 py-1 text-right border-r border-border/40">
-                    {m.maiorGap ? `${m.maiorGap.dias} d (${fmtDataBR(m.maiorGap.inicio)} → ${fmtDataBR(m.maiorGap.fim)})` : '—'}
-                  </td>
-                  <td className="px-2 py-1 text-right">
-                    {m.maiorDia.data ? `${fmt(m.maiorDia.mm)} mm (${fmtDataBR(m.maiorDia.data)})` : '—'}
-                  </td>
+        {/* Tabela executiva */}
+        <div className="rounded-md border border-border bg-card overflow-hidden flex flex-col">
+          <div className="overflow-x-auto flex-1">
+            <table className="w-full text-[11px] tabular-nums leading-tight">
+              <thead className="bg-[#1E3A5F] text-white">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-semibold border border-[#24466B]">Fazenda</th>
+                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro}</th>
+                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro - 1}</th>
+                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Δ%</th>
+                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Dias sem chuva</th>
+                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Maior chuva/dia</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {/* Rodapé: soma operacional, NÃO pluviometria oficial */}
-        {insights && (
+              </thead>
+              <tbody>
+                {[...ativasComChuva].sort((a, b) => b.acum - a.acum).map(m => {
+                  const pct = fmtPct(m.comp.deltaPct);
+                  return (
+                    <tr key={m.fazenda.id} className="border-b border-border/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/10">
+                      <td className="px-2 py-1 font-medium border-r border-border/40">{m.fazenda.nome}</td>
+                      <td className="px-2 py-1 text-right border-r border-border/40 font-medium">{fmt(m.acum)} mm</td>
+                      <td className="px-2 py-1 text-right border-r border-border/40 text-muted-foreground">
+                        {m.comp.totalAnoAnt > 0 ? `${fmt(m.comp.totalAnoAnt)} mm` : '—'}
+                      </td>
+                      <td className={`px-2 py-1 text-right border-r border-border/40 font-medium ${pct.cor}`}>
+                        {pct.texto}
+                      </td>
+                      <td className="px-2 py-1 text-right border-r border-border/40">{fmtInt(m.diasSem)} dias</td>
+                      <td className="px-2 py-1 text-right">
+                        {m.maiorDia.data ? `${fmt(m.maiorDia.mm)} mm (${fmtDataBR(m.maiorDia.data)})` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* Rodapé — soma operacional, NÃO pluviometria oficial */}
           <div className="px-3 py-2 bg-muted/40 border-t border-border text-[10px] text-muted-foreground italic">
-            Soma operacional dos registros: <span className="font-semibold text-foreground not-italic">{fmt(insights.somaOp)} mm</span>
+            Soma operacional dos registros: <span className="font-semibold text-foreground not-italic">{fmt(somaOperacional)} mm</span>
             {' — não representa pluviometria oficial. Cada fazenda é uma estação independente.'}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-interface CardKpiProps {
+// ─── Cards executivos ────────────────────────────────────────────────
+
+interface CardSingleProps {
   label: string;
   value: string;
   sub?: string;
-  accent?: 'emerald' | 'amber' | 'rose';
 }
 
-function CardKpi({ label, value, sub, accent }: CardKpiProps) {
-  const accentCls = accent === 'emerald'
-    ? 'border-emerald-200 dark:border-emerald-900/40'
-    : accent === 'amber'
-      ? 'border-amber-200 dark:border-amber-900/40'
-      : accent === 'rose'
-        ? 'border-rose-200 dark:border-rose-900/40'
-        : 'border-border';
-
+function CardSingle({ label, value, sub }: CardSingleProps) {
   return (
-    <div className={`bg-card border ${accentCls} rounded-md p-2.5 flex flex-col gap-0.5 min-w-0`}>
+    <div className="bg-card border border-border rounded-md p-2.5 flex flex-col gap-0.5 min-w-0">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
         {label}
       </div>
-      <div className="text-sm font-bold text-foreground truncate leading-tight">{value}</div>
+      <div className="text-xl font-bold text-foreground leading-tight tabular-nums">{value}</div>
       {sub && <div className="text-[10px] text-muted-foreground truncate">{sub}</div>}
+    </div>
+  );
+}
+
+interface CardListaItem {
+  nome: string;
+  valor: string;
+  sub?: string;
+  extra?: string;
+  extraCor?: string;
+}
+
+function CardLista({ label, itens }: { label: string; itens: CardListaItem[] }) {
+  return (
+    <div className="bg-card border border-border rounded-md p-2.5 flex flex-col gap-1 min-w-0">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
+        {label}
+      </div>
+      {itens.length === 0 && (
+        <div className="text-xs text-muted-foreground">—</div>
+      )}
+      {itens.map((it, idx) => (
+        <div key={idx} className={idx > 0 ? 'pt-1 border-t border-border/40' : ''}>
+          <div className="text-[11px] font-medium text-foreground truncate">{it.nome}</div>
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="text-sm font-bold text-foreground tabular-nums truncate">{it.valor}</span>
+            {it.extra && (
+              <span className={`text-[10px] font-semibold tabular-nums ${it.extraCor ?? ''}`}>{it.extra}</span>
+            )}
+          </div>
+          {it.sub && <div className="text-[9px] text-muted-foreground truncate">{it.sub}</div>}
+        </div>
+      ))}
     </div>
   );
 }

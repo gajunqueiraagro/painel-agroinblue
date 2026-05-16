@@ -34,11 +34,23 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
   const { chuvas, loading, salvarChuva } = useChuvas();
   const { isGlobal } = useFazenda();
   const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
   const [anoFiltro, setAnoFiltro] = useState(currentYear);
+  // Modo Global: filtro de mês limita o período de análise (01/jan → fim do mês).
+  // Default = mês atual quando ano filtro = ano corrente; senão Dez (ano completo).
+  const [mesFiltro, setMesFiltro] = useState(currentMonth);
 
   useEffect(() => {
     if (anoInicial) setAnoFiltro(Number(anoInicial));
   }, [anoInicial]);
+
+  // Quando troca de ano: se ano selecionado < corrente, ir para Dez (ano completo);
+  // se ano = corrente, voltar para mês atual; ano futuro → Dez.
+  useEffect(() => {
+    if (anoFiltro < currentYear) setMesFiltro(12);
+    else if (anoFiltro === currentYear) setMesFiltro(currentMonth);
+    else setMesFiltro(12);
+  }, [anoFiltro, currentYear, currentMonth]);
 
   // Dialog state for quick entry
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -174,6 +186,19 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
               </SelectContent>
             </Select>
             )}
+            {/* Filtro de mês — só em Global (define o período Jan→mês para análise) */}
+            {isGlobal && (
+              <Select value={String(mesFiltro)} onValueChange={v => setMesFiltro(Number(v))}>
+                <SelectTrigger className="w-24 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MESES.map((m, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {!isGlobal && (
               <span className="text-sm font-semibold text-muted-foreground">
                 Total: {yearTotal.toFixed(1)} mm
@@ -181,7 +206,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
             )}
             {isGlobal && (
               <span className="text-sm font-semibold text-muted-foreground">
-                Comparativo entre fazendas — {anoFiltro}
+                Comparativo entre fazendas — Jan a {MESES[mesFiltro - 1]}/{anoFiltro}
               </span>
             )}
           </div>
@@ -221,7 +246,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
       {/* Bifurcação: Global → painel comparativo entre fazendas (não soma).
           Fazenda individual → heatmap operacional atual (intacto). */}
       {isGlobal ? (
-        <ChuvasGlobalView anoFiltro={anoFiltro} />
+        <ChuvasGlobalView anoFiltro={anoFiltro} mesFiltro={mesFiltro} />
       ) : (
       <div className="px-2">
 
