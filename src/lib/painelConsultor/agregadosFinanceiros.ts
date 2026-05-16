@@ -257,6 +257,23 @@ export function agregaDeducoes(lancFin: FinanceiroLancamento[], ano: number): nu
   return addArrays(entrada, saida);
 }
 
+/**
+ * Dedução de Receitas — APENAS lado SAÍDA.
+ *
+ * Espelha exatamente o que o Dashboard (useFluxoCaixa.ts L281+L295) conta:
+ * lançamentos com isSaida(l)=true AND isDeducaoReceitas(l)=true.
+ *
+ * Diferente de agregaDeducoes (que soma entrada + saída — útil para
+ * relatórios que precisam do total conceitual incluindo lançamentos
+ * legados marcados como entrada com sinal de redução).
+ *
+ * Use este atômico em agregaSaidasTotais (modelo Caixa puro) para garantir
+ * paridade com Dashboard Financeiro.
+ */
+export function agregaDeducoesSaida(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas);
+}
+
 export function agregaAmortizacaoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoPecuaria);
 }
@@ -298,9 +315,16 @@ export function agregaDesembolsoAgri(lancFin: FinanceiroLancamento[], ano: numbe
 }
 
 /**
- * Saídas Totais oficiais 1T26:
- *   DesembolsoPec + DesembolsoAgri + InvBovinos + Amortizações + Dividendos.
- * Dedução de Receitas é ajuste de entrada — NÃO entra.
+ * Saídas Totais oficiais — modelo Caixa puro.
+ *
+ *   DesembolsoPec + DesembolsoAgri + InvBovinos + Amortizações + Dividendos
+ *   + Deduções de Receitas (lado saída).
+ *
+ * Espelho do Dashboard Financeiro (useFluxoCaixa.ts L324):
+ *   totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos
+ *
+ * Modelo Caixa puro: tudo que SAI do caixa entra em "Saídas Totais".
+ * Receita Pec continua bruta (sem desconto de dedução).
  */
 export function agregaSaidasTotais(lancFin: FinanceiroLancamento[], ano: number): number[] {
   let out = agregaDesembolsoPec(lancFin, ano);
@@ -308,6 +332,7 @@ export function agregaSaidasTotais(lancFin: FinanceiroLancamento[], ano: number)
   out = addArrays(out, agregaInvBovinos(lancFin, ano));
   out = addArrays(out, agregaAmortizacoes(lancFin, ano));
   out = addArrays(out, agregaDividendos(lancFin, ano));
+  out = addArrays(out, agregaDeducoesSaida(lancFin, ano));
   return out;
 }
 
@@ -371,6 +396,16 @@ export function agregaDeducoesMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isDeducaoReceitas);
 }
 
+/**
+ * Versão META. makeMetaSource opera sobre SubcentroGrid (não tem sinal
+ * de entrada/saída ambíguo como o realizado legado), portanto idêntico
+ * a agregaDeducoesMeta na prática. Existe como apelido semântico para
+ * deixar explícito o uso em agregaSaidasTotaisMeta (modelo Caixa puro).
+ */
+export function agregaDeducoesSaidaMeta(grid: SubcentroGrid[]): number[] {
+  return agregaDeducoesMeta(grid);
+}
+
 export function agregaAmortizacaoPecMeta(grid: SubcentroGrid[]): number[] {
   return agregaPorPredicadoGenerico(makeMetaSource(grid), isAmortizacaoPecuaria);
 }
@@ -412,8 +447,11 @@ export function agregaDesembolsoAgriMeta(grid: SubcentroGrid[]): number[] {
 }
 
 /**
- * Saídas Totais META 1T26: mesma fórmula do Realizado, sobre planejamento.
- *   DesembolsoPec + DesembolsoAgri + InvBovinos + Amortizações + Dividendos.
+ * Saídas Totais META — modelo Caixa puro (espelho do agregaSaidasTotais
+ * realizado, para o cenário planejado).
+ *
+ *   DesembolsoPec + DesembolsoAgri + InvBovinos + Amortizações + Dividendos
+ *   + Deduções de Receitas META.
  */
 export function agregaSaidasTotaisMeta(grid: SubcentroGrid[]): number[] {
   let out = agregaDesembolsoPecMeta(grid);
@@ -421,5 +459,6 @@ export function agregaSaidasTotaisMeta(grid: SubcentroGrid[]): number[] {
   out = addArrays(out, agregaInvBovinosMeta(grid));
   out = addArrays(out, agregaAmortizacoesMeta(grid));
   out = addArrays(out, agregaDividendosMeta(grid));
+  out = addArrays(out, agregaDeducoesSaidaMeta(grid));
   return out;
 }

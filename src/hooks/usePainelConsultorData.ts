@@ -43,6 +43,8 @@ import {
   agregaInvBovinosMeta,
   agregaAmortizacoesMeta,
   agregaDividendosMeta,
+  agregaSaidasTotais,
+  agregaSaidasTotaisMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
@@ -2450,10 +2452,10 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const cusAgriComJ = addArr12(cusAgriSemJ, jurAgri);
     const desembPec   = addArr12(cusPecComJ, invFazPec);
     const desembAgri  = addArr12(cusAgriComJ, invFazAgri);
-    const saidasTot = addArr12(
-      addArr12(addArr12(addArr12(desembPec, desembAgri), invBov), amort),
-      div,
-    );
+    // Modelo Caixa puro — inclui Deduções de Receitas (lado saída).
+    // Espelha agregaSaidasTotais oficial; eliminamos a soma manual paralela
+    // que excluía dedução e gerava divergência com Dashboard.
+    const saidasTot = agregaSaidasTotais(lancFin, ano);
 
     // ─── META — só calcula se grid disponível (A3) ───────────────────────
     // Indicadores soberanos META consomem o grid consolidado interno único.
@@ -2479,9 +2481,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
     const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
     const desembAgri_M  = (cusAgriComJ_M && invFazAgri_M) ? addArr12(cusAgriComJ_M, invFazAgri_M) : null;
-    const saidasTot_M   = (desembPec_M && desembAgri_M && invBov_M && amort_M && div_M)
-      ? addArr12(addArr12(addArr12(addArr12(desembPec_M, desembAgri_M), invBov_M), amort_M), div_M)
-      : null;
+    // Modelo Caixa puro — inclui Deduções de Receitas META.
+    // Espelha agregaSaidasTotaisMeta oficial. Mantém gate hasGridMeta.
+    const saidasTot_M = hasGridMeta ? agregaSaidasTotaisMeta(gridMetaConsolidado) : null;
 
     const isPer = viewMode === 'periodo';
     const mesPos = mes;
@@ -2530,8 +2532,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
     return {
       saidasTotais: buildInd(saidasTot, 'SAÍDAS TOTAIS', 'Saídas Totais',
-        isPer ? 'Saídas operacionais acumuladas Jan→mês (caixa, exclui dedução de receitas)'
-              : 'Saídas operacionais no mês (caixa, exclui dedução de receitas)',
+        isPer ? 'Saída total de caixa acumulada Jan→mês (espelho do Dashboard Financeiro)'
+              : 'Saída total de caixa no mês (espelho do Dashboard Financeiro)',
         saidasTot_M),
       jurosPec: buildInd(jurPec, 'JUROS PECUÁRIA', 'Juros Pecuária',
         isPer ? 'Juros pecuária acumulado Jan→mês (caixa)'
