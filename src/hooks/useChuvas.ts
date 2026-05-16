@@ -56,12 +56,15 @@ export function useChuvas() {
       return;
     }
 
+    // NOTE: coluna `observacao` ausente no schema cache do Supabase — não enviar
+    // no payload até que migration confirme a coluna. Parâmetro mantido na
+    // assinatura para preservar compat de chamada (input do dialog inalterado).
+    void observacao;
     const { error } = await supabase.from('chuvas').upsert({
       fazenda_id: fazendaId,
       cliente_id: clienteId,
       data,
       milimetros,
-      observacao: observacao || null,
     }, { onConflict: 'fazenda_id,data' });
 
     if (error) {
