@@ -262,6 +262,27 @@ export interface PainelConsultorDataResult {
     serieMeta?:  number[];       // ausente nesta fase
   } | null;
   /**
+   * Indicador Desfrute (@) — arrobas desfrutadas no fluxo
+   * (abate + venda em pé + consumo). Mesmas regras semânticas do
+   * desfruteIndicador (cab.), porém em arrobas.
+   *
+   * Real: monthlyData.desfrute_arr.
+   * Ano-1 e meta: pecAnoAnt12.desfArr / pecMeta12.desfArr (mesmas
+   * queries diretas a 'lancamentos' que alimentam precoArrIndicador).
+   */
+  desfruteArrIndicador: {
+    label:      string;
+    titulo:     string;
+    subtitulo:  string;
+    valor:      number | null;
+    deltaMes:   number | null;
+    deltaAno:   number | null;
+    deltaMeta:  number | null;
+    serieAno:   number[];
+    serieAnoAnt?: number[];
+    serieMeta?:  number[];
+  } | null;
+  /**
    * Indicador Valor do Rebanho — patrimônio (estoque).
    * Mês = posição final do mês. Período = MESMO VALOR (não soma, não média).
    * Fonte: valor_rebanho_realizado_validado (Fazenda) / vw_valor_rebanho_realizado_global_mensal (Global).
@@ -1906,6 +1927,70 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   })();
 
   // ─────────────────────────────────────────────────────────────
+  // ── Desfrute (@) oficial — fluxo (1-based, length 13) ──
+  // mes = arrobas desfrutadas do mês (abate: qtd×peso_carcaca/15;
+  // venda+consumo: qtd×peso_medio/30) — já consolidado em
+  // monthlyData.desfrute_arr (real), pecAnoAnt12.desfArr (ano-1),
+  // pecMeta12.desfArr (meta). Sem fonte nova; espelha desfrute (cab.).
+  // ─────────────────────────────────────────────────────────────
+  const desfruteArrMesSerie13 = Array.from({ length: 13 }, (_, i) =>
+    i === 0 ? NaN : (monthlyData.desfrute_arr[i - 1] ?? NaN)
+  );
+  const desfruteArrPeriodoSerie13 = cumSumTo13(monthlyData.desfrute_arr);
+  const desfruteArrSerie = isPeriodo ? desfruteArrPeriodoSerie13 : desfruteArrMesSerie13;
+  const desfruteArrValor = safe(desfruteArrSerie[mesIdx]);
+
+  const desfruteArrDeltaMes = (() => {
+    if (mesIdx <= 1) return null;
+    const curr = safe(desfruteArrSerie[mesIdx]);
+    const prev = safe(desfruteArrSerie[mesIdx - 1]);
+    if (curr == null || prev == null || prev === 0) return null;
+    return ((curr - prev) / prev) * 100;
+  })();
+
+  // Ano anterior — pecAnoAnt12.desfArr.
+  const desfruteArrAnoAntPossui = pecAnoAnt12.desfArr.some(v => v > 0);
+  const desfruteArrMesAnoAntSerie13 = desfruteArrAnoAntPossui
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (pecAnoAnt12.desfArr[i - 1] ?? NaN)
+      )
+    : null;
+  const desfruteArrPeriodoAnoAntSerie13 = desfruteArrAnoAntPossui
+    ? cumSumTo13(pecAnoAnt12.desfArr)
+    : null;
+  const desfruteArrSerieAnoAnt = isPeriodo
+    ? desfruteArrPeriodoAnoAntSerie13
+    : desfruteArrMesAnoAntSerie13;
+  const desfruteArrDeltaAno = (() => {
+    if (!desfruteArrSerieAnoAnt) return null;
+    const curr = safe(desfruteArrSerie[mesIdx]);
+    const ant  = safe(desfruteArrSerieAnoAnt[mesIdx]);
+    if (curr == null || ant == null || ant === 0) return null;
+    return ((curr - ant) / ant) * 100;
+  })();
+
+  // Meta — pecMeta12.desfArr.
+  const desfruteArrMetaPossui = pecMeta12.desfArr.some(v => v > 0);
+  const desfruteArrMesMetaSerie13 = desfruteArrMetaPossui
+    ? Array.from({ length: 13 }, (_, i) =>
+        i === 0 ? NaN : (pecMeta12.desfArr[i - 1] ?? NaN)
+      )
+    : null;
+  const desfruteArrPeriodoMetaSerie13 = desfruteArrMetaPossui
+    ? cumSumTo13(pecMeta12.desfArr)
+    : null;
+  const desfruteArrSerieMeta = isPeriodo
+    ? desfruteArrPeriodoMetaSerie13
+    : desfruteArrMesMetaSerie13;
+  const desfruteArrDeltaMeta = (() => {
+    if (!desfruteArrSerieMeta) return null;
+    const curr = safe(desfruteArrSerie[mesIdx]);
+    const meta = safe(desfruteArrSerieMeta[mesIdx]);
+    if (curr == null || meta == null || meta === 0) return null;
+    return ((curr - meta) / meta) * 100;
+  })();
+
+  // ─────────────────────────────────────────────────────────────
   // ── Valor do Rebanho oficial — patrimônio/estoque (1-based, length 13) ──
   // mes = posição do mês. periodo = MESMO valor (estoque, sem soma/média).
   // Fonte: valor_rebanho_realizado_validado / vw_valor_rebanho_realizado_global_mensal.
@@ -2865,6 +2950,20 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAnoAnt: desfruteSerieAnoAnt ?? undefined,
       serieMeta:   desfruteSerieMeta ?? undefined,
     } : null,
+    desfruteArrIndicador: monthlyData ? {
+      label:     isPeriodo ? 'DESFRUTE (@) NO PERÍODO' : 'DESFRUTE (@) NO MÊS',
+      titulo:    isPeriodo ? 'Desfrute (@) no período' : 'Desfrute (@) no mês',
+      subtitulo: isPeriodo
+        ? 'Arrobas desfrutadas (abate + venda + consumo) no período'
+        : 'Arrobas desfrutadas (abate + venda + consumo) no mês',
+      valor:     desfruteArrValor,
+      deltaMes:  desfruteArrDeltaMes,
+      deltaAno:  desfruteArrDeltaAno,
+      deltaMeta: desfruteArrDeltaMeta,
+      serieAno:    desfruteArrSerie,
+      serieAnoAnt: desfruteArrSerieAnoAnt ?? undefined,
+      serieMeta:   desfruteArrSerieMeta ?? undefined,
+    } : null,
     valorRebanhoIndicador: monthlyData ? {
       label:     isPeriodo ? 'VALOR DO REBANHO NO PERÍODO' : 'VALOR DO REBANHO NO MÊS',
       titulo:    isPeriodo ? 'Valor do Rebanho no período' : 'Valor do Rebanho no mês',
@@ -2999,6 +3098,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       kgHaIndicador: null,
       arrobasIndicador: null,
       desfruteIndicador: null,
+      desfruteArrIndicador: null,
       valorRebanhoIndicador: null,
       receitaPecIndicador: null,
       custeioPecIndicador: _custeioPecIndicadorMerged,
