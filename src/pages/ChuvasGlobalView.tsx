@@ -158,19 +158,20 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
         />
       </div>
 
-      {/* Linha 2 — Gráfico (≈55%) + Tabela (≈45%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[11fr_9fr] gap-2">
-        {/* Gráfico horizontal */}
+      {/* Linha 2 — Gráfico (~40%) + Tabela (~60%), compactos */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-2">
+        {/* Gráfico horizontal — altura fixa, barSize controlado */}
         <div className="bg-card border border-border rounded-md px-3 py-2 flex flex-col">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
             Chuvas acumuladas até {periodoLabel} (mm)
           </div>
-          <div style={{ minHeight: 420, flex: 1 }}>
+          <div style={{ height: 240 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ top: 4, right: 28, bottom: 4, left: 4 }}
+                margin={{ top: 4, right: 24, bottom: 4, left: 4 }}
+                barCategoryGap={6}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" horizontal={false} />
                 <XAxis
@@ -183,7 +184,7 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
                   type="category"
                   dataKey="nome"
                   tick={{ fontSize: 10, fill: 'hsl(var(--foreground))' }}
-                  width={130}
+                  width={120}
                   stroke="hsl(var(--muted-foreground))"
                 />
                 <Tooltip
@@ -197,24 +198,28 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
                     backdropFilter: 'blur(4px)',
                   }}
                 />
-                <Bar dataKey="mm" fill="#1E3A5F" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="mm" fill="#1E3A5F" radius={[0, 3, 3, 0]} barSize={18} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Tabela executiva */}
+        {/* Tabela executiva simplificada (4 colunas) */}
         <div className="rounded-md border border-border bg-card overflow-hidden flex flex-col">
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-[11px] tabular-nums leading-tight">
+            <table className="w-full text-[11px] tabular-nums leading-tight table-fixed">
+              <colgroup>
+                <col style={{ width: '46%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '14%' }} />
+              </colgroup>
               <thead className="bg-[#1E3A5F] text-white">
                 <tr>
                   <th className="px-2 py-1.5 text-left font-semibold border border-[#24466B]">Fazenda</th>
                   <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro}</th>
                   <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Acum. {anoFiltro - 1}</th>
                   <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Δ%</th>
-                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Dias sem chuva</th>
-                  <th className="px-2 py-1.5 text-right font-semibold border border-[#24466B]">Maior chuva/dia</th>
                 </tr>
               </thead>
               <tbody>
@@ -222,17 +227,13 @@ export function ChuvasGlobalView({ anoFiltro, mesFiltro }: Props) {
                   const pct = fmtPct(m.comp.deltaPct);
                   return (
                     <tr key={m.fazenda.id} className="border-b border-border/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/10">
-                      <td className="px-2 py-1 font-medium border-r border-border/40">{m.fazenda.nome}</td>
+                      <td className="px-2 py-1 font-medium border-r border-border/40 truncate">{m.fazenda.nome}</td>
                       <td className="px-2 py-1 text-right border-r border-border/40 font-medium">{fmt(m.acum)} mm</td>
                       <td className="px-2 py-1 text-right border-r border-border/40 text-muted-foreground">
                         {m.comp.totalAnoAnt > 0 ? `${fmt(m.comp.totalAnoAnt)} mm` : '—'}
                       </td>
-                      <td className={`px-2 py-1 text-right border-r border-border/40 font-medium ${pct.cor}`}>
+                      <td className={`px-2 py-1 text-right font-medium ${pct.cor}`}>
                         {pct.texto}
-                      </td>
-                      <td className="px-2 py-1 text-right border-r border-border/40">{fmtInt(m.diasSem)} dias</td>
-                      <td className="px-2 py-1 text-right">
-                        {m.maiorDia.data ? `${fmt(m.maiorDia.mm)} mm (${fmtDataBR(m.maiorDia.data)})` : '—'}
                       </td>
                     </tr>
                   );

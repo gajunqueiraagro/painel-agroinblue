@@ -250,14 +250,20 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
       ) : (
       <div className="px-2">
 
-      {/* Matrix table — densidade tipo planilha executiva, header AGROinBLUE */}
+      {/* Matrix table — densidade tipo planilha executiva, header AGROinBLUE.
+          table-fixed + colgroup garante que a largura NÃO oscile ao editar
+          células (Input inline ocupa 100% da célula sem expandir geometria). */}
       <div className="overflow-auto max-h-[calc(100vh-140px)]">
-        <table className="w-full text-[11px] tabular-nums leading-tight border-collapse min-w-[640px]">
+        <table className="w-full text-[11px] tabular-nums leading-tight border-collapse min-w-[640px] table-fixed">
+          <colgroup>
+            <col style={{ width: 32 }} />
+            {MESES.map((_, i) => <col key={i} style={{ width: 50 }} />)}
+          </colgroup>
           <thead className="sticky top-0 z-20">
             <tr className="bg-[#1E3A5F] text-white">
-              <th className="border border-[#24466B] px-1 py-0.5 text-center sticky left-0 bg-[#1E3A5F] z-30 w-8 font-semibold">Dia</th>
+              <th className="border border-[#24466B] px-1 py-0.5 text-center sticky left-0 bg-[#1E3A5F] z-30 font-semibold">Dia</th>
               {MESES.map((m, i) => (
-                <th key={i} className="border border-[#24466B] px-1 py-0.5 text-center min-w-[44px] font-semibold">{m}</th>
+                <th key={i} className="border border-[#24466B] px-1 py-0.5 text-center font-semibold">{m}</th>
               ))}
             </tr>
           </thead>
@@ -281,7 +287,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
 
                   if (isEditing) {
                     return (
-                      <td key={mes} className="border border-border p-0">
+                      <td key={mes} className="border border-border p-0 overflow-hidden">
                         <Input
                           type="number"
                           step="0.1"
@@ -291,7 +297,7 @@ export function ChuvasTab({ anoInicial }: { anoInicial?: string } = {}) {
                           onBlur={handleCellSave}
                           onKeyDown={e => e.key === 'Enter' && handleCellSave()}
                           autoFocus
-                          className="h-5 w-full text-[11px] px-1 rounded-none border-0 text-center tabular-nums"
+                          className="h-5 w-full min-w-0 text-[11px] px-1 rounded-none border-0 text-center tabular-nums box-border"
                         />
                       </td>
                     );
