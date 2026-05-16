@@ -2459,7 +2459,13 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     // Indicadores soberanos META consomem o grid consolidado interno único.
     // gridMetaExterno (param) é ignorado deliberadamente — callers atuais
     // passavam grid cru com mesmo bug do custeioPecMeta12 standalone.
-    const hasGridMeta = carregarMetaEffective && gridMetaConsolidado.length > 0;
+    //
+    // NÃO gatear por carregarMetaEffective: callers como PainelConsultorTab
+    // chamam o hook sem carregarMeta=true (default false), mas SEMPRE precisam
+    // dos indicadores META do _finSoberano (modal Auditoria, custeioPec/jurosPec
+    // etc.). O grid interno é carregado independente desse flag — basta checar
+    // length para saber se já chegaram dados do TanStack Query.
+    const hasGridMeta = gridMetaConsolidado.length > 0;
     const cusPecSemJ_M  = hasGridMeta ? agregaCusteioPecSemJurosMeta(gridMetaConsolidado) : null;
     const jurPec_M      = hasGridMeta ? agregaJurosPecMeta(gridMetaConsolidado) : null;
     const invFazPec_M   = hasGridMeta ? agregaInvFazendaPecMeta(gridMetaConsolidado) : null;
@@ -2581,7 +2587,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         div_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lancFin, ano, mes, viewMode, gridMetaConsolidado, carregarMetaEffective]);
+  }, [lancFin, ano, mes, viewMode, gridMetaConsolidado]);
 
   // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
   // Estabiliza a referência do objeto retornado para evitar render loop em
