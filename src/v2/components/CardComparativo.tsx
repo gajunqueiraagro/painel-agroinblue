@@ -27,6 +27,12 @@ interface CardComparativoProps {
   hideQuandoVazio?: boolean;
   /** Quando true, mostra linha "+X,X% vs ano ant." abaixo do valor (usa dado.vsAnoFechado.delta). */
   mostrarVsAnoAnt?: boolean;
+  /**
+   * Label do comparativo. Default 'ano ant.' (comportamento legado).
+   * Cards de posição META (Rebanho Final, Peso Médio Final) usam
+   * 'início ano' — comparam contra o rebanho/peso REALIZADO de Dez ano-1.
+   */
+  comparativoLabel?: string;
 }
 
 function formatar(valor: number | null, formato: FormatoExibicao): string {
@@ -55,24 +61,24 @@ function formatar(valor: number | null, formato: FormatoExibicao): string {
   }
 }
 
-function fmtDelta(d: number | null): { texto: string; cor: string } {
+function fmtDelta(d: number | null, label: string): { texto: string; cor: string } {
   if (d == null || !Number.isFinite(d)) {
-    return { texto: '— vs ano ant.', cor: 'text-muted-foreground' };
+    return { texto: `— vs ${label}`, cor: 'text-muted-foreground' };
   }
   const sinal = d >= 0 ? '+' : '';
   const positivo = d >= 0;
   return {
-    texto: `${sinal}${d.toFixed(1).replace('.', ',')}% vs ano ant.`,
+    texto: `${sinal}${d.toFixed(1).replace('.', ',')}% vs ${label}`,
     cor: positivo
       ? 'text-emerald-700 dark:text-emerald-300'
       : 'text-rose-700 dark:text-rose-300',
   };
 }
 
-export function CardComparativo({ titulo, dado, className, valorClassName, hideQuandoVazio = false, mostrarVsAnoAnt = false }: CardComparativoProps) {
+export function CardComparativo({ titulo, dado, className, valorClassName, hideQuandoVazio = false, mostrarVsAnoAnt = false, comparativoLabel = 'ano ant.' }: CardComparativoProps) {
   if (hideQuandoVazio && dado.valor == null) return null;
 
-  const delta = mostrarVsAnoAnt ? fmtDelta(dado.vsAnoFechado.delta) : null;
+  const delta = mostrarVsAnoAnt ? fmtDelta(dado.vsAnoFechado.delta, comparativoLabel) : null;
 
   return (
     <div

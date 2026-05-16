@@ -46,9 +46,9 @@ export function BlocoProducaoPecuaria({ data }: Props) {
 
       <SecaoTitulo>Posições</SecaoTitulo>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-        <CardComparativo titulo="Rebanho Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
+        <CardComparativo titulo="Rebanho Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO}     mostrarVsAnoAnt comparativoLabel="início ano" />
         <CardComparativo titulo="Rebanho Médio META"          dado={data.rebanhoMedio}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
-        <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO}     mostrarVsAnoAnt />
+        <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO}     mostrarVsAnoAnt comparativoLabel="início ano" />
         <CardComparativo titulo="Valor Reb. META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt />
         <CardComparativo titulo="Área Prod. Pec. META" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>

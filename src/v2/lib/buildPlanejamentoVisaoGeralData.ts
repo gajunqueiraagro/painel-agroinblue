@@ -387,15 +387,26 @@ function buildComparativoEstoquePontoZeroIndexed(
   idxZeroBased: number,
   origem: OrigemMetric,
   formato: FormatoExibicao,
+  /**
+   * Base oficial de comparação — REBANHO/PESO INICIAL REALIZADO do ano
+   * (= fechamento de Dez ano-1). Fonte: indicator.serieAnoAnt[12]
+   * (length 13, 1-based, [12]=Dez ano-1). Quando ausente ou inválida,
+   * vsAnoFechado fica null e o card mostra "—".
+   */
+  baseInicioAno?: number | null,
 ): ComparativoDuplo {
   const v = seriesMeta && seriesMeta.length > idxZeroBased ? seriesMeta[idxZeroBased] : null;
   const valor = v != null && Number.isFinite(v) ? v : null;
+  const base = baseInicioAno != null && Number.isFinite(baseInicioAno) && baseInicioAno !== 0
+    ? baseInicioAno
+    : null;
+  const delta = valor != null && base != null ? ((valor - base) / base) * 100 : null;
   return {
     valor,
     origem,
     tipoSemantica: 'estoque',
     formato,
-    vsAnoFechado: { valor: null, delta: null },
+    vsAnoFechado: { valor: base, delta },
     vsMesmoPeriodo: { valor: null, delta: null },
   };
 }
@@ -674,7 +685,7 @@ function buildBloco2Producao(
 
   warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
   warnings.push('valorRebanhoFinal META: painel.seriesMeta não expõe valorRebFin — GAP do PC-100, card exibe "—"');
-  warnings.push('cabecasFinal/pesoMedioFinal META: cards de FOTO 0-indexed em painel.seriesMeta. Comparativo Dez ano-ant não disponível na mesma convenção — vsAnoFechado=null, card exibe "— vs ano ant." (GAP/follow-up)');
+  warnings.push('cabecasFinal/pesoMedioFinal META: cards de FOTO 0-indexed em painel.seriesMeta. Comparativo agora é vs INÍCIO DO ANO (Dez ano-1 REALIZADO via *Indicador.serieAnoAnt[12]) — label "vs início ano".');
 
   // Rebanho Final META: FOTO Dez (idx 11 em painel.seriesMeta.cabFin, 0-indexed).
   //   NÃO usar cabecasIndicador.serieMetaIndicador aqui — em viewMode='periodo'
@@ -685,9 +696,18 @@ function buildBloco2Producao(
   // Valor do Rebanho Final META: GAP do PC-100 — painel.seriesMeta não expõe valorRebFin
   //   para META. Sem fonte oficial pronta → emptyComparativo, exibe '—'. Sem fallback.
   return {
-    cabecasFinal: buildComparativoEstoquePontoZeroIndexed(painel.seriesMeta?.cabFin, 11, 'pc100', 'cabecas'),
+    // Comparativo vs INÍCIO DO ANO (Rebanho/Peso de Dez ano-1 REALIZADO).
+    // Fonte: cabecasIndicador.serieAnoAnt[12] / pesoMedioIndicador.serieAnoAnt[12]
+    // (length 13, 1-based, [12]=Dez ano-1 — saldo final realizado do ano anterior).
+    cabecasFinal: buildComparativoEstoquePontoZeroIndexed(
+      painel.seriesMeta?.cabFin, 11, 'pc100', 'cabecas',
+      painel.cabecasIndicador?.serieAnoAnt?.[12] ?? null,
+    ),
     rebanhoMedio: buildComparativoPonto(cabSerieMeta, cabSerieAnoAnt, mesAtual, 'pc100', 'media', 'cabecas'),
-    pesoMedioFinal: buildComparativoEstoquePontoZeroIndexed(painel.seriesMeta?.pesoMedioFin, 11, 'pc100', 'kg'),
+    pesoMedioFinal: buildComparativoEstoquePontoZeroIndexed(
+      painel.seriesMeta?.pesoMedioFin, 11, 'pc100', 'kg',
+      painel.pesoMedioIndicador?.serieAnoAnt?.[12] ?? null,
+    ),
     valorRebanhoFinal: emptyComparativo('pc100', 'estoque', 'moeda'),
 
     arrobasProduzidas: buildComparativoPonto(
