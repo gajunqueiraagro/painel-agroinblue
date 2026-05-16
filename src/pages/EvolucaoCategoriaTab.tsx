@@ -451,25 +451,25 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
         )}
       </div>
 
-      {/* Card técnico GMD — discreto, max 50% largura */}
+      {/* Card técnico GMD — discreto, max ~65% largura, valores em uma linha cada */}
       {!isLoading && !isFutureMonth && totais.diasMes > 0 && (
-        <div className="max-w-[50%] bg-muted/40 rounded border border-border/50 px-3 py-2 space-y-1.5">
+        <div className="max-w-[65%] bg-muted/40 rounded border border-border/50 px-3 py-2 space-y-1.5">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground">
             <Info className="h-3 w-3" />
             GMD — {MESES_CURTOS[mesNum - 1]}/{anoFiltro}
           </div>
 
-          <div className="grid grid-cols-4 gap-x-4 gap-y-0.5 text-[9px]">
+          <div className="grid grid-cols-4 gap-x-5 gap-y-0.5 text-[9px]">
             {/* Linha 1 — bloco inicial */}
-            <div><span className="text-muted-foreground">Saldo Inicial:</span> <span className="font-medium text-foreground">{totais.si.toLocaleString('pt-BR')} cab</span></div>
-            <div><span className="text-muted-foreground">Peso Inicial:</span> <span className="font-medium text-foreground">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
-            <div><span className="text-muted-foreground">Cab. Méd.:</span> <span className="font-medium text-foreground">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</span></div>
-            <div><span className="text-muted-foreground">Dias:</span> <span className="font-medium text-foreground">{totais.diasMes}</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Saldo Inicial:</span> <span className="font-medium text-foreground tabular-nums">{totais.si.toLocaleString('pt-BR')} cab</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Peso Inicial:</span> <span className="font-medium text-foreground tabular-nums">{totais.pesoTotalIni.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Cab. Méd.:</span> <span className="font-medium text-foreground tabular-nums">{totais.cabMedias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Dias:</span> <span className="font-medium text-foreground tabular-nums">{totais.diasMes}</span></div>
             {/* Linha 2 — bloco final + resultado */}
-            <div><span className="text-muted-foreground">Saldo Final:</span> <span className="font-medium text-foreground">{totais.sf != null ? `${totais.sf.toLocaleString('pt-BR')} cab` : '—'}</span></div>
-            <div><span className="text-muted-foreground">Peso Final:</span> <span className="font-medium text-foreground">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
-            <div><span className="text-muted-foreground">Prod. Bio:</span> <span className={`font-medium ${negClass(totais.prodBio) || 'text-foreground'}`}>{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
-            <div><span className="text-muted-foreground">GMD:</span> <span className={`font-semibold ${negClass(totais.gmd) || 'text-blue-700'}`}>{totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/d` : '–'}</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Saldo Final:</span> <span className="font-medium text-foreground tabular-nums">{totais.sf != null ? `${totais.sf.toLocaleString('pt-BR')} cab` : '—'}</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Peso Final:</span> <span className="font-medium text-foreground tabular-nums">{totais.pesoTotalFin.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">Prod. Bio:</span> <span className={`font-medium tabular-nums ${negClass(totais.prodBio) || 'text-foreground'}`}>{totais.prodBio.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} kg</span></div>
+            <div className="whitespace-nowrap"><span className="text-muted-foreground">GMD:</span> <span className={`font-semibold tabular-nums ${negClass(totais.gmd) || 'text-blue-700'}`}>{totais.gmd !== null ? `${totais.gmd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg/d` : '–'}</span></div>
           </div>
 
           {totais.cabMedias > 0 && totais.gmd !== null && (
