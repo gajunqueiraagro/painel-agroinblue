@@ -45,6 +45,8 @@ import {
   agregaDividendosMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
+import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
+import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
   computePeriodGmd,
   rollingAvg,
@@ -533,6 +535,49 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
   const {
     rawCategorias: viewDataMetaRaw,
   } = useRebanhoOficial({ ano, cenario: 'meta', global: isGlobal, enabled: enabled && carregarMetaEffective });
+
+  // ─── GRID META FINANCEIRO CONSOLIDADO — fonte soberana única ─────────────
+  // Espelha o mesmo grid que o Fluxo de Caixa META renderiza visualmente:
+  //   buildGrid() de planejamento_financeiro + composeGridMetaConsolidado
+  //   somando os 4 streams auto (rebanho, financiamento, nutrição, projetos).
+  //
+  // Indicadores soberanos _finSoberano.* (custeioPec, juros, invFaz, etc.) E
+  // o legado custeioPecMeta12 consomem EXCLUSIVAMENTE este grid. Não há
+  // mais query direta a planejamento_financeiro neste hook para META.
+  //
+  // gridMetaExterno (param) permanece no contrato mas é IGNORADO pela
+  // lógica META interna. Callers atuais (PainelConsultorTab,
+  // usePlanejamentoAprovacaoData) passavam grid manual cru — mesma raiz do
+  // bug do custeioPecMeta12. Consolidar interno garante 1 fonte única e
+  // consistente em V2 Visão Geral Planejamento, PainelConsultorTab/Auditoria
+  // e usePlanejamentoAprovacaoData.
+  //
+  // buildGrid de usePlanejamentoFinanceiro é useCallback estável
+  // (deps: planoContas, savedData, dividendos). Padrão de uso replicado
+  // de V2PlanejamentoVisaoGeral.tsx L50.
+  const _planFinInterno = usePlanejamentoFinanceiro(
+    ano,
+    isGlobal ? undefined : fazendaId,
+  );
+  const _gridMetaBaseInterno = useMemo(
+    () => _planFinInterno.buildGrid(),
+    [_planFinInterno.buildGrid, _planFinInterno.loading],
+  );
+  const gridMetaConsolidado = useMemo<SubcentroGrid[]>(
+    () => composeGridMetaConsolidado(_gridMetaBaseInterno, {
+      lancamentosRebanho: _planFinInterno.lancamentosRebanho,
+      lancamentosFinanciamento: _planFinInterno.lancamentosFinanciamento,
+      lancamentosNutricao: _planFinInterno.lancamentosNutricao,
+      lancamentosProjetos: _planFinInterno.lancamentosProjetos,
+    }),
+    [
+      _gridMetaBaseInterno,
+      _planFinInterno.lancamentosRebanho,
+      _planFinInterno.lancamentosFinanciamento,
+      _planFinInterno.lancamentosNutricao,
+      _planFinInterno.lancamentosProjetos,
+    ],
+  );
 
   const viewDataMeta = carregarMetaEffective ? viewDataMetaRaw : null;
 
@@ -1072,69 +1117,16 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return () => { cancelled = true; };
   }, [incluirComparativos, ano, isGlobal, fazendaId, clienteAtual?.id]);
 
-  // Custeio Produção Pecuária META — planejamento_financeiro cenario='meta'.
-  // Sem status_transacao (planejamento não tem). Soma valor_planejado por mes.
-  const [custeioPecMeta12, setCusteioPecMeta12] = useState<number[]>(() => Array(12).fill(0));
-  useEffect(() => {
-    if (!carregarMetaEffective) {
-      setCusteioPecMeta12(Array(12).fill(0));
-      return;
-    }
-    let cancelled = false;
-    const cid = clienteAtual?.id;
-    const load = async () => {
-      const PAGE = 1000;
-      const allRows: any[] = [];
-      let from = 0;
-      while (true) {
-        let q = (supabase
-          .from('planejamento_financeiro' as any)
-          .select('id, mes, valor_planejado, grupo_custo') as any)
-          .eq('ano', ano)
-          .eq('cenario', 'meta')
-          .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária']);
-        if (isGlobal) {
-          if (!cid) {
-            if (!cancelled) setCusteioPecMeta12(Array(12).fill(0));
-            return;
-          }
-          q = q.eq('cliente_id', cid);
-        } else if (fazendaId && fazendaId !== '__global__') {
-          q = q.eq('fazenda_id', fazendaId);
-        } else {
-          if (!cancelled) setCusteioPecMeta12(Array(12).fill(0));
-          return;
-        }
-        const { data, error } = await q
-          .order('mes', { ascending: true })
-          .order('id', { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (cancelled) return;
-        if (error || !data || data.length === 0) break;
-        allRows.push(...data);
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-      if (cancelled) return;
-      // Dedup defensivo por id: paginação Supabase pode entregar duplicatas
-      // entre páginas se a ordenação não for totalmente determinística.
-      const seenIds = new Set<string>();
-      const dedupRows = allRows.filter((r: any) => {
-        if (!r?.id || seenIds.has(r.id)) return false;
-        seenIds.add(r.id);
-        return true;
-      });
-      const out = Array(12).fill(0);
-      for (const r of dedupRows) {
-        const m = Number(r.mes);
-        if (!Number.isInteger(m) || m < 1 || m > 12) continue;
-        out[m - 1] += Number(r.valor_planejado) || 0;
-      }
-      setCusteioPecMeta12(out);
-    };
-    load();
-    return () => { cancelled = true; };
-  }, [carregarMetaEffective, ano, isGlobal, fazendaId, clienteAtual?.id]);
+  // ─── custeioPecMeta12 — fonte: gridMetaConsolidado (soberano único) ───────
+  // Antes: fetch direto a planejamento_financeiro (incompleto, ignorava os
+  // 4 streams auto). Agora: deriva do mesmo agregador oficial que alimenta
+  // _finSoberano.custeioPecSemJuros, garantindo paridade entre o caminho
+  // legado (_custeioPecIndicadorMemo) e o caminho soberano (_finSoberano).
+  const custeioPecMeta12 = useMemo<number[]>(() => {
+    if (!carregarMetaEffective) return Array(12).fill(0);
+    const result = agregaCusteioPecSemJurosMeta(gridMetaConsolidado);
+    return result ?? Array(12).fill(0);
+  }, [carregarMetaEffective, gridMetaConsolidado]);
 
   // Valor do Rebanho META validada — somente Fazenda (Global não tem fonte oficial).
   const [valorRebanhoMetaMes, setValorRebanhoMetaMes] = useState<number[]>(() => Array(12).fill(NaN));
@@ -2464,16 +2456,19 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     );
 
     // ─── META — só calcula se grid disponível (A3) ───────────────────────
-    const hasGridMeta = !!gridMetaExterno && gridMetaExterno.length > 0;
-    const cusPecSemJ_M  = hasGridMeta ? agregaCusteioPecSemJurosMeta(gridMetaExterno!) : null;
-    const jurPec_M      = hasGridMeta ? agregaJurosPecMeta(gridMetaExterno!) : null;
-    const invFazPec_M   = hasGridMeta ? agregaInvFazendaPecMeta(gridMetaExterno!) : null;
-    const cusAgriSemJ_M = hasGridMeta ? agregaCusteioAgriSemJurosMeta(gridMetaExterno!) : null;
-    const jurAgri_M     = hasGridMeta ? agregaJurosAgriMeta(gridMetaExterno!) : null;
-    const invFazAgri_M  = hasGridMeta ? agregaInvFazendaAgriMeta(gridMetaExterno!) : null;
-    const invBov_M      = hasGridMeta ? agregaInvBovinosMeta(gridMetaExterno!) : null;
-    const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaExterno!) : null;
-    const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaExterno!) : null;
+    // Indicadores soberanos META consomem o grid consolidado interno único.
+    // gridMetaExterno (param) é ignorado deliberadamente — callers atuais
+    // passavam grid cru com mesmo bug do custeioPecMeta12 standalone.
+    const hasGridMeta = carregarMetaEffective && gridMetaConsolidado.length > 0;
+    const cusPecSemJ_M  = hasGridMeta ? agregaCusteioPecSemJurosMeta(gridMetaConsolidado) : null;
+    const jurPec_M      = hasGridMeta ? agregaJurosPecMeta(gridMetaConsolidado) : null;
+    const invFazPec_M   = hasGridMeta ? agregaInvFazendaPecMeta(gridMetaConsolidado) : null;
+    const cusAgriSemJ_M = hasGridMeta ? agregaCusteioAgriSemJurosMeta(gridMetaConsolidado) : null;
+    const jurAgri_M     = hasGridMeta ? agregaJurosAgriMeta(gridMetaConsolidado) : null;
+    const invFazAgri_M  = hasGridMeta ? agregaInvFazendaAgriMeta(gridMetaConsolidado) : null;
+    const invBov_M      = hasGridMeta ? agregaInvBovinosMeta(gridMetaConsolidado) : null;
+    const amort_M       = hasGridMeta ? agregaAmortizacoesMeta(gridMetaConsolidado) : null;
+    const div_M         = hasGridMeta ? agregaDividendosMeta(gridMetaConsolidado) : null;
     const cusPecComJ_M  = (cusPecSemJ_M && jurPec_M) ? addArr12(cusPecSemJ_M, jurPec_M) : null;
     const cusAgriComJ_M = (cusAgriSemJ_M && jurAgri_M) ? addArr12(cusAgriSemJ_M, jurAgri_M) : null;
     const desembPec_M   = (cusPecComJ_M && invFazPec_M) ? addArr12(cusPecComJ_M, invFazPec_M) : null;
@@ -2586,7 +2581,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         div_M),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lancFin, ano, mes, viewMode, gridMetaExterno]);
+  }, [lancFin, ano, mes, viewMode, gridMetaConsolidado, carregarMetaEffective]);
 
   // ─── custeioPecIndicador legado memoizado (Opção D) ─────────────────
   // Estabiliza a referência do objeto retornado para evitar render loop em
