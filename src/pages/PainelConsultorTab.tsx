@@ -122,12 +122,16 @@ function viewToMetaCategoriaMes(rows: ZootCategoriaMensal[]): MetaCategoriaMes[]
 }
 
 // ─── Build blocks for each tab ───
-function cumSum(arr: number[]): number[] {
-  const r: number[] = [];
-  let acc = 0;
-  for (const v of arr) { acc += v; r.push(acc); }
-  return r;
-}
+// cumSum acumulado com guarda NaN: se um mês vier NaN, o acumulado não morre
+// a partir dali — continua usando o saldo anterior. Retorna número finito em
+// todas as posições (zeros até o primeiro mês com valor finito).
+const cumSum = (arr: number[]): number[] => {
+  let s = 0;
+  return arr.map(v => {
+    if (Number.isFinite(v)) s += v;
+    return s;
+  });
+};
 /**
  * Dados financeiros META agregados do planejamento_financeiro.
  * Calculado por agregarGridMetaPainelConsultor. Uso exclusivo do PainelConsultorTab — não exportar.
@@ -330,6 +334,8 @@ function buildBlocosForTab(
   soberano?: SoberanoSerie12,
   endividamento?: EndividamentoSeries,
   caixaSaldoMensal?: number[],
+  saidasDesfruteCabMensal?: number[],
+  pcd?: ReturnType<typeof usePainelConsultorData> | null,
 ): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta linha "Saldo Final de Caixa".
   // Fonte oficial: pc100.caixaIndicador.serieAno (length 13; slice(1) = Jan..Dez).
@@ -389,7 +395,10 @@ function buildBlocosForTab(
     const arrAcum = cumSum(d.arrobasProd);
     return custAcum.map((c, i) => arrAcum[i] > 0 ? c / arrAcum[i] : NaN);
   })();
-  const desfruteCab = d.desfruteCab;
+  // Desfrute (cab.) oficial: APENAS abate + venda + consumo (TIPOS_DESFRUTE_GLOBAL).
+  // Fonte: saidasDesfruteCabMensal vindo de lancPec filtrado. Sem fallback para
+  // monthlyData.desfruteCab — se a série oficial não vier, mostra NaN/—.
+  const desfruteCab = saidasDesfruteCabMensal ?? Array(12).fill(NaN);
   const desfrute_arr = d.desfrute_arr;
   const finEntradas = d.entFin;
   const finSaidas = d.saiFin;
@@ -439,6 +448,22 @@ function buildBlocosForTab(
     ? buildBlocoEndividamento(endividamento, 'acumulado')
     : null;
 
+  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
+  // Indicadores prontos do PC-100 (custoArr/precoArr/margemArr/custoCab).
+  // Realizado → serieAno. Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
+  const _serie12IE = (s?: number[]): number[] =>
+    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
+  const _pickAno = (ind?: { serieAno?: number[] } | null): number[] => _serie12IE(ind?.serieAno);
+  const blocoIndEcon: Bloco = {
+    nome: 'Indicadores Econômicos',
+    rows: [
+      r('Custo Produtivo R$/@',    'money', _pickAno(pcd?.custoArrIndicador),  'custo_arr'),
+      r('Preço de Venda R$/@',     'money', _pickAno(pcd?.precoArrIndicador),  'preco_arr'),
+      r('Margem R$/@',             'money', _pickAno(pcd?.margemArrIndicador), 'margem_arr'),
+      r('Custo por Cabeça R$/cab', 'money', _pickAno(pcd?.custoCabIndicador),  'custo_cab'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -463,6 +488,7 @@ function buildBlocosForTab(
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -508,6 +534,7 @@ function buildBlocosForTab(
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -549,6 +576,7 @@ function buildBlocosForTab(
             r('Desfrute Acumulado (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -596,6 +624,7 @@ function buildBlocosForTab(
             r('Desfrute médio período (@)', 'padrao', desfrute_arr, 'desfrute_arr_periodo', true),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -653,7 +682,7 @@ function buildBlocoSoberano(
 }
 
 // ─── Build blocos from vw_zoot_fazenda_mensal (for Meta cenário) ───
-function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[]): Bloco[] {
+function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanhoMetaMes?: number[], valorRebanhoMetaMesAnteriorOuDez?: number[], metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
   const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   const byMes = indexByMes(rows);
@@ -718,7 +747,12 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
     return v;
   });
   const arrHa = arrobasProd.map((v, i) => areaProd[i] > 0 && !isNaN(v) ? v / areaProd[i] : NaN);
-  const desfruteCab = saidas;
+  // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
+  // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
+  // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
+  // `saidas` — se a série oficial não existir, mostra NaN/— (NUNCA reintroduz
+  // morte/transferência).
+  const desfruteCab = saidasDesfruteCabMensal ?? Array(12).fill(NaN);
   // Desfrute @ vem pré-calculado por lançamento (calcArrobasSafe + TIPOS_DESFRUTE_GLOBAL).
   // abate: pesoCarcacaKg/15; venda/consumo: pesoMedioKg/30; exclui transferencia_saida.
   const desfrute_arr = arrobasSaidasMensal
@@ -775,6 +809,22 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
+  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
+  // META → serieMeta. Sem fallback p/ serieAno (real) — se serieMeta não vier, NaN/—.
+  // Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
+  const _serie12IE = (s?: number[]): number[] =>
+    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
+  const _pickMeta = (ind?: { serieMeta?: number[] } | null): number[] => _serie12IE(ind?.serieMeta);
+  const blocoIndEcon: Bloco = {
+    nome: 'Indicadores Econômicos',
+    rows: [
+      r('Custo Produtivo R$/@',    'money', _pickMeta(pcd?.custoArrIndicador),  'custo_arr'),
+      r('Preço de Venda R$/@',     'money', _pickMeta(pcd?.precoArrIndicador),  'preco_arr'),
+      r('Margem R$/@',             'money', _pickMeta(pcd?.margemArrIndicador), 'margem_arr'),
+      r('Custo por Cabeça R$/cab', 'money', _pickMeta(pcd?.custoCabIndicador),  'custo_cab'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -799,6 +849,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -842,6 +893,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -882,6 +934,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -924,6 +977,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
             { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -950,7 +1004,7 @@ function buildBlocosFromZootMensal(rows: ZootMensal[], tab: ViewTab, valorRebanh
 }
 
 // ─── Build blocos from MetaConsolidacao (validated consolidation) ───
-function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[]): Bloco[] {
+function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: ViewTab, areaProd: number, gmdMetaRows: MetaGmdRow[], valorRebanhoMetaMes?: number[], dezAnoAnteriorRealizado?: number, metaValorCabMes?: number[], metaPrecoArrMes?: number[], pesoSnap?: PesoSnapshot, dezRealizadoSnap?: { cabecas: number; pesoMedioKg: number; arrobas: number }, finMeta?: FinMetaPainel | null, soberano?: SoberanoSerie12, arrobasSaidasMensal?: number[], caixaSaldoMensal?: number[], saidasDesfruteCabMensal?: number[], pcd?: ReturnType<typeof usePainelConsultorData> | null): Bloco[] {
   // Saldo bancário consolidado (estoque) Jan..Dez — alimenta "Saldo Final de Caixa".
   const _saldoCaixaMes12: number[] = caixaSaldoMensal ?? Array(12).fill(NaN);
   // Aggregate across all categories per month
@@ -1019,7 +1073,12 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   const uaMedia = cabMedia.map((v, i) => pesoMedFin[i] > 0 ? (v * pesoMedFin[i]) / 450 : NaN);
   const lotacao = uaMedia.map(v => areaProd > 0 ? v / areaProd : NaN);
   const arrHa = arrobasProd.map(v => areaProd > 0 ? v / areaProd : NaN);
-  const desfruteCab = saidas;
+  // Desfrute (cab.) oficial: APENAS abate + venda + consumo. NUNCA mortes ou
+  // transferências. Fonte: saidasDesfruteCabMensal (calculado fora a partir de
+  // lancPec/lancPecMeta filtrando TIPOS_DESFRUTE_GLOBAL). Sem fallback para
+  // `saidas` — se a série oficial não existir, mostra NaN/— (NUNCA reintroduz
+  // morte/transferência).
+  const desfruteCab = saidasDesfruteCabMensal ?? Array(12).fill(NaN);
   // Desfrute @ vem pré-calculado por lançamento (calcArrobasSafe + TIPOS_DESFRUTE_GLOBAL).
   // abate: pesoCarcacaKg/15; venda/consumo: pesoMedioKg/30; exclui transferencia_saida.
   const desfrute_arr = arrobasSaidasMensal
@@ -1082,6 +1141,22 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
   // Bloco "Financeiro Soberano (Auditoria)" — helper compartilhado
   const blocoSoberano = buildBlocoSoberano(soberano, r);
 
+  // ── Bloco "Indicadores Econômicos" — entre Produção e Financeiro (Caixa).
+  // META → serieMeta. Sem fallback p/ serieAno (real) — se serieMeta não vier, NaN/—.
+  // Séries têm length 13 (1-based, [0]=Dez ano-1) — slice 12.
+  const _serie12IE = (s?: number[]): number[] =>
+    s && s.length === 13 ? s.slice(1) : (s ?? Array(12).fill(NaN));
+  const _pickMeta = (ind?: { serieMeta?: number[] } | null): number[] => _serie12IE(ind?.serieMeta);
+  const blocoIndEcon: Bloco = {
+    nome: 'Indicadores Econômicos',
+    rows: [
+      r('Custo Produtivo R$/@',    'money', _pickMeta(pcd?.custoArrIndicador),  'custo_arr'),
+      r('Preço de Venda R$/@',     'money', _pickMeta(pcd?.precoArrIndicador),  'preco_arr'),
+      r('Margem R$/@',             'money', _pickMeta(pcd?.margemArrIndicador), 'margem_arr'),
+      r('Custo por Cabeça R$/cab', 'money', _pickMeta(pcd?.custoCabIndicador),  'custo_cab'),
+    ],
+  };
+
   switch (tab) {
     case 'mensal':
       return [
@@ -1106,6 +1181,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1149,6 +1225,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute (@)', 'padrao', desfrute_arr, 'desfrute_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1189,6 +1266,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             r('Desfrute acum. (@)', 'padrao', desfrute_arr, 'desfrute_acum_arr'),
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1231,6 +1309,7 @@ function buildBlocosFromMetaConsolidacao(consolidacao: MetaCategoriaMes[], tab: 
             { indicador: 'GMD do período', format: 'gmd', valores: gmdPeriodo, indicadorId: 'gmd_periodo', noTotal: true },
           ],
         },
+        blocoIndEcon,
         {
           nome: 'Financeiro (Caixa)',
           rows: [
@@ -1736,6 +1815,39 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
     return arr;
   }, [lancPecMeta, anoNum]);
 
+  // Desfrute em CABEÇAS — equivalente de `arrobasSaidasMeta12` porém somando
+  // QUANTIDADE em vez de arrobas. Filtro idêntico: TIPOS_DESFRUTE_GLOBAL
+  // (abate + venda + consumo) — exclui mortes, transferências, reclassificações
+  // e nascimentos. Duas séries (real e meta) alimentam `saidasDesfruteCabMensal`
+  // dos builders abaixo.
+  const saidasDesfruteCabReal12 = useMemo(() => {
+    const arr = new Array(12).fill(0);
+    const tiposSet = new Set<string>(TIPOS_DESFRUTE_GLOBAL);
+    for (const l of lancPec) {
+      if (!tiposSet.has(l.tipo)) continue;
+      const dataAno = Number(l.data.substring(0, 4));
+      if (dataAno !== anoNum) continue;
+      const mes = Number(l.data.substring(5, 7));
+      if (mes < 1 || mes > 12) continue;
+      arr[mes - 1] += Number(l.quantidade) || 0;
+    }
+    return arr;
+  }, [lancPec, anoNum]);
+
+  const saidasDesfruteCabMeta12 = useMemo(() => {
+    const arr = new Array(12).fill(0);
+    const tiposSet = new Set<string>(TIPOS_DESFRUTE_GLOBAL);
+    for (const l of lancPecMeta) {
+      if (!tiposSet.has(l.tipo)) continue;
+      const dataAno = Number(l.data.substring(0, 4));
+      if (dataAno !== anoNum) continue;
+      const mes = Number(l.data.substring(5, 7));
+      if (mes < 1 || mes > 12) continue;
+      arr[mes - 1] += Number(l.quantidade) || 0;
+    }
+    return arr;
+  }, [lancPecMeta, anoNum]);
+
   // Blocos: Realizado usa buildMonthlyData, Meta usa view oficial + snapshot validado
   const blocos = useMemo(() => {
     let result: Bloco[];
@@ -1750,10 +1862,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
       // Fonte oficial: view convertida para MetaCategoriaMes[]
       if (metaConsolidacaoView.length > 0) {
-        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
+        result = buildBlocosFromMetaConsolidacao(metaConsolidacaoView, viewTab, areaProdutiva, gmdMetaRows, valorRebanhoMetaMes, valorRebanhoMes[0], metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano);
       } else {
         // Fallback: dados de fazenda (vw_zoot_fazenda_mensal)
-        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
+        result = buildBlocosFromZootMensal(zootMeta || [], viewTab, valorRebanhoMetaMes, valorRebIniMeta, metaValorCabMes, metaPrecoArrMes, metaPesoSnap, dezSnap, finMetaPainel, soberanoSerie, arrobasSaidasMeta12, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabMeta12, pcdSoberano);
       }
     } else {
       // Realizado: slice(1) removes Dec prev year index for 12-month arrays
@@ -1763,7 +1875,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         arrobas: realPesoSnap.arrobas.slice(1),
       };
       const dezArrobasKg = (realPesoSnap.arrobas[0] || 0) * 30;
-      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined, pcdSoberano.caixaIndicador?.serieAno?.slice(1));
+      result = buildBlocosForTab(monthlyData, viewTab, realValorCabMes.slice(1), realPrecoArrMes.slice(1), realPesoSnap12, dezArrobasKg > 0 ? dezArrobasKg : undefined, soberanoSerie, endividamento.hasData ? endividamento.series : undefined, pcdSoberano.caixaIndicador?.serieAno?.slice(1), saidasDesfruteCabReal12, pcdSoberano);
     }
 
     // C4.1 — injetar bloco ÁREAS META logo APÓS "Financeiro Soberano (Auditoria)";
@@ -1780,7 +1892,7 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
       }
     }
     return result;
-  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas, arrobasSaidasMeta12]);
+  }, [isPrevisto, monthlyData, zootMeta, viewTab, metaConsolidacaoView, gmdMetaRows, areaProdutiva, valorRebanhoMetaMes, metaValorCabMes, metaPrecoArrMes, valorRebanhoMes, realValorCabMes, realPrecoArrMes, realPesoSnap, metaPesoSnap, finMetaPainel, soberanoSerie, endividamento.hasData, endividamento.series, blocoAreas, arrobasSaidasMeta12, saidasDesfruteCabReal12, saidasDesfruteCabMeta12, pcdSoberano]);
 
   useEffect(() => {
     if (blocos.length > 0) {
