@@ -3045,6 +3045,80 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         </div>
       )}
 
+      {isCompra && (
+        <div className="flex items-center gap-2 pt-3 border-t mt-3">
+          {editingAbateId && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelEdit}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+          )}
+          {compraDetalhes && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCompraDialogOpen(true)}
+              disabled={submitting}
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              Editar Financeiro
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting || !compraDetalhes}
+          >
+            {submitting
+              ? 'Registrando...'
+              : editingAbateId ? 'Salvar Alterações' : 'Registrar Compra'}
+          </Button>
+        </div>
+      )}
+
+      {isTransferencia && (
+        <div className="flex items-center gap-2 pt-3 border-t mt-3">
+          {editingAbateId && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelEdit}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+          )}
+          {transferenciaDetalhes && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTransferenciaDialogOpen(true)}
+              disabled={submitting}
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              Editar Financeiro
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="font-bold"
+            onClick={handleRequestRegister}
+            disabled={submitting}
+          >
+            {submitting
+              ? 'Registrando...'
+              : editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 

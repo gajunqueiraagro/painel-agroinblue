@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { AlertTriangle, CheckCircle, Edit, ShoppingCart } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ShoppingCart } from 'lucide-react';
 import type { CompraDetalhes } from './CompraDetalhesDialog';
 
 interface Props {
@@ -103,25 +103,8 @@ export function CompraResumoPanel({
             <span className="font-medium">Detalhes financeiros preenchidos</span>
           </div>
 
-          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
-            <Edit className="h-3 w-3" />
-            Editar Detalhes
-          </Button>
         </>
       )}
-
-      <Separator />
-
-      <div className="space-y-1">
-        {onCancelEdit && (
-          <Button type="button" variant="outline" className="w-full h-7 text-[11px] font-bold" onClick={onCancelEdit}>
-            Cancelar Edição
-          </Button>
-        )}
-        <Button type="button" className="w-full h-8 text-[11px] font-bold" onClick={onRequestRegister} disabled={submitting || !detalhesPreenchidos}>
-          {submitting ? 'Registrando...' : (registerLabel || 'Registrar Compra')}
-        </Button>
-      </div>
     </div>
   );
 }

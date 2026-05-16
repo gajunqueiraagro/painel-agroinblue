@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { formatMoeda, formatKg, formatArroba } from '@/lib/calculos/formatters';
 import { CATEGORIAS } from '@/types/cattle';
-import { AlertTriangle, CheckCircle, Edit, ArrowRightLeft } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ArrowRightLeft } from 'lucide-react';
 import type { TransferenciaDetalhes } from './TransferenciaDetalhesDialog';
 import type { TransferenciaCalculation } from '@/lib/calculos/transferencia';
 
@@ -74,19 +74,6 @@ export function TransferenciaResumoPanel({
           {!canOpenModal && (
             <p className="text-[9px] text-muted-foreground text-center leading-tight">Preencha Data, Quantidade, Peso, Categoria e Destino</p>
           )}
-
-          <Separator />
-
-          <div className="flex items-center gap-1.5">
-            {onCancelEdit && (
-              <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
-                Cancelar
-              </Button>
-            )}
-            <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting}>
-              {submitting ? 'Registrando...' : (registerLabel || 'Registrar Transferência')}
-            </Button>
-          </div>
         </>
       ) : (
         <>
@@ -108,24 +95,6 @@ export function TransferenciaResumoPanel({
           <div className="flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded p-1 leading-tight">
             <CheckCircle className="h-3 w-3 shrink-0" />
             <span className="font-medium">Referência econômica preenchida</span>
-          </div>
-
-          <Button type="button" variant="ghost" size="sm" className="w-full h-6 text-[10px] font-medium gap-1 text-muted-foreground" onClick={onOpenModal}>
-            <Edit className="h-3 w-3" />
-            Editar Detalhes
-          </Button>
-
-          <Separator />
-
-          <div className="flex items-center gap-1.5">
-            {onCancelEdit && (
-              <Button type="button" variant="outline" className="flex-1 h-7 text-[10px] font-bold" onClick={onCancelEdit}>
-                Cancelar
-              </Button>
-            )}
-            <Button type="button" className="flex-1 h-7 text-[10px] font-bold" onClick={onRequestRegister} disabled={submitting}>
-              {submitting ? 'Registrando...' : (registerLabel || 'Registrar Transferência')}
-            </Button>
           </div>
         </>
       )}
