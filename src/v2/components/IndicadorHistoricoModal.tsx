@@ -73,6 +73,9 @@ interface Props {
   deltaAno?: number | null;
   /** Modo de visualização — afeta o cálculo do histórico inferior multi-ano. */
   viewMode?: 'mes' | 'periodo';
+  /** Callback para alternar viewMode dentro do modal (toggle interno).
+   *  Quando ausente, o toggle não é renderizado. Estado real vive no pai. */
+  onViewModeChange?: (v: 'mes' | 'periodo') => void;
   /**
    * Histórico multi-ano (auxiliar legado de zoot_mensal_cache).
    * Vem de useHistoricoIndicador no V2Home — modal só renderiza.
@@ -132,6 +135,7 @@ export function IndicadorHistoricoModal({
   deltaMes,
   deltaAno,
   viewMode = 'mes',
+  onViewModeChange,
   historicoAno,
   historicoMeta,
   loadingHistorico = false,
@@ -278,11 +282,37 @@ export function IndicadorHistoricoModal({
       >
         {/* Header executivo (two-column) — fixo, fora do scroll */}
         <div className="shrink-0 flex items-start justify-between gap-4 px-5 py-3 border-b border-border/40">
-          {/* Esquerda — título + subtítulo */}
+          {/* Esquerda — título + subtítulo + toggle */}
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-foreground leading-tight">{titulo}</h2>
             {subtitulo && (
               <p className="text-[11px] font-light text-muted-foreground/70 leading-snug mt-0.5">{subtitulo}</p>
+            )}
+            {onViewModeChange && (
+              <div className="flex gap-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => onViewModeChange('mes')}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                    viewMode === 'mes'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+                  }`}
+                >
+                  No mês
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onViewModeChange('periodo')}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                    viewMode === 'periodo'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'
+                  }`}
+                >
+                  No período
+                </button>
+              </div>
             )}
           </div>
 
