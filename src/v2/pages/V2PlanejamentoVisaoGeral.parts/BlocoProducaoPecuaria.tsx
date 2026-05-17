@@ -66,7 +66,7 @@ export function BlocoProducaoPecuaria({ data }: Props) {
         <CardComparativo titulo="Custo R$/@ META"           dado={data.custoArr}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
         <CardComparativo titulo="Venda R$/@ META"           dado={data.precoArr}    className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} mostrarVsAnoAnt />
         <CardComparativo titulo="Margem R$/@ META"          dado={data.margemArr}   className={PALETA_MARGEM}  valorClassName={VALOR_MARGEM}  mostrarVsAnoAnt />
-        <CardComparativo titulo="GMD Médio META"            dado={data.gmdMedio}    className={PALETA_NEUTRO}  />
+        <CardComparativo titulo="GMD Médio META"            dado={data.gmdMedio}    className={PALETA_NEUTRO}  mostrarVsAnoAnt />
         <CardComparativo titulo="Custo/Cab mês META"        dado={data.custoCab}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
       </div>
     </section>

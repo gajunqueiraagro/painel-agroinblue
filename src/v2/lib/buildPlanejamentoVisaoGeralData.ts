@@ -828,7 +828,7 @@ function buildBloco2Producao(
       12, // ANUAL: card sem filtro de mês — lê Dez (Jan-Dez acumulado/média) da série META do período
       'pc100',
       'gmd',
-      null, // sem comparativo de início de ano para GMD
+      painel.gmdIndicador?.serieAnoAnt?.[12] ?? null, // GMD acumulado/médio ano anterior (Dez)
     ),
 
     custoCab: buildComparativoPonto(
