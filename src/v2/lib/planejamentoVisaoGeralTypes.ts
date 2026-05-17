@@ -79,7 +79,7 @@ export type TipoSemantica = 'estoque' | 'acumulado' | 'media' | 'taxa';
 /**
  * Formato de exibição.
  */
-export type FormatoExibicao = 'moeda' | 'numero' | 'percentual' | 'arrobas' | 'kg' | 'cabecas' | 'hectares' | 'ua_ha';
+export type FormatoExibicao = 'moeda' | 'numero' | 'percentual' | 'arrobas' | 'kg' | 'cabecas' | 'hectares' | 'ua_ha' | 'gmd';
 
 /**
  * Comparativo duplo: META vs ano-1 anual + META acum Jan→mêsAtual vs ano-1 mesmo período.

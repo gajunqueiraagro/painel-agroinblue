@@ -56,6 +56,8 @@ function formatar(valor: number | null, formato: FormatoExibicao): string {
       return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(valor)} ha`;
     case 'ua_ha':
       return `${valor.toFixed(2).replace('.', ',')} UA/ha`;
+    case 'gmd':
+      return `${valor.toFixed(2).replace('.', ',')} kg/dia`;
     default:
       return String(valor);
   }

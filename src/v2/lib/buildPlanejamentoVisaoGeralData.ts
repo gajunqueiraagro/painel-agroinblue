@@ -705,7 +705,7 @@ function buildBloco2Producao(
       custoArr: empty('moeda', 'taxa'),
       precoArr: empty('moeda', 'taxa'),
       margemArr: empty('moeda', 'taxa'),
-      gmdMedio: empty('kg', 'estoque'),
+      gmdMedio: empty('gmd', 'estoque'),
       custoCab: empty('moeda', 'taxa'),
     };
   }
@@ -825,9 +825,9 @@ function buildBloco2Producao(
 
     gmdMedio: buildComparativoEstoquePontoZeroIndexed(
       painel.gmdIndicador?.serieMeta,
-      12, // ANUAL: Visão Geral Planejamento não tem filtro de mês — lê Dez (Jan-Dez acumulado/média) da série META do período
+      12, // ANUAL: card sem filtro de mês — lê Dez (Jan-Dez acumulado/média) da série META do período
       'pc100',
-      'kg',
+      'gmd',
       null, // sem comparativo de início de ano para GMD
     ),
 
