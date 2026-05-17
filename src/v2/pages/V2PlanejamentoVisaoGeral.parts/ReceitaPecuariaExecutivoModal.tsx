@@ -9,10 +9,10 @@
 import { useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
+  Area, AreaChart,
   Bar, BarChart,
   CartesianGrid,
   Legend,
-  Line, LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis, YAxis,
@@ -30,9 +30,9 @@ interface Props {
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-// Cores idênticas às do BlocoResumoExecutivo
+// Cores oficiais do modal.
 const COR_META = '#f97316'; // orange-500
-const COR_REAL = '#374151'; // gray-700
+const COR_REAL = '#94a3b8'; // slate-400 (azul-cinza claro)
 
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -48,19 +48,20 @@ const fmtPct = (d: DeltaSeguro): string => {
   return `${sinal}${pct.toFixed(1)}%`;
 };
 
+// Cor do Δ% na TABELA (linhas centro/subcentro): emerald/rose/muted.
 const corDelta = (d: DeltaSeguro): string => {
   if (d === null || !Number.isFinite(d)) return 'text-muted-foreground';
   return d >= 0 ? 'text-emerald-600' : 'text-rose-600';
 };
 
-// Cor do Δ% no HEADER do modal: negativo=rose-700, positivo=blue-700,
-// zero=neutro, null=neutro. Distinto de corDelta (que pinta linhas).
+// Cor do Δ% no HEADER do modal: blue-700 positivo, rose-700 negativo,
+// zero/null=neutro.
 const corDeltaHeader = (d: DeltaSeguro): string => {
   if (d === null || !Number.isFinite(d) || d === 0) return 'text-foreground';
   return d > 0 ? 'text-blue-700' : 'text-rose-700';
 };
 
-// Cor da Diferença/Δ% nos CARDS de top impacto: blue=positivo, rose=negativo, neutro=zero.
+// Cor da Diferença/Δ% nos CARDS de top impacto.
 const corImpactoCard = (impactoAbs: number): string => {
   if (impactoAbs > 0) return 'text-blue-700 dark:text-blue-300';
   if (impactoAbs < 0) return 'text-rose-700 dark:text-rose-300';
@@ -84,7 +85,7 @@ function GraficoTooltip({
 }: { active?: boolean; payload?: TooltipItem[]; label?: string }) {
   if (!active || !payload || payload.length === 0) return null;
   return (
-    <div className="rounded-md border border-border/50 bg-background/85 backdrop-blur-sm px-2.5 py-1.5 shadow-sm text-[11px]">
+    <div className="rounded-md border border-border/50 bg-background/90 backdrop-blur-sm px-2.5 py-1.5 shadow-sm text-[11px]">
       <div className="font-semibold text-foreground mb-0.5">{label}</div>
       {payload.map((p, i) => {
         const isMeta = String(p.dataKey ?? '').toLowerCase().includes('meta');
@@ -101,6 +102,24 @@ function GraficoTooltip({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Legenda com dots vazados (círculo branco com borda colorida) e texto na cor da série.
+interface LegendItem { value?: string; color?: string }
+function GraficoLegend({ payload }: { payload?: LegendItem[] }) {
+  if (!payload || payload.length === 0) return null;
+  return (
+    <div className="flex justify-center gap-4 mt-2 text-[11px]">
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden>
+            <circle cx="5" cy="5" r="3.75" fill="white" stroke={entry.color} strokeWidth="1.5" />
+          </svg>
+          <span style={{ color: entry.color }} className="font-medium">{entry.value}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -137,28 +156,38 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold">
-            {data.linha.label}
-          </DialogTitle>
-          <div className="flex flex-col gap-0.5 tabular-nums text-sm mt-1">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1.5">REAL 2025</span>
-              <span className="text-foreground font-semibold">{fmtBRL(data.linha.real)}</span>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+        {/* ── Header sticky 1 linha ── */}
+        <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5">
+          <DialogHeader className="space-y-0">
+            <div className="flex items-center gap-4 flex-wrap">
+              <DialogTitle className="text-[17px] font-semibold m-0">
+                {data.linha.label}
+              </DialogTitle>
+              <div className="flex items-center gap-3 flex-wrap tabular-nums text-sm">
+                <div>
+                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">REAL 2025</span>
+                  <span className="font-semibold text-foreground">{fmtBRL(data.linha.real)}</span>
+                </div>
+                <span className="text-muted-foreground/40">·</span>
+                <div>
+                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">META 2026</span>
+                  <span className="font-semibold text-orange-500">{fmtBRL(data.linha.meta)}</span>
+                </div>
+                <span className="text-muted-foreground/40">·</span>
+                <div>
+                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">Δ%</span>
+                  <span className={cn('font-semibold', corDeltaHeader(data.linha.delta as DeltaSeguro))}>
+                    {fmtPct(data.linha.delta as DeltaSeguro)}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1.5">META 2026</span>
-              <span className="text-orange-500 font-semibold">{fmtBRL(data.linha.meta)}</span>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1.5">Δ%</span>
-              <span className={cn('font-semibold', corDeltaHeader(data.linha.delta as DeltaSeguro))}>
-                {fmtPct(data.linha.delta as DeltaSeguro)}
-              </span>
-            </div>
-          </div>
-        </DialogHeader>
+          </DialogHeader>
+        </div>
+
+        {/* ── Corpo (padding interno) ── */}
+        <div className="px-5 pb-5 space-y-4">
 
         {/* Banner de divergência (invariante numérica) */}
         {!data.conciliado && (
@@ -187,51 +216,103 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
           Composição oficial: grupo_custo = "Receita Pecuária"
         </div>
 
-        {/* Grid 50/50 topo: tabela hierárquica à esquerda, top 3 impactos à direita */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          {/* Tabela hierárquica centro → subcentros */}
-          <div className="border border-border rounded-md overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-1.5 bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <div></div>
-              <div className="text-right">REAL 2025</div>
-              <div className="text-right text-orange-500">META 2026</div>
-              <div className="text-right">Δ%</div>
-            </div>
-            {/* Centros */}
-            {data.porCentro.map((centro) => (
-              <div key={centro.centro_custo} className="border-t border-border/60 first:border-t-0">
-                <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-1.5 bg-muted/20 font-semibold text-[12px]">
-                  <div className="truncate">{centro.centro_custo}</div>
-                  <div className="text-right tabular-nums">{fmtBRL(centro.realTotal)}</div>
-                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
-                  <div className={cn('text-right text-[11px] font-semibold tabular-nums', corDelta(centro.delta))}>
-                    {fmtPct(centro.delta)}
+        {/* ── Tabela hierárquica FULL-WIDTH ── */}
+        <div className="border border-border rounded-md overflow-hidden">
+          {/* Header */}
+          <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-1.5 bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div></div>
+            <div className="text-right">REAL 2025</div>
+            <div className="text-right text-orange-500">META 2026</div>
+            <div className="text-right">Δ%</div>
+          </div>
+          {/* Centros */}
+          {data.porCentro.map((centro) => (
+            <div key={centro.centro_custo} className="border-t border-border/60 first:border-t-0">
+              <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-1.5 bg-muted/20 font-semibold text-[13px]">
+                <div className="truncate">{centro.centro_custo}</div>
+                <div className="text-right tabular-nums">{fmtBRL(centro.realTotal)}</div>
+                <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
+                <div className={cn('text-right text-[12px] font-semibold tabular-nums', corDelta(centro.delta))}>
+                  {fmtPct(centro.delta)}
+                </div>
+              </div>
+              {centro.subcentros.map((sub) => (
+                <div
+                  key={sub.subcentro}
+                  className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-[3px] text-[11px] leading-[1.3] border-t border-border/30 text-muted-foreground"
+                >
+                  <div className="pl-4 truncate">{sub.subcentro}</div>
+                  <div className="text-right tabular-nums">{fmtBRL(sub.realTotal)}</div>
+                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
+                  <div className={cn('text-right tabular-nums font-semibold', corDelta(sub.delta))}>
+                    {fmtPct(sub.delta)}
                   </div>
                 </div>
-                {centro.subcentros.map((sub) => (
-                  <div
-                    key={sub.subcentro}
-                    className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-[3px] text-[11px] border-t border-border/30"
-                  >
-                    <div className="pl-4 truncate text-foreground/80">{sub.subcentro}</div>
-                    <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
-                    <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
-                    <div className={cn('text-right tabular-nums font-semibold', corDelta(sub.delta))}>
-                      {fmtPct(sub.delta)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* ── 2 gráficos lado a lado ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Mensal — barras agrupadas REAL/META encostadas */}
+          <div className="border border-border rounded-md p-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Mensal
+            </h3>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dadosMensais} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={0} barCategoryGap="18%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip content={<GraficoTooltip />} cursor={{ fill: 'hsl(var(--muted-foreground) / 0.08)' }} />
+                  <Legend content={<GraficoLegend />} />
+                  <Bar dataKey="real" name="REAL 2025" fill={COR_REAL} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="meta" name="META 2026" fill={COR_META} radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
-          {/* Top 3 maiores impactos — coluna direita, empilhados verticalmente */}
-          {data.topImpactos.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Maiores impactos na variação
-              </div>
+          {/* Acumulado Jan→Dez — areas com gradient */}
+          <div className="border border-border rounded-md p-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Acumulado
+            </h3>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dadosAcumulado} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradReal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COR_REAL} stopOpacity={0.30} />
+                      <stop offset="100%" stopColor={COR_REAL} stopOpacity={0.04} />
+                    </linearGradient>
+                    <linearGradient id="gradMeta" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COR_META} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={COR_META} stopOpacity={0.04} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip content={<GraficoTooltip />} />
+                  <Legend content={<GraficoLegend />} />
+                  <Area type="monotone" dataKey="realAcum" name="REAL 2025" stroke={COR_REAL} strokeWidth={2.6} fill="url(#gradReal)" dot={false} />
+                  <Area type="monotone" dataKey="metaAcum" name="META 2026" stroke={COR_META} strokeWidth={2.6} fill="url(#gradMeta)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Top 3 cards (full-width inferior, grid 3 colunas) ── */}
+        {data.topImpactos.length > 0 && (
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.4px] text-muted-foreground font-medium mb-2">
+              Maiores impactos na variação
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {data.topImpactos.map((sub) => {
                 const cardCls =
                   sub.impactoAbs > 0
@@ -241,66 +322,29 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
                       : 'bg-muted border-border';
                 const corValor = corImpactoCard(sub.impactoAbs);
                 return (
-                  <div key={sub.subcentro} className={cn('border rounded-md p-2.5 flex flex-col gap-1 min-w-0', cardCls)}>
-                    <div className="text-[12px] font-semibold truncate">{sub.subcentro}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{sub.centro_custo}</div>
-                    <div className="text-[11px] tabular-nums text-muted-foreground">REAL 2025 {fmtBRL(sub.realTotal)}</div>
-                    <div className="text-[11px] tabular-nums text-orange-500">META 26 {fmtBRL(sub.metaTotal)}</div>
-                    <div className="text-[11px] tabular-nums">
-                      Diferença <span className={cn('font-semibold', corValor)}>{fmtBRL(sub.impactoAbs)}</span>
+                  <div key={sub.subcentro} className={cn('border rounded-lg px-3 py-2.5 flex flex-col gap-0.5 min-w-0', cardCls)}>
+                    <div className="text-[12px] font-semibold leading-[1.3] truncate text-foreground">{sub.subcentro}</div>
+                    <div className="text-[10px] text-muted-foreground truncate mb-1.5">{sub.centro_custo}</div>
+                    <div className="text-[11px] leading-[1.4] tabular-nums">
+                      <span className="text-muted-foreground">REAL 2025 </span>
+                      <span className="text-foreground">{fmtBRL(sub.realTotal)}</span>
                     </div>
-                    <div className={cn('text-[11px] tabular-nums font-semibold', corValor)}>
+                    <div className="text-[11px] leading-[1.4] tabular-nums text-orange-500">
+                      META 26 {fmtBRL(sub.metaTotal)}
+                    </div>
+                    <div className="text-[11px] leading-[1.4] tabular-nums">
+                      <span className="text-muted-foreground">Diferença </span>
+                      <span className={cn('font-semibold', corValor)}>{fmtBRL(sub.impactoAbs)}</span>
+                    </div>
+                    <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', corValor)}>
                       Δ% {fmtPct(sub.delta)}
                     </div>
                   </div>
                 );
               })}
             </div>
-          ) : <div />}
-        </div>
-
-        {/* 2 gráficos lado a lado: Mensal (barras) + Acumulado (linhas) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Mensal — barras agrupadas REAL/META */}
-          <div className="border border-border rounded-md p-3">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Mensal
-            </h3>
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dadosMensais} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip content={<GraficoTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="real" name="REAL 2025" fill={COR_REAL} radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="meta" name="META 2026" fill={COR_META} radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
           </div>
-
-          {/* Acumulado Jan→Dez — linhas REAL/META */}
-          <div className="border border-border rounded-md p-3">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Acumulado
-            </h3>
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dadosAcumulado} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip content={<GraficoTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="realAcum" name="REAL 2025" stroke={COR_REAL} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="metaAcum" name="META 2026" stroke={COR_META} strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Footer — botão "Ver detalhes" SOMENTE quando onVerDetalhes existe */}
         {onVerDetalhes && (
@@ -314,6 +358,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
             </button>
           </div>
         )}
+
+        </div>
       </DialogContent>
     </Dialog>
   );
