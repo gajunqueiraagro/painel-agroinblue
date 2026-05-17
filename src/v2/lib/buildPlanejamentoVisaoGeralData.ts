@@ -825,7 +825,7 @@ function buildBloco2Producao(
 
     gmdMedio: buildComparativoEstoquePontoZeroIndexed(
       painel.gmdIndicador?.serieMeta,
-      12, // Dez (serieMeta length 13, 1-based: [0]=NaN, [12]=Dez META)
+      mesAtual, // mês selecionado, 1-based (compatível com serieMeta [1]=Jan..[12]=Dez)
       'pc100',
       'kg',
       null, // sem comparativo de início de ano para GMD
