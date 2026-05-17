@@ -95,9 +95,9 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
           <DialogTitle className="text-lg font-bold flex items-center gap-3 flex-wrap">
             <span>{data.linha.label}</span>
             <span className="text-sm font-normal text-muted-foreground tabular-nums">
-              META <span className="text-orange-500 font-semibold">{fmtBRL(data.linha.meta)}</span>
-              <span className="mx-2">·</span>
               REAL <span className="text-foreground font-semibold">{fmtBRL(data.linha.real)}</span>
+              <span className="mx-2">·</span>
+              META <span className="text-orange-500 font-semibold">{fmtBRL(data.linha.meta)}</span>
               <span className="mx-2">·</span>
               Δ% <span className={cn('font-semibold', corDelta(data.linha.delta as DeltaSeguro))}>
                 {fmtPct(data.linha.delta as DeltaSeguro)}
@@ -138,8 +138,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
           {/* Header */}
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-1.5 bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <div></div>
-            <div className="text-right text-orange-500">META 2026</div>
             <div className="text-right">REAL 2025</div>
+            <div className="text-right text-orange-500">META 2026</div>
             <div className="text-right">Δ%</div>
           </div>
           {/* Centros */}
@@ -147,8 +147,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
             <div key={centro.centro_custo} className="border-t border-border/60 first:border-t-0">
               <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-1.5 bg-muted/20 font-semibold text-[12px]">
                 <div className="truncate">{centro.centro_custo}</div>
-                <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
                 <div className="text-right tabular-nums">{fmtBRL(centro.realTotal)}</div>
+                <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
                 <div className={cn('text-right text-[11px] font-semibold tabular-nums', corDelta(centro.delta))}>
                   {fmtPct(centro.delta)}
                 </div>
@@ -159,8 +159,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
                   className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center px-3 py-[3px] text-[11px] border-t border-border/30"
                 >
                   <div className="pl-4 truncate text-foreground/80">{sub.subcentro}</div>
-                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
                   <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
+                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
                   <div className={cn('text-right tabular-nums font-semibold', corDelta(sub.delta))}>
                     {fmtPct(sub.delta)}
                   </div>
@@ -182,8 +182,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
                 <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => fmtBRL(v)} axisLine={false} tickLine={false} width={80} />
                 <Tooltip content={<GraficoTooltip />} />
-                <Area type="monotone" dataKey="meta" name="META 2026" stroke={COR_META} fill={COR_META} fillOpacity={0.15} strokeWidth={2} />
                 <Area type="monotone" dataKey="real" name="REAL 2025" stroke={COR_REAL} fill={COR_REAL} fillOpacity={0.10} strokeWidth={2} />
+                <Area type="monotone" dataKey="meta" name="META 2026" stroke={COR_META} fill={COR_META} fillOpacity={0.15} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -207,8 +207,8 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
                   <div key={sub.subcentro} className={cn('border rounded-md p-2.5 flex flex-col gap-1 min-w-0', cardCls)}>
                     <div className="text-[12px] font-semibold truncate">{sub.subcentro}</div>
                     <div className="text-[10px] text-muted-foreground truncate">{sub.centro_custo}</div>
-                    <div className="text-[11px] tabular-nums text-orange-500">META {fmtBRL(sub.metaTotal)}</div>
                     <div className="text-[11px] tabular-nums text-foreground/80">REAL {fmtBRL(sub.realTotal)}</div>
+                    <div className="text-[11px] tabular-nums text-orange-500">META {fmtBRL(sub.metaTotal)}</div>
                     <div className="text-[11px] tabular-nums">
                       Diferença <span className="font-semibold">{fmtBRL(sub.impactoAbs)}</span>
                     </div>

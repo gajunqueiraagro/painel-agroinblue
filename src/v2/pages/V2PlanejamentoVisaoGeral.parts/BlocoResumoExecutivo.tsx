@@ -160,11 +160,11 @@ function LinhaRow({ linha, destaque = false, onClick }: { linha: LinhaExecutiva;
       <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
         {linha.label}
       </div>
-      <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
-        {fmtBRL(linha.meta)}
-      </div>
       <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
         {fmtBRL(linha.real)}
+      </div>
+      <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
+        {fmtBRL(linha.meta)}
       </div>
       <div className="text-right">
         <DeltaBadge delta={linha.delta} />
@@ -267,7 +267,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     <section className="bg-card border border-border rounded-lg p-4 mb-4">
       <h2 className="text-base font-bold text-foreground mb-1">Fluxo de Caixa Previsto</h2>
       <p className="text-xs text-muted-foreground mb-3">
-        META 2026 (planejamento financeiro) vs Real 2025 (financeiro lançamentos).
+        Real 2025 (financeiro lançamentos) vs META 2026 (planejamento financeiro).
         Gráfico: saldo acumulado projetado mês a mês.
       </p>
 
@@ -315,17 +315,17 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area
                 type="monotone"
-                dataKey="META 2026"
-                stroke="#f97316"
-                strokeWidth={2}
-                fill="url(#g-meta)"
-              />
-              <Area
-                type="monotone"
                 dataKey="REAL 2025"
                 stroke="#9ca3af"
                 strokeWidth={2}
                 fill="url(#g-real)"
+              />
+              <Area
+                type="monotone"
+                dataKey="META 2026"
+                stroke="#f97316"
+                strokeWidth={2}
+                fill="url(#g-meta)"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -372,8 +372,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">REAL 2025</div>
+            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">Δ%</div>
           </div>
           <LinhaRow linha={data.totalEntradas} destaque />
@@ -392,8 +392,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">REAL 2025</div>
+            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             <div className="text-right">Δ%</div>
           </div>
           <LinhaRow linha={data.totalSaidas} destaque />
