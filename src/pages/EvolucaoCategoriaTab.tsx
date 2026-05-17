@@ -179,6 +179,7 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     enabled: !!fazendaId && !!clienteAtual?.id,
   });
   const pastosFechados = pastosFechadosCount > 0;
+  const isRealizado = statusFiltro === 'realizado';
 
   const totais = useMemo(() => {
     const si = dadosMes.reduce((s, d) => s + d.saldo_inicial, 0);
@@ -187,9 +188,9 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     const evolIn = dadosMes.reduce((s, d) => s + d.evol_cat_entrada, 0);
     const evolOut = dadosMes.reduce((s, d) => s + d.evol_cat_saida, 0);
     const algumSistemaNulo = dadosMes.some(d => d.saldo_sistema == null);
-    const sf: number | null = algumSistemaNulo
-      ? null
-      : dadosMes.reduce((s, d) => s + d.saldo_sistema!, 0);
+    const sf: number | null = isRealizado && !algumSistemaNulo
+      ? dadosMes.reduce((s, d) => s + d.saldo_sistema!, 0)
+      : dadosMes.reduce((s, d) => s + d.saldo_final, 0);
     const pesoTotalIni = dadosMes.reduce((s, d) => s + d.peso_total_inicial, 0);
     const pesoTotalFin = dadosMes.reduce((s, d) => s + d.peso_total_final, 0);
     const prodBio = dadosMes.reduce((s, d) => s + d.producao_biologica, 0);
@@ -200,9 +201,8 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
     const gmd = cabMedias > 0 && diasMes > 0 ? prodBio / cabMedias / diasMes : null;
 
     return { si, entExt, saiExt, evolIn, evolOut, sf, pesoTotalIni, pesoTotalFin, pesoMedioIni, pesoMedioFin, prodBio, diasMes, cabMedias, gmd };
-  }, [dadosMes]);
+  }, [dadosMes, isRealizado]);
 
-  const isRealizado = statusFiltro === 'realizado';
   const fmtNum = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR');
   const fmtPeso = (v: number | null) => (v === null || v <= 0) ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const fmtKgTotal = (v: number) => v === 0 ? '–' : v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -462,7 +462,9 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-bold bg-foreground/[0.03] ${cellClickable} ${isFutureMonth ? 'text-transparent' : isRealizado ? 'text-primary' : 'text-orange-700'}`}>
                         {isFutureMonth ? '' :
                           modo === 'cabeca'
-                            ? (d.saldo_sistema != null ? fmtNum(d.saldo_sistema) : '—')
+                            ? (isRealizado
+                                ? (d.saldo_sistema != null ? fmtNum(d.saldo_sistema) : '—')
+                                : fmtNum(d.saldo_final))
                             : getVal(d, 'saldo_final')
                         }
                       </td>
