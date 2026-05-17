@@ -85,6 +85,7 @@ export function buildMonthlyDataFromView(
   valorRebanhoMes: number[],
   isGlobal = false,
   areaProdutivaMensal?: number[],
+  gmdPrevistoLookup?: Map<string, number> | null,
 ): MonthlyData {
   const mk = (fn: (m: number) => number) => Array.from({ length: 12 }, (_, i) => fn(i + 1));
   const diasNoMes = (m: number): number => new Date(ano, m, 0).getDate();
@@ -131,9 +132,35 @@ export function buildMonthlyDataFromView(
   const pesoMedioIni = mk(m => { const c = cabIni[m - 1]; return c > 0 ? pesoTotalIni[m - 1] / c : NaN; });
   const pesoMedioFin = mk(m => { const c = cabFin[m - 1]; return c > 0 ? pesoTotalFin[m - 1] / c : NaN; });
 
-  // GMD: weighted average from view rows
+  // GMD: fonte depende do cenário
+  // - META  (gmdPrevistoLookup presente): média ponderada de gmd_previsto por
+  //   cabMedia da categoria, soberano via meta_gmd_mensal.
+  // - Realizado (lookup ausente): producao_biologica / cabMedia / dias
+  //   (fórmula original, INALTERADA).
+  //
+  // Guardrail: se nenhuma categoria do mês tiver match em gmdPrevistoLookup,
+  // retorna NaN (ausência de base oficial). NUNCA retorna 0 nesse caso —
+  // zero significaria dado válido = "GMD = 0", mascarando ausência.
   const gmd = mk(m => {
     const mesRows = viewRows.filter(r => r.mes === m);
+
+    if (gmdPrevistoLookup) {
+      // ── MODO META ──
+      let numer = 0;
+      let denom = 0;
+      for (const row of mesRows) {
+        const key = `${row.fazenda_id}|${row.ano_mes}|${row.categoria_codigo}`;
+        const gmdPrev = gmdPrevistoLookup.get(key);
+        if (gmdPrev == null) continue;
+        const cabMediaCat = (row.saldo_inicial + row.saldo_final) / 2;
+        if (cabMediaCat <= 0) continue;
+        numer += gmdPrev * cabMediaCat;
+        denom += cabMediaCat;
+      }
+      return denom > 0 ? numer / denom : NaN;
+    }
+
+    // ── MODO REALIZADO (fórmula original, inalterada) ──
     const cabMedia = (cabIni[m - 1] + cabFin[m - 1]) / 2;
     if (cabMedia <= 0) return NaN;
     const prodBio = mesRows.reduce((s, r) => s + r.producao_biologica, 0);

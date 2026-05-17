@@ -1204,6 +1204,45 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     return () => { cancelled = true; };
   }, [ano, isGlobal, fazendaId, clienteAtual?.id]);
 
+  // META — GMD previsto por (fazenda × ano_mes × categoria_codigo)
+  // Fonte oficial: meta_gmd_mensal. Defensivo: dedup por updated_at DESC.
+  // (Mesmo após UNIQUE constraint, dedup defensivo no fetch protege contra
+  // regressão acidental ou estados intermediários durante deploy.)
+  const [gmdPrevistoLookup, setGmdPrevistoLookup] = useState<Map<string, number> | null>(null);
+  useEffect(() => {
+    const cid = clienteAtual?.id;
+    if (!carregarMetaEffective || !cid) { setGmdPrevistoLookup(null); return; }
+    if (!isGlobal && (!fazendaId || fazendaId === '__global__')) {
+      setGmdPrevistoLookup(null); return;
+    }
+    let cancelled = false;
+    const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
+    let q = supabase
+      .from('meta_gmd_mensal' as any)
+      .select('fazenda_id, ano_mes, categoria, gmd_previsto, updated_at, id')
+      .eq('cliente_id', cid)
+      .in('ano_mes', meses)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false });
+    if (!isGlobal) q = q.eq('fazenda_id', fazendaId);
+    q.then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) { setGmdPrevistoLookup(null); return; }
+      // Dedup defensiva: mantém o primeiro (mais recente) por chave.
+      // SEM soma, SEM média entre duplicatas — escolha explícita do registro soberano.
+      const map = new Map<string, number>();
+      for (const r of data as any[]) {
+        const key = `${r.fazenda_id}|${r.ano_mes}|${r.categoria}`;
+        if (map.has(key)) continue;
+        const v = Number(r.gmd_previsto);
+        if (!Number.isFinite(v)) continue;
+        map.set(key, v);
+      }
+      setGmdPrevistoLookup(map);
+    });
+    return () => { cancelled = true; };
+  }, [ano, isGlobal, fazendaId, clienteAtual?.id, carregarMetaEffective]);
+
   const mesRef = mes === 0 ? 12 : mes;
   const mesStr = `${ano}-${String(mesRef).padStart(2, '0')}`;
   const { status: statusPilares } = useStatusPilares(fazendaId, mesStr);
@@ -1238,10 +1277,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
             Array(13).fill(NaN),
             isGlobal,
             areaPecuariaMetaNumPorMes,
+            gmdPrevistoLookup,
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewTotalsMeta, viewDataMeta, carregarMetaEffective, ano, isGlobal, areaPecuariaMetaNumPorMes],
+    [viewTotalsMeta, viewDataMeta, carregarMetaEffective, ano, isGlobal, areaPecuariaMetaNumPorMes, gmdPrevistoLookup],
   );
 
   const loading = loadingRebanho || loadingLanc || loadingFin || loadingArea;
