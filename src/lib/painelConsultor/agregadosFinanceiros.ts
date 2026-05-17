@@ -466,31 +466,36 @@ export function agregaSaidasTotaisMeta(grid: SubcentroGrid[]): number[] {
 // ─── Atômicos REALIZADO/META por subcentro (drilldown executivo) ───────
 //
 // Invariante: para cada mês m,
-//   sum(Object.values(porSubcentro).map(s => s.meses[m])) === agregaReceitaPec(...)[m]
-// Filtros base e predicate são IDÊNTICOS aos usados em agregaReceitaPec
-// (reuso de makeRealizadoSourceEntrada / makeMetaSource + isReceitaPecuaria).
+//   sum(Object.values(porSubcentro).map(s => s.meses[m])) === agregaX(...)[m]
+// Filtros base e predicate são IDÊNTICOS aos do agregador escalar
+// correspondente (reuso de makeRealizadoSource / makeRealizadoSourceEntrada
+// / makeMetaSource + predicates de classificacao.ts).
 
 export interface ComposicaoSubcentro {
   centro_custo: string;
   meses: number[]; // length 12
 }
 
-export function agregaReceitaPecPorSubcentro(
-  lancFin: FinanceiroLancamento[],
-  ano: number,
+/**
+ * Núcleo genérico: extrai composição por subcentro de uma fonte qualquer
+ * filtrada por predicate. Retorna Record<subcentro, {centro_custo, meses[12]}>.
+ * Lançamentos sem centro/subcentro: IGNORADOS + console.warn. Zero fallback.
+ */
+export function agregaPorSubcentroGenerico<T>(
+  source: AggregaSource<T>,
+  predicate: Predicate,
+  contextLabel: string,
 ): Record<string, ComposicaoSubcentro> {
-  const source = makeRealizadoSourceEntrada(lancFin, ano);
   const out: Record<string, ComposicaoSubcentro> = {};
-
   for (const item of source.items) {
     if (!source.passesBase(item)) continue;
     const classif = source.toClassificavel(item);
-    if (!isReceitaPecuaria(classif)) continue;
+    if (!predicate(classif)) continue;
 
     const centro = classif.centro_custo;
     const sub = classif.subcentro;
     if (!centro || !sub) {
-      console.warn('[agregaReceitaPecPorSubcentro] lançamento sem centro/subcentro ignorado:', (item as FinanceiroLancamento).id);
+      console.warn('[' + contextLabel + '] lançamento sem centro/subcentro ignorado');
       continue;
     }
 
@@ -504,30 +509,113 @@ export function agregaReceitaPecPorSubcentro(
   return out;
 }
 
-export function agregaReceitaPecPorSubcentroMeta(
-  grid: SubcentroGrid[],
-): Record<string, ComposicaoSubcentro> {
-  const source = makeMetaSource(grid);
-  const out: Record<string, ComposicaoSubcentro> = {};
+// ─── Wrappers thin: um par (Real, Meta) por bucket do BlocoResumoExecutivo ───
 
-  for (const item of source.items) {
-    if (!source.passesBase(item)) continue;
-    const classif = source.toClassificavel(item);
-    if (!isReceitaPecuaria(classif)) continue;
+// — ENTRADAS —
 
-    const centro = classif.centro_custo;
-    const sub = classif.subcentro;
-    if (!centro || !sub) {
-      console.warn('[agregaReceitaPecPorSubcentroMeta] row sem centro/subcentro ignorada');
-      continue;
-    }
+export function agregaReceitaPecPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaPecuaria, 'agregaReceitaPecPorSubcentro');
+}
+export function agregaReceitaPecPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isReceitaPecuaria, 'agregaReceitaPecPorSubcentroMeta');
+}
 
-    if (!out[sub]) {
-      out[sub] = { centro_custo: centro, meses: new Array(12).fill(0) };
-    }
-    source.forEachContribution(item, (mesIdx, valor) => {
-      out[sub].meses[mesIdx] += valor;
-    });
-  }
-  return out;
+export function agregaReceitaAgriPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaAgricola, 'agregaReceitaAgriPorSubcentro');
+}
+export function agregaReceitaAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isReceitaAgricola, 'agregaReceitaAgriPorSubcentroMeta');
+}
+
+export function agregaOutrasReceitasPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isOutrasReceitas, 'agregaOutrasReceitasPorSubcentro');
+}
+export function agregaOutrasReceitasPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isOutrasReceitas, 'agregaOutrasReceitasPorSubcentroMeta');
+}
+
+export function agregaEntradasFinanceirasPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isEntradaFinanceira, 'agregaEntradasFinanceirasPorSubcentro');
+}
+export function agregaEntradasFinanceirasPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isEntradaFinanceira, 'agregaEntradasFinanceirasPorSubcentroMeta');
+}
+
+// — SAÍDAS —
+
+export function agregaCusteioPecPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoPecuaria, 'agregaCusteioPecPorSubcentro');
+}
+export function agregaCusteioPecPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isCusteioProducaoPecuaria, 'agregaCusteioPecPorSubcentroMeta');
+}
+
+export function agregaCusteioAgriPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoAgricultura, 'agregaCusteioAgriPorSubcentro');
+}
+export function agregaCusteioAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isCusteioProducaoAgricultura, 'agregaCusteioAgriPorSubcentroMeta');
+}
+
+export function agregaJurosPecPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isJurosPecuaria, 'agregaJurosPecPorSubcentro');
+}
+export function agregaJurosPecPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isJurosPecuaria, 'agregaJurosPecPorSubcentroMeta');
+}
+
+export function agregaJurosAgriPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isJurosAgricultura, 'agregaJurosAgriPorSubcentro');
+}
+export function agregaJurosAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isJurosAgricultura, 'agregaJurosAgriPorSubcentroMeta');
+}
+
+export function agregaInvFazendaPecPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaPecuaria, 'agregaInvFazendaPecPorSubcentro');
+}
+export function agregaInvFazendaPecPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isInvestimentoFazendaPecuaria, 'agregaInvFazendaPecPorSubcentroMeta');
+}
+
+export function agregaInvFazendaAgriPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isInvestimentoFazendaAgricultura, 'agregaInvFazendaAgriPorSubcentro');
+}
+export function agregaInvFazendaAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isInvestimentoFazendaAgricultura, 'agregaInvFazendaAgriPorSubcentroMeta');
+}
+
+export function agregaInvBovinosPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isReposicaoBovinos, 'agregaInvBovinosPorSubcentro');
+}
+export function agregaInvBovinosPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isReposicaoBovinos, 'agregaInvBovinosPorSubcentroMeta');
+}
+
+export function agregaAmortizacaoPecPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoPecuaria, 'agregaAmortizacaoPecPorSubcentro');
+}
+export function agregaAmortizacaoPecPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isAmortizacaoPecuaria, 'agregaAmortizacaoPecPorSubcentroMeta');
+}
+
+export function agregaAmortizacaoAgriPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isAmortizacaoAgricultura, 'agregaAmortizacaoAgriPorSubcentro');
+}
+export function agregaAmortizacaoAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isAmortizacaoAgricultura, 'agregaAmortizacaoAgriPorSubcentroMeta');
+}
+
+export function agregaDividendosPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isDividendoOuRetirada, 'agregaDividendosPorSubcentro');
+}
+export function agregaDividendosPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isDividendoOuRetirada, 'agregaDividendosPorSubcentroMeta');
+}
+
+export function agregaDeducoesPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSource(lancFin, ano), isDeducaoReceitas, 'agregaDeducoesPorSubcentro');
+}
+export function agregaDeducoesPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isDeducaoReceitas, 'agregaDeducoesPorSubcentroMeta');
 }

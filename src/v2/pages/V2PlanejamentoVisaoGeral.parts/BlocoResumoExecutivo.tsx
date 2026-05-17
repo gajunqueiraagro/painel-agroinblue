@@ -37,9 +37,22 @@ interface Props {
    * Cards Total Entradas/Saídas + tabelas Entradas/Saídas continuam nítidos.
    */
   desfocarDashboard?: boolean;
-  /** Callback ao clicar numa linha drilldown-friendly. Pai decide qual modal abrir. */
-  onLinhaClick?: (id: 'receitaPecuaria') => void;
+  /** Callback ao clicar numa linha drilldown-friendly. Pai decide qual modal abrir.
+   *  Linhas TOTAL ENTRADAS / TOTAL SAÍDAS NÃO disparam o callback (não têm modal). */
+  onLinhaClick?: (id: LinhaModalKey) => void;
 }
+
+// Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
+// preservar desacoplamento — qualquer página que use o Bloco pode passar
+// callbacks com este union literal).
+export type LinhaModalKey =
+  | 'receitaPecuaria' | 'receitaAgricultura' | 'outrasReceitas' | 'entradasFinanceiras'
+  | 'custeioPecuaria' | 'custeioAgricultura'
+  | 'jurosPecuaria' | 'jurosAgricultura'
+  | 'investimentoPecuaria' | 'investimentoAgricultura'
+  | 'reposicaoBovinos'
+  | 'amortizacaoPecuaria' | 'amortizacaoAgricultura'
+  | 'dividendos' | 'deducoesReceita';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -236,25 +249,28 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     );
   }
 
-  const linhasEntrada: LinhaExecutiva[] = [
-    data.receitaPecuaria,
-    data.receitaAgricultura,
-    data.outrasReceitas,
-    data.entradasFinanceiras,
+  // Pares [linha, key] — a key vai pro callback onLinhaClick.
+  // Adicionar/remover linhas → manter sincronizado com CONFIG_MODAIS_LINHA
+  // no V2PlanejamentoVisaoGeral.tsx.
+  const linhasEntrada: Array<[LinhaExecutiva, LinhaModalKey]> = [
+    [data.receitaPecuaria, 'receitaPecuaria'],
+    [data.receitaAgricultura, 'receitaAgricultura'],
+    [data.outrasReceitas, 'outrasReceitas'],
+    [data.entradasFinanceiras, 'entradasFinanceiras'],
   ];
 
-  const linhasSaida: LinhaExecutiva[] = [
-    data.custeioPecuaria,
-    data.custeioAgricultura,
-    data.jurosPecuaria,
-    data.jurosAgricultura,
-    data.investimentoPecuaria,
-    data.investimentoAgricultura,
-    data.reposicaoBovinos,
-    data.amortizacaoPecuaria,
-    data.amortizacaoAgricultura,
-    data.dividendos,
-    data.deducoesReceita,
+  const linhasSaida: Array<[LinhaExecutiva, LinhaModalKey]> = [
+    [data.custeioPecuaria, 'custeioPecuaria'],
+    [data.custeioAgricultura, 'custeioAgricultura'],
+    [data.jurosPecuaria, 'jurosPecuaria'],
+    [data.jurosAgricultura, 'jurosAgricultura'],
+    [data.investimentoPecuaria, 'investimentoPecuaria'],
+    [data.investimentoAgricultura, 'investimentoAgricultura'],
+    [data.reposicaoBovinos, 'reposicaoBovinos'],
+    [data.amortizacaoPecuaria, 'amortizacaoPecuaria'],
+    [data.amortizacaoAgricultura, 'amortizacaoAgricultura'],
+    [data.dividendos, 'dividendos'],
+    [data.deducoesReceita, 'deducoesReceita'],
   ];
 
   const chartData = MESES.map((nome, i) => ({
@@ -377,11 +393,11 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             <div className="text-right">Δ%</div>
           </div>
           <LinhaRow linha={data.totalEntradas} destaque />
-          {linhasEntrada.map(l => (
+          {linhasEntrada.map(([l, key]) => (
             <LinhaRow
-              key={l.label}
+              key={key}
               linha={l}
-              onClick={l === data.receitaPecuaria && onLinhaClick ? () => onLinhaClick('receitaPecuaria') : undefined}
+              onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
             />
           ))}
         </div>
@@ -397,8 +413,12 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             <div className="text-right">Δ%</div>
           </div>
           <LinhaRow linha={data.totalSaidas} destaque />
-          {linhasSaida.map(l => (
-            <LinhaRow key={l.label} linha={l} />
+          {linhasSaida.map(([l, key]) => (
+            <LinhaRow
+              key={key}
+              linha={l}
+              onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+            />
           ))}
         </div>
       </div>

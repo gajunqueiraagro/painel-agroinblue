@@ -19,13 +19,185 @@ import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisao
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
+  type ComposicaoSubcentro,
   agregaReceitaPecPorSubcentro,
   agregaReceitaPecPorSubcentroMeta,
+  agregaReceitaAgriPorSubcentro,
+  agregaReceitaAgriPorSubcentroMeta,
+  agregaOutrasReceitasPorSubcentro,
+  agregaOutrasReceitasPorSubcentroMeta,
+  agregaEntradasFinanceirasPorSubcentro,
+  agregaEntradasFinanceirasPorSubcentroMeta,
+  agregaCusteioPecPorSubcentro,
+  agregaCusteioPecPorSubcentroMeta,
+  agregaCusteioAgriPorSubcentro,
+  agregaCusteioAgriPorSubcentroMeta,
+  agregaJurosPecPorSubcentro,
+  agregaJurosPecPorSubcentroMeta,
+  agregaJurosAgriPorSubcentro,
+  agregaJurosAgriPorSubcentroMeta,
+  agregaInvFazendaPecPorSubcentro,
+  agregaInvFazendaPecPorSubcentroMeta,
+  agregaInvFazendaAgriPorSubcentro,
+  agregaInvFazendaAgriPorSubcentroMeta,
+  agregaInvBovinosPorSubcentro,
+  agregaInvBovinosPorSubcentroMeta,
+  agregaAmortizacaoPecPorSubcentro,
+  agregaAmortizacaoPecPorSubcentroMeta,
+  agregaAmortizacaoAgriPorSubcentro,
+  agregaAmortizacaoAgriPorSubcentroMeta,
+  agregaDividendosPorSubcentro,
+  agregaDividendosPorSubcentroMeta,
+  agregaDeducoesPorSubcentro,
+  agregaDeducoesPorSubcentroMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
-import { ORDEM_CENTROS_RECEITA_PECUARIA } from '@/lib/financeiro/classificacao';
+import {
+  ORDEM_CENTROS_RECEITA_PECUARIA,
+  ORDEM_CENTROS_RECEITA_AGRICULTURA,
+  ORDEM_CENTROS_OUTRAS_RECEITAS,
+  ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
+  ORDEM_CENTROS_CUSTEIO_PECUARIA,
+  ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
+  ORDEM_CENTROS_JUROS_PECUARIA,
+  ORDEM_CENTROS_JUROS_AGRICULTURA,
+  ORDEM_CENTROS_INVESTIMENTO_PECUARIA,
+  ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA,
+  ORDEM_CENTROS_REPOSICAO_BOVINOS,
+  ORDEM_CENTROS_AMORTIZACAO_PECUARIA,
+  ORDEM_CENTROS_AMORTIZACAO_AGRICULTURA,
+  ORDEM_CENTROS_DIVIDENDOS,
+  ORDEM_CENTROS_DEDUCOES_RECEITA,
+} from '@/lib/financeiro/classificacao';
+import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { buildLinhaExecutivaModalData } from '@/v2/lib/buildLinhaExecutivaModalData';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
+
+export type LinhaModalKey =
+  | 'receitaPecuaria' | 'receitaAgricultura' | 'outrasReceitas' | 'entradasFinanceiras'
+  | 'custeioPecuaria' | 'custeioAgricultura'
+  | 'jurosPecuaria' | 'jurosAgricultura'
+  | 'investimentoPecuaria' | 'investimentoAgricultura'
+  | 'reposicaoBovinos'
+  | 'amortizacaoPecuaria' | 'amortizacaoAgricultura'
+  | 'dividendos' | 'deducoesReceita';
+
+interface ConfigModalLinha {
+  titulo: string;
+  composicaoOficialLabel: string;
+  ordemCentrosOficial: readonly string[];
+  agregaReal: (lancFin: FinanceiroLancamento[], ano: number) => Record<string, ComposicaoSubcentro>;
+  agregaMeta: (grid: SubcentroGrid[]) => Record<string, ComposicaoSubcentro>;
+}
+
+const CONFIG_MODAIS_LINHA: Record<LinhaModalKey, ConfigModalLinha> = {
+  receitaPecuaria: {
+    titulo: 'Receita Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Receita Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_RECEITA_PECUARIA,
+    agregaReal: agregaReceitaPecPorSubcentro,
+    agregaMeta: agregaReceitaPecPorSubcentroMeta,
+  },
+  receitaAgricultura: {
+    titulo: 'Receita Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Receita Agrícola"',
+    ordemCentrosOficial: ORDEM_CENTROS_RECEITA_AGRICULTURA,
+    agregaReal: agregaReceitaAgriPorSubcentro,
+    agregaMeta: agregaReceitaAgriPorSubcentroMeta,
+  },
+  outrasReceitas: {
+    titulo: 'Outras Receitas',
+    composicaoOficialLabel: 'grupo_custo = "Outras Receitas"',
+    ordemCentrosOficial: ORDEM_CENTROS_OUTRAS_RECEITAS,
+    agregaReal: agregaOutrasReceitasPorSubcentro,
+    agregaMeta: agregaOutrasReceitasPorSubcentroMeta,
+  },
+  entradasFinanceiras: {
+    titulo: 'Entradas Financeiras',
+    composicaoOficialLabel: 'grupo_custo = "Entradas de Capital"',
+    ordemCentrosOficial: ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
+    agregaReal: agregaEntradasFinanceirasPorSubcentro,
+    agregaMeta: agregaEntradasFinanceirasPorSubcentroMeta,
+  },
+  custeioPecuaria: {
+    titulo: 'Custeio Pecuária',
+    composicaoOficialLabel: 'macro_custo = "Custeio Produção", escopo = "pecuária" (fixo + variável, sem juros)',
+    ordemCentrosOficial: ORDEM_CENTROS_CUSTEIO_PECUARIA,
+    agregaReal: agregaCusteioPecPorSubcentro,
+    agregaMeta: agregaCusteioPecPorSubcentroMeta,
+  },
+  custeioAgricultura: {
+    titulo: 'Custeio Agricultura',
+    composicaoOficialLabel: 'macro_custo = "Custeio Produção", escopo = "agricultura" (fixo + variável, sem juros)',
+    ordemCentrosOficial: ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
+    agregaReal: agregaCusteioAgriPorSubcentro,
+    agregaMeta: agregaCusteioAgriPorSubcentroMeta,
+  },
+  jurosPecuaria: {
+    titulo: 'Juros Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Juros de Financiamento Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_JUROS_PECUARIA,
+    agregaReal: agregaJurosPecPorSubcentro,
+    agregaMeta: agregaJurosPecPorSubcentroMeta,
+  },
+  jurosAgricultura: {
+    titulo: 'Juros Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Juros de Financiamento Agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_JUROS_AGRICULTURA,
+    agregaReal: agregaJurosAgriPorSubcentro,
+    agregaMeta: agregaJurosAgriPorSubcentroMeta,
+  },
+  investimentoPecuaria: {
+    titulo: 'Investimento Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Investimento Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_INVESTIMENTO_PECUARIA,
+    agregaReal: agregaInvFazendaPecPorSubcentro,
+    agregaMeta: agregaInvFazendaPecPorSubcentroMeta,
+  },
+  investimentoAgricultura: {
+    titulo: 'Investimento Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Investimento Agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA,
+    agregaReal: agregaInvFazendaAgriPorSubcentro,
+    agregaMeta: agregaInvFazendaAgriPorSubcentroMeta,
+  },
+  reposicaoBovinos: {
+    titulo: 'Reposição Bovinos',
+    composicaoOficialLabel: 'grupo_custo = "Compra de Bovinos"',
+    ordemCentrosOficial: ORDEM_CENTROS_REPOSICAO_BOVINOS,
+    agregaReal: agregaInvBovinosPorSubcentro,
+    agregaMeta: agregaInvBovinosPorSubcentroMeta,
+  },
+  amortizacaoPecuaria: {
+    titulo: 'Amortização Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Amortizações", escopo = "pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_AMORTIZACAO_PECUARIA,
+    agregaReal: agregaAmortizacaoPecPorSubcentro,
+    agregaMeta: agregaAmortizacaoPecPorSubcentroMeta,
+  },
+  amortizacaoAgricultura: {
+    titulo: 'Amortização Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Amortizações", escopo = "agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_AMORTIZACAO_AGRICULTURA,
+    agregaReal: agregaAmortizacaoAgriPorSubcentro,
+    agregaMeta: agregaAmortizacaoAgriPorSubcentroMeta,
+  },
+  dividendos: {
+    titulo: 'Dividendos',
+    composicaoOficialLabel: 'grupo_custo = "Dividendos"',
+    ordemCentrosOficial: ORDEM_CENTROS_DIVIDENDOS,
+    agregaReal: agregaDividendosPorSubcentro,
+    agregaMeta: agregaDividendosPorSubcentroMeta,
+  },
+  deducoesReceita: {
+    titulo: 'Deduções de Receita',
+    composicaoOficialLabel: 'grupo_custo = "Deduções de Receitas"',
+    ordemCentrosOficial: ORDEM_CENTROS_DEDUCOES_RECEITA,
+    agregaReal: agregaDeducoesPorSubcentro,
+    agregaMeta: agregaDeducoesPorSubcentroMeta,
+  },
+};
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
@@ -128,18 +300,21 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     });
   }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading, planFin.saldoInicial, painel.caixaIndicador]);
 
-  // Modal executivo "Receita Pecuária" — drilldown da linha consolidada.
-  // DTO montado por buildReceitaPecuariaModalData consumindo agregadores oficiais.
-  const [modalReceitaPec, setModalReceitaPec] = useState(false);
-  const dadosModalReceitaPec = useMemo(() => {
-    if (!dadosBloco1 || planFin.lancFin2025Loading) return null;
+  // Modal executivo genérico — qualquer linha do BlocoResumoExecutivo.
+  // Config map por linha (titulo, composicao, ordem, agregadores) declarado
+  // no topo do arquivo. Estado único: qual linha está aberta (ou null).
+  const [modalLinha, setModalLinha] = useState<LinhaModalKey | null>(null);
+  const cfgModalAtivo = modalLinha ? CONFIG_MODAIS_LINHA[modalLinha] : null;
+  const linhaAtiva = (modalLinha && dadosBloco1) ? dadosBloco1[modalLinha] : null;
+  const dadosModalLinha = useMemo(() => {
+    if (!cfgModalAtivo || !linhaAtiva || planFin.lancFin2025Loading) return null;
     return buildLinhaExecutivaModalData({
-      linha: dadosBloco1.receitaPecuaria,
-      porSubcentroMeta: agregaReceitaPecPorSubcentroMeta(gridMetaConsolidado),
-      porSubcentroReal: agregaReceitaPecPorSubcentro(planFin.lancFin2025, 2025),
-      ordemCentrosOficial: ORDEM_CENTROS_RECEITA_PECUARIA,
+      linha: linhaAtiva,
+      porSubcentroReal: cfgModalAtivo.agregaReal(planFin.lancFin2025, 2025),
+      porSubcentroMeta: cfgModalAtivo.agregaMeta(gridMetaConsolidado),
+      ordemCentrosOficial: cfgModalAtivo.ordemCentrosOficial,
     });
-  }, [dadosBloco1, gridMetaConsolidado, planFin.lancFin2025, planFin.lancFin2025Loading]);
+  }, [cfgModalAtivo, linhaAtiva, planFin.lancFin2025, planFin.lancFin2025Loading, gridMetaConsolidado]);
 
   const loading = painel.loading || planFin.loading;
 
@@ -180,16 +355,16 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         saldoInicialMeta={planFin.saldoInicial}
         saldoInicialReal={painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN}
         desfocarDashboard={desfocarDashboard}
-        onLinhaClick={(id) => { if (id === 'receitaPecuaria') setModalReceitaPec(true); }}
+        onLinhaClick={(key) => setModalLinha(key)}
       />
 
-      {dadosModalReceitaPec && (
+      {modalLinha && cfgModalAtivo && dadosModalLinha && (
         <LinhaExecutivaExecutivoModal
-          open={modalReceitaPec}
-          onOpenChange={setModalReceitaPec}
-          data={dadosModalReceitaPec}
-          titulo="Receita Pecuária"
-          composicaoOficialLabel={'grupo_custo = "Receita Pecuária"'}
+          open={true}
+          onOpenChange={(o) => { if (!o) setModalLinha(null); }}
+          data={dadosModalLinha}
+          titulo={cfgModalAtivo.titulo}
+          composicaoOficialLabel={cfgModalAtivo.composicaoOficialLabel}
           // TODO: cabear onVerDetalhes em fase posterior — rota do
           // Financeiro V2 ainda não confirmada. Não inventar URL aqui.
           onVerDetalhes={undefined}

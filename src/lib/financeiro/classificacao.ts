@@ -574,3 +574,69 @@ export const ORDEM_CENTROS_RECEITA_PECUARIA = [
 ] as const;
 
 export type CentroReceitaPecuaria = (typeof ORDEM_CENTROS_RECEITA_PECUARIA)[number];
+
+// ─── Ordens oficiais dos demais buckets do BlocoResumoExecutivo ───────
+// Usadas pelo modal LinhaExecutivaExecutivoModal via ordemCentrosOficial.
+// Quando um centro vier do banco fora dessa ordem, o builder cai em
+// alfabético e dispara banner "Centros fora da ordem oficial" (não trava).
+
+export const ORDEM_CENTROS_RECEITA_AGRICULTURA = [
+  'Venda Produção', 'Venda Ativos',
+] as const;
+
+export const ORDEM_CENTROS_OUTRAS_RECEITAS = [
+  'Financeiro', 'Outros',
+] as const;
+
+export const ORDEM_CENTROS_ENTRADAS_FINANCEIRAS = [
+  'Capital', 'Financiamento',
+] as const;
+
+export const ORDEM_CENTROS_CUSTEIO_PECUARIA = [
+  'Mão de Obra', 'Administração', 'Manutenção Fazenda',
+  'Máquinas', 'Impostos', 'Outros',
+  'Nutrição', 'Sanidade', 'Reprodução', 'Pastagem',
+  'Identificação', 'Comercial', 'Transferências',
+] as const;
+
+export const ORDEM_CENTROS_CUSTEIO_AGRICULTURA = [
+  'Mão de Obra', 'Administração', 'Manutenção Fazenda',
+  'Máquinas', 'Impostos',
+  'Insumos', 'Operações', 'Logística', 'Financeiro',
+] as const;
+
+export const ORDEM_CENTROS_JUROS_PECUARIA = [
+  'Juros de Financiamento Pecuária',
+] as const;
+
+export const ORDEM_CENTROS_JUROS_AGRICULTURA = [
+  'Juros de Financiamento Agricultura',
+] as const;
+
+export const ORDEM_CENTROS_INVESTIMENTO_PECUARIA = [
+  'Infraestrutura', 'Máquinas', 'Pastagem', 'RH',
+] as const;
+
+export const ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA = [
+  'Infraestrutura', 'Máquinas', 'Solo', 'RH',
+] as const;
+
+export const ORDEM_CENTROS_REPOSICAO_BOVINOS = [
+  'Compra de Bovinos',
+] as const;
+
+export const ORDEM_CENTROS_AMORTIZACAO_PECUARIA = [
+  'Pecuária',
+] as const;
+
+export const ORDEM_CENTROS_AMORTIZACAO_AGRICULTURA = [
+  'Agricultura',
+] as const;
+
+export const ORDEM_CENTROS_DIVIDENDOS = [
+  'Dividendos',
+] as const;
+
+export const ORDEM_CENTROS_DEDUCOES_RECEITA = [
+  'Ajustes', 'Impostos',
+] as const;
