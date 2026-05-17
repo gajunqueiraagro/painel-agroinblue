@@ -131,7 +131,7 @@ export function IndicadorHistoricoModal({
   subtitulo,
   deltaMes,
   deltaAno,
-  viewMode: _viewMode = 'mes',
+  viewMode = 'mes',
   historicoAno,
   historicoMeta,
   loadingHistorico = false,
@@ -144,7 +144,7 @@ export function IndicadorHistoricoModal({
   // Props de roteamento (clienteId, fazendaId, fazendaIds, anoInicio, viewMode, tipoAcumulado)
   // são aceitas por compatibilidade com V2Home — não usadas aqui pois o modal não consulta banco.
   void clienteId; void fazendaId; void fazendaIds; void anoInicio;
-  void tipoAcumulado; void _viewMode; void indicadorKey;
+  void tipoAcumulado; void indicadorKey;
   // labelPeriodo é usado abaixo no bloco de histórico inferior
 
   if (!open) return null;
@@ -321,76 +321,122 @@ export function IndicadorHistoricoModal({
         {/* Gráfico */}
         <div className="px-3 pb-2">
           <ResponsiveContainer width="100%" height={190}>
-            <ComposedChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
-              <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
-              <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
-              <Tooltip content={<CustomTooltip />} />
-              {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
-              {hasAnoAnt && (
+            {viewMode === 'mes' ? (
+              // Comparativo executivo por barras com efeito de profundidade.
+              // Ordem Meta → AnoAnt → Atual: a última renderizada fica na frente.
+              // Offsets pequenos (8/4/0) para sugerir camadas sem virar agrupamento.
+              <BarChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }} barGap={-22} barCategoryGap="22%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
+                <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                {hasMeta && (
+                  <Bar
+                    dataKey="meta"
+                    barSize={22}
+                    isAnimationActive={false}
+                    shape={(props: any) => {
+                      const { x, y, width, height } = props;
+                      if (height == null || height <= 0 || isNaN(height)) return null;
+                      return <rect x={x + 8} y={y} width={width} height={height} fill="#F97316" rx={2} ry={2} />;
+                    }}
+                  />
+                )}
+                {hasAnoAnt && (
+                  <Bar
+                    dataKey="anoAnterior"
+                    barSize={22}
+                    isAnimationActive={false}
+                    shape={(props: any) => {
+                      const { x, y, width, height } = props;
+                      if (height == null || height <= 0 || isNaN(height)) return null;
+                      return <rect x={x + 4} y={y} width={width} height={height} fill="#B4B2A9" rx={2} ry={2} />;
+                    }}
+                  />
+                )}
+                <Bar
+                  dataKey="atual"
+                  barSize={22}
+                  isAnimationActive={false}
+                  shape={(props: any) => {
+                    const { x, y, width, height } = props;
+                    if (height == null || height <= 0 || isNaN(height)) return null;
+                    return <rect x={x} y={y} width={width} height={height} fill={COR_ATUAL.stroke} rx={2} ry={2} />;
+                  }}
+                />
+              </BarChart>
+            ) : (
+              <ComposedChart data={dados} margin={{ top: 8, right: 16, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E8E6DF" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: '#888780' }} stroke="#E8E6DF" />
+                <YAxis tick={{ fontSize: 10, fill: '#888780' }} tickFormatter={fmtAxis} stroke="#E8E6DF" width={48} />
+                <Tooltip content={<CustomTooltip />} />
+                {/* Areas (sob as linhas) — dataKey separado p/ não duplicar no tooltip */}
+                {hasAnoAnt && (
+                  <Area
+                    type="monotone"
+                    dataKey="anoAnteriorArea"
+                    stroke="none"
+                    fill="#000000"
+                    fillOpacity={0.04}
+                    isAnimationActive={false}
+                    connectNulls={false}
+                    legendType="none"
+                    activeDot={false}
+                  />
+                )}
                 <Area
                   type="monotone"
-                  dataKey="anoAnteriorArea"
+                  dataKey="atualArea"
                   stroke="none"
                   fill="#000000"
-                  fillOpacity={0.04}
+                  fillOpacity={0.09}
                   isAnimationActive={false}
                   connectNulls={false}
                   legendType="none"
                   activeDot={false}
                 />
-              )}
-              <Area
-                type="monotone"
-                dataKey="atualArea"
-                stroke="none"
-                fill="#000000"
-                fillOpacity={0.09}
-                isAnimationActive={false}
-                connectNulls={false}
-                legendType="none"
-                activeDot={false}
-              />
-              {/* Lines (por cima das áreas) */}
-              {hasAnoAnt && (
+                {/* Lines (por cima das áreas) */}
+                {hasAnoAnt && (
+                  <Line
+                    type="monotone"
+                    dataKey="anoAnterior"
+                    stroke="#B4B2A9"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={{ r: 2, fill: '#B4B2A9' }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
+                {hasMeta && (
+                  <Line
+                    type="monotone"
+                    dataKey="meta"
+                    stroke="#F97316"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 3"
+                    dot={{ r: 2, fill: '#F97316' }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
                 <Line
                   type="monotone"
-                  dataKey="anoAnterior"
-                  stroke="#B4B2A9"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  dot={{ r: 2, fill: '#B4B2A9' }}
+                  dataKey="atual"
+                  stroke={COR_ATUAL.stroke}
+                  strokeWidth={2}
                   connectNulls={false}
                   isAnimationActive={false}
+                  dot={(props: any) => {
+                    const isSel = props.index === mesAtual - 1;
+                    return isSel
+                      ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
+                      : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
+                  }}
                 />
-              )}
-              {hasMeta && (
-                <Line
-                  type="monotone"
-                  dataKey="meta"
-                  stroke="#F97316"
-                  strokeWidth={1.5}
-                  strokeDasharray="6 3"
-                  dot={{ r: 2, fill: '#F97316' }}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              )}
-              <Line
-                type="monotone"
-                dataKey="atual"
-                stroke={COR_ATUAL.stroke}
-                strokeWidth={2}
-                connectNulls={false}
-                isAnimationActive={false}
-                dot={(props: any) => {
-                  const isSel = props.index === mesAtual - 1;
-                  return isSel
-                    ? <circle key={props.index} cx={props.cx} cy={props.cy} r={6} fill={COR_ATUAL.stroke} />
-                    : <circle key={props.index} cx={props.cx} cy={props.cy} r={2} fill={COR_ATUAL.dotLight} />;
-                }}
-              />
-            </ComposedChart>
+              </ComposedChart>
+            )}
           </ResponsiveContainer>
 
           {/* Legenda — abaixo do gráfico */}
