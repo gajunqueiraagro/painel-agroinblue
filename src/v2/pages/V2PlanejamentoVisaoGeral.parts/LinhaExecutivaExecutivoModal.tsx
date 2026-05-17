@@ -37,6 +37,7 @@ interface Props {
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MESES_CURTOS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'] as const;
 
 // Cores oficiais do modal.
 const COR_META = '#f97316'; // orange-500
@@ -56,16 +57,21 @@ const fmtPct = (d: DeltaSeguro): string => {
   return `${sinal}${pct.toFixed(1)}%`;
 };
 
-// Regra única de cor para Δ% em TODOS os lugares (header + tabela + cards):
-// positivo blue-700, negativo rose-700, zero/null muted.
-const corDelta = (d: DeltaSeguro): string => {
-  if (d === null || !Number.isFinite(d) || d === 0) return 'text-muted-foreground';
-  return d > 0 ? 'text-blue-700' : 'text-rose-700';
+/** Δ R$ com sinal explícito. Não pinta — caller decide a cor. */
+function formatDeltaReais(valor: number): string {
+  if (valor === 0) return 'R$ 0';
+  const sign = valor > 0 ? '+' : '-';
+  const abs = Math.abs(valor);
+  return sign + 'R$ ' + abs.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
+// Eixo X: rótulos em 1 letra (J F M A M J J A S O N D).
+const formatMesCurto = (v: string): string => {
+  const idx = MESES.indexOf(v);
+  return idx >= 0 ? MESES_CURTOS[idx] : v;
 };
 
-const corDeltaHeader = corDelta;
-
-// Cor da Diferença/Δ% nos CARDS de top impacto.
+// Cor da Diferença/Δ% nos CARDS de top impacto (mantém regra por sinal).
 const corImpactoCard = (impactoAbs: number): string => {
   if (impactoAbs > 0) return 'text-blue-700 dark:text-blue-300';
   if (impactoAbs < 0) return 'text-rose-700 dark:text-rose-300';
@@ -165,33 +171,36 @@ export function LinhaExecutivaExecutivoModal({
     });
   }, [dadosMensais]);
 
+  const deltaRsHeader = data.linha.meta - data.linha.real;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0">
-        {/* ── Header sticky 1 linha ── */}
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+        {/* ── Header sticky em 2 linhas ── */}
         <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5">
-          <DialogHeader className="space-y-0">
-            <div className="flex items-center gap-4 flex-wrap">
-              <DialogTitle className="text-[17px] font-semibold m-0">
-                {titulo}
-              </DialogTitle>
-              <div className="flex items-center gap-3 flex-wrap tabular-nums text-sm">
-                <div>
-                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">REAL 2025</span>
-                  <span className="font-semibold text-foreground">{fmtBRL(data.linha.real)}</span>
-                </div>
-                <span className="text-muted-foreground/40">·</span>
-                <div>
-                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">META 2026</span>
-                  <span className="font-semibold text-orange-500">{fmtBRL(data.linha.meta)}</span>
-                </div>
-                <span className="text-muted-foreground/40">·</span>
-                <div>
-                  <span className="text-[11px] uppercase tracking-[0.3px] text-muted-foreground mr-1.5">Δ%</span>
-                  <span className={cn('font-semibold', corDeltaHeader(data.linha.delta as DeltaSeguro))}>
-                    {fmtPct(data.linha.delta as DeltaSeguro)}
-                  </span>
-                </div>
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base font-semibold m-0 leading-tight text-slate-900">
+              {titulo}
+            </DialogTitle>
+            <div className="flex items-center gap-2 tabular-nums whitespace-nowrap overflow-x-auto">
+              <div>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">REAL 25</span>
+                <span className="text-[12px] font-semibold text-slate-900">{fmtBRL(data.linha.real)}</span>
+              </div>
+              <span className="text-[10px] text-slate-300">·</span>
+              <div>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">META 26</span>
+                <span className="text-[12px] font-semibold text-orange-500">{fmtBRL(data.linha.meta)}</span>
+              </div>
+              <span className="text-[10px] text-slate-300">·</span>
+              <div>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">Δ R$</span>
+                <span className="text-[12px] font-semibold text-slate-500">{formatDeltaReais(deltaRsHeader)}</span>
+              </div>
+              <span className="text-[10px] text-slate-300">·</span>
+              <div>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">Δ%</span>
+                <span className="text-[12px] font-semibold text-slate-500">{fmtPct(data.linha.delta as DeltaSeguro)}</span>
               </div>
             </div>
           </DialogHeader>
@@ -229,39 +238,41 @@ export function LinhaExecutivaExecutivoModal({
 
         {/* ── Tabela hierárquica COMPACTA + CENTRALIZADA (max 720px) ── */}
         <div className="border border-border rounded-lg overflow-hidden max-w-[720px] mx-auto">
-          {/* Header */}
-          <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center px-3.5 py-[9px] bg-muted text-[11px] uppercase tracking-[0.3px] font-medium">
+          {/* Header — cabeçalhos das colunas CENTRALIZADOS */}
+          <div className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center px-3.5 py-[9px] bg-muted text-[11px] uppercase tracking-[0.3px] font-medium">
             <div></div>
-            <div className="text-right text-muted-foreground">REAL 2025</div>
-            <div className="text-right text-orange-500">META 2026</div>
-            <div className="text-right text-slate-400">Δ%</div>
+            <div className="text-center text-muted-foreground">REAL 2025</div>
+            <div className="text-center text-orange-500">META 2026</div>
+            <div className="text-center text-slate-400">Δ R$</div>
+            <div className="text-center text-slate-400">Δ%</div>
           </div>
-          {/* Centros */}
-          {data.porCentro.map((centro) => (
-            <div key={centro.centro_custo}>
-              <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center px-3.5 py-[9px] border-t border-border text-[13px] font-semibold">
-                <div className="truncate text-foreground">{centro.centro_custo}</div>
-                <div className="text-right tabular-nums text-foreground">{fmtBRL(centro.realTotal)}</div>
-                <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
-                <div className={cn('text-right tabular-nums font-semibold', corDelta(centro.delta))}>
-                  {fmtPct(centro.delta)}
+          {/* Centros (cada centro = bloco executivo) */}
+          {data.porCentro.map((centro) => {
+            const deltaRs = centro.metaTotal - centro.realTotal;
+            return (
+              <div key={centro.centro_custo} className="mt-1 first:mt-0">
+                <div className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center px-3 py-2 bg-slate-200 dark:bg-slate-800 text-[12px] font-bold uppercase tracking-[0.2px]">
+                  <div className="truncate text-foreground">{centro.centro_custo}</div>
+                  <div className="text-right tabular-nums text-foreground">{fmtBRL(centro.realTotal)}</div>
+                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
+                  <div className="text-right tabular-nums text-slate-500">{formatDeltaReais(deltaRs)}</div>
+                  <div className="text-right tabular-nums text-slate-500">{fmtPct(centro.delta)}</div>
                 </div>
-              </div>
-              {centro.subcentros.map((sub) => (
-                <div
-                  key={sub.subcentro}
-                  className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center pl-7 pr-3.5 py-[3px] border-t border-border text-[11px] leading-[1.3] font-normal"
-                >
-                  <div className="truncate text-muted-foreground">{sub.subcentro}</div>
-                  <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
-                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
-                  <div className={cn('text-right tabular-nums', corDelta(sub.delta))}>
-                    {fmtPct(sub.delta)}
+                {centro.subcentros.map((sub) => (
+                  <div
+                    key={sub.subcentro}
+                    className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center pl-6 pr-3 py-[3px] border-t border-border/40 text-[11px] leading-[1.3] font-normal"
+                  >
+                    <div className="truncate text-muted-foreground">{sub.subcentro}</div>
+                    <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
+                    <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
+                    <div className="text-right tabular-nums text-slate-400">{formatDeltaReais(sub.impactoAbs)}</div>
+                    <div className="text-right tabular-nums text-slate-400">{fmtPct(sub.delta)}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ))}
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* ── 2 gráficos lado a lado ── */}
@@ -275,18 +286,24 @@ export function LinhaExecutivaExecutivoModal({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dadosMensais} margin={{ top: 4, right: 8, left: 0, bottom: 0 }} barGap={0} barCategoryGap="18%">
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="mes"
+                    tickFormatter={formatMesCurto}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
                   <Tooltip content={<GraficoTooltip />} cursor={{ fill: 'hsl(var(--muted-foreground) / 0.08)' }} />
                   <Legend content={<GraficoLegend />} />
-                  <Bar dataKey="real" name="REAL 2025" fill={COR_REAL} radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="meta" name="META 2026" fill={COR_META} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="real" name="REAL 2025" fill={COR_REAL} radius={[2, 2, 0, 0]} opacity={0.55} />
+                  <Bar dataKey="meta" name="META 2026" fill={COR_META} radius={[2, 2, 0, 0]} opacity={0.55} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Acumulado Jan→Dez — areas com gradient */}
+          {/* Acumulado Jan→Dez — areas finas + dots + gradient leve */}
           <div className="border border-border rounded-md p-3">
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Acumulado
@@ -295,22 +312,46 @@ export function LinhaExecutivaExecutivoModal({
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dadosAcumulado} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="gradReal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COR_REAL} stopOpacity={0.30} />
-                      <stop offset="100%" stopColor={COR_REAL} stopOpacity={0.04} />
+                    <linearGradient id="gradRealAc" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COR_REAL} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={COR_REAL} stopOpacity={0.02} />
                     </linearGradient>
-                    <linearGradient id="gradMeta" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COR_META} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={COR_META} stopOpacity={0.04} />
+                    <linearGradient id="gradMetaAc" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={COR_META} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={COR_META} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <XAxis
+                    dataKey="mes"
+                    tickFormatter={formatMesCurto}
+                    tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
                   <Tooltip content={<GraficoTooltip />} />
                   <Legend content={<GraficoLegend />} />
-                  <Area type="monotone" dataKey="realAcum" name="REAL 2025" stroke={COR_REAL} strokeWidth={2.6} fill="url(#gradReal)" dot={false} />
-                  <Area type="monotone" dataKey="metaAcum" name="META 2026" stroke={COR_META} strokeWidth={2.6} fill="url(#gradMeta)" dot={false} />
+                  <Area
+                    type="monotone"
+                    dataKey="realAcum"
+                    name="REAL 2025"
+                    stroke={COR_REAL}
+                    strokeWidth={1.5}
+                    fill="url(#gradRealAc)"
+                    dot={{ r: 2.5, fill: '#ffffff', stroke: COR_REAL, strokeWidth: 1.4 }}
+                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: COR_REAL, strokeWidth: 1.6 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="metaAcum"
+                    name="META 2026"
+                    stroke={COR_META}
+                    strokeWidth={1.5}
+                    fill="url(#gradMetaAc)"
+                    dot={{ r: 2.5, fill: '#ffffff', stroke: COR_META, strokeWidth: 1.4 }}
+                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: COR_META, strokeWidth: 1.6 }}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
