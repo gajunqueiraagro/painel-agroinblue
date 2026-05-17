@@ -48,18 +48,14 @@ const fmtPct = (d: DeltaSeguro): string => {
   return `${sinal}${pct.toFixed(1)}%`;
 };
 
-// Cor do Δ% na TABELA (linhas centro/subcentro): emerald/rose/muted.
+// Regra única de cor para Δ% em TODOS os lugares (header + tabela + cards):
+// positivo blue-700, negativo rose-700, zero/null muted.
 const corDelta = (d: DeltaSeguro): string => {
-  if (d === null || !Number.isFinite(d)) return 'text-muted-foreground';
-  return d >= 0 ? 'text-emerald-600' : 'text-rose-600';
-};
-
-// Cor do Δ% no HEADER do modal: blue-700 positivo, rose-700 negativo,
-// zero/null=neutro.
-const corDeltaHeader = (d: DeltaSeguro): string => {
-  if (d === null || !Number.isFinite(d) || d === 0) return 'text-foreground';
+  if (d === null || !Number.isFinite(d) || d === 0) return 'text-muted-foreground';
   return d > 0 ? 'text-blue-700' : 'text-rose-700';
 };
+
+const corDeltaHeader = corDelta;
 
 // Cor da Diferença/Δ% nos CARDS de top impacto.
 const corImpactoCard = (impactoAbs: number): string => {
@@ -216,35 +212,35 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
           Composição oficial: grupo_custo = "Receita Pecuária"
         </div>
 
-        {/* ── Tabela hierárquica FULL-WIDTH ── */}
-        <div className="border border-border rounded-md overflow-hidden">
+        {/* ── Tabela hierárquica COMPACTA + CENTRALIZADA (max 720px) ── */}
+        <div className="border border-border rounded-lg overflow-hidden max-w-[720px] mx-auto">
           {/* Header */}
-          <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-1.5 bg-muted/40 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center px-3.5 py-[9px] bg-muted text-[11px] uppercase tracking-[0.3px] font-medium">
             <div></div>
-            <div className="text-right">REAL 2025</div>
+            <div className="text-right text-muted-foreground">REAL 2025</div>
             <div className="text-right text-orange-500">META 2026</div>
-            <div className="text-right">Δ%</div>
+            <div className="text-right text-slate-400">Δ%</div>
           </div>
           {/* Centros */}
           {data.porCentro.map((centro) => (
-            <div key={centro.centro_custo} className="border-t border-border/60 first:border-t-0">
-              <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-1.5 bg-muted/20 font-semibold text-[13px]">
-                <div className="truncate">{centro.centro_custo}</div>
-                <div className="text-right tabular-nums">{fmtBRL(centro.realTotal)}</div>
+            <div key={centro.centro_custo}>
+              <div className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center px-3.5 py-[9px] border-t border-border text-[13px] font-semibold">
+                <div className="truncate text-foreground">{centro.centro_custo}</div>
+                <div className="text-right tabular-nums text-foreground">{fmtBRL(centro.realTotal)}</div>
                 <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
-                <div className={cn('text-right text-[12px] font-semibold tabular-nums', corDelta(centro.delta))}>
+                <div className={cn('text-right tabular-nums font-semibold', corDelta(centro.delta))}>
                   {fmtPct(centro.delta)}
                 </div>
               </div>
               {centro.subcentros.map((sub) => (
                 <div
                   key={sub.subcentro}
-                  className="grid grid-cols-[minmax(0,1fr)_140px_140px_90px] gap-1 items-center px-3 py-[3px] text-[11px] leading-[1.3] border-t border-border/30 text-muted-foreground"
+                  className="grid grid-cols-[minmax(0,1fr)_140px_140px_80px] gap-1 items-center pl-7 pr-3.5 py-[3px] border-t border-border text-[11px] leading-[1.3] font-normal"
                 >
-                  <div className="pl-4 truncate">{sub.subcentro}</div>
-                  <div className="text-right tabular-nums">{fmtBRL(sub.realTotal)}</div>
+                  <div className="truncate text-muted-foreground">{sub.subcentro}</div>
+                  <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
                   <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
-                  <div className={cn('text-right tabular-nums font-semibold', corDelta(sub.delta))}>
+                  <div className={cn('text-right tabular-nums', corDelta(sub.delta))}>
                     {fmtPct(sub.delta)}
                   </div>
                 </div>
