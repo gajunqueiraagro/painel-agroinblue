@@ -163,17 +163,21 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
   // Check if pastos are closed for this month via fechamento_pastos table
   const { clienteAtual } = useCliente();
   const anoMesKey = `${ano}-${String(mesNum).padStart(2, '0')}`;
+  const isGlobalFazenda = fazendaId === '__global__';
   const { data: pastosFechadosCount = 0 } = useQuery({
-    queryKey: ['fechamento-pastos-status', fazendaId, clienteAtual?.id, anoMesKey],
+    queryKey: ['fechamento-pastos-status', isGlobalFazenda ? 'global' : fazendaId, clienteAtual?.id, anoMesKey],
     queryFn: async () => {
       if (!fazendaId || !clienteAtual?.id) return 0;
-      const { count } = await supabase
+      let q = supabase
         .from('fechamento_pastos')
         .select('id', { count: 'exact', head: true })
-        .eq('fazenda_id', fazendaId)
         .eq('cliente_id', clienteAtual.id)
         .eq('ano_mes', anoMesKey)
         .eq('status', 'fechado');
+      if (!isGlobalFazenda) {
+        q = q.eq('fazenda_id', fazendaId);
+      }
+      const { count } = await q;
       return count ?? 0;
     },
     enabled: !!fazendaId && !!clienteAtual?.id,
