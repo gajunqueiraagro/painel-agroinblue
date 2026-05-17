@@ -57,7 +57,7 @@ function formatar(valor: number | null, formato: FormatoExibicao): string {
     case 'ua_ha':
       return `${valor.toFixed(2).replace('.', ',')} UA/ha`;
     case 'gmd':
-      return `${valor.toFixed(2).replace('.', ',')} kg/dia`;
+      return `${valor.toFixed(3).replace('.', ',')} kg/dia`;
     default:
       return String(valor);
   }
