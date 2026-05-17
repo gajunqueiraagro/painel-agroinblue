@@ -1,12 +1,14 @@
-import type { ReceitaPecuariaModalData, CentroComposicao, SubcentroComposicao, DeltaSeguro } from './receitaPecuariaModalTypes';
+import type { LinhaExecutivaModalData, CentroComposicao, SubcentroComposicao, DeltaSeguro } from './linhaExecutivaModalTypes';
 import type { LinhaExecutiva } from './blocoResumoExecutivoTypes';
 import type { ComposicaoSubcentro } from '@/lib/painelConsultor/agregadosFinanceiros';
-import { ORDEM_CENTROS_RECEITA_PECUARIA } from '@/lib/financeiro/classificacao';
 
-export interface BuildReceitaPecModalInput {
+export interface BuildLinhaExecutivaModalInput {
   linha: LinhaExecutiva;
   porSubcentroMeta: Record<string, ComposicaoSubcentro>;
   porSubcentroReal: Record<string, ComposicaoSubcentro>;
+  /** Ordem oficial dos centros (opcional). Quando ausente, ordena alfabeticamente.
+   *  Centros fora da ordem oficial caem ao final em ordem alfabética + console.warn. */
+  ordemCentrosOficial?: readonly string[];
 }
 
 const sum12 = (arr: number[]): number => arr.reduce((s, v) => s + (v ?? 0), 0);
@@ -23,7 +25,7 @@ function calcDeltaSeguro(meta: number, real: number): DeltaSeguro {
   return (meta - real) / real;
 }
 
-export function buildReceitaPecuariaModalData(input: BuildReceitaPecModalInput): ReceitaPecuariaModalData {
+export function buildLinhaExecutivaModalData(input: BuildLinhaExecutivaModalInput): LinhaExecutivaModalData {
   const { linha, porSubcentroMeta, porSubcentroReal } = input;
 
   const allSubs = new Set([
@@ -44,7 +46,7 @@ export function buildReceitaPecuariaModalData(input: BuildReceitaPecModalInput):
 
     const centro = m?.centro_custo ?? r?.centro_custo;
     if (!centro) {
-      console.warn('[buildReceitaPecModal] subcentro sem centro associado, ignorado:', sub);
+      console.warn('[buildLinhaExecutivaModal] subcentro sem centro associado, ignorado:', sub);
       continue;
     }
 
@@ -63,18 +65,24 @@ export function buildReceitaPecuariaModalData(input: BuildReceitaPecModalInput):
     centrosMap.get(s.centro_custo)!.push(s);
   }
 
+  const ordem = input.ordemCentrosOficial;
   const centrosForaDaOrdemOficial: string[] = [];
-  for (const c of centrosMap.keys()) {
-    if (!(ORDEM_CENTROS_RECEITA_PECUARIA as readonly string[]).includes(c)) {
-      centrosForaDaOrdemOficial.push(c);
-      console.warn('[buildReceitaPecModal] centro fora da ORDEM_CENTROS_RECEITA_PECUARIA:', c);
+
+  if (ordem) {
+    for (const c of centrosMap.keys()) {
+      if (!ordem.includes(c)) {
+        centrosForaDaOrdemOficial.push(c);
+        console.warn('[buildLinhaExecutivaModal] centro fora da ordem oficial:', c);
+      }
     }
   }
 
-  const centrosOrdenados: string[] = [
-    ...ORDEM_CENTROS_RECEITA_PECUARIA.filter(c => centrosMap.has(c)),
-    ...centrosForaDaOrdemOficial.sort((a, b) => a.localeCompare(b, 'pt-BR')),
-  ];
+  const centrosOrdenados: string[] = ordem
+    ? [
+        ...ordem.filter(c => centrosMap.has(c)),
+        ...centrosForaDaOrdemOficial.sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      ]
+    : [...centrosMap.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const porCentro: CentroComposicao[] = centrosOrdenados.map(centro => {
     const subs = centrosMap.get(centro)!.sort((a, b) => b.metaTotal - a.metaTotal);

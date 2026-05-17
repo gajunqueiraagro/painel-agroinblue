@@ -22,9 +22,10 @@ import {
   agregaReceitaPecPorSubcentro,
   agregaReceitaPecPorSubcentroMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
-import { buildReceitaPecuariaModalData } from '@/v2/lib/buildReceitaPecuariaModalData';
+import { ORDEM_CENTROS_RECEITA_PECUARIA } from '@/lib/financeiro/classificacao';
+import { buildLinhaExecutivaModalData } from '@/v2/lib/buildLinhaExecutivaModalData';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
-import { ReceitaPecuariaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/ReceitaPecuariaExecutivoModal';
+import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
@@ -132,10 +133,11 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const [modalReceitaPec, setModalReceitaPec] = useState(false);
   const dadosModalReceitaPec = useMemo(() => {
     if (!dadosBloco1 || planFin.lancFin2025Loading) return null;
-    return buildReceitaPecuariaModalData({
+    return buildLinhaExecutivaModalData({
       linha: dadosBloco1.receitaPecuaria,
       porSubcentroMeta: agregaReceitaPecPorSubcentroMeta(gridMetaConsolidado),
       porSubcentroReal: agregaReceitaPecPorSubcentro(planFin.lancFin2025, 2025),
+      ordemCentrosOficial: ORDEM_CENTROS_RECEITA_PECUARIA,
     });
   }, [dadosBloco1, gridMetaConsolidado, planFin.lancFin2025, planFin.lancFin2025Loading]);
 
@@ -182,10 +184,12 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
       />
 
       {dadosModalReceitaPec && (
-        <ReceitaPecuariaExecutivoModal
+        <LinhaExecutivaExecutivoModal
           open={modalReceitaPec}
           onOpenChange={setModalReceitaPec}
           data={dadosModalReceitaPec}
+          titulo="Receita Pecuária"
+          composicaoOficialLabel={'grupo_custo = "Receita Pecuária"'}
           // TODO: cabear onVerDetalhes em fase posterior — rota do
           // Financeiro V2 ainda não confirmada. Não inventar URL aqui.
           onVerDetalhes={undefined}

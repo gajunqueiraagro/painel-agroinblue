@@ -1,7 +1,10 @@
 /**
- * Modal executivo "Receita Pecuária" — drilldown da linha consolidada do
- * BlocoResumoExecutivo. Componente BURRO: recebe ReceitaPecuariaModalData
- * pronto e apenas renderiza. Não classifica, não filtra, não roteia.
+ * Modal executivo de drilldown de uma LinhaExecutiva do BlocoResumoExecutivo.
+ * Componente BURRO: recebe LinhaExecutivaModalData pronto e apenas renderiza.
+ * Não classifica, não filtra, não roteia.
+ *
+ * Genérico — o caller passa `titulo` e `composicaoOficialLabel` específicos da
+ * linha (ex.: "Receita Pecuária" / 'grupo_custo = "Receita Pecuária"').
  *
  * Invariante visual: banner de divergência VISÍVEL quando soma do breakdown
  * não bate com a linha consolidada do DTO (data.conciliado === false).
@@ -18,13 +21,18 @@ import {
   XAxis, YAxis,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import type { ReceitaPecuariaModalData, DeltaSeguro } from '@/v2/lib/receitaPecuariaModalTypes';
+import type { LinhaExecutivaModalData, DeltaSeguro } from '@/v2/lib/linhaExecutivaModalTypes';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  data: ReceitaPecuariaModalData;
-  /** Callback opcional. Nesta entrega NÃO é cabeado — botão "Ver detalhes" fica oculto. */
+  data: LinhaExecutivaModalData;
+  /** Título do modal (ex.: "Receita Pecuária"). */
+  titulo: string;
+  /** Texto da composição oficial exibido no disclaimer
+   *  (ex.: 'grupo_custo = "Receita Pecuária"'). */
+  composicaoOficialLabel: string;
+  /** Callback opcional. Quando undefined, botão "Ver detalhes" fica oculto. */
   onVerDetalhes?: () => void;
 }
 
@@ -120,7 +128,14 @@ function GraficoLegend({ payload }: { payload?: LegendItem[] }) {
   );
 }
 
-export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerDetalhes }: Props) {
+export function LinhaExecutivaExecutivoModal({
+  open,
+  onOpenChange,
+  data,
+  titulo,
+  composicaoOficialLabel,
+  onVerDetalhes,
+}: Props) {
   // Série mensal consolidada (soma vertical de todos os subcentros).
   const dadosMensais = useMemo(() => {
     const out = Array.from({ length: 12 }, (_, i) => ({
@@ -158,7 +173,7 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
           <DialogHeader className="space-y-0">
             <div className="flex items-center gap-4 flex-wrap">
               <DialogTitle className="text-[17px] font-semibold m-0">
-                {data.linha.label}
+                {titulo}
               </DialogTitle>
               <div className="flex items-center gap-3 flex-wrap tabular-nums text-sm">
                 <div>
@@ -209,7 +224,7 @@ export function ReceitaPecuariaExecutivoModal({ open, onOpenChange, data, onVerD
 
         {/* Disclaimer */}
         <div className="text-[11px] text-muted-foreground">
-          Composição oficial: grupo_custo = "Receita Pecuária"
+          Composição oficial: {composicaoOficialLabel}
         </div>
 
         {/* ── Tabela hierárquica COMPACTA + CENTRALIZADA (max 720px) ── */}

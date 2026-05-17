@@ -21,7 +21,7 @@ export interface CentroComposicao {
   delta: DeltaSeguro;
 }
 
-export interface ReceitaPecuariaModalData {
+export interface LinhaExecutivaModalData {
   linha: LinhaExecutiva;
   porCentro: CentroComposicao[];
   topImpactos: SubcentroComposicao[];
