@@ -236,17 +236,37 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   const lancFin2025: FinanceiroLancamento[] = real2025.lancamentos ?? [];
   const lancFin2025Loading = real2025.loading;
 
+  // ─── TIPOS LOCAIS — sem `any` ───────────────────────────────────────
+  interface ParcelaZootMeta {
+    data?: string;
+    valor?: number;
+  }
+  interface DetalhesSnapshotZootMeta {
+    formaReceb?: string | null;
+    parcelas?: ParcelaZootMeta[];
+  }
+  interface RowZootMeta {
+    id: string;
+    tipo: string;
+    categoria: string | null;
+    data: string;
+    valor_total: number | null;
+    boitel_lote_id: string | null;
+    detalhes_snapshot: DetalhesSnapshotZootMeta | null;
+  }
+
   const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
-    queryKey: ['ppf:rebanho', clienteId, fazendaId, ano],
+    queryKey: ['ppf:rebanho:recebimento', clienteId, fazendaId, ano],
     queryFn: async () => {
+      // Sem filtro por intervalo de competência: um abate em mês X pode ter
+      // parcela em mês Y do mesmo ano. O filtro de ano ocorre pelo ano da
+      // PARCELA dentro do loop (avista usa lancamentos.data como recebimento).
       let query = supabase
         .from('lancamentos')
-        .select('tipo, categoria, data, valor_total, boitel_lote_id')
+        .select('id, tipo, categoria, data, valor_total, boitel_lote_id, detalhes_snapshot')
         .eq('cliente_id', clienteId!)
         .eq('cenario', 'meta')
         .eq('cancelado', false)
-        .gte('data', `${ano}-01-01`)
-        .lte('data', `${ano}-12-31`)
         .in('tipo', ['abate', 'venda', 'compra'])
         .not('valor_total', 'is', null);
       if (isValidFazenda(fazendaId)) {
@@ -254,15 +274,85 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       const { data: rows, error } = await query;
       if (error) throw error;
+
+      const rowsTyped = (rows ?? []) as RowZootMeta[];
       const result = new Map<string, number[]>();
-      for (const r of (rows || [])) {
-        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria, !!r.boitel_lote_id);
-        if (!subcentro) continue;
-        const mes = Number((r.data as string).substring(5, 7));
-        if (mes < 1 || mes > 12) continue;
+      const yearStr = String(ano);
+
+      const pushIntoResult = (subcentro: string, dataISO: string, valor: number) => {
+        if (!dataISO || dataISO.slice(0, 4) !== yearStr) return; // filtra ano da PARCELA
+        const mes = Number(dataISO.substring(5, 7));
+        if (mes < 1 || mes > 12) return;
         if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
-        result.get(subcentro)![mes - 1] += Math.abs(r.valor_total || 0);
+        result.get(subcentro)![mes - 1] += Math.abs(valor || 0);
+      };
+
+      const isValidParcela = (p: ParcelaZootMeta): boolean => {
+        return typeof p?.data === 'string'
+          && p.data.length >= 10
+          && typeof p?.valor === 'number'
+          && Number.isFinite(p.valor);
+      };
+
+      for (const r of rowsTyped) {
+        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria ?? '', !!r.boitel_lote_id);
+        if (!subcentro) continue;
+
+        const det = r.detalhes_snapshot ?? null;
+        const formaReceb = det?.formaReceb ?? null;
+        const parcelas: ParcelaZootMeta[] = Array.isArray(det?.parcelas) ? det!.parcelas! : [];
+
+        // Regra 1: prazo + parcelas → iterar parcelas (data de RECEBIMENTO)
+        if (formaReceb === 'prazo') {
+          if (parcelas.length === 0) {
+            console.warn('[usePlanejamentoFinanceiro] lançamento META prazo SEM parcelas — ignorado no Fluxo', {
+              lancamentoId: r.id,
+              tipo: r.tipo,
+              dataCompetencia: r.data,
+            });
+            continue;
+          }
+          let lancouAlguma = false;
+          for (const p of parcelas) {
+            if (!isValidParcela(p)) {
+              console.warn('[usePlanejamentoFinanceiro] parcela inválida em lançamento META — ignorada', {
+                lancamentoId: r.id,
+                tipo: r.tipo,
+                parcela: p,
+              });
+              continue;
+            }
+            pushIntoResult(subcentro, p.data as string, p.valor as number);
+            lancouAlguma = true;
+          }
+          if (!lancouAlguma) {
+            console.warn('[usePlanejamentoFinanceiro] lançamento META prazo com TODAS parcelas inválidas — ignorado no Fluxo', {
+              lancamentoId: r.id,
+              tipo: r.tipo,
+              dataCompetencia: r.data,
+              parcelasCount: parcelas.length,
+            });
+          }
+          continue;
+        }
+
+        // Regra 2: avista → data principal do lançamento (= recebimento à vista)
+        if (formaReceb === 'avista') {
+          pushIntoResult(subcentro, r.data, Number(r.valor_total) || 0);
+          continue;
+        }
+
+        // Regra 3: formaReceb null/inválida → NÃO LANÇAR no Fluxo
+        // Dado incompleto NÃO cai em competência silenciosa.
+        console.warn('[usePlanejamentoFinanceiro] lançamento META sem formaReceb — ignorado no Fluxo', {
+          lancamentoId: r.id,
+          tipo: r.tipo,
+          formaReceb,
+          dataCompetencia: r.data,
+        });
       }
+
+      // Round 2 casas
       for (const [, arr] of result) {
         for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
       }
