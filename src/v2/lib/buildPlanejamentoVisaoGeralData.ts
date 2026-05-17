@@ -705,7 +705,7 @@ function buildBloco2Producao(
       custoArr: empty('moeda', 'taxa'),
       precoArr: empty('moeda', 'taxa'),
       margemArr: empty('moeda', 'taxa'),
-      receitaCab: empty('moeda', 'taxa'),
+      gmdMedio: empty('kg', 'estoque'),
       custoCab: empty('moeda', 'taxa'),
     };
   }
@@ -716,8 +716,6 @@ function buildBloco2Producao(
   const pesoSerieMeta = painel.pesoMedioIndicador?.serieMeta;
   const pesoSerieAnoAnt = painel.pesoMedioIndicador?.serieAnoAnt;
 
-  warnings.push('receitaCab: derivação receitaPec/cabecas requer divisão ponto-a-ponto — Marco 1.1.D');
-  warnings.push('valorRebanhoFinal META: painel.seriesMeta não expõe valorRebFin — GAP do PC-100, card exibe "—"');
   warnings.push('cabecasFinal/pesoMedioFinal META: foto Dez. Comparativo vs INÍCIO DO ANO usa cabecasFinFotoAnoAnt / pesoMedioFinFotoAnoAnt (foto Dez ano-1 REALIZADO, independente de viewMode). Peso final META usa pesoMedioFinMetaSnap (snapshot validado, mesma fonte da tabela Rebanho META).');
 
   // Rebanho Final META: FOTO Dez (idx 11 em painel.seriesMeta.cabFin, 0-indexed).
@@ -726,8 +724,13 @@ function buildBloco2Producao(
   // Peso Médio Final META: idem — painel.seriesMeta.pesoMedioFin[11] (foto Dez).
   // Rebanho Médio META: este SIM é média do período. Consome
   //   painel.cabecasIndicador.serieMetaIndicador (= cabMediaAcumMeta em modo 'periodo').
-  // Valor do Rebanho Final META: GAP do PC-100 — painel.seriesMeta não expõe valorRebFin
-  //   para META. Sem fonte oficial pronta → emptyComparativo, exibe '—'. Sem fallback.
+  // Valor do Rebanho Final META: painel.valorRebanhoIndicador.serieMeta (length 13,
+  //   1-based, [12]=Dez). Em Global retorna serieMeta vazia (limitação real:
+  //   valor_rebanho_meta_validada só existe em Fazenda — L310 do PC-100).
+  //   Comparativo "vs início ano" = painel.valorRebanhoIndicador.serieAno[0] (Dez ano-1
+  //   REALIZADO, 1-based length 13 — L2028 do PC-100).
+  // GMD Médio META: painel.gmdIndicador.serieMeta[12] (Dez META). Substitui o
+  //   antigo card Receita/Cab que dependia de derivação Marco 1.1.D pendente.
   return {
     // Comparativo vs INÍCIO DO ANO (foto Dez ano-1 REALIZADO).
     //   - Cabeças: painel.cabecasFinFotoAnoAnt (= cabFinAnoAntSerie[12], foto)
@@ -747,7 +750,13 @@ function buildBloco2Producao(
       painel.seriesMeta?.pesoMedioFin?.[11] ?? null,
       painel.pesoMedioFinFotoAnoAnt,
     ),
-    valorRebanhoFinal: emptyComparativo('pc100', 'estoque', 'moeda'),
+    valorRebanhoFinal: buildComparativoEstoquePontoZeroIndexed(
+      painel.valorRebanhoIndicador?.serieMeta,
+      12, // Dez (serieMeta length 13, 1-based)
+      'pc100',
+      'moeda',
+      painel.valorRebanhoIndicador?.serieAno?.[0] ?? null, // Dez ano-1 realizado = serieAno[0]
+    ),
 
     arrobasProduzidas: buildComparativoPonto(
       painel.arrobasIndicador?.serieMeta,
@@ -814,8 +823,13 @@ function buildBloco2Producao(
       mesAtual, 'pc100', 'taxa', 'moeda',
     ),
 
-    // Derivação 2 séries cumulativas — Marco 1.1.D
-    receitaCab: emptyComparativo('derivado', 'taxa', 'moeda'),
+    gmdMedio: buildComparativoEstoquePontoZeroIndexed(
+      painel.gmdIndicador?.serieMeta,
+      12, // Dez (serieMeta length 13, 1-based: [0]=NaN, [12]=Dez META)
+      'pc100',
+      'kg',
+      null, // sem comparativo de início de ano para GMD
+    ),
 
     custoCab: buildComparativoPonto(
       painel.custoCabIndicador?.serieMeta,

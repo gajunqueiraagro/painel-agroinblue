@@ -49,7 +49,7 @@ export function BlocoProducaoPecuaria({ data }: Props) {
         <CardComparativo titulo="Rebanho Final META"          dado={data.cabecasFinal}        className={PALETA_NEUTRO}     mostrarVsAnoAnt comparativoLabel="início ano" />
         <CardComparativo titulo="Rebanho Médio META"          dado={data.rebanhoMedio}        className={PALETA_NEUTRO}     mostrarVsAnoAnt />
         <CardComparativo titulo="Peso Médio Final META"       dado={data.pesoMedioFinal}      className={PALETA_NEUTRO}     mostrarVsAnoAnt comparativoLabel="início ano" />
-        <CardComparativo titulo="Valor Reb. META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt />
+        <CardComparativo titulo="Valor Reb. META" dado={data.valorRebanhoFinal}   className={PALETA_PATRIMONIO} valorClassName={VALOR_PATRIMONIO} mostrarVsAnoAnt comparativoLabel="início ano" />
         <CardComparativo titulo="Área Prod. Pec. META" dado={data.areaProdutivaMedia} className={PALETA_NEUTRO} mostrarVsAnoAnt />
       </div>
 
@@ -66,7 +66,7 @@ export function BlocoProducaoPecuaria({ data }: Props) {
         <CardComparativo titulo="Custo R$/@ META"           dado={data.custoArr}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
         <CardComparativo titulo="Venda R$/@ META"           dado={data.precoArr}    className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} mostrarVsAnoAnt />
         <CardComparativo titulo="Margem R$/@ META"          dado={data.margemArr}   className={PALETA_MARGEM}  valorClassName={VALOR_MARGEM}  mostrarVsAnoAnt />
-        <CardComparativo titulo="Receita/Cab META"          dado={data.receitaCab}  className={PALETA_RECEITA} valorClassName={VALOR_RECEITA} />
+        <CardComparativo titulo="GMD Médio META"            dado={data.gmdMedio}    className={PALETA_NEUTRO}  />
         <CardComparativo titulo="Custo/Cab mês META"        dado={data.custoCab}    className={PALETA_CUSTO}   valorClassName={VALOR_CUSTO}   mostrarVsAnoAnt />
       </div>
     </section>

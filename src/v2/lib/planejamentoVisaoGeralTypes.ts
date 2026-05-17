@@ -214,7 +214,7 @@ export interface Bloco2Producao {
   custoArr: ComparativoDuplo;               // tipoSemantica: 'taxa'
   precoArr: ComparativoDuplo;               // tipoSemantica: 'taxa'
   margemArr: ComparativoDuplo;              // tipoSemantica: 'taxa'
-  receitaCab: ComparativoDuplo;             // tipoSemantica: 'taxa' — derivado
+  gmdMedio: ComparativoDuplo;               // tipoSemantica: 'estoque' — foto Dez META (gmdIndicador.serieMeta[12])
   custoCab: ComparativoDuplo;               // tipoSemantica: 'taxa'
 }
 
