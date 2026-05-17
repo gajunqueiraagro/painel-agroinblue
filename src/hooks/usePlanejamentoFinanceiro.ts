@@ -381,7 +381,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     const engordaDias = Number(params.engorda_periodo_dias) || 0;
     const engordaConsumo = Number(params.engorda_consumo_kg_ms) || 0;
     const engordaCustoKg = Number(params.engorda_custo_kg_ms) || 0;
-    const comercialCustoCab = Number(params.comercial_custo_cab) || 0;
     const freteCustoCab = Number(params.frete_custo_cab) || 0;
     const custoPorCabEngorda = engordaDias * engordaConsumo * engordaCustoKg;
 
@@ -453,30 +452,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       result.set('Nutrição Engorda', engorda);
     }
 
-    // DESPESAS COMERCIAIS
-    if (comercialCustoCab > 0) {
-      const { data: movComerciais } = await supabase
-        .from('lancamentos')
-        .select('data, quantidade')
-        .eq('cliente_id', clienteId!)
-        .eq('fazenda_id', fId)
-        .eq('cenario', 'meta')
-        .eq('cancelado', false)
-        .in('tipo', ['abate', 'venda', 'venda_pe'])
-        .gte('data', `${ano}-01-01`)
-        .lte('data', `${ano}-12-31`);
-
-      const comercial = new Array(12).fill(0);
-      for (const r of (movComerciais || [])) {
-        const mes = Number((r.data as string).substring(5, 7));
-        if (mes < 1 || mes > 12) continue;
-        comercial[mes - 1] += Math.abs(Number(r.quantidade) || 0) * comercialCustoCab;
-      }
-      for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i] * 100) / 100;
-      result.set('Despesas Comerciais Pecuária', comercial);
-      result.set('Impostos e Despesas de Abates e Vendas', [...comercial]);
-    }
-
     // FRETE EM TRANSFERÊNCIAS: alocado na fazenda destino (transferencia_entrada)
     if (freteCustoCab > 0) {
       const { data: entradas } = await supabase
@@ -528,9 +503,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           fazendasOperacionais.map(f => calcNutricaoFazenda(f.id))
         );
         for (const r of results) mergeNutricaoMaps(consolidated, r);
-        // Frete entre fazendas só aparece por fazenda individual — em global, fretes
-        // intra-cliente se anulam (origem na fazenda A, destino na fazenda B do mesmo cliente).
-        consolidated.delete('Transferência de Gado entre Fazendas');
         setLancamentosNutricao(consolidated);
       } catch (e: any) {
         console.error('Erro ao calcular nutrição global:', e);
