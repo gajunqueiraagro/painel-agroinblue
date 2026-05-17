@@ -308,12 +308,35 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         await import('@/lib/financiamentos/parcelaMirror');
 
       if (status === 'cancelado' || saindoDePago) {
-        // Remove mirror e desvincula a parcela.
-        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
-        // await deletarMirrorParcela(supabase as any, parcela.id);
+        // CORREÇÃO: cancelar parcela deve cancelar (marcar cancelado=true) o lançamento espelho
+        // em financeiro_lancamentos_v2 — não apenas desvincular o ponteiro da parcela.
+        if (status === 'cancelado') {
+          if (parcela.lancamento_id) {
+            await supabase
+              .from('financeiro_lancamentos_v2')
+              .update({
+                cancelado: true,
+                cancelado_em: new Date().toISOString(),
+                sem_movimentacao_caixa: true,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', parcela.lancamento_id);
+          }
+          if (parcela.lancamento_juros_id) {
+            await supabase
+              .from('financeiro_lancamentos_v2')
+              .update({
+                cancelado: true,
+                cancelado_em: new Date().toISOString(),
+                sem_movimentacao_caixa: true,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', parcela.lancamento_juros_id);
+          }
+        }
         await supabase
           .from('financiamento_parcelas')
-          .update({ lancamento_id: null })
+          .update({ lancamento_id: null, lancamento_juros_id: null } as any)
           .eq('id', parcela.id);
         // Se saindoDePago e não cancelado, e ainda há valor → recria mirror programado para o novo vencimento.
         if (status !== 'cancelado' && tipoValido && (principal > 0 || juros > 0)) {
