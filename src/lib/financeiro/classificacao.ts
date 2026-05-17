@@ -556,3 +556,21 @@ export function datePagtoAno(l: LancamentoClassificavel): number | null {
 /** Soma absoluta de valores */
 export const somaAbs = (lancs: LancamentoClassificavel[]) =>
   lancs.reduce((s, l) => s + Math.abs(l.valor), 0);
+
+/**
+ * Ordem oficial dos centros de custo do grupo "Receita Pecuária".
+ * Fonte: plano de contas (financeiro_plano_contas, ordem_exibicao 1010-1140).
+ * REGRA: qualquer breakdown que apresente centros de Receita Pecuária
+ * DEVE usar esta constante para ordenação. Centros fora desta lista
+ * caem ao final em ordem alfabética com console.warn — não silenciar.
+ */
+export const ORDEM_CENTROS_RECEITA_PECUARIA = [
+  'Abates',
+  'Venda Peso Vivo',
+  'Arrendamento',
+  'Venda Geral',
+  'Venda Insumos',
+  'Venda Ativos',
+] as const;
+
+export type CentroReceitaPecuaria = (typeof ORDEM_CENTROS_RECEITA_PECUARIA)[number];

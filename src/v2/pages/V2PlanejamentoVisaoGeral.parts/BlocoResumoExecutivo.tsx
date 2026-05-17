@@ -37,6 +37,8 @@ interface Props {
    * Cards Total Entradas/Saídas + tabelas Entradas/Saídas continuam nítidos.
    */
   desfocarDashboard?: boolean;
+  /** Callback ao clicar numa linha drilldown-friendly. Pai decide qual modal abrir. */
+  onLinhaClick?: (id: 'receitaPecuaria') => void;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -145,12 +147,14 @@ function DeltaBadge({ delta }: { delta: number }) {
   );
 }
 
-function LinhaRow({ linha, destaque = false }: { linha: LinhaExecutiva; destaque?: boolean }) {
+function LinhaRow({ linha, destaque = false, onClick }: { linha: LinhaExecutiva; destaque?: boolean; onClick?: () => void }) {
   return (
     <div
+      onClick={onClick}
       className={cn(
         'grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center py-[2px] border-b border-border/30 last:border-0',
         destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20 py-[4px]',
+        onClick && 'cursor-pointer hover:bg-muted/40 transition-colors',
       )}
     >
       <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
@@ -221,7 +225,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -374,7 +378,11 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           </div>
           <LinhaRow linha={data.totalEntradas} destaque />
           {linhasEntrada.map(l => (
-            <LinhaRow key={l.label} linha={l} />
+            <LinhaRow
+              key={l.label}
+              linha={l}
+              onClick={l === data.receitaPecuaria && onLinhaClick ? () => onLinhaClick('receitaPecuaria') : undefined}
+            />
           ))}
         </div>
 

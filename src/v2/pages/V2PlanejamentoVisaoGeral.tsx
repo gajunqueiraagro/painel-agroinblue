@@ -10,7 +10,7 @@
  * buildPlanejamentoVisaoGeralData.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -18,7 +18,13 @@ import { V2PageContent } from '@/v2/components/V2PageShell';
 import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
+import {
+  agregaReceitaPecPorSubcentro,
+  agregaReceitaPecPorSubcentroMeta,
+} from '@/lib/painelConsultor/agregadosFinanceiros';
+import { buildReceitaPecuariaModalData } from '@/v2/lib/buildReceitaPecuariaModalData';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
+import { ReceitaPecuariaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/ReceitaPecuariaExecutivoModal';
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
@@ -121,6 +127,18 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     });
   }, [planFin.lancFin2025, gridMetaConsolidado, planFin.lancFin2025Loading, planFin.saldoInicial, painel.caixaIndicador]);
 
+  // Modal executivo "Receita Pecuária" — drilldown da linha consolidada.
+  // DTO montado por buildReceitaPecuariaModalData consumindo agregadores oficiais.
+  const [modalReceitaPec, setModalReceitaPec] = useState(false);
+  const dadosModalReceitaPec = useMemo(() => {
+    if (!dadosBloco1 || planFin.lancFin2025Loading) return null;
+    return buildReceitaPecuariaModalData({
+      linha: dadosBloco1.receitaPecuaria,
+      porSubcentroMeta: agregaReceitaPecPorSubcentroMeta(gridMetaConsolidado),
+      porSubcentroReal: agregaReceitaPecPorSubcentro(planFin.lancFin2025, 2025),
+    });
+  }, [dadosBloco1, gridMetaConsolidado, planFin.lancFin2025, planFin.lancFin2025Loading]);
+
   const loading = painel.loading || planFin.loading;
 
   // Gate estrito: enquanto qualquer fonte oficial está carregando, mostra
@@ -160,7 +178,19 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
         saldoInicialMeta={planFin.saldoInicial}
         saldoInicialReal={painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN}
         desfocarDashboard={desfocarDashboard}
+        onLinhaClick={(id) => { if (id === 'receitaPecuaria') setModalReceitaPec(true); }}
       />
+
+      {dadosModalReceitaPec && (
+        <ReceitaPecuariaExecutivoModal
+          open={modalReceitaPec}
+          onOpenChange={setModalReceitaPec}
+          data={dadosModalReceitaPec}
+          // TODO: cabear onVerDetalhes em fase posterior — rota do
+          // Financeiro V2 ainda não confirmada. Não inventar URL aqui.
+          onVerDetalhes={undefined}
+        />
+      )}
 
       {/* Layout por filtro ────────────────────────────────────────────
           - Global:          Produção → Estrutura → Financeiro/Capital → Movimentação

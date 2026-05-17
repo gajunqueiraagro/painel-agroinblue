@@ -462,3 +462,72 @@ export function agregaSaidasTotaisMeta(grid: SubcentroGrid[]): number[] {
   out = addArrays(out, agregaDeducoesSaidaMeta(grid));
   return out;
 }
+
+// ─── Atômicos REALIZADO/META por subcentro (drilldown executivo) ───────
+//
+// Invariante: para cada mês m,
+//   sum(Object.values(porSubcentro).map(s => s.meses[m])) === agregaReceitaPec(...)[m]
+// Filtros base e predicate são IDÊNTICOS aos usados em agregaReceitaPec
+// (reuso de makeRealizadoSourceEntrada / makeMetaSource + isReceitaPecuaria).
+
+export interface ComposicaoSubcentro {
+  centro_custo: string;
+  meses: number[]; // length 12
+}
+
+export function agregaReceitaPecPorSubcentro(
+  lancFin: FinanceiroLancamento[],
+  ano: number,
+): Record<string, ComposicaoSubcentro> {
+  const source = makeRealizadoSourceEntrada(lancFin, ano);
+  const out: Record<string, ComposicaoSubcentro> = {};
+
+  for (const item of source.items) {
+    if (!source.passesBase(item)) continue;
+    const classif = source.toClassificavel(item);
+    if (!isReceitaPecuaria(classif)) continue;
+
+    const centro = classif.centro_custo;
+    const sub = classif.subcentro;
+    if (!centro || !sub) {
+      console.warn('[agregaReceitaPecPorSubcentro] lançamento sem centro/subcentro ignorado:', (item as FinanceiroLancamento).id);
+      continue;
+    }
+
+    if (!out[sub]) {
+      out[sub] = { centro_custo: centro, meses: new Array(12).fill(0) };
+    }
+    source.forEachContribution(item, (mesIdx, valor) => {
+      out[sub].meses[mesIdx] += valor;
+    });
+  }
+  return out;
+}
+
+export function agregaReceitaPecPorSubcentroMeta(
+  grid: SubcentroGrid[],
+): Record<string, ComposicaoSubcentro> {
+  const source = makeMetaSource(grid);
+  const out: Record<string, ComposicaoSubcentro> = {};
+
+  for (const item of source.items) {
+    if (!source.passesBase(item)) continue;
+    const classif = source.toClassificavel(item);
+    if (!isReceitaPecuaria(classif)) continue;
+
+    const centro = classif.centro_custo;
+    const sub = classif.subcentro;
+    if (!centro || !sub) {
+      console.warn('[agregaReceitaPecPorSubcentroMeta] row sem centro/subcentro ignorada');
+      continue;
+    }
+
+    if (!out[sub]) {
+      out[sub] = { centro_custo: centro, meses: new Array(12).fill(0) };
+    }
+    source.forEachContribution(item, (mesIdx, valor) => {
+      out[sub].meses[mesIdx] += valor;
+    });
+  }
+  return out;
+}
