@@ -196,6 +196,30 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       return false;
     }
 
+    // ─── GUARDS INTERNOS — decisão pertence ao painel, não ao caller ─────
+    // formaReceb null/inválida: lançamento zoot já foi salvo pelo caller;
+    // financeiro fica pendente até o usuário completar o detalhe.
+    if (!efFormaReceb || (efFormaReceb !== 'avista' && efFormaReceb !== 'prazo')) {
+      console.warn('[AbateFinanceiro] formaReceb ausente/inválida — financeiro não será gerado', {
+        lancamentoId: targetLancamentoId,
+        formaReceb: efFormaReceb,
+      });
+      toast.warning('Abate salvo, mas financeiro não gerado: informe a forma de recebimento.');
+      setGerando(false);
+      return false;
+    }
+
+    // prazo sem parcelas: detalhe incompleto — não inserir
+    if (efFormaReceb === 'prazo' && (!efParcelas || efParcelas.length === 0)) {
+      console.warn('[AbateFinanceiro] prazo sem parcelas — financeiro não será gerado', {
+        lancamentoId: targetLancamentoId,
+      });
+      toast.warning('Abate salvo, mas financeiro não gerado: informe as parcelas de recebimento.');
+      setGerando(false);
+      return false;
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     setGerando(true);
     try {
       // In update mode, cancel existing records first

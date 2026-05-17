@@ -1908,8 +1908,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         editOriginalRef.current = null;
         setP1BloqueioMsg(null);
         onEditar(editingAbateId, lancamentoDados);
-        if (isAbate && (isConciliado || isConfirmado || isMeta)) {
-          // Auto-generate/update financeiro for abate — pass overrides to avoid race condition
+        if (isAbate) {
+          // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
           if (abateFinanceiroRef.current) {
             await abateFinanceiroRef.current.generateFinanceiro(editingAbateId, {
               valorLiquido: calc.valorLiquido,
@@ -1917,6 +1917,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               formaReceb: abateDetalhes?.formaReceb || 'avista',
               parcelas: abateDetalhes?.parcelas || [],
             });
+          } else {
+            console.warn('[LancamentosTab] AbateFinanceiroPanel ref ausente na edição de abate');
           }
           setEditingAbateId(null);
           setLastSavedLancamentoId(null);
@@ -2016,8 +2018,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
-        } else if (isAbate && (isConciliado || isConfirmado || isMeta) && returnedId) {
-          // Auto-generate financeiro for abate — pass overrides to avoid race condition
+        } else if (isAbate && returnedId) {
+          // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
           if (abateFinanceiroRef.current) {
             await abateFinanceiroRef.current.generateFinanceiro(returnedId, {
               valorLiquido: calc.valorLiquido,
@@ -2025,6 +2027,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               formaReceb: abateDetalhes?.formaReceb || 'avista',
               parcelas: abateDetalhes?.parcelas || [],
             });
+          } else {
+            console.warn('[LancamentosTab] AbateFinanceiroPanel ref ausente na criação de abate');
           }
           setLastSavedLancamentoId(null);
           setQuantidade(''); setCategoria(''); setPesoKg('');
