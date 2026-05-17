@@ -200,6 +200,7 @@ const CONFIG_MODAIS_LINHA: Record<LinhaModalKey, ConfigModalLinha> = {
 };
 import { BlocoProducaoPecuaria } from './V2PlanejamentoVisaoGeral.parts/BlocoProducaoPecuaria';
 import { BlocoEstruturaCustos } from './V2PlanejamentoVisaoGeral.parts/BlocoEstruturaCustos';
+import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFinanceiroCapital';
 import { BlocoMovimentacaoRebanho } from './V2PlanejamentoVisaoGeral.parts/BlocoMovimentacaoRebanho';
 import { BlocoRateioAdministrativo } from './V2PlanejamentoVisaoGeral.parts/BlocoRateioAdministrativo';
@@ -377,21 +378,21 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
           - Fazenda op.:     Produção → Estrutura → Movimentação → Rateio Adm */}
       {isAdministrativo ? (
         <>
-          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
           <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
           <BlocoRateioAdministrativo />
         </>
       ) : isFazendaOperacional ? (
         <>
           <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
-          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
           <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
           <BlocoRateioAdministrativo />
         </>
       ) : (
         <>
           <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
-          <BlocoEstruturaCustos data={dto.bloco3_estruturaCustos} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
           <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
           <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
         </>

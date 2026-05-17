@@ -225,6 +225,71 @@ export interface Bloco3Custos {
   custoFixoPecuaria: GrupoCustoBloco;
 }
 
+// ─── BLOCO 3 — Análise Econômica META (DRE Pecuária) ────────────────────────
+// Estrutura DRE em regime de competência. Substitui visualmente o
+// Bloco 3 anterior (Estrutura de Custos). Zero nova fonte de dado:
+// os subtotais derivados são calculados apenas a partir das linhas
+// oficiais já existentes (PC-100 + agregadores oficiais).
+//
+// Linhas 8 (Tributos Patrimoniais) e 9 (Impostos sobre Lucro)
+// ficam null até reestruturação do plano de contas.
+
+/**
+ * Linha individual do DRE — META anual + comparativo Real ano-1.
+ */
+export interface AnaliseEconomicaLinha {
+  label: string;
+  valor: number | null;            // META anual
+  valorAnoAnt: number | null;      // Realizado ano-1 anual
+  deltaRs: number | null;          // valor - valorAnoAnt (null se algum lado for null)
+  deltaPct: number | null;         // ((valor - valorAnoAnt) / valorAnoAnt) × 100; null se ant<=0
+}
+
+/**
+ * Grupo do DRE — total + detalhes (subcentros ou sub-linhas).
+ */
+export interface AnaliseEconomicaGrupo {
+  label: string;
+  total: AnaliseEconomicaLinha;
+  detalhes: AnaliseEconomicaLinha[];
+}
+
+/**
+ * DTO completo do bloco 3 — Análise Econômica.
+ */
+export interface Bloco3AnaliseEconomica {
+  // 1
+  faturamento: AnaliseEconomicaGrupo;
+  // 2 (sinal: negativo no UI)
+  deducoes: AnaliseEconomicaGrupo;
+  // = subtotal
+  receitaLiquida: AnaliseEconomicaLinha;
+  // 3 (negativo)
+  custeioPecuaria: AnaliseEconomicaGrupo;
+  // = subtotal
+  resultadoBruto: AnaliseEconomicaLinha;
+  // 4 (negativo)
+  investimentoFazendaPec: AnaliseEconomicaLinha;
+  // = subtotal
+  resultadoComInvestimento: AnaliseEconomicaLinha;
+  // 5 (negativo)
+  reposicaoBovinos: AnaliseEconomicaLinha;
+  // 6 (sinal natural — pode ser +/-)
+  variacaoEstoqueGado: AnaliseEconomicaLinha;
+  // = subtotal
+  resultadoOperacional: AnaliseEconomicaLinha;
+  // 7 (negativo — só Juros Pecuária nesta versão)
+  resultadoFinanceiro: AnaliseEconomicaGrupo;
+  // = subtotal
+  resultadoAntesTributos: AnaliseEconomicaLinha;
+  // 8 — placeholder (null até plano de contas)
+  tributosPatrimoniais: AnaliseEconomicaGrupo | null;
+  // 9 — placeholder (null até plano de contas)
+  impostosSobreLucro: AnaliseEconomicaGrupo | null;
+  // = subtotal final (= resultadoAntesTributos enquanto 8 e 9 forem null)
+  lucroLiquido: AnaliseEconomicaLinha;
+}
+
 // ─── BLOCO 4 — Financeiro / Capital ───────────────────────────────────────────
 
 export interface Bloco4Financeiro {
@@ -258,6 +323,7 @@ export interface PlanejamentoVisaoGeralDTO {
   bloco1_macroExecutivo: Bloco1Macro;
   bloco2_producaoPecuaria: Bloco2Producao;
   bloco3_estruturaCustos: Bloco3Custos;
+  bloco3_analiseEconomica: Bloco3AnaliseEconomica;
   bloco4_financeiroCapital: Bloco4Financeiro;
   bloco5_movimentacaoRebanho: Bloco5Rebanho;
 

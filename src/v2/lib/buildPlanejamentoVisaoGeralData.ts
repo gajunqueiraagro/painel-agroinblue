@@ -19,6 +19,9 @@ import type {
   Bloco1Macro,
   Bloco2Producao,
   Bloco3Custos,
+  Bloco3AnaliseEconomica,
+  AnaliseEconomicaLinha,
+  AnaliseEconomicaGrupo,
   Bloco4Financeiro,
   Bloco5Rebanho,
   ComparativoDuplo,
@@ -856,6 +859,215 @@ function buildBloco3Custos(
   };
 }
 
+// ─── BLOCO 3 — Análise Econômica META (DRE Pecuária) ───────────────────────
+// Builder puro. Reutiliza Bloco1 (entradas/saídas via grid), Bloco3Custos
+// (CustoVar/CustoFix Pec) e Bloco4Financeiro (juros). Adiciona dois cálculos:
+//   - Deduções: buildComparativoGrid(macro='Deduções de Receitas')
+//   - Variação Estoque Gado: serieMeta[12] - serieAno[0]  (META = final Dez META − inicial Jan = Dez ano-1)
+//                            serieAnoAnt[12] - serieAnoAnt[0]  (Ano-1)
+// Subtotais derivados via soma algébrica explícita.
+// Convenção: valores POSITIVOS no DTO; sinal contábil aplicado no JSX.
+function buildBloco3AnaliseEconomica(
+  input: BuildPlanejamentoVisaoGeralInput,
+  bloco1: Bloco1Macro,
+  bloco3Custos: Bloco3Custos,
+  bloco4: Bloco4Financeiro,
+): Bloco3AnaliseEconomica {
+  const { grid, extrasGrid, painel, mesAtual } = input;
+
+  const mkLinha = (
+    label: string,
+    valor: number | null,
+    valorAnoAnt: number | null,
+  ): AnaliseEconomicaLinha => {
+    const deltaRs =
+      valor != null && Number.isFinite(valor) && valorAnoAnt != null && Number.isFinite(valorAnoAnt)
+        ? valor - valorAnoAnt
+        : null;
+    const deltaPct =
+      valor != null && Number.isFinite(valor) && valorAnoAnt != null && Number.isFinite(valorAnoAnt) && valorAnoAnt > 0
+        ? ((valor - valorAnoAnt) / valorAnoAnt) * 100
+        : null;
+    return { label, valor, valorAnoAnt, deltaRs, deltaPct };
+  };
+
+  const soma = (...vs: (number | null)[]): number | null => {
+    let acc: number | null = null;
+    for (const v of vs) {
+      if (v == null || !Number.isFinite(v)) continue;
+      acc = (acc ?? 0) + v;
+    }
+    return acc;
+  };
+
+  const subt = (a: number | null, b: number | null): number | null =>
+    a != null && Number.isFinite(a) && b != null && Number.isFinite(b) ? a - b : null;
+
+  // ─── 1. Faturamento ──────────────────────────────────────────
+  const recPecMeta = bloco1.receitasPecuaria.valor;
+  const recPecAnoAnt = bloco1.receitasPecuaria.vsAnoFechado.valor;
+  const outRecMeta = bloco1.outrasReceitas.valor;
+  const outRecAnoAnt = bloco1.outrasReceitas.vsAnoFechado.valor;
+  const fatTotMeta = soma(recPecMeta, outRecMeta);
+  const fatTotAnoAnt = soma(recPecAnoAnt, outRecAnoAnt);
+
+  const faturamento: AnaliseEconomicaGrupo = {
+    label: '1. Faturamento',
+    total: mkLinha('Faturamento', fatTotMeta, fatTotAnoAnt),
+    detalhes: [
+      mkLinha('Receita Pecuária', recPecMeta, recPecAnoAnt),
+      mkLinha('Outras Receitas', outRecMeta, outRecAnoAnt),
+    ],
+  };
+
+  // ─── 2. (−) Deduções de Receita ──────────────────────────────
+  // Total via grid (macro = "Deduções de Receitas"). Detalhe único = total
+  // (agregador por subcentro Real não disponível neste escopo do builder).
+  const deducoesCD = buildComparativoGrid(
+    grid, extrasGrid,
+    r => r.macro_custo === 'Deduções de Receitas',
+    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  );
+  const deducoesMeta = deducoesCD.valor;
+  const deducoesAnoAnt = deducoesCD.vsAnoFechado.valor;
+  const deducoes: AnaliseEconomicaGrupo = {
+    label: '2. (−) Deduções de Receita',
+    total: mkLinha('Deduções', deducoesMeta, deducoesAnoAnt),
+    detalhes: [mkLinha('Deduções totais', deducoesMeta, deducoesAnoAnt)],
+  };
+
+  // = Receita Líquida
+  const recLiqMeta = subt(fatTotMeta, deducoesMeta);
+  const recLiqAnoAnt = subt(fatTotAnoAnt, deducoesAnoAnt);
+  const receitaLiquida = mkLinha('Receita Líquida', recLiqMeta, recLiqAnoAnt);
+
+  // ─── 3. (−) Custeio Pecuária ─────────────────────────────────
+  const custeioPecMeta = bloco1.custeioPecuaria.valor;
+  const custeioPecAnoAnt = bloco1.custeioPecuaria.vsAnoFechado.valor;
+  const custoVarMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
+  const custoVarAnoAnt = bloco3Custos.custoVariavelPecuaria.total.vsAnoFechado.valor;
+  const custoFixMeta = bloco3Custos.custoFixoPecuaria.total.valor;
+  const custoFixAnoAnt = bloco3Custos.custoFixoPecuaria.total.vsAnoFechado.valor;
+
+  const custeioPecuaria: AnaliseEconomicaGrupo = {
+    label: '3. (−) Custeio Pecuária',
+    total: mkLinha('Custeio Pecuária', custeioPecMeta, custeioPecAnoAnt),
+    detalhes: [
+      mkLinha('Custo Variável Pec', custoVarMeta, custoVarAnoAnt),
+      mkLinha('Custo Fixo Pec', custoFixMeta, custoFixAnoAnt),
+    ],
+  };
+
+  // = Resultado Bruto
+  const resBrutoMeta = subt(recLiqMeta, custeioPecMeta);
+  const resBrutoAnoAnt = subt(recLiqAnoAnt, custeioPecAnoAnt);
+  const resultadoBruto = mkLinha('Resultado Bruto', resBrutoMeta, resBrutoAnoAnt);
+
+  // ─── 4. (−) Investimento na Fazenda Pec ──────────────────────
+  const invFazPecMeta = bloco1.investimentosPecuaria.valor;
+  const invFazPecAnoAnt = bloco1.investimentosPecuaria.vsAnoFechado.valor;
+  const investimentoFazendaPec = mkLinha(
+    '4. (−) Investimento na Fazenda Pec',
+    invFazPecMeta, invFazPecAnoAnt,
+  );
+
+  // = Resultado com Investimento
+  const resInvMeta = subt(resBrutoMeta, invFazPecMeta);
+  const resInvAnoAnt = subt(resBrutoAnoAnt, invFazPecAnoAnt);
+  const resultadoComInvestimento = mkLinha(
+    'Resultado com Investimento', resInvMeta, resInvAnoAnt,
+  );
+
+  // ─── 5. (−) Reposição de Bovinos ─────────────────────────────
+  const reposMeta = bloco1.reposicaoBovinos.valor;
+  const reposAnoAnt = bloco1.reposicaoBovinos.vsAnoFechado.valor;
+  const reposicaoBovinos = mkLinha(
+    '5. (−) Reposição de Bovinos', reposMeta, reposAnoAnt,
+  );
+
+  // ─── 6. (±) Variação do Estoque do Gado ──────────────────────
+  // PC-100 valorRebanhoIndicador: 1-based length 13.
+  //   META  = serieMeta[12]   − serieAno[0]      (final Dez META − inicial Jan = Dez ano-1)
+  //   Ano-1 = serieAnoAnt[12] − serieAnoAnt[0]
+  const safeIdx = (arr: number[] | null | undefined, idx: number): number | null => {
+    if (!arr) return null;
+    const v = arr[idx];
+    if (v == null || !Number.isFinite(v)) return null;
+    return v;
+  };
+  const serieAno    = painel?.valorRebanhoIndicador?.serieAno    ?? null;
+  const serieAnoAnt = painel?.valorRebanhoIndicador?.serieAnoAnt ?? null;
+  const serieMeta   = painel?.valorRebanhoIndicador?.serieMeta   ?? null;
+
+  const finalMeta   = safeIdx(serieMeta, 12);
+  const inicialMeta = safeIdx(serieAno, 0);
+  const varMeta = subt(finalMeta, inicialMeta);
+
+  const finalAnoAnt   = safeIdx(serieAnoAnt, 12);
+  const inicialAnoAnt = safeIdx(serieAnoAnt, 0);
+  const varAnoAnt = subt(finalAnoAnt, inicialAnoAnt);
+
+  const variacaoEstoqueGado = mkLinha(
+    '6. (±) Variação do Estoque do Gado', varMeta, varAnoAnt,
+  );
+
+  // = Resultado Operacional = ResComInv − Reposição + VariaçãoEstoque
+  const resOpMeta =
+    resInvMeta != null && reposMeta != null && varMeta != null
+      ? resInvMeta - reposMeta + varMeta
+      : null;
+  const resOpAnoAnt =
+    resInvAnoAnt != null && reposAnoAnt != null && varAnoAnt != null
+      ? resInvAnoAnt - reposAnoAnt + varAnoAnt
+      : null;
+  const resultadoOperacional = mkLinha(
+    'Resultado Operacional', resOpMeta, resOpAnoAnt,
+  );
+
+  // ─── 7. (−) Resultado Financeiro — só Juros Pec ──────────────
+  const jurosMeta = bloco4.juros.valor;
+  const jurosAnoAnt = bloco4.juros.vsAnoFechado.valor;
+  const resultadoFinanceiro: AnaliseEconomicaGrupo = {
+    label: '7. (−) Resultado Financeiro',
+    total: mkLinha('Resultado Financeiro', jurosMeta, jurosAnoAnt),
+    detalhes: [mkLinha('Juros Pecuária', jurosMeta, jurosAnoAnt)],
+  };
+
+  // = Resultado Antes dos Tributos
+  const resAntesMeta = subt(resOpMeta, jurosMeta);
+  const resAntesAnoAnt = subt(resOpAnoAnt, jurosAnoAnt);
+  const resultadoAntesTributos = mkLinha(
+    'Resultado Antes dos Tributos', resAntesMeta, resAntesAnoAnt,
+  );
+
+  // ─── 8 & 9 placeholders ──────────────────────────────────────
+  const tributosPatrimoniais = null;
+  const impostosSobreLucro = null;
+
+  // = Lucro Líquido Planejado (= resAntes enquanto 8 e 9 forem null)
+  const lucroLiquido = mkLinha(
+    'Lucro Líquido Planejado', resAntesMeta, resAntesAnoAnt,
+  );
+
+  return {
+    faturamento,
+    deducoes,
+    receitaLiquida,
+    custeioPecuaria,
+    resultadoBruto,
+    investimentoFazendaPec,
+    resultadoComInvestimento,
+    reposicaoBovinos,
+    variacaoEstoqueGado,
+    resultadoOperacional,
+    resultadoFinanceiro,
+    resultadoAntesTributos,
+    tributosPatrimoniais,
+    impostosSobreLucro,
+    lucroLiquido,
+  };
+}
+
 function buildBloco4Financeiro(
   input: BuildPlanejamentoVisaoGeralInput,
   _warnings: string[],
@@ -939,6 +1151,7 @@ export function buildPlanejamentoVisaoGeralData(
   // Por ora continua via PC-100 — pode mostrar valores que não batem com BLOCO 1.
   warnings.push('BLOCO 4 (Financeiro/Capital): ainda via PC-100. Migrar para grade META no Marco 1.1.D-secondary.');
   const bloco4 = buildBloco4Financeiro(input, warnings);
+  const bloco3Analise = buildBloco3AnaliseEconomica(input, bloco1, bloco3, bloco4);
   const bloco5 = buildBloco5RebanhoStub(warnings);
 
   return {
@@ -950,6 +1163,7 @@ export function buildPlanejamentoVisaoGeralData(
     bloco1_macroExecutivo: bloco1,
     bloco2_producaoPecuaria: bloco2,
     bloco3_estruturaCustos: bloco3,
+    bloco3_analiseEconomica: bloco3Analise,
     bloco4_financeiroCapital: bloco4,
     bloco5_movimentacaoRebanho: bloco5,
     loading: false,
