@@ -356,6 +356,44 @@ function valorPC100NoRegime(
 }
 
 /**
+ * Patch pós-F2.1 — Subcentros de Nutrição auto-calculados via
+ * meta_parametros_nutricao × zoot_mensal_cache (em usePlanejamentoFinanceiro)
+ * que compõem Custo Variável Pecuária META.
+ *
+ * NÃO incluir aqui:
+ *   - 'Transferência de Gado entre Fazendas' (macro Transferências, neutro)
+ *   - 'Impostos e Despesas de Abates e Vendas' (macro Deduções de Receitas)
+ * As duas chaves acima são auto-calculadas pelo mesmo hook mas pertencem
+ * a outros macros e NÃO devem entrar em Custo Variável Pec.
+ */
+const SUBCENTROS_NUTRICAO_META_AUTO = [
+  'Nutrição Cria',
+  'Nutrição Recria',
+  'Nutrição Engorda',
+] as const;
+
+/**
+ * Patch pós-F2.1 — Lê do Map `extras.lancamentosNutricao` apenas as 3 chaves
+ * de Nutrição auto (Cria/Recria/Engorda) e devolve a soma mensal[12].
+ *
+ * Reutiliza a fonte oficial já carregada pelo `usePlanejamentoFinanceiro`
+ * (`loadNutricao`) — sem query nova, sem duplicar fórmula. Defensivo:
+ * pula chaves ausentes silenciosamente (Map sem aquela linha → 0 no mês).
+ */
+function lerNutricaoMetaAutoMensal(extras: ExtrasGrid | undefined): number[] {
+  const meses = new Array(12).fill(0);
+  if (!extras?.lancamentosNutricao) return meses;
+  for (const subcentro of SUBCENTROS_NUTRICAO_META_AUTO) {
+    const arr = extras.lancamentosNutricao.get(subcentro);
+    if (!arr) continue;
+    for (let i = 0; i < 12 && i < arr.length; i++) {
+      meses[i] += Number(arr[i]) || 0;
+    }
+  }
+  return meses;
+}
+
+/**
  * Marco 1.1.D — Saldo mensal "líquido" do Fluxo de Caixa META:
  * receitas - saídas = saldo_mes[12].
  * Caixa Final = saldoInicial + Σ saldo_mes.
@@ -1256,7 +1294,21 @@ function buildBloco3AnaliseEconomica(
   const custeioPecAnoCorr = valorPC100NoRegime(
     painel?.custeioPecIndicador?.serieAno, mesAlvo, modo,
   );
-  const custoVarMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
+
+  // Patch pós-F2.1 — Custo Variável Pec META inclui nutrição auto calculada
+  // via meta_parametros_nutricao × zoot_mensal_cache (helper oficial
+  // `extras.lancamentosNutricao`). Esse componente NÃO existe no realizado
+  // (Real ano-1 / Real ano-corrente) — apenas em META, por design do Fluxo
+  // de Caixa META. Coerência entre DRE e Fluxo de Caixa preservada.
+  // Composição acontece APENAS no subitem visual da DRE. Total continua
+  // soberano via PC-100. Agregadores base intactos.
+  // Custo Variável Pec REAL continua puro financeiro_lancamentos_v2.
+  const nutricaoMetaAutoMensal = lerNutricaoMetaAutoMensal(input.extrasGrid);
+  const nutricaoMetaAutoVal = somaAteMes(nutricaoMetaAutoMensal, mesAlvo, modo);
+  const custoVarFinanceiroMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
+  const custoVarTotalComposto = safeNum(custoVarFinanceiroMeta) + nutricaoMetaAutoVal;
+  const custoVarMeta: number | null = custoVarTotalComposto > 0 ? custoVarTotalComposto : null;
+
   // Marco F2.1: regime temporal aplicado ao agregador financeiro ano-1.
   const custoVarAnoAnt = (input.lancFinAnoAnt && input.ano != null)
     ? somaAteMes(agregaCustoVariavelPec(input.lancFinAnoAnt, input.ano - 1), mesAlvo, modo)
