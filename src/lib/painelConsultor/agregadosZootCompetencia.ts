@@ -30,9 +30,39 @@ export interface AgregadoZootCompResult {
   breakdown?: Record<string, number[]>;         // [12] valores por categoria/tipo
 }
 
-/** Helper: anual derivado, NUNCA armazenado na interface. */
+/**
+ * Marco F2.1 — Regime temporal de redução de array mensal[12].
+ * 'no-mes'     → retorna apenas o valor do mês alvo (mesAlvo-1 no array 0-indexed)
+ * 'acumulado'  → soma de Jan→mesAlvo
+ * (mesAlvo indefinido → soma anual Jan→Dez, comportamento legado)
+ */
+export type ModoTemporal = 'no-mes' | 'acumulado';
+
+/**
+ * Reduz array meses[12] para escalar conforme regime temporal.
+ * Marco F2.1 — usado para sincronizar 3 colunas (Real ano-1 / Meta / Real
+ * ano-corrente) no mesmo regime quando mesAlvo definido.
+ *
+ * @param meses array de 12 elementos (Jan=0, Dez=11)
+ * @param mesAlvo 1..12 (1=Jan, 12=Dez). Indefinido → soma anual Jan→Dez.
+ * @param modo 'no-mes' ou 'acumulado'. Ignorado se mesAlvo indefinido.
+ */
+export function somaAteMes(meses: number[], mesAlvo?: number, modo: ModoTemporal = 'acumulado'): number {
+  if (mesAlvo == null) {
+    return meses.reduce((s, v) => s + (Number(v) || 0), 0);
+  }
+  if (mesAlvo < 1 || mesAlvo > 12) return 0;
+  if (modo === 'no-mes') {
+    return Number(meses[mesAlvo - 1]) || 0;
+  }
+  let acc = 0;
+  for (let i = 0; i < mesAlvo; i++) acc += Number(meses[i]) || 0;
+  return acc;
+}
+
+/** Helper: anual derivado, NUNCA armazenado na interface. Wrapper de somaAteMes. */
 export function somaAnualMeses(meses: number[]): number {
-  return meses.reduce((s, v) => s + v, 0);
+  return somaAteMes(meses);
 }
 
 interface ParamsAgregadorZootComp {

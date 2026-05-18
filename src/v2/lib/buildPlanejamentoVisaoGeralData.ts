@@ -16,7 +16,8 @@ import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import {
   type AgregadoZootCompResult,
-  somaAnualMeses,
+  type ModoTemporal,
+  somaAteMes,
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
 import {
   agregaOutrasReceitas,
@@ -25,6 +26,8 @@ import {
   agregaDeducoes,
   agregaCustoVariavelPec,
   agregaCustoFixoPec,
+  agregaReceitaPec,
+  agregaInvBovinos,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 
 import type {
@@ -136,6 +139,40 @@ export interface BuildPlanejamentoVisaoGeralInput {
    * (essas seguem zoot/PC-100 já definidos).
    */
   lancFinAnoAnt?: FinanceiroLancamento[];
+
+  /**
+   * Marco F2.1 — Ponte temporária controlada até Marco 2.5.
+   *
+   * Array de financeiro_lancamentos_v2 do ANO CORRENTE carregado via
+   * `carregarLancFinAnoCorrenteReal` no caller (tela de Fechamento de
+   * Período). Permite a 3ª coluna comparativa Real ano-corrente no DRE.
+   *
+   * Combinado com `mesAlvo` + `modo`, o builder produz `valorAnoCorrente`
+   * em cada linha do DRE no mesmo regime temporal de `valor` e
+   * `valorAnoAnt` (sincronização invariável: as 3 colunas SEMPRE no
+   * mesmo regime).
+   *
+   * Quando undefined → `valorAnoCorrente=null` em todas as linhas;
+   * comportamento exato do Planejamento Visão Geral preservado.
+   */
+  lancFinAnoCorrente?: FinanceiroLancamento[];
+
+  /**
+   * Marco F2.1 — Mês alvo (1..12) para regime temporal das 3 colunas DRE.
+   * Quando indefinido → 3 colunas usam ano completo (Jan→Dez) e
+   * `valorAnoCorrente` fica null. Quando definido, junto com `modo`,
+   * define o regime aplicado a valor/valorAnoAnt/valorAnoCorrente.
+   * NUNCA permitir drift de regime entre colunas.
+   */
+  mesAlvo?: number;
+
+  /**
+   * Marco F2.1 — Modo temporal do mesAlvo:
+   *   'no-mes'    → apenas o mês mesAlvo
+   *   'acumulado' → Jan→mesAlvo
+   * Default (quando mesAlvo definido) → 'acumulado'.
+   */
+  modo?: ModoTemporal;
 }
 
 /**
@@ -232,26 +269,27 @@ function mediaSerieMensal(serie: (number | null)[] | number[] | undefined, ate?:
 // ─── HELPERS DE GRID + EXTRAS (Marco 1.1.D) ──────────────────────────────────
 
 /**
- * Marco 1.1.D — Soma anual de subcentros por filtro macro/grupo,
+ * Marco 1.1.D + F2.1 — Mensal[12] de subcentros por filtro macro/grupo,
  * unificando grid base (planejamento_financeiro) com as 4 Maps de extras
  * (rebanho, financiamento, nutrição, projetos) — exatamente como faz
  * a tela de Fluxo de Caixa META.
  *
- * Filtro recebe (row) do grid e retorna soma total. Para anual usar ate=12.
- * Para acumulado Jan→mesAtual usar ate=mesAtual.
+ * Marco F2.1: retorna o array mensal completo (não mais escalar anual);
+ * a redução temporal fica por conta do caller via `somaAteMes(meses,
+ * mesAlvo, modo)`. Isso permite parametrizar o regime das 3 colunas
+ * (Real ano-1 / Meta / Real ano-corrente) sincronizadas.
  */
-function somarGridEExtras(
+function mesesGridEExtras(
   grid: SubcentroGrid[],
   extras: ExtrasGrid | undefined,
   filter: (row: SubcentroGrid) => boolean,
-  ate: number = 12,
-): number {
-  let total = 0;
+): number[] {
+  const meses = new Array(12).fill(0);
   // 1) Soma do grid base (planejamento_financeiro)
   for (const row of grid) {
     if (!filter(row)) continue;
-    for (let i = 0; i < ate && i < row.meses.length; i++) {
-      total += Number(row.meses[i]) || 0;
+    for (let i = 0; i < 12 && i < row.meses.length; i++) {
+      meses[i] += Number(row.meses[i]) || 0;
     }
   }
   // 2) Para cada Map de extras: somar APENAS os subcentros que passam no filter
@@ -268,15 +306,53 @@ function somarGridEExtras(
       extras.lancamentosProjetos,
     ];
     for (const m of maps) {
-      for (const [subcentro, meses] of m.entries()) {
+      for (const [subcentro, mesesArr] of m.entries()) {
         if (!subcentrosValidos.has(subcentro)) continue;
-        for (let i = 0; i < ate && i < meses.length; i++) {
-          total += Number(meses[i]) || 0;
+        for (let i = 0; i < 12 && i < mesesArr.length; i++) {
+          meses[i] += Number(mesesArr[i]) || 0;
         }
       }
     }
   }
-  return total;
+  return meses;
+}
+
+/**
+ * Marco F2.1 — Lê valor de série PC-100 cumulativa 13-pos no regime temporal.
+ *
+ * Séries PC-100 em viewMode='periodo' vêm como `[NaN, jan_acum, fev_acum,
+ * ..., dez_acum]` (índice 1-based, posição 0 = NaN). Para sincronizar
+ * com `somaAteMes`:
+ *   - mesAlvo undefined → lê posição [12] (anual Dez)
+ *   - modo 'acumulado'  → lê posição [mesAlvo]
+ *   - modo 'no-mes'     → posição [mesAlvo] - posição [mesAlvo - 1]
+ *     (com guard mesAlvo=1: serie[0]=NaN → tratar como 0; retorna serie[1])
+ *
+ * Retorna null se a série estiver indisponível ou produzir não-finito.
+ */
+function valorPC100NoRegime(
+  serie: number[] | null | undefined,
+  mesAlvo?: number,
+  modo: ModoTemporal = 'acumulado',
+): number | null {
+  if (!serie) return null;
+  const safeIdx = (idx: number): number | null => {
+    if (idx < 0 || idx >= serie.length) return null;
+    const v = serie[idx];
+    if (v == null || !Number.isFinite(v)) return null;
+    return v;
+  };
+  if (mesAlvo == null) return safeIdx(12);
+  if (mesAlvo < 1 || mesAlvo > 12) return null;
+  if (modo === 'acumulado') return safeIdx(mesAlvo);
+  // modo 'no-mes': diferença entre acumulado(mes) e acumulado(mes-1).
+  // Guard mesAlvo=1: serie[0] é NaN → o "Jan" do regime no-mes equivale ao
+  // próprio acumulado de Jan (serie[1]) sem subtração.
+  if (mesAlvo === 1) return safeIdx(1);
+  const atual = safeIdx(mesAlvo);
+  const anterior = safeIdx(mesAlvo - 1);
+  if (atual == null || anterior == null) return null;
+  return atual - anterior;
 }
 
 /**
@@ -354,10 +430,15 @@ function buildComparativoGrid(
   origem: OrigemMetric,
   tipoSemantica: TipoSemantica,
   formato: FormatoExibicao,
+  mesAlvo?: number,
+  modo?: ModoTemporal,
 ): ComparativoDuplo {
-  const anual = somarGridEExtras(grid, extras, filter, 12);
+  // Marco F2.1: agregação temporal parametrizada (anual quando mesAlvo
+  // indefinido — comportamento legado preservado).
+  const meses = mesesGridEExtras(grid, extras, filter);
+  const valor = somaAteMes(meses, mesAlvo, modo);
   return {
-    valor: anual,
+    valor,
     origem,
     tipoSemantica,
     formato,
@@ -387,9 +468,13 @@ function buildComparativoFromZootMeses(
   origem: OrigemMetric,
   tipoSemantica: TipoSemantica,
   formato: FormatoExibicao,
+  mesAlvo?: number,
+  modo?: ModoTemporal,
 ): ComparativoDuplo {
-  const valor = meses ? somaAnualMeses(meses) : null;
-  const valorAnoAnt = mesesAnoAnt ? somaAnualMeses(mesesAnoAnt) : null;
+  // Marco F2.1: agregação temporal parametrizada — anual quando mesAlvo
+  // indefinido (comportamento legado), regime sincronizado quando definido.
+  const valor = meses ? somaAteMes(meses, mesAlvo, modo) : null;
+  const valorAnoAnt = mesesAnoAnt ? somaAteMes(mesesAnoAnt, mesAlvo, modo) : null;
   return {
     valor,
     origem,
@@ -570,14 +655,18 @@ function agruparPorCentro(
   grupoCusto: string,
   ordemOficialCentros: readonly string[],
   mesAtual: number,
+  mesAlvo?: number,
+  modo?: ModoTemporal,
 ): { centros: CentroCustoBloco[]; total: ComparativoDuplo } {
   const linhasGrupo = grid.filter(r => r.grupo_custo === grupoCusto);
 
   // Agrupa subcentros por centro
+  // Marco F2.1: cada valorMeta segue regime temporal (anual quando
+  // mesAlvo indefinido — comportamento legado).
   const porCentro = new Map<string, SubcentroLinha[]>();
   for (const r of linhasGrupo) {
     const arr = porCentro.get(r.centro_custo) ?? [];
-    const valorMeta = sumAnual(r.meses);
+    const valorMeta = somaAteMes(r.meses, mesAlvo, modo);
     arr.push({
       subcentro: r.subcentro,
       valorMeta,
@@ -654,6 +743,8 @@ function buildBloco1Macro(
   zootComp?: ZootCompPreload,
   lancFinAnoAnt?: FinanceiroLancamento[],
   ano?: number,
+  mesAlvo?: number,
+  modo?: ModoTemporal,
 ): Bloco1Macro {
   // ENTRADAS
   // Fase 2 DRE: Receita Pecuária migra de fonte caixa (planejamento_financeiro)
@@ -663,17 +754,19 @@ function buildBloco1Macro(
     zootComp?.receitaPec?.meses ?? null,
     zootComp?.receitaPecAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const outrasReceitasBase = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === MACRO_RECEITAS
       && r.grupo_custo !== GRUPO_RECEITA_PECUARIA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   // Marco 1.1.E: vsAnoFechado de Outras Receitas vem do realizado financeiro
   // do ano-1 via agregaOutrasReceitas oficial (camada histórica). META intocada.
   const outrasReceitasAnoAnt = (lancFinAnoAnt && ano != null)
-    ? somaAnualMeses(agregaOutrasReceitas(lancFinAnoAnt, ano - 1))
+    ? somaAteMes(agregaOutrasReceitas(lancFinAnoAnt, ano - 1), mesAlvo, modo)
     : null;
   const outrasReceitas: ComparativoDuplo = {
     ...outrasReceitasBase,
@@ -686,12 +779,14 @@ function buildBloco1Macro(
     grid, extras,
     r => r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const totalEntradas = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === MACRO_RECEITAS
       || r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
 
   // SAÍDAS — Custeio Pec separado de juros (SEM juros), custeio agri, invest, dividendos
@@ -701,6 +796,7 @@ function buildBloco1Macro(
       && (r.grupo_custo === 'Custo Fixo Pecuária'
        || r.grupo_custo === 'Custo Variável Pecuária'),
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const custeioAgricultura = buildComparativoGrid(
     grid, extras,
@@ -708,17 +804,19 @@ function buildBloco1Macro(
       && (r.grupo_custo === 'Custo Fixo Agricultura'
        || r.grupo_custo === 'Custo Variável Agricultura'),
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const investimentosPecuariaBase = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === 'Investimento na Fazenda'
       && r.escopo_negocio === 'pecuaria',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   // Marco 1.1.E: vsAnoFechado de Investimento Fazenda Pec vem do realizado
   // financeiro ano-1 via agregaInvFazendaPec oficial (camada histórica).
   const investimentosPecuariaAnoAnt = (lancFinAnoAnt && ano != null)
-    ? somaAnualMeses(agregaInvFazendaPec(lancFinAnoAnt, ano - 1))
+    ? somaAteMes(agregaInvFazendaPec(lancFinAnoAnt, ano - 1), mesAlvo, modo)
     : null;
   const investimentosPecuaria: ComparativoDuplo = {
     ...investimentosPecuariaBase,
@@ -732,6 +830,7 @@ function buildBloco1Macro(
     r => r.macro_custo === 'Investimento na Fazenda'
       && r.escopo_negocio === 'agricultura',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   // Fase 2 DRE: Reposição Bovinos migra de fonte caixa para competência zoot.
   // Marco 1.1.E: vsAnoFechado vem do mesmo agregador chamado com (ano - 1).
@@ -739,16 +838,19 @@ function buildBloco1Macro(
     zootComp?.reposicaoBovinos?.meses ?? null,
     zootComp?.reposicaoBovinosAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const amortizacoes = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === 'Saída Financeira',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const dividendos = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === 'Dividendos',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   // Total Saídas = soma das 6 macros de saída (inclui Deduções de Receitas)
   const totalSaidas = buildComparativoGrid(
@@ -760,6 +862,7 @@ function buildBloco1Macro(
       || r.macro_custo === 'Dividendos'
       || r.macro_custo === 'Deduções de Receitas',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
 
   // RESULTADO
@@ -973,10 +1076,12 @@ function buildBloco3Custos(
   input: BuildPlanejamentoVisaoGeralInput,
   warnings: string[],
 ): Bloco3Custos {
-  const { grid, mesAtual } = input;
+  const { grid, mesAtual, mesAlvo, modo } = input;
 
-  const cvp = agruparPorCentro(grid, GRUPO_CUSTO_VARIAVEL_PEC, ORDEM_CENTROS_CUSTO_VAR_PEC, mesAtual);
-  const cfp = agruparPorCentro(grid, GRUPO_CUSTO_FIXO_PEC, ORDEM_CENTROS_CUSTO_FIXO_PEC, mesAtual);
+  // Marco F2.1: agruparPorCentro recebe mesAlvo/modo para alinhar com o
+  // regime das demais linhas da DRE (sincronização temporal invariável).
+  const cvp = agruparPorCentro(grid, GRUPO_CUSTO_VARIAVEL_PEC, ORDEM_CENTROS_CUSTO_VAR_PEC, mesAtual, mesAlvo, modo);
+  const cfp = agruparPorCentro(grid, GRUPO_CUSTO_FIXO_PEC, ORDEM_CENTROS_CUSTO_FIXO_PEC, mesAtual, mesAlvo, modo);
 
   warnings.push('BLOCO 3: ano-1 detalhado por subcentro = null (Marco 1.1.E: sem fonte oficial REAL por subcentro)');
 
@@ -1002,10 +1107,15 @@ function buildBloco3AnaliseEconomica(
 ): Bloco3AnaliseEconomica {
   const { grid, extrasGrid, painel, mesAtual } = input;
 
+  // Marco F2.1: mkLinha aceita 3ª série opcional (valorAnoCorrente).
+  // deltaRs/deltaPct continuam comparando valor (Meta) vs valorAnoAnt
+  // (Real ano-1) — lógica do delta intocada. A 3ª série é renderizada
+  // separadamente no componente visual.
   const mkLinha = (
     label: string,
     valor: number | null,
     valorAnoAnt: number | null,
+    valorAnoCorrente: number | null = null,
   ): AnaliseEconomicaLinha => {
     const deltaRs =
       valor != null && Number.isFinite(valor) && valorAnoAnt != null && Number.isFinite(valorAnoAnt)
@@ -1015,7 +1125,7 @@ function buildBloco3AnaliseEconomica(
       valor != null && Number.isFinite(valor) && valorAnoAnt != null && Number.isFinite(valorAnoAnt) && valorAnoAnt > 0
         ? ((valor - valorAnoAnt) / valorAnoAnt) * 100
         : null;
-    return { label, valor, valorAnoAnt, deltaRs, deltaPct };
+    return { label, valor, valorAnoAnt, valorAnoCorrente, deltaRs, deltaPct };
   };
 
   const soma = (...vs: (number | null)[]): number | null => {
@@ -1042,22 +1152,43 @@ function buildBloco3AnaliseEconomica(
     return acc;
   };
 
+  // Marco F2.1 — regime temporal das 3 colunas (sincronização invariável).
+  // mesAlvo undefined → todas as somas ficam anuais (comportamento legado).
+  const mesAlvo = input.mesAlvo;
+  const modo = input.modo;
+
+  /**
+   * Marco F2.1 — calcula valorAnoCorrente para uma linha-base aplicando
+   * o mesmo agregador financeiro sobre lancFinAnoCorrente no regime
+   * temporal vigente. Retorna null quando lancFinAnoCorrente ausente
+   * (preserva comportamento atual da tela Planejamento).
+   */
+  const valorAnoCorrFin = (
+    agregador: (lancFin: FinanceiroLancamento[], ano: number) => number[],
+  ): number | null => {
+    if (!input.lancFinAnoCorrente || input.ano == null) return null;
+    return somaAteMes(agregador(input.lancFinAnoCorrente, input.ano), mesAlvo, modo);
+  };
+
   // ─── 1. Faturamento ──────────────────────────────────────────
   const recPecMeta = bloco1.receitasPecuaria.valor;
   const recPecAnoAnt = bloco1.receitasPecuaria.vsAnoFechado.valor;
+  const recPecAnoCorr = valorAnoCorrFin(agregaReceitaPec);
   const outRecMeta = bloco1.outrasReceitas.valor;
   const outRecAnoAnt = bloco1.outrasReceitas.vsAnoFechado.valor;
+  const outRecAnoCorr = valorAnoCorrFin(agregaOutrasReceitas);
   const fatTotMeta = soma(recPecMeta, outRecMeta);
   // Marco 1.1.E: Outras Receitas ano-1 sem fonte oficial REAL → fatTotAnoAnt
   // estrito propaga null. Derivados encadeados (Receita Líquida etc.) seguem.
   const fatTotAnoAnt = somaEstrita(recPecAnoAnt, outRecAnoAnt);
+  const fatTotAnoCorr = somaEstrita(recPecAnoCorr, outRecAnoCorr);
 
   const faturamento: AnaliseEconomicaGrupo = {
     label: '1. Faturamento',
-    total: mkLinha('Faturamento', fatTotMeta, fatTotAnoAnt),
+    total: mkLinha('Faturamento', fatTotMeta, fatTotAnoAnt, fatTotAnoCorr),
     detalhes: [
-      mkLinha('Receita Pecuária', recPecMeta, recPecAnoAnt),
-      mkLinha('Outras Receitas', outRecMeta, outRecAnoAnt),
+      mkLinha('Receita Pecuária', recPecMeta, recPecAnoAnt, recPecAnoCorr),
+      mkLinha('Outras Receitas', outRecMeta, outRecAnoAnt, outRecAnoCorr),
     ],
   };
 
@@ -1077,11 +1208,13 @@ function buildBloco3AnaliseEconomica(
     input.zootComp?.deducoes?.meses ?? null,
     input.zootComp?.deducoesAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
+    mesAlvo, modo,
   );
   const deducoesMeta = deducoesCD.valor;
   const deducoesZootAnoAnt = deducoesCD.vsAnoFechado.valor;
+  // Marco F2.1: regime temporal aplicado ao fallback financeiro ano-1.
   const deducoesFinAnoAnt = (input.lancFinAnoAnt && input.ano != null)
-    ? somaAnualMeses(agregaDeducoes(input.lancFinAnoAnt, input.ano - 1))
+    ? somaAteMes(agregaDeducoes(input.lancFinAnoAnt, input.ano - 1), mesAlvo, modo)
     : null;
   const deducoesAnoAnt: number | null =
     deducoesZootAnoAnt != null && deducoesZootAnoAnt > 0
@@ -1089,16 +1222,20 @@ function buildBloco3AnaliseEconomica(
       : (deducoesFinAnoAnt != null && deducoesFinAnoAnt > 0
         ? deducoesFinAnoAnt
         : null);
+  // Marco F2.1: Deduções ano-corrente via agregador financeiro (não existe
+  // zootComp ano-corrente no preload; fonte financeira é a única disponível).
+  const deducoesAnoCorr = valorAnoCorrFin(agregaDeducoes);
   const deducoes: AnaliseEconomicaGrupo = {
     label: '2. (−) Deduções de Receita',
-    total: mkLinha('Deduções', deducoesMeta, deducoesAnoAnt),
-    detalhes: [mkLinha('Deduções totais', deducoesMeta, deducoesAnoAnt)],
+    total: mkLinha('Deduções', deducoesMeta, deducoesAnoAnt, deducoesAnoCorr),
+    detalhes: [mkLinha('Deduções totais', deducoesMeta, deducoesAnoAnt, deducoesAnoCorr)],
   };
 
   // = Receita Líquida
   const recLiqMeta = subt(fatTotMeta, deducoesMeta);
   const recLiqAnoAnt = subt(fatTotAnoAnt, deducoesAnoAnt);
-  const receitaLiquida = mkLinha('Receita Líquida', recLiqMeta, recLiqAnoAnt);
+  const recLiqAnoCorr = subt(fatTotAnoCorr, deducoesAnoCorr);
+  const receitaLiquida = mkLinha('Receita Líquida', recLiqMeta, recLiqAnoAnt, recLiqAnoCorr);
 
   // ─── 3. (−) Custeio Pecuária ─────────────────────────────────
   // Marco 1.1.E: Custeio Pec TOTAL ano-1 vem do PC-100 (custeioPecIndicador
@@ -1112,56 +1249,76 @@ function buildBloco3AnaliseEconomica(
   // vsAnoFechado.valor; META intacta (custoVarMeta/custoFixMeta seguem do
   // bloco3Custos sobre o grid META).
   const custeioPecMeta = bloco1.custeioPecuaria.valor;
-  const custeioPecAnoAnt = painel?.custeioPecIndicador?.serieAnoAnt?.[12] ?? null;
+  // Marco F2.1: PC-100 cumulativo 13-pos parametrizado pelo regime.
+  const custeioPecAnoAnt = valorPC100NoRegime(
+    painel?.custeioPecIndicador?.serieAnoAnt, mesAlvo, modo,
+  );
+  const custeioPecAnoCorr = valorPC100NoRegime(
+    painel?.custeioPecIndicador?.serieAno, mesAlvo, modo,
+  );
   const custoVarMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
+  // Marco F2.1: regime temporal aplicado ao agregador financeiro ano-1.
   const custoVarAnoAnt = (input.lancFinAnoAnt && input.ano != null)
-    ? somaAnualMeses(agregaCustoVariavelPec(input.lancFinAnoAnt, input.ano - 1))
+    ? somaAteMes(agregaCustoVariavelPec(input.lancFinAnoAnt, input.ano - 1), mesAlvo, modo)
     : null;
+  const custoVarAnoCorr = valorAnoCorrFin(agregaCustoVariavelPec);
   const custoFixMeta = bloco3Custos.custoFixoPecuaria.total.valor;
   const custoFixAnoAnt = (input.lancFinAnoAnt && input.ano != null)
-    ? somaAnualMeses(agregaCustoFixoPec(input.lancFinAnoAnt, input.ano - 1))
+    ? somaAteMes(agregaCustoFixoPec(input.lancFinAnoAnt, input.ano - 1), mesAlvo, modo)
     : null;
+  const custoFixAnoCorr = valorAnoCorrFin(agregaCustoFixoPec);
 
   const custeioPecuaria: AnaliseEconomicaGrupo = {
     label: '3. (−) Custeio Pecuária',
-    total: mkLinha('Custeio Pecuária', custeioPecMeta, custeioPecAnoAnt),
+    total: mkLinha('Custeio Pecuária', custeioPecMeta, custeioPecAnoAnt, custeioPecAnoCorr),
     detalhes: [
-      mkLinha('Custo Variável Pec', custoVarMeta, custoVarAnoAnt),
-      mkLinha('Custo Fixo Pec', custoFixMeta, custoFixAnoAnt),
+      mkLinha('Custo Variável Pec', custoVarMeta, custoVarAnoAnt, custoVarAnoCorr),
+      mkLinha('Custo Fixo Pec', custoFixMeta, custoFixAnoAnt, custoFixAnoCorr),
     ],
   };
 
   // = Resultado Bruto
   const resBrutoMeta = subt(recLiqMeta, custeioPecMeta);
   const resBrutoAnoAnt = subt(recLiqAnoAnt, custeioPecAnoAnt);
-  const resultadoBruto = mkLinha('Resultado Bruto', resBrutoMeta, resBrutoAnoAnt);
+  const resBrutoAnoCorr = subt(recLiqAnoCorr, custeioPecAnoCorr);
+  const resultadoBruto = mkLinha('Resultado Bruto', resBrutoMeta, resBrutoAnoAnt, resBrutoAnoCorr);
 
   // ─── 4. (−) Investimento na Fazenda Pec ──────────────────────
   const invFazPecMeta = bloco1.investimentosPecuaria.valor;
   const invFazPecAnoAnt = bloco1.investimentosPecuaria.vsAnoFechado.valor;
+  const invFazPecAnoCorr = valorAnoCorrFin(agregaInvFazendaPec);
   const investimentoFazendaPec = mkLinha(
     '4. (−) Investimento na Fazenda Pec',
-    invFazPecMeta, invFazPecAnoAnt,
+    invFazPecMeta, invFazPecAnoAnt, invFazPecAnoCorr,
   );
 
   // = Resultado com Investimento
   const resInvMeta = subt(resBrutoMeta, invFazPecMeta);
   const resInvAnoAnt = subt(resBrutoAnoAnt, invFazPecAnoAnt);
+  const resInvAnoCorr = subt(resBrutoAnoCorr, invFazPecAnoCorr);
   const resultadoComInvestimento = mkLinha(
-    'Resultado com Investimento', resInvMeta, resInvAnoAnt,
+    'Resultado com Investimento', resInvMeta, resInvAnoAnt, resInvAnoCorr,
   );
 
   // ─── 5. (−) Reposição de Bovinos ─────────────────────────────
   const reposMeta = bloco1.reposicaoBovinos.valor;
   const reposAnoAnt = bloco1.reposicaoBovinos.vsAnoFechado.valor;
+  // Marco F2.1: Reposição ano-corrente via agregador financeiro
+  // (agregaInvBovinos — fonte oficial sobre lancFinAnoCorrente).
+  const reposAnoCorr = valorAnoCorrFin(agregaInvBovinos);
   const reposicaoBovinos = mkLinha(
-    '5. (−) Reposição de Bovinos', reposMeta, reposAnoAnt,
+    '5. (−) Reposição de Bovinos', reposMeta, reposAnoAnt, reposAnoCorr,
   );
 
   // ─── 6. (±) Variação do Estoque do Gado ──────────────────────
   // PC-100 valorRebanhoIndicador: 1-based length 13.
   //   META  = serieMeta[12]   − serieAno[0]      (final Dez META − inicial Jan = Dez ano-1)
   //   Ano-1 = serieAnoAnt[12] − serieAnoAnt[0]
+  //
+  // Marco F2.1: quando mesAlvo definido, "fim" é serie[mesAlvo] e "início"
+  // depende do modo — 'acumulado' usa início do ano, 'no-mes' usa
+  // serie[mesAlvo-1] (variação do mês isolado). Aplicado às 3 séries
+  // (META, ano-1, ano-corrente) com mesmo regime.
   const safeIdx = (arr: number[] | null | undefined, idx: number): number | null => {
     if (!arr) return null;
     const v = arr[idx];
@@ -1172,16 +1329,24 @@ function buildBloco3AnaliseEconomica(
   const serieAnoAnt = painel?.valorRebanhoIndicador?.serieAnoAnt ?? null;
   const serieMeta   = painel?.valorRebanhoIndicador?.serieMeta   ?? null;
 
-  const finalMeta   = safeIdx(serieMeta, 12);
-  const inicialMeta = safeIdx(serieAno, 0);
+  const idxFim = mesAlvo == null ? 12 : mesAlvo;
+  // Início depende do modo: acumulado vs início do ano; no-mes vs mês anterior.
+  const usaInicioMesAnterior = modo === 'no-mes' && mesAlvo != null && mesAlvo > 1;
+  const inicialMeta = usaInicioMesAnterior ? safeIdx(serieMeta, mesAlvo! - 1) : safeIdx(serieAno, 0);
+  const inicialAnoAnt = usaInicioMesAnterior ? safeIdx(serieAnoAnt, mesAlvo! - 1) : safeIdx(serieAnoAnt, 0);
+  const inicialAnoCorr = usaInicioMesAnterior ? safeIdx(serieAno, mesAlvo! - 1) : safeIdx(serieAno, 0);
+
+  const finalMeta   = safeIdx(serieMeta, idxFim);
   const varMeta = subt(finalMeta, inicialMeta);
 
-  const finalAnoAnt   = safeIdx(serieAnoAnt, 12);
-  const inicialAnoAnt = safeIdx(serieAnoAnt, 0);
+  const finalAnoAnt = safeIdx(serieAnoAnt, idxFim);
   const varAnoAnt = subt(finalAnoAnt, inicialAnoAnt);
 
+  const finalAnoCorr = safeIdx(serieAno, idxFim);
+  const varAnoCorr = subt(finalAnoCorr, inicialAnoCorr);
+
   const variacaoEstoqueGado = mkLinha(
-    '6. (±) Variação do Estoque do Gado', varMeta, varAnoAnt,
+    '6. (±) Variação do Estoque do Gado', varMeta, varAnoAnt, varAnoCorr,
   );
 
   // = Resultado Operacional = ResComInv − Reposição + VariaçãoEstoque
@@ -1193,24 +1358,30 @@ function buildBloco3AnaliseEconomica(
     resInvAnoAnt != null && reposAnoAnt != null && varAnoAnt != null
       ? resInvAnoAnt - reposAnoAnt + varAnoAnt
       : null;
+  const resOpAnoCorr =
+    resInvAnoCorr != null && reposAnoCorr != null && varAnoCorr != null
+      ? resInvAnoCorr - reposAnoCorr + varAnoCorr
+      : null;
   const resultadoOperacional = mkLinha(
-    'Resultado Operacional', resOpMeta, resOpAnoAnt,
+    'Resultado Operacional', resOpMeta, resOpAnoAnt, resOpAnoCorr,
   );
 
   // ─── 7. (−) Resultado Financeiro — só Juros Pec ──────────────
   const jurosMeta = bloco4.juros.valor;
   const jurosAnoAnt = bloco4.juros.vsAnoFechado.valor;
+  const jurosAnoCorr = valorAnoCorrFin(agregaJurosPec);
   const resultadoFinanceiro: AnaliseEconomicaGrupo = {
     label: '7. (−) Resultado Financeiro',
-    total: mkLinha('Resultado Financeiro', jurosMeta, jurosAnoAnt),
-    detalhes: [mkLinha('Juros Pecuária', jurosMeta, jurosAnoAnt)],
+    total: mkLinha('Resultado Financeiro', jurosMeta, jurosAnoAnt, jurosAnoCorr),
+    detalhes: [mkLinha('Juros Pecuária', jurosMeta, jurosAnoAnt, jurosAnoCorr)],
   };
 
   // = Resultado Antes dos Tributos
   const resAntesMeta = subt(resOpMeta, jurosMeta);
   const resAntesAnoAnt = subt(resOpAnoAnt, jurosAnoAnt);
+  const resAntesAnoCorr = subt(resOpAnoCorr, jurosAnoCorr);
   const resultadoAntesTributos = mkLinha(
-    'Resultado Antes dos Tributos', resAntesMeta, resAntesAnoAnt,
+    'Resultado Antes dos Tributos', resAntesMeta, resAntesAnoAnt, resAntesAnoCorr,
   );
 
   // ─── 8 & 9 placeholders ──────────────────────────────────────
@@ -1219,7 +1390,7 @@ function buildBloco3AnaliseEconomica(
 
   // = Lucro Líquido Planejado (= resAntes enquanto 8 e 9 forem null)
   const lucroLiquido = mkLinha(
-    'Lucro Líquido Planejado', resAntesMeta, resAntesAnoAnt,
+    'Lucro Líquido Planejado', resAntesMeta, resAntesAnoAnt, resAntesAnoCorr,
   );
 
   return {
@@ -1245,7 +1416,7 @@ function buildBloco4Financeiro(
   input: BuildPlanejamentoVisaoGeralInput,
   _warnings: string[],
 ): Bloco4Financeiro {
-  const { painel, mesAtual, lancFinAnoAnt, ano } = input;
+  const { painel, mesAtual, lancFinAnoAnt, ano, mesAlvo, modo } = input;
   const empty = (): ComparativoDuplo => emptyComparativo('pc100', 'acumulado', 'moeda');
 
   const fromIndicator = (ind: { serieMeta?: number[]; serieAnoAnt?: number[] } | null | undefined): ComparativoDuplo =>
@@ -1262,8 +1433,9 @@ function buildBloco4Financeiro(
   // DRE pega via cascata de bloco4.juros.vsAnoFechado.valor — sem override
   // duplicado no Bloco 3. Camada de compatibilidade histórica, mesmo
   // princípio do Passo 1.
+  // Marco F2.1: regime temporal aplicado também no override de Juros.
   const jurosAnoAntReal = (lancFinAnoAnt && ano != null)
-    ? somaAnualMeses(agregaJurosPec(lancFinAnoAnt, ano - 1))
+    ? somaAteMes(agregaJurosPec(lancFinAnoAnt, ano - 1), mesAlvo, modo)
     : null;
   const juros: ComparativoDuplo = jurosAnoAntReal != null
     ? { ...jurosBase, vsAnoFechado: { valor: jurosAnoAntReal, delta: pctDelta(jurosBase.valor, jurosAnoAntReal) } }
@@ -1341,6 +1513,7 @@ export function buildPlanejamentoVisaoGeralData(
   const bloco1 = buildBloco1Macro(
     input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial,
     input.zootComp, input.lancFinAnoAnt, input.ano,
+    input.mesAlvo, input.modo,
   );
   const bloco2 = buildBloco2Producao(input, warnings);
   const bloco3 = buildBloco3Custos(input, warnings);

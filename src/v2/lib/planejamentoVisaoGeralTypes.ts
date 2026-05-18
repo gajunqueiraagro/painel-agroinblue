@@ -236,12 +236,20 @@ export interface Bloco3Custos {
 // ficam null até reestruturação do plano de contas.
 
 /**
- * Linha individual do DRE — META anual + comparativo Real ano-1.
+ * Linha individual do DRE — META anual + comparativo Real ano-1 + (Marco F2.1)
+ * 3ª série opcional Real ano-corrente.
+ *
+ * Marco F2.1 — Ponte temporária controlada até Marco 2.5. Quando o caller
+ * passar lancFinAnoCorrente + mesAlvo + modo ao builder, valorAnoCorrente
+ * é populado no mesmo regime temporal de valor e valorAnoAnt
+ * (sincronização invariável). Quando mesAlvo indefinido, valorAnoCorrente
+ * = null e o DTO se comporta exatamente como antes (anual sem 3ª coluna).
  */
 export interface AnaliseEconomicaLinha {
   label: string;
-  valor: number | null;            // META anual
-  valorAnoAnt: number | null;      // Realizado ano-1 anual
+  valor: number | null;            // META no regime temporal vigente (anual quando mesAlvo undefined)
+  valorAnoAnt: number | null;      // Realizado ano-1 no mesmo regime temporal
+  valorAnoCorrente: number | null; // Realizado ano-corrente no mesmo regime; null quando F2.1 não aplica
   deltaRs: number | null;          // valor - valorAnoAnt (null se algum lado for null)
   deltaPct: number | null;         // ((valor - valorAnoAnt) / valorAnoAnt) × 100; null se ant<=0
 }
