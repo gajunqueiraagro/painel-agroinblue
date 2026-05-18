@@ -25,9 +25,13 @@ interface Props {
   mostrarAnoCorrente?: boolean;
 }
 
-// Templates de grid — 4 colunas (legado) vs 7 colunas (F2.2 modo Fechamento).
+// Templates de grid:
+//   Legado (4 cols após label): Real ano-1 | Meta | Δ R$ | Δ%
+//   Fechamento 3 valores (5 cols após label): Real ano-1 | Meta | Real ano | Δ Ano Ant % | Δ Meta %
+// Ordem da Fase 1 Marco 2.5: passado → planejado → atual, apenas deltas percentuais
+// (cabe sem cortar; deltas R$ removidos para leitura executiva).
 const GRID_4_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_70px]';
-const GRID_7_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_110px_70px_110px_70px]';
+const GRID_5_COLS = 'grid-cols-[minmax(200px,360px)_100px_100px_100px_70px_70px]';
 
 const fmtBRLAbs = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -118,52 +122,57 @@ function LinhaRow({
 
   const rowClass = cn(
     'grid gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
-    mostrarAnoCorrente ? GRID_7_COLS : GRID_4_COLS,
+    mostrarAnoCorrente ? GRID_5_COLS : GRID_4_COLS,
     destaque ? 'bg-muted/40 border-t border-border/40' : '',
     destaqueFinal ? 'bg-muted/60 border-t border-border' : '',
   );
 
-  // F2.2 — Δ Ano Ant: compara Real ano vs Real ano-1.
-  //        Δ Meta: compara Real ano vs Meta. Propaga null estrita.
-  const deltaAnoAntRs = (linha.valorAnoCorrente != null && Number.isFinite(linha.valorAnoCorrente)
-    && linha.valorAnoAnt != null && Number.isFinite(linha.valorAnoAnt))
-    ? linha.valorAnoCorrente - linha.valorAnoAnt
+  // Fase 1 Marco 2.5 — Δ Ano Ant %: compara Real ano vs Real ano-1.
+  //                   Δ Meta %: compara Real ano vs Meta. Propaga null estrita.
+  // Deltas R$ removidos no modo 3 valores (decisão executiva: percentuais
+  // são suficientes; espaço da tela mais importante).
+  const deltaAnoAntPct = (linha.valorAnoCorrente != null && Number.isFinite(linha.valorAnoCorrente)
+    && linha.valorAnoAnt != null && Number.isFinite(linha.valorAnoAnt) && linha.valorAnoAnt > 0)
+    ? ((linha.valorAnoCorrente - linha.valorAnoAnt) / linha.valorAnoAnt) * 100
     : null;
-  const deltaAnoAntPct = (deltaAnoAntRs != null && linha.valorAnoAnt != null && linha.valorAnoAnt > 0)
-    ? (deltaAnoAntRs / linha.valorAnoAnt) * 100
+  const deltaMetaPct = (linha.valorAnoCorrente != null && Number.isFinite(linha.valorAnoCorrente)
+    && linha.valor != null && Number.isFinite(linha.valor) && linha.valor > 0)
+    ? ((linha.valorAnoCorrente - linha.valor) / linha.valor) * 100
     : null;
-  const deltaMetaRs = (linha.valorAnoCorrente != null && Number.isFinite(linha.valorAnoCorrente)
-    && linha.valor != null && Number.isFinite(linha.valor))
-    ? linha.valorAnoCorrente - linha.valor
-    : null;
-  const deltaMetaPct = (deltaMetaRs != null && linha.valor != null && linha.valor > 0)
-    ? (deltaMetaRs / linha.valor) * 100
-    : null;
+
+  // Cores fixas por coluna no modo Fechamento (3 valores):
+  //   Real ano-1 → muted/cinza (passado, referência histórica)
+  //   Meta ano   → laranja (referência planejada, mesmo tom do header)
+  //   Real ano   → semântica (azul positivo / vermelho negativo) preserva
+  //                significado financeiro do valor atual
+  const realAnoAntClass = mostrarAnoCorrente
+    ? cn(valorClass, 'text-muted-foreground')
+    : cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal));
+  const metaClass = mostrarAnoCorrente
+    ? cn(valorClass, 'text-orange-600 dark:text-orange-400')
+    : cn(valorClass, corValor(linha.valor, tipoSinal));
+  const realAnoCorrClass = cn(valorClass, corValor(linha.valorAnoCorrente, tipoSinal));
 
   const deltaRsClassLegado = cn('text-right tabular-nums text-[10px] font-medium', corDelta(linha.deltaRs));
   const deltaPctClassLegado = cn('text-right tabular-nums text-[10px] font-medium', corDelta(linha.deltaPct));
-  const deltaRsClassAnoAnt = cn('text-right tabular-nums text-[10px] font-medium', corDelta(deltaAnoAntRs));
   const deltaPctClassAnoAnt = cn('text-right tabular-nums text-[10px] font-medium', corDelta(deltaAnoAntPct));
-  const deltaRsClassMeta = cn('text-right tabular-nums text-[10px] font-medium', corDelta(deltaMetaRs));
   const deltaPctClassMeta = cn('text-right tabular-nums text-[10px] font-medium', corDelta(deltaMetaPct));
 
   return (
     <div className={rowClass}>
       <div className={labelClass}>{linha.label}</div>
-      <div className={cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal))}>{fmt(linha.valorAnoAnt)}</div>
-      {mostrarAnoCorrente && (
-        <div className={cn(valorClass, corValor(linha.valorAnoCorrente, tipoSinal))}>{fmt(linha.valorAnoCorrente)}</div>
-      )}
-      <div className={cn(valorClass, corValor(linha.valor, tipoSinal))}>{fmt(linha.valor)}</div>
       {mostrarAnoCorrente ? (
         <>
-          <div className={deltaRsClassAnoAnt}>{formatDeltaRs(deltaAnoAntRs)}</div>
+          <div className={realAnoAntClass}>{fmt(linha.valorAnoAnt)}</div>
+          <div className={metaClass}>{fmt(linha.valor)}</div>
+          <div className={realAnoCorrClass}>{fmt(linha.valorAnoCorrente)}</div>
           <div className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</div>
-          <div className={deltaRsClassMeta}>{formatDeltaRs(deltaMetaRs)}</div>
           <div className={deltaPctClassMeta}>{formatPct(deltaMetaPct)}</div>
         </>
       ) : (
         <>
+          <div className={realAnoAntClass}>{fmt(linha.valorAnoAnt)}</div>
+          <div className={metaClass}>{fmt(linha.valor)}</div>
           <div className={deltaRsClassLegado}>{formatDeltaRs(linha.deltaRs)}</div>
           <div className={deltaPctClassLegado}>{formatPct(linha.deltaPct)}</div>
         </>
@@ -205,18 +214,23 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
   return (
     <div className={cn(
       'grid gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
-      mostrarAnoCorrente ? GRID_7_COLS : GRID_4_COLS,
+      mostrarAnoCorrente ? GRID_5_COLS : GRID_4_COLS,
     )}>
       <div className="truncate text-[11px] italic text-muted-foreground">
         {label} <span className="text-[10px]">(aguarda plano de contas)</span>
       </div>
-      <div className={valorMuted}>—</div>
-      {mostrarAnoCorrente && <div className={valorMuted}>—</div>}
-      <div className={valorMuted}>—</div>
-      <div className={deltaMuted}>—</div>
-      <div className={deltaMuted}>—</div>
-      {mostrarAnoCorrente && (
+      {mostrarAnoCorrente ? (
         <>
+          <div className={valorMuted}>—</div>
+          <div className={valorMuted}>—</div>
+          <div className={valorMuted}>—</div>
+          <div className={deltaMuted}>—</div>
+          <div className={deltaMuted}>—</div>
+        </>
+      ) : (
+        <>
+          <div className={valorMuted}>—</div>
+          <div className={valorMuted}>—</div>
           <div className={deltaMuted}>—</div>
           <div className={deltaMuted}>—</div>
         </>
@@ -254,20 +268,20 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
         </p>
       )}
 
-      {/* Header da tabela */}
+      {/* Header da tabela.
+          Modo Fechamento (5 cols após label): Real ano-1 | Meta | Real ano | Δ Ano Ant % | Δ Meta % */}
+      <div className={cn('overflow-x-auto', m && 'min-w-0')}>
       <div className={cn(
         'grid gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground',
-        m ? GRID_7_COLS : GRID_4_COLS,
+        m ? GRID_5_COLS : GRID_4_COLS,
       )}>
         <div></div>
         <div className="text-center">Real {ano - 1}</div>
-        {m && <div className="text-center">Real {ano}</div>}
         <div className="text-center text-orange-500">Meta {ano}</div>
+        {m && <div className="text-center text-blue-600 dark:text-blue-400">Real {ano}</div>}
         {m ? (
           <>
-            <div className="text-center">Δ Ano Ant R$</div>
             <div className="text-center">Δ Ano Ant %</div>
-            <div className="text-center">Δ Meta R$</div>
             <div className="text-center">Δ Meta %</div>
           </>
         ) : (
@@ -299,6 +313,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
           ? <GrupoRow grupo={data.impostosSobreLucro} tipoSinal="despesa" mostrarAnoCorrente={m} />
           : <LinhaPlaceholder label="9. (−) Impostos sobre Lucro" mostrarAnoCorrente={m} />}
         <LinhaRow linha={data.lucroLiquido} tipoSinal="subtotal" destaqueFinal mostrarAnoCorrente={m} />
+      </div>
       </div>
     </section>
   );
