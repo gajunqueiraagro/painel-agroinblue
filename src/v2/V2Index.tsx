@@ -14,8 +14,6 @@ import { V2FilterBar } from './components/V2FilterBar';
 import { V2MobileNav } from './components/V2MobileNav';
 import { V2ContextDrawer } from './components/V2ContextDrawer';
 import { V2Home } from './pages/V2Home';
-import { DrillDownLancamentosSheet } from './components/DrillDownLancamentosSheet';
-import { TIPOS_ENTRADA, TIPOS_SAIDA } from '@/lib/calculos/zootecnicos';
 import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { V2AreasMeta } from './pages/V2AreasMeta';
 import { V2PlanejamentoVisaoGeral } from './pages/V2PlanejamentoVisaoGeral';
@@ -123,10 +121,6 @@ interface V2LancamentosWrapperProps {
   abateParaEditar?: Lancamento | null;
   /** Venda para abrir em modo edição (vindo da Conferência). */
   vendaParaEditar?: Lancamento | null;
-  /** Compra para abrir em modo edição (Onda 1 drill-down). */
-  compraParaEditar?: Lancamento | null;
-  /** Transferência (entrada/saída) para abrir em modo edição (Onda 1 drill-down). */
-  transferenciaParaEditar?: Lancamento | null;
   /** Callback chamado após cancelar/salvar edição vinda da Conferência. */
   onReturnFromEdit?: () => void;
   /** Atalho do card "Chuvas" — navega para a tela de Chuvas. */
@@ -137,8 +131,16 @@ interface V2LancamentosWrapperProps {
   cenarioInicial?: 'realizado' | 'meta';
   /** Restringe cenários disponíveis no seletor de Status (ex.: ['meta']). */
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
+  /** Aba inicial — drill da Conferência Categoria (Ent.Ext → 'entrada' / Sai.Ext → 'saida' / Evol → 'reclassificacao'). */
+  abaInicial?: 'entrada' | 'saida' | 'reclassificacao';
+  /** Filtro de ano (drill da Conferência Categoria). */
+  initialAnoFiltro?: string;
+  /** Filtro de mês (drill da Conferência Categoria). */
+  initialMesFiltro?: string;
+  /** Categoria pré-selecionada (drill da Conferência Categoria). */
+  initialCategoria?: string;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, abaInicial, initialAnoFiltro, initialMesFiltro, initialCategoria }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -254,19 +256,14 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, compraParaEdit
         onCountFinanceiros={countFinanceirosVinculados}
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
-        compraParaEditar={compraParaEditar}
-        transferenciaParaEditar={transferenciaParaEditar}
         onReturnFromEdit={onReturnFromEdit}
         onNavegarChuvas={onNavegarChuvas}
         cenarioInicial={cenarioInicial}
         cenariosPermitidos={cenariosPermitidos}
-        abaInicial={
-          (abateParaEditar || vendaParaEditar) ? 'saida'
-          : compraParaEditar ? 'entrada'
-          : transferenciaParaEditar
-            ? (transferenciaParaEditar.tipo === 'transferencia_entrada' ? 'entrada' : 'saida')
-            : undefined
-        }
+        initialAnoFiltro={initialAnoFiltro}
+        initialMesFiltro={initialMesFiltro}
+        initialCategoria={initialCategoria}
+        abaInicial={abaInicial ?? ((abateParaEditar || vendaParaEditar) ? 'saida' : undefined)}
       />
     </div>
   );
@@ -300,16 +297,15 @@ export default function V2Index() {
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
-  // Onda 1 drill-down: Compra/Transferência (entrada ou saída) — paralelo a Abate/Venda.
-  const [compraParaEditar, setCompraParaEditar] = useState<Lancamento | null>(null);
-  const [transferenciaParaEditar, setTransferenciaParaEditar] = useState<Lancamento | null>(null);
-  // Section de origem da edição — usado por onReturnFromEdit para voltar
-  // à tela correta (default: 'conferencia-lancamentos' — comportamento legado).
-  const [editOriginSection, setEditOriginSection] = useState<V2Section | null>(null);
-  // Onda 1 drill-down: Sheet listando lançamentos de uma célula (N>1).
-  const [drillCelulaState, setDrillCelulaState] = useState<{
-    cel: { ano: string; mes: number; cenario: 'realizado' | 'meta'; categoria: string; categoriaNome?: string; coluna: 'ent_ext' | 'sai_ext' };
-    lancamentos: Lancamento[];
+  // Drill filtrado vindo de EvolucaoCategoriaTab: navega para LancamentosTab
+  // com aba+ano+mês+categoria+cenário pré-aplicados. Mesmo padrão do
+  // FluxoAnualTab (navegação filtrada, sem editor standalone).
+  const [drillFiltro, setDrillFiltro] = useState<{
+    aba: 'entrada' | 'saida' | 'reclassificacao';
+    ano: string;
+    mes: string;
+    cenario: 'realizado' | 'meta';
+    categoria: string;
   } | null>(null);
   // Quando um lançamento de financiamento é editado em Financeiro → Lançamentos,
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
@@ -322,118 +318,20 @@ export default function V2Index() {
   const limparEdicaoAvancada = () => {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
-    setCompraParaEditar(null);
-    setTransferenciaParaEditar(null);
   };
   // Limpa estado de edição se sair da seção `lancamentos-zoot` por qualquer
   // motivo (menu, drawer, navegação direta) — evita criação normal travada
-  // em modo edição.
+  // em modo edição. Inclui drillFiltro (drill da Conferência Categoria).
   useEffect(() => {
-    if (section !== 'lancamentos-zoot' && (abateParaEditar || vendaParaEditar || compraParaEditar || transferenciaParaEditar)) {
-      limparEdicaoAvancada();
+    if (section !== 'lancamentos-zoot') {
+      if (abateParaEditar || vendaParaEditar) limparEdicaoAvancada();
+      if (drillFiltro) setDrillFiltro(null);
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const periodoTipo = getPeriodoTipo(section);
   const { clientes, clienteAtual } = useCliente();
-  const { fazendas, fazendaAtual, isGlobal } = useFazenda();
+  const { fazendas, isGlobal } = useFazenda();
   const { canEditMeta } = usePermissions();
-
-  /**
-   * Onda 1 drill-down — handler para click em célula de Entrada/Saída
-   * Externa em EvolucaoCategoriaTab.
-   *
-   * Busca lançamentos da célula filtrando por fazenda + categoria +
-   * ano_mes + cenário + tipos (TIPOS_ENTRADA ou TIPOS_SAIDA oficiais).
-   *
-   * - 1 lançamento editável (compra/venda/abate/transferência) → set
-   *   xParaEditar + navega para 'lancamentos-zoot'
-   * - 1 lançamento inline (nascimento/morte/consumo) → toast.info
-   * - N>1 lançamentos → abre Sheet listando todos
-   *
-   * Após save, onReturnFromEdit usa editOriginSection para voltar à
-   * tela exata de origem (preserva ano/mês/cenário via state V2Index).
-   */
-  const handleDrillCelula = async (cel: {
-    ano: string;
-    mes: number;
-    cenario: 'realizado' | 'meta';
-    categoria: string;
-    categoriaNome?: string;
-    coluna: 'ent_ext' | 'sai_ext';
-  }) => {
-    if (!clienteAtual?.id) {
-      toast.error('Selecione um cliente.');
-      return;
-    }
-    if (!fazendaAtual?.id || fazendaAtual.id === '__global__') {
-      toast.error('Selecione uma fazenda específica para editar lançamentos.');
-      return;
-    }
-    const tipos = cel.coluna === 'ent_ext' ? TIPOS_ENTRADA : TIPOS_SAIDA;
-    // Tabela `lancamentos` usa coluna `data` (DATE); filtramos por range
-    // [primeiro_dia_mes, primeiro_dia_mes_seguinte).
-    const anoNum = Number(cel.ano);
-    const mesNum = cel.mes;
-    const proxAno = mesNum === 12 ? anoNum + 1 : anoNum;
-    const proxMes = mesNum === 12 ? 1 : mesNum + 1;
-    const dataIni = `${anoNum}-${String(mesNum).padStart(2, '0')}-01`;
-    const dataFim = `${proxAno}-${String(proxMes).padStart(2, '0')}-01`;
-    try {
-      const { data, error } = await supabase
-        .from('lancamentos')
-        .select('*')
-        .eq('cliente_id', clienteAtual.id)
-        .eq('fazenda_id', fazendaAtual.id)
-        .gte('data', dataIni)
-        .lt('data', dataFim)
-        .eq('categoria', cel.categoria)
-        .eq('cenario', cel.cenario)
-        .eq('cancelado', false)
-        .in('tipo', tipos as readonly string[]);
-      if (error) throw error;
-      const rows = (data ?? []) as unknown as Lancamento[];
-      if (rows.length === 0) {
-        toast.info('Nenhum lançamento encontrado para esta célula.');
-        return;
-      }
-      if (rows.length === 1) {
-        const unico = rows[0];
-        navigateToEditarLancamento(unico);
-        return;
-      }
-      // N>1 → abre Sheet
-      setDrillCelulaState({ cel, lancamentos: rows });
-    } catch (e) {
-      console.error('[handleDrillCelula]', e);
-      toast.error('Erro ao buscar lançamentos da célula.');
-    }
-  };
-
-  /**
-   * Onda 1 — Despacha para o state xParaEditar correto conforme tipo
-   * do lançamento e navega para 'lancamentos-zoot' preservando section
-   * de origem para retorno via onReturnFromEdit.
-   */
-  const navigateToEditarLancamento = (l: Lancamento) => {
-    setEditOriginSection(section);
-    setDrillCelulaState(null);
-    if (l.tipo === 'compra') {
-      setCompraParaEditar(l);
-      setSection('lancamentos-zoot');
-    } else if (l.tipo === 'venda') {
-      setVendaParaEditar(l);
-      setSection('lancamentos-zoot');
-    } else if (l.tipo === 'abate') {
-      setAbateParaEditar(l);
-      setSection('lancamentos-zoot');
-    } else if (l.tipo === 'transferencia_entrada' || l.tipo === 'transferencia_saida') {
-      setTransferenciaParaEditar(l);
-      setSection('lancamentos-zoot');
-    } else {
-      // Nascimento/Morte/Consumo — formulário inline, sem modal standalone.
-      toast.info('Edição inline disponível em Movimentações');
-    }
-  };
 
   useEffect(() => {
     if (!clienteAtual?.id) return;
@@ -626,16 +524,15 @@ export default function V2Index() {
       <V2LancamentosWrapper
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
-        compraParaEditar={compraParaEditar}
-        transferenciaParaEditar={transferenciaParaEditar}
         cenariosPermitidos={['realizado', 'programado']}
+        abaInicial={drillFiltro?.aba}
+        initialAnoFiltro={drillFiltro?.ano}
+        initialMesFiltro={drillFiltro?.mes}
+        initialCategoria={drillFiltro?.categoria}
+        cenarioInicial={drillFiltro?.cenario}
         onReturnFromEdit={() => {
-          // Onda 1: usa editOriginSection (drill-down vindo de
-          // 'evolucao-categoria') quando setado; senão fallback legado.
-          const dest = editOriginSection ?? 'conferencia-lancamentos';
-          setEditOriginSection(null);
           limparEdicaoAvancada();
-          setSection(dest);
+          setSection('conferencia-lancamentos');
         }}
         onNavegarChuvas={() => setSection('chuvas-lancamento')}
         onNavegarMapaRebanho={() => {
@@ -726,7 +623,29 @@ export default function V2Index() {
         initialAno={ano}
         initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
         ocultarFiltrosPeriodo
-        onDrillCelula={handleDrillCelula}
+        onNavigateToEvolCatLista={(filtro) => {
+          // Drill da Conferência Categoria → navega para LancamentosTab
+          // filtrado por mês/ano/cenário/aba/categoria. Mesmo padrão do
+          // FluxoAnualTab: navegação filtrada, sem editor standalone.
+          // Mapeamento coluna → aba:
+          //   ent_ext   → 'entrada'
+          //   sai_ext   → 'saida'
+          //   evol_ent  → 'reclassificacao'
+          //   evol_sai  → 'reclassificacao'
+          //   (sem coluna ou Saldo Ini/Fin) → 'saida' default (drill mensal)
+          const aba: 'entrada' | 'saida' | 'reclassificacao' =
+            filtro.coluna === 'ent_ext' ? 'entrada'
+            : filtro.coluna === 'evol_ent' || filtro.coluna === 'evol_sai' ? 'reclassificacao'
+            : 'saida';
+          setDrillFiltro({
+            aba,
+            ano: filtro.ano,
+            mes: String(filtro.mes).padStart(2, '0'),
+            cenario: filtro.cenario,
+            categoria: filtro.categoria ?? '',
+          });
+          setSection('lancamentos-zoot');
+        }}
       />
     );
     if (section === 'areas-meta') return <V2AreasMeta ano={ano} />;
@@ -924,16 +843,6 @@ export default function V2Index() {
 
       {/* MOBILE BOTTOM NAV — fixed bottom-0 + md:hidden internos no componente */}
       <V2MobileNav activeSection={section} onNavigate={setSection} />
-
-      {/* Onda 1 drill-down — Sheet listando lançamentos da célula quando N>1.
-          Montado a nível V2Index para sobreviver à navegação entre sections. */}
-      <DrillDownLancamentosSheet
-        open={drillCelulaState !== null}
-        onClose={() => setDrillCelulaState(null)}
-        cel={drillCelulaState?.cel ?? null}
-        lancamentos={drillCelulaState?.lancamentos ?? []}
-        onSelectEditable={(l) => navigateToEditarLancamento(l)}
-      />
 
     </div>
   );

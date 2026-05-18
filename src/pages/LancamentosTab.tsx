@@ -88,6 +88,8 @@ interface Props {
   initialAnoFiltro?: string;
   /** Initial month filter for historico view */
   initialMesFiltro?: string;
+  /** Categoria pré-selecionada ao abrir em modo filtrado (drill da Conferência Categoria). */
+  initialCategoria?: string;
   /** Cenário inicial para reclassificação quando navegado da Evolução por Categoria */
   initialReclassCenario?: 'realizado' | 'meta';
   /**
@@ -260,7 +262,7 @@ function matchFornecedor(options: FornecedorOption[], params: { id?: string | nu
   });
 }
 
-export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialReclassCenario, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: Props) {
+export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, onCountFinanceiros, abaInicial, onBackToConciliacao, dataInicial, backLabel, abateParaEditar, vendaParaEditar, compraParaEditar, transferenciaParaEditar, reclassParaEditar, morteParaEditar, consumoParaEditar, onReturnFromEdit, initialAnoFiltro, initialMesFiltro, initialCategoria, initialReclassCenario, onNavegarChuvas, cenarioInicial, cenariosPermitidos }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const { clienteAtual } = useCliente();
   const nomeFazenda = fazendaAtual?.nome || '';
@@ -350,6 +352,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   useEffect(() => {
     if (initialMesFiltro) setMesFiltro(String(initialMesFiltro));
   }, [initialMesFiltro]);
+
+  // Categoria pré-selecionada via drill da Conferência Categoria.
+  useEffect(() => {
+    if (initialCategoria) setCategoria(initialCategoria as Categoria);
+  }, [initialCategoria]);
+
   const [compraDetalhes, setCompraDetalhes] = useState<CompraDetalhes | null>(null);
   const [compraDialogOpen, setCompraDialogOpen] = useState(false);
   const [abateDetalhes, setAbateDetalhes] = useState<AbateDetalhes | null>(null);
