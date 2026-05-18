@@ -35,6 +35,8 @@ import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
+import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
+import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
 import {
@@ -229,6 +231,23 @@ export default function V2FechamentoPeriodo() {
     zootComp, lancFinAnoAnt, lancFinAnoCorrente,
   ]);
 
+  // Marco 2.5 Fase 1 — BlocoResumoExecutivo renderizado em paralelo a
+  // FluxoCaixa (legado). Reutiliza dados já carregados (lancFinAnoAnt + grid
+  // + planFin.saldoInicial). Substituição oficial do FluxoCaixa fica para
+  // após validação cruzada (entradas/saídas/caixa devem bater com renderer
+  // antigo dentro da tolerância R$ 1).
+  const blocoResumoData = useMemo(() => {
+    if (!lancFinAnoAnt || !grid) return null;
+    return buildBlocoResumoExecutivo({
+      lancFin2025: lancFinAnoAnt,
+      gridMeta2026: grid,
+      saldoInicialMeta: planFin.saldoInicial,
+      caixaSaldoAnoAntMensal: painel.caixaIndicador?.serieAnoAnt?.slice(1),
+    });
+  }, [lancFinAnoAnt, grid, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
+
+  const saldoInicialReal = painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN;
+
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
   }
@@ -254,6 +273,19 @@ export default function V2FechamentoPeriodo() {
         ano={ano}
         mostrarAnoCorrente={true}
       />
+
+      {/* Marco 2.5 Fase 1: BlocoResumoExecutivo renderizado em paralelo a
+          FluxoCaixa (legado). Validação cruzada de entradas/saídas/caixa
+          pendente — FluxoCaixa continua sendo a fonte soberana até confirmar
+          paridade. */}
+      {blocoResumoData && (
+        <BlocoResumoExecutivo
+          data={blocoResumoData}
+          saldoInicialMeta={planFin.saldoInicial}
+          saldoInicialReal={saldoInicialReal}
+          desfocarDashboard={false}
+        />
+      )}
 
       {loading && (
         <div className="p-4 text-sm text-muted-foreground">Carregando dados do fechamento…</div>
