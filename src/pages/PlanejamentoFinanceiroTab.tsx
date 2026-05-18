@@ -500,15 +500,15 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                           <React.Fragment key={sub.key}>
                             {/* Auto */}
                             <tr className="border-b border-border/10">
-                              <td className="px-1 py-1 text-left leading-tight font-normal text-[12px] italic text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 40 }} title={bloqueio.bloqueado ? bloqueio.motivo : `${sub.subcentro} (auto)`}>
+                              <td className="px-1 py-0.5 text-left leading-tight font-normal text-[10px] text-muted-foreground/70 sticky left-0 z-10 border-r-2 border-border/40 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" style={{ background: BG_ZEBRA, paddingLeft: 24 }} title={bloqueio.bloqueado ? bloqueio.motivo : `${sub.subcentro} (auto)`}>
                                 {sub.subcentro} (auto)
                               </td>
                               {autoMeses!.map((v, i) => (
-                                <td key={i} className={`px-1 py-1 text-right leading-tight text-[10px] italic opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>
+                                <td key={i} className={`px-1 py-0.5 text-right leading-tight text-[10px] opacity-70 ${cor}${trimBorder(i)}`} style={{ background: BG_ZEBRA }}>
                                   {fmtCompact(v)}
                                 </td>
                               ))}
-                              <td className={`px-1 py-1 text-right leading-tight text-[10px] italic font-medium sticky right-0 z-10 border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
+                              <td className={`px-1 py-0.5 text-right leading-tight text-[10px] font-medium sticky right-0 z-10 border-l-2 border-border opacity-70 ${cor}`} style={{ background: BG_MUTED }}>
                                 {fmtCompact(autoTotal)}
                               </td>
                             </tr>
