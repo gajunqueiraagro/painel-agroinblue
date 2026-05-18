@@ -149,14 +149,14 @@ function GrupoRow({
  */
 function LinhaPlaceholder({ label }: { label: string }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30">
+    <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0">
       <div className="truncate text-[11px] italic text-muted-foreground">
         {label} <span className="text-[10px]">(aguarda plano de contas)</span>
       </div>
-      <div className="text-right text-muted-foreground">—</div>
-      <div className="text-right text-muted-foreground">—</div>
-      <div className="text-right text-muted-foreground">—</div>
-      <div className="text-right text-muted-foreground">—</div>
+      <div className="text-right tabular-nums text-[11px] text-muted-foreground">—</div>
+      <div className="text-right tabular-nums text-[11px] text-muted-foreground">—</div>
+      <div className="text-right tabular-nums text-[10px] font-medium text-muted-foreground">—</div>
+      <div className="text-right tabular-nums text-[10px] font-medium text-muted-foreground">—</div>
     </div>
   );
 }
