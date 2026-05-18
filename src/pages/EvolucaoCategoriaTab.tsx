@@ -17,6 +17,20 @@ interface Props {
   onNavigateToReclass?: (filtro?: { ano: string; mes: number; cenario?: 'realizado' | 'meta' }) => void;
   /** Abre a LISTA de movimentações (aba "Evol. Cat.") com filtros pré-aplicados — usado no clique das células numéricas. */
   onNavigateToEvolCatLista?: (filtro: { ano: string; mes: number; cenario: 'realizado' | 'meta' }) => void;
+  /**
+   * Onda 1 drill-down — abre Sheet com lançamentos específicos da célula
+   * (categoria × coluna). Aplicável APENAS em Entrada Externa e Saída
+   * Externa. Quando passado, tem precedência sobre `onNavigateToEvolCatLista`
+   * nessas 2 colunas. Demais células seguem callback legado V1.
+   */
+  onDrillCelula?: (cel: {
+    ano: string;
+    mes: number;
+    cenario: 'realizado' | 'meta';
+    categoria: string;
+    categoriaNome?: string;
+    coluna: 'ent_ext' | 'sai_ext';
+  }) => void;
   onNavigateToFechamentoPastos?: () => void;
   onNavigateToValorRebanho?: () => void;
   onNavigateToMovimentacoes?: () => void;
@@ -29,7 +43,7 @@ const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 
 type ModoVisualizacao = 'cabeca' | 'kg_medio' | 'kg_total';
 
-export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes, onNavigateToMetaGmd, ocultarFiltrosPeriodo }: Props) {
+export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, onNavigateToReclass, onNavigateToEvolCatLista, onDrillCelula, onNavigateToFechamentoPastos, onNavigateToValorRebanho, onNavigateToMovimentacoes, onNavigateToMetaGmd, ocultarFiltrosPeriodo }: Props) {
   const { fazendaAtual } = useFazenda();
   const fazendaId = fazendaAtual?.id;
 
@@ -440,6 +454,45 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                     : '';
                   const cellTitle = handleCellClick ? 'Abrir lista de movimentações deste mês (Evol. Cat.)' : undefined;
 
+                  // Onda 1 drill-down: Entrada Externa e Saída Externa preferem
+                  // `onDrillCelula` (filtra por categoria+coluna específica)
+                  // quando passado E o valor > 0. Demais células seguem
+                  // `handleCellClick` legado (V1 compat).
+                  const drillEntActive = !!onDrillCelula && d.entradas_externas > 0;
+                  const drillSaiActive = !!onDrillCelula && d.saidas_externas > 0;
+                  const drillEntClick = drillEntActive
+                    ? () => onDrillCelula!({
+                        ano: anoFiltro,
+                        mes: Number(mesFiltro),
+                        cenario: statusFiltro,
+                        categoria: d.categoria_codigo,
+                        categoriaNome: d.categoria_nome,
+                        coluna: 'ent_ext',
+                      })
+                    : handleCellClick;
+                  const drillSaiClick = drillSaiActive
+                    ? () => onDrillCelula!({
+                        ano: anoFiltro,
+                        mes: Number(mesFiltro),
+                        cenario: statusFiltro,
+                        categoria: d.categoria_codigo,
+                        categoriaNome: d.categoria_nome,
+                        coluna: 'sai_ext',
+                      })
+                    : handleCellClick;
+                  const drillEntClickable = drillEntActive
+                    ? 'cursor-pointer hover:bg-muted/40 transition-colors'
+                    : cellClickable;
+                  const drillSaiClickable = drillSaiActive
+                    ? 'cursor-pointer hover:bg-muted/40 transition-colors'
+                    : cellClickable;
+                  const drillEntTitle = drillEntActive
+                    ? 'Editar lançamentos desta célula (Entrada Externa)'
+                    : cellTitle;
+                  const drillSaiTitle = drillSaiActive
+                    ? 'Editar lançamentos desta célula (Saída Externa)'
+                    : cellTitle;
+
                   return (
                     <tr key={d.categoria_codigo + i} className={`${rowBg} ${isSeparator ? 'border-t border-border' : ''}`}>
                       <td className={`px-1 py-0.5 font-semibold text-foreground sticky left-0 z-10 text-[9px] ${stickyBg}`} style={{ width: 90 }}>
@@ -451,10 +504,10 @@ export function EvolucaoCategoriaTab({ initialAno, initialMes, initialCenario, o
                       <td className="px-0.5 py-0.5 text-right text-muted-foreground bg-foreground/[0.03]">
                         {fmtPeso(d.peso_medio_inicial)}
                       </td>
-                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
+                      <td onClick={drillEntClick} title={drillEntTitle} className={`px-0.5 py-0.5 text-right font-medium ${drillEntClickable} ${d.entradas_externas > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'entradas_externas')}
                       </td>
-                      <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
+                      <td onClick={drillSaiClick} title={drillSaiTitle} className={`px-0.5 py-0.5 text-right font-medium ${drillSaiClickable} ${d.saidas_externas > 0 ? 'text-destructive' : 'text-muted-foreground/30'}`}>
                         {getVal(d, 'saidas_externas')}
                       </td>
                       <td onClick={handleCellClick} title={cellTitle} className={`px-0.5 py-0.5 text-right font-medium ${cellClickable} ${d.evol_cat_entrada > 0 ? 'text-green-700' : 'text-muted-foreground/30'}`}>

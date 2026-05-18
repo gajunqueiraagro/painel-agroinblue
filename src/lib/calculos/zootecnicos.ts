@@ -51,8 +51,8 @@ export interface ConciliacaoCategoria {
 // Helpers internos
 // ---------------------------------------------------------------------------
 
-const TIPOS_ENTRADA: TipoMovimentacao[] = ['nascimento', 'compra', 'transferencia_entrada'];
-const TIPOS_SAIDA: TipoMovimentacao[] = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
+export const TIPOS_ENTRADA: TipoMovimentacao[] = ['nascimento', 'compra', 'transferencia_entrada'];
+export const TIPOS_SAIDA: TipoMovimentacao[] = ['abate', 'venda', 'transferencia_saida', 'consumo', 'morte'];
 
 /**
  * Verifica se o tipo de movimentação é uma entrada.
