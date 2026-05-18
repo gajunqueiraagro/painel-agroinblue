@@ -306,6 +306,7 @@ export default function V2FechamentoPeriodo() {
           saldoInicialMeta={planFin.saldoInicial}
           saldoInicialReal={saldoInicialReal}
           desfocarDashboard={false}
+          modo="fechamento"
         />
       )}
 

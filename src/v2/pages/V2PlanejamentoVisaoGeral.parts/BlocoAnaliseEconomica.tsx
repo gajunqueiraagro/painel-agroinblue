@@ -249,11 +249,18 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       )}
     >
       <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-        <h2 className="text-sm font-semibold text-foreground">
-          Análise Econômica META
-        </h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-sm font-semibold text-foreground">
+            {mostrarAnoCorrente ? 'Análise Econômica Realizada — DRE' : 'Análise Econômica META'}
+          </h2>
+          {mostrarAnoCorrente && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+              Competência
+            </span>
+          )}
+        </div>
         <span className="text-[10px] text-muted-foreground">
-          Pecuária · regime de competência
+          {mostrarAnoCorrente ? 'Regime de competência • Realizado vs Meta' : 'Pecuária · regime de competência'}
         </span>
       </div>
 

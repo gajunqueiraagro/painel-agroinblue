@@ -40,6 +40,9 @@ interface Props {
   /** Callback ao clicar numa linha drilldown-friendly. Pai decide qual modal abrir.
    *  Linhas TOTAL ENTRADAS / TOTAL SAÍDAS NÃO disparam o callback (não têm modal). */
   onLinhaClick?: (id: LinhaModalKey) => void;
+  /** Modo de uso do bloco. 'planejamento' (default) usa título "Fluxo de Caixa Previsto";
+   *  'fechamento' usa "Fluxo de Caixa Realizado" com subtítulo de regime de caixa. */
+  modo?: 'planejamento' | 'fechamento';
 }
 
 // Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
@@ -238,7 +241,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento' }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -281,10 +284,18 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
 
   return (
     <section className="bg-card border border-border rounded-lg p-4 mb-4">
-      <h2 className="text-base font-bold text-foreground mb-1">Fluxo de Caixa Previsto</h2>
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <h2 className="text-base font-bold text-foreground">
+          {modo === 'fechamento' ? 'Fluxo de Caixa Realizado' : 'Fluxo de Caixa Previsto'}
+        </h2>
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-900/60">
+          Caixa
+        </span>
+      </div>
       <p className="text-xs text-muted-foreground mb-3">
-        Real 2025 (financeiro lançamentos) vs META 2026 (planejamento financeiro).
-        Gráfico: saldo acumulado projetado mês a mês.
+        {modo === 'fechamento'
+          ? 'Regime de caixa • Fluxo financeiro acumulado'
+          : 'Real 2025 (financeiro lançamentos) vs META 2026 (planejamento financeiro). Gráfico: saldo acumulado projetado mês a mês.'}
       </p>
 
       {!data.conciliado && (
