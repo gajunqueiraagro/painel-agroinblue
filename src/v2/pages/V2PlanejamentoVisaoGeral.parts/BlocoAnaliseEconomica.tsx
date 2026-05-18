@@ -56,6 +56,15 @@ function corPctSubtotal(v: number | null): string {
   return v > 0 ? 'text-emerald-700' : 'text-rose-700';
 }
 
+// Cor semântica das colunas Real ano-1 e META.
+// Despesa é exibida com sinal '−' prefixo (formatBRLDespesa), portanto sempre destructive.
+// Demais linhas: pelo sinal real do valor.
+function corValor(v: number | null, tipoSinal: TipoSinal): string {
+  if (v == null || !Number.isFinite(v) || v === 0) return 'text-muted-foreground';
+  if (tipoSinal === 'despesa') return 'text-destructive';
+  return v > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-destructive';
+}
+
 function LinhaRow({
   linha,
   tipoSinal,
@@ -103,8 +112,8 @@ function LinhaRow({
   return (
     <div className={rowClass}>
       <div className={labelClass}>{linha.label}</div>
-      <div className={valorClass}>{fmt(linha.valorAnoAnt)}</div>
-      <div className={valorClass}>{fmt(linha.valor)}</div>
+      <div className={cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal))}>{fmt(linha.valorAnoAnt)}</div>
+      <div className={cn(valorClass, corValor(linha.valor, tipoSinal))}>{fmt(linha.valor)}</div>
       <div className={cn('text-right tabular-nums text-[10px] font-medium', destaque || destaqueFinal ? '' : 'text-muted-foreground')}>
         {formatDeltaRs(linha.deltaRs)}
       </div>
@@ -183,10 +192,10 @@ export function BlocoAnaliseEconomica({ data, desfocar }: Props) {
       {/* Header da tabela */}
       <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
         <div></div>
-        <div className="text-right">Real ano-1</div>
-        <div className="text-right text-orange-500">META</div>
-        <div className="text-right">Δ R$</div>
-        <div className="text-right">Δ%</div>
+        <div className="text-center">Real ano-1</div>
+        <div className="text-center text-orange-500">META</div>
+        <div className="text-center">Δ R$</div>
+        <div className="text-center">Δ%</div>
       </div>
 
       {/* Estrutura DRE */}
