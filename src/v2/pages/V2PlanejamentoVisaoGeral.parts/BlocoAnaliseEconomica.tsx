@@ -29,10 +29,10 @@ function formatBRL(v: number | null): string {
   return sign + fmtBRLAbs(v);
 }
 
-// Para linhas de dedução/custo: envolve em parênteses (valor sempre positivo no DTO).
+// Para linhas de dedução/custo: prefixa sinal negativo (valor sempre positivo no DTO).
 function formatBRLDespesa(v: number | null): string {
   if (v == null || !Number.isFinite(v)) return '—';
-  return `(${fmtBRLAbs(v)})`;
+  return `−${fmtBRLAbs(v)}`;
 }
 
 function formatDeltaRs(v: number | null): string {
@@ -75,32 +75,29 @@ function LinhaRow({
   const fmt = tipoSinal === 'despesa' ? formatBRLDespesa : formatBRL;
 
   const valorClass = cn(
-    'text-right tabular-nums',
-    destaque ? 'font-medium' : '',
+    'text-right tabular-nums text-[11px]',
+    destaque ? 'font-semibold' : '',
     destaqueFinal ? 'font-bold' : '',
   );
 
   const labelClass = cn(
     'truncate',
-    indentado ? 'pl-6 text-[12px] text-muted-foreground' : '',
-    destaque ? 'font-medium text-[13px]' : '',
-    destaqueFinal ? 'font-bold text-[14px] text-blue-900' : '',
-    !indentado && !destaque && !destaqueFinal ? 'text-[13px]' : '',
+    indentado ? 'pl-6 text-[10px] text-muted-foreground' : '',
+    destaque ? 'font-medium text-[11px]' : '',
+    destaqueFinal ? 'font-bold text-[11px] tracking-wide' : '',
+    !indentado && !destaque && !destaqueFinal ? 'text-[11px]' : '',
     italic ? 'italic' : '',
   );
 
   const rowClass = cn(
-    'grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-3 py-[5px]',
-    destaque ? 'bg-slate-100 dark:bg-slate-800/40' : '',
-    destaqueFinal ? 'bg-blue-50 dark:bg-blue-950/30 border-y border-blue-200 dark:border-blue-900/50' : '',
-    !destaque && !destaqueFinal ? 'border-t border-border/40' : '',
+    'grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
+    destaque ? 'bg-muted/40 border-t border-border/40' : '',
+    destaqueFinal ? 'bg-muted/60 border-t border-border' : '',
   );
 
   const deltaPctClass = cn(
-    'text-right tabular-nums text-[11px]',
+    'text-right tabular-nums text-[10px] font-medium',
     destaque || destaqueFinal ? corPctSubtotal(linha.deltaPct) : 'text-muted-foreground',
-    destaque ? 'font-medium' : '',
-    destaqueFinal ? 'font-bold' : '',
   );
 
   return (
@@ -108,7 +105,7 @@ function LinhaRow({
       <div className={labelClass}>{linha.label}</div>
       <div className={valorClass}>{fmt(linha.valorAnoAnt)}</div>
       <div className={valorClass}>{fmt(linha.valor)}</div>
-      <div className={cn('text-right tabular-nums text-[11px]', destaque || destaqueFinal ? '' : 'text-muted-foreground', destaque ? 'font-medium' : '', destaqueFinal ? 'font-bold' : '')}>
+      <div className={cn('text-right tabular-nums text-[10px] font-medium', destaque || destaqueFinal ? '' : 'text-muted-foreground')}>
         {formatDeltaRs(linha.deltaRs)}
       </div>
       <div className={deltaPctClass}>{formatPct(linha.deltaPct)}</div>
@@ -143,9 +140,9 @@ function GrupoRow({
  */
 function LinhaPlaceholder({ label }: { label: string }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-3 py-[5px] border-t border-border/40">
-      <div className="truncate text-[13px] italic text-muted-foreground">
-        {label} <span className="text-[11px]">(aguarda plano de contas)</span>
+    <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30">
+      <div className="truncate text-[11px] italic text-muted-foreground">
+        {label} <span className="text-[10px]">(aguarda plano de contas)</span>
       </div>
       <div className="text-right text-muted-foreground">—</div>
       <div className="text-right text-muted-foreground">—</div>
@@ -164,27 +161,27 @@ export function BlocoAnaliseEconomica({ data, desfocar }: Props) {
       )}
     >
       <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
-        <h2 className="text-base font-bold text-foreground">
+        <h2 className="text-sm font-semibold text-foreground">
           Análise Econômica META
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[10px] text-muted-foreground">
           Pecuária · regime de competência
         </span>
       </div>
 
       {desfocar ? (
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className="text-[10px] text-muted-foreground mb-2">
           Disponível apenas em modo Global.
         </p>
       ) : (
-        <p className="text-xs text-muted-foreground mb-3">
+        <p className="text-[10px] text-muted-foreground mb-2">
           DRE pecuária. Tributos serão calculados após reestruturação
           do plano de contas.
         </p>
       )}
 
       {/* Header da tabela */}
-      <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-3 py-2 bg-muted/60 text-[10px] uppercase tracking-[0.3px] font-medium text-muted-foreground rounded-t-md">
+      <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
         <div></div>
         <div className="text-right">Real ano-1</div>
         <div className="text-right text-orange-500">META</div>
