@@ -106,7 +106,15 @@ export function useMetaGmd(ano: string) {
       }
 
       if (inserts.length > 0) {
-        const { error } = await supabase.from('meta_gmd_mensal').insert(inserts);
+        // Idempotente vs UNIQUE meta_gmd_mensal_unique_categoria_mes_fazenda
+        // (fazenda_id, ano_mes, categoria). Antes era .insert() puro e
+        // colidia quando o DELETE acima falhava ou estava sob race condition.
+        const { error } = await supabase
+          .from('meta_gmd_mensal')
+          .upsert(inserts, {
+            onConflict: 'fazenda_id,ano_mes,categoria',
+            ignoreDuplicates: false,
+          });
         if (error) throw error;
       }
 
