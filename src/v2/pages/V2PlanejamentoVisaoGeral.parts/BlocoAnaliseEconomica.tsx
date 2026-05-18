@@ -52,17 +52,19 @@ function formatPct(v: number | null): string {
 
 type TipoSinal = 'receita' | 'despesa' | 'variacao' | 'subtotal';
 
-function corPctSubtotal(v: number | null): string {
-  if (v == null || !Number.isFinite(v) || v === 0) return 'text-muted-foreground';
-  return v > 0 ? 'text-emerald-700' : 'text-rose-700';
-}
-
 // Cor semântica das colunas Real ano-1 e META.
 // Despesa é exibida com sinal '−' prefixo (formatBRLDespesa), portanto sempre destructive.
 // Demais linhas: pelo sinal real do valor.
 function corValor(v: number | null, tipoSinal: TipoSinal): string {
   if (v == null || !Number.isFinite(v) || v === 0) return 'text-muted-foreground';
   if (tipoSinal === 'despesa') return 'text-destructive';
+  return v > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-destructive';
+}
+
+// Cor semântica das colunas Δ R$ e Δ% — padrão alinhado com corValor:
+// positivo → azul, negativo → destructive, zero/null → muted.
+function corDelta(v: number | null): string {
+  if (v == null || !Number.isFinite(v) || v === 0) return 'text-muted-foreground';
   return v > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-destructive';
 }
 
@@ -85,7 +87,8 @@ function LinhaRow({
   const fmt = tipoSinal === 'despesa' ? formatBRLDespesa : formatBRL;
 
   const valorClass = cn(
-    'text-right tabular-nums text-[11px]',
+    'text-right tabular-nums',
+    indentado ? 'text-[10px]' : 'text-[11px]',
     destaque ? 'font-semibold' : '',
     destaqueFinal ? 'font-bold' : '',
   );
@@ -100,14 +103,18 @@ function LinhaRow({
   );
 
   const rowClass = cn(
-    'grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
+    'grid grid-cols-[minmax(220px,420px)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
     destaque ? 'bg-muted/40 border-t border-border/40' : '',
     destaqueFinal ? 'bg-muted/60 border-t border-border' : '',
   );
 
+  const deltaRsClass = cn(
+    'text-right tabular-nums text-[10px] font-medium',
+    corDelta(linha.deltaRs),
+  );
   const deltaPctClass = cn(
     'text-right tabular-nums text-[10px] font-medium',
-    destaque || destaqueFinal ? corPctSubtotal(linha.deltaPct) : 'text-muted-foreground',
+    corDelta(linha.deltaPct),
   );
 
   return (
@@ -115,9 +122,7 @@ function LinhaRow({
       <div className={labelClass}>{linha.label}</div>
       <div className={cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal))}>{fmt(linha.valorAnoAnt)}</div>
       <div className={cn(valorClass, corValor(linha.valor, tipoSinal))}>{fmt(linha.valor)}</div>
-      <div className={cn('text-right tabular-nums text-[10px] font-medium', destaque || destaqueFinal ? '' : 'text-muted-foreground')}>
-        {formatDeltaRs(linha.deltaRs)}
-      </div>
+      <div className={deltaRsClass}>{formatDeltaRs(linha.deltaRs)}</div>
       <div className={deltaPctClass}>{formatPct(linha.deltaPct)}</div>
     </div>
   );
@@ -150,7 +155,7 @@ function GrupoRow({
  */
 function LinhaPlaceholder({ label }: { label: string }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0">
+    <div className="grid grid-cols-[minmax(220px,420px)_110px_110px_110px_70px] gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0">
       <div className="truncate text-[11px] italic text-muted-foreground">
         {label} <span className="text-[10px]">(aguarda plano de contas)</span>
       </div>
@@ -191,7 +196,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano }: Props) {
       )}
 
       {/* Header da tabela */}
-      <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <div className="grid grid-cols-[minmax(220px,420px)_110px_110px_110px_70px] gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
         <div></div>
         <div className="text-center">Real {ano - 1}</div>
         <div className="text-center text-orange-500">Meta {ano}</div>
