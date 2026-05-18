@@ -8,11 +8,13 @@
  * da tabela lancamentos), nunca por data_pagamento.
  *
  * Cada função é pura: recebe params (clienteId, ano, cenario) + supabase client,
- * retorna { valor, qtdeLanc, breakdown? } | null.
+ * retorna { meses[12], qtdeLancMensal[12], breakdown?: Record<string, number[12]> } | null.
+ *
+ * Soberania = mensal. Anual = somaAnualMeses(result.meses) — derivado, nunca armazenado.
  *
  * Convenção de retorno:
- *   null                         = sem dados na competência (GAP de cadastro)
- *   { valor: 0, qtdeLanc: 0 }    = competência válida mas zerada (dado real)
+ *   null                                                  = sem dados na competência (GAP de cadastro)
+ *   { meses: [0×12], qtdeLancMensal: [0×12], breakdown }  = competência válida mas zerada (dado real)
  *
  * Fase 1: bônus NÃO tratado. Receita Bruta = valor_total. Deduções = soma dos 4
  * campos de desconto. Bônus fica para Fase 2, após investigar se valor_total
@@ -23,9 +25,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type CenarioZoot = 'realizado' | 'meta';
 
 export interface AgregadoZootCompResult {
-  valor: number;
-  qtdeLanc: number;
-  breakdown?: Record<string, number>;
+  meses: number[];                              // [12] valores mensais (0=Jan, 11=Dez)
+  qtdeLancMensal: number[];                     // [12] contagens mensais
+  breakdown?: Record<string, number[]>;         // [12] valores por categoria/tipo
+}
+
+/** Helper: anual derivado, NUNCA armazenado na interface. */
+export function somaAnualMeses(meses: number[]): number {
+  return meses.reduce((s, v) => s + v, 0);
 }
 
 interface ParamsAgregadorZootComp {
@@ -75,7 +82,8 @@ function inicioAnoSeguinte(ano: number): string {
  * NÃO usar data_pagamento. NÃO usar fluxo de caixa. NÃO usar competência financeira.
  *
  * @returns null quando não há nenhuma linha no ano (GAP de cadastro zootécnico).
- *          { valor: 0, qtdeLanc: 0, breakdown } quando há linhas mas todas zeradas (dado real).
+ *          { meses: [0×12], qtdeLancMensal: [0×12], breakdown } quando há linhas
+ *          mas todas zeradas (dado real).
  */
 export async function agregaReceitaPecZootComp(
   params: ParamsAgregadorZootComp,
@@ -98,16 +106,24 @@ export async function agregaReceitaPecZootComp(
 
   if (rows.length === 0) return null;
 
-  const breakdown: Record<string, number> = { abate: 0, venda: 0, venda_pe: 0 };
-  let valor = 0;
+  const meses = new Array(12).fill(0);
+  const qtdeLancMensal = new Array(12).fill(0);
+  const breakdown: Record<string, number[]> = {
+    abate: new Array(12).fill(0),
+    venda: new Array(12).fill(0),
+    venda_pe: new Array(12).fill(0),
+  };
 
   for (const row of rows) {
     const v = Number(row.valor_total ?? 0);
-    valor += v;
-    breakdown[row.tipo] += v;
+    const mes = Number((row.data as string).substring(5, 7)) - 1;
+    if (mes < 0 || mes > 11) continue;
+    meses[mes] += v;
+    qtdeLancMensal[mes] += 1;
+    breakdown[row.tipo][mes] += v;
   }
 
-  return { valor, qtdeLanc: rows.length, breakdown };
+  return { meses, qtdeLancMensal, breakdown };
 }
 
 /**
@@ -123,8 +139,8 @@ export async function agregaReceitaPecZootComp(
  * nesta função. Fica para investigação da Fase 2.
  *
  * @returns null se não há venda/abate cadastrado no ano (GAP — não há base de venda).
- *          { valor: 0, qtdeLanc: N, breakdown } quando há venda/abate mas sem
- *          dedução preenchida (dado real: cliente vende sem registrar Funrural/descontos).
+ *          { meses: [0×12], qtdeLancMensal: [N×12], breakdown } quando há venda/abate
+ *          mas sem dedução preenchida (dado real: cliente vende sem registrar Funrural/descontos).
  */
 export async function agregaDeducoesZootComp(
   params: ParamsAgregadorZootComp,
@@ -147,27 +163,31 @@ export async function agregaDeducoesZootComp(
 
   if (rows.length === 0) return null;
 
-  const breakdown: Record<string, number> = {
-    deducoes_gerais: 0,
-    funrural: 0,
-    desconto_qualidade: 0,
-    outros_descontos: 0,
+  const meses = new Array(12).fill(0);
+  const qtdeLancMensal = new Array(12).fill(0);
+  const breakdown: Record<string, number[]> = {
+    deducoes_gerais: new Array(12).fill(0),
+    funrural: new Array(12).fill(0),
+    desconto_qualidade: new Array(12).fill(0),
+    outros_descontos: new Array(12).fill(0),
   };
-  let valor = 0;
 
   for (const row of rows) {
     const d  = Number(row.deducoes ?? 0);
     const f  = Number(row.desconto_funrural ?? 0);
     const dq = Number(row.desconto_qualidade ?? 0);
     const o  = Number(row.outros_descontos ?? 0);
-    breakdown.deducoes_gerais     += d;
-    breakdown.funrural            += f;
-    breakdown.desconto_qualidade  += dq;
-    breakdown.outros_descontos    += o;
-    valor += d + f + dq + o;
+    const mes = Number((row.data as string).substring(5, 7)) - 1;
+    if (mes < 0 || mes > 11) continue;
+    breakdown.deducoes_gerais[mes]     += d;
+    breakdown.funrural[mes]            += f;
+    breakdown.desconto_qualidade[mes]  += dq;
+    breakdown.outros_descontos[mes]    += o;
+    meses[mes] += d + f + dq + o;
+    qtdeLancMensal[mes] += 1;
   }
 
-  return { valor, qtdeLanc: rows.length, breakdown };
+  return { meses, qtdeLancMensal, breakdown };
 }
 
 /**
@@ -176,9 +196,9 @@ export async function agregaDeducoesZootComp(
  * Fonte: tabela `lancamentos`, tipo='compra'.
  * Campo de competência: `data`. Campo de valor: `valor_total`.
  *
- * Diferente das outras: retorna { valor: 0, qtdeLanc: 0 } quando não há compra
- * no ano, porque ausência de reposição planejada é estado válido (cliente pode
- * estar em ciclo de venda sem reposição) — NÃO é GAP de cadastro.
+ * Diferente das outras: retorna estrutura mensal zerada (arrays de 12 zeros)
+ * quando não há compra no ano, porque ausência de reposição planejada é estado
+ * válido (cliente pode estar em ciclo de venda sem reposição) — NÃO é GAP de cadastro.
  */
 export async function agregaReposicaoBovinosZootComp(
   params: ParamsAgregadorZootComp,
@@ -199,10 +219,15 @@ export async function agregaReposicaoBovinosZootComp(
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as RowCompra[];
 
-  let valor = 0;
+  const meses = new Array(12).fill(0);
+  const qtdeLancMensal = new Array(12).fill(0);
   for (const row of rows) {
-    valor += Number(row.valor_total ?? 0);
+    const v = Number(row.valor_total ?? 0);
+    const mes = Number((row.data as string).substring(5, 7)) - 1;
+    if (mes < 0 || mes > 11) continue;
+    meses[mes] += v;
+    qtdeLancMensal[mes] += 1;
   }
 
-  return { valor, qtdeLanc: rows.length };
+  return { meses, qtdeLancMensal };
 }
