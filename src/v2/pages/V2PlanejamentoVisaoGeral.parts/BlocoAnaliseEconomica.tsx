@@ -14,6 +14,7 @@ import type {
 interface Props {
   data: Bloco3AnaliseEconomica;
   desfocar: boolean;
+  ano: number;
 }
 
 const fmtBRLAbs = (v: number): string =>
@@ -161,7 +162,7 @@ function LinhaPlaceholder({ label }: { label: string }) {
   );
 }
 
-export function BlocoAnaliseEconomica({ data, desfocar }: Props) {
+export function BlocoAnaliseEconomica({ data, desfocar, ano }: Props) {
   return (
     <section
       className={cn(
@@ -192,8 +193,8 @@ export function BlocoAnaliseEconomica({ data, desfocar }: Props) {
       {/* Header da tabela */}
       <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px_70px] gap-1 items-center px-2 py-1 bg-muted/40 text-[10px] uppercase tracking-wide text-muted-foreground">
         <div></div>
-        <div className="text-center">Real ano-1</div>
-        <div className="text-center text-orange-500">META</div>
+        <div className="text-center">Real {ano - 1}</div>
+        <div className="text-center text-orange-500">Meta {ano}</div>
         <div className="text-center">Δ R$</div>
         <div className="text-center">Δ%</div>
       </div>

@@ -462,21 +462,21 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
           - Fazenda op.:     Produção → Estrutura → Movimentação → Rateio Adm */}
       {isAdministrativo ? (
         <>
-          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} ano={ano} />
           <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
           <BlocoRateioAdministrativo />
         </>
       ) : isFazendaOperacional ? (
         <>
           <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
-          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} ano={ano} />
           <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
           <BlocoRateioAdministrativo />
         </>
       ) : (
         <>
           <BlocoProducaoPecuaria data={dto.bloco2_producaoPecuaria} />
-          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} />
+          <BlocoAnaliseEconomica data={dto.bloco3_analiseEconomica} desfocar={!isGlobal} ano={ano} />
           <BlocoFinanceiroCapital data={dto.bloco4_financeiroCapital} />
           <BlocoMovimentacaoRebanho data={dto.bloco5_movimentacaoRebanho} />
         </>
