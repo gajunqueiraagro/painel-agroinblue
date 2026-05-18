@@ -28,6 +28,8 @@ import {
   isSaida as isFinSaida,
   isEntrada as isFinEntrada,
   isCusteioProducaoPecuaria,
+  isCustoVariavelPecuaria,
+  isCustoFixoPecuaria,
   isCusteioProducaoAgricultura,
   isJurosPecuaria,
   isJurosAgricultura,
@@ -194,6 +196,16 @@ export function agregaPorPredicado(
 
 export function agregaCusteioPecSemJuros(lancFin: FinanceiroLancamento[], ano: number): number[] {
   return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCusteioProducaoPecuaria);
+}
+
+/** Marco 1.1.E — Custo Variável Pecuária separado (grupo_custo estrito). */
+export function agregaCustoVariavelPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoVariavelPecuaria);
+}
+
+/** Marco 1.1.E — Custo Fixo Pecuária separado (grupo_custo estrito). */
+export function agregaCustoFixoPec(lancFin: FinanceiroLancamento[], ano: number): number[] {
+  return agregaPorPredicadoGenerico(makeRealizadoSource(lancFin, ano), isCustoFixoPecuaria);
 }
 
 export function agregaJurosPec(lancFin: FinanceiroLancamento[], ano: number): number[] {

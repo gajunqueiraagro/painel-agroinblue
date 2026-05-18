@@ -339,6 +339,16 @@ export function isCusteioProducaoPecuaria(l: LancamentoClassificavel): boolean {
       || l.grupo_custo === 'Custo Variável Pecuária';
 }
 
+/** Filtro estrito por `grupo_custo='Custo Variável Pecuária'`. Marco 1.1.E. */
+export function isCustoVariavelPecuaria(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Variável Pecuária';
+}
+
+/** Filtro estrito por `grupo_custo='Custo Fixo Pecuária'`. Marco 1.1.E. */
+export function isCustoFixoPecuaria(l: LancamentoClassificavel): boolean {
+  return l.grupo_custo === 'Custo Fixo Pecuária';
+}
+
 /** É Receita operacional (macro_custo = "receitas") */
 export function isReceita(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'receitas';

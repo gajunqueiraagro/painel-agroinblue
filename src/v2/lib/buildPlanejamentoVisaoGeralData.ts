@@ -22,6 +22,9 @@ import {
   agregaOutrasReceitas,
   agregaInvFazendaPec,
   agregaJurosPec,
+  agregaDeducoes,
+  agregaCustoVariavelPec,
+  agregaCustoFixoPec,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 
 import type {
@@ -1060,15 +1063,32 @@ function buildBloco3AnaliseEconomica(
 
   // ─── 2. (−) Deduções de Receita ──────────────────────────────
   // Fase 2 DRE: Deduções migra de fonte caixa para competência zoot
-  // (agregadosZootCompetencia). Sem fallback caixa. Detalhe único = total.
-  // Marco 1.1.E: vsAnoFechado vem do mesmo agregador chamado com (ano - 1).
+  // (agregadosZootCompetencia). Sem fallback caixa para META. Detalhe único = total.
+  //
+  // Marco 1.1.E (FIX 1) — Deduções ano-1 COMPOSTA:
+  //   1) zoot REAL ano-1 (agregaDeducoesZootComp) — preferida
+  //   2) fallback financeiro REAL ano-1 (agregaDeducoes em financeiro_lancamentos_v2)
+  //      — só usado quando o cliente registrou deduções como lançamentos
+  //      financeiros históricos sem cadastro zootécnico
+  //   3) null se ambas vazias
+  // Padrão de compatibilidade histórica: aplica APENAS em vsAnoFechado.valor;
+  // META segue zoot puro (deducoesMeta intacto).
   const deducoesCD = buildComparativoFromZootMeses(
     input.zootComp?.deducoes?.meses ?? null,
     input.zootComp?.deducoesAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
   );
   const deducoesMeta = deducoesCD.valor;
-  const deducoesAnoAnt = deducoesCD.vsAnoFechado.valor;
+  const deducoesZootAnoAnt = deducoesCD.vsAnoFechado.valor;
+  const deducoesFinAnoAnt = (input.lancFinAnoAnt && input.ano != null)
+    ? somaAnualMeses(agregaDeducoes(input.lancFinAnoAnt, input.ano - 1))
+    : null;
+  const deducoesAnoAnt: number | null =
+    deducoesZootAnoAnt != null && deducoesZootAnoAnt > 0
+      ? deducoesZootAnoAnt
+      : (deducoesFinAnoAnt != null && deducoesFinAnoAnt > 0
+        ? deducoesFinAnoAnt
+        : null);
   const deducoes: AnaliseEconomicaGrupo = {
     label: '2. (−) Deduções de Receita',
     total: mkLinha('Deduções', deducoesMeta, deducoesAnoAnt),
@@ -1083,14 +1103,24 @@ function buildBloco3AnaliseEconomica(
   // ─── 3. (−) Custeio Pecuária ─────────────────────────────────
   // Marco 1.1.E: Custeio Pec TOTAL ano-1 vem do PC-100 (custeioPecIndicador
   // .serieAnoAnt[12], regime CAIXA via financeiro_lancamentos_v2 REALIZADO).
-  // Detalhe Var/Fix ano-1 fica null — não distribuir o total seria inventar
-  // fonte paralela; sem cadastro REAL por subcentro ano-1 disponível.
+  // PC-100 mantém autoridade no Total — não substituir mesmo com agregadores
+  // disponíveis (pequenos deltas de arredondamento entre pipelines são
+  // aceitos no Total; detalhe Var/Fix usa agregadores oficiais por grupo).
+  //
+  // FIX 2 — Custo Var/Fix ano-1 via agregadores oficiais por grupo_custo
+  // ('Custo Variável Pecuária' / 'Custo Fixo Pecuária'). Aplica APENAS em
+  // vsAnoFechado.valor; META intacta (custoVarMeta/custoFixMeta seguem do
+  // bloco3Custos sobre o grid META).
   const custeioPecMeta = bloco1.custeioPecuaria.valor;
   const custeioPecAnoAnt = painel?.custeioPecIndicador?.serieAnoAnt?.[12] ?? null;
   const custoVarMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
-  const custoVarAnoAnt = bloco3Custos.custoVariavelPecuaria.total.vsAnoFechado.valor;
+  const custoVarAnoAnt = (input.lancFinAnoAnt && input.ano != null)
+    ? somaAnualMeses(agregaCustoVariavelPec(input.lancFinAnoAnt, input.ano - 1))
+    : null;
   const custoFixMeta = bloco3Custos.custoFixoPecuaria.total.valor;
-  const custoFixAnoAnt = bloco3Custos.custoFixoPecuaria.total.vsAnoFechado.valor;
+  const custoFixAnoAnt = (input.lancFinAnoAnt && input.ano != null)
+    ? somaAnualMeses(agregaCustoFixoPec(input.lancFinAnoAnt, input.ano - 1))
+    : null;
 
   const custeioPecuaria: AnaliseEconomicaGrupo = {
     label: '3. (−) Custeio Pecuária',
