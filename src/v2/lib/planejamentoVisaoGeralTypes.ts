@@ -62,6 +62,7 @@ export const ORDEM_CENTROS_CUSTO_FIXO_PEC = [
 export type OrigemMetric =
   | 'pc100'                    // valor vem direto de PainelConsultorDataResult
   | 'planejamento_financeiro'  // valor vem do buildGrid() de usePlanejamentoFinanceiro
+  | 'zoot_competencia'         // valor vem de agregadosZootCompetencia (mensal por data do lançamento)
   | 'derivado'                 // valor é computado a partir de outros (ex: receitaPec/precoArr)
   | 'misto';                   // combinação de fontes (ex: caixa = saldoInicial + entradas − saídas)
 

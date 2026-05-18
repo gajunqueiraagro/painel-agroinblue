@@ -10,12 +10,19 @@
  * buildPlanejamentoVisaoGeralData.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { useCliente } from '@/contexts/ClienteContext';
+import { supabase } from '@/integrations/supabase/client';
 import { V2PageContent } from '@/v2/components/V2PageShell';
-import { buildPlanejamentoVisaoGeralData } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
+import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
+import {
+  agregaReceitaPecZootComp,
+  agregaDeducoesZootComp,
+  agregaReposicaoBovinosZootComp,
+} from '@/lib/painelConsultor/agregadosZootCompetencia';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
@@ -212,6 +219,8 @@ interface Props {
 
 export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const { fazendaAtual, isGlobal } = useFazenda();
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id;
 
   // Filtro atual da tela determina o layout. 3 modos:
   //   - Global:          layout completo (como hoje)
@@ -242,6 +251,38 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
   const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
 
+  // Fase 2 DRE Planejamento — agregadores por COMPETÊNCIA ZOOT (data do
+  // lançamento) para 3 linhas do Bloco 3 (Receita Pec, Deduções, Reposição
+  // Bovinos). Carregados aqui em paralelo; passados ao builder via campo
+  // opcional `zootComp` para manter buildPlanejamentoVisaoGeralData SYNC.
+  // Loading inicial: zootComp=null → builder retorna valor=null nessas linhas.
+  const [zootComp, setZootComp] = useState<ZootCompPreload | null>(null);
+  useEffect(() => {
+    if (!clienteId || !ano) {
+      setZootComp(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const [receitaPec, deducoes, reposicaoBovinos] = await Promise.all([
+          agregaReceitaPecZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaDeducoesZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaReposicaoBovinosZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+        ]);
+        if (!cancelado) {
+          setZootComp({ receitaPec, deducoes, reposicaoBovinos });
+        }
+      } catch (e) {
+        if (!cancelado) {
+          console.error('[V2PVG] erro ao carregar agregadosZootCompetencia:', e);
+          setZootComp(null);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, ano]);
+
   // Monta DTO via camada oficial.
   // Marco 1.1.D: extrasGrid traz as 4 fontes que não entram em buildGrid()
   // mas integram o Fluxo de Caixa META (rebanho, financiamento, nutrição, projetos).
@@ -260,11 +301,13 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
       lancamentosNutricao: planFin.lancamentosNutricao,
       lancamentosProjetos: planFin.lancamentosProjetos,
     },
+    zootComp: zootComp ?? undefined,
   }), [
     ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
     painel, grid, planFin.saldoInicial,
     planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
     planFin.lancamentosNutricao, planFin.lancamentosProjetos,
+    zootComp,
   ]);
 
   // Grid META consolidado: mesmo shape de gridMeta2026, mas com as 4 fontes

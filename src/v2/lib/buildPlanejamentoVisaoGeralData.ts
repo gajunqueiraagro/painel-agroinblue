@@ -13,6 +13,10 @@
  */
 
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
+import {
+  type AgregadoZootCompResult,
+  somaAnualMeses,
+} from '@/lib/painelConsultor/agregadosZootCompetencia';
 
 import type {
   PlanejamentoVisaoGeralDTO,
@@ -97,6 +101,30 @@ export interface BuildPlanejamentoVisaoGeralInput {
    *  - lancamentosProjetos: meta_projetos_investimento
    */
   extrasGrid?: ExtrasGrid;
+
+  /**
+   * Fase 2 DRE Planejamento — agregadores zootécnicos por COMPETÊNCIA (data
+   * do lançamento), pré-carregados no caller via useEffect/useState (mantém
+   * este builder SYNC). Quando ausente (loading inicial), as 3 linhas
+   * afetadas (Receita Pecuária, Reposição Bovinos, Deduções) retornam
+   * valor=null. ZERO fallback para fonte caixa.
+   */
+  zootComp?: ZootCompPreload;
+}
+
+/**
+ * Resultados pré-carregados de agregadosZootCompetencia para o Bloco 3.
+ * Carregados ASYNC no caller (V2PlanejamentoVisaoGeral) e passados como
+ * parâmetro para manter este builder SYNC.
+ *
+ * Quando undefined (loading inicial) → as 3 linhas retornam valor=null.
+ * Quando preenchido → valor anual = somaAnualMeses(meses),
+ * origem='zoot_competencia'.
+ */
+export interface ZootCompPreload {
+  receitaPec: AgregadoZootCompResult | null;
+  deducoes: AgregadoZootCompResult | null;
+  reposicaoBovinos: AgregadoZootCompResult;  // sem | null por convenção da função
 }
 
 /** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
@@ -302,6 +330,32 @@ function buildComparativoGrid(
     formato,
     vsAnoFechado: { valor: null, delta: null },     // Marco 1.1.E
     vsMesmoPeriodo: { valor: null, delta: null },   // Marco 1.1.E
+  };
+}
+
+/**
+ * Constrói ComparativoDuplo a partir de array mensal [12] (origem competência zoot).
+ *
+ * Convenção:
+ *  - meses === null  → GAP de cadastro (UI mostra placeholder)
+ *  - meses === [12]  → dado real (zero ou positivo); anual = somaAnualMeses
+ *
+ * Comparativos vsAnoFechado e vsMesmoPeriodo ficam null — não disponíveis
+ * na competência sem segundo agregador anual (próxima fase).
+ */
+function buildComparativoFromZootMeses(
+  meses: number[] | null,
+  origem: OrigemMetric,
+  tipoSemantica: TipoSemantica,
+  formato: FormatoExibicao,
+): ComparativoDuplo {
+  return {
+    valor: meses ? somaAnualMeses(meses) : null,
+    origem,
+    tipoSemantica,
+    formato,
+    vsAnoFechado: { valor: null, delta: null },
+    vsMesmoPeriodo: { valor: null, delta: null },
   };
 }
 
@@ -556,12 +610,14 @@ function buildBloco1Macro(
   extras: ExtrasGrid | undefined,
   mesAtual: number,
   saldoInicial: number,
+  zootComp?: ZootCompPreload,
 ): Bloco1Macro {
   // ENTRADAS
-  const receitasPecuaria = buildComparativoGrid(
-    grid, extras,
-    r => r.grupo_custo === GRUPO_RECEITA_PECUARIA,
-    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  // Fase 2 DRE: Receita Pecuária migra de fonte caixa (planejamento_financeiro)
+  // para competência zoot (agregadosZootCompetencia). Sem fallback caixa.
+  const receitasPecuaria = buildComparativoFromZootMeses(
+    zootComp?.receitaPec?.meses ?? null,
+    'zoot_competencia', 'acumulado', 'moeda',
   );
   const outrasReceitas = buildComparativoGrid(
     grid, extras,
@@ -608,10 +664,10 @@ function buildBloco1Macro(
       && r.escopo_negocio === 'agricultura',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
-  const reposicaoBovinos = buildComparativoGrid(
-    grid, extras,
-    r => r.macro_custo === 'Investimento em Bovinos',
-    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  // Fase 2 DRE: Reposição Bovinos migra de fonte caixa para competência zoot.
+  const reposicaoBovinos = buildComparativoFromZootMeses(
+    zootComp?.reposicaoBovinos?.meses ?? null,
+    'zoot_competencia', 'acumulado', 'moeda',
   );
   const amortizacoes = buildComparativoGrid(
     grid, extras,
@@ -921,12 +977,11 @@ function buildBloco3AnaliseEconomica(
   };
 
   // ─── 2. (−) Deduções de Receita ──────────────────────────────
-  // Total via grid (macro = "Deduções de Receitas"). Detalhe único = total
-  // (agregador por subcentro Real não disponível neste escopo do builder).
-  const deducoesCD = buildComparativoGrid(
-    grid, extrasGrid,
-    r => r.macro_custo === 'Deduções de Receitas',
-    mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
+  // Fase 2 DRE: Deduções migra de fonte caixa para competência zoot
+  // (agregadosZootCompetencia). Sem fallback caixa. Detalhe único = total.
+  const deducoesCD = buildComparativoFromZootMeses(
+    input.zootComp?.deducoes?.meses ?? null,
+    'zoot_competencia', 'acumulado', 'moeda',
   );
   const deducoesMeta = deducoesCD.valor;
   const deducoesAnoAnt = deducoesCD.vsAnoFechado.valor;
@@ -1143,7 +1198,9 @@ export function buildPlanejamentoVisaoGeralData(
   const warnings: string[] = [];
 
   // Marco 1.1.D — BLOCO 1 soberano via grid + extras (Fluxo de Caixa META).
-  const bloco1 = buildBloco1Macro(input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial);
+  // Fase 2 DRE: zootComp opcional pluga Receita Pec + Reposição Bovinos
+  // por competência zoot.
+  const bloco1 = buildBloco1Macro(input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial, input.zootComp);
   const bloco2 = buildBloco2Producao(input, warnings);
   const bloco3 = buildBloco3Custos(input, warnings);
   // TODO Marco 1.1.D-secondary: aplicar buildComparativoGrid também ao BLOCO 4
