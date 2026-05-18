@@ -386,14 +386,14 @@ export function isInvestimentoFazenda(l: LancamentoClassificavel): boolean {
   return canonicalMacro(l) === 'investimento na fazenda';
 }
 
-/** Investimento na Fazenda — escopo Pecuária (derivado de centro_custo via getEscopo). */
+/** Investimento na Fazenda — Pecuária via grupo_custo literal oficial. */
 export function isInvestimentoFazendaPecuaria(l: LancamentoClassificavel): boolean {
-  return isInvestimentoFazenda(l) && getEscopo(l) === 'pec';
+  return isInvestimentoFazenda(l) && l.grupo_custo === 'Investimento Pecuária';
 }
 
-/** Investimento na Fazenda — escopo Agricultura. */
+/** Investimento na Fazenda — Agricultura via grupo_custo literal oficial. */
 export function isInvestimentoFazendaAgricultura(l: LancamentoClassificavel): boolean {
-  return isInvestimentoFazenda(l) && getEscopo(l) === 'agri';
+  return isInvestimentoFazenda(l) && l.grupo_custo === 'Investimento Agricultura';
 }
 
 /** Investimento em Bovinos (linha "Reposição"/"Investimento em Bovinos" do PC-100). */
@@ -495,11 +495,14 @@ export const isOutrasReceitas = (l: LancamentoClassificavel): boolean =>
 export const isEntradaFinanceira = (l: LancamentoClassificavel): boolean =>
   canonicalMacro(l) === 'outras entradas financeiras';
 
+// Para Amortização, o plano de contas oficial coloca a distinção Pec/Agri
+// no subcentro (não no grupo_custo, que é genérico 'Amortizações').
+// Filtro por subcentro literal, mesmo princípio: nome do plano de contas oficial.
 export const isAmortizacaoPecuaria = (l: LancamentoClassificavel): boolean =>
-  isAmortizacao(l) && getEscopo(l) === 'pec';
+  isAmortizacao(l) && l.subcentro === 'Amortização Financiamento Pecuária';
 
 export const isAmortizacaoAgricultura = (l: LancamentoClassificavel): boolean =>
-  isAmortizacao(l) && getEscopo(l) === 'agri';
+  isAmortizacao(l) && l.subcentro === 'Amortização Financiamento Agricultura';
 
 // ---------------------------------------------------------------------------
 // CLASSIFICADOR SOBERANO OFICIAL — categoria única por saída
