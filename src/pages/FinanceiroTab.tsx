@@ -27,6 +27,8 @@ interface Props {
   filtroAnoInicial?: string;
   filtroMesInicial?: string;
   filtroStatusInicial?: string;
+  /** Categoria pré-selecionada (drill da Conferência Categoria). */
+  filtroCategoriaInicial?: string;
   onBack?: () => void;
   drillDownLabel?: string;
   onEditarAbate?: (lancamento: Lancamento, context?: { subAba: SubAba; statusFiltro: string; anoFiltro: string; mesFiltro: string }) => void;
@@ -439,7 +441,7 @@ function getTopTabFromSubAba(subAba?: SubAba): TopTab {
   return 'entradas';
 }
 
-export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo }: Props) {
+export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial, modoMovimentacao, filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial, onBack, drillDownLabel, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo }: Props) {
   const { fazendaAtual, fazendas, isGlobal } = useFazenda();
   const fazendaMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -466,13 +468,14 @@ export function FinanceiroTab({ lancamentos, onEditar, onRemover, subAbaInicial,
   const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
   const [mesFiltro, setMesFiltro] = useState(filtroMesInicial || 'todos');
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>(normalizeStatusFiltro(filtroStatusInicial));
-  const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
+  const [categoriaFiltro, setCategoriaFiltro] = useState(filtroCategoriaInicial || 'todas');
 
   useEffect(() => {
     if (filtroAnoInicial) setAnoFiltro(filtroAnoInicial);
     if (filtroMesInicial) setMesFiltro(filtroMesInicial);
     if (filtroStatusInicial) setStatusFiltro(normalizeStatusFiltro(filtroStatusInicial));
-  }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial]);
+    if (filtroCategoriaInicial) setCategoriaFiltro(filtroCategoriaInicial);
+  }, [filtroAnoInicial, filtroMesInicial, filtroStatusInicial, filtroCategoriaInicial]);
 
   const filtrados = useMemo(() => {
     let tiposFilter: string[] = [];

@@ -36,7 +36,7 @@ import { V2ZootWrapper } from './components/V2ZootWrapper';
 import { ValorRebanhoTab } from '@/pages/ValorRebanhoTab';
 import { EvolucaoTab } from '@/pages/EvolucaoTab';
 import { FluxoAnualTab } from '@/pages/FluxoAnualTab';
-import { FinanceiroTab } from '@/pages/FinanceiroTab';
+import { FinanceiroTab, type SubAba } from '@/pages/FinanceiroTab';
 import { IndicadoresTab } from '@/pages/IndicadoresTab';
 import { FinanceiroCaixaTab } from '@/pages/FinanceiroCaixaTab';
 import { DividendosTab } from '@/pages/DividendosTab';
@@ -131,16 +131,8 @@ interface V2LancamentosWrapperProps {
   cenarioInicial?: 'realizado' | 'meta';
   /** Restringe cenários disponíveis no seletor de Status (ex.: ['meta']). */
   cenariosPermitidos?: Array<'realizado' | 'programado' | 'meta'>;
-  /** Aba inicial — drill da Conferência Categoria (Ent.Ext → 'entrada' / Sai.Ext → 'saida' / Evol → 'reclassificacao'). */
-  abaInicial?: 'entrada' | 'saida' | 'reclassificacao';
-  /** Filtro de ano (drill da Conferência Categoria). */
-  initialAnoFiltro?: string;
-  /** Filtro de mês (drill da Conferência Categoria). */
-  initialMesFiltro?: string;
-  /** Categoria pré-selecionada (drill da Conferência Categoria). */
-  initialCategoria?: string;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, abaInicial, initialAnoFiltro, initialMesFiltro, initialCategoria }: V2LancamentosWrapperProps = {}) {
+function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal } = useFazenda();
   const { canEdit, canEditMeta } = usePermissions();
@@ -260,10 +252,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
         onNavegarChuvas={onNavegarChuvas}
         cenarioInicial={cenarioInicial}
         cenariosPermitidos={cenariosPermitidos}
-        initialAnoFiltro={initialAnoFiltro}
-        initialMesFiltro={initialMesFiltro}
-        initialCategoria={initialCategoria}
-        abaInicial={abaInicial ?? ((abateParaEditar || vendaParaEditar) ? 'saida' : undefined)}
+        abaInicial={(abateParaEditar || vendaParaEditar) ? 'saida' : undefined}
       />
     </div>
   );
@@ -297,15 +286,17 @@ export default function V2Index() {
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
-  // Drill filtrado vindo de EvolucaoCategoriaTab: navega para LancamentosTab
-  // com aba+ano+mês+categoria+cenário pré-aplicados. Mesmo padrão do
+  // Drill filtrado vindo de EvolucaoCategoriaTab: navega para
+  // 'conferencia-lancamentos' (FinanceiroTab) com subAba+ano+mês+categoria
+  // +cenário pré-aplicados. Mesmo padrão do onNavigateToMovimentacao do
   // FluxoAnualTab (navegação filtrada, sem editor standalone).
   const [drillFiltro, setDrillFiltro] = useState<{
-    aba: 'entrada' | 'saida' | 'reclassificacao';
+    subAba: SubAba;
     ano: string;
     mes: string;
     cenario: 'realizado' | 'meta';
     categoria: string;
+    label: string;
   } | null>(null);
   // Quando um lançamento de financiamento é editado em Financeiro → Lançamentos,
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
@@ -321,11 +312,14 @@ export default function V2Index() {
   };
   // Limpa estado de edição se sair da seção `lancamentos-zoot` por qualquer
   // motivo (menu, drawer, navegação direta) — evita criação normal travada
-  // em modo edição. Inclui drillFiltro (drill da Conferência Categoria).
+  // em modo edição.
   useEffect(() => {
-    if (section !== 'lancamentos-zoot') {
-      if (abateParaEditar || vendaParaEditar) limparEdicaoAvancada();
-      if (drillFiltro) setDrillFiltro(null);
+    if (section !== 'lancamentos-zoot' && (abateParaEditar || vendaParaEditar)) {
+      limparEdicaoAvancada();
+    }
+    // drillFiltro vive em 'conferencia-lancamentos' — limpa ao sair de lá.
+    if (section !== 'conferencia-lancamentos' && drillFiltro) {
+      setDrillFiltro(null);
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const periodoTipo = getPeriodoTipo(section);
@@ -465,9 +459,18 @@ export default function V2Index() {
         {({ lancamentosTodosCenarios, removerLancamento, editarLancamento }) => (
           <FinanceiroTab
             lancamentos={lancamentosTodosCenarios}
-            filtroAnoInicial={ano}
-            filtroMesInicial={undefined}
-            filtroStatusInicial="realizado"
+            // drillFiltro presente → filtros vêm do drill da Conferência Categoria.
+            // Caso contrário, comportamento legado (ano global, status realizado).
+            filtroAnoInicial={drillFiltro?.ano ?? ano}
+            filtroMesInicial={drillFiltro?.mes}
+            filtroStatusInicial={drillFiltro?.cenario ?? 'realizado'}
+            filtroCategoriaInicial={drillFiltro?.categoria}
+            subAbaInicial={drillFiltro?.subAba}
+            drillDownLabel={drillFiltro?.label}
+            onBack={drillFiltro ? () => {
+              setDrillFiltro(null);
+              setSection('evolucao-categoria');
+            } : undefined}
             onRemover={removerLancamento}
             onEditar={editarLancamento}
             onEditarAbate={(l) => {
@@ -525,11 +528,6 @@ export default function V2Index() {
         abateParaEditar={abateParaEditar}
         vendaParaEditar={vendaParaEditar}
         cenariosPermitidos={['realizado', 'programado']}
-        abaInicial={drillFiltro?.aba}
-        initialAnoFiltro={drillFiltro?.ano}
-        initialMesFiltro={drillFiltro?.mes}
-        initialCategoria={drillFiltro?.categoria}
-        cenarioInicial={drillFiltro?.cenario}
         onReturnFromEdit={() => {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');
@@ -624,27 +622,38 @@ export default function V2Index() {
         initialMes={mes === '0' ? undefined : mes.padStart(2, '0')}
         ocultarFiltrosPeriodo
         onNavigateToEvolCatLista={(filtro) => {
-          // Drill da Conferência Categoria → navega para LancamentosTab
-          // filtrado por mês/ano/cenário/aba/categoria. Mesmo padrão do
-          // FluxoAnualTab: navegação filtrada, sem editor standalone.
-          // Mapeamento coluna → aba:
-          //   ent_ext   → 'entrada'
-          //   sai_ext   → 'saida'
-          //   evol_ent  → 'reclassificacao'
-          //   evol_sai  → 'reclassificacao'
-          //   (sem coluna ou Saldo Ini/Fin) → 'saida' default (drill mensal)
-          const aba: 'entrada' | 'saida' | 'reclassificacao' =
-            filtro.coluna === 'ent_ext' ? 'entrada'
-            : filtro.coluna === 'evol_ent' || filtro.coluna === 'evol_sai' ? 'reclassificacao'
-            : 'saida';
+          // Drill da Conferência Categoria → 'conferencia-lancamentos'
+          // (FinanceiroTab) filtrado por subAba+ano+mês+cenário+categoria.
+          // Padrão idêntico ao onNavigateToMovimentacao do FluxoAnualTab.
+          //
+          // Mapeamento coluna → SubAba (default mais comum por coluna; o
+          // usuário ajusta a SubAba dentro do FinanceiroTab se precisar
+          // ver outro tipo da mesma TopTab):
+          //   ent_ext   → 'compra'    (TopTab 'entradas')
+          //   sai_ext   → 'venda'     (TopTab 'saidas')
+          //   evol_ent  → 'historico' (reclassificacoes vivem em 'historico')
+          //   evol_sai  → 'historico'
+          //   (sem coluna ou Saldo Ini/Fin) → 'venda' default
+          const subAba: SubAba =
+            filtro.coluna === 'ent_ext' ? 'compra'
+            : filtro.coluna === 'evol_ent' || filtro.coluna === 'evol_sai' ? 'historico'
+            : 'venda';
+          const colunaLabel =
+            filtro.coluna === 'ent_ext' ? 'Entradas'
+            : filtro.coluna === 'sai_ext' ? 'Saídas'
+            : filtro.coluna === 'evol_ent' ? 'Evolução Entrada'
+            : filtro.coluna === 'evol_sai' ? 'Evolução Saída'
+            : 'Movimentações';
+          const mesPadded = String(filtro.mes).padStart(2, '0');
           setDrillFiltro({
-            aba,
+            subAba,
             ano: filtro.ano,
-            mes: String(filtro.mes).padStart(2, '0'),
+            mes: mesPadded,
             cenario: filtro.cenario,
-            categoria: filtro.categoria ?? '',
+            categoria: filtro.categoria ?? 'todas',
+            label: `${colunaLabel} · ${mesPadded}/${filtro.ano} · ${filtro.cenario === 'meta' ? 'META' : 'Realizado'}`,
           });
-          setSection('lancamentos-zoot');
+          setSection('conferencia-lancamentos');
         }}
       />
     );
