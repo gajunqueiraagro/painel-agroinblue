@@ -256,6 +256,7 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   // Bovinos). Carregados aqui em paralelo; passados ao builder via campo
   // opcional `zootComp` para manter buildPlanejamentoVisaoGeralData SYNC.
   // Loading inicial: zootComp=null → builder retorna valor=null nessas linhas.
+  // Marco 1.1.E: 6 agregações em paralelo (3 ano META + 3 ano-1 REALIZADO).
   const [zootComp, setZootComp] = useState<ZootCompPreload | null>(null);
   useEffect(() => {
     if (!clienteId || !ano) {
@@ -265,13 +266,22 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
     let cancelado = false;
     (async () => {
       try {
-        const [receitaPec, deducoes, reposicaoBovinos] = await Promise.all([
+        const [
+          receitaPec, deducoes, reposicaoBovinos,
+          receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
+        ] = await Promise.all([
           agregaReceitaPecZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
           agregaDeducoesZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
           agregaReposicaoBovinosZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaReceitaPecZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
+          agregaDeducoesZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
+          agregaReposicaoBovinosZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
         ]);
         if (!cancelado) {
-          setZootComp({ receitaPec, deducoes, reposicaoBovinos });
+          setZootComp({
+            receitaPec, deducoes, reposicaoBovinos,
+            receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
+          });
         }
       } catch (e) {
         if (!cancelado) {

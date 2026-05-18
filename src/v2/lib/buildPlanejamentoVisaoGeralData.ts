@@ -120,11 +120,18 @@ export interface BuildPlanejamentoVisaoGeralInput {
  * Quando undefined (loading inicial) → as 3 linhas retornam valor=null.
  * Quando preenchido → valor anual = somaAnualMeses(meses),
  * origem='zoot_competencia'.
+ *
+ * Marco 1.1.E — campos *AnoAnt alimentam vsAnoFechado das mesmas 3 linhas
+ * via chamada paralela dos mesmos agregadores com (ano - 1). Sem dado
+ * → vsAnoFechado.valor = null (UI mostra '—'), sem fallback.
  */
 export interface ZootCompPreload {
   receitaPec: AgregadoZootCompResult | null;
   deducoes: AgregadoZootCompResult | null;
   reposicaoBovinos: AgregadoZootCompResult;  // sem | null por convenção da função
+  receitaPecAnoAnt: AgregadoZootCompResult | null;
+  deducoesAnoAnt: AgregadoZootCompResult | null;
+  reposicaoBovinosAnoAnt: AgregadoZootCompResult;
 }
 
 /** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
@@ -328,8 +335,11 @@ function buildComparativoGrid(
     origem,
     tipoSemantica,
     formato,
-    vsAnoFechado: { valor: null, delta: null },     // Marco 1.1.E
-    vsMesmoPeriodo: { valor: null, delta: null },   // Marco 1.1.E
+    // Marco 1.1.E: hook usePlanejamentoFinanceiro só lê cenario='meta'; não
+    // existe grid REAL ano-1 disponível. PC-100 cobre apenas algumas linhas
+    // (Receita Pec, Custeio Pec total, Variação Estoque) — tratadas no Bloco 3.
+    vsAnoFechado: { valor: null, delta: null },
+    vsMesmoPeriodo: { valor: null, delta: null },
   };
 }
 
@@ -337,24 +347,29 @@ function buildComparativoGrid(
  * Constrói ComparativoDuplo a partir de array mensal [12] (origem competência zoot).
  *
  * Convenção:
- *  - meses === null  → GAP de cadastro (UI mostra placeholder)
- *  - meses === [12]  → dado real (zero ou positivo); anual = somaAnualMeses
+ *  - meses === null            → GAP de cadastro (UI mostra placeholder)
+ *  - meses === [12]            → dado real (zero ou positivo); anual = somaAnualMeses
+ *  - mesesAnoAnt === null      → sem dado ano-1 (vsAnoFechado.valor = null)
+ *  - mesesAnoAnt === [12]      → anual ano-1 = somaAnualMeses; delta % derivado
  *
- * Comparativos vsAnoFechado e vsMesmoPeriodo ficam null — não disponíveis
- * na competência sem segundo agregador anual (próxima fase).
+ * vsMesmoPeriodo permanece null — agregadores zoot anuais não retornam
+ * série Jan→mêsAtual.
  */
 function buildComparativoFromZootMeses(
   meses: number[] | null,
+  mesesAnoAnt: number[] | null,
   origem: OrigemMetric,
   tipoSemantica: TipoSemantica,
   formato: FormatoExibicao,
 ): ComparativoDuplo {
+  const valor = meses ? somaAnualMeses(meses) : null;
+  const valorAnoAnt = mesesAnoAnt ? somaAnualMeses(mesesAnoAnt) : null;
   return {
-    valor: meses ? somaAnualMeses(meses) : null,
+    valor,
     origem,
     tipoSemantica,
     formato,
-    vsAnoFechado: { valor: null, delta: null },
+    vsAnoFechado: { valor: valorAnoAnt, delta: pctDelta(valor, valorAnoAnt) },
     vsMesmoPeriodo: { valor: null, delta: null },
   };
 }
@@ -540,7 +555,7 @@ function agruparPorCentro(
     arr.push({
       subcentro: r.subcentro,
       valorMeta,
-      valorAnoAnt: null, // Marco 1.1.B: ano-1 do grid não disponível ainda
+      valorAnoAnt: null, // Marco 1.1.E: detalhamento por subcentro ano-1 sem fonte oficial REAL.
     });
     porCentro.set(r.centro_custo, arr);
   }
@@ -570,7 +585,7 @@ function agruparPorCentro(
         origem: 'planejamento_financeiro',
         tipoSemantica: 'acumulado',
         formato: 'moeda',
-        vsAnoFechado: { valor: null, delta: null },   // Marco 1.1.C/D
+        vsAnoFechado: { valor: null, delta: null },   // Marco 1.1.E
         vsMesmoPeriodo: { valor: null, delta: null },
       },
       subcentros: subs,
@@ -615,8 +630,10 @@ function buildBloco1Macro(
   // ENTRADAS
   // Fase 2 DRE: Receita Pecuária migra de fonte caixa (planejamento_financeiro)
   // para competência zoot (agregadosZootCompetencia). Sem fallback caixa.
+  // Marco 1.1.E: vsAnoFechado vem do mesmo agregador chamado com (ano - 1).
   const receitasPecuaria = buildComparativoFromZootMeses(
     zootComp?.receitaPec?.meses ?? null,
+    zootComp?.receitaPecAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
   );
   const outrasReceitas = buildComparativoGrid(
@@ -665,8 +682,10 @@ function buildBloco1Macro(
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
   // Fase 2 DRE: Reposição Bovinos migra de fonte caixa para competência zoot.
+  // Marco 1.1.E: vsAnoFechado vem do mesmo agregador chamado com (ano - 1).
   const reposicaoBovinos = buildComparativoFromZootMeses(
     zootComp?.reposicaoBovinos?.meses ?? null,
+    zootComp?.reposicaoBovinosAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
   );
   const amortizacoes = buildComparativoGrid(
@@ -907,7 +926,7 @@ function buildBloco3Custos(
   const cvp = agruparPorCentro(grid, GRUPO_CUSTO_VARIAVEL_PEC, ORDEM_CENTROS_CUSTO_VAR_PEC, mesAtual);
   const cfp = agruparPorCentro(grid, GRUPO_CUSTO_FIXO_PEC, ORDEM_CENTROS_CUSTO_FIXO_PEC, mesAtual);
 
-  warnings.push('BLOCO 3: ano-1 detalhado por subcentro = null (precisa Marco 1.1.C/D)');
+  warnings.push('BLOCO 3: ano-1 detalhado por subcentro = null (Marco 1.1.E: sem fonte oficial REAL por subcentro)');
 
   return {
     custoVariavelPecuaria: { grupo: GRUPO_CUSTO_VARIAVEL_PEC, total: cvp.total, centros: cvp.centros },
@@ -959,13 +978,27 @@ function buildBloco3AnaliseEconomica(
   const subt = (a: number | null, b: number | null): number | null =>
     a != null && Number.isFinite(a) && b != null && Number.isFinite(b) ? a - b : null;
 
+  // Marco 1.1.E: soma ESTRITA — qualquer parcela null → resultado null.
+  // Usada para derivados ano-1 onde parcelas faltantes não podem ser
+  // mascaradas como zero (geraria número parcial enganoso na UI).
+  const somaEstrita = (...vs: (number | null)[]): number | null => {
+    let acc = 0;
+    for (const v of vs) {
+      if (v == null || !Number.isFinite(v)) return null;
+      acc += v;
+    }
+    return acc;
+  };
+
   // ─── 1. Faturamento ──────────────────────────────────────────
   const recPecMeta = bloco1.receitasPecuaria.valor;
   const recPecAnoAnt = bloco1.receitasPecuaria.vsAnoFechado.valor;
   const outRecMeta = bloco1.outrasReceitas.valor;
   const outRecAnoAnt = bloco1.outrasReceitas.vsAnoFechado.valor;
   const fatTotMeta = soma(recPecMeta, outRecMeta);
-  const fatTotAnoAnt = soma(recPecAnoAnt, outRecAnoAnt);
+  // Marco 1.1.E: Outras Receitas ano-1 sem fonte oficial REAL → fatTotAnoAnt
+  // estrito propaga null. Derivados encadeados (Receita Líquida etc.) seguem.
+  const fatTotAnoAnt = somaEstrita(recPecAnoAnt, outRecAnoAnt);
 
   const faturamento: AnaliseEconomicaGrupo = {
     label: '1. Faturamento',
@@ -979,8 +1012,10 @@ function buildBloco3AnaliseEconomica(
   // ─── 2. (−) Deduções de Receita ──────────────────────────────
   // Fase 2 DRE: Deduções migra de fonte caixa para competência zoot
   // (agregadosZootCompetencia). Sem fallback caixa. Detalhe único = total.
+  // Marco 1.1.E: vsAnoFechado vem do mesmo agregador chamado com (ano - 1).
   const deducoesCD = buildComparativoFromZootMeses(
     input.zootComp?.deducoes?.meses ?? null,
+    input.zootComp?.deducoesAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
   );
   const deducoesMeta = deducoesCD.valor;
@@ -997,8 +1032,12 @@ function buildBloco3AnaliseEconomica(
   const receitaLiquida = mkLinha('Receita Líquida', recLiqMeta, recLiqAnoAnt);
 
   // ─── 3. (−) Custeio Pecuária ─────────────────────────────────
+  // Marco 1.1.E: Custeio Pec TOTAL ano-1 vem do PC-100 (custeioPecIndicador
+  // .serieAnoAnt[12], regime CAIXA via financeiro_lancamentos_v2 REALIZADO).
+  // Detalhe Var/Fix ano-1 fica null — não distribuir o total seria inventar
+  // fonte paralela; sem cadastro REAL por subcentro ano-1 disponível.
   const custeioPecMeta = bloco1.custeioPecuaria.valor;
-  const custeioPecAnoAnt = bloco1.custeioPecuaria.vsAnoFechado.valor;
+  const custeioPecAnoAnt = painel?.custeioPecIndicador?.serieAnoAnt?.[12] ?? null;
   const custoVarMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
   const custoVarAnoAnt = bloco3Custos.custoVariavelPecuaria.total.vsAnoFechado.valor;
   const custoFixMeta = bloco3Custos.custoFixoPecuaria.total.valor;
@@ -1199,8 +1238,12 @@ export function buildPlanejamentoVisaoGeralData(
 
   // Marco 1.1.D — BLOCO 1 soberano via grid + extras (Fluxo de Caixa META).
   // Fase 2 DRE: zootComp opcional pluga Receita Pec + Reposição Bovinos
-  // por competência zoot.
-  const bloco1 = buildBloco1Macro(input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial, input.zootComp);
+  // por competência zoot. Receita/Deduções/Reposição também carregam ano-1
+  // via mesmo agregador com cenario='realizado' (em ZootCompPreload).
+  const bloco1 = buildBloco1Macro(
+    input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial,
+    input.zootComp,
+  );
   const bloco2 = buildBloco2Producao(input, warnings);
   const bloco3 = buildBloco3Custos(input, warnings);
   // TODO Marco 1.1.D-secondary: aplicar buildComparativoGrid também ao BLOCO 4
