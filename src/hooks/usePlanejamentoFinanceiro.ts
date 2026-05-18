@@ -241,9 +241,15 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     data?: string;
     valor?: number;
   }
+  interface BoitelSnapshotZootMeta {
+    possuiAdiantamento?: boolean;
+    dataAdiantamento?: string;
+    valorTotalAntecipado?: number;
+  }
   interface DetalhesSnapshotZootMeta {
     formaReceb?: string | null;
     parcelas?: ParcelaZootMeta[];
+    boitelSnapshot?: BoitelSnapshotZootMeta;
   }
   interface RowZootMeta {
     id: string;
@@ -256,7 +262,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }
 
   const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
-    queryKey: ['ppf:rebanho:recebimento', clienteId, fazendaId, ano],
+    queryKey: ['ppf:rebanho:recebimento:boitel', clienteId, fazendaId, ano],
     queryFn: async () => {
       // Sem filtro por intervalo de competência: um abate em mês X pode ter
       // parcela em mês Y do mesmo ano. O filtro de ano ocorre pelo ano da
@@ -299,6 +305,35 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
         if (!subcentro) continue;
 
         const det = r.detalhes_snapshot ?? null;
+
+        // ─── BLOCO INDEPENDENTE: Adiantamento de Boitel ──────────────────
+        // Emite SAÍDA em "Adiantamento de Boitel" no mês de dataAdiantamento.
+        // NÃO substitui nem altera a entrada da venda (que segue via regras 1/2 abaixo).
+        // SEM FALLBACK para r.data ou r.valor_total: dado inválido → warn + skip.
+        if (r.boitel_lote_id) {
+          const bs = det?.boitelSnapshot ?? null;
+          if (bs && bs.possuiAdiantamento === true) {
+            const dataAdiant = typeof bs.dataAdiantamento === 'string' && bs.dataAdiantamento.length >= 10
+              ? bs.dataAdiantamento
+              : null;
+            const valorAdiant = typeof bs.valorTotalAntecipado === 'number'
+              && Number.isFinite(bs.valorTotalAntecipado)
+              ? bs.valorTotalAntecipado
+              : null;
+
+            if (dataAdiant && valorAdiant !== null && valorAdiant > 0) {
+              pushIntoResult('Adiantamento de Boitel', dataAdiant, valorAdiant);
+            } else {
+              console.warn('[usePlanejamentoFinanceiro] boitel com adiantamento mas dados inválidos — ignorado no Fluxo', {
+                lancamentoId: r.id,
+                possuiAdiantamento: bs.possuiAdiantamento,
+                dataAdiantamento: bs.dataAdiantamento,
+                valorTotalAntecipado: bs.valorTotalAntecipado,
+              });
+            }
+          }
+        }
+
         const formaReceb = det?.formaReceb ?? null;
         const parcelas: ParcelaZootMeta[] = Array.isArray(det?.parcelas) ? det!.parcelas! : [];
 
