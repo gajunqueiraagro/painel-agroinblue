@@ -37,6 +37,7 @@ import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
+import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
 import {
@@ -125,6 +126,27 @@ export default function V2FechamentoPeriodo() {
   // Planejamento financeiro do ano (grid META + saldo inicial + extras).
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
   const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
+
+  // Grid META consolidado (base + 4 maps de extras: rebanho/financiamento/
+  // nutrição/projetos). Necessário para o BlocoResumoExecutivo computar Meta
+  // com todas as fontes auto — sem isso, Custeio Pec/Receita Pec/Investimentos
+  // /Amortizações META ficam subestimados (caso do bug detectado em NJ Pureza
+  // 2026). Espelho exato do padrão de V2PlanejamentoVisaoGeral.
+  const gridMetaConsolidado = useMemo(
+    () => composeGridMetaConsolidado(planFin.gridMeta2026, {
+      lancamentosRebanho: planFin.lancamentosRebanho,
+      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
+      lancamentosNutricao: planFin.lancamentosNutricao,
+      lancamentosProjetos: planFin.lancamentosProjetos,
+    }),
+    [
+      planFin.gridMeta2026,
+      planFin.lancamentosRebanho,
+      planFin.lancamentosFinanciamento,
+      planFin.lancamentosNutricao,
+      planFin.lancamentosProjetos,
+    ],
+  );
 
   // financeiro_lancamentos_v2 ano-1 e ano-corrente (REAL).
   const [lancFinAnoAnt, setLancFinAnoAnt] = useState<FinanceiroLancamento[] | null>(null);
@@ -237,14 +259,14 @@ export default function V2FechamentoPeriodo() {
   // após validação cruzada (entradas/saídas/caixa devem bater com renderer
   // antigo dentro da tolerância R$ 1).
   const blocoResumoData = useMemo(() => {
-    if (!lancFinAnoAnt || !grid) return null;
+    if (!lancFinAnoAnt || !gridMetaConsolidado) return null;
     return buildBlocoResumoExecutivo({
       lancFin2025: lancFinAnoAnt,
-      gridMeta2026: grid,
+      gridMeta2026: gridMetaConsolidado,
       saldoInicialMeta: planFin.saldoInicial,
       caixaSaldoAnoAntMensal: painel.caixaIndicador?.serieAnoAnt?.slice(1),
     });
-  }, [lancFinAnoAnt, grid, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
+  }, [lancFinAnoAnt, gridMetaConsolidado, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
 
   const saldoInicialReal = painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN;
 
