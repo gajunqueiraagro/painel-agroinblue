@@ -262,7 +262,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }
 
   const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
-    queryKey: ['ppf:rebanho:recebimento:boitel', clienteId, fazendaId, ano],
+    queryKey: ['ppf:rebanho:recebimento:boitel2', clienteId, fazendaId, ano],
     queryFn: async () => {
       // Sem filtro por intervalo de competência: um abate em mês X pode ter
       // parcela em mês Y do mesmo ano. O filtro de ano ocorre pelo ano da
@@ -301,16 +301,18 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       };
 
       for (const r of rowsTyped) {
-        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria ?? '', !!r.boitel_lote_id);
-        if (!subcentro) continue;
-
         const det = r.detalhes_snapshot ?? null;
+        // isBoitel via coluna OU via snapshot (boitel_lote_id pode estar null em
+        // lançamentos META mesmo havendo dados do boitel no snapshot)
+        const isBoitel = !!r.boitel_lote_id || !!(det?.boitelSnapshot);
+        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria ?? '', isBoitel);
+        if (!subcentro) continue;
 
         // ─── BLOCO INDEPENDENTE: Adiantamento de Boitel ──────────────────
         // Emite SAÍDA em "Adiantamento de Boitel" no mês de dataAdiantamento.
         // NÃO substitui nem altera a entrada da venda (que segue via regras 1/2 abaixo).
         // SEM FALLBACK para r.data ou r.valor_total: dado inválido → warn + skip.
-        if (r.boitel_lote_id) {
+        if (isBoitel) {
           const bs = det?.boitelSnapshot ?? null;
           if (bs && bs.possuiAdiantamento === true) {
             const dataAdiant = typeof bs.dataAdiantamento === 'string' && bs.dataAdiantamento.length >= 10
