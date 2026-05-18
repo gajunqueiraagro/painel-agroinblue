@@ -23,6 +23,7 @@ import {
   agregaDeducoesZootComp,
   agregaReposicaoBovinosZootComp,
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
+import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
@@ -258,6 +259,34 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
   // Loading inicial: zootComp=null → builder retorna valor=null nessas linhas.
   // Marco 1.1.E: 6 agregações em paralelo (3 ano META + 3 ano-1 REALIZADO).
   const [zootComp, setZootComp] = useState<ZootCompPreload | null>(null);
+
+  // Marco 1.1.E — financeiro_lancamentos_v2 do ano FECHADO (ano - 1).
+  // Carregado uma vez no caller; passado ao builder que aplica os agregadores
+  // oficiais (agregaOutrasReceitas, agregaInvFazendaPec) sobre o array.
+  // Camada de compatibilidade histórica REAL ano-1 — não toca META.
+  const [lancFinAnoAnt, setLancFinAnoAnt] = useState<FinanceiroLancamento[] | null>(null);
+  useEffect(() => {
+    if (!clienteId || !ano) {
+      setLancFinAnoAnt(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const rows = await carregarLancFinAnoAntReal(
+          { clienteId, fazendaId: isGlobal ? undefined : fazendaAtual?.id, ano },
+          supabase,
+        );
+        if (!cancelado) setLancFinAnoAnt(rows);
+      } catch (e) {
+        if (!cancelado) {
+          console.error('[V2PVG] erro ao carregar financeiro_lancamentos_v2 ano-1:', e);
+          setLancFinAnoAnt(null);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, ano, isGlobal, fazendaAtual?.id]);
   useEffect(() => {
     if (!clienteId || !ano) {
       setZootComp(null);
@@ -312,12 +341,14 @@ export function V2PlanejamentoVisaoGeral({ ano, mes }: Props) {
       lancamentosProjetos: planFin.lancamentosProjetos,
     },
     zootComp: zootComp ?? undefined,
+    lancFinAnoAnt: lancFinAnoAnt ?? undefined,
   }), [
     ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
     painel, grid, planFin.saldoInicial,
     planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
     planFin.lancamentosNutricao, planFin.lancamentosProjetos,
     zootComp,
+    lancFinAnoAnt,
   ]);
 
   // Grid META consolidado: mesmo shape de gridMeta2026, mas com as 4 fontes

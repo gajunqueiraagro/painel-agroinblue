@@ -13,10 +13,15 @@
  */
 
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
+import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 import {
   type AgregadoZootCompResult,
   somaAnualMeses,
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
+import {
+  agregaOutrasReceitas,
+  agregaInvFazendaPec,
+} from '@/lib/painelConsultor/agregadosFinanceiros';
 
 import type {
   PlanejamentoVisaoGeralDTO,
@@ -110,6 +115,23 @@ export interface BuildPlanejamentoVisaoGeralInput {
    * valor=null. ZERO fallback para fonte caixa.
    */
   zootComp?: ZootCompPreload;
+
+  /**
+   * Marco 1.1.E — Camada de compatibilidade histórica REAL ano-1.
+   * Array de financeiro_lancamentos_v2 do ano FECHADO (ano - 1) carregado
+   * via `carregarLancFinAnoAntReal` no caller. Os agregadores oficiais
+   * (`agregaOutrasReceitas`, `agregaInvFazendaPec`, `agregaJurosPec`)
+   * classificam esse array em number[12] por linha-base.
+   *
+   * Aplica-se APENAS no caminho ano-1; META continua intocada. Linhas DRE
+   * afetadas (vsAnoFechado sobrescrito quando lancFinAnoAnt está presente):
+   *   - Outras Receitas
+   *   - Investimento Fazenda Pec
+   *   - Juros Pecuária (Passo 2 — pendente)
+   * NÃO se aplica a Receita Pec, Reposição, Variação Estoque, Custeio total
+   * (essas seguem zoot/PC-100 já definidos).
+   */
+  lancFinAnoAnt?: FinanceiroLancamento[];
 }
 
 /**
@@ -626,6 +648,8 @@ function buildBloco1Macro(
   mesAtual: number,
   saldoInicial: number,
   zootComp?: ZootCompPreload,
+  lancFinAnoAnt?: FinanceiroLancamento[],
+  ano?: number,
 ): Bloco1Macro {
   // ENTRADAS
   // Fase 2 DRE: Receita Pecuária migra de fonte caixa (planejamento_financeiro)
@@ -636,12 +660,24 @@ function buildBloco1Macro(
     zootComp?.receitaPecAnoAnt?.meses ?? null,
     'zoot_competencia', 'acumulado', 'moeda',
   );
-  const outrasReceitas = buildComparativoGrid(
+  const outrasReceitasBase = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === MACRO_RECEITAS
       && r.grupo_custo !== GRUPO_RECEITA_PECUARIA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
+  // Marco 1.1.E: vsAnoFechado de Outras Receitas vem do realizado financeiro
+  // do ano-1 via agregaOutrasReceitas oficial (camada histórica). META intocada.
+  const outrasReceitasAnoAnt = (lancFinAnoAnt && ano != null)
+    ? somaAnualMeses(agregaOutrasReceitas(lancFinAnoAnt, ano - 1))
+    : null;
+  const outrasReceitas: ComparativoDuplo = {
+    ...outrasReceitasBase,
+    vsAnoFechado: {
+      valor: outrasReceitasAnoAnt,
+      delta: pctDelta(outrasReceitasBase.valor, outrasReceitasAnoAnt),
+    },
+  };
   const entradasFinanceiras = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
@@ -669,12 +705,24 @@ function buildBloco1Macro(
        || r.grupo_custo === 'Custo Variável Agricultura'),
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
-  const investimentosPecuaria = buildComparativoGrid(
+  const investimentosPecuariaBase = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === 'Investimento na Fazenda'
       && r.escopo_negocio === 'pecuaria',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
   );
+  // Marco 1.1.E: vsAnoFechado de Investimento Fazenda Pec vem do realizado
+  // financeiro ano-1 via agregaInvFazendaPec oficial (camada histórica).
+  const investimentosPecuariaAnoAnt = (lancFinAnoAnt && ano != null)
+    ? somaAnualMeses(agregaInvFazendaPec(lancFinAnoAnt, ano - 1))
+    : null;
+  const investimentosPecuaria: ComparativoDuplo = {
+    ...investimentosPecuariaBase,
+    vsAnoFechado: {
+      valor: investimentosPecuariaAnoAnt,
+      delta: pctDelta(investimentosPecuariaBase.valor, investimentosPecuariaAnoAnt),
+    },
+  };
   const investimentosAgricultura = buildComparativoGrid(
     grid, extras,
     r => r.macro_custo === 'Investimento na Fazenda'
@@ -1240,9 +1288,11 @@ export function buildPlanejamentoVisaoGeralData(
   // Fase 2 DRE: zootComp opcional pluga Receita Pec + Reposição Bovinos
   // por competência zoot. Receita/Deduções/Reposição também carregam ano-1
   // via mesmo agregador com cenario='realizado' (em ZootCompPreload).
+  // Marco 1.1.E: lancFinAnoAnt + ano destravam vsAnoFechado de Outras Receitas
+  // e Investimento Fazenda Pec via agregadores financeiros oficiais.
   const bloco1 = buildBloco1Macro(
     input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial,
-    input.zootComp,
+    input.zootComp, input.lancFinAnoAnt, input.ano,
   );
   const bloco2 = buildBloco2Producao(input, warnings);
   const bloco3 = buildBloco3Custos(input, warnings);

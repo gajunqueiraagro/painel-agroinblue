@@ -200,7 +200,7 @@ async function fetchAllPaginated<T>(
 }
 
 /** Map a V2 row to the FinanceiroLancamento interface for backward compatibility */
-function mapV2ToLancamento(r: any): FinanceiroLancamento {
+export function mapV2ToLancamento(r: any): FinanceiroLancamento {
   return {
     id: r.id,
     fazenda_id: r.fazenda_id,
