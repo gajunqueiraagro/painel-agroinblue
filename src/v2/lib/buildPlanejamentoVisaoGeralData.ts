@@ -21,6 +21,7 @@ import {
 import {
   agregaOutrasReceitas,
   agregaInvFazendaPec,
+  agregaJurosPec,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 
 import type {
@@ -1214,13 +1215,30 @@ function buildBloco4Financeiro(
   input: BuildPlanejamentoVisaoGeralInput,
   _warnings: string[],
 ): Bloco4Financeiro {
-  const { painel, mesAtual } = input;
+  const { painel, mesAtual, lancFinAnoAnt, ano } = input;
   const empty = (): ComparativoDuplo => emptyComparativo('pc100', 'acumulado', 'moeda');
 
   const fromIndicator = (ind: { serieMeta?: number[]; serieAnoAnt?: number[] } | null | undefined): ComparativoDuplo =>
     ind ? buildComparativoPonto(ind.serieMeta, ind.serieAnoAnt, mesAtual, 'pc100', 'acumulado', 'moeda') : empty();
 
-  const juros = fromIndicator(painel?.jurosPecIndicador);
+  const jurosBase = fromIndicator(painel?.jurosPecIndicador);
+  // Marco 1.1.E (Passo 2): override de vsAnoFechado para Juros Pec.
+  // Override compensando usePainelConsultorData L2604 que força
+  // serieAnoAnt: undefined em _finSoberano.jurosPec — sem isso, o ano-1
+  // do Bloco 4 (e por cascata o jurosAnoAnt do DRE) fica null indefinidamente.
+  // Fonte oficial: agregaJurosPec sobre financeiro_lancamentos_v2 ano-1
+  // (mesma fonte usada em Outras Receitas e Invest Fazenda Pec no Passo 1).
+  // Aplica APENAS em Real ano-1 — META segue PC-100 (jurosBase.valor intocado).
+  // DRE pega via cascata de bloco4.juros.vsAnoFechado.valor — sem override
+  // duplicado no Bloco 3. Camada de compatibilidade histórica, mesmo
+  // princípio do Passo 1.
+  const jurosAnoAntReal = (lancFinAnoAnt && ano != null)
+    ? somaAnualMeses(agregaJurosPec(lancFinAnoAnt, ano - 1))
+    : null;
+  const juros: ComparativoDuplo = jurosAnoAntReal != null
+    ? { ...jurosBase, vsAnoFechado: { valor: jurosAnoAntReal, delta: pctDelta(jurosBase.valor, jurosAnoAntReal) } }
+    : jurosBase;
+
   const amortizacoes = fromIndicator(painel?.amortizacoesIndicador);
   const investimentosPecuaria = fromIndicator(painel?.investPecIndicador);
   const investimentosAgricultura = fromIndicator(painel?.investAgriIndicador);
