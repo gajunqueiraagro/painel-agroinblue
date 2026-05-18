@@ -42,6 +42,7 @@ const SUBCENTROS_REBANHO = new Set([
   'Venda de Desmama Machos', 'Venda de Desmama Fêmeas',
   'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
   'Venda em Boitel',
+  'Adiantamento de Boitel',
   'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
 ]);
 
