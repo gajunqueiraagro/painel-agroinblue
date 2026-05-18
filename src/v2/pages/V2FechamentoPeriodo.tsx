@@ -10,7 +10,7 @@
  *  - Botão "Gerar PDF" chama window.print()
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -26,6 +26,23 @@ import FluxoCaixa from './V2FechamentoPeriodo.parts/FluxoCaixa';
 import DesembolsoProducao from './V2FechamentoPeriodo.parts/DesembolsoProducao';
 import ResumoGlobal from './V2FechamentoPeriodo.parts/ResumoGlobal';
 import './V2FechamentoPeriodo.parts/printStyles.css';
+
+// Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado em
+// paralelo aos renderers antigos. Reutiliza o pipeline oficial:
+// usePainelConsultorData + usePlanejamentoFinanceiro + agregadores zoot +
+// loaders financeiros ano-1/ano-corrente → buildPlanejamentoVisaoGeralData.
+import { usePainelConsultorData } from '@/hooks/usePainelConsultorData';
+import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
+import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
+import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
+import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
+import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
+import {
+  agregaReceitaPecZootComp,
+  agregaDeducoesZootComp,
+  agregaReposicaoBovinosZootComp,
+} from '@/lib/painelConsultor/agregadosZootCompetencia';
+import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 
 export default function V2FechamentoPeriodo() {
   const { clienteAtual } = useCliente();
@@ -83,6 +100,135 @@ export default function V2FechamentoPeriodo() {
     periodoFim: periodo.periodoFim,
   });
 
+  // Marco 2.5 Fase 1: deriva ano/mesAlvo/modo do range do HeaderFiltro.
+  // Fase 1: modo='acumulado' = Jan→mesAlvo. Range arbitrário (Mar→Jun)
+  // não suportado pelo builder — usuário usa periodoInicio=periodoFim para "no mês".
+  const ano = periodo.periodoFim
+    ? Number(periodo.periodoFim.substring(0, 4)) || new Date().getFullYear()
+    : new Date().getFullYear();
+  const mesAlvo = periodo.periodoFim ? Number(periodo.periodoFim.substring(5, 7)) : 12;
+  const modo: 'no-mes' | 'acumulado' =
+    periodo.periodoInicio && periodo.periodoInicio === periodo.periodoFim ? 'no-mes' : 'acumulado';
+
+  // PC-100 anual + comparativos ano-1. Mesmo shape usado por V2PlanejamentoVisaoGeral.
+  const painel = usePainelConsultorData({
+    ano,
+    mes: 12,
+    viewMode: 'periodo',
+    carregarMeta: true,
+    incluirComparativos: true,
+    preservarMetaQuandoGlobalIncompleto: true,
+  });
+
+  // Planejamento financeiro do ano (grid META + saldo inicial + extras).
+  const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
+  const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
+
+  // financeiro_lancamentos_v2 ano-1 e ano-corrente (REAL).
+  const [lancFinAnoAnt, setLancFinAnoAnt] = useState<FinanceiroLancamento[] | null>(null);
+  const [lancFinAnoCorrente, setLancFinAnoCorrente] = useState<FinanceiroLancamento[] | null>(null);
+  useEffect(() => {
+    if (!clienteId || !ano) {
+      setLancFinAnoAnt(null);
+      setLancFinAnoCorrente(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const [rowsAnt, rowsCorr] = await Promise.all([
+          carregarLancFinAnoAntReal(
+            { clienteId, fazendaId: isGlobal ? undefined : fazendaAtual?.id, ano },
+            supabase,
+          ),
+          carregarLancFinAnoCorrenteReal(
+            { clienteId, fazendaId: isGlobal ? undefined : fazendaAtual?.id, ano },
+            supabase,
+          ),
+        ]);
+        if (!cancelado) {
+          setLancFinAnoAnt(rowsAnt);
+          setLancFinAnoCorrente(rowsCorr);
+        }
+      } catch (e) {
+        if (!cancelado) {
+          console.error('[V2FechamentoPeriodo] erro ao carregar financeiro_lancamentos_v2:', e);
+          setLancFinAnoAnt(null);
+          setLancFinAnoCorrente(null);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, ano, isGlobal, fazendaAtual?.id]);
+
+  // ZootComp: 6 agregações (3 ano META + 3 ano-1 REALIZADO).
+  const [zootComp, setZootComp] = useState<ZootCompPreload | null>(null);
+  useEffect(() => {
+    if (!clienteId || !ano) {
+      setZootComp(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      try {
+        const [
+          receitaPec, deducoes, reposicaoBovinos,
+          receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
+        ] = await Promise.all([
+          agregaReceitaPecZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaDeducoesZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaReposicaoBovinosZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
+          agregaReceitaPecZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
+          agregaDeducoesZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
+          agregaReposicaoBovinosZootComp({ clienteId, ano: ano - 1, cenario: 'realizado' }, supabase),
+        ]);
+        if (!cancelado) {
+          setZootComp({
+            receitaPec, deducoes, reposicaoBovinos,
+            receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
+          });
+        }
+      } catch (e) {
+        if (!cancelado) {
+          console.error('[V2FechamentoPeriodo] erro agregadosZootCompetencia:', e);
+          setZootComp(null);
+        }
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [clienteId, ano]);
+
+  // Monta DTO do Planejamento com mesAlvo/modo/lancFinAnoCorrente — habilita
+  // 3 colunas (Real ano-1 / Real ano / Meta) no BlocoAnaliseEconomica.
+  const dtoPlanejamento = useMemo(() => buildPlanejamentoVisaoGeralData({
+    ano,
+    mesAtual: mesAlvo,
+    escopo: isGlobal ? 'global' : 'fazenda',
+    fazendaId: isGlobal ? undefined : fazendaAtual?.id,
+    fazendaNome: isGlobal ? undefined : fazendaAtual?.nome,
+    painel,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    grid: grid as any,
+    saldoInicial: planFin.saldoInicial,
+    extrasGrid: {
+      lancamentosRebanho: planFin.lancamentosRebanho,
+      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
+      lancamentosNutricao: planFin.lancamentosNutricao,
+      lancamentosProjetos: planFin.lancamentosProjetos,
+    },
+    zootComp: zootComp ?? undefined,
+    lancFinAnoAnt: lancFinAnoAnt ?? undefined,
+    lancFinAnoCorrente: lancFinAnoCorrente ?? undefined,
+    mesAlvo,
+    modo,
+  }), [
+    ano, mesAlvo, modo, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
+    painel, grid, planFin.saldoInicial,
+    planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
+    planFin.lancamentosNutricao, planFin.lancamentosProjetos,
+    zootComp, lancFinAnoAnt, lancFinAnoCorrente,
+  ]);
+
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
   }
@@ -97,6 +243,16 @@ export default function V2FechamentoPeriodo() {
         onChange={(ini, fim) => setPeriodo({ periodoInicio: ini, periodoFim: fim })}
         onImprimir={() => window.print()}
         loading={loading}
+      />
+
+      {/* Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado
+          em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
+          ativa as 7 colunas (Real ano-1 / Real ano / Meta + 2 deltas). */}
+      <BlocoAnaliseEconomica
+        data={dtoPlanejamento.bloco3_analiseEconomica}
+        desfocar={false}
+        ano={ano}
+        mostrarAnoCorrente={true}
       />
 
       {loading && (
