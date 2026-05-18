@@ -509,6 +509,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
     const engordaConsumo = Number(params.engorda_consumo_kg_ms) || 0;
     const engordaCustoKg = Number(params.engorda_custo_kg_ms) || 0;
     const freteCustoCab = Number(params.frete_custo_cab) || 0;
+    const comercialCustoCab = Number((params as any).comercial_custo_cab) || 0;
     const custoPorCabEngorda = engordaDias * engordaConsumo * engordaCustoKg;
 
     // 2. Load rebanho META (saldo_final por categoria/mês)
@@ -600,6 +601,29 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
       }
       for (let i = 0; i < 12; i++) frete[i] = Math.round(frete[i] * 100) / 100;
       result.set('Transferência de Gado entre Fazendas', frete);
+    }
+
+    // COMERCIAL EM ABATES+VENDAS: taxa por cab abatida/vendida → Impostos e Despesas de Abates e Vendas
+    if (comercialCustoCab > 0) {
+      const { data: saidas } = await supabase
+        .from('lancamentos')
+        .select('data, quantidade')
+        .eq('cliente_id', clienteId!)
+        .eq('fazenda_id', fId)
+        .eq('cenario', 'meta')
+        .in('tipo', ['abate', 'venda'])
+        .eq('cancelado', false)
+        .gte('data', `${ano}-01-01`)
+        .lte('data', `${ano}-12-31`);
+
+      const comercial = new Array(12).fill(0);
+      for (const r of (saidas ?? [])) {
+        const mes = Number((r.data as string).substring(5, 7)) - 1;
+        if (mes < 0 || mes > 11) continue;
+        comercial[mes] += Math.abs(Number(r.quantidade)) * comercialCustoCab;
+      }
+      for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i]);
+      result.set('Impostos e Despesas de Abates e Vendas', comercial);
     }
 
     return result;
