@@ -588,7 +588,14 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             modo={modo}
             inverterSemantica={modo === 'fechamento'}
           />
-          <div className={cn('grid grid-cols-2 gap-2 relative')}>
+          {/* PR5 — No modo Fechamento, card 'Dif. Caixa no Período - Meta' foi
+              removido (valores estavam incorretos). Saldo Caixa Final Real fica
+              sozinho ocupando toda a largura. No Planejamento, mantém o card
+              'Dif. Caixa no Ano - Meta' (lógica Dez−Dez/N-1 ainda válida). */}
+          <div className={cn(
+            'grid gap-2 relative',
+            modo === 'fechamento' ? 'grid-cols-1' : 'grid-cols-2',
+          )}>
             <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
               <CardTotal
                 titulo={modo === 'fechamento' ? 'Saldo Caixa Final Real' : 'Saldo Caixa Final Meta'}
@@ -597,14 +604,16 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                 metaOnly
               />
             </div>
-            <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
-              <CardTotal
-                titulo={modo === 'fechamento' ? 'Dif. Caixa no Período - Meta' : 'Dif. Caixa no Ano - Meta'}
-                linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal, mesAlvo)}
-                variant="neutral"
-                metaOnly
-              />
-            </div>
+            {modo !== 'fechamento' && (
+              <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
+                <CardTotal
+                  titulo="Dif. Caixa no Ano - Meta"
+                  linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal, mesAlvo)}
+                  variant="neutral"
+                  metaOnly
+                />
+              </div>
+            )}
             {desfocarDashboard && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <span className="text-[10px] font-semibold text-foreground/70 bg-background/80 border border-border rounded px-2 py-0.5">
