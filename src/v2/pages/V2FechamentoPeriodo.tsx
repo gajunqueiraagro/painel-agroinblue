@@ -343,11 +343,16 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           desfocarDashboard={false}
           modo="fechamento"
           mesAlvo={mesAlvo}
-          onAnalisarFluxo={() => setFluxoModalOpen(true)}
+          onAnalisarFluxo={isGlobal ? () => setFluxoModalOpen(true) : undefined}
+          motivoFluxoBloqueado={
+            !isGlobal
+              ? 'Análise indisponível nesta visão. O caixa é consolidado por cliente. Selecione "Global" para analisar.'
+              : undefined
+          }
         />
       )}
 
-      {clienteId && (
+      {isGlobal && clienteId && (
         <FluxoCaixaModal
           open={fluxoModalOpen}
           onClose={() => setFluxoModalOpen(false)}
@@ -357,7 +362,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           painel={painel}
           saldoInicialMeta={planFin.saldoInicial}
           gridMetaConsolidado={gridMetaConsolidado}
-          isContextoIndividual={!isGlobal}
+          isContextoIndividual={false}
         />
       )}
 

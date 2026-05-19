@@ -19,6 +19,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { Info } from 'lucide-react';
+// Aliases para evitar shadowing do `Tooltip` do recharts.
+import {
+  Tooltip as ShTooltip,
+  TooltipContent as ShTooltipContent,
+  TooltipProvider as ShTooltipProvider,
+  TooltipTrigger as ShTooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type {
   BlocoResumoExecutivoData,
@@ -50,6 +58,10 @@ interface Props {
   /** Quando definida, o header do bloco vira clicável e abre o Modal Fluxo
    *  de Caixa Realizado. Sem prop → comportamento atual preservado. */
   onAnalisarFluxo?: () => void;
+  /** Quando definido, header NÃO fica clicável e exibe Info + Tooltip
+   *  com a mensagem do motivo. Mutuamente exclusivo com onAnalisarFluxo
+   *  (no fluxo normal apenas um vem definido por vez). */
+  motivoFluxoBloqueado?: string;
 }
 
 // Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
@@ -337,7 +349,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo, motivoFluxoBloqueado }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -439,6 +451,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-900/60">
           Caixa
         </span>
+        {/* Estado 1: clicável — header abre o Modal Fluxo (Global no Fechamento). */}
         {onAnalisarFluxo && (
           <span
             className="text-[10px] font-medium text-sky-700 dark:text-sky-300 underline-offset-2 hover:underline"
@@ -447,6 +460,27 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             Analisar ↗
           </span>
         )}
+        {/* Estado 2: bloqueado com motivo — Info + Tooltip (Individual no Fechamento). */}
+        {motivoFluxoBloqueado && !onAnalisarFluxo && (
+          <ShTooltipProvider delayDuration={150}>
+            <ShTooltip>
+              <ShTooltipTrigger asChild>
+                <span
+                  className="inline-flex items-center text-muted-foreground cursor-help"
+                  tabIndex={0}
+                  aria-label="Informação sobre análise indisponível"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </span>
+              </ShTooltipTrigger>
+              <ShTooltipContent side="bottom" className="max-w-xs text-xs">
+                {motivoFluxoBloqueado}
+              </ShTooltipContent>
+            </ShTooltip>
+          </ShTooltipProvider>
+        )}
+        {/* Estado 3: nenhum — Planejamento (header inerte como hoje). */}
       </div>
       <p className="text-xs text-muted-foreground mb-3">
         {modo === 'fechamento'

@@ -62,19 +62,27 @@ export function FluxoCaixaModal({
     enabled: open,
   });
 
-  // Subtítulo vem pré-formatado do builder; fallback enquanto data carrega.
-  const subtitulo = data?.subtituloPeriodo ?? `Real ${ano} vs Meta ${ano}`;
+  // Subtítulo vem pré-formatado do builder; fallback string garante texto
+  // descritivo mesmo enquanto data carrega (a11y aria-describedby).
+  const subtitulo =
+    data?.subtituloPeriodo ?? `Análise de fluxo de caixa realizado versus meta — Real ${ano} vs Meta ${ano}`;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto p-0">
+      <DialogContent
+        className="max-w-6xl max-h-[92vh] overflow-y-auto p-0"
+        aria-describedby="fluxo-caixa-modal-desc"
+      >
         {/* Header sticky com título, subtítulo e toggle */}
         <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5 space-y-2">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base font-semibold m-0 leading-tight">
               Fluxo de Caixa Realizado
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription
+              id="fluxo-caixa-modal-desc"
+              className="text-xs text-muted-foreground"
+            >
               {subtitulo}
             </DialogDescription>
           </DialogHeader>

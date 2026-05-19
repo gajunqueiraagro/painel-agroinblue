@@ -51,7 +51,6 @@ export function FluxoAnualTab({ lancamentos, saldosIniciais, onNavigateToMovimen
   // FONTE OFICIAL: useRebanhoOficial — saldos agregados da vw_zoot_categoria_mensal
   const cenarioView = statusFiltro === 'realizado' ? 'realizado' : 'meta';
   const rebanhoOf = useRebanhoOficial({ ano: Number(anoFiltro), cenario: cenarioView as 'realizado' | 'meta', global: isGlobal });
-  console.log('[FLUXO DEBUG]', { anoFiltro, cenarioView, fazendaAtualId: fazendaAtual?.id, fazendaAtualNome: fazendaAtual?.nome });
   // Verificar se o mês tem dados oficiais de fechamento
   const temFechamento = (mesKey: string): boolean => {
     const z = fazendaByMes[mesKey];
