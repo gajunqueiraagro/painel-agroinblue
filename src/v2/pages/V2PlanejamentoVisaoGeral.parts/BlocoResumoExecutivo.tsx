@@ -11,8 +11,8 @@
 
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
   ResponsiveContainer,
@@ -385,7 +385,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         >
           <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none', 'w-full h-full')}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="g-meta" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#f97316" stopOpacity={0.45} />
@@ -437,7 +437,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                   isAnimationActive={false}
                 />
               )}
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
           </div>
           {desfocarDashboard && (
