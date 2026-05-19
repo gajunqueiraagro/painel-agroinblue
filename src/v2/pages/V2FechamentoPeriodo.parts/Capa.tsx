@@ -1,19 +1,18 @@
 /**
- * Capa Executiva — Página 1 do Fechamento do Período (Marco 2.5).
+ * Capa Executiva — Página 1 do Fechamento do Período (Marco 2.5 Fase 3).
  *
- * 2 linhas: metadata 1-line + Resumo Executivo em bullets textuais.
- * Sem cards/grid — texto narrativo executivo. Sem insight automático.
+ * Narrativa macro limpa: 9 bullets textuais com Total + breakdown Pec/Agri.
+ * Sem comparativos vs META aqui — comparativos vivem nos cards/blocos abaixo.
  *
- * REGRA DE FONTES (auditoria pré-implementação):
- *   - Caixa Final → c.caixaFinal.realizado (DTO Fechamento — fluxo oficial),
- *     SEM comparativo vs META (Meta caixa não é soberana neste contexto).
- *   - Demais bullets → painel.<X>Indicador (PC-100 em viewMode='periodo'),
- *     fonte soberana com Meta correta. Substituem c.* do DTO que usava
- *     planFin.buildGrid() BASE (sem extras), gerando deltas inflados
- *     (ex: Receita Pec +287% antes do fix, agora −38% correto).
+ * Filosofia de fonte:
+ *   - Áreas e indicadores financeiros/zoot: painel.<X>Indicador (PC-100 soberano).
+ *   - Caixa Final: c.caixaFinal.realizado (DTO Fechamento — fluxo oficial).
+ *   - Rebanho médio: painel.cabecasIndicador.valor (média Jan→mesAlvo).
+ *   - Rebanho final: dto.movRebanho.resumo.cabecasFinal (fonte oficial do
+ *     builder Fechamento; sem cálculo paralelo).
  *
- * "Resultado do período" foi removido: cálculo Receita Op − Desembolso Pec
- * não interpretável nessa camada — usuário consulta DRE para resultado.
+ * NÃO existe receitaAgriIndicador no PC-100 — bullet "Receita Total Caixa"
+ * renderiza como "100% Pec" via modo soPec do helper de breakdown.
  */
 
 import logo from '@/assets/logo.png';
@@ -25,8 +24,7 @@ interface Props {
   dto: FechamentoPeriodoDTO;
   nomeCliente?: string;
   nomeFazenda?: string;
-  /** PC-100 — fonte soberana dos bullets (Receita/Custeio/Inv/Juros/Arrobas/
-   *  GMD) e do escopo "Pecuária + Agricultura" na metadata. */
+  /** PC-100 — fonte soberana dos bullets financeiros/zoot/áreas. */
   painel: PainelConsultorDataResult | null;
 }
 
@@ -41,13 +39,7 @@ function fmtMoedaCurto(v: number | null | undefined): string {
   return `R$ ${fmt(v)}`;
 }
 
-function fmtDeltaMeta(d: number | null | undefined): string {
-  if (d == null || !Number.isFinite(d)) return '(— vs META)';
-  const sign = d > 0 ? '+' : '';
-  return `(${sign}${Math.round(d)}% vs META)`;
-}
-
-// ─── Escopo Pec/Agri derivado de PC-100 ─────────────────────────────
+// ─── Escopo Pec/Agri (texto da metadata) ─────────────────────────────
 
 function derivarEscopo(painel: PainelConsultorDataResult | null): string {
   const pec = painel?.areaPecuariaRealMes ?? 0;
@@ -58,7 +50,7 @@ function derivarEscopo(painel: PainelConsultorDataResult | null): string {
   );
 }
 
-// ─── Área Produtiva + breakdown Pec/Agri ────────────────────────────
+// ─── Área Produtiva + breakdown ─────────────────────────────────────
 
 function derivarAreaProdutiva(painel: PainelConsultorDataResult | null): {
   total: number | null;
@@ -68,7 +60,6 @@ function derivarAreaProdutiva(painel: PainelConsultorDataResult | null): {
   const total = painel?.areaProdutivaRealMes ?? null;
   const pec = painel?.areaPecuariaRealMes ?? null;
   const agri = painel?.areaAgriculturaRealMes ?? null;
-  // Breakdown só faz sentido se as 3 estão disponíveis e total > 0.
   if (total == null || total <= 0 || pec == null || agri == null) {
     return { total, pctPec: null, pctAgri: null };
   }
@@ -81,21 +72,83 @@ function derivarAreaProdutiva(painel: PainelConsultorDataResult | null): {
   };
 }
 
+// ─── Breakdown Pec/Agri genérico (Receita, Custeio, Inv, Juros) ─────
+
+type BreakdownModo = 'ambos' | 'soPec' | 'soAgri' | 'vazio';
+
+function calcBreakdownPecAgri(
+  valorPec: number | null | undefined,
+  valorAgri: number | null | undefined,
+): { total: number | null; pctPec: number | null; pctAgri: number | null; modo: BreakdownModo } {
+  const pec = valorPec != null && Number.isFinite(valorPec) ? valorPec : 0;
+  const agri = valorAgri != null && Number.isFinite(valorAgri) ? valorAgri : 0;
+  const total = pec + agri;
+  if (total === 0) return { total: null, pctPec: null, pctAgri: null, modo: 'vazio' };
+  if (pec > 0 && agri > 0) {
+    const pctPec = Math.round((pec / total) * 100);
+    const pctAgri = 100 - pctPec;
+    return { total, pctPec, pctAgri, modo: 'ambos' };
+  }
+  if (pec > 0) return { total, pctPec: 100, pctAgri: 0, modo: 'soPec' };
+  if (agri > 0) return { total, pctPec: 0, pctAgri: 100, modo: 'soAgri' };
+  return { total: null, pctPec: null, pctAgri: null, modo: 'vazio' };
+}
+
+// Sub-componente: texto do parêntese de breakdown (font menor + muted).
+function BreakdownPctSpan({ modo, pctPec, pctAgri }: {
+  modo: BreakdownModo;
+  pctPec: number | null;
+  pctAgri: number | null;
+}) {
+  if (modo === 'vazio') return null;
+  if (modo === 'soPec') return <span className="text-xs text-muted-foreground"> (100% Pec)</span>;
+  if (modo === 'soAgri') return <span className="text-xs text-muted-foreground"> (100% Agri)</span>;
+  return <span className="text-xs text-muted-foreground"> ({pctPec}% Pec • {pctAgri}% Agri)</span>;
+}
+
+// ─── Rebanho composto (médio + final) ───────────────────────────────
+
+function derivarRebanho(
+  painel: PainelConsultorDataResult | null,
+  dto: FechamentoPeriodoDTO,
+): { medio: number | null; final: number | null } {
+  const medioRaw = painel?.cabecasIndicador?.valor;
+  const medio = medioRaw != null && Number.isFinite(medioRaw) ? medioRaw : null;
+  // dto.movRebanho.resumo.cabecasFinal — fonte oficial buildFechamentoPeriodoData
+  // (L1208: agFinal?.cabecas via agregaRebanhoMes). Sem cálculo paralelo.
+  const finalRaw = dto.movRebanho?.resumo?.cabecasFinal;
+  const final = finalRaw != null && Number.isFinite(finalRaw) ? finalRaw : null;
+  return { medio, final };
+}
+
 // ─── Componente principal ───────────────────────────────────────────
 
 export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   const c = dto.cabecalho;
   const escopoTexto = derivarEscopo(painel);
   const area = derivarAreaProdutiva(painel);
+  const rebanho = derivarRebanho(painel, dto);
 
-  // PC-100 soberano — substitui c.* do DTO (que usa planFin.buildGrid() BASE,
-  // sem extras lancamentosRebanho/Financiamento/Nutricao/Projetos).
-  const receitaPec     = painel?.receitaPecIndicador;
-  const custeioPec     = painel?.custeioPecIndicador;
-  const investPec      = painel?.investPecIndicador;
-  const jurosPec       = painel?.jurosPecIndicador;
-  const arrobas        = painel?.arrobasIndicador;
-  const gmd            = painel?.gmdIndicador;
+  // PC-100 soberano — Pec
+  const receitaPec = painel?.receitaPecIndicador?.valor;
+  const custeioPec = painel?.custeioPecIndicador?.valor;
+  const investPec  = painel?.investPecIndicador?.valor;
+  const jurosPec   = painel?.jurosPecIndicador?.valor;
+  const arrobas    = painel?.arrobasIndicador?.valor;
+  const gmd        = painel?.gmdIndicador?.valor;
+
+  // PC-100 soberano — Agri (não existe receitaAgriIndicador; só custos).
+  // TODO: adicionar breakdown Agri em Receita Total Caixa quando PC-100
+  // expor receitaAgriIndicador.
+  const custeioAgri = painel?.custeioAgriIndicador?.valor;
+  const investAgri  = painel?.investAgriIndicador?.valor;
+  const jurosAgri   = painel?.jurosAgriIndicador?.valor;
+
+  // Breakdowns por bullet
+  const breakReceita = calcBreakdownPecAgri(receitaPec, null); // sem Agri
+  const breakCusteio = calcBreakdownPecAgri(custeioPec, custeioAgri);
+  const breakInvest  = calcBreakdownPecAgri(investPec, investAgri);
+  const breakJuros   = calcBreakdownPecAgri(jurosPec, jurosAgri);
 
   return (
     <section className="pagina-fechamento bg-card border border-border rounded-lg p-4 mb-4">
@@ -110,51 +163,60 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
         <img src={logo} alt="Agroinblue" className="h-8 shrink-0" />
       </header>
 
-      {/* LINHA 2 — Resumo Executivo em bullets textuais.
-          TODO: reativar Entradas/Saídas Financeiras na Capa quando DTO ganhar
+      {/* LINHA 2 — Resumo Executivo (9 bullets, sem % vs META).
+          TODO: reativar Entradas/Saídas Financeiras totais quando DTO ganhar
           gridMetaConsolidado (hoje useFechamentoPeriodoData usa
-          planFin.buildGrid() base, sem extras — Meta subestimada). */}
+          planFin.buildGrid() base, sem extras). */}
       <div>
         <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
           Resumo Executivo
         </h3>
         <ul className="text-sm text-foreground space-y-1 leading-snug">
+          {/* 1. Área Produtiva */}
           <li>
             Área Produtiva: <strong className="font-semibold">{area.total != null ? `${fmt(area.total, 0)} ha` : '—'}</strong>
             {area.pctPec !== null && area.pctAgri !== null && (
-              <span className="text-muted-foreground"> ({Math.round(area.pctPec)}% Pecuária • {Math.round(area.pctAgri)}% Agricultura)</span>
+              <span className="text-xs text-muted-foreground"> ({Math.round(area.pctPec)}% Pec • {Math.round(area.pctAgri)}% Agri)</span>
             )}
-            {/* Sem breakdown → omitir parêntese; sem total → "—". Área é
-                estrutural, sem comparativo vs META. TODO: expor breakdown
-                quando areaPec/areaAgri estiverem indisponíveis em modo Global
-                + P1 incompleto (hoje cai em "—"). */}
           </li>
+          {/* 2. Rebanho (médio + final) */}
           <li>
-            Caixa final: <strong className="font-semibold">{fmtMoedaCurto(c.caixaFinal.realizado)}</strong>
+            Rebanho:{' '}
+            médio: <strong className="font-semibold">{rebanho.medio != null ? `${fmt(rebanho.medio, 0)} cab` : '—'}</strong>
+            <span className="text-xs text-muted-foreground"> | </span>
+            final: <strong className="font-semibold">{rebanho.final != null ? `${fmt(rebanho.final, 0)} cab` : '—'}</strong>
           </li>
+          {/* 3. Caixa Final (sem breakdown, sem delta) */}
           <li>
-            Receita Pecuária: <strong className="font-semibold">{fmtMoedaCurto(receitaPec?.valor)}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(receitaPec?.deltaMeta)}</span>
+            Caixa Final: <strong className="font-semibold">{fmtMoedaCurto(c.caixaFinal.realizado)}</strong>
           </li>
+          {/* 4. Receita Total Caixa */}
           <li>
-            Custeio Produção Pecuária: <strong className="font-semibold">{fmtMoedaCurto(custeioPec?.valor)}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(custeioPec?.deltaMeta)}</span>
+            Receita Total Caixa: <strong className="font-semibold">{fmtMoedaCurto(breakReceita.total)}</strong>
+            <BreakdownPctSpan modo={breakReceita.modo} pctPec={breakReceita.pctPec} pctAgri={breakReceita.pctAgri} />
           </li>
+          {/* 5. Custeio Produção */}
           <li>
-            Investimentos Fazenda Pecuária: <strong className="font-semibold">{fmtMoedaCurto(investPec?.valor)}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(investPec?.deltaMeta)}</span>
+            Custeio Produção: <strong className="font-semibold">{fmtMoedaCurto(breakCusteio.total)}</strong>
+            <BreakdownPctSpan modo={breakCusteio.modo} pctPec={breakCusteio.pctPec} pctAgri={breakCusteio.pctAgri} />
           </li>
+          {/* 6. Investimentos Fazenda */}
           <li>
-            Juros Financiamento Pecuária: <strong className="font-semibold">{fmtMoedaCurto(jurosPec?.valor)}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(jurosPec?.deltaMeta)}</span>
+            Investimentos Fazenda: <strong className="font-semibold">{fmtMoedaCurto(breakInvest.total)}</strong>
+            <BreakdownPctSpan modo={breakInvest.modo} pctPec={breakInvest.pctPec} pctAgri={breakInvest.pctAgri} />
           </li>
+          {/* 7. Juros Financiamento */}
           <li>
-            Arrobas Produzidas: <strong className="font-semibold">{arrobas?.valor != null ? `${fmt(arrobas.valor)} @` : '—'}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(arrobas?.deltaMeta)}</span>
+            Juros Financiamento: <strong className="font-semibold">{fmtMoedaCurto(breakJuros.total)}</strong>
+            <BreakdownPctSpan modo={breakJuros.modo} pctPec={breakJuros.pctPec} pctAgri={breakJuros.pctAgri} />
           </li>
+          {/* 8. Arrobas Produzidas (sem breakdown) */}
           <li>
-            GMD médio: <strong className="font-semibold">{gmd?.valor != null ? `${fmt(gmd.valor, 3)} kg/dia` : '—'}</strong>
-            <span className="text-muted-foreground"> {fmtDeltaMeta(gmd?.deltaMeta)}</span>
+            Arrobas Produzidas: <strong className="font-semibold">{arrobas != null ? `${fmt(arrobas)} @` : '—'}</strong>
+          </li>
+          {/* 9. GMD médio (sem breakdown) */}
+          <li>
+            GMD médio: <strong className="font-semibold">{gmd != null ? `${fmt(gmd, 3)} kg/dia` : '—'}</strong>
           </li>
         </ul>
       </div>
