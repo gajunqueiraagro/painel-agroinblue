@@ -216,8 +216,8 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
       'grid gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
       mostrarAnoCorrente ? GRID_5_COLS : GRID_4_COLS,
     )}>
-      <div className="truncate text-[11px] italic text-muted-foreground">
-        {label} <span className="text-[10px]">(aguarda plano de contas)</span>
+      <div className="truncate text-[11px]">
+        {label} <span className="text-[10px] italic text-muted-foreground">(aguarda plano de contas)</span>
       </div>
       {mostrarAnoCorrente ? (
         <>
@@ -302,7 +302,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       {/* Estrutura DRE */}
       <div className="border-x border-b border-border/40 rounded-b-md overflow-hidden">
         <GrupoRow grupo={data.faturamento} tipoSinal="receita" mostrarAnoCorrente={m} />
-        <GrupoRow grupo={data.deducoes} tipoSinal="despesa" mostrarAnoCorrente={m} />
+        <LinhaRow linha={{ ...data.deducoes.total, label: data.deducoes.label }} tipoSinal="despesa" mostrarAnoCorrente={m} />
         <LinhaRow linha={data.receitaLiquida} tipoSinal="subtotal" destaque mostrarAnoCorrente={m} />
         <GrupoRow grupo={data.custeioPecuaria} tipoSinal="despesa" mostrarAnoCorrente={m} />
         <LinhaRow linha={data.resultadoBruto} tipoSinal="subtotal" destaque mostrarAnoCorrente={m} />
@@ -311,7 +311,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
         <LinhaRow linha={data.reposicaoBovinos} tipoSinal="despesa" mostrarAnoCorrente={m} />
         <LinhaRow linha={data.variacaoEstoqueGado} tipoSinal="variacao" mostrarAnoCorrente={m} />
         <LinhaRow linha={data.resultadoOperacional} tipoSinal="subtotal" destaque mostrarAnoCorrente={m} />
-        <GrupoRow grupo={data.resultadoFinanceiro} tipoSinal="despesa" mostrarAnoCorrente={m} />
+        <LinhaRow linha={{ ...data.resultadoFinanceiro.total, label: '7. (−) Juros Pecuária' }} tipoSinal="despesa" mostrarAnoCorrente={m} />
         <LinhaRow linha={data.resultadoAntesTributos} tipoSinal="subtotal" destaque mostrarAnoCorrente={m} />
         {data.tributosPatrimoniais
           ? <GrupoRow grupo={data.tributosPatrimoniais} tipoSinal="despesa" mostrarAnoCorrente={m} />
