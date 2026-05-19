@@ -118,6 +118,11 @@ export interface LancamentoBruto {
   status_transacao: string;
   /** 'realizado' | 'meta' — builder filtra apenas 'realizado'. */
   cenario: string;
+  // Necessário para filtrar transferências entre contas
+  // (tipo_operacao === '3-Transferências'). macro_custo é inconsistente no
+  // banco (~74% NULL em lançamentos com tipo_operacao = '3-Transferências'),
+  // portanto não pode ser fonte única do filtro.
+  tipo_operacao: string | null;
   subcentro: string | null;
   centro_custo: string | null;
   grupo_custo: string | null;

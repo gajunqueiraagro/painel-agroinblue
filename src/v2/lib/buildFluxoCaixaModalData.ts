@@ -337,6 +337,10 @@ function montarTopImpactos(
   const limite = mesAlvo - 1; // 0-based inclusive
   for (const l of lancamentosFiltrados) {
     if (l.subcentro == null) continue;
+    // Transferências entre contas são movimento neutro. NÃO impactam fluxo
+    // líquido. Filtro por tipo_operacao (canônico). macro_custo é
+    // inconsistente no banco (~74% NULL nesses lançamentos).
+    if (l.tipo_operacao === '3-Transferências') continue;
     const idx = mesIdxDe(l.ano_mes);
     if (idx < 0 || idx > limite) continue;
     const key = l.subcentro;
@@ -351,17 +355,22 @@ function montarTopImpactos(
       });
     }
     const agg = mapa.get(key)!;
-    // Lançamento traz sinal próprio (+1/-1) — usar direto.
-    agg.realPeriodo += safeNum(l.valor) * (l.sinal === -1 ? -1 : 1);
+    // Top Impactos compara valores ABSOLUTOS por subcentro — natureza
+    // (entrada/saída) é resolvida em calcularImpacto via macro_custo.
+    // Evita inconsistência quando `sinal` vier null no banco (legados).
+    agg.realPeriodo += Math.abs(safeNum(l.valor));
   }
 
-  // Agregar meta por subcentro (Jan→mesAlvo) usando sinal convencional.
+  // Agregar meta por subcentro (Jan→mesAlvo) em valor absoluto.
   for (const row of grid) {
-    const sinal = sinalConvencionalDeMacro(row.macro_custo);
+    // Grid Meta não expõe tipo_operacao. Fallback por macro_custo
+    // (cobertura parcial — proteção secundária). Refinar quando
+    // SubcentroGrid evoluir para expor tipo_operacao.
+    if (row.macro_custo === 'Transferências') continue;
     let soma = 0;
     for (let i = 0; i <= limite && i < 12; i++) {
       const v = row.meses[i];
-      if (isFiniteNumber(v)) soma += v * sinal;
+      if (isFiniteNumber(v)) soma += Math.abs(v);
     }
     if (soma === 0) {
       // Sem meta no período, mas pode ter realizado → ainda assim entra.

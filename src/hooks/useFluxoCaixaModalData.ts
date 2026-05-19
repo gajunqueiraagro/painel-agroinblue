@@ -8,6 +8,10 @@
  *   1. Query enxuta paginada em `financeiro_lancamentos_v2` — cenário
  *      'realizado', cancelado=false, sem_movimentacao_caixa=false, no ano.
  *      Sem filtro de fazenda — caixa é cliente-wide (espelha caixaIndicador).
+ *      SELECT de 11 colunas (id, ano_mes, valor, sinal, status_transacao,
+ *      cenario, tipo_operacao, subcentro, centro_custo, grupo_custo,
+ *      macro_custo). `tipo_operacao` é necessário para filtrar transferências
+ *      entre contas no builder (macro_custo é inconsistente, ~74% NULL).
  *   2. Compor input do builder (saldos PC-100 + grid Meta + lançamentos).
  *   3. Devolver DTO pronto via `buildFluxoCaixaModalData(...)`.
  *
@@ -59,6 +63,7 @@ interface LancamentoRow {
   sinal: number | null;
   status_transacao: string | null;
   cenario: string | null;
+  tipo_operacao: string | null;
   subcentro: string | null;
   centro_custo: string | null;
   grupo_custo: string | null;
@@ -77,7 +82,7 @@ async function fetchLancamentosDoAno(
     query: () => (supabase
       .from('financeiro_lancamentos_v2')
       .select(
-        'id, ano_mes, valor, sinal, status_transacao, cenario, subcentro, centro_custo, grupo_custo, macro_custo',
+        'id, ano_mes, valor, sinal, status_transacao, cenario, tipo_operacao, subcentro, centro_custo, grupo_custo, macro_custo',
       ) as any)
       .eq('cliente_id', clienteId)
       .eq('cenario', 'realizado')
@@ -105,6 +110,7 @@ async function fetchLancamentosDoAno(
       sinal: r.sinal === -1 ? -1 : 1,
       status_transacao: r.status_transacao ?? '',
       cenario: r.cenario ?? '',
+      tipo_operacao: r.tipo_operacao ?? null,
       subcentro: r.subcentro,
       centro_custo: r.centro_custo,
       grupo_custo: r.grupo_custo,
