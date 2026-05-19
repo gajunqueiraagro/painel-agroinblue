@@ -115,10 +115,15 @@ export default function V2FechamentoPeriodo() {
   const modo: 'no-mes' | 'acumulado' =
     periodo.periodoInicio && periodo.periodoInicio === periodo.periodoFim ? 'no-mes' : 'acumulado';
 
-  // PC-100 anual + comparativos ano-1. Mesmo shape usado por V2PlanejamentoVisaoGeral.
+  // PC-100 Jan→mesAlvo + comparativos ano-1. mes=mesAlvo é crítico:
+  // controla indicador.valor e deltas (séries serieAno/serieAnoAnt/serieMeta
+  // são as mesmas independente de mes). Mes=12 hardcoded envenenava
+  // GMD (÷365 em vez de ÷dias-do-período), UA/ha (rollingAvg NaN-propaga
+  // a partir de meses futuros), Valor Rebanho (foto Dez sem snapshot) e
+  // Rebanho Médio (filter de NaN contaminado por mês parcial em curso).
   const painel = usePainelConsultorData({
     ano,
-    mes: 12,
+    mes: mesAlvo,
     viewMode: 'periodo',
     carregarMeta: true,
     incluirComparativos: true,
