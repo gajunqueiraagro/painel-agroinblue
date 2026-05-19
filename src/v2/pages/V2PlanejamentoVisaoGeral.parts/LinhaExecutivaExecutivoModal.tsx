@@ -99,8 +99,19 @@ function inferirNaturezaLinha(
   composicaoOficialLabel?: string,
 ): NaturezaLinha {
   const texto = `${titulo} ${composicaoOficialLabel ?? ''}`.toLowerCase();
-  // ALERTA: "deduções de receita" cairá em 'receita' por substring match.
-  // Caso edge a tratar quando Deduções virar drill (PR futuro).
+  // PR4 — exceção explícita: "Deduções de Receita" é REDUTORA de receita,
+  // não receita. Visualmente comportamento de DESPESA:
+  //   - Real MAIOR que Meta em Deduções = ruim (gastou mais com deduções) = vermelho
+  //   - Real MENOR que Meta em Deduções = bom (economia) = verde
+  // Regra deve vir ANTES da regra genérica de receita.
+  if (
+    texto.includes('dedução') ||
+    texto.includes('deduções') ||
+    texto.includes('deducao') ||
+    texto.includes('deducoes')
+  ) {
+    return 'despesa';
+  }
   if (
     texto.includes('receita') ||
     texto.includes('entrada') ||

@@ -62,9 +62,33 @@ import {
   agregaCusteioPecPorSubcentroMeta,
   agregaCusteioAgriPorSubcentro,
   agregaCusteioAgriPorSubcentroMeta,
-  // Restantes (Juros, Investimentos, Reposição Bovinos, Amortizações,
-  // Dividendos, Deduções) entram em PR4+ — uma linha por PR para validação
-  // visual isolada.
+  // PR4 — Juros (Pec + Agri)
+  agregaJurosPecPorSubcentro,
+  agregaJurosPecPorSubcentroMeta,
+  agregaJurosAgriPorSubcentro,
+  agregaJurosAgriPorSubcentroMeta,
+  // PR4 — Investimentos (Pec + Agri). Nome real do export: agregaInvFazenda*
+  // (não agregaInvestimento*). Adotado conforme regra do briefing.
+  agregaInvFazendaPecPorSubcentro,
+  agregaInvFazendaPecPorSubcentroMeta,
+  agregaInvFazendaAgriPorSubcentro,
+  agregaInvFazendaAgriPorSubcentroMeta,
+  // PR4 — Reposição Bovinos. Nome real do export: agregaInvBovinos*.
+  agregaInvBovinosPorSubcentro,
+  agregaInvBovinosPorSubcentroMeta,
+  // PR4 — Amortizações (Pec + Agri)
+  agregaAmortizacaoPecPorSubcentro,
+  agregaAmortizacaoPecPorSubcentroMeta,
+  agregaAmortizacaoAgriPorSubcentro,
+  agregaAmortizacaoAgriPorSubcentroMeta,
+  // PR4 — Dividendos
+  agregaDividendosPorSubcentro,
+  agregaDividendosPorSubcentroMeta,
+  // PR4 — Deduções de Receita (natureza='despesa' via fix do helper
+  // inferirNaturezaLinha). Nome real do export: agregaDeducoes* (sem o
+  // sufixo 'Receita' no nome da função, apesar da chave deducoesReceita).
+  agregaDeducoesPorSubcentro,
+  agregaDeducoesPorSubcentroMeta,
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import {
   ORDEM_CENTROS_RECEITA_PECUARIA,
@@ -73,6 +97,15 @@ import {
   ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
   ORDEM_CENTROS_CUSTEIO_PECUARIA,
   ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
+  ORDEM_CENTROS_JUROS_PECUARIA,
+  ORDEM_CENTROS_JUROS_AGRICULTURA,
+  ORDEM_CENTROS_INVESTIMENTO_PECUARIA,
+  ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA,
+  ORDEM_CENTROS_REPOSICAO_BOVINOS,
+  ORDEM_CENTROS_AMORTIZACAO_PECUARIA,
+  ORDEM_CENTROS_AMORTIZACAO_AGRICULTURA,
+  ORDEM_CENTROS_DIVIDENDOS,
+  ORDEM_CENTROS_DEDUCOES_RECEITA,
 } from '@/lib/financeiro/classificacao';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
@@ -156,6 +189,75 @@ const CONFIG_MODAIS_LINHA_FECHAMENTO: Partial<Record<LinhaModalKey, ConfigModalL
     ordemCentrosOficial: ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
     agregaReal: agregaCusteioAgriPorSubcentro,
     agregaMeta: agregaCusteioAgriPorSubcentroMeta,
+  },
+  // PR4 — 9 linhas restantes (Juros + Inv + Reposição + Amort + Div + Ded).
+  // Paridade EXATA com CONFIG_MODAIS_LINHA do V2PlanejamentoVisaoGeral.tsx
+  // (L145-207). Strings copiadas literalmente (regra soberana — Gabriel).
+  jurosPecuaria: {
+    titulo: 'Juros Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Juros de Financiamento Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_JUROS_PECUARIA,
+    agregaReal: agregaJurosPecPorSubcentro,
+    agregaMeta: agregaJurosPecPorSubcentroMeta,
+  },
+  jurosAgricultura: {
+    titulo: 'Juros Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Juros de Financiamento Agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_JUROS_AGRICULTURA,
+    agregaReal: agregaJurosAgriPorSubcentro,
+    agregaMeta: agregaJurosAgriPorSubcentroMeta,
+  },
+  investimentoPecuaria: {
+    titulo: 'Investimento Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Investimento Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_INVESTIMENTO_PECUARIA,
+    agregaReal: agregaInvFazendaPecPorSubcentro,
+    agregaMeta: agregaInvFazendaPecPorSubcentroMeta,
+  },
+  investimentoAgricultura: {
+    titulo: 'Investimento Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Investimento Agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_INVESTIMENTO_AGRICULTURA,
+    agregaReal: agregaInvFazendaAgriPorSubcentro,
+    agregaMeta: agregaInvFazendaAgriPorSubcentroMeta,
+  },
+  reposicaoBovinos: {
+    titulo: 'Reposição Bovinos',
+    composicaoOficialLabel: 'grupo_custo = "Compra de Bovinos"',
+    ordemCentrosOficial: ORDEM_CENTROS_REPOSICAO_BOVINOS,
+    agregaReal: agregaInvBovinosPorSubcentro,
+    agregaMeta: agregaInvBovinosPorSubcentroMeta,
+  },
+  amortizacaoPecuaria: {
+    titulo: 'Amortização Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Amortizações", escopo = "pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_AMORTIZACAO_PECUARIA,
+    agregaReal: agregaAmortizacaoPecPorSubcentro,
+    agregaMeta: agregaAmortizacaoPecPorSubcentroMeta,
+  },
+  amortizacaoAgricultura: {
+    titulo: 'Amortização Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Amortizações", escopo = "agricultura"',
+    ordemCentrosOficial: ORDEM_CENTROS_AMORTIZACAO_AGRICULTURA,
+    agregaReal: agregaAmortizacaoAgriPorSubcentro,
+    agregaMeta: agregaAmortizacaoAgriPorSubcentroMeta,
+  },
+  dividendos: {
+    titulo: 'Dividendos',
+    composicaoOficialLabel: 'grupo_custo = "Dividendos"',
+    ordemCentrosOficial: ORDEM_CENTROS_DIVIDENDOS,
+    agregaReal: agregaDividendosPorSubcentro,
+    agregaMeta: agregaDividendosPorSubcentroMeta,
+  },
+  // Deduções: natureza='despesa' forçada via fix do helper inferirNaturezaLinha
+  // no LinhaExecutivaExecutivoModal.tsx (PR4). Real MAIOR que Meta = ruim
+  // (vermelho); Real MENOR = bom (verde). Comportamento de despesa pura.
+  deducoesReceita: {
+    titulo: 'Deduções de Receita',
+    composicaoOficialLabel: 'grupo_custo = "Deduções de Receitas"',
+    ordemCentrosOficial: ORDEM_CENTROS_DEDUCOES_RECEITA,
+    agregaReal: agregaDeducoesPorSubcentro,
+    agregaMeta: agregaDeducoesPorSubcentroMeta,
   },
 };
 
