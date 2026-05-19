@@ -45,15 +45,28 @@ import { buildProducaoRealizadaData } from '@/v2/lib/buildProducaoRealizadaData'
 import type { LinhaExecutiva } from '@/v2/lib/blocoResumoExecutivoTypes';
 import {
   type ComposicaoSubcentro,
+  // PR1 — Receita Pecuária
   agregaReceitaPecPorSubcentro,
   agregaReceitaPecPorSubcentroMeta,
-  // OBS: importar SOMENTE Receita Pec nesta PR1.
-  // As outras 14 linhas (Receita Agri, Custeio Pec/Agri, Juros, Investimentos,
-  // Reposição Bovinos, Amortizações, Dividendos, Deduções, Outras Receitas,
-  // Entradas Financeiras) entram em PRs seguintes — uma linha por PR para
-  // validação isolada.
+  // PR2 — Receita Agricultura
+  agregaReceitaAgriPorSubcentro,
+  agregaReceitaAgriPorSubcentroMeta,
+  // PR2 — Outras Receitas
+  agregaOutrasReceitasPorSubcentro,
+  agregaOutrasReceitasPorSubcentroMeta,
+  // PR2 — Entradas Financeiras
+  agregaEntradasFinanceirasPorSubcentro,
+  agregaEntradasFinanceirasPorSubcentroMeta,
+  // Restantes (Custeio Pec/Agri, Juros, Investimentos, Reposição Bovinos,
+  // Amortizações, Dividendos, Deduções) entram em PR3+ — uma linha por PR
+  // para validação visual isolada.
 } from '@/lib/painelConsultor/agregadosFinanceiros';
-import { ORDEM_CENTROS_RECEITA_PECUARIA } from '@/lib/financeiro/classificacao';
+import {
+  ORDEM_CENTROS_RECEITA_PECUARIA,
+  ORDEM_CENTROS_RECEITA_AGRICULTURA,
+  ORDEM_CENTROS_OUTRAS_RECEITAS,
+  ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
+} from '@/lib/financeiro/classificacao';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
@@ -91,6 +104,33 @@ const CONFIG_MODAIS_LINHA_FECHAMENTO: Partial<Record<LinhaModalKey, ConfigModalL
     ordemCentrosOficial: ORDEM_CENTROS_RECEITA_PECUARIA,
     agregaReal: agregaReceitaPecPorSubcentro,
     agregaMeta: agregaReceitaPecPorSubcentroMeta,
+  },
+  // PR2 — paridade EXATA com V2PlanejamentoVisaoGeral.tsx (CONFIG_MODAIS_LINHA).
+  // titulo + composicaoOficialLabel + ordemCentrosOficial + agregaReal/Meta
+  // copiados conforme regra soberana de paridade (Gabriel).
+  receitaAgricultura: {
+    titulo: 'Receita Agricultura',
+    composicaoOficialLabel: 'grupo_custo = "Receita Agrícola"',
+    ordemCentrosOficial: ORDEM_CENTROS_RECEITA_AGRICULTURA,
+    agregaReal: agregaReceitaAgriPorSubcentro,
+    agregaMeta: agregaReceitaAgriPorSubcentroMeta,
+  },
+  outrasReceitas: {
+    titulo: 'Outras Receitas',
+    composicaoOficialLabel: 'grupo_custo = "Outras Receitas"',
+    ordemCentrosOficial: ORDEM_CENTROS_OUTRAS_RECEITAS,
+    agregaReal: agregaOutrasReceitasPorSubcentro,
+    agregaMeta: agregaOutrasReceitasPorSubcentroMeta,
+  },
+  // Natureza='receita' por substring match em 'entrada' (PR1.2A).
+  // Decisão Gabriel: aceitar para fins de cor semântica — "mais entrada
+  // que o planejado = azul" é leitura executiva válida no modal de caixa.
+  entradasFinanceiras: {
+    titulo: 'Entradas Financeiras',
+    composicaoOficialLabel: 'grupo_custo = "Entradas de Capital"',
+    ordemCentrosOficial: ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
+    agregaReal: agregaEntradasFinanceirasPorSubcentro,
+    agregaMeta: agregaEntradasFinanceirasPorSubcentroMeta,
   },
 };
 
