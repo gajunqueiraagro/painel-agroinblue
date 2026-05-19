@@ -8,6 +8,10 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'chuvas':                'ano',
   'lancamentos-zoot':      'nenhum',
   'fechamento':               'ano',
+  // Fechamento do Período: Select Ano global é escondido — Período (inputs
+  // month inicio/fim) renderizado dentro do V2FilterBar substitui o filtro
+  // de ano para esta seção.
+  'fechamento-periodo':       'nenhum',
   'conferencia-lancamentos':   'ano',
   'conferencia-mensal':        'ano-mes',
   'meta-gmd':              'ano',

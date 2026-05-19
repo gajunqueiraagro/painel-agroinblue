@@ -280,6 +280,13 @@ export default function V2Index() {
   const [mes, setMes] = useState(String(mesAnterior));
   const [viewMode, setViewMode] = useState<'mes' | 'periodo'>('mes');
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
+  // Período do Fechamento — state global para sobreviver à navegação entre
+  // seções. Default vazio; V2FechamentoPeriodo popula via calcularDefaultPeriodo
+  // assim que statusPilDefault + fazendasComPecuaria carregam.
+  const [periodo, setPeriodo] = useState<{ periodoInicio: string; periodoFim: string }>({
+    periodoInicio: '',
+    periodoFim: '',
+  });
   const [intensivo, setIntensivo] = useState(false);
   const [drawerAtivo, setDrawerAtivo] = useState<string | null>(null);
   // Estado para edição completa de Abate/Venda vinda da Conferência.
@@ -659,7 +666,7 @@ export default function V2Index() {
     );
     if (section === 'areas-meta') return <V2AreasMeta ano={ano} />;
     if (section === 'planejamento-home') return <V2PlanejamentoVisaoGeral ano={Number(ano)} mes={Number(mes)} />;
-    if (section === 'fechamento-periodo') return <V2FechamentoPeriodo />;
+    if (section === 'fechamento-periodo') return <V2FechamentoPeriodo periodo={periodo} onPeriodoChange={setPeriodo} />;
     if (section === 'meta-precos') {
       if (isGlobal) {
         return (
@@ -802,6 +809,10 @@ export default function V2Index() {
             className="shrink-0"
             modo={section === 'financeiro-dashboard' ? modo : undefined}
             onModoChange={section === 'financeiro-dashboard' ? setModo : undefined}
+            periodoInicio={section === 'fechamento-periodo' ? periodo.periodoInicio : undefined}
+            periodoFim={section === 'fechamento-periodo' ? periodo.periodoFim : undefined}
+            onPeriodoChange={section === 'fechamento-periodo' ? (ini, fim) => setPeriodo({ periodoInicio: ini, periodoFim: fim }) : undefined}
+            onImprimir={section === 'fechamento-periodo' ? () => window.print() : undefined}
           />
         </div>
 

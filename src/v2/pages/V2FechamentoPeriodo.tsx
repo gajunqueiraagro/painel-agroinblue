@@ -18,7 +18,6 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
-import HeaderFiltro from './V2FechamentoPeriodo.parts/HeaderFiltro';
 import Capa from './V2FechamentoPeriodo.parts/Capa';
 import EvolucaoOperacao from './V2FechamentoPeriodo.parts/EvolucaoOperacao';
 import AnaliseZootecnica from './V2FechamentoPeriodo.parts/AnaliseZootecnica';
@@ -49,7 +48,15 @@ import {
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
 import type { FinanceiroLancamento } from '@/hooks/useFinanceiro';
 
-export default function V2FechamentoPeriodo() {
+interface Props {
+  /** Período (Jan→mesAlvo) controlado pelo V2Index — state global, sobrevive
+   *  à navegação entre seções. Slot Período + botão Gerar PDF moram no
+   *  V2FilterBar (header global). */
+  periodo: { periodoInicio: string; periodoFim: string };
+  onPeriodoChange: (p: { periodoInicio: string; periodoFim: string }) => void;
+}
+
+export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
 
@@ -90,15 +97,13 @@ export default function V2FechamentoPeriodo() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const [periodo, setPeriodo] = useState({ periodoInicio: '', periodoFim: '' });
-
   useEffect(() => {
     if (periodo.periodoInicio) return;
     if (!statusPilDefault.data) return;
     const fids = (fazendasComPecuaria ?? []).map(f => f.id);
     const d = calcularDefaultPeriodo(statusPilDefault.data, fids);
-    setPeriodo(d);
-  }, [statusPilDefault.data, fazendasComPecuaria, periodo.periodoInicio]);
+    onPeriodoChange(d);
+  }, [statusPilDefault.data, fazendasComPecuaria, periodo.periodoInicio, onPeriodoChange]);
 
   const { dto, loading, error } = useFechamentoPeriodoData({
     periodoInicio: periodo.periodoInicio,
@@ -296,14 +301,6 @@ export default function V2FechamentoPeriodo() {
 
   return (
     <div className="fechamento-container px-4 py-4">
-      <HeaderFiltro
-        periodoInicio={periodo.periodoInicio}
-        periodoFim={periodo.periodoFim}
-        onChange={(ini, fim) => setPeriodo({ periodoInicio: ini, periodoFim: fim })}
-        onImprimir={() => window.print()}
-        loading={loading}
-      />
-
       {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — 13 cards
           PC-100 (viewMode='periodo') com comparativo "vs meta". Ordem
           visual: Operacional → Competência (DRE) → Caixa (Fluxo). */}
