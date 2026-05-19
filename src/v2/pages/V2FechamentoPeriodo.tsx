@@ -355,8 +355,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       porSubcentroReal: cfgModalAtivo.agregaReal(lancFinAnoCorrente, ano),
       porSubcentroMeta: cfgModalAtivo.agregaMeta(gridMetaConsolidado),
       ordemCentrosOficial: cfgModalAtivo.ordemCentrosOficial,
+      mesAlvo,
     });
-  }, [cfgModalAtivo, linhaAtiva, lancFinAnoCorrente, ano, gridMetaConsolidado]);
+  }, [cfgModalAtivo, linhaAtiva, lancFinAnoCorrente, ano, gridMetaConsolidado, mesAlvo]);
 
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
@@ -450,6 +451,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           composicaoOficialLabel={cfgModalAtivo.composicaoOficialLabel}
           onVerDetalhes={undefined}
           modo="fechamento"
+          mesAlvo={mesAlvo}
         />
       )}
 

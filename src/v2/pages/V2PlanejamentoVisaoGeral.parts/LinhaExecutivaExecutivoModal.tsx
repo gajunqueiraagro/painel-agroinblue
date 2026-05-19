@@ -69,6 +69,12 @@ interface Props {
    *  para sky-600, troca labels REAL 2025 → REAL 2026, e usa
    *  realAnoCorrente/deltaAnoCorrente da LinhaExecutiva como base do REAL. */
   modo?: ModoModal;
+  /** Mês alvo do filtro (1..12). Quando definido (modo Fechamento),
+   *  corta visualmente AMBAS as séries (META e REAL) após mesAlvo — ambos
+   *  os valores viram null → Recharts quebra a linha. Tabela e gráficos
+   *  refletem exatamente Jan→mesAlvo, reconciliando com o card.
+   *  Ausente → comportamento Planejamento (ano completo Jan→Dez). */
+  mesAlvo?: number;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -181,6 +187,7 @@ export function LinhaExecutivaExecutivoModal({
   composicaoOficialLabel,
   onVerDetalhes,
   modo = 'planejamento',
+  mesAlvo,
 }: Props) {
   const cfg = CFG_MODOS[modo];
   const isFechamento = modo === 'fechamento';
@@ -198,8 +205,13 @@ export function LinhaExecutivaExecutivoModal({
     : data.linha.meta - data.linha.real;
 
   // Série mensal consolidada (soma vertical de todos os subcentros).
-  const dadosMensais = useMemo(() => {
-    const out = Array.from({ length: 12 }, (_, i) => ({
+  // REGRA: em modo Fechamento (mesAlvo definido), META e REAL são cortados
+  // JUNTOS após mesAlvo — ambos os valores viram null → Recharts quebra a
+  // linha. Zero ambiguidade visual: modal reflete exatamente o mesmo período
+  // do card (Jan→mesAlvo).
+  type DadoMensal = { mes: string; real: number | null; meta: number | null };
+  const dadosMensais = useMemo<DadoMensal[]>(() => {
+    const out: DadoMensal[] = Array.from({ length: 12 }, (_, i) => ({
       mes: MESES[i],
       real: 0,
       meta: 0,
@@ -207,24 +219,37 @@ export function LinhaExecutivaExecutivoModal({
     for (const c of data.porCentro) {
       for (const s of c.subcentros) {
         for (let i = 0; i < 12; i++) {
-          out[i].real += s.realMeses[i] ?? 0;
-          out[i].meta += s.metaMeses[i] ?? 0;
+          out[i].real = (out[i].real ?? 0) + (s.realMeses[i] ?? 0);
+          out[i].meta = (out[i].meta ?? 0) + (s.metaMeses[i] ?? 0);
         }
       }
     }
+    if (mesAlvo !== undefined) {
+      const limite = Math.max(0, Math.min(12, mesAlvo));
+      for (let i = limite; i < 12; i++) {
+        out[i].real = null;
+        out[i].meta = null;
+      }
+    }
     return out;
-  }, [data.porCentro]);
+  }, [data.porCentro, mesAlvo]);
 
-  // Série acumulada Jan→Dez (running sum).
-  const dadosAcumulado = useMemo(() => {
+  // Série acumulada Jan→Dez (running sum). META e REAL param JUNTOS após
+  // mesAlvo (acumulado vira null em ambos), seguindo a mesma regra.
+  type DadoAcumulado = { mes: string; realAcum: number | null; metaAcum: number | null };
+  const dadosAcumulado = useMemo<DadoAcumulado[]>(() => {
     let realAc = 0;
     let metaAc = 0;
-    return dadosMensais.map(d => {
-      realAc += d.real;
-      metaAc += d.meta;
-      return { mes: d.mes, realAcum: realAc, metaAcum: metaAc };
+    const limite = mesAlvo !== undefined ? Math.max(0, Math.min(12, mesAlvo)) : 12;
+    return dadosMensais.map((d, i) => {
+      if (i < limite) {
+        if (typeof d.real === 'number') realAc += d.real;
+        if (typeof d.meta === 'number') metaAc += d.meta;
+        return { mes: d.mes, realAcum: realAc, metaAcum: metaAc };
+      }
+      return { mes: d.mes, realAcum: null, metaAcum: null };
     });
-  }, [dadosMensais]);
+  }, [dadosMensais, mesAlvo]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -445,6 +470,7 @@ export function LinhaExecutivaExecutivoModal({
                     fill="url(#gradRealAc)"
                     dot={{ r: 2.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.4 }}
                     activeDot={{ r: 3.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.6 }}
+                    connectNulls={false}
                   />
                   <Area
                     type="monotone"
@@ -455,6 +481,7 @@ export function LinhaExecutivaExecutivoModal({
                     fill="url(#gradMetaAc)"
                     dot={{ r: 2.5, fill: '#ffffff', stroke: cfg.corMeta, strokeWidth: 1.4 }}
                     activeDot={{ r: 3.5, fill: '#ffffff', stroke: cfg.corMeta, strokeWidth: 1.6 }}
+                    connectNulls={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
