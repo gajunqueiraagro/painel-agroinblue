@@ -33,6 +33,13 @@ interface CardComparativoProps {
    * 'início ano' — comparam contra o rebanho/peso REALIZADO de Dez ano-1.
    */
   comparativoLabel?: string;
+  /**
+   * Densidade de layout do card.
+   * - 'normal' (default): 3 linhas empilhadas (título / valor grande / delta). ~85px.
+   * - 'compacta': 2 linhas (título+delta em row, valor abaixo). ~55-60px. Usado
+   *   em painéis com muitos cards (Bloco Produção Pecuária Realizada).
+   */
+  densidade?: 'normal' | 'compacta';
 }
 
 function formatar(valor: number | null, formato: FormatoExibicao): string {
@@ -77,10 +84,35 @@ function fmtDelta(d: number | null, label: string): { texto: string; cor: string
   };
 }
 
-export function CardComparativo({ titulo, dado, className, valorClassName, hideQuandoVazio = false, mostrarVsAnoAnt = false, comparativoLabel = 'ano ant.' }: CardComparativoProps) {
+export function CardComparativo({ titulo, dado, className, valorClassName, hideQuandoVazio = false, mostrarVsAnoAnt = false, comparativoLabel = 'ano ant.', densidade = 'normal' }: CardComparativoProps) {
   if (hideQuandoVazio && dado.valor == null) return null;
 
   const delta = mostrarVsAnoAnt ? fmtDelta(dado.vsAnoFechado.delta, comparativoLabel) : null;
+
+  if (densidade === 'compacta') {
+    return (
+      <div
+        className={cn(
+          'bg-card border border-border rounded-md p-2 flex flex-col gap-0.5 min-w-0',
+          className,
+        )}
+      >
+        <div className="flex items-baseline justify-between gap-1.5 min-w-0">
+          <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
+            {titulo}
+          </div>
+          {delta && (
+            <div className={cn('text-[9px] font-medium tabular-nums truncate shrink-0', delta.cor)}>
+              {delta.texto}
+            </div>
+          )}
+        </div>
+        <div className={cn('text-base font-bold text-foreground tabular-nums truncate leading-tight', valorClassName)}>
+          {formatar(dado.valor, dado.formato)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
