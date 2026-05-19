@@ -265,8 +265,9 @@ export default function V2FechamentoPeriodo() {
       gridMeta2026: gridMetaConsolidado,
       saldoInicialMeta: planFin.saldoInicial,
       caixaSaldoAnoAntMensal: painel.caixaIndicador?.serieAnoAnt?.slice(1),
+      lancFin2026: lancFinAnoCorrente ?? undefined,
     });
-  }, [lancFinAnoAnt, gridMetaConsolidado, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
+  }, [lancFinAnoAnt, lancFinAnoCorrente, gridMetaConsolidado, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
 
   const saldoInicialReal = painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN;
 

@@ -6,8 +6,14 @@
 export interface LinhaExecutiva {
   label: string;
   meta: number;
+  /** Real ano anterior (referência histórica do modo Planejamento). */
   real: number;
+  /** Delta (meta − real)/real — comparativo modo Planejamento. */
   delta: number;
+  /** Real ano corrente — populado quando buildBlocoResumoExecutivo recebe lancFin2026. */
+  realAnoCorrente?: number;
+  /** Delta (realAnoCorrente − meta)/meta — comparativo modo Fechamento. */
+  deltaAnoCorrente?: number;
 }
 
 export interface BlocoResumoExecutivoData {
@@ -33,6 +39,9 @@ export interface BlocoResumoExecutivoData {
   serieMeta: number[];
   serieReal: number[];
   serieMetaLinear: number[];
+  /** Real ano corrente — acumulado mensal de (entradas − saídas) a partir
+   *  de lancFin2026. Não inclui saldoInicial; o consumidor soma se necessário. */
+  serieRealAnoCorrente?: number[];
 
   conciliado: boolean;
   diferencaMeta: number;

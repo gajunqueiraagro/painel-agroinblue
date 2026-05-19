@@ -80,7 +80,18 @@ function calcDeltaLocal(meta: number, real: number): number {
   return (meta - real) / (real || 1);
 }
 
-function montarLinhaSaldoFinal(data: BlocoResumoExecutivoData): LinhaExecutiva {
+function montarLinhaSaldoFinal(
+  data: BlocoResumoExecutivoData,
+  modo: 'planejamento' | 'fechamento' = 'planejamento',
+  saldoInicialMeta: number = 0,
+): LinhaExecutiva {
+  if (modo === 'fechamento') {
+    // Saldo Caixa Final Real = saldoInicial + acumulado (E−S) ano corrente.
+    // Pendência: mapear "mês do filtro" — fallback para Dez (index 11).
+    const acc = data.serieRealAnoCorrente?.[11] ?? 0;
+    const meta = saldoInicialMeta + acc;
+    return { label: 'Saldo Caixa Final', meta, real: 0, delta: 0 };
+  }
   const meta = data.serieMeta[11];
   const real = data.serieReal[11];
   return { label: 'Saldo Caixa Final', meta, real, delta: calcDeltaLocal(meta, real) };
@@ -149,9 +160,13 @@ function FluxoCaixaTooltip({
   );
 }
 
-function DeltaBadge({ delta }: { delta: number }) {
+function DeltaBadge({ delta, inverterSemantica = false }: { delta: number; inverterSemantica?: boolean }) {
+  // inverterSemantica=true: usado em saídas no modo Fechamento, onde Real >
+  // Meta (gastou mais do que planejado) é ruim — pinta de rose mesmo com
+  // sinal positivo. Receitas mantêm comportamento padrão (positivo = bom).
   const positivo = delta >= 0;
-  const cls = positivo
+  const bom = inverterSemantica ? !positivo : positivo;
+  const cls = bom
     ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/40'
     : 'text-rose-700 bg-rose-50 dark:text-rose-300 dark:bg-rose-950/40';
   return (
@@ -163,7 +178,26 @@ function DeltaBadge({ delta }: { delta: number }) {
   );
 }
 
-function LinhaRow({ linha, destaque = false, onClick }: { linha: LinhaExecutiva; destaque?: boolean; onClick?: () => void }) {
+// Classe utilitária para a coluna REAL 2026 no modo Fechamento — azul
+// (espelha variant 'sky' dos cards). Aplicada no header e nos valores.
+const REAL_ANO_CORRENTE_COLUNA = 'text-sky-700 dark:text-sky-300';
+
+function LinhaRow({
+  linha,
+  destaque = false,
+  onClick,
+  modo = 'planejamento',
+  inverterSemantica = false,
+}: {
+  linha: LinhaExecutiva;
+  destaque?: boolean;
+  onClick?: () => void;
+  modo?: 'planejamento' | 'fechamento';
+  inverterSemantica?: boolean;
+}) {
+  const isFechamento = modo === 'fechamento';
+  const realAC = linha.realAnoCorrente ?? 0;
+  const deltaAC = linha.deltaAnoCorrente ?? 0;
   return (
     <div
       onClick={onClick}
@@ -176,15 +210,31 @@ function LinhaRow({ linha, destaque = false, onClick }: { linha: LinhaExecutiva;
       <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
         {linha.label}
       </div>
-      <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
-        {fmtBRL(linha.real)}
-      </div>
-      <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
-        {fmtBRL(linha.meta)}
-      </div>
-      <div className="text-right">
-        <DeltaBadge delta={linha.delta} />
-      </div>
+      {isFechamento ? (
+        <>
+          <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
+            {fmtBRL(linha.meta)}
+          </div>
+          <div className={cn('text-[11px] tabular-nums text-right font-semibold', REAL_ANO_CORRENTE_COLUNA)}>
+            {fmtBRL(realAC)}
+          </div>
+          <div className="text-right">
+            <DeltaBadge delta={deltaAC} inverterSemantica={inverterSemantica} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={cn('text-[11px] tabular-nums text-right', destaque ? 'text-foreground/80' : 'text-muted-foreground')}>
+            {fmtBRL(linha.real)}
+          </div>
+          <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
+            {fmtBRL(linha.meta)}
+          </div>
+          <div className="text-right">
+            <DeltaBadge delta={linha.delta} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -196,12 +246,17 @@ function CardTotal({
   linha,
   variant = 'neutral',
   metaOnly = false,
+  modo = 'planejamento',
+  inverterSemantica = false,
 }: {
   titulo: string;
   linha: LinhaExecutiva;
   variant?: CardVariant;
   /** Quando true, esconde linha "Real …" e badge Δ% — card META-only. */
   metaOnly?: boolean;
+  /** 'fechamento': big value = realAnoCorrente, sublinha "Meta R$ X" + deltaAnoCorrente. */
+  modo?: 'planejamento' | 'fechamento';
+  inverterSemantica?: boolean;
 }) {
   const variantCls: Record<CardVariant, { card: string; label: string }> = {
     sky: {
@@ -219,20 +274,26 @@ function CardTotal({
   };
   const v = variantCls[variant];
 
+  const isFechamento = modo === 'fechamento';
+  const bigValor = isFechamento ? (linha.realAnoCorrente ?? 0) : linha.meta;
+  const sublinhaLabel = isFechamento ? 'Meta' : 'Real';
+  const sublinhaValor = isFechamento ? linha.meta : linha.real;
+  const deltaUsado = isFechamento ? (linha.deltaAnoCorrente ?? 0) : linha.delta;
+
   return (
     <div className={cn('border rounded-md p-2.5 flex flex-col gap-1 min-w-0', v.card)}>
       <div className={cn('text-[10px] font-semibold uppercase tracking-wide truncate', v.label)}>
         {titulo}
       </div>
       <div className="text-base font-bold text-foreground tabular-nums truncate leading-tight">
-        {fmtBRL(linha.meta)}
+        {fmtBRL(bigValor)}
       </div>
       {!metaOnly && (
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-[10px] text-muted-foreground truncate">
-            Real {fmtBRL(linha.real)}
+            {sublinhaLabel} {fmtBRL(sublinhaValor)}
           </span>
-          <DeltaBadge delta={linha.delta} />
+          <DeltaBadge delta={deltaUsado} inverterSemantica={inverterSemantica} />
         </div>
       )}
     </div>
@@ -367,15 +428,31 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         </div>
 
         <div className="lg:col-span-2 flex flex-col gap-2">
-          <CardTotal titulo="Total Entradas META" linha={data.totalEntradas} variant="sky" />
-          <CardTotal titulo="Total Saídas META" linha={data.totalSaidas} variant="rose" />
+          <CardTotal
+            titulo={modo === 'fechamento' ? 'Total Entradas Real' : 'Total Entradas META'}
+            linha={data.totalEntradas}
+            variant="sky"
+            modo={modo}
+          />
+          <CardTotal
+            titulo={modo === 'fechamento' ? 'Total Saídas Real' : 'Total Saídas META'}
+            linha={data.totalSaidas}
+            variant="rose"
+            modo={modo}
+            inverterSemantica={modo === 'fechamento'}
+          />
           <div className={cn('grid grid-cols-2 gap-2 relative')}>
             <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
-              <CardTotal titulo="Saldo Caixa Final Meta" linha={montarLinhaSaldoFinal(data)} variant="neutral" metaOnly />
+              <CardTotal
+                titulo={modo === 'fechamento' ? 'Saldo Caixa Final Real' : 'Saldo Caixa Final Meta'}
+                linha={montarLinhaSaldoFinal(data, modo, saldoInicialMeta)}
+                variant="neutral"
+                metaOnly
+              />
             </div>
             <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
               <CardTotal
-                titulo="Dif. Caixa no Ano - Meta"
+                titulo={modo === 'fechamento' ? 'Dif. Caixa no Período - Meta' : 'Dif. Caixa no Ano - Meta'}
                 linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
                 variant="neutral"
                 metaOnly
@@ -399,16 +476,26 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className="text-right">REAL 2025</div>
-            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+            {modo === 'fechamento' ? (
+              <>
+                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+                <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
+              </>
+            ) : (
+              <>
+                <div className="text-right">REAL 2025</div>
+                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+              </>
+            )}
             <div className="text-right">Δ%</div>
           </div>
-          <LinhaRow linha={data.totalEntradas} destaque />
+          <LinhaRow linha={data.totalEntradas} destaque modo={modo} />
           {linhasEntrada.map(([l, key]) => (
             <LinhaRow
               key={key}
               linha={l}
               onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+              modo={modo}
             />
           ))}
         </div>
@@ -419,16 +506,27 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
             <div></div>
-            <div className="text-right">REAL 2025</div>
-            <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+            {modo === 'fechamento' ? (
+              <>
+                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+                <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
+              </>
+            ) : (
+              <>
+                <div className="text-right">REAL 2025</div>
+                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+              </>
+            )}
             <div className="text-right">Δ%</div>
           </div>
-          <LinhaRow linha={data.totalSaidas} destaque />
+          <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={modo === 'fechamento'} />
           {linhasSaida.map(([l, key]) => (
             <LinhaRow
               key={key}
               linha={l}
               onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+              modo={modo}
+              inverterSemantica={modo === 'fechamento'}
             />
           ))}
         </div>
