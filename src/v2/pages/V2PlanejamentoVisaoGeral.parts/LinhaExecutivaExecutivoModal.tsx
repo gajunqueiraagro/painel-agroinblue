@@ -111,6 +111,8 @@ function inferirNaturezaLinha(
   return 'despesa';
 }
 
+// PR3.1 — Padrão V2 (Visão Geral): emerald-600 para positivo bom, red-500
+// para negativo ruim. Alinhamento com text-emerald-600 / text-red-500 do front.
 function classeDeltaSemantico(
   delta: number | null | undefined,
   natureza: NaturezaLinha,
@@ -121,13 +123,13 @@ function classeDeltaSemantico(
   const positivo = delta > 0;
   if (natureza === 'receita') {
     return positivo
-      ? 'text-sky-700 dark:text-sky-300'
-      : 'text-rose-700 dark:text-rose-300';
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-red-500 dark:text-red-400';
   }
   // despesa
   return positivo
-    ? 'text-rose-700 dark:text-rose-300'
-    : 'text-sky-700 dark:text-sky-300';
+    ? 'text-red-500 dark:text-red-400'
+    : 'text-emerald-600 dark:text-emerald-400';
 }
 
 interface Props {
@@ -266,6 +268,16 @@ export function LinhaExecutivaExecutivoModal({
   const isFechamento = modo === 'fechamento';
   // Natureza da linha (receita vs despesa) — drive cor dos deltas.
   const naturezaLinha = inferirNaturezaLinha(titulo, composicaoOficialLabel);
+  // PR3.1 — cor do REAL depende de natureza no Fechamento:
+  //   - Fechamento + despesa  → vermelho (#ef4444, red-500 do front).
+  //     Visualmente comunica "saída de caixa". Diferencia despesa de
+  //     receita na leitura rápida do modal.
+  //   - Fechamento + receita  → azul (#0284c7, sky-600) atual.
+  //   - Planejamento          → cinza (#94a3b8, slate-400) atual.
+  const corRealNatureza =
+    isFechamento && naturezaLinha === 'despesa'
+      ? '#ef4444'
+      : cfg.corReal;
   // Título da linha totalizadora (plural definitivo) — usado na 1ª linha
   // da tabela hierárquica. Fallback titulo.toUpperCase().
   const tituloLinhaTotalizadora = TITULOS_TABELA[titulo] ?? titulo.toUpperCase();
@@ -395,7 +407,7 @@ export function LinhaExecutivaExecutivoModal({
             {isFechamento ? (
               <>
                 <div className="text-center" style={{ color: cfg.corMeta }}>{cfg.labelMetaLong}</div>
-                <div className="text-center" style={{ color: cfg.corReal }}>{cfg.labelRealLong}</div>
+                <div className="text-center" style={{ color: corRealNatureza }}>{cfg.labelRealLong}</div>
               </>
             ) : (
               <>
@@ -415,7 +427,7 @@ export function LinhaExecutivaExecutivoModal({
             {isFechamento ? (
               <>
                 <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</div>
-                <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(realTotalizadora)}</div>
+                <div className="text-right tabular-nums" style={{ color: corRealNatureza }}>{fmtBRL(realTotalizadora)}</div>
               </>
             ) : (
               <>
@@ -441,7 +453,7 @@ export function LinhaExecutivaExecutivoModal({
               ? centro.realTotal - centro.metaTotal
               : centro.metaTotal - centro.realTotal;
             const colReal = (
-              <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(centro.realTotal)}</div>
+              <div className="text-right tabular-nums" style={{ color: corRealNatureza }}>{fmtBRL(centro.realTotal)}</div>
             );
             const colMeta = (
               <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(centro.metaTotal)}</div>
@@ -466,7 +478,7 @@ export function LinhaExecutivaExecutivoModal({
                 </div>
                 {centro.subcentros.map((sub) => {
                   const subReal = (
-                    <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(sub.realTotal)}</div>
+                    <div className="text-right tabular-nums" style={{ color: corRealNatureza }}>{fmtBRL(sub.realTotal)}</div>
                   );
                   const subMeta = (
                     <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(sub.metaTotal)}</div>
@@ -519,11 +531,11 @@ export function LinhaExecutivaExecutivoModal({
                   />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
                   <Tooltip
-                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={cfg.corReal} corMeta={cfg.corMeta} />}
+                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={corRealNatureza} corMeta={cfg.corMeta} />}
                     cursor={{ fill: 'hsl(var(--muted-foreground) / 0.08)' }}
                   />
                   <Legend content={<GraficoLegend />} />
-                  <Bar dataKey="real" name={cfg.labelRealLong} fill={cfg.corReal} radius={[2, 2, 0, 0]} opacity={0.55} />
+                  <Bar dataKey="real" name={cfg.labelRealLong} fill={corRealNatureza} radius={[2, 2, 0, 0]} opacity={0.55} />
                   <Bar dataKey="meta" name={cfg.labelMetaLong} fill={cfg.corMeta} radius={[2, 2, 0, 0]} opacity={0.55} />
                 </BarChart>
               </ResponsiveContainer>
@@ -540,8 +552,8 @@ export function LinhaExecutivaExecutivoModal({
                 <AreaChart data={dadosAcumulado} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradRealAc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={cfg.corReal} stopOpacity={0.18} />
-                      <stop offset="100%" stopColor={cfg.corReal} stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={corRealNatureza} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={corRealNatureza} stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="gradMetaAc" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={cfg.corMeta} stopOpacity={0.18} />
@@ -558,18 +570,18 @@ export function LinhaExecutivaExecutivoModal({
                   />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
                   <Tooltip
-                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={cfg.corReal} corMeta={cfg.corMeta} />}
+                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={corRealNatureza} corMeta={cfg.corMeta} />}
                   />
                   <Legend content={<GraficoLegend />} />
                   <Area
                     type="monotone"
                     dataKey="realAcum"
                     name={cfg.labelRealLong}
-                    stroke={cfg.corReal}
+                    stroke={corRealNatureza}
                     strokeWidth={1.5}
                     fill="url(#gradRealAc)"
-                    dot={{ r: 2.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.4 }}
-                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.6 }}
+                    dot={{ r: 2.5, fill: '#ffffff', stroke: corRealNatureza, strokeWidth: 1.4 }}
+                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: corRealNatureza, strokeWidth: 1.6 }}
                     connectNulls={false}
                   />
                   <Area
@@ -611,9 +623,9 @@ export function LinhaExecutivaExecutivoModal({
                     : !deltaPositivo;
                 const cardCls =
                   ehBom === true
-                    ? 'bg-sky-50 border-sky-200 dark:bg-sky-950/30 dark:border-sky-900/50'
+                    ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50'
                     : ehBom === false
-                      ? 'bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/50'
+                      ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/50'
                       : 'bg-muted border-border';
                 const corValor = classeDeltaSemantico(impactoAbsAjustado, naturezaLinha);
                 return (
@@ -622,7 +634,7 @@ export function LinhaExecutivaExecutivoModal({
                     <div className="text-[10px] text-muted-foreground truncate mb-1.5">{sub.centro_custo}</div>
                     <div className="text-[11px] leading-[1.4] tabular-nums">
                       <span className="text-muted-foreground">{cfg.labelRealLong} </span>
-                      <span style={{ color: cfg.corReal }}>{fmtBRL(sub.realTotal)}</span>
+                      <span style={{ color: corRealNatureza }}>{fmtBRL(sub.realTotal)}</span>
                     </div>
                     <div className="text-[11px] leading-[1.4] tabular-nums" style={{ color: cfg.corMeta }}>
                       {cfg.labelMeta} {fmtBRL(sub.metaTotal)}
