@@ -1,25 +1,25 @@
 /**
- * Capa Executiva Macro — Página 1 do Fechamento do Período (Marco 2.5).
+ * Capa Executiva — Página 1 do Fechamento do Período (Marco 2.5).
  *
- * 3 linhas (~210px total): metadata 1-line + 8 cards macro + insight automático.
- * Frases determinísticas (sem IA, sem semáforo). Cards via CardComparativo
- * (densidade='compacta') para os 5 que têm comparativo vs Meta + 3 simples
- * para os derivados de Área/Composição.
+ * 3 linhas: metadata 1-line + Resumo Executivo em bullets textuais + insight
+ * automático. Sem cards/grid — texto narrativo executivo, mais legível.
+ * Frases determinísticas (sem IA, sem semáforo).
+ *
+ * "Resultado do período" foi removido: cálculo (Receita Op − Desembolso Pec)
+ * não é interpretável nessa camada — usuário consulta DRE para resultado.
  */
 
 import logo from '@/assets/logo.png';
-import { CardComparativo } from '@/v2/components/CardComparativo';
-import type { ComparativoDuplo } from '@/v2/lib/planejamentoVisaoGeralTypes';
-import type { Comparativo, FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
+import type { FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
-import { fmt, formatarPeriodo } from './fmt';
+import { fmt, pct, formatarPeriodo } from './fmt';
 
 interface Props {
   dto: FechamentoPeriodoDTO;
   nomeCliente?: string;
   nomeFazenda?: string;
-  /** PC-100 do Fechamento — fornece Áreas Pec/Agri/Produtiva + Valor Rebanho.
-   *  Sem queries novas: zero acoplamento adicional. */
+  /** PC-100 — usado apenas para derivar escopo "Pecuária + Agricultura"
+   *  na metadata. Sem queries novas. */
   painel: PainelConsultorDataResult | null;
 }
 
@@ -76,61 +76,14 @@ function gerarInsightExecutivo(dto: FechamentoPeriodoDTO): string {
   return partes.join(', ') + '.';
 }
 
-// ─── Composição Pec/Agri derivada de PC-100 ─────────────────────────
+// ─── Escopo Pec/Agri derivado de PC-100 ─────────────────────────────
 
-function derivarComposicao(painel: PainelConsultorDataResult | null): {
-  areaOperacional: number | null;
-  pctPec: number | null;
-  pctAgri: number | null;
-  temPec: boolean;
-  temAgri: boolean;
-} {
+function derivarEscopo(painel: PainelConsultorDataResult | null): string {
   const pec = painel?.areaPecuariaRealMes ?? 0;
   const agri = painel?.areaAgriculturaRealMes ?? 0;
-  const total = pec + agri;
-  return {
-    areaOperacional: total > 0 ? total : null,
-    pctPec: total > 0 ? (pec / total) * 100 : null,
-    pctAgri: total > 0 ? (agri / total) * 100 : null,
-    temPec: pec > 0,
-    temAgri: agri > 0,
-  };
-}
-
-// ─── Wrapper Comparativo (DTO Fechamento) → ComparativoDuplo (Card) ─
-
-function toComparativoDuplo(
-  comp: Comparativo,
-  tipoSemantica: 'estoque' | 'acumulado' | 'media' | 'taxa',
-  formato: 'moeda' | 'numero' | 'percentual' | 'arrobas' | 'kg' | 'cabecas' | 'hectares' | 'ua_ha' | 'gmd',
-): ComparativoDuplo {
-  return {
-    valor: comp.realizado,
-    origem: 'pc100',
-    tipoSemantica,
-    formato,
-    vsAnoFechado: { valor: comp.meta, delta: comp.desvioMetaPct },
-    vsMesmoPeriodo: { valor: comp.anoAnterior, delta: comp.desvioAnoAntPct },
-  };
-}
-
-// ─── CardSimples (3 cards sem comparativo: Áreas + Composição) ───────
-
-function CardSimples({ titulo, valor, unidade }: {
-  titulo: string;
-  valor: string;
-  unidade?: string;
-}) {
   return (
-    <div className="bg-card border border-border border-l-[3px] border-l-slate-400 dark:border-l-slate-500 rounded-md p-2 flex flex-col gap-0.5 min-w-0">
-      <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
-        {titulo}
-      </div>
-      <div className="text-base font-bold text-foreground tabular-nums truncate leading-tight">
-        {valor}
-        {unidade && <span className="text-xs font-normal text-muted-foreground ml-1">{unidade}</span>}
-      </div>
-    </div>
+    [pec > 0 && 'Pecuária', agri > 0 && 'Agricultura'].filter(Boolean).join(' + ') ||
+    'Pecuária'
   );
 }
 
@@ -138,11 +91,8 @@ function CardSimples({ titulo, valor, unidade }: {
 
 export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   const c = dto.cabecalho;
-  const comp = derivarComposicao(painel);
   const insight = gerarInsightExecutivo(dto);
-  const escopoTexto =
-    [comp.temPec && 'Pecuária', comp.temAgri && 'Agricultura'].filter(Boolean).join(' + ') ||
-    'Pecuária';
+  const escopoTexto = derivarEscopo(painel);
 
   // Render simples de negrito do insight (parse de **...**)
   const renderInsight = (texto: string) => {
@@ -152,20 +102,6 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
         ? <strong key={i} className="font-semibold text-foreground">{p.slice(2, -2)}</strong>
         : <span key={i}>{p}</span>,
     );
-  };
-
-  // Valor Rebanho: Meta não confiável em Global (serieMeta=NaN). Usa deltaMeta
-  // pré-calculado do PC-100 quando disponível; senão card mostra "—" vs meta.
-  const valorRebanhoDuplo: ComparativoDuplo = {
-    valor: painel?.valorRebanhoIndicador?.valor ?? null,
-    origem: 'pc100',
-    tipoSemantica: 'estoque',
-    formato: 'moeda',
-    vsAnoFechado: {
-      valor: null,
-      delta: painel?.valorRebanhoIndicador?.deltaMeta ?? null,
-    },
-    vsMesmoPeriodo: { valor: null, delta: null },
   };
 
   return (
@@ -181,61 +117,37 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
         <img src={logo} alt="Agroinblue" className="h-8 shrink-0" />
       </header>
 
-      {/* LINHA 2 — 8 cards macro */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
-        <CardSimples
-          titulo="Área Operacional"
-          valor={comp.areaOperacional !== null ? fmt(comp.areaOperacional, 0) : '—'}
-          unidade="ha"
-        />
-        <CardSimples
-          titulo="Área Produtiva"
-          valor={painel?.areaProdutivaRealMes != null ? fmt(painel.areaProdutivaRealMes, 0) : '—'}
-          unidade="ha"
-        />
-        <CardSimples
-          titulo="Composição Pec/Agri"
-          valor={
-            comp.pctPec !== null && comp.pctAgri !== null
-              ? `${Math.round(comp.pctPec)}% / ${Math.round(comp.pctAgri)}%`
-              : '—'
-          }
-        />
-        <CardComparativo
-          titulo="Rebanho Médio"
-          dado={toComparativoDuplo(c.cabecasMedias, 'media', 'cabecas')}
-          mostrarVsAnoAnt
-          comparativoLabel="meta"
-          densidade="compacta"
-        />
-        <CardComparativo
-          titulo="Valor Rebanho"
-          dado={valorRebanhoDuplo}
-          mostrarVsAnoAnt
-          comparativoLabel="meta"
-          densidade="compacta"
-        />
-        <CardComparativo
-          titulo="Receita Pecuária"
-          dado={toComparativoDuplo(c.receitaPecuaria, 'acumulado', 'moeda')}
-          mostrarVsAnoAnt
-          comparativoLabel="meta"
-          densidade="compacta"
-        />
-        <CardComparativo
-          titulo="Resultado Operacional"
-          dado={toComparativoDuplo(c.resultadoPeriodo, 'acumulado', 'moeda')}
-          mostrarVsAnoAnt
-          comparativoLabel="meta"
-          densidade="compacta"
-        />
-        <CardComparativo
-          titulo="Caixa Final"
-          dado={toComparativoDuplo(c.caixaFinal, 'estoque', 'moeda')}
-          mostrarVsAnoAnt
-          comparativoLabel="meta"
-          densidade="compacta"
-        />
+      {/* LINHA 2 — Resumo Executivo em bullets textuais */}
+      <div className="mb-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+          Resumo Executivo
+        </h3>
+        <ul className="text-sm text-foreground space-y-1 leading-snug">
+          <li>
+            Caixa final: <strong className="font-semibold">R$ {fmt(c.caixaFinal.realizado)}</strong>
+          </li>
+          <li>
+            Receita Pecuária: <strong className="font-semibold">R$ {fmt(c.receitaPecuaria.realizado)}</strong>
+            {c.receitaPecuaria.desvioMetaPct !== null && (
+              <span className="text-muted-foreground"> ({pct(c.receitaPecuaria.desvioMetaPct)} vs META)</span>
+            )}
+          </li>
+          <li>
+            Custeio Produção: <strong className="font-semibold">R$ {fmt(c.custeioPecuaria.realizado)}</strong>
+          </li>
+          <li>
+            Investimentos Fazenda: <strong className="font-semibold">R$ {fmt(c.investimentosFazendaPec.realizado)}</strong>
+          </li>
+          <li>
+            Juros Financiamento: <strong className="font-semibold">R$ {fmt(c.jurosFinanciamentoPec.realizado)}</strong>
+          </li>
+          <li>
+            Arrobas Produzidas: <strong className="font-semibold">{fmt(c.arrobasProduzidas.realizado)} @</strong>
+          </li>
+          <li>
+            GMD médio: <strong className="font-semibold">{fmt(c.gmd.realizado, 3)} kg/dia</strong>
+          </li>
+        </ul>
       </div>
 
       {/* LINHA 3 — Insight executivo */}
