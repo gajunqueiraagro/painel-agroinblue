@@ -53,14 +53,91 @@ const CFG_MODOS: Record<ModoModal, CfgModo> = {
   },
 };
 
+// Mapa de títulos da linha totalizadora — padrão visual definitivo dos 15
+// modais do CONFIG_MODAIS_LINHA. Plural em receitas/entradas; singular nas
+// saídas; respeita terminologia financeira ("AMORTIZAÇÕES", "JUROS").
+// Fallback titulo.toUpperCase() para qualquer chave nova até ser mapeada.
+const TITULOS_TABELA: Record<string, string> = {
+  // Entradas
+  'Receita Pecuária': 'RECEITAS PECUÁRIAS',
+  'Receita Agricultura': 'RECEITAS AGRÍCOLAS',
+  'Outras Receitas': 'OUTRAS RECEITAS',
+  'Entradas Financeiras': 'ENTRADAS FINANCEIRAS',
+  // Saídas — Custeio
+  'Custeio Pecuária': 'CUSTEIO PECUÁRIA',
+  'Custeio Agricultura': 'CUSTEIO AGRICULTURA',
+  // Saídas — Juros
+  'Juros Pecuária': 'JUROS PECUÁRIA',
+  'Juros Agricultura': 'JUROS AGRICULTURA',
+  // Saídas — Investimentos
+  'Investimento Pecuária': 'INVESTIMENTOS PECUÁRIA',
+  'Investimento Agricultura': 'INVESTIMENTOS AGRICULTURA',
+  // Saídas — Reposição
+  'Reposição Bovinos': 'REPOSIÇÃO BOVINOS',
+  // Saídas — Amortizações
+  'Amortização Pecuária': 'AMORTIZAÇÕES PECUÁRIA',
+  'Amortização Agricultura': 'AMORTIZAÇÕES AGRICULTURA',
+  // Saídas — Outros
+  'Dividendos': 'DIVIDENDOS',
+  'Deduções de Receita': 'DEDUÇÕES DE RECEITA',
+};
+
+// ─── Helpers de natureza semântica ─────────────────────────────────────
+//
+// A cor do delta segue a NATUREZA da linha (receita vs despesa):
+// - Receita acima da meta = bom → azul
+// - Receita abaixo da meta = ruim → vermelho
+// - Despesa acima da meta = ruim → vermelho
+// - Despesa abaixo da meta = bom (economia) → azul
+//
+// A cor é baseada no valor do delta EXIBIDO. Não muda o cálculo.
+
+type NaturezaLinha = 'receita' | 'despesa';
+
+function inferirNaturezaLinha(
+  titulo: string,
+  composicaoOficialLabel?: string,
+): NaturezaLinha {
+  const texto = `${titulo} ${composicaoOficialLabel ?? ''}`.toLowerCase();
+  // ALERTA: "deduções de receita" cairá em 'receita' por substring match.
+  // Caso edge a tratar quando Deduções virar drill (PR futuro).
+  if (
+    texto.includes('receita') ||
+    texto.includes('entrada') ||
+    texto.includes('faturamento')
+  ) {
+    return 'receita';
+  }
+  return 'despesa';
+}
+
+function classeDeltaSemantico(
+  delta: number | null | undefined,
+  natureza: NaturezaLinha,
+): string {
+  if (delta == null || !Number.isFinite(delta) || Math.abs(delta) < 0.0001) {
+    return 'text-muted-foreground';
+  }
+  const positivo = delta > 0;
+  if (natureza === 'receita') {
+    return positivo
+      ? 'text-sky-700 dark:text-sky-300'
+      : 'text-rose-700 dark:text-rose-300';
+  }
+  // despesa
+  return positivo
+    ? 'text-rose-700 dark:text-rose-300'
+    : 'text-sky-700 dark:text-sky-300';
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: LinhaExecutivaModalData;
   /** Título do modal (ex.: "Receita Pecuária"). */
   titulo: string;
-  /** Texto da composição oficial exibido no disclaimer
-   *  (ex.: 'grupo_custo = "Receita Pecuária"'). */
+  /** Texto da composição oficial — usado APENAS pelo helper de natureza
+   *  (inferirNaturezaLinha). Não mais exibido como disclaimer visual. */
   composicaoOficialLabel: string;
   /** Callback opcional. Quando undefined, botão "Ver detalhes" fica oculto. */
   onVerDetalhes?: () => void;
@@ -108,12 +185,8 @@ const formatMesCurto = (v: string): string => {
   return idx >= 0 ? MESES_CURTOS[idx] : v;
 };
 
-// Cor da Diferença/Δ% nos CARDS de top impacto (mantém regra por sinal).
-const corImpactoCard = (impactoAbs: number): string => {
-  if (impactoAbs > 0) return 'text-blue-700 dark:text-blue-300';
-  if (impactoAbs < 0) return 'text-rose-700 dark:text-rose-300';
-  return 'text-muted-foreground';
-};
+// (`corImpactoCard` removido em PR1.2A — substituído por classeDeltaSemantico
+// que respeita natureza receita/despesa em vez de apenas o sinal do delta.)
 
 // Formatador compacto para eixo Y (R$ 1,2 mi / R$ 850 mil etc).
 const fmtBRLCompacto = (v: number): string => {
@@ -191,17 +264,24 @@ export function LinhaExecutivaExecutivoModal({
 }: Props) {
   const cfg = CFG_MODOS[modo];
   const isFechamento = modo === 'fechamento';
-  // Em modo Fechamento, o "REAL" do header usa realAnoCorrente / deltaAnoCorrente
-  // (campos opcionais do LinhaExecutiva populados quando lancFin2026 é passado
-  // ao buildBlocoResumoExecutivo). Caller PRECISA garantir essa cobertura no
-  // modo Fechamento; caso contrário, fallback para 0 evita NaN no render.
-  const realHeader = isFechamento ? (data.linha.realAnoCorrente ?? 0) : data.linha.real;
-  const deltaHeader: DeltaSeguro = isFechamento
+  // Natureza da linha (receita vs despesa) — drive cor dos deltas.
+  const naturezaLinha = inferirNaturezaLinha(titulo, composicaoOficialLabel);
+  // Título da linha totalizadora (plural definitivo) — usado na 1ª linha
+  // da tabela hierárquica. Fallback titulo.toUpperCase().
+  const tituloLinhaTotalizadora = TITULOS_TABELA[titulo] ?? titulo.toUpperCase();
+  // Em modo Fechamento, o "REAL" do header/totalizadora usa realAnoCorrente
+  // / deltaAnoCorrente (campos opcionais do LinhaExecutiva populados quando
+  // lancFin2026 é passado ao buildBlocoResumoExecutivo). Caller PRECISA
+  // garantir essa cobertura no modo Fechamento; caso contrário, fallback
+  // para 0 evita NaN no render.
+  const realTotalizadora = isFechamento ? (data.linha.realAnoCorrente ?? 0) : data.linha.real;
+  // Δ% — vem da LinhaExecutiva (já correto). Δ R$ derivado por sinal do modo.
+  const deltaPctTotalizadora: DeltaSeguro = isFechamento
     ? (data.linha.deltaAnoCorrente ?? null)
     : (data.linha.delta as DeltaSeguro);
   // Δ R$ Fechamento = Real - Meta; Planejamento = Meta - Real.
-  const deltaRsHeader = isFechamento
-    ? realHeader - data.linha.meta
+  const deltaRsTotalizadora = isFechamento
+    ? realTotalizadora - data.linha.meta
     : data.linha.meta - data.linha.real;
 
   // Série mensal consolidada (soma vertical de todos os subcentros).
@@ -224,79 +304,73 @@ export function LinhaExecutivaExecutivoModal({
         }
       }
     }
+    // PR1.2A — só REAL corta após mesAlvo. META permanece até Dez como
+    // referência anual (decisão Gabriel: "Meta é referência do plano;
+    // Real é execução"). Sem conflito visual com totais Jan→mesAlvo da
+    // tabela — são leituras diferentes (tabela = período; gráfico =
+    // contexto anual).
     if (mesAlvo !== undefined) {
       const limite = Math.max(0, Math.min(12, mesAlvo));
       for (let i = limite; i < 12; i++) {
         out[i].real = null;
-        out[i].meta = null;
+        // meta permanece intacto
       }
     }
     return out;
   }, [data.porCentro, mesAlvo]);
 
-  // Série acumulada Jan→Dez (running sum). META e REAL param JUNTOS após
-  // mesAlvo (acumulado vira null em ambos), seguindo a mesma regra.
+  // Série acumulada Jan→Dez (running sum).
+  // PR1.2A: realAcum para de crescer e vira null após mesAlvo;
+  // metaAcum continua acumulando até Dez (referência anual).
   type DadoAcumulado = { mes: string; realAcum: number | null; metaAcum: number | null };
   const dadosAcumulado = useMemo<DadoAcumulado[]>(() => {
     let realAc = 0;
     let metaAc = 0;
     const limite = mesAlvo !== undefined ? Math.max(0, Math.min(12, mesAlvo)) : 12;
     return dadosMensais.map((d, i) => {
+      // metaAcum acumula em todos os 12 meses quando d.meta é número.
+      if (typeof d.meta === 'number') metaAc += d.meta;
       if (i < limite) {
         if (typeof d.real === 'number') realAc += d.real;
-        if (typeof d.meta === 'number') metaAc += d.meta;
         return { mes: d.mes, realAcum: realAc, metaAcum: metaAc };
       }
-      return { mes: d.mes, realAcum: null, metaAcum: null };
+      // Após mesAlvo: realAcum=null (linha quebra), metaAcum continua.
+      return { mes: d.mes, realAcum: null, metaAcum: metaAc };
     });
   }, [dadosMensais, mesAlvo]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
-        {/* ── Header sticky em 2 linhas ── */}
+        {/* ── Header sticky — somente título. KPIs movidos para linha
+             totalizadora da tabela (primeira linha) em PR1.2A. ── */}
         <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base font-semibold m-0 leading-tight text-slate-900">
               {titulo}
             </DialogTitle>
-            <div className="flex items-center gap-2 tabular-nums whitespace-nowrap overflow-x-auto">
-              <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">{cfg.labelReal}</span>
-                <span className="text-[12px] font-semibold" style={{ color: cfg.corReal }}>{fmtBRL(realHeader)}</span>
-              </div>
-              <span className="text-[10px] text-slate-300">·</span>
-              <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">{cfg.labelMeta}</span>
-                <span className="text-[12px] font-semibold" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</span>
-              </div>
-              <span className="text-[10px] text-slate-300">·</span>
-              <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">Δ R$</span>
-                <span className="text-[12px] font-semibold text-slate-500">{formatDeltaReais(deltaRsHeader)}</span>
-              </div>
-              <span className="text-[10px] text-slate-300">·</span>
-              <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">Δ%</span>
-                <span className="text-[12px] font-semibold text-slate-500">{fmtPct(deltaHeader)}</span>
-              </div>
-            </div>
           </DialogHeader>
         </div>
 
         {/* ── Corpo (padding interno) ── */}
         <div className="px-5 pb-5 space-y-4">
 
-        {/* Banner de divergência (invariante numérica) */}
-        {!data.conciliado && (
-          <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2 text-[12px] dark:bg-rose-950/30 dark:border-rose-900/50 dark:text-rose-200">
-            <div className="font-semibold mb-0.5">⚠️ Divergência detectada</div>
-            <div>Breakdown não bate com o card.</div>
-            <div>
-              {cfg.labelMeta}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaMeta)}</span>.
-              {' '}{cfg.labelReal}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaReal)}</span>.
+        {/* Banner de divergência — colapsável e com guard de arredondamento.
+             Só renderiza quando diferença > R$ 1 (evita banner por sub-real). */}
+        {!data.conciliado && (Math.abs(data.diferencaMeta) > 1 || Math.abs(data.diferencaReal) > 1) && (
+          <details className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <summary className="cursor-pointer font-medium select-none">
+              Divergência de auditoria detectada
+            </summary>
+            <div className="mt-2 space-y-1">
+              <div>
+                {cfg.labelMeta}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaMeta)}</span>
+              </div>
+              <div>
+                {cfg.labelReal}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaReal)}</span>
+              </div>
             </div>
-          </div>
+          </details>
         )}
 
         {/* Banner de centros fora da ordem oficial */}
@@ -309,10 +383,8 @@ export function LinhaExecutivaExecutivoModal({
           </div>
         )}
 
-        {/* Disclaimer */}
-        <div className="text-[11px] text-muted-foreground">
-          Composição oficial: {composicaoOficialLabel}
-        </div>
+        {/* Disclaimer "Composição oficial" removido em PR1.2A —
+             composicaoOficialLabel agora alimenta APENAS inferirNaturezaLinha. */}
 
         {/* ── Tabela hierárquica COMPACTA + CENTRALIZADA (max 720px) ── */}
         <div className="border border-border rounded-lg overflow-hidden max-w-[720px] mx-auto">
@@ -334,8 +406,36 @@ export function LinhaExecutivaExecutivoModal({
             <div className="text-center text-slate-400">Δ R$</div>
             <div className="text-center text-slate-400">Δ%</div>
           </div>
+          {/* Linha totalizadora — primeira linha da tabela. Plural definitivo
+              do TITULOS_TABELA (fallback toUpperCase). Cores via natureza.
+              Valores vêm da LinhaExecutiva consolidada (já cortada em
+              Jan→mesAlvo pelo builder pai). Ordem dinâmica por modo. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center px-3 py-2 bg-muted/60 border-b-2 border-border text-[12px] font-bold uppercase tracking-[0.3px]">
+            <div className="truncate text-foreground">{tituloLinhaTotalizadora}</div>
+            {isFechamento ? (
+              <>
+                <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</div>
+                <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(realTotalizadora)}</div>
+              </>
+            ) : (
+              <>
+                <div className="text-right tabular-nums text-foreground">{fmtBRL(data.linha.real)}</div>
+                <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</div>
+              </>
+            )}
+            <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaRsTotalizadora, naturezaLinha))}>
+              {formatDeltaReais(deltaRsTotalizadora)}
+            </div>
+            <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaPctTotalizadora, naturezaLinha))}>
+              {fmtPct(deltaPctTotalizadora)}
+            </div>
+          </div>
           {/* Centros (cada centro = bloco executivo).
-              Δ R$ — Planejamento = Meta - Real; Fechamento = Real - Meta. */}
+              Δ R$ — Planejamento = Meta - Real; Fechamento = Real - Meta.
+              NOTA: em modo Fechamento, centro.delta e sub.delta usam
+              calcDeltaSeguro (meta-real)/real que dá sinal INVERTIDO para
+              a interpretação Fechamento. Bug pré-existente — fix de
+              cálculo em PR separado. A cor segue o sinal exibido fielmente. */}
           {data.porCentro.map((centro) => {
             const deltaRs = isFechamento
               ? centro.realTotal - centro.metaTotal
@@ -361,8 +461,8 @@ export function LinhaExecutivaExecutivoModal({
                       {colMeta}
                     </>
                   )}
-                  <div className="text-right tabular-nums text-slate-500">{formatDeltaReais(deltaRs)}</div>
-                  <div className="text-right tabular-nums text-slate-500">{fmtPct(centro.delta)}</div>
+                  <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaRs, naturezaLinha))}>{formatDeltaReais(deltaRs)}</div>
+                  <div className={cn('text-right tabular-nums', classeDeltaSemantico(centro.delta, naturezaLinha))}>{fmtPct(centro.delta)}</div>
                 </div>
                 {centro.subcentros.map((sub) => {
                   const subReal = (
@@ -389,8 +489,8 @@ export function LinhaExecutivaExecutivoModal({
                           {subMeta}
                         </>
                       )}
-                      <div className="text-right tabular-nums text-slate-400">{formatDeltaReais(impactoSub)}</div>
-                      <div className="text-right tabular-nums text-slate-400">{fmtPct(sub.delta)}</div>
+                      <div className={cn('text-right tabular-nums', classeDeltaSemantico(impactoSub, naturezaLinha))}>{formatDeltaReais(impactoSub)}</div>
+                      <div className={cn('text-right tabular-nums', classeDeltaSemantico(sub.delta, naturezaLinha))}>{fmtPct(sub.delta)}</div>
                     </div>
                   );
                 })}
@@ -500,13 +600,22 @@ export function LinhaExecutivaExecutivoModal({
                 // Fechamento: Δ = Real - Meta → inverte sinal do impactoAbs do builder
                 // (que vem como Meta - Real). Cor/card seguem o sinal invertido.
                 const impactoAbsAjustado = isFechamento ? -sub.impactoAbs : sub.impactoAbs;
+                // Card de fundo segue natureza (receita: + azul / - rose;
+                // despesa: + rose / - azul). Mesma regra de classeDeltaSemantico.
+                const deltaPositivo = impactoAbsAjustado > 0;
+                const deltaZero = Math.abs(impactoAbsAjustado) < 0.0001;
+                const ehBom = deltaZero
+                  ? null
+                  : naturezaLinha === 'receita'
+                    ? deltaPositivo
+                    : !deltaPositivo;
                 const cardCls =
-                  impactoAbsAjustado > 0
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/50'
-                    : impactoAbsAjustado < 0
+                  ehBom === true
+                    ? 'bg-sky-50 border-sky-200 dark:bg-sky-950/30 dark:border-sky-900/50'
+                    : ehBom === false
                       ? 'bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/50'
                       : 'bg-muted border-border';
-                const corValor = corImpactoCard(impactoAbsAjustado);
+                const corValor = classeDeltaSemantico(impactoAbsAjustado, naturezaLinha);
                 return (
                   <div key={sub.subcentro} className={cn('border rounded-lg px-3 py-2.5 flex flex-col gap-0.5 min-w-0', cardCls)}>
                     <div className="text-[12px] font-semibold leading-[1.3] truncate text-foreground">{sub.subcentro}</div>
@@ -522,7 +631,7 @@ export function LinhaExecutivaExecutivoModal({
                       <span className="text-muted-foreground">Diferença </span>
                       <span className={cn('font-semibold', corValor)}>{fmtBRL(impactoAbsAjustado)}</span>
                     </div>
-                    <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', corValor)}>
+                    <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', classeDeltaSemantico(sub.delta, naturezaLinha))}>
                       Δ% {fmtPct(sub.delta)}
                     </div>
                   </div>
