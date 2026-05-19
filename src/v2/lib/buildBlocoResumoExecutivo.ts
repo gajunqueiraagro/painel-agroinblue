@@ -80,6 +80,16 @@ export interface BuildBlocoInput {
    * gráfico. Ausente → totais anuais (modo Planejamento).
    */
   mesAlvo?: number;
+  /**
+   * Saldo bancário consolidado realizado Jan..Dez do ano corrente — fonte
+   * oficial PC-100: pc100.caixaIndicador.serieAno.slice(1) (length 12).
+   * Quando presente, alimenta diretamente `serieRealAnoCorrente` como
+   * saldo absoluto (mesma semântica de `caixaSaldoAnoAntMensal`/`serieMeta`)
+   * — encerra cálculo paralelo via lancFin2026 para a curva do gráfico.
+   * Fonte única soberana — sem cálculo paralelo. Fluxos por categoria
+   * (cards Total/tabelas) continuam vindo de `lancFin2026`.
+   */
+  caixaSaldoAnoCorrenteMensal?: number[];
 }
 
 const ANO_REAL = 2025;
@@ -145,7 +155,15 @@ const makeLinha = (
 // ─── Builder ─────────────────────────────────────────────────────────
 
 export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoExecutivoData {
-  const { lancFin2025, gridMeta2026, saldoInicialMeta, caixaSaldoAnoAntMensal, lancFin2026, mesAlvo } = input;
+  const {
+    lancFin2025,
+    gridMeta2026,
+    saldoInicialMeta,
+    caixaSaldoAnoAntMensal,
+    lancFin2026,
+    mesAlvo,
+    caixaSaldoAnoCorrenteMensal,
+  } = input;
 
   // 15 buckets REAL 2025 — number[12] cada
   const rReceitaPec    = agregaReceitaPec(lancFin2025, ANO_REAL);
@@ -295,12 +313,20 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   }
   const serieMetaLinear = new Array(12).fill(0);
 
-  // serieRealAnoCorrente: acumulado mensal de (entradas − saídas) do ano
-  // corrente, SEM saldo inicial. Consumidor (BlocoResumoExecutivo card
-  // "Saldo Caixa Final Real") soma saldoInicialMeta quando precisar do
-  // saldo absoluto. Modo Planejamento (lancFin2026 ausente) → undefined.
+  // serieRealAnoCorrente: prioriza fonte soberana PC-100 (saldo bancário
+  // consolidado oficial via caixaSaldoAnoCorrenteMensal). Quando PC-100
+  // indisponível, fallback ao acumulado puro de (E − S) sem saldo inicial
+  // (compatibilidade — modo Planejamento ou contextos sem painel).
+  const usandoPC100AnoCorrente = !!(
+    caixaSaldoAnoCorrenteMensal && caixaSaldoAnoCorrenteMensal.length === 12
+  );
   let serieRealAnoCorrente: number[] | undefined;
-  if (totalEntradasAnoCorrenteArr && totalSaidasAnoCorrenteArr) {
+  if (usandoPC100AnoCorrente) {
+    // Saldo absoluto — mesma semântica de serieReal (Real ano-1) e serieMeta.
+    serieRealAnoCorrente = caixaSaldoAnoCorrenteMensal!;
+  } else if (totalEntradasAnoCorrenteArr && totalSaidasAnoCorrenteArr) {
+    // Fallback: acumulado puro (E−S) sem saldoInicial. Consumidor soma
+    // saldoInicialMeta para obter saldo absoluto.
     serieRealAnoCorrente = new Array(12).fill(0);
     let accRC = 0;
     for (let i = 0; i < 12; i++) {
@@ -311,12 +337,15 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
 
   // Saldo final de caixa no período (Jan→mesAlvo, ou Dez se ausente).
   // serieMeta já é saldo absoluto (acumulado a partir de saldoInicialMeta) —
-  // basta indexar idxFinal. serieRealAnoCorrente é acumulado puro (E−S) sem
-  // saldoInicial, então somamos explicitamente.
+  // basta indexar idxFinal.
+  // serieRealAnoCorrente é absoluto quando vem do PC-100 (basta indexar);
+  // é acumulado puro no fallback (somar saldoInicialMeta).
   const idxFinal = Math.max(0, Math.min(11, (mesAlvo ?? 12) - 1));
   const saldoCaixaFinalMeta = serieMeta[idxFinal] ?? 0;
   const saldoCaixaFinalReal = serieRealAnoCorrente
-    ? saldoInicialMeta + (serieRealAnoCorrente[idxFinal] ?? 0)
+    ? (usandoPC100AnoCorrente
+        ? (serieRealAnoCorrente[idxFinal] ?? 0)
+        : saldoInicialMeta + (serieRealAnoCorrente[idxFinal] ?? 0))
     : undefined;
 
   // Conciliação: total absoluto bruto do grid vs soma dos 15 buckets META.
