@@ -14,6 +14,7 @@ import {
   AreaChart,
   CartesianGrid,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -43,6 +44,10 @@ interface Props {
   /** Modo de uso do bloco. 'planejamento' (default) usa título "Fluxo de Caixa Previsto";
    *  'fechamento' usa "Fluxo de Caixa Realizado" com subtítulo de regime de caixa. */
   modo?: 'planejamento' | 'fechamento';
+  /** Mês alvo do filtro (1..12). Usado APENAS para cortar a linha REAL 2026
+   *  do gráfico (após mesAlvo vira null → Recharts quebra a linha). Os
+   *  totais escalares já chegam prorated pelo builder. */
+  mesAlvo?: number;
 }
 
 // Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
@@ -83,16 +88,14 @@ function calcDeltaLocal(meta: number, real: number): number {
 function montarLinhaSaldoFinal(
   data: BlocoResumoExecutivoData,
   modo: 'planejamento' | 'fechamento' = 'planejamento',
-  saldoInicialMeta: number = 0,
 ): LinhaExecutiva {
+  // Builder entrega valores prontos via saldoCaixaFinalMeta /
+  // saldoCaixaFinalReal — zero cálculo aqui.
   if (modo === 'fechamento') {
-    // Saldo Caixa Final Real = saldoInicial + acumulado (E−S) ano corrente.
-    // Pendência: mapear "mês do filtro" — fallback para Dez (index 11).
-    const acc = data.serieRealAnoCorrente?.[11] ?? 0;
-    const meta = saldoInicialMeta + acc;
+    const meta = data.saldoCaixaFinalReal ?? 0;
     return { label: 'Saldo Caixa Final', meta, real: 0, delta: 0 };
   }
-  const meta = data.serieMeta[11];
+  const meta = data.saldoCaixaFinalMeta;
   const real = data.serieReal[11];
   return { label: 'Saldo Caixa Final', meta, real, delta: calcDeltaLocal(meta, real) };
 }
@@ -302,7 +305,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento' }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -337,10 +340,17 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     [data.deducoesReceita, 'deducoesReceita'],
   ];
 
+  // Limite do mesAlvo para cortar a linha REAL 2026 — Recharts trata null
+  // como quebra de linha (a curva termina visualmente no mês alvo).
+  const limiteMes = mesAlvo ?? 12;
+  const mostrarReal2026 = modo === 'fechamento' && !!data.serieRealAnoCorrente;
   const chartData = MESES.map((nome, i) => ({
     mes: nome,
     'META 2026': data.serieMeta[i] ?? 0,
     'REAL 2025': data.serieReal[i] ?? 0,
+    ...(mostrarReal2026 && {
+      'REAL 2026': i < limiteMes ? (data.serieRealAnoCorrente![i] ?? 0) : null,
+    }),
   }));
 
   return (
@@ -415,6 +425,18 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                 strokeWidth={2}
                 fill="url(#g-meta)"
               />
+              {mostrarReal2026 && (
+                <Line
+                  type="monotone"
+                  dataKey="REAL 2026"
+                  stroke="#0284c7"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: '#0284c7' }}
+                  activeDot={{ r: 4 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
           </div>
@@ -445,7 +467,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
               <CardTotal
                 titulo={modo === 'fechamento' ? 'Saldo Caixa Final Real' : 'Saldo Caixa Final Meta'}
-                linha={montarLinhaSaldoFinal(data, modo, saldoInicialMeta)}
+                linha={montarLinhaSaldoFinal(data, modo)}
                 variant="neutral"
                 metaOnly
               />

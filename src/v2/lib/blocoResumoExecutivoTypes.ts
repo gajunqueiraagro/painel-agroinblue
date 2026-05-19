@@ -43,6 +43,13 @@ export interface BlocoResumoExecutivoData {
    *  de lancFin2026. Não inclui saldoInicial; o consumidor soma se necessário. */
   serieRealAnoCorrente?: number[];
 
+  /** Saldo final de caixa META para o período (Jan→mesAlvo, ou Dez se não
+   *  informado). Já absoluto — inclui saldoInicial. */
+  saldoCaixaFinalMeta: number;
+  /** Saldo final de caixa REAL ano corrente para o período. Só populado
+   *  quando lancFin2026 foi fornecido ao builder. Já absoluto. */
+  saldoCaixaFinalReal?: number;
+
   conciliado: boolean;
   diferencaMeta: number;
 }

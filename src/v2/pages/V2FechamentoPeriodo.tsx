@@ -266,8 +266,9 @@ export default function V2FechamentoPeriodo() {
       saldoInicialMeta: planFin.saldoInicial,
       caixaSaldoAnoAntMensal: painel.caixaIndicador?.serieAnoAnt?.slice(1),
       lancFin2026: lancFinAnoCorrente ?? undefined,
+      mesAlvo,
     });
-  }, [lancFinAnoAnt, lancFinAnoCorrente, gridMetaConsolidado, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt]);
+  }, [lancFinAnoAnt, lancFinAnoCorrente, gridMetaConsolidado, planFin.saldoInicial, painel.caixaIndicador?.serieAnoAnt, mesAlvo]);
 
   const saldoInicialReal = painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN;
 
@@ -308,6 +309,7 @@ export default function V2FechamentoPeriodo() {
           saldoInicialReal={saldoInicialReal}
           desfocarDashboard={false}
           modo="fechamento"
+          mesAlvo={mesAlvo}
         />
       )}
 

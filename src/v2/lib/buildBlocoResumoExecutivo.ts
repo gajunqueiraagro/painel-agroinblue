@@ -72,6 +72,14 @@ export interface BuildBlocoInput {
    * BlocoResumoExecutivo. Ausente → comportamento original preservado.
    */
   lancFin2026?: FinanceiroLancamento[];
+  /**
+   * Mês alvo do filtro (1..12). Quando presente, TODOS os totais escalares
+   * de cada LinhaExecutiva (meta/real/realAnoCorrente) refletem Jan→mesAlvo
+   * — comparação período vs mesmo período. Séries mensais (serieMeta /
+   * serieReal / serieRealAnoCorrente) seguem sempre com 12 posições para o
+   * gráfico. Ausente → totais anuais (modo Planejamento).
+   */
+  mesAlvo?: number;
 }
 
 const ANO_REAL = 2025;
@@ -82,6 +90,16 @@ const ANO_CORRENTE = 2026;
 const sum12 = (arr: number[]): number => {
   let s = 0;
   for (let i = 0; i < 12; i++) s += arr[i] ?? 0;
+  return s;
+};
+
+// Soma os primeiros `n` meses (1..12) de um array mensal. Quando n
+// indefinido, equivale a sum12. Usado para prorated totals no modo
+// Fechamento — comparativo período vs mesmo período.
+const sumUpTo = (arr: number[], n?: number): number => {
+  const limite = Math.max(0, Math.min(12, n ?? 12));
+  let s = 0;
+  for (let i = 0; i < limite; i++) s += arr[i] ?? 0;
   return s;
 };
 
@@ -111,12 +129,13 @@ const makeLinha = (
   metaArr: number[],
   realArr: number[],
   realAnoCorrenteArr?: number[],
+  mesAlvo?: number,
 ): LinhaExecutiva => {
-  const meta = sum12(metaArr);
-  const real = sum12(realArr);
+  const meta = sumUpTo(metaArr, mesAlvo);
+  const real = sumUpTo(realArr, mesAlvo);
   const base: LinhaExecutiva = { label, meta, real, delta: calcDelta(meta, real) };
   if (realAnoCorrenteArr) {
-    const realAnoCorrente = sum12(realAnoCorrenteArr);
+    const realAnoCorrente = sumUpTo(realAnoCorrenteArr, mesAlvo);
     base.realAnoCorrente = realAnoCorrente;
     base.deltaAnoCorrente = calcDeltaAnoCorrente(realAnoCorrente, meta);
   }
@@ -126,7 +145,7 @@ const makeLinha = (
 // ─── Builder ─────────────────────────────────────────────────────────
 
 export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoExecutivoData {
-  const { lancFin2025, gridMeta2026, saldoInicialMeta, caixaSaldoAnoAntMensal, lancFin2026 } = input;
+  const { lancFin2025, gridMeta2026, saldoInicialMeta, caixaSaldoAnoAntMensal, lancFin2026, mesAlvo } = input;
 
   // 15 buckets REAL 2025 — number[12] cada
   const rReceitaPec    = agregaReceitaPec(lancFin2025, ANO_REAL);
@@ -180,22 +199,23 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   const mDividendos    = agregaDividendosMeta(gridMeta2026);
   const mDeducoes      = agregaDeducoesMeta(gridMeta2026);
 
-  // Linhas individuais (escalares)
-  const receitaPecuaria        = makeLinha('Receita Pecuária',        mReceitaPec,  rReceitaPec,  cReceitaPec);
-  const receitaAgricultura     = makeLinha('Receita Agricultura',     mReceitaAgri, rReceitaAgri, cReceitaAgri);
-  const outrasReceitas         = makeLinha('Outras Receitas',         mOutrasRec,   rOutrasRec,   cOutrasRec);
-  const entradasFinanceiras    = makeLinha('Entradas Financeiras',    mEntradasFin, rEntradasFin, cEntradasFin);
-  const custeioPecuaria        = makeLinha('Custeio Pecuária',        mCusteioPec,  rCusteioPec,  cCusteioPec);
-  const custeioAgricultura     = makeLinha('Custeio Agricultura',     mCusteioAgri, rCusteioAgri, cCusteioAgri);
-  const jurosPecuaria          = makeLinha('Juros Pecuária',          mJurosPec,    rJurosPec,    cJurosPec);
-  const jurosAgricultura       = makeLinha('Juros Agricultura',       mJurosAgri,   rJurosAgri,   cJurosAgri);
-  const investimentoPecuaria   = makeLinha('Investimento Pecuária',   mInvPec,      rInvPec,      cInvPec);
-  const investimentoAgricultura = makeLinha('Investimento Agricultura', mInvAgri,   rInvAgri,     cInvAgri);
-  const reposicaoBovinos       = makeLinha('Reposição Bovinos',       mRepoBov,     rRepoBov,     cRepoBov);
-  const amortizacaoPecuaria    = makeLinha('Amortização Pecuária',    mAmortPec,    rAmortPec,    cAmortPec);
-  const amortizacaoAgricultura = makeLinha('Amortização Agricultura', mAmortAgri,   rAmortAgri,   cAmortAgri);
-  const dividendos             = makeLinha('Dividendos',              mDividendos,  rDividendos,  cDividendos);
-  const deducoesReceita        = makeLinha('Deduções de Receita',     mDeducoes,    rDeducoes,    cDeducoes);
+  // Linhas individuais (escalares). mesAlvo proporciona Jan→mesAlvo
+  // simétricamente em Real ano-1, Meta e Real ano corrente.
+  const receitaPecuaria        = makeLinha('Receita Pecuária',        mReceitaPec,  rReceitaPec,  cReceitaPec,  mesAlvo);
+  const receitaAgricultura     = makeLinha('Receita Agricultura',     mReceitaAgri, rReceitaAgri, cReceitaAgri, mesAlvo);
+  const outrasReceitas         = makeLinha('Outras Receitas',         mOutrasRec,   rOutrasRec,   cOutrasRec,   mesAlvo);
+  const entradasFinanceiras    = makeLinha('Entradas Financeiras',    mEntradasFin, rEntradasFin, cEntradasFin, mesAlvo);
+  const custeioPecuaria        = makeLinha('Custeio Pecuária',        mCusteioPec,  rCusteioPec,  cCusteioPec,  mesAlvo);
+  const custeioAgricultura     = makeLinha('Custeio Agricultura',     mCusteioAgri, rCusteioAgri, cCusteioAgri, mesAlvo);
+  const jurosPecuaria          = makeLinha('Juros Pecuária',          mJurosPec,    rJurosPec,    cJurosPec,    mesAlvo);
+  const jurosAgricultura       = makeLinha('Juros Agricultura',       mJurosAgri,   rJurosAgri,   cJurosAgri,   mesAlvo);
+  const investimentoPecuaria   = makeLinha('Investimento Pecuária',   mInvPec,      rInvPec,      cInvPec,      mesAlvo);
+  const investimentoAgricultura = makeLinha('Investimento Agricultura', mInvAgri,   rInvAgri,     cInvAgri,     mesAlvo);
+  const reposicaoBovinos       = makeLinha('Reposição Bovinos',       mRepoBov,     rRepoBov,     cRepoBov,     mesAlvo);
+  const amortizacaoPecuaria    = makeLinha('Amortização Pecuária',    mAmortPec,    rAmortPec,    cAmortPec,    mesAlvo);
+  const amortizacaoAgricultura = makeLinha('Amortização Agricultura', mAmortAgri,   rAmortAgri,   cAmortAgri,   mesAlvo);
+  const dividendos             = makeLinha('Dividendos',              mDividendos,  rDividendos,  cDividendos,  mesAlvo);
+  const deducoesReceita        = makeLinha('Deduções de Receita',     mDeducoes,    rDeducoes,    cDeducoes,    mesAlvo);
 
   // Totais — soma de arrays mensais antes de reduzir a escalar
   const totalEntradasMetaArr = sumArrays(mReceitaPec, mReceitaAgri, mOutrasRec, mEntradasFin);
@@ -211,10 +231,10 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
     rDividendos, rDeducoes,
   );
 
-  const totalEntradasMeta = sum12(totalEntradasMetaArr);
-  const totalEntradasReal = sum12(totalEntradasRealArr);
-  const totalSaidasMeta = sum12(totalSaidasMetaArr);
-  const totalSaidasReal = sum12(totalSaidasRealArr);
+  const totalEntradasMeta = sumUpTo(totalEntradasMetaArr, mesAlvo);
+  const totalEntradasReal = sumUpTo(totalEntradasRealArr, mesAlvo);
+  const totalSaidasMeta = sumUpTo(totalSaidasMetaArr, mesAlvo);
+  const totalSaidasReal = sumUpTo(totalSaidasRealArr, mesAlvo);
 
   // Totais REAL ano corrente — só calcula se lancFin2026 foi fornecido.
   const totalEntradasAnoCorrenteArr = lancFin2026
@@ -227,8 +247,8 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
         cDividendos!, cDeducoes!,
       )
     : undefined;
-  const totalEntradasAnoCorrente = totalEntradasAnoCorrenteArr ? sum12(totalEntradasAnoCorrenteArr) : undefined;
-  const totalSaidasAnoCorrente = totalSaidasAnoCorrenteArr ? sum12(totalSaidasAnoCorrenteArr) : undefined;
+  const totalEntradasAnoCorrente = totalEntradasAnoCorrenteArr ? sumUpTo(totalEntradasAnoCorrenteArr, mesAlvo) : undefined;
+  const totalSaidasAnoCorrente = totalSaidasAnoCorrenteArr ? sumUpTo(totalSaidasAnoCorrenteArr, mesAlvo) : undefined;
 
   const totalEntradas: LinhaExecutiva = {
     label: 'Total Entradas',
@@ -289,14 +309,26 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
     }
   }
 
+  // Saldo final de caixa no período (Jan→mesAlvo, ou Dez se ausente).
+  // serieMeta já é saldo absoluto (acumulado a partir de saldoInicialMeta) —
+  // basta indexar idxFinal. serieRealAnoCorrente é acumulado puro (E−S) sem
+  // saldoInicial, então somamos explicitamente.
+  const idxFinal = Math.max(0, Math.min(11, (mesAlvo ?? 12) - 1));
+  const saldoCaixaFinalMeta = serieMeta[idxFinal] ?? 0;
+  const saldoCaixaFinalReal = serieRealAnoCorrente
+    ? saldoInicialMeta + (serieRealAnoCorrente[idxFinal] ?? 0)
+    : undefined;
+
   // Conciliação: total absoluto bruto do grid vs soma dos 15 buckets META.
   // Detecta rows com macro/grupo que não caem em nenhum predicate oficial.
+  // Sempre ano inteiro — conciliação é propriedade de classificação, não
+  // de período (ignora mesAlvo).
   let totalBrutoMeta = 0;
   for (const g of gridMeta2026) {
     for (let i = 0; i < 12; i++) totalBrutoMeta += Math.abs(g.meses[i] || 0);
   }
-  const somaBucketsMeta = totalEntradasMeta + totalSaidasMeta;
-  const diferencaMeta = totalBrutoMeta - somaBucketsMeta;
+  const somaBucketsMetaAnual = sum12(totalEntradasMetaArr) + sum12(totalSaidasMetaArr);
+  const diferencaMeta = totalBrutoMeta - somaBucketsMetaAnual;
   const conciliado = Math.abs(diferencaMeta) < 1;
 
   return {
@@ -321,6 +353,8 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
     serieReal,
     serieMetaLinear,
     serieRealAnoCorrente,
+    saldoCaixaFinalMeta,
+    saldoCaixaFinalReal,
     conciliado,
     diferencaMeta,
   };
