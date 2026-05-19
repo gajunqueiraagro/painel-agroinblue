@@ -36,6 +36,7 @@ import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
+import { BlocoMovimentacoesRebanhoFechamento } from './V2FechamentoPeriodo.parts/BlocoMovimentacoesRebanhoFechamento';
 import { FluxoCaixaModal } from '@/v2/components/modais/FluxoCaixaModal';
 import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
 import type { LinhaModalKey } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
@@ -546,11 +547,6 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         />
       )}
 
-      {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — 13 cards
-          PC-100 (viewMode='periodo') com comparativo "vs meta". Ordem
-          visual: Operacional → Competência (DRE) → Caixa (Fluxo). */}
-      <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
-
       {/* Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado
           em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
           ativa as 7 colunas (Real ano-1 / Real ano / Meta + 2 deltas). */}
@@ -594,6 +590,14 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           }
         />
       )}
+
+      {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
+      <BlocoMovimentacoesRebanhoFechamento ano={ano} mes={mesAlvo} isGlobal={isGlobal} />
+
+      {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — movido para
+          após Movimentações conforme decisão FASE 3 (Capa → DRE → Fluxo →
+          Movimentações → Produção). */}
+      <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
 
       {isGlobal && clienteId && (
         <FluxoCaixaModal
