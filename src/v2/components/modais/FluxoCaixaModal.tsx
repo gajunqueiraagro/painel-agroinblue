@@ -1,16 +1,17 @@
 /**
  * FluxoCaixaModal — orquestrador do Modal Fluxo de Caixa Realizado.
  *
- * Camada 3 / FASE 1 / Commit 3. Componente puro de orquestração:
+ * Camada 3 / FASE 1 / Commit 4B. Componente puro de orquestração:
  *   1. Consome useFluxoCaixaModalData (hook do Commit 2)
  *   2. Mantém estado local `modo` (toggle Realizado/Confirmado/Estimado)
- *   3. Compõe sub-componentes na ordem visual obrigatória:
- *      Header → Toggle → KPIs → Gráfico → Top Impactos → Rodapé (warnings + origem)
+ *   3. Layout 2 colunas (12-grid):
+ *      Header sticky (título + subtítulo + toggle)
+ *      ├── Gráfico (col-span-7 lg)
+ *      └── KPIs sticky (col-span-5 lg, layout vertical)
+ *      Top Impactos (col-span-12)
+ *      Rodapé (warnings + origemProjecao)
  *
  * Read-only analítico: não cria, edita ou deleta nada.
- *
- * Padrão visual espelha LinhaExecutivaExecutivoModal.tsx (Dialog shadcn
- * sticky header em 2 linhas + corpo com space-y).
  */
 
 import { useState } from 'react';
@@ -34,17 +35,6 @@ interface Props {
   saldoInicialMeta: number;
   gridMetaConsolidado: SubcentroGrid[] | null;
   isContextoIndividual?: boolean;
-}
-
-const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-function labelPeriodo(modo: ModoToggle, mesAlvo: number, ano: number): string {
-  const mes = MESES_CURTOS[mesAlvo - 1] ?? '—';
-  const anoCurto = String(ano).slice(-2);
-  if (modo === 'realizado') {
-    return `Jan→${mes}/${anoCurto}`;
-  }
-  return `Jan→${mes}/${anoCurto} realizado + ${mes === 'Dez' ? '' : `${MESES_CURTOS[mesAlvo]}→`}Dez/${anoCurto} projetado`;
 }
 
 export function FluxoCaixaModal({
@@ -72,25 +62,27 @@ export function FluxoCaixaModal({
     enabled: open,
   });
 
+  // Subtítulo vem pré-formatado do builder; fallback enquanto data carrega.
+  const subtitulo = data?.subtituloPeriodo ?? `Real ${ano} vs Meta ${ano}`;
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto p-0">
-        {/* Header sticky */}
-        <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5">
+      <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto p-0">
+        {/* Header sticky com título, subtítulo e toggle */}
+        <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-3.5 space-y-2">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-base font-semibold m-0 leading-tight">
               Fluxo de Caixa Realizado
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Real 2026 vs Meta 2026 — {labelPeriodo(modo, mesAlvo, ano)}
+              {subtitulo}
             </DialogDescription>
           </DialogHeader>
+          <FluxoCaixaToggle modo={modo} onChange={setModo} />
         </div>
 
         {/* Corpo */}
         <div className="px-5 py-4 space-y-4">
-          <FluxoCaixaToggle modo={modo} onChange={setModo} />
-
           {error && (
             <div className="rounded-md border border-rose-300 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30 text-xs text-rose-800 dark:text-rose-200 px-3 py-2">
               Erro ao carregar lançamentos: {error.message}
@@ -109,14 +101,29 @@ export function FluxoCaixaModal({
             </div>
           ) : (
             <>
-              <FluxoCaixaKPIs kpis={data?.kpis ?? null} modo={modo} />
-              <FluxoCaixaGrafico3Trilhos
-                real2025={data?.trilhoReal2025 ?? null}
-                meta2026={data?.trilhoMeta2026 ?? null}
-                real2026={data?.trilhoReal2026 ?? null}
-                modo={modo}
-                mesAlvo={mesAlvo}
-              />
+              {/* Layout 2 colunas: gráfico à esquerda, KPIs sticky à direita */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                <div className="lg:col-span-7 min-w-0">
+                  <FluxoCaixaGrafico3Trilhos
+                    real2025={data?.trilhoReal2025 ?? null}
+                    meta2026={data?.trilhoMeta2026 ?? null}
+                    real2026={data?.trilhoReal2026 ?? null}
+                    modo={modo}
+                    mesAlvo={mesAlvo}
+                    mesHorizonteInclusivo={data?.mesHorizonteInclusivo ?? mesAlvo - 1}
+                  />
+                </div>
+                <div className="lg:col-span-5 lg:sticky lg:top-4 lg:self-start min-w-0">
+                  <FluxoCaixaKPIs
+                    kpis={data?.kpis ?? null}
+                    labelCard1={data?.labelCard1 ?? 'Fluxo Real'}
+                    labelCard2={data?.labelCard2 ?? 'Fluxo Meta'}
+                    layout="vertical"
+                  />
+                </div>
+              </div>
+
+              {/* Top Impactos — full width */}
               <FluxoCaixaTopImpactos impactos={data?.topImpactos ?? []} />
             </>
           )}

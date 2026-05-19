@@ -40,6 +40,14 @@ const MACROS_ENTRADA: ReadonlyArray<string> = [
   'Entrada Financeira',
 ];
 
+/**
+ * Horizonte tático da projeção a partir de mesAlvo (em meses).
+ * Nos modos 'confirmado' e 'estimado', a projeção cobre Jan→min(mesAlvo+3, Dez).
+ * Janela curta = decisões executivas acionáveis. Para visão anual completa,
+ * usar o Planejamento.
+ */
+const HORIZONTE_PROJECAO_MESES = 3;
+
 /** Threshold para impacto 'neutro'. */
 const THRESHOLD_NEUTRO_PCT = 0.01;
 /**
@@ -82,6 +90,17 @@ function mesIdxDe(ano_mes: string): number {
 /** Determina natureza (entrada/saida) a partir do macro_custo. */
 function naturezaDeMacro(macro: string | null | undefined): NaturezaSubcentro {
   return macro != null && MACROS_ENTRADA.includes(macro) ? 'entrada' : 'saida';
+}
+
+const MESES_ABREV: ReadonlyArray<string> = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+];
+
+/** "Abr/26" (mês 0-based + ano completo) */
+function mesYY(idx0: number, ano: number): string {
+  const mes = MESES_ABREV[idx0] ?? '—';
+  return `${mes}/${String(ano).slice(-2)}`;
 }
 
 /** Sinal convencional para construir fluxo líquido a partir do grid Meta:
@@ -166,6 +185,7 @@ function montarTrilhoMeta(
   saldoInicialMeta: number,
   modo: ModoToggle,
   mesAlvo: number,
+  mesHorizonteInclusivo: number,
 ): SerieAno12 {
   const fluxoMensal = ZEROS_12();
   for (const row of grid) {
@@ -181,10 +201,12 @@ function montarTrilhoMeta(
     acc += fluxoMensal[i];
     meses[i] = acc;
   }
+  // totalPeriodo cobre Jan..mesAlvo no modo realizado, Jan..mesHorizonteInclusivo
+  // nos modos com projeção (horizonte tático de HORIZONTE_PROJECAO_MESES).
   const totalPeriodo =
     modo === 'realizado'
       ? somaFluxoNoIntervalo(fluxoMensal, 0, mesAlvo - 1)
-      : somaFluxoNoIntervalo(fluxoMensal, 0, 11);
+      : somaFluxoNoIntervalo(fluxoMensal, 0, mesHorizonteInclusivo);
   return { meses, fluxoMensal, totalPeriodo };
 }
 
@@ -208,6 +230,7 @@ function montarTrilhoReal2026(
   fluxoLancFiltradoPorMes: number[],
   modo: ModoToggle,
   mesAlvo: number,
+  mesHorizonteInclusivo: number,
 ): SerieAno12 {
   const meses = NAN_12();
   const fluxoMensal = NAN_12();
@@ -228,15 +251,15 @@ function montarTrilhoReal2026(
     }
   }
 
-  // Projeção mesAlvo..Dez (apenas confirmado/estimado).
+  // Projeção mesAlvo..mesHorizonteInclusivo (apenas confirmado/estimado).
+  // Cobre apenas os HORIZONTE_PROJECAO_MESES meses à frente do mesAlvo —
+  // janela tática para decisões executivas acionáveis.
   if (modo !== 'realizado') {
-    // Ponto de partida: último saldo válido do histórico, ou saldoInicialReal
-    // se nenhum mês histórico veio populado.
     let accSaldo = saldoPrev;
     if (!isFiniteNumber(accSaldo)) {
       accSaldo = isFiniteNumber(saldoInicialReal) ? saldoInicialReal : NaN;
     }
-    for (let i = idxLimiteHist; i < 12; i++) {
+    for (let i = idxLimiteHist; i <= mesHorizonteInclusivo && i < 12; i++) {
       const fluxo = safeNum(fluxoLancFiltradoPorMes[i]);
       fluxoMensal[i] = fluxo;
       if (isFiniteNumber(accSaldo)) {
@@ -249,7 +272,7 @@ function montarTrilhoReal2026(
   const totalPeriodo =
     modo === 'realizado'
       ? somaFluxoNoIntervalo(fluxoMensal, 0, mesAlvo - 1)
-      : somaFluxoNoIntervalo(fluxoMensal, 0, 11);
+      : somaFluxoNoIntervalo(fluxoMensal, 0, mesHorizonteInclusivo);
   return { meses, fluxoMensal, totalPeriodo };
 }
 
@@ -260,6 +283,8 @@ function montarKPIs(
   trilhoMeta: SerieAno12,
   modo: ModoToggle,
   mesAlvo: number,
+  mesHorizonteInclusivo: number,
+  ano: number,
 ): KPIHeader {
   const realizadoPeriodo = isFiniteNumber(trilhoReal.totalPeriodo) ? trilhoReal.totalPeriodo : null;
   const metaPeriodo = isFiniteNumber(trilhoMeta.totalPeriodo) ? trilhoMeta.totalPeriodo : null;
@@ -270,37 +295,40 @@ function montarKPIs(
       ? (deltaAbs / Math.abs(metaPeriodo)) * 100
       : null;
 
-  // saldoFinalReal: último saldo válido conforme modo.
-  let saldoFinalReal: number | null = null;
+  // Card 4 — semântica varia conforme modo:
+  //   - realizado: SALDO FINAL = saldo[mesAlvo-1]
+  //   - confirmado: SALDO PREVISTO = saldo[mesHorizonteInclusivo]
+  //   - estimado: MENOR SALDO em [mesAlvo..mesHorizonteInclusivo]
+  let card4Label = '';
+  let card4Valor: number | null = null;
+  let card4Sufixo = '';
   if (modo === 'realizado') {
+    card4Label = 'Saldo Final';
     const v = trilhoReal.meses[mesAlvo - 1];
-    saldoFinalReal = isFiniteNumber(v) ? v : null;
+    card4Valor = isFiniteNumber(v) ? v : null;
+    card4Sufixo = `em ${mesYY(mesAlvo - 1, ano)}`;
+  } else if (modo === 'confirmado') {
+    card4Label = 'Saldo Previsto';
+    const v = trilhoReal.meses[mesHorizonteInclusivo];
+    card4Valor = isFiniteNumber(v) ? v : null;
+    card4Sufixo = `em ${mesYY(mesHorizonteInclusivo, ano)}`;
   } else {
-    // Procurar o último saldo válido em [0..11].
-    for (let i = 11; i >= 0; i--) {
+    // estimado
+    card4Label = 'Menor Saldo';
+    let menor: number | null = null;
+    let idxMenor = -1;
+    // Busca em [mesAlvo..mesHorizonteInclusivo] (inclui o ponto de transição).
+    for (let i = mesAlvo - 1; i <= mesHorizonteInclusivo && i < 12; i++) {
       const v = trilhoReal.meses[i];
       if (isFiniteNumber(v)) {
-        saldoFinalReal = v;
-        break;
-      }
-    }
-  }
-  const saldoMetaFinal = trilhoMeta.meses[11];
-  const saldoFinalMeta = isFiniteNumber(saldoMetaFinal) ? saldoMetaFinal : null;
-
-  // Menor saldo projetado — só nos modos não-realizado.
-  let menorSaldoProjetado: number | null = null;
-  let mesMenorSaldo: number | null = null;
-  if (modo !== 'realizado') {
-    for (let i = mesAlvo; i < 12; i++) {
-      const v = trilhoReal.meses[i];
-      if (isFiniteNumber(v)) {
-        if (menorSaldoProjetado == null || v < menorSaldoProjetado) {
-          menorSaldoProjetado = v;
-          mesMenorSaldo = i + 1; // 1-based
+        if (menor == null || v < menor) {
+          menor = v;
+          idxMenor = i;
         }
       }
     }
+    card4Valor = menor;
+    card4Sufixo = idxMenor >= 0 ? `em ${mesYY(idxMenor, ano)}` : '';
   }
 
   return {
@@ -308,10 +336,11 @@ function montarKPIs(
     metaPeriodo,
     deltaAbs,
     deltaPct,
-    saldoFinalReal,
-    saldoFinalMeta,
-    menorSaldoProjetado,
-    mesMenorSaldo,
+    card4: {
+      label: card4Label,
+      valor: card4Valor,
+      sufixo: card4Sufixo,
+    },
   };
 }
 
@@ -330,11 +359,16 @@ function montarTopImpactos(
   lancamentosFiltrados: LancamentoBruto[],
   grid: SubcentroGrid[],
   mesAlvo: number,
+  modo: ModoToggle,
+  mesHorizonteInclusivo: number,
 ): ImpactoDesvio[] {
   const mapa = new Map<string, AgrupadoSubcentro>();
 
-  // Agregar real por subcentro (Jan→mesAlvo).
-  const limite = mesAlvo - 1; // 0-based inclusive
+  // Agregar real por subcentro. Janela do período:
+  //   - 'realizado': Jan→mesAlvo
+  //   - 'confirmado'/'estimado': Jan→mesHorizonteInclusivo
+  const limite =
+    modo === 'realizado' ? mesAlvo - 1 : mesHorizonteInclusivo; // 0-based inclusive
   for (const l of lancamentosFiltrados) {
     if (l.subcentro == null) continue;
     // Transferências entre contas são movimento neutro. NÃO impactam fluxo
@@ -515,24 +549,78 @@ export function buildFluxoCaixaModalData(
     fluxoLancFiltradoPorMes[idx] += safeNum(l.valor) * sinal;
   }
 
+  // 2b. Calcular mesHorizonteInclusivo (0-based). Janela tática.
+  //   - 'realizado': horizonte = mesAlvo - 1 (sem projeção).
+  //   - 'confirmado'/'estimado': mesAlvo + HORIZONTE_PROJECAO_MESES - 1
+  //     (capped em 11 = Dez).
+  const mesHorizonteInclusivo =
+    modo === 'realizado'
+      ? Math.max(0, mesAlvo - 1)
+      : Math.min(mesAlvo - 1 + HORIZONTE_PROJECAO_MESES, 11);
+
   // 3. Construir os 3 trilhos.
   const trilhoReal2025 = montarTrilhoReal2025(serieReal2025Saldo);
-  const trilhoMeta2026 = montarTrilhoMeta(gridMetaConsolidado, saldoInicialMeta, modo, mesAlvo);
+  const trilhoMeta2026 = montarTrilhoMeta(
+    gridMetaConsolidado,
+    saldoInicialMeta,
+    modo,
+    mesAlvo,
+    mesHorizonteInclusivo,
+  );
   const trilhoReal2026 = montarTrilhoReal2026(
     serieReal2026SaldoOficial,
     saldoInicialReal,
     fluxoLancFiltradoPorMes,
     modo,
     mesAlvo,
+    mesHorizonteInclusivo,
   );
 
   // 4. KPIs.
-  const kpis = montarKPIs(trilhoReal2026, trilhoMeta2026, modo, mesAlvo);
+  const kpis = montarKPIs(trilhoReal2026, trilhoMeta2026, modo, mesAlvo, mesHorizonteInclusivo, ano);
 
-  // 5. Top Impactos — usa lançamentos já filtrados pelo modo (briefing v3).
-  const topImpactos = montarTopImpactos(lancamentosFiltrados, gridMetaConsolidado, mesAlvo);
+  // 5. Top Impactos — usa lançamentos já filtrados pelo modo + janela do
+  //    horizonte tático para os modos com projeção.
+  const topImpactos = montarTopImpactos(
+    lancamentosFiltrados,
+    gridMetaConsolidado,
+    mesAlvo,
+    modo,
+    mesHorizonteInclusivo,
+  );
 
-  // 6. Warnings + origem.
+  // 6. Labels pré-formatados (subtítulo do modal + cards 1/2).
+  const idxAlvo = mesAlvo - 1; // 0-based
+  const periodoRealizadoTxt = `Jan→${mesYY(idxAlvo, ano)}`;
+  const periodoProjetadoTxt =
+    mesHorizonteInclusivo > idxAlvo
+      ? `${mesYY(idxAlvo + 1, ano)}→${mesYY(mesHorizonteInclusivo, ano)}`
+      : '';
+  let subtituloPeriodo = '';
+  let labelCard1 = '';
+  let labelCard2 = '';
+  if (modo === 'realizado') {
+    subtituloPeriodo = `Real ${ano} vs Meta ${ano} — ${periodoRealizadoTxt} realizado`;
+    labelCard1 = `Fluxo Real ${periodoRealizadoTxt}`;
+    labelCard2 = `Fluxo Meta ${periodoRealizadoTxt}`;
+  } else if (modo === 'confirmado') {
+    subtituloPeriodo = `Real ${ano} vs Meta ${ano} — ${periodoRealizadoTxt} realizado${periodoProjetadoTxt ? ' + ' + periodoProjetadoTxt + ' agendado' : ''}`;
+    const periodoTotal = periodoProjetadoTxt
+      ? `Jan→${mesYY(mesHorizonteInclusivo, ano)}`
+      : periodoRealizadoTxt;
+    labelCard1 = `Fluxo Real + Agendado ${periodoTotal}`;
+    labelCard2 = `Fluxo Meta ${periodoTotal}`;
+  } else {
+    // estimado
+    subtituloPeriodo = `Real ${ano} vs Meta ${ano} — ${periodoRealizadoTxt} realizado${periodoProjetadoTxt ? ' + ' + periodoProjetadoTxt + ' projetado' : ''}`;
+    const periodoTotal = periodoProjetadoTxt
+      ? `Jan→${mesYY(mesHorizonteInclusivo, ano)}`
+      : periodoRealizadoTxt;
+    labelCard1 = `Fluxo Projetado ${periodoTotal}`;
+    labelCard2 = `Fluxo Meta ${periodoTotal}`;
+  }
+
+  // 7. Warnings + origem.
   const warnings = montarWarnings(modo, lancamentos, isContextoIndividual);
   const origemProjecao = montarOrigemProjecao(modo);
 
@@ -545,6 +633,10 @@ export function buildFluxoCaixaModalData(
     modo,
     mesAlvo,
     ano,
+    mesHorizonteInclusivo,
+    subtituloPeriodo,
+    labelCard1,
+    labelCard2,
     warnings,
     origemProjecao,
   };

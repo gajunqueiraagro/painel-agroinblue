@@ -1,12 +1,20 @@
 /**
- * FluxoCaixaGrafico3Trilhos — gráfico de saldo acumulado mês a mês,
- * 3 séries: Real 2025 (cinza), Meta 2026 (laranja), Real 2026 (azul).
+ * FluxoCaixaGrafico3Trilhos — gráfico de saldo acumulado mês a mês.
  *
- * Componente puro: consome 3 `SerieAno12` prontas + `modo` + `mesAlvo`.
- * Tracejado nos meses > mesAlvo da série azul (Real 2026) em modos
- * 'confirmado' e 'estimado' — visual indica projeção, não histórico.
+ * 3 séries:
+ *   - Real 2025 (cinza, Jan→Dez sempre)
+ *   - Meta 2026 (laranja, Jan→Dez sempre)
+ *   - Real 2026 = duas séries internas sem overlap visual:
+ *     · "Real 2026" (sólida): valores em [0..mesAlvo-1], null em [mesAlvo..11]
+ *     · "Real 2026 (projeção)" (tracejada): valor em mesAlvo-1 (mesmo da sólida,
+ *       para conectar visualmente) + valores em [mesAlvo..mesHorizonteInclusivo],
+ *       null fora desse range.
  *
- * Linha de referência vertical em mesAlvo demarca corte histórico/projetado.
+ * O Tooltip filtra duplicação no ponto de transição (mesAlvo-1) — só mostra
+ * o valor da sólida.
+ *
+ * Linha vertical em mesAlvo marca o corte realizado/projetado nos modos
+ * 'confirmado'/'estimado'.
  */
 
 import {
@@ -28,6 +36,9 @@ interface Props {
   real2026: SerieAno12 | null;
   modo: ModoToggle;
   mesAlvo: number;
+  /** 0-based inclusive — limite superior da projeção do trilho Real 2026
+   *  nos modos 'confirmado'/'estimado'. Em 'realizado' = mesAlvo - 1. */
+  mesHorizonteInclusivo: number;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -38,7 +49,7 @@ const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'O
 // pontos do projeto onde Recharts é usado a mesma exceção vale —
 // ver LinhaExecutivaExecutivoModal.tsx:43-44 (mesmas constantes) e
 // BlocoResumoExecutivo.tsx:117-119,128-129 (mesma paleta).
-// Tokens visuais oficiais Tailwind: orange-500 (meta), slate-400 (ano-1),
+// Tokens visuais oficiais Tailwind: orange-500 (meta), gray-400 (ano-1),
 // sky-600 (ano corrente). Quando o projeto adotar `getComputedStyle` para
 // resolver `hsl(var(--*))` antes de passar a Recharts, migrar para
 // padrão único. Por ora, hex literal alinhado ao precedente já estabelecido.
@@ -81,10 +92,27 @@ function GraficoTooltip({
   label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
+  // Filtra duplicação no ponto de transição: se "Real 2026" e "Real 2026 (projeção)"
+  // têm o mesmo valor (ponto de conexão), mostra apenas a sólida.
+  const solid = payload.find((p) => p.dataKey === 'Real 2026');
+  const dashed = payload.find((p) => p.dataKey === 'Real 2026 (projeção)');
+  const filtered = payload.filter((p) => {
+    if (
+      p.dataKey === 'Real 2026 (projeção)' &&
+      solid &&
+      dashed &&
+      typeof solid.value === 'number' &&
+      typeof dashed.value === 'number' &&
+      solid.value === dashed.value
+    ) {
+      return false;
+    }
+    return true;
+  });
   return (
     <div className="rounded-md border border-border/50 bg-background/90 backdrop-blur-sm px-2.5 py-1.5 shadow-sm text-[11px]">
       <div className="font-semibold text-foreground mb-0.5">{label}</div>
-      {payload.map((p) => {
+      {filtered.map((p) => {
         const dk = String(p.dataKey);
         const v = typeof p.value === 'number' ? fmtBRLCheio(p.value) : '—';
         return (
@@ -98,55 +126,69 @@ function GraficoTooltip({
   );
 }
 
-export function FluxoCaixaGrafico3Trilhos({ real2025, meta2026, real2026, modo, mesAlvo }: Props) {
-  // Compor chartData a partir das 3 séries (saldos). Real 2026 vira null
-  // após mesAlvo em modo='realizado' para Recharts quebrar a linha.
+export function FluxoCaixaGrafico3Trilhos({
+  real2025,
+  meta2026,
+  real2026,
+  modo,
+  mesAlvo,
+  mesHorizonteInclusivo,
+}: Props) {
   const mostrarProjecao = modo !== 'realizado';
+  const idxAlvo = mesAlvo - 1; // 0-based
+
+  // chartData: 1 dataset com 4 séries.
+  //   - Real 2026 (sólida): valor em [0..idxAlvo], null em [idxAlvo+1..11]
+  //   - Real 2026 (projeção): null em [0..idxAlvo-1],
+  //                            valor em [idxAlvo..mesHorizonteInclusivo]
+  //                            (idxAlvo é o ponto de conexão com a sólida —
+  //                            mesmo valor para evitar gap visual),
+  //                            null em [mesHorizonteInclusivo+1..11]
   const chartData = MESES.map((mes, i) => {
     const row: Record<string, number | string | null> = { mes };
-    if (real2025 && Number.isFinite(real2025.meses[i])) {
-      row['Real 2025'] = real2025.meses[i];
-    } else {
-      row['Real 2025'] = null;
-    }
-    if (meta2026 && Number.isFinite(meta2026.meses[i])) {
-      row['Meta 2026'] = meta2026.meses[i];
-    } else {
-      row['Meta 2026'] = null;
-    }
+
+    // Real 2025 (Jan→Dez sempre)
+    row['Real 2025'] =
+      real2025 && Number.isFinite(real2025.meses[i]) ? real2025.meses[i] : null;
+
+    // Meta 2026 (Jan→Dez sempre)
+    row['Meta 2026'] =
+      meta2026 && Number.isFinite(meta2026.meses[i]) ? meta2026.meses[i] : null;
+
+    // Real 2026 — duas séries sem overlap:
     if (real2026) {
       const v = real2026.meses[i];
-      const ativo = mostrarProjecao || i < mesAlvo;
-      row['Real 2026'] = ativo && Number.isFinite(v) ? v : null;
-    }
-    return row;
-  });
-
-  // Linha azul projetada (tracejado) — separada para aplicar strokeDasharray
-  // apenas no segmento > mesAlvo. Quando modo='realizado', série fica vazia.
-  const chartDataProjecao = MESES.map((mes, i) => {
-    const row: Record<string, number | string | null> = { mes };
-    if (real2026 && mostrarProjecao && i >= mesAlvo - 1) {
-      // Inicia 1 mês antes para conectar com a linha sólida em mesAlvo.
-      const v = real2026.meses[i];
-      row['Real 2026 (projeção)'] = Number.isFinite(v) ? v : null;
+      const valido = Number.isFinite(v);
+      // Sólida: até idxAlvo (inclusive). Null após.
+      if (valido && i <= idxAlvo) {
+        row['Real 2026'] = v;
+      } else {
+        row['Real 2026'] = null;
+      }
+      // Tracejada: começa em idxAlvo (mesmo ponto da sólida — valor igual
+      // garante conexão visual sem gap) e vai até mesHorizonteInclusivo.
+      if (
+        mostrarProjecao &&
+        valido &&
+        i >= idxAlvo &&
+        i <= mesHorizonteInclusivo
+      ) {
+        row['Real 2026 (projeção)'] = v;
+      } else {
+        row['Real 2026 (projeção)'] = null;
+      }
     } else {
+      row['Real 2026'] = null;
       row['Real 2026 (projeção)'] = null;
     }
+
     return row;
   });
-
-  // Merge: 1 dataset com ambas as séries de Real 2026 (sólido até mesAlvo;
-  // tracejado dali em diante).
-  const chartMerged = chartData.map((row, i) => ({
-    ...row,
-    'Real 2026 (projeção)': chartDataProjecao[i]['Real 2026 (projeção)'],
-  }));
 
   return (
     <div className="border border-border rounded-md p-2 h-80">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartMerged} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
           <YAxis
@@ -154,11 +196,14 @@ export function FluxoCaixaGrafico3Trilhos({ real2025, meta2026, real2026, modo, 
             tickFormatter={fmtBRLCompacto}
             width={64}
           />
-          <Tooltip content={<GraficoTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeWidth: 1 }} />
+          <Tooltip
+            content={<GraficoTooltip />}
+            cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeWidth: 1 }}
+          />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {mostrarProjecao && (
             <ReferenceLine
-              x={MESES[mesAlvo - 1]}
+              x={MESES[idxAlvo]}
               stroke="hsl(var(--muted-foreground) / 0.4)"
               strokeDasharray="2 2"
               label={{
@@ -204,7 +249,23 @@ export function FluxoCaixaGrafico3Trilhos({ real2025, meta2026, real2026, modo, 
               stroke={COR_REAL_2026}
               strokeWidth={2}
               strokeDasharray="5 4"
-              dot={{ r: 2.5, fill: COR_REAL_2026, fillOpacity: 0.6 }}
+              // dot=false no ponto inicial (idxAlvo) para evitar overlap com
+              // o dot da sólida no mesmo ponto. Demais pontos da projeção
+              // recebem dot levemente menor.
+              dot={(props: { cx?: number; cy?: number; payload?: { mes?: string }; index?: number }) => {
+                const idx = props.index ?? -1;
+                if (idx === idxAlvo) return <g />;
+                if (props.cx == null || props.cy == null) return <g />;
+                return (
+                  <circle
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={2.5}
+                    fill={COR_REAL_2026}
+                    fillOpacity={0.6}
+                  />
+                );
+              }}
               connectNulls={false}
               isAnimationActive={false}
               legendType="none"

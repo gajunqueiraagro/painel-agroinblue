@@ -1,21 +1,28 @@
 /**
  * FluxoCaixaKPIs — 4 cards de KPI do Modal Fluxo de Caixa Realizado.
  *
- * Componente puro: consome `KPIHeader` pronto do builder. Zero cálculo aqui.
- * Card 4 condiciona ao modo:
- *   - 'realizado'/'confirmado': "Saldo Final"
- *   - 'estimado': "Menor Saldo Projetado" + mês onde ocorre
+ * Componente puro: consome `KPIHeader` + labels pré-formatados pelo builder.
+ * Zero cálculo aqui.
+ *
+ * Card 4 vem com label/valor/sufixo prontos do builder conforme modo:
+ *   - 'realizado'   → "Saldo Final"     + saldo[mesAlvo-1]
+ *   - 'confirmado'  → "Saldo Previsto"  + saldo[mesHorizonteInclusivo]
+ *   - 'estimado'    → "Menor Saldo"     + min(saldo[mesAlvo..horizonte])
+ *
+ * Prop `layout`:
+ *   - 'horizontal' (default): grid 2×2 / 4×1 — uso em headers compactos.
+ *   - 'vertical': flex coluna — uso na coluna direita do modal (sticky).
  */
 
 import { cn } from '@/lib/utils';
-import type { KPIHeader, ModoToggle } from '@/v2/lib/fluxoCaixaModalTypes';
+import type { KPIHeader } from '@/v2/lib/fluxoCaixaModalTypes';
 
 interface Props {
   kpis: KPIHeader | null;
-  modo: ModoToggle;
+  labelCard1: string;
+  labelCard2: string;
+  layout?: 'horizontal' | 'vertical';
 }
-
-const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function fmtBRL(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return '—';
@@ -43,11 +50,13 @@ function fmtPct(d: number | null | undefined): string {
 
 function Card({
   titulo,
+  sublabel,
   valor,
   subValor,
   destaque,
 }: {
   titulo: string;
+  sublabel?: string;
   valor: string;
   subValor?: string;
   destaque?: 'positivo' | 'negativo' | 'neutro';
@@ -63,6 +72,9 @@ function Card({
       <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground truncate">
         {titulo}
       </div>
+      {sublabel && (
+        <div className="text-[10px] text-muted-foreground truncate">{sublabel}</div>
+      )}
       <div className={cn('text-base font-bold tabular-nums truncate leading-tight', destaqueCls)}>
         {valor}
       </div>
@@ -73,10 +85,15 @@ function Card({
   );
 }
 
-export function FluxoCaixaKPIs({ kpis, modo }: Props) {
+export function FluxoCaixaKPIs({ kpis, labelCard1, labelCard2, layout = 'horizontal' }: Props) {
+  const containerCls =
+    layout === 'vertical'
+      ? 'flex flex-col gap-2'
+      : 'grid grid-cols-2 lg:grid-cols-4 gap-2';
+
   if (!kpis) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className={containerCls}>
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="border border-border bg-muted/30 rounded-md p-2.5 h-16 animate-pulse" />
         ))}
@@ -91,34 +108,21 @@ export function FluxoCaixaKPIs({ kpis, modo }: Props) {
         ? 'negativo'
         : 'neutro';
 
-  const card4 =
-    modo === 'estimado' && kpis.menorSaldoProjetado != null
-      ? {
-          titulo: 'Menor Saldo Projetado',
-          valor: fmtBRLCurto(kpis.menorSaldoProjetado),
-          subValor:
-            kpis.mesMenorSaldo != null
-              ? `em ${MESES_CURTOS[kpis.mesMenorSaldo - 1] ?? '—'}`
-              : undefined,
-        }
-      : {
-          titulo: 'Saldo Final',
-          valor: fmtBRLCurto(kpis.saldoFinalReal),
-          subValor:
-            kpis.saldoFinalMeta != null ? `Meta: ${fmtBRLCurto(kpis.saldoFinalMeta)}` : undefined,
-        };
-
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-      <Card titulo="Fluxo Real (período)" valor={fmtBRLCurto(kpis.realizadoPeriodo)} />
-      <Card titulo="Fluxo Meta (período)" valor={fmtBRLCurto(kpis.metaPeriodo)} />
+    <div className={containerCls}>
+      <Card titulo={labelCard1} valor={fmtBRLCurto(kpis.realizadoPeriodo)} />
+      <Card titulo={labelCard2} valor={fmtBRLCurto(kpis.metaPeriodo)} />
       <Card
         titulo="Δ Real vs Meta"
         valor={fmtBRLCurto(kpis.deltaAbs)}
         subValor={fmtPct(kpis.deltaPct)}
         destaque={deltaDestaque}
       />
-      <Card titulo={card4.titulo} valor={card4.valor} subValor={card4.subValor} />
+      <Card
+        titulo={kpis.card4.label}
+        valor={fmtBRLCurto(kpis.card4.valor)}
+        subValor={kpis.card4.sufixo}
+      />
     </div>
   );
 }

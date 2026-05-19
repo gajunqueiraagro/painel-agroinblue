@@ -43,16 +43,15 @@ export interface KPIHeader {
   deltaAbs: number | null;
   /** (deltaAbs / |metaPeriodo|) × 100. null se metaPeriodo===0/null. */
   deltaPct: number | null;
-  /** Último saldo válido do trilho REAL 2026.
-   *   - modo='realizado': saldo[mesAlvo-1]
-   *   - modo='confirmado'/'estimado': saldo[11] (Dez) */
-  saldoFinalReal: number | null;
-  /** Saldo Dez/N da META. */
-  saldoFinalMeta: number | null;
-  /** Menor saldo entre [mesAlvo..Dez] do trilho REAL 2026. null em modo='realizado'. */
-  menorSaldoProjetado: number | null;
-  /** 1..12 — mês onde o menor saldo ocorre (1-based). null em modo='realizado'. */
-  mesMenorSaldo: number | null;
+  /** Card 4 — valor + label + sufixo já computados pelo builder conforme modo:
+   *   - 'realizado': SALDO FINAL — saldo[mesAlvo-1] + "em {MES_ALVO}/{YY}"
+   *   - 'confirmado': SALDO PREVISTO — saldo[mesHorizonteInclusivo] + "em {MES_HORIZONTE}/{YY}"
+   *   - 'estimado': MENOR SALDO — min(saldo[mesAlvo..mesHorizonte]) + "em {MES_MENOR}/{YY}" */
+  card4: {
+    label: string;
+    valor: number | null;
+    sufixo: string;
+  };
 }
 
 // ─── Top Impactos por subcentro ──────────────────────────────────────
@@ -94,6 +93,17 @@ export interface FluxoCaixaModalData {
   modo: ModoToggle;
   mesAlvo: number;
   ano: number;
+  /** Limite superior INCLUSIVO (0-based) da projeção do trilho Real 2026
+   *  e dos KPIs nos modos 'confirmado'/'estimado'. Calculado como
+   *  min(mesAlvo - 1 + HORIZONTE_PROJECAO_MESES, 11). Em modo 'realizado'
+   *  = mesAlvo - 1 (sem projeção). Eixo X do gráfico permanece Jan→Dez. */
+  mesHorizonteInclusivo: number;
+  /** Subtítulo do modal pré-formatado conforme modo. */
+  subtituloPeriodo: string;
+  /** Label do KPI Card 1 ("Fluxo Real ..."). Já com período aplicado. */
+  labelCard1: string;
+  /** Label do KPI Card 2 ("Fluxo Meta ..."). Já com período aplicado. */
+  labelCard2: string;
   warnings: string[];
   /** Lista de fontes usadas na projeção, para rodapé de origem. */
   origemProjecao: string[];
