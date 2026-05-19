@@ -14,7 +14,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Legend,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -104,10 +103,15 @@ function montarLinhaDifAno(
   data: BlocoResumoExecutivoData,
   saldoInicialMeta: number,
   saldoInicialReal: number,
+  mesAlvo?: number,
 ): LinhaExecutiva {
-  const meta = data.serieMeta[11] - saldoInicialMeta;
+  // Quando mesAlvo é fornecido (modo Fechamento), a diferença é Jan→mesAlvo
+  // (saldo final do período − saldo inicial). Sem mesAlvo, mantém variação
+  // anual (Dez − Dez/N-1) — comportamento legado do Planejamento.
+  const idx = Math.max(0, Math.min(11, (mesAlvo ?? 12) - 1));
+  const meta = (data.serieMeta[idx] ?? 0) - saldoInicialMeta;
   const real = Number.isFinite(saldoInicialReal)
-    ? data.serieReal[11] - saldoInicialReal
+    ? (data.serieReal[idx] ?? NaN) - saldoInicialReal
     : NaN;
   return { label: 'Dif. Caixa no Ano', meta, real, delta: calcDeltaLocal(meta, real) };
 }
@@ -117,6 +121,10 @@ function montarLinhaDifAno(
 // Cores das séries do gráfico — espelham strokes dos <Area>.
 const COR_META = '#f97316'; // laranja (mesma da linha META no gráfico)
 const COR_REAL = '#374151'; // gray-700 (mais escuro que o stroke #9ca3af, melhor contraste no tooltip)
+const COR_REAL_2026 = '#0284c7'; // sky-600 (mesma do stroke da Area REAL 2026)
+
+// Ordem das séries no tooltip — modo Fechamento prioriza REAL 2026.
+const ORDEM_TOOLTIP_FECHAMENTO: ReadonlyArray<string> = ['REAL 2026', 'META 2026', 'REAL 2025'];
 
 // Classe utilitária para a coluna META 2026 — identidade laranja do
 // Planejamento (espelha COR_META=#f97316 = orange-500). Aplicada no header
@@ -133,27 +141,48 @@ function FluxoCaixaTooltip({
   active,
   payload,
   label,
+  modo = 'planejamento',
 }: {
   active?: boolean;
   payload?: TooltipPayloadItem[];
   label?: string;
+  modo?: 'planejamento' | 'fechamento';
 }) {
   if (!active || !payload || payload.length === 0) return null;
+  // Em modo Fechamento, priorizar REAL 2026 → META 2026 → REAL 2025.
+  // Itens fora da ordem nominal vão para o fim preservando ordem original.
+  const itens = modo === 'fechamento'
+    ? [...payload].sort((a, b) => {
+        const ia = ORDEM_TOOLTIP_FECHAMENTO.indexOf(String(a.dataKey));
+        const ib = ORDEM_TOOLTIP_FECHAMENTO.indexOf(String(b.dataKey));
+        const ra = ia === -1 ? ORDEM_TOOLTIP_FECHAMENTO.length : ia;
+        const rb = ib === -1 ? ORDEM_TOOLTIP_FECHAMENTO.length : ib;
+        return ra - rb;
+      })
+    : payload;
+  const corDe = (dataKey: string): string => {
+    if (dataKey === 'META 2026') return COR_META;
+    if (dataKey === 'REAL 2026') return COR_REAL_2026;
+    return COR_REAL;
+  };
+  const destacar = (dataKey: string): boolean =>
+    modo === 'fechamento' ? dataKey === 'REAL 2026' : dataKey === 'META 2026';
   return (
     <div
       className="rounded-md border border-border/50 bg-background/80 backdrop-blur-sm px-2.5 py-2 shadow-sm text-[11px]"
       style={{ WebkitBackdropFilter: 'blur(4px)' }}
     >
       <div className="text-foreground font-medium mb-1">{label}</div>
-      {payload.map(p => {
-        const isMeta = p.dataKey === 'META 2026';
-        const color = isMeta ? COR_META : COR_REAL;
+      {itens.map(p => {
+        const dk = String(p.dataKey);
+        const color = corDe(dk);
+        const bold = destacar(dk);
         return (
-          <div key={String(p.dataKey)} className="flex items-center gap-2 tabular-nums">
-            <span style={{ color }} className={isMeta ? 'font-bold' : 'font-semibold'}>
-              {String(p.dataKey)}:
+          <div key={dk} className="flex items-center gap-2 tabular-nums">
+            <span style={{ color }} className={bold ? 'font-bold' : 'font-semibold'}>
+              {dk}:
             </span>
-            <span style={{ color }} className={isMeta ? 'font-bold' : 'font-medium'}>
+            <span style={{ color }} className={bold ? 'font-bold' : 'font-medium'}>
               {typeof p.value === 'number' ? fmtBRL(p.value) : '—'}
             </span>
           </div>
@@ -353,6 +382,30 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     }),
   }));
 
+  // Gradient bipartido azul/vermelho para REAL 2026 — transição exata no
+  // ponto zero do range. Quando todos os valores >= 0 → azul puro;
+  // quando todos <= 0 → vermelho puro; quando cruza → split no zero.
+  let gradientRealAnoCorrente: JSX.Element | null = null;
+  if (mostrarReal2026) {
+    const valores = chartData
+      .map((d) => (d as { 'REAL 2026'?: number | null })['REAL 2026'])
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    if (valores.length > 0) {
+      const max = Math.max(...valores, 0);
+      const min = Math.min(...valores, 0);
+      const range = max - min;
+      const offsetZero = range > 0 ? max / range : (max > 0 ? 1 : 0);
+      gradientRealAnoCorrente = (
+        <linearGradient id="g-real-2026" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0284c7" stopOpacity={0.55} />
+          <stop offset={offsetZero} stopColor="#0284c7" stopOpacity={0.05} />
+          <stop offset={offsetZero} stopColor="#dc2626" stopOpacity={0.08} />
+          <stop offset="100%" stopColor="#dc2626" stopOpacity={0.35} />
+        </linearGradient>
+      );
+    }
+  }
+
   return (
     <section className="bg-card border border-border rounded-lg p-4 mb-4">
       <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -395,6 +448,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                   <stop offset="0%" stopColor="#9ca3af" stopOpacity={0.35} />
                   <stop offset="100%" stopColor="#9ca3af" stopOpacity={0.05} />
                 </linearGradient>
+                {gradientRealAnoCorrente}
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
@@ -407,7 +461,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                 width={56}
               />
               <Tooltip
-                content={<FluxoCaixaTooltip />}
+                content={(props) => <FluxoCaixaTooltip {...(props as TooltipPayloadItem & { active?: boolean; payload?: TooltipPayloadItem[]; label?: string })} modo={modo} />}
                 cursor={{ stroke: 'hsl(var(--muted-foreground) / 0.3)', strokeWidth: 1 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -415,26 +469,31 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                 type="monotone"
                 dataKey="REAL 2025"
                 stroke="#9ca3af"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 fill="url(#g-real)"
+                fillOpacity={0.35}
               />
               <Area
                 type="monotone"
                 dataKey="META 2026"
                 stroke="#f97316"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 fill="url(#g-meta)"
+                fillOpacity={0.35}
               />
               {mostrarReal2026 && (
-                <Line
+                <Area
                   type="monotone"
                   dataKey="REAL 2026"
                   stroke="#0284c7"
                   strokeWidth={2.5}
+                  fill="url(#g-real-2026)"
+                  fillOpacity={1}
                   dot={{ r: 3, fill: '#0284c7' }}
                   activeDot={{ r: 4 }}
                   connectNulls={false}
                   isAnimationActive={false}
+                  baseValue={0}
                 />
               )}
             </ComposedChart>
@@ -475,7 +534,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             <div className={cn(desfocarDashboard && 'blur-md pointer-events-none select-none')}>
               <CardTotal
                 titulo={modo === 'fechamento' ? 'Dif. Caixa no Período - Meta' : 'Dif. Caixa no Ano - Meta'}
-                linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal)}
+                linha={montarLinhaDifAno(data, saldoInicialMeta, saldoInicialReal, mesAlvo)}
                 variant="neutral"
                 metaOnly
               />
