@@ -356,6 +356,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       porSubcentroMeta: cfgModalAtivo.agregaMeta(gridMetaConsolidado),
       ordemCentrosOficial: cfgModalAtivo.ordemCentrosOficial,
       mesAlvo,
+      modo: 'fechamento',
     });
   }, [cfgModalAtivo, linhaAtiva, lancFinAnoCorrente, ano, gridMetaConsolidado, mesAlvo]);
 

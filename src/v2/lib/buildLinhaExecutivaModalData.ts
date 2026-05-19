@@ -2,6 +2,12 @@ import type { LinhaExecutivaModalData, CentroComposicao, SubcentroComposicao, De
 import type { LinhaExecutiva } from './blocoResumoExecutivoTypes';
 import type { ComposicaoSubcentro } from '@/lib/painelConsultor/agregadosFinanceiros';
 
+// Reutiliza o conceito existente no LinhaExecutivaExecutivoModal.tsx
+// (`type ModoModal`). Duplicado conscientemente — cada arquivo tem o seu
+// para evitar ciclo de imports e divergência de nomes ('fechamento' vs
+// 'closing' vs 'realizado'). UMA fonte de nome semântico.
+export type ModoModalLinha = 'planejamento' | 'fechamento';
+
 export interface BuildLinhaExecutivaModalInput {
   linha: LinhaExecutiva;
   porSubcentroMeta: Record<string, ComposicaoSubcentro>;
@@ -17,6 +23,13 @@ export interface BuildLinhaExecutivaModalInput {
    *  modo Fechamento, ambos null após mesAlvo).
    *  Ausente → ano inteiro (Planejamento, comportamento original). */
   mesAlvo?: number;
+  /** Modo de uso. Default 'planejamento' (mantém fórmula original
+   *  (meta - real) / real). 'fechamento' inverte para (real - meta) / meta,
+   *  refletindo a interpretação executiva "quanto o realizado se desvia
+   *  da meta". Aplicado a TODOS os deltas internos: centros, subcentros,
+   *  Top 3 cards. Linha totalizadora do modal já usa data.linha.delta /
+   *  deltaAnoCorrente do builder pai — não passa por aqui. */
+  modo?: ModoModalLinha;
 }
 
 const sum12 = (arr: number[]): number => arr.reduce((s, v) => s + (v ?? 0), 0);
@@ -33,17 +46,31 @@ const sumUpTo = (arr: number[], n?: number): number => {
 /**
  * Delta executivo seguro:
  * - meta<=0 && real<=0 → 0 (ambos zero, sem variação)
- * - real<=0 && meta>0  → null (matematicamente indefinido — render "—")
- * - caso geral         → (meta - real) / real
+ * - Planejamento: (meta - real) / real; real<=0 && meta>0 → null
+ * - Fechamento:   (real - meta) / meta; meta<=0 → null (sem base de comparação)
+ *
+ * O modo determina a base de comparação:
+ * - Planejamento usa REAL ano-1 como base → "quanto a Meta cresce vs o
+ *   realizado anterior".
+ * - Fechamento usa META como base → "quanto o realizado se desvia da Meta".
  */
-function calcDeltaSeguro(meta: number, real: number): DeltaSeguro {
+function calcDeltaSeguro(
+  meta: number,
+  real: number,
+  modo: ModoModalLinha = 'planejamento',
+): DeltaSeguro {
   if (meta <= 0 && real <= 0) return 0;
+  if (modo === 'fechamento') {
+    if (meta <= 0) return null;
+    return (real - meta) / meta;
+  }
+  // Planejamento (default)
   if (real <= 0) return null;
   return (meta - real) / real;
 }
 
 export function buildLinhaExecutivaModalData(input: BuildLinhaExecutivaModalInput): LinhaExecutivaModalData {
-  const { linha, porSubcentroMeta, porSubcentroReal, mesAlvo } = input;
+  const { linha, porSubcentroMeta, porSubcentroReal, mesAlvo, modo = 'planejamento' } = input;
 
   const allSubs = new Set([
     ...Object.keys(porSubcentroMeta),
@@ -73,7 +100,7 @@ export function buildLinhaExecutivaModalData(input: BuildLinhaExecutivaModalInpu
       subcentro: sub,
       centro_custo: centro,
       metaMeses, realMeses, metaTotal, realTotal,
-      delta: calcDeltaSeguro(metaTotal, realTotal),
+      delta: calcDeltaSeguro(metaTotal, realTotal, modo),
       impactoAbs: metaTotal - realTotal,
     });
   }
@@ -111,7 +138,7 @@ export function buildLinhaExecutivaModalData(input: BuildLinhaExecutivaModalInpu
       centro_custo: centro,
       subcentros: subs,
       metaTotal, realTotal,
-      delta: calcDeltaSeguro(metaTotal, realTotal),
+      delta: calcDeltaSeguro(metaTotal, realTotal, modo),
     };
   });
 
