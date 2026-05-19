@@ -57,15 +57,22 @@ import {
   // PR2 — Entradas Financeiras
   agregaEntradasFinanceirasPorSubcentro,
   agregaEntradasFinanceirasPorSubcentroMeta,
-  // Restantes (Custeio Pec/Agri, Juros, Investimentos, Reposição Bovinos,
-  // Amortizações, Dividendos, Deduções) entram em PR3+ — uma linha por PR
-  // para validação visual isolada.
+  // PR3 — Custeio Pecuária + Agricultura (primeiras linhas natureza='despesa')
+  agregaCusteioPecPorSubcentro,
+  agregaCusteioPecPorSubcentroMeta,
+  agregaCusteioAgriPorSubcentro,
+  agregaCusteioAgriPorSubcentroMeta,
+  // Restantes (Juros, Investimentos, Reposição Bovinos, Amortizações,
+  // Dividendos, Deduções) entram em PR4+ — uma linha por PR para validação
+  // visual isolada.
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import {
   ORDEM_CENTROS_RECEITA_PECUARIA,
   ORDEM_CENTROS_RECEITA_AGRICULTURA,
   ORDEM_CENTROS_OUTRAS_RECEITAS,
   ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
+  ORDEM_CENTROS_CUSTEIO_PECUARIA,
+  ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
 } from '@/lib/financeiro/classificacao';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
@@ -131,6 +138,24 @@ const CONFIG_MODAIS_LINHA_FECHAMENTO: Partial<Record<LinhaModalKey, ConfigModalL
     ordemCentrosOficial: ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
     agregaReal: agregaEntradasFinanceirasPorSubcentro,
     agregaMeta: agregaEntradasFinanceirasPorSubcentroMeta,
+  },
+  // PR3 — Custeio Pec + Agri: primeiras linhas natureza='despesa' com drill.
+  // Cenário-prova da cor semântica invertida (PR1.2A + PR1.3): Δ% negativo
+  // em despesa = economia → AZUL. Paridade EXATA com Planejamento L131-144
+  // (regra soberana de paridade — Gabriel).
+  custeioPecuaria: {
+    titulo: 'Custeio Pecuária',
+    composicaoOficialLabel: 'macro_custo = "Custeio Produção", escopo = "pecuária" (fixo + variável, sem juros)',
+    ordemCentrosOficial: ORDEM_CENTROS_CUSTEIO_PECUARIA,
+    agregaReal: agregaCusteioPecPorSubcentro,
+    agregaMeta: agregaCusteioPecPorSubcentroMeta,
+  },
+  custeioAgricultura: {
+    titulo: 'Custeio Agricultura',
+    composicaoOficialLabel: 'macro_custo = "Custeio Produção", escopo = "agricultura" (fixo + variável, sem juros)',
+    ordemCentrosOficial: ORDEM_CENTROS_CUSTEIO_AGRICULTURA,
+    agregaReal: agregaCusteioAgriPorSubcentro,
+    agregaMeta: agregaCusteioAgriPorSubcentroMeta,
   },
 };
 
