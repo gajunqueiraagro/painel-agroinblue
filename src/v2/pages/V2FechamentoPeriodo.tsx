@@ -301,6 +301,17 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
   return (
     <div className="fechamento-container px-4 py-4">
+      {/* Marco 2.5: Capa Executiva no topo — Resumo Executivo via PC-100
+          soberano. Precede os 3 blocos operacionais (Produção → DRE → Caixa). */}
+      {dto && (
+        <Capa
+          dto={dto}
+          nomeCliente={clienteAtual?.nome}
+          nomeFazenda={nomeFazenda}
+          painel={painel}
+        />
+      )}
+
       {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — 13 cards
           PC-100 (viewMode='periodo') com comparativo "vs meta". Ordem
           visual: Operacional → Competência (DRE) → Caixa (Fluxo). */}
@@ -340,7 +351,6 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       {dto && (
         <div className="fechamento-print-area">
-          <Capa dto={dto} nomeCliente={clienteAtual?.nome} nomeFazenda={nomeFazenda} painel={painel} />
           <EvolucaoOperacao dto={dto} />
           <AnaliseZootecnica dto={dto} />
           <FluxoCaixa dto={dto} />

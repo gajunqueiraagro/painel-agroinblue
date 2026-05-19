@@ -1,25 +1,32 @@
 /**
  * Capa Executiva — Página 1 do Fechamento do Período (Marco 2.5).
  *
- * 3 linhas: metadata 1-line + Resumo Executivo em bullets textuais + insight
- * automático. Sem cards/grid — texto narrativo executivo, mais legível.
- * Frases determinísticas (sem IA, sem semáforo).
+ * 2 linhas: metadata 1-line + Resumo Executivo em bullets textuais.
+ * Sem cards/grid — texto narrativo executivo. Sem insight automático.
  *
- * "Resultado do período" foi removido: cálculo (Receita Op − Desembolso Pec)
- * não é interpretável nessa camada — usuário consulta DRE para resultado.
+ * REGRA DE FONTES (auditoria pré-implementação):
+ *   - Caixa Final → c.caixaFinal.realizado (DTO Fechamento — fluxo oficial),
+ *     SEM comparativo vs META (Meta caixa não é soberana neste contexto).
+ *   - Demais bullets → painel.<X>Indicador (PC-100 em viewMode='periodo'),
+ *     fonte soberana com Meta correta. Substituem c.* do DTO que usava
+ *     planFin.buildGrid() BASE (sem extras), gerando deltas inflados
+ *     (ex: Receita Pec +287% antes do fix, agora −38% correto).
+ *
+ * "Resultado do período" foi removido: cálculo Receita Op − Desembolso Pec
+ * não interpretável nessa camada — usuário consulta DRE para resultado.
  */
 
 import logo from '@/assets/logo.png';
 import type { FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
-import { fmt, pct, formatarPeriodo } from './fmt';
+import { fmt, formatarPeriodo } from './fmt';
 
 interface Props {
   dto: FechamentoPeriodoDTO;
   nomeCliente?: string;
   nomeFazenda?: string;
-  /** PC-100 — usado apenas para derivar escopo "Pecuária + Agricultura"
-   *  na metadata. Sem queries novas. */
+  /** PC-100 — fonte soberana dos bullets (Receita/Custeio/Inv/Juros/Arrobas/
+   *  GMD) e do escopo "Pecuária + Agricultura" na metadata. */
   painel: PainelConsultorDataResult | null;
 }
 
@@ -34,46 +41,10 @@ function fmtMoedaCurto(v: number | null | undefined): string {
   return `R$ ${fmt(v)}`;
 }
 
-function fmtMoedaArroba(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '—';
-  return `R$ ${fmt(v, 0)}/@`;
-}
-
-// ─── Insight executivo (função pura) ────────────────────────────────
-
-function gerarInsightExecutivo(dto: FechamentoPeriodoDTO): string {
-  const c = dto.cabecalho;
-  const partes: string[] = [];
-
-  // Frase 1 — Resultado
-  const resPct = c.resultadoPeriodo.desvioMetaPct;
-  if (resPct !== null && Number.isFinite(resPct)) {
-    if (resPct >= 10) partes.push(`Período fechou **+${Math.round(resPct)}% vs Meta**`);
-    else if (resPct <= -10) partes.push(`Período fechou **${Math.round(resPct)}% vs Meta**`);
-    else partes.push(`Período **alinhado à Meta**`);
-  } else {
-    partes.push(`Período em curso`);
-  }
-
-  // Frase 2 — Receita
-  if (c.receitaPecuaria.realizado != null) {
-    partes.push(`receita pec **${fmtMoedaCurto(c.receitaPecuaria.realizado)}**`);
-  }
-
-  // Frase 3 — Custos
-  const custPct = c.custeioPecuaria.desvioMetaPct;
-  if (custPct !== null && Number.isFinite(custPct)) {
-    if (custPct <= -10) partes.push(`custos operacionais **${Math.round(custPct)}% vs Meta**`);
-    else if (custPct >= 10) partes.push(`custos **+${Math.round(custPct)}% acima da Meta**`);
-    else partes.push(`custos **alinhados**`);
-  }
-
-  // Frase 4 — Margem R$/@
-  if (c.margemRsArroba?.realizado != null) {
-    partes.push(`margem **${fmtMoedaArroba(c.margemRsArroba.realizado)}**`);
-  }
-
-  return partes.join(', ') + '.';
+function fmtDeltaMeta(d: number | null | undefined): string {
+  if (d == null || !Number.isFinite(d)) return '(— vs META)';
+  const sign = d > 0 ? '+' : '';
+  return `(${sign}${Math.round(d)}% vs META)`;
 }
 
 // ─── Escopo Pec/Agri derivado de PC-100 ─────────────────────────────
@@ -87,22 +58,44 @@ function derivarEscopo(painel: PainelConsultorDataResult | null): string {
   );
 }
 
+// ─── Área Produtiva + breakdown Pec/Agri ────────────────────────────
+
+function derivarAreaProdutiva(painel: PainelConsultorDataResult | null): {
+  total: number | null;
+  pctPec: number | null;
+  pctAgri: number | null;
+} {
+  const total = painel?.areaProdutivaRealMes ?? null;
+  const pec = painel?.areaPecuariaRealMes ?? null;
+  const agri = painel?.areaAgriculturaRealMes ?? null;
+  // Breakdown só faz sentido se as 3 estão disponíveis e total > 0.
+  if (total == null || total <= 0 || pec == null || agri == null) {
+    return { total, pctPec: null, pctAgri: null };
+  }
+  const denom = pec + agri;
+  if (denom <= 0) return { total, pctPec: null, pctAgri: null };
+  return {
+    total,
+    pctPec: (pec / denom) * 100,
+    pctAgri: (agri / denom) * 100,
+  };
+}
+
 // ─── Componente principal ───────────────────────────────────────────
 
 export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   const c = dto.cabecalho;
-  const insight = gerarInsightExecutivo(dto);
   const escopoTexto = derivarEscopo(painel);
+  const area = derivarAreaProdutiva(painel);
 
-  // Render simples de negrito do insight (parse de **...**)
-  const renderInsight = (texto: string) => {
-    const partes = texto.split(/(\*\*[^*]+\*\*)/);
-    return partes.map((p, i) =>
-      p.startsWith('**') && p.endsWith('**')
-        ? <strong key={i} className="font-semibold text-foreground">{p.slice(2, -2)}</strong>
-        : <span key={i}>{p}</span>,
-    );
-  };
+  // PC-100 soberano — substitui c.* do DTO (que usa planFin.buildGrid() BASE,
+  // sem extras lancamentosRebanho/Financiamento/Nutricao/Projetos).
+  const receitaPec     = painel?.receitaPecIndicador;
+  const custeioPec     = painel?.custeioPecIndicador;
+  const investPec      = painel?.investPecIndicador;
+  const jurosPec       = painel?.jurosPecIndicador;
+  const arrobas        = painel?.arrobasIndicador;
+  const gmd            = painel?.gmdIndicador;
 
   return (
     <section className="pagina-fechamento bg-card border border-border rounded-lg p-4 mb-4">
@@ -117,43 +110,54 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
         <img src={logo} alt="Agroinblue" className="h-8 shrink-0" />
       </header>
 
-      {/* LINHA 2 — Resumo Executivo em bullets textuais */}
-      <div className="mb-3">
+      {/* LINHA 2 — Resumo Executivo em bullets textuais.
+          TODO: reativar Entradas/Saídas Financeiras na Capa quando DTO ganhar
+          gridMetaConsolidado (hoje useFechamentoPeriodoData usa
+          planFin.buildGrid() base, sem extras — Meta subestimada). */}
+      <div>
         <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
           Resumo Executivo
         </h3>
         <ul className="text-sm text-foreground space-y-1 leading-snug">
           <li>
-            Caixa final: <strong className="font-semibold">R$ {fmt(c.caixaFinal.realizado)}</strong>
-          </li>
-          <li>
-            Receita Pecuária: <strong className="font-semibold">R$ {fmt(c.receitaPecuaria.realizado)}</strong>
-            {c.receitaPecuaria.desvioMetaPct !== null && (
-              <span className="text-muted-foreground"> ({pct(c.receitaPecuaria.desvioMetaPct)} vs META)</span>
+            Área Produtiva: <strong className="font-semibold">{area.total != null ? `${fmt(area.total, 0)} ha` : '—'}</strong>
+            {area.pctPec !== null && area.pctAgri !== null && (
+              <span className="text-muted-foreground"> ({Math.round(area.pctPec)}% Pecuária • {Math.round(area.pctAgri)}% Agricultura)</span>
             )}
+            {/* Sem breakdown → omitir parêntese; sem total → "—". Área é
+                estrutural, sem comparativo vs META. TODO: expor breakdown
+                quando areaPec/areaAgri estiverem indisponíveis em modo Global
+                + P1 incompleto (hoje cai em "—"). */}
           </li>
           <li>
-            Custeio Produção: <strong className="font-semibold">R$ {fmt(c.custeioPecuaria.realizado)}</strong>
+            Caixa final: <strong className="font-semibold">{fmtMoedaCurto(c.caixaFinal.realizado)}</strong>
           </li>
           <li>
-            Investimentos Fazenda: <strong className="font-semibold">R$ {fmt(c.investimentosFazendaPec.realizado)}</strong>
+            Receita Pecuária: <strong className="font-semibold">{fmtMoedaCurto(receitaPec?.valor)}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(receitaPec?.deltaMeta)}</span>
           </li>
           <li>
-            Juros Financiamento: <strong className="font-semibold">R$ {fmt(c.jurosFinanciamentoPec.realizado)}</strong>
+            Custeio Produção Pecuária: <strong className="font-semibold">{fmtMoedaCurto(custeioPec?.valor)}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(custeioPec?.deltaMeta)}</span>
           </li>
           <li>
-            Arrobas Produzidas: <strong className="font-semibold">{fmt(c.arrobasProduzidas.realizado)} @</strong>
+            Investimentos Fazenda Pecuária: <strong className="font-semibold">{fmtMoedaCurto(investPec?.valor)}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(investPec?.deltaMeta)}</span>
           </li>
           <li>
-            GMD médio: <strong className="font-semibold">{fmt(c.gmd.realizado, 3)} kg/dia</strong>
+            Juros Financiamento Pecuária: <strong className="font-semibold">{fmtMoedaCurto(jurosPec?.valor)}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(jurosPec?.deltaMeta)}</span>
+          </li>
+          <li>
+            Arrobas Produzidas: <strong className="font-semibold">{arrobas?.valor != null ? `${fmt(arrobas.valor)} @` : '—'}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(arrobas?.deltaMeta)}</span>
+          </li>
+          <li>
+            GMD médio: <strong className="font-semibold">{gmd?.valor != null ? `${fmt(gmd.valor, 3)} kg/dia` : '—'}</strong>
+            <span className="text-muted-foreground"> {fmtDeltaMeta(gmd?.deltaMeta)}</span>
           </li>
         </ul>
       </div>
-
-      {/* LINHA 3 — Insight executivo */}
-      <p className="text-sm text-foreground leading-relaxed">
-        {renderInsight(insight)}
-      </p>
     </section>
   );
 }
