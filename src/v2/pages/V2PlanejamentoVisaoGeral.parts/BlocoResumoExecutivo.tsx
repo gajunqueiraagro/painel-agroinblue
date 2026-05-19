@@ -373,14 +373,27 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
   // como quebra de linha (a curva termina visualmente no mês alvo).
   const limiteMes = mesAlvo ?? 12;
   const mostrarReal2026 = modo === 'fechamento' && !!data.serieRealAnoCorrente;
-  const chartData = MESES.map((nome, i) => ({
-    mes: nome,
-    'META 2026': data.serieMeta[i] ?? 0,
-    'REAL 2025': data.serieReal[i] ?? 0,
-    ...(mostrarReal2026 && {
-      'REAL 2026': i < limiteMes ? (data.serieRealAnoCorrente![i] ?? 0) : null,
-    }),
-  }));
+  // Ponto de partida visual "Início" = Dez/N-1. Saldo absoluto de partida
+  // antes de Jan, evitando a "queda artificial" do zero. REAL 2026 e META
+  // 2026 partem do mesmo ponto (saldoInicialMeta = foto Dez/N-1); REAL 2025
+  // parte de saldoInicialReal (Dez/N-2). Séries do builder permanecem 12 —
+  // a injeção é puramente visual no chartData.
+  const chartData = [
+    {
+      mes: 'Início',
+      'REAL 2025': Number.isFinite(saldoInicialReal) ? saldoInicialReal : 0,
+      'META 2026': saldoInicialMeta,
+      ...(mostrarReal2026 && { 'REAL 2026': saldoInicialMeta }),
+    },
+    ...MESES.map((nome, i) => ({
+      mes: nome,
+      'META 2026': data.serieMeta[i] ?? 0,
+      'REAL 2025': data.serieReal[i] ?? 0,
+      ...(mostrarReal2026 && {
+        'REAL 2026': i < limiteMes ? (data.serieRealAnoCorrente![i] ?? 0) : null,
+      }),
+    })),
+  ];
 
   // Gradient bipartido azul/vermelho para REAL 2026 — transição exata no
   // ponto zero do range. Quando todos os valores >= 0 → azul puro;
