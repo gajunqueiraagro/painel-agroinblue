@@ -36,7 +36,9 @@ import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/buildPlanejamentoVisaoGeralData';
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
+import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
+import { buildProducaoRealizadaData } from '@/v2/lib/buildProducaoRealizadaData';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
@@ -273,6 +275,14 @@ export default function V2FechamentoPeriodo() {
 
   const saldoInicialReal = painel.caixaIndicador?.serieAnoAnt?.[0] ?? NaN;
 
+  // Marco 2.5 Fase 1 — Bloco Produção Pecuária Realizada: consome PC-100
+  // (viewMode='periodo') direto, sem queries novas. Index 1-based: builder
+  // usa indicador.valor (já indexado) e serieMeta/serieAnoAnt[mesAlvo].
+  const blocoProducaoRealizada = useMemo(
+    () => buildProducaoRealizadaData(painel, mesAlvo),
+    [painel, mesAlvo],
+  );
+
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
   }
@@ -288,6 +298,11 @@ export default function V2FechamentoPeriodo() {
         onImprimir={() => window.print()}
         loading={loading}
       />
+
+      {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — 13 cards
+          PC-100 (viewMode='periodo') com comparativo "vs meta". Ordem
+          visual: Operacional → Competência (DRE) → Caixa (Fluxo). */}
+      <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
 
       {/* Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado
           em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
