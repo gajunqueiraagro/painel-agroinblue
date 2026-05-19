@@ -340,7 +340,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       {dto && (
         <div className="fechamento-print-area">
-          <Capa dto={dto} nomeCliente={clienteAtual?.nome} nomeFazenda={nomeFazenda} />
+          <Capa dto={dto} nomeCliente={clienteAtual?.nome} nomeFazenda={nomeFazenda} painel={painel} />
           <EvolucaoOperacao dto={dto} />
           <AnaliseZootecnica dto={dto} />
           <FluxoCaixa dto={dto} />
