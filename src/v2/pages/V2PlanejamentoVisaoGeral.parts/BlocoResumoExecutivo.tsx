@@ -47,6 +47,9 @@ interface Props {
    *  do gráfico (após mesAlvo vira null → Recharts quebra a linha). Os
    *  totais escalares já chegam prorated pelo builder. */
   mesAlvo?: number;
+  /** Quando definida, o header do bloco vira clicável e abre o Modal Fluxo
+   *  de Caixa Realizado. Sem prop → comportamento atual preservado. */
+  onAnalisarFluxo?: () => void;
 }
 
 // Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
@@ -334,7 +337,7 @@ function CardTotal({
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -421,13 +424,29 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
 
   return (
     <section className="bg-card border border-border rounded-lg p-4 mb-4">
-      <div className="flex items-center gap-2 flex-wrap mb-1">
+      <div
+        className={cn(
+          'flex items-center gap-2 flex-wrap mb-1',
+          onAnalisarFluxo && 'cursor-pointer hover:opacity-80 transition-opacity',
+        )}
+        onClick={onAnalisarFluxo}
+        role={onAnalisarFluxo ? 'button' : undefined}
+        tabIndex={onAnalisarFluxo ? 0 : undefined}
+      >
         <h2 className="text-base font-bold text-foreground">
           {modo === 'fechamento' ? 'Fluxo de Caixa Realizado' : 'Fluxo de Caixa Previsto'}
         </h2>
         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-900/60">
           Caixa
         </span>
+        {onAnalisarFluxo && (
+          <span
+            className="text-[10px] font-medium text-sky-700 dark:text-sky-300 underline-offset-2 hover:underline"
+            aria-label="Analisar fluxo de caixa"
+          >
+            Analisar ↗
+          </span>
+        )}
       </div>
       <p className="text-xs text-muted-foreground mb-3">
         {modo === 'fechamento'

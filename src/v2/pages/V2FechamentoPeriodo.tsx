@@ -36,6 +36,7 @@ import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
+import { FluxoCaixaModal } from '@/v2/components/modais/FluxoCaixaModal';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
 import { buildProducaoRealizadaData } from '@/v2/lib/buildProducaoRealizadaData';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
@@ -293,6 +294,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
     [painel, mesAlvo],
   );
 
+  // Modal Fluxo de Caixa Realizado (Camada 3 / FASE 1).
+  const [fluxoModalOpen, setFluxoModalOpen] = useState(false);
+
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
   }
@@ -339,6 +343,21 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           desfocarDashboard={false}
           modo="fechamento"
           mesAlvo={mesAlvo}
+          onAnalisarFluxo={() => setFluxoModalOpen(true)}
+        />
+      )}
+
+      {clienteId && (
+        <FluxoCaixaModal
+          open={fluxoModalOpen}
+          onClose={() => setFluxoModalOpen(false)}
+          clienteId={clienteId}
+          ano={ano}
+          mesAlvo={mesAlvo}
+          painel={painel}
+          saldoInicialMeta={planFin.saldoInicial}
+          gridMetaConsolidado={gridMetaConsolidado}
+          isContextoIndividual={!isGlobal}
         />
       )}
 
