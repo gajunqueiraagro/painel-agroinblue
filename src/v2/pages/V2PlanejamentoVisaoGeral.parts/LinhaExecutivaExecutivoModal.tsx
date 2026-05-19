@@ -23,6 +23,36 @@ import {
 import { cn } from '@/lib/utils';
 import type { LinhaExecutivaModalData, DeltaSeguro } from '@/v2/lib/linhaExecutivaModalTypes';
 
+type ModoModal = 'planejamento' | 'fechamento';
+
+interface CfgModo {
+  labelReal: string;      // "REAL 25" / "REAL 26" — header KPI compacto
+  labelMeta: string;      // "META 26" — header KPI (mesmo nos 2 modos)
+  labelRealLong: string;  // "REAL 2025" / "REAL 2026" — tabela, gráficos, top cards
+  labelMetaLong: string;  // "META 2026" — idem
+  corReal: string;        // '#94a3b8' (slate-400) / '#0284c7' (sky-600)
+  corMeta: string;        // '#f97316' (orange-500) — mesmo nos 2 modos
+}
+
+const CFG_MODOS: Record<ModoModal, CfgModo> = {
+  planejamento: {
+    labelReal: 'REAL 25',
+    labelMeta: 'META 26',
+    labelRealLong: 'REAL 2025',
+    labelMetaLong: 'META 2026',
+    corReal: '#94a3b8',
+    corMeta: '#f97316',
+  },
+  fechamento: {
+    labelReal: 'REAL 26',
+    labelMeta: 'META 26',
+    labelRealLong: 'REAL 2026',
+    labelMetaLong: 'META 2026',
+    corReal: '#0284c7',
+    corMeta: '#f97316',
+  },
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,14 +64,15 @@ interface Props {
   composicaoOficialLabel: string;
   /** Callback opcional. Quando undefined, botão "Ver detalhes" fica oculto. */
   onVerDetalhes?: () => void;
+  /** Modo de uso do modal. Default 'planejamento' (mantém comportamento atual).
+   *  'fechamento' inverte ordem visual (META | REAL | Δ), troca cor do REAL
+   *  para sky-600, troca labels REAL 2025 → REAL 2026, e usa
+   *  realAnoCorrente/deltaAnoCorrente da LinhaExecutiva como base do REAL. */
+  modo?: ModoModal;
 }
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MESES_CURTOS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'] as const;
-
-// Cores oficiais do modal.
-const COR_META = '#f97316'; // orange-500
-const COR_REAL = '#94a3b8'; // slate-400 (azul-cinza claro)
 
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -91,19 +122,27 @@ const fmtBRLCompacto = (v: number): string => {
 interface TooltipItem { dataKey?: string | number; value?: number; name?: string }
 
 function GraficoTooltip({
-  active, payload, label,
-}: { active?: boolean; payload?: TooltipItem[]; label?: string }) {
+  active, payload, label, corReal, corMeta,
+}: {
+  active?: boolean;
+  payload?: TooltipItem[];
+  label?: string;
+  corReal: string;
+  corMeta: string;
+}) {
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="rounded-md border border-border/50 bg-background/90 backdrop-blur-sm px-2.5 py-1.5 shadow-sm text-[11px]">
       <div className="font-semibold text-foreground mb-0.5">{label}</div>
       {payload.map((p, i) => {
+        // Detecção por dataKey: 'meta'/'metaAcum' → cor meta; demais → cor real.
+        // Label mantém substring 'meta' em ambos os modos (META 26 / META 2026).
         const isMeta = String(p.dataKey ?? '').toLowerCase().includes('meta');
         return (
           <div key={i} className="flex items-center gap-2">
             <span
               className="inline-block w-2 h-2 rounded-full"
-              style={{ background: isMeta ? COR_META : COR_REAL }}
+              style={{ background: isMeta ? corMeta : corReal }}
             />
             <span className="text-muted-foreground">{p.name}</span>
             <span className="tabular-nums text-foreground">
@@ -141,7 +180,23 @@ export function LinhaExecutivaExecutivoModal({
   titulo,
   composicaoOficialLabel,
   onVerDetalhes,
+  modo = 'planejamento',
 }: Props) {
+  const cfg = CFG_MODOS[modo];
+  const isFechamento = modo === 'fechamento';
+  // Em modo Fechamento, o "REAL" do header usa realAnoCorrente / deltaAnoCorrente
+  // (campos opcionais do LinhaExecutiva populados quando lancFin2026 é passado
+  // ao buildBlocoResumoExecutivo). Caller PRECISA garantir essa cobertura no
+  // modo Fechamento; caso contrário, fallback para 0 evita NaN no render.
+  const realHeader = isFechamento ? (data.linha.realAnoCorrente ?? 0) : data.linha.real;
+  const deltaHeader: DeltaSeguro = isFechamento
+    ? (data.linha.deltaAnoCorrente ?? null)
+    : (data.linha.delta as DeltaSeguro);
+  // Δ R$ Fechamento = Real - Meta; Planejamento = Meta - Real.
+  const deltaRsHeader = isFechamento
+    ? realHeader - data.linha.meta
+    : data.linha.meta - data.linha.real;
+
   // Série mensal consolidada (soma vertical de todos os subcentros).
   const dadosMensais = useMemo(() => {
     const out = Array.from({ length: 12 }, (_, i) => ({
@@ -171,8 +226,6 @@ export function LinhaExecutivaExecutivoModal({
     });
   }, [dadosMensais]);
 
-  const deltaRsHeader = data.linha.meta - data.linha.real;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
@@ -184,13 +237,13 @@ export function LinhaExecutivaExecutivoModal({
             </DialogTitle>
             <div className="flex items-center gap-2 tabular-nums whitespace-nowrap overflow-x-auto">
               <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">REAL 25</span>
-                <span className="text-[12px] font-semibold text-slate-900">{fmtBRL(data.linha.real)}</span>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">{cfg.labelReal}</span>
+                <span className="text-[12px] font-semibold" style={{ color: cfg.corReal }}>{fmtBRL(realHeader)}</span>
               </div>
               <span className="text-[10px] text-slate-300">·</span>
               <div>
-                <span className="text-[10px] uppercase text-slate-500 mr-1">META 26</span>
-                <span className="text-[12px] font-semibold text-orange-500">{fmtBRL(data.linha.meta)}</span>
+                <span className="text-[10px] uppercase text-slate-500 mr-1">{cfg.labelMeta}</span>
+                <span className="text-[12px] font-semibold" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</span>
               </div>
               <span className="text-[10px] text-slate-300">·</span>
               <div>
@@ -200,7 +253,7 @@ export function LinhaExecutivaExecutivoModal({
               <span className="text-[10px] text-slate-300">·</span>
               <div>
                 <span className="text-[10px] uppercase text-slate-500 mr-1">Δ%</span>
-                <span className="text-[12px] font-semibold text-slate-500">{fmtPct(data.linha.delta as DeltaSeguro)}</span>
+                <span className="text-[12px] font-semibold text-slate-500">{fmtPct(deltaHeader)}</span>
               </div>
             </div>
           </DialogHeader>
@@ -215,8 +268,8 @@ export function LinhaExecutivaExecutivoModal({
             <div className="font-semibold mb-0.5">⚠️ Divergência detectada</div>
             <div>Breakdown não bate com o card.</div>
             <div>
-              META: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaMeta)}</span>.
-              {' '}REAL: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaReal)}</span>.
+              {cfg.labelMeta}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaMeta)}</span>.
+              {' '}{cfg.labelReal}: diff de <span className="font-semibold tabular-nums">{fmtBRL(data.diferencaReal)}</span>.
             </div>
           </div>
         )}
@@ -238,38 +291,84 @@ export function LinhaExecutivaExecutivoModal({
 
         {/* ── Tabela hierárquica COMPACTA + CENTRALIZADA (max 720px) ── */}
         <div className="border border-border rounded-lg overflow-hidden max-w-[720px] mx-auto">
-          {/* Header — cabeçalhos das colunas CENTRALIZADOS */}
+          {/* Header — cabeçalhos das colunas CENTRALIZADOS.
+              Ordem dinâmica por modo: Planejamento = REAL | META; Fechamento = META | REAL. */}
           <div className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center px-3.5 py-[9px] bg-muted text-[11px] uppercase tracking-[0.3px] font-medium">
             <div></div>
-            <div className="text-center text-muted-foreground">REAL 2025</div>
-            <div className="text-center text-orange-500">META 2026</div>
+            {isFechamento ? (
+              <>
+                <div className="text-center" style={{ color: cfg.corMeta }}>{cfg.labelMetaLong}</div>
+                <div className="text-center" style={{ color: cfg.corReal }}>{cfg.labelRealLong}</div>
+              </>
+            ) : (
+              <>
+                <div className="text-center text-muted-foreground">{cfg.labelRealLong}</div>
+                <div className="text-center" style={{ color: cfg.corMeta }}>{cfg.labelMetaLong}</div>
+              </>
+            )}
             <div className="text-center text-slate-400">Δ R$</div>
             <div className="text-center text-slate-400">Δ%</div>
           </div>
-          {/* Centros (cada centro = bloco executivo) */}
+          {/* Centros (cada centro = bloco executivo).
+              Δ R$ — Planejamento = Meta - Real; Fechamento = Real - Meta. */}
           {data.porCentro.map((centro) => {
-            const deltaRs = centro.metaTotal - centro.realTotal;
+            const deltaRs = isFechamento
+              ? centro.realTotal - centro.metaTotal
+              : centro.metaTotal - centro.realTotal;
+            const colReal = (
+              <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(centro.realTotal)}</div>
+            );
+            const colMeta = (
+              <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(centro.metaTotal)}</div>
+            );
             return (
               <div key={centro.centro_custo} className="mt-1 first:mt-0">
                 <div className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center px-3 py-2 bg-slate-200 dark:bg-slate-800 text-[12px] font-bold uppercase tracking-[0.2px]">
                   <div className="truncate text-foreground">{centro.centro_custo}</div>
-                  <div className="text-right tabular-nums text-foreground">{fmtBRL(centro.realTotal)}</div>
-                  <div className="text-right tabular-nums text-orange-500">{fmtBRL(centro.metaTotal)}</div>
+                  {isFechamento ? (
+                    <>
+                      {colMeta}
+                      {colReal}
+                    </>
+                  ) : (
+                    <>
+                      {colReal}
+                      {colMeta}
+                    </>
+                  )}
                   <div className="text-right tabular-nums text-slate-500">{formatDeltaReais(deltaRs)}</div>
                   <div className="text-right tabular-nums text-slate-500">{fmtPct(centro.delta)}</div>
                 </div>
-                {centro.subcentros.map((sub) => (
-                  <div
-                    key={sub.subcentro}
-                    className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center pl-6 pr-3 py-[3px] border-t border-border/40 text-[11px] leading-[1.3] font-normal"
-                  >
-                    <div className="truncate text-muted-foreground">{sub.subcentro}</div>
-                    <div className="text-right tabular-nums text-muted-foreground">{fmtBRL(sub.realTotal)}</div>
-                    <div className="text-right tabular-nums text-orange-500">{fmtBRL(sub.metaTotal)}</div>
-                    <div className="text-right tabular-nums text-slate-400">{formatDeltaReais(sub.impactoAbs)}</div>
-                    <div className="text-right tabular-nums text-slate-400">{fmtPct(sub.delta)}</div>
-                  </div>
-                ))}
+                {centro.subcentros.map((sub) => {
+                  const subReal = (
+                    <div className="text-right tabular-nums" style={{ color: cfg.corReal }}>{fmtBRL(sub.realTotal)}</div>
+                  );
+                  const subMeta = (
+                    <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(sub.metaTotal)}</div>
+                  );
+                  const impactoSub = isFechamento ? -sub.impactoAbs : sub.impactoAbs;
+                  return (
+                    <div
+                      key={sub.subcentro}
+                      className="grid grid-cols-[minmax(0,1fr)_105px_105px_105px_70px] gap-1 items-center pl-6 pr-3 py-[3px] border-t border-border/40 text-[11px] leading-[1.3] font-normal"
+                    >
+                      <div className="truncate text-muted-foreground">{sub.subcentro}</div>
+                      {isFechamento ? (
+                        <>
+                          {subMeta}
+                          {subReal}
+                        </>
+                      ) : (
+                        <>
+                          {subReal}
+                          {subMeta}
+                        </>
+                      )}
+                      <div className="text-right tabular-nums text-slate-400">{formatDeltaReais(impactoSub)}</div>
+                      <div className="text-right tabular-nums text-slate-400">{fmtPct(sub.delta)}</div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -294,10 +393,13 @@ export function LinhaExecutivaExecutivoModal({
                     tickLine={false}
                   />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip content={<GraficoTooltip />} cursor={{ fill: 'hsl(var(--muted-foreground) / 0.08)' }} />
+                  <Tooltip
+                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={cfg.corReal} corMeta={cfg.corMeta} />}
+                    cursor={{ fill: 'hsl(var(--muted-foreground) / 0.08)' }}
+                  />
                   <Legend content={<GraficoLegend />} />
-                  <Bar dataKey="real" name="REAL 2025" fill={COR_REAL} radius={[2, 2, 0, 0]} opacity={0.55} />
-                  <Bar dataKey="meta" name="META 2026" fill={COR_META} radius={[2, 2, 0, 0]} opacity={0.55} />
+                  <Bar dataKey="real" name={cfg.labelRealLong} fill={cfg.corReal} radius={[2, 2, 0, 0]} opacity={0.55} />
+                  <Bar dataKey="meta" name={cfg.labelMetaLong} fill={cfg.corMeta} radius={[2, 2, 0, 0]} opacity={0.55} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -313,12 +415,12 @@ export function LinhaExecutivaExecutivoModal({
                 <AreaChart data={dadosAcumulado} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradRealAc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COR_REAL} stopOpacity={0.18} />
-                      <stop offset="100%" stopColor={COR_REAL} stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={cfg.corReal} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={cfg.corReal} stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="gradMetaAc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={COR_META} stopOpacity={0.18} />
-                      <stop offset="100%" stopColor={COR_META} stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={cfg.corMeta} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={cfg.corMeta} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.4} vertical={false} />
@@ -330,27 +432,29 @@ export function LinhaExecutivaExecutivoModal({
                     tickLine={false}
                   />
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={fmtBRLCompacto} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip content={<GraficoTooltip />} />
+                  <Tooltip
+                    content={(props) => <GraficoTooltip {...(props as { active?: boolean; payload?: TooltipItem[]; label?: string })} corReal={cfg.corReal} corMeta={cfg.corMeta} />}
+                  />
                   <Legend content={<GraficoLegend />} />
                   <Area
                     type="monotone"
                     dataKey="realAcum"
-                    name="REAL 2025"
-                    stroke={COR_REAL}
+                    name={cfg.labelRealLong}
+                    stroke={cfg.corReal}
                     strokeWidth={1.5}
                     fill="url(#gradRealAc)"
-                    dot={{ r: 2.5, fill: '#ffffff', stroke: COR_REAL, strokeWidth: 1.4 }}
-                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: COR_REAL, strokeWidth: 1.6 }}
+                    dot={{ r: 2.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.4 }}
+                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: cfg.corReal, strokeWidth: 1.6 }}
                   />
                   <Area
                     type="monotone"
                     dataKey="metaAcum"
-                    name="META 2026"
-                    stroke={COR_META}
+                    name={cfg.labelMetaLong}
+                    stroke={cfg.corMeta}
                     strokeWidth={1.5}
                     fill="url(#gradMetaAc)"
-                    dot={{ r: 2.5, fill: '#ffffff', stroke: COR_META, strokeWidth: 1.4 }}
-                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: COR_META, strokeWidth: 1.6 }}
+                    dot={{ r: 2.5, fill: '#ffffff', stroke: cfg.corMeta, strokeWidth: 1.4 }}
+                    activeDot={{ r: 3.5, fill: '#ffffff', stroke: cfg.corMeta, strokeWidth: 1.6 }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -366,27 +470,30 @@ export function LinhaExecutivaExecutivoModal({
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {data.topImpactos.map((sub) => {
+                // Fechamento: Δ = Real - Meta → inverte sinal do impactoAbs do builder
+                // (que vem como Meta - Real). Cor/card seguem o sinal invertido.
+                const impactoAbsAjustado = isFechamento ? -sub.impactoAbs : sub.impactoAbs;
                 const cardCls =
-                  sub.impactoAbs > 0
+                  impactoAbsAjustado > 0
                     ? 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/50'
-                    : sub.impactoAbs < 0
+                    : impactoAbsAjustado < 0
                       ? 'bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/50'
                       : 'bg-muted border-border';
-                const corValor = corImpactoCard(sub.impactoAbs);
+                const corValor = corImpactoCard(impactoAbsAjustado);
                 return (
                   <div key={sub.subcentro} className={cn('border rounded-lg px-3 py-2.5 flex flex-col gap-0.5 min-w-0', cardCls)}>
                     <div className="text-[12px] font-semibold leading-[1.3] truncate text-foreground">{sub.subcentro}</div>
                     <div className="text-[10px] text-muted-foreground truncate mb-1.5">{sub.centro_custo}</div>
                     <div className="text-[11px] leading-[1.4] tabular-nums">
-                      <span className="text-muted-foreground">REAL 2025 </span>
-                      <span className="text-foreground">{fmtBRL(sub.realTotal)}</span>
+                      <span className="text-muted-foreground">{cfg.labelRealLong} </span>
+                      <span style={{ color: cfg.corReal }}>{fmtBRL(sub.realTotal)}</span>
                     </div>
-                    <div className="text-[11px] leading-[1.4] tabular-nums text-orange-500">
-                      META 26 {fmtBRL(sub.metaTotal)}
+                    <div className="text-[11px] leading-[1.4] tabular-nums" style={{ color: cfg.corMeta }}>
+                      {cfg.labelMeta} {fmtBRL(sub.metaTotal)}
                     </div>
                     <div className="text-[11px] leading-[1.4] tabular-nums">
                       <span className="text-muted-foreground">Diferença </span>
-                      <span className={cn('font-semibold', corValor)}>{fmtBRL(sub.impactoAbs)}</span>
+                      <span className={cn('font-semibold', corValor)}>{fmtBRL(impactoAbsAjustado)}</span>
                     </div>
                     <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', corValor)}>
                       Δ% {fmtPct(sub.delta)}

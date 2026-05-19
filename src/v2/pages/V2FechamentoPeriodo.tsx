@@ -37,8 +37,24 @@ import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAna
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
 import { FluxoCaixaModal } from '@/v2/components/modais/FluxoCaixaModal';
+import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
+import type { LinhaModalKey } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
+import { buildLinhaExecutivaModalData } from '@/v2/lib/buildLinhaExecutivaModalData';
 import { buildProducaoRealizadaData } from '@/v2/lib/buildProducaoRealizadaData';
+import type { LinhaExecutiva } from '@/v2/lib/blocoResumoExecutivoTypes';
+import {
+  type ComposicaoSubcentro,
+  agregaReceitaPecPorSubcentro,
+  agregaReceitaPecPorSubcentroMeta,
+  // OBS: importar SOMENTE Receita Pec nesta PR1.
+  // As outras 14 linhas (Receita Agri, Custeio Pec/Agri, Juros, Investimentos,
+  // Reposição Bovinos, Amortizações, Dividendos, Deduções, Outras Receitas,
+  // Entradas Financeiras) entram em PRs seguintes — uma linha por PR para
+  // validação isolada.
+} from '@/lib/painelConsultor/agregadosFinanceiros';
+import { ORDEM_CENTROS_RECEITA_PECUARIA } from '@/lib/financeiro/classificacao';
+import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
@@ -56,6 +72,27 @@ interface Props {
   periodo: { periodoInicio: string; periodoFim: string };
   onPeriodoChange: (p: { periodoInicio: string; periodoFim: string }) => void;
 }
+
+// Config dos modais executivos de linha do Fechamento (FASE 2).
+// PR1: apenas Receita Pecuária. Demais linhas (Custeio, Juros, Inv, etc) entram
+// uma por PR — basta adicionar a entrada correspondente aqui.
+interface ConfigModalLinhaFechamento {
+  titulo: string;
+  composicaoOficialLabel: string;
+  ordemCentrosOficial: readonly string[];
+  agregaReal: (lancFin: FinanceiroLancamento[], ano: number) => Record<string, ComposicaoSubcentro>;
+  agregaMeta: (grid: SubcentroGrid[]) => Record<string, ComposicaoSubcentro>;
+}
+
+const CONFIG_MODAIS_LINHA_FECHAMENTO: Partial<Record<LinhaModalKey, ConfigModalLinhaFechamento>> = {
+  receitaPecuaria: {
+    titulo: 'Receita Pecuária',
+    composicaoOficialLabel: 'grupo_custo = "Receita Pecuária"',
+    ordemCentrosOficial: ORDEM_CENTROS_RECEITA_PECUARIA,
+    agregaReal: agregaReceitaPecPorSubcentro,
+    agregaMeta: agregaReceitaPecPorSubcentroMeta,
+  },
+};
 
 export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props) {
   const { clienteAtual } = useCliente();
@@ -297,6 +334,30 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
   // Modal Fluxo de Caixa Realizado (Camada 3 / FASE 1).
   const [fluxoModalOpen, setFluxoModalOpen] = useState(false);
 
+  // Modal executivo de linha (FASE 2 / PR1 — drill Receita Pec por CAIXA).
+  // Demais linhas (Custeio, Juros, Inv, etc) virão em PRs subsequentes —
+  // basta adicionar a entrada correspondente em CONFIG_MODAIS_LINHA_FECHAMENTO.
+  const [modalLinha, setModalLinha] = useState<LinhaModalKey | null>(null);
+  const cfgModalAtivo = modalLinha ? CONFIG_MODAIS_LINHA_FECHAMENTO[modalLinha] : null;
+  // Helper local: BlocoResumoExecutivoData não é indexável por LinhaModalKey
+  // diretamente (TSC reclama de signature). Cast (as any) ISOLADO aqui — NÃO
+  // mexer em types globais (linhaExecutivaModalTypes / blocoResumoExecutivoTypes
+  // estão proibidos de modificar nesta PR).
+  const linhaAtiva: LinhaExecutiva | null = (modalLinha && blocoResumoData)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? ((blocoResumoData as any)[modalLinha] ?? null)
+    : null;
+
+  const dadosModalLinha = useMemo(() => {
+    if (!cfgModalAtivo || !linhaAtiva || !lancFinAnoCorrente) return null;
+    return buildLinhaExecutivaModalData({
+      linha: linhaAtiva,
+      porSubcentroReal: cfgModalAtivo.agregaReal(lancFinAnoCorrente, ano),
+      porSubcentroMeta: cfgModalAtivo.agregaMeta(gridMetaConsolidado),
+      ordemCentrosOficial: cfgModalAtivo.ordemCentrosOficial,
+    });
+  }, [cfgModalAtivo, linhaAtiva, lancFinAnoCorrente, ano, gridMetaConsolidado]);
+
   if (!periodo.periodoInicio) {
     return <div className="p-4 text-sm text-muted-foreground">Carregando filtros…</div>;
   }
@@ -349,6 +410,19 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
               ? 'Análise indisponível nesta visão. O caixa é consolidado por cliente. Selecione "Global" para analisar.'
               : undefined
           }
+          // FASE 2 / PR1: drill em linhas configuradas. Hoje só Receita Pec
+          // ativa. Outras linhas (custeio, juros, etc) NÃO disparam modal
+          // nesta PR — clique sem config é no-op. Apenas em modo Global
+          // (mesmo motivo da trava do FluxoCaixaModal: caixa cliente-wide).
+          onLinhaClick={
+            isGlobal
+              ? (key) => {
+                  if (CONFIG_MODAIS_LINHA_FECHAMENTO[key]) {
+                    setModalLinha(key);
+                  }
+                }
+              : undefined
+          }
         />
       )}
 
@@ -363,6 +437,19 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           saldoInicialMeta={planFin.saldoInicial}
           gridMetaConsolidado={gridMetaConsolidado}
           isContextoIndividual={false}
+        />
+      )}
+
+      {/* FASE 2 / PR1 — Modal executivo de drill da Receita Pec (CAIXA). */}
+      {modalLinha && cfgModalAtivo && dadosModalLinha && (
+        <LinhaExecutivaExecutivoModal
+          open={true}
+          onOpenChange={(o) => { if (!o) setModalLinha(null); }}
+          data={dadosModalLinha}
+          titulo={cfgModalAtivo.titulo}
+          composicaoOficialLabel={cfgModalAtivo.composicaoOficialLabel}
+          onVerDetalhes={undefined}
+          modo="fechamento"
         />
       )}
 
