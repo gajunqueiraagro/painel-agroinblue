@@ -111,7 +111,8 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
     return { saldoInicial: si, saldoFinal: sf };
   }, [saldoInicialAnual, porTipo]);
 
-  const colunas = Array.from({ length: mes }, (_, i) => i + 1);
+  // Sempre Jan→Dez. Meses > mesAlvo ficam visualmente vazios (cinza).
+  const colunas = Array.from({ length: 12 }, (_, i) => i + 1);
   const linhas  = buildLinhas(isGlobal);
 
   if (loading) {
@@ -168,15 +169,19 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
                     {row.label}
                   </td>
                   {colunas.map(m => {
+                    const futuro = m > mes;
                     let v: number;
-                    if (isSaldoInicio)    v = saldoInicial[m];
-                    else if (isSaldoFinal) v = saldoFinal[m];
-                    else                   v = porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0;
+                    if (isSaldoInicio)     v = saldoInicial[m];
+                    else if (isSaldoFinal)  v = saldoFinal[m];
+                    else                    v = porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0;
                     return (
-                      <td key={m} className={`text-right px-2 py-1 tabular-nums ${corSinal(row.sinal)}`}>
-                        {v !== 0
-                          ? fmtCab(v)
-                          : <span className="text-muted-foreground/40">—</span>}
+                      <td
+                        key={m}
+                        className={`text-right px-2 py-1 tabular-nums ${futuro ? 'text-muted-foreground/30 bg-muted/10' : corSinal(row.sinal)}`}
+                      >
+                        {futuro || v === 0
+                          ? <span className="text-muted-foreground/30">—</span>
+                          : fmtCab(v)}
                       </td>
                     );
                   })}
@@ -184,9 +189,9 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
                     {(() => {
                       if (isSaldoInicio) return fmtCab(saldoInicial[1]);
                       if (isSaldoFinal)  return fmtCab(saldoFinal[mes]);
-                      const tot = colunas.reduce(
-                        (s, m) => s + (porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0), 0,
-                      );
+                      const tot = colunas
+                        .filter(m => m <= mes)
+                        .reduce((s, m) => s + (porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0), 0);
                       return tot !== 0
                         ? fmtCab(tot)
                         : <span className="text-muted-foreground/40">—</span>;
