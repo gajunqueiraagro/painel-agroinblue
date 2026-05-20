@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText } from 'lucide-react';
+import { Plus, Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
+import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -162,6 +163,16 @@ export function LancamentoV2Dialog({
   }, [lancamento]);
   const [saving, setSaving] = useState(false);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
+  // FASE 1 zoo-fin: aviso de origem zootécnica + navegação para LancamentoZooModal.
+  // zooModalId é capturado ao clicar no link âmbar; abre só após o V2Dialog
+  // desmontar (setTimeout pequeno) para evitar stacking de dois modais editáveis.
+  const [zooModalId, setZooModalId] = useState<string | null>(null);
+  const handleAbrirZoo = () => {
+    if (!lancamento?.movimentacao_rebanho_id) return;
+    const idZoo = lancamento.movimentacao_rebanho_id;
+    onClose();
+    setTimeout(() => setZooModalId(idZoo), 100);
+  };
 
   // Fornecedor search state
   const [fornecedorOpen, setFornecedorOpen] = useState(false);
@@ -858,6 +869,32 @@ export function LancamentoV2Dialog({
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
 
+            {/* FASE 1 zoo-fin: aviso de origem zootécnica + link para LancamentoZooModal. */}
+            {lancamento?.movimentacao_rebanho_id && (
+              <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 p-3 mb-2">
+                <div className="flex items-start gap-2">
+                  <Beef className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-1">
+                    <p className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">
+                      Origem zootécnica vinculada
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                      Este lançamento financeiro foi gerado a partir de uma movimentação
+                      do rebanho. Edite dados bancários aqui. Edite quantidade, peso,
+                      categoria ou operação no módulo zootécnico.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleAbrirZoo}
+                      className="text-[11px] font-medium text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 underline underline-offset-2 mt-1"
+                    >
+                      Abrir lançamento zootécnico →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── BLOCO 1 — Tipo e Datas ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><CalendarDays className="h-3.5 w-3.5" /> Tipo e Datas</p>
@@ -1324,6 +1361,15 @@ export function LancamentoV2Dialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* FASE 1 zoo-fin: modal soberano zoo aberto após V2Dialog fechar. */}
+      {zooModalId && (
+        <LancamentoZooModal
+          open
+          onOpenChange={(o) => { if (!o) setZooModalId(null); }}
+          lancamentoId={zooModalId}
+        />
+      )}
 
       <NovoFornecedorDialog
         open={fornecedorDialogOpen}
