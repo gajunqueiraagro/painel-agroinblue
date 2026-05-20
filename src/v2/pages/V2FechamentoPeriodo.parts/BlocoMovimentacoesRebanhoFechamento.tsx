@@ -10,6 +10,7 @@
  * PR3.4 = gráficos Recharts. PR3.5 = drill via MovimentacaoHistoricoModal.
  */
 import { useMemo } from 'react';
+import { ExecutiveSlide } from '@/v2/components/executive/ExecutiveSlide';
 import {
   useMovimentacoesAgregadas,
   type TipoMov,
@@ -88,6 +89,47 @@ function corSinal(sinal: 'entrada' | 'saida' | null): string {
   return 'font-semibold text-foreground';
 }
 
+/**
+ * Gera frase executiva curta sobre a dinâmica do rebanho no período.
+ * Regra simples (sem IA): compara entradas, saídas e variação líquida.
+ * Tolerância 0.0001 para evitar ruído de ponto flutuante.
+ */
+function gerarFraseExecutiva(
+  entradas: number | null,
+  saidas: number | null,
+  saldoIni: number,
+  saldoFim: number,
+  mortes: number | null,
+): string {
+  const variacao = saldoFim - saldoIni;
+  const variacaoZero = Math.abs(variacao) < 0.0001;
+  const e = entradas ?? 0;
+  const s = saidas ?? 0;
+  const m = mortes ?? 0;
+
+  const semMov = variacaoZero && e === 0 && s === 0;
+  if (semMov) {
+    return 'Período sem movimentações registradas no rebanho.';
+  }
+
+  const fmt = (v: number) => Math.abs(Math.round(v)).toLocaleString('pt-BR');
+
+  if (variacao < 0 && !variacaoZero) {
+    const causaPrincipal = m > e
+      ? 'mortes acima das entradas'
+      : s > e * 2
+        ? 'aumento de saídas produtivas'
+        : 'ausência de reposição';
+    return `O rebanho encerrou o período com redução líquida de ${fmt(variacao)} cabeças, puxada principalmente por ${causaPrincipal}.`;
+  }
+
+  if (variacao > 0 && !variacaoZero) {
+    return `O rebanho encerrou o período com crescimento líquido de ${fmt(variacao)} cabeças — entradas superaram as saídas produtivas.`;
+  }
+
+  return `As entradas compensaram integralmente as saídas, mantendo estabilidade do estoque (${fmt(saldoFim)} cabeças).`;
+}
+
 export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlobal }: Props) {
   const { loading, porTipo, saldoInicialAnual } = useMovimentacoesAgregadas({
     ano,
@@ -123,113 +165,250 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
     );
   }
 
+  // Frase executiva — calculada antes do return para estabilidade.
+  const fraseExec = gerarFraseExecutiva(
+    porTipo['soma_entradas']?.mesAtual.cab ?? null,
+    porTipo['soma_saidas']?.mesAtual.cab ?? null,
+    saldoInicial[1] ?? 0,
+    saldoFinal[mes] ?? 0,
+    porTipo['mortes']?.mesAtual.cab ?? null,
+  );
+
   return (
-    <section className="my-6 print:break-before-page">
-      <h2 className="text-base font-semibold text-foreground mb-2">
-        Movimentações do Rebanho — Jan a {String(mes).padStart(2, '0')}/{ano}
-      </h2>
+    <ExecutiveSlide
+      title="Movimentações do Rebanho"
+      subtitle={`Jan a ${String(mes).padStart(2, '0')}/${ano}`}
+      className="my-6"
+      footer={`Fonte: lançamentos realizados · ${viewMode === 'periodo' ? 'Período acumulado' : 'Mês selecionado'}`}
+    >
+      <div className="flex flex-col gap-3 h-full">
 
-      <p className="text-sm text-muted-foreground mb-4">
-        Entradas aumentam o saldo do rebanho; saídas produtivas representam o desfrute;
-        mortes representam perda de estoque.
-      </p>
+        {/* ── FRASE EXECUTIVA ── */}
+        <div className="bg-muted/30 border-l-4 border-primary rounded-r-md px-3 py-2 shrink-0">
+          <p className="text-sm text-foreground leading-snug">
+            {fraseExec}
+          </p>
+        </div>
 
-      <div className="overflow-x-auto mb-6">
-        <table className="w-full text-xs border-collapse">
-          <thead>
-            <tr className="bg-muted/60">
-              <th className="text-left px-2 py-1.5 font-semibold text-foreground sticky left-0 bg-muted/60 min-w-[110px]">
-                Movimentação
-              </th>
-              {colunas.map(m => (
-                <th key={m} className="text-right px-2 py-1.5 font-semibold text-foreground min-w-[52px]">
-                  {MESES_CURTOS[m - 1]}
-                </th>
-              ))}
-              <th className="text-right px-2 py-1.5 font-semibold text-foreground min-w-[60px] border-l border-border/60">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map((row, idx) => {
-              const isSaldoInicio = row.label === 'Saldo Início';
-              const isSaldoFinal  = row.label === 'Saldo Final';
-              const isSaldo = isSaldoInicio || isSaldoFinal;
-
-              return (
-                <tr
-                  key={idx}
-                  className={isSaldo ? 'bg-muted/40 border-t border-b border-border/40' : 'hover:bg-muted/20'}
-                >
-                  <td className={`px-2 py-1 sticky left-0 ${isSaldo ? 'bg-muted/40' : 'bg-background'} ${corSinal(row.sinal)}`}>
-                    {!isSaldo && (
-                      <span className="mr-1 opacity-50">{row.sinal === 'entrada' ? '+' : '–'}</span>
-                    )}
-                    {row.label}
-                  </td>
-                  {colunas.map(m => {
-                    const futuro = m > mes;
-                    let v: number;
-                    if (isSaldoInicio)     v = saldoInicial[m];
-                    else if (isSaldoFinal)  v = saldoFinal[m];
-                    else                    v = porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0;
-                    return (
-                      <td
-                        key={m}
-                        className={`text-right px-2 py-1 tabular-nums ${futuro ? 'text-muted-foreground/30 bg-muted/10' : corSinal(row.sinal)}`}
-                      >
-                        {futuro || v === 0
-                          ? <span className="text-muted-foreground/30">—</span>
-                          : fmtCab(v)}
-                      </td>
-                    );
-                  })}
-                  <td className={`text-right px-2 py-1 tabular-nums border-l border-border/60 ${corSinal(row.sinal)}`}>
-                    {(() => {
-                      if (isSaldoInicio) return fmtCab(saldoInicial[1]);
-                      if (isSaldoFinal)  return fmtCab(saldoFinal[mes]);
-                      const tot = colunas
-                        .filter(m => m <= mes)
-                        .reduce((s, m) => s + (porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0), 0);
-                      return tot !== 0
-                        ? fmtCab(tot)
-                        : <span className="text-muted-foreground/40">—</span>;
-                    })()}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {CARDS.map(({ tipo, label, ehDespesa, corValor }) => {
-          const card = porTipo[tipo];
-          if (!card) return null;
-          const real    = card.mesAtual.cab;
-          const meta    = card.meta.cab;
-          const anoAnt  = card.mesAnoAnt.cab;
-          const dvsMeta   = calcDeltaPct(real, meta);
-          const dvsAnoAnt = calcDeltaPct(real, anoAnt);
-          return (
-            <div key={tipo} className="bg-card border rounded-lg p-3 flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+        {/* ── TOPO — 5 indicadores executivos (responsivo) ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 shrink-0">
+          {([
+            {
+              label: 'Σ Entradas',
+              valor: porTipo['soma_entradas']?.mesAtual.cab ?? null,
+              meta:  porTipo['soma_entradas']?.meta.cab ?? null,
+              fmt: (v: number | null) => `${fmtCab(v)} cab`,
+              cor: 'text-emerald-700',
+              bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
+              ehDespesa: false,
+            },
+            {
+              label: 'Σ Saídas',
+              valor: porTipo['soma_saidas']?.mesAtual.cab ?? null,
+              meta:  porTipo['soma_saidas']?.meta.cab ?? null,
+              fmt: (v: number | null) => `${fmtCab(v)} cab`,
+              cor: 'text-red-700',
+              bg: 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
+              ehDespesa: true,
+            },
+            {
+              label: 'Desfrute',
+              valor: porTipo['desfrute_pct']?.mesAtual.cab ?? null,
+              meta:  porTipo['desfrute_pct']?.meta.cab ?? null,
+              fmt: (v: number | null) =>
+                v !== null && isFinite(v) ? `${v.toFixed(1)}%` : '—',
+              cor: 'text-foreground',
+              bg: 'bg-muted/40 border-border',
+              ehDespesa: false,
+            },
+            {
+              label: 'Mortalidade',
+              valor: porTipo['mortes']?.mesAtual.cab ?? null,
+              meta:  porTipo['mortes']?.meta.cab ?? null,
+              fmt: (v: number | null) => `${fmtCab(v)} cab`,
+              cor: 'text-red-600',
+              bg: 'bg-muted/40 border-border',
+              ehDespesa: true,
+            },
+            {
+              label: 'Saldo Final',
+              valor: saldoFinal[mes] ?? null,
+              meta:  null,
+              fmt: (v: number | null) => `${fmtCab(v)} cab`,
+              cor: 'text-foreground font-semibold',
+              bg: 'bg-card border-border',
+              ehDespesa: false,
+            },
+          ] as const).map(({ label, valor, meta, fmt, cor, bg, ehDespesa }) => (
+            <div key={label} className={`border rounded-lg px-2.5 py-2 ${bg}`}>
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                 {label}
-              </span>
-              <span className={`text-2xl font-bold tabular-nums ${corValor}`}>
-                {fmtCab(real)}{' '}
-                <span className="text-sm font-normal text-muted-foreground">cab</span>
-              </span>
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-                <span>vs Meta <DeltaTag delta={dvsMeta} ehDespesa={ehDespesa} /></span>
-                <span>vs {ano - 1} <DeltaTag delta={dvsAnoAnt} ehDespesa={ehDespesa} /></span>
+              </div>
+              <div className={`text-base font-bold tabular-nums leading-tight ${cor}`}>
+                {fmt(valor)}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                {meta !== null
+                  ? <>vs Meta <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} /></>
+                  : <span className="opacity-50">—</span>}
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        {/* ── MEIO — Narrativa esquerda/direita ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
+
+          {/* LADO ESQUERDO — Entradas */}
+          <div className="border border-emerald-200 dark:border-emerald-800 rounded-lg overflow-hidden">
+            <div className="bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 border-b border-emerald-200 dark:border-emerald-800">
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                ↑ Entradas que aumentam o rebanho
+              </span>
+            </div>
+            <div className="px-3 divide-y divide-border/20">
+              {([
+                { tipo: 'nascimentos' as TipoMov, label: 'Nascimentos' },
+                { tipo: 'compras'     as TipoMov, label: 'Compras / Reposição' },
+                ...(!isGlobal ? [{ tipo: 'transf_entradas' as TipoMov, label: 'Transf. Entrada' }] : []),
+              ] as const).map(({ tipo, label }) => {
+                const card   = porTipo[tipo];
+                const real   = card?.mesAtual.cab ?? null;
+                const anoAnt = card?.mesAnoAnt.cab ?? null;
+                return (
+                  <div key={tipo} className="flex items-center justify-between py-1.5">
+                    <span className="text-xs text-foreground">{label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                        {fmtCab(real)} cab
+                      </span>
+                      <span className="text-[10px] text-muted-foreground w-14 text-right">
+                        vs {ano - 1}{' '}
+                        <DeltaTag delta={calcDeltaPct(real, anoAnt)} ehDespesa={false} />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* LADO DIREITO — Saídas */}
+          <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
+            <div className="bg-red-50 dark:bg-red-950/30 px-3 py-1.5 border-b border-red-200 dark:border-red-800">
+              <span className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">
+                ↓ Saídas que reduzem o rebanho
+              </span>
+            </div>
+            <div className="px-3 divide-y divide-border/20">
+              {([
+                { tipo: 'abates'   as TipoMov, label: 'Abates',   ehDespesa: false },
+                { tipo: 'vendas'   as TipoMov, label: 'Vendas',   ehDespesa: false },
+                { tipo: 'consumos' as TipoMov, label: 'Consumo',  ehDespesa: false },
+                { tipo: 'mortes'   as TipoMov, label: 'Mortes',   ehDespesa: true  },
+                ...(!isGlobal ? [{ tipo: 'transf_saidas' as TipoMov, label: 'Transf. Saída', ehDespesa: false }] : []),
+              ] as const).map(({ tipo, label, ehDespesa }) => {
+                const card   = porTipo[tipo];
+                const real   = card?.mesAtual.cab ?? null;
+                const anoAnt = card?.mesAnoAnt.cab ?? null;
+                const isMorte = tipo === 'mortes';
+                return (
+                  <div key={tipo} className="flex items-center justify-between py-1.5">
+                    <span className={`text-xs ${isMorte ? 'text-red-600 font-medium' : 'text-foreground'}`}>
+                      {label}{isMorte && real !== null && (real as number) > 0 ? ' ⚠' : ''}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold tabular-nums ${isMorte ? 'text-red-600' : 'text-foreground'}`}>
+                        {fmtCab(real)} cab
+                      </span>
+                      <span className="text-[10px] text-muted-foreground w-14 text-right">
+                        vs {ano - 1}{' '}
+                        <DeltaTag delta={calcDeltaPct(real, anoAnt)} ehDespesa={ehDespesa} />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── BASE — Tabela de conferência Jan→Dez compacta ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <table className="w-full border-collapse" style={{ fontSize: '10px' }}>
+            <thead>
+              <tr className="bg-muted/60">
+                <th className="text-left px-1.5 py-1 font-semibold sticky left-0 bg-muted/60 min-w-[90px]">
+                  Movimentação
+                </th>
+                {colunas.map(m => (
+                  <th key={m} className="text-right px-1 py-1 font-semibold min-w-[40px]">
+                    {MESES_CURTOS[m - 1]}
+                  </th>
+                ))}
+                <th className="text-right px-1.5 py-1 font-semibold min-w-[44px] border-l border-border/60">
+                  Total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((row, idx) => {
+                const isSaldoInicio = row.label === 'Saldo Início';
+                const isSaldoFinal  = row.label === 'Saldo Final';
+                const isSaldo = isSaldoInicio || isSaldoFinal;
+                return (
+                  <tr
+                    key={idx}
+                    className={isSaldo ? 'bg-muted/40 border-t border-border/40' : ''}
+                  >
+                    <td className={`px-1.5 py-0.5 sticky left-0 ${isSaldo ? 'bg-muted/40' : 'bg-background'} ${corSinal(row.sinal)}`}>
+                      {!isSaldo && (
+                        <span className="mr-0.5 opacity-40">
+                          {row.sinal === 'entrada' ? '+' : '–'}
+                        </span>
+                      )}
+                      {row.label}
+                    </td>
+                    {colunas.map(m => {
+                      const futuro = m > mes;
+                      let v: number;
+                      if (isSaldoInicio)     v = saldoInicial[m];
+                      else if (isSaldoFinal)  v = saldoFinal[m];
+                      else                    v = porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0;
+                      return (
+                        <td
+                          key={m}
+                          className={`text-right px-1 py-0.5 tabular-nums ${
+                            futuro ? 'text-muted-foreground/25 bg-muted/10' : corSinal(row.sinal)
+                          }`}
+                        >
+                          {futuro || v === 0
+                            ? <span className="text-muted-foreground/25">—</span>
+                            : fmtCab(v)}
+                        </td>
+                      );
+                    })}
+                    <td className={`text-right px-1.5 py-0.5 tabular-nums border-l border-border/60 ${corSinal(row.sinal)}`}>
+                      {(() => {
+                        if (isSaldoInicio) return fmtCab(saldoInicial[1]);
+                        if (isSaldoFinal)  return fmtCab(saldoFinal[mes]);
+                        const tot = colunas
+                          .filter(m => m <= mes)
+                          .reduce((s, m) => s + (porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0), 0);
+                        return tot !== 0
+                          ? fmtCab(tot)
+                          : <span className="text-muted-foreground/25">—</span>;
+                      })()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
       </div>
-    </section>
+    </ExecutiveSlide>
   );
 }
