@@ -27,6 +27,7 @@
 import type { Lancamento, Categoria } from '@/types/cattle';
 import { CATEGORIAS } from '@/types/cattle';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META } from '@/lib/statusOperacional';
+import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,6 +65,16 @@ interface EditCompraFormProps {
   /** Nome da fazenda destino (readonly no form). */
   nomeFazendaDestino: string;
 
+  /** Z4 — fornecedor soberano do zoo (controlado pelo caller). */
+  fornecedorId: string | null;
+  onFornecedorChange: (id: string | null, nome: string | null) => void;
+  /** Texto histórico sem UUID (para estado legado do FornecedorSelect). */
+  textoLegado?: string;
+  /** Snapshot persistido (display readonly auxiliar). */
+  snapshotNome?: string;
+  /** Cliente do lançamento — necessário para a query interna do FornecedorSelect. */
+  clienteId: string;
+
   /** Reservados para F4 — não acionados aqui. */
   readOnly?: boolean;
   blockReason?: EditBlockReason;
@@ -82,6 +93,11 @@ export function EditCompraForm({
   canEditMeta,
   finRecordsCount,
   nomeFazendaDestino,
+  fornecedorId,
+  onFornecedorChange,
+  textoLegado,
+  snapshotNome,
+  clienteId,
   // readOnly e blockReason são declarados mas não acionados em F3a (F4 ativa).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   readOnly: _readOnly,
@@ -142,6 +158,21 @@ export function EditCompraForm({
             </SelectContent>
           </Select>
         </div>
+        <div className="col-span-2">
+          {/* Z4 — Fornecedor soberano do zoo (separado da Origem física). */}
+          <FornecedorSelect
+            fornecedorId={fornecedorId}
+            onFornecedorChange={onFornecedorChange}
+            clienteId={clienteId}
+            textoLegado={textoLegado}
+            snapshotNome={snapshotNome}
+            modoResolucaoLegado="permitir"
+            label="Fornecedor"
+            placeholder="Selecione ou cadastre fornecedor"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
         <div>
           <Label className="text-[10px] font-bold text-foreground">Origem</Label>
           <Input

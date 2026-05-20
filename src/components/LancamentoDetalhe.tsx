@@ -694,6 +694,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 zooSaved={compraZooSaved}
                 zooDirty={compraZooDirty}
                 onSubmitZoo={handleSalvarCompraZoo}
+                fornecedorId={null}
+                onFornecedorChange={() => { /* sheet adormecida — LancamentoZooModal soberano */ }}
+                clienteId={lancamento.clienteId ?? ''}
                 canEditMeta={canEditMeta}
                 finRecordsCount={finRecords.length}
                 nomeFazendaDestino={nomeFazendaResolvido}
