@@ -38,6 +38,7 @@ import {
   classificarSaida as classificarSaidaCentral,
 } from '@/lib/financeiro/classificacao';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import type { FluxoDrillPayload } from '@/components/financeiro/FluxoFinanceiro';
 import { toast } from 'sonner';
 import type { Lancamento, SaldoInicial } from '@/types/cattle';
@@ -110,6 +111,10 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   // Edit dialog state — opens ON TOP of audit modal
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLancV2, setEditingLancV2] = useState<any>(null);
+  // Estado local — cada instância de FinanceiroCaixaTab tem seu próprio
+  // zooModalIdFin para evitar confusão com zooEditId de V2Index.tsx
+  // (mesmo padrão, escopos distintos).
+  const [zooModalIdFin, setZooModalIdFin] = useState<string | null>(null);
 
   // Lifted audit modal state — persists across useFinanceiro reload cycles
   const [auditModalOpen, setAuditModalOpen] = useState(false);
@@ -134,6 +139,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
 
   // Convert FinanceiroLancamento to LancamentoV2-like for the dialog
   const handleEditFromAuditoria = useCallback((lanc: FinanceiroLancamento) => {
+    // Se lançamento financeiro veio de movimentação zoo → modal soberano zoo.
+    // Lançamentos sem vínculo (histórico + manuais) seguem o fluxo atual.
+    if (lanc.movimentacao_rebanho_id) {
+      setZooModalIdFin(lanc.movimentacao_rebanho_id);
+      return;
+    }
     const v2Like = {
       id: lanc.id,
       cliente_id: '',
@@ -548,6 +559,20 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
         defaultFazendaId={fazendaId !== '__global__' ? fazendaId || '' : ''}
         onCriarFornecedor={v2Hook.criarFornecedor}
       />
+
+      {/* Modal soberano zoo — para lançamentos financeiros com vínculo a movimentação. */}
+      {zooModalIdFin && (
+        <LancamentoZooModal
+          open
+          onOpenChange={(o) => { if (!o) setZooModalIdFin(null); }}
+          lancamentoId={zooModalIdFin}
+          onEditSuccess={() => {
+            setZooModalIdFin(null);
+            reloadData();
+            fluxoReloadRef.current?.();
+          }}
+        />
+      )}
     </div>
   );
 }
