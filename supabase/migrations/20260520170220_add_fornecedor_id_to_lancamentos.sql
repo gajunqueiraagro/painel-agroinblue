@@ -37,8 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_lancamentos_fornecedor_id
 WITH match_unico AS (
   SELECT
     l.id AS lanc_id,
-    MIN(f.id) AS fornecedor_id_match,
-    MIN(f.nome) AS fornecedor_nome_match
+    (array_agg(DISTINCT f.id))[1] AS fornecedor_id_match,
+    (array_agg(DISTINCT f.nome))[1] AS fornecedor_nome_match
   FROM lancamentos l
   JOIN financeiro_fornecedores f
     ON LOWER(TRIM(l.comprador_fornecedor)) =
