@@ -16,13 +16,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { Plus, Pencil, Copy, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
@@ -321,6 +323,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
+  // Modal soberano zoo — para lançamentos financeiros com vínculo a movimentação.
+  // Escopo local; convive com zooEditId/zooModalIdFin em outros arquivos sem colisão.
+  const [zooModalId, setZooModalId] = useState<string | null>(null);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -592,6 +597,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => {
+    // Se lançamento financeiro veio de movimentação zoo → modal soberano zoo.
+    // Lançamentos sem vínculo (histórico + manuais) seguem o fluxo atual.
+    if (l.movimentacao_rebanho_id) {
+      setZooModalId(l.movimentacao_rebanho_id);
+      return;
+    }
     console.log('[FinV2] reopen edit object', {
       id: l.id,
       tipo_operacao: l.tipo_operacao,
@@ -1428,6 +1439,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${l.descricao || ''}` : (l.descricao || '')}>
                           {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {l.descricao || '-'}
+                          {l.movimentacao_rebanho_id && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Beef className="inline h-3 w-3 text-muted-foreground ml-1 shrink-0 align-middle" />
+                              </TooltipTrigger>
+                              <TooltipContent>Gerado a partir de lançamento zootécnico</TooltipContent>
+                            </Tooltip>
+                          )}
                         </td>
                         <td className="truncate px-2 py-1 align-middle text-[12px] font-medium leading-tight" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
@@ -1509,6 +1528,19 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
       />
+
+      {/* Modal soberano zoo — para lançamentos financeiros com vínculo a movimentação. */}
+      {zooModalId && (
+        <LancamentoZooModal
+          open
+          onOpenChange={(o) => { if (!o) setZooModalId(null); }}
+          lancamentoId={zooModalId}
+          onEditSuccess={() => {
+            setZooModalId(null);
+            hook.loadLancamentos(filtros, hook.page);
+          }}
+        />
+      )}
 
 
       {/* Bulk delete confirmation */}

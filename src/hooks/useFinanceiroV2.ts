@@ -40,6 +40,10 @@ export interface LancamentoV2 {
   editado_manual: boolean;
   created_at: string;
   updated_at: string;
+  /** FK para `lancamentos.id` quando o registro foi gerado a partir de uma
+   *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
+   *  indicador visual e roteamento para LancamentoZooModal. */
+  movimentacao_rebanho_id: string | null;
 }
 
 export interface LancamentoV2Form {
