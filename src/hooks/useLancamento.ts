@@ -40,6 +40,10 @@ function mapRowToLancamento(l: LancamentoRow): Lancamento {
     categoriaDestino: r.categoria_destino as Categoria | undefined,
     fazendaOrigem: l.fazenda_origem ?? undefined,
     fazendaDestino: l.fazenda_destino ?? undefined,
+    // Z4.1: identidade multi-tenant — necessária para queries dependentes
+    // (FornecedorSelect, useEditPermissions). Banco tem como UUID NULLABLE.
+    fazendaId: l.fazenda_id ?? undefined,
+    clienteId: l.cliente_id ?? undefined,
     pesoMedioKg: r.peso_medio_kg ?? undefined,
     pesoMedioArrobas: r.peso_medio_arrobas ?? undefined,
     precoMedioCabeca: r.preco_medio_cabeca ?? undefined,
