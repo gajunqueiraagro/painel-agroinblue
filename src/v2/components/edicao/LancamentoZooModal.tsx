@@ -22,7 +22,7 @@
  *  - Recálculo financeiro mantém regra "confirmação explícita do usuário"
  *    (CompraFinanceiroPanel preserva o comportamento atual).
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
@@ -168,7 +168,10 @@ export function LancamentoZooModal({
   const [notaFiscalEdit, setNotaFiscalEdit] = useState('');
 
   // Reinicializa state ao trocar de lançamento ou reabrir.
-  useMemo(() => {
+  // REGRA: side-effect (setState) precisa ser useEffect, não useMemo.
+  // useMemo com setState é anti-pattern grave em React 18 — pode causar
+  // tela branca silenciosa por violar a regra "no setState during render".
+  useEffect(() => {
     if (lancamento && lancamento.tipo === 'compra' && open) {
       setCompraForm({ ...lancamento });
       setCompraStatusMode(isMeta(lancamento) ? 'meta' : ((lancamento.statusOperacional as 'realizado' | 'programado') || 'realizado'));
