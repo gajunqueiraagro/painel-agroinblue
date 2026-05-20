@@ -25,6 +25,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
+import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
@@ -129,6 +130,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // Etapa 5 — sheet padronizado para Reclassificação (substitui Dialog genérico)
   const [reclassificacaoEditOpen, setReclassificacaoEditOpen] = useState(false);
 
+  // Atalho arquitetural: entrypoint soberano de edição (carrega por id).
+  // Substitui os caminhos paralelos antigos (navegação para aba lancamentos,
+  // sheets locais espalhados). state legado abaixo permanece declarado para
+  // não quebrar JSX dos sheets antigos (que continuam montados sem efeito).
+  const [zooModalOpen, setZooModalOpen] = useState(false);
+
   // Unified purchase edit sheet
   const [compraEditSheetOpen, setCompraEditSheetOpen] = useState(false);
   const [compraForm, setCompraForm] = useState({ ...lancamento });
@@ -176,58 +183,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   const isTransferenciaEntrada = lancamento.tipo === 'transferencia_entrada';
 
   // ---- Handle edit click ----
+  // Atalho arquitetural: edição soberana via LancamentoZooModal.
+  // Ignora callbacks legados onEditarAbate/Venda/Compra/etc. (que navegavam
+  // para aba lancamentos) e os Sheets inline antigos. Para abate/venda, o
+  // modal mostra placeholder honesto (TODO Fase A7/A8). Demais tipos abrem
+  // os Edit*Sheets existentes reroteados pelo modal.
   const handleEditClick = () => {
-    if (isAbate && onEditarAbate) {
-      // Redirect abate to the full form in LancamentosTab
-      onClose();
-      onEditarAbate(lancamento);
-    } else if (isVenda && onEditarVenda) {
-      // Redirect venda to the full form in LancamentosTab
-      onClose();
-      onEditarVenda(lancamento);
-    } else if (isCompra && onEditarCompra) {
-      // Redirect compra to the full form in LancamentosTab
-      onClose();
-      onEditarCompra(lancamento);
-    } else if (lancamento.tipo === 'transferencia_saida' && onEditarTransferencia) {
-      onClose();
-      onEditarTransferencia(lancamento);
-    } else if (isReclassificacao(lancamento.tipo) && onEditarReclass) {
-      onClose();
-      onEditarReclass(lancamento);
-    } else if (lancamento.tipo === 'morte' && onEditarMorte) {
-      onClose();
-      onEditarMorte(lancamento);
-    } else if (lancamento.tipo === 'consumo' && onEditarConsumo) {
-      onClose();
-      onEditarConsumo(lancamento);
-    } else if (isCompra) {
-      // Fallback: Open unified purchase edit sheet
-      setCompraForm({ ...lancamento });
-      setCompraStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
-      setCompraZooSaved(false);
-      setNotaFiscalEdit(lancamento.notaFiscal || '');
-      setCompraEditSheetOpen(true);
-    } else if (lancamento.tipo === 'nascimento') {
-      // Etapa 1 — sheet padronizado para Nascimento.
-      setNascimentoEditOpen(true);
-    } else if (lancamento.tipo === 'morte') {
-      // Etapa 2 — sheet padronizado para Morte.
-      setMorteEditOpen(true);
-    } else if (lancamento.tipo === 'transferencia_saida') {
-      // Etapa 3 — sheet padronizado para Transferência (saída).
-      setTransferenciaEditOpen(true);
-    } else if (lancamento.tipo === 'consumo') {
-      // Etapa 4 — sheet padronizado para Consumo.
-      setConsumoEditOpen(true);
-    } else if (isReclassificacao(lancamento.tipo)) {
-      // Etapa 5 — sheet padronizado para Reclassificação.
-      setReclassificacaoEditOpen(true);
-    } else {
-      setForm({ ...lancamento });
-      setFormStatusMode(lancamentoIsMeta ? 'meta' : ((lancamento.statusOperacional as any) || 'realizado'));
-      setEditando(true);
-    }
+    setZooModalOpen(true);
   };
 
   // ---- Simple edit save (non-purchase) ----
@@ -873,6 +835,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Atalho arquitetural: entrypoint soberano de edição. */}
+        <LancamentoZooModal
+          open={zooModalOpen}
+          onOpenChange={setZooModalOpen}
+          lancamentoId={lancamento.id}
+          onEditSuccess={() => {
+            // Cache invalidado pelo useLancamentos.editarLancamento internamente.
+            // Fechar modal soberano + propagar para o parent (que pode refetchar listas).
+            setZooModalOpen(false);
+          }}
+        />
       </>
     );
   }
