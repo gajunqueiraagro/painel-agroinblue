@@ -24,8 +24,36 @@ import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import React from 'react';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
+
+// Diagnóstico temporário — captura crash silencioso do modal soberano.
+// Remover após bug isolado.
+class ZooModalErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error('[ZooModalErrorBoundary]', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, padding: 16, color: 'white', background: '#7f1d1d', zIndex: 9999, fontFamily: 'monospace', fontSize: 12 }}>
+          <strong>ZooModal crash:</strong> {this.state.error.message}
+          <pre style={{ whiteSpace: 'pre-wrap', marginTop: 8 }}>
+            {this.state.error.stack?.split('\n').slice(0, 8).join('\n')}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
@@ -837,16 +865,18 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
         </AlertDialog>
 
         {/* Atalho arquitetural: entrypoint soberano de edição. */}
-        <LancamentoZooModal
-          open={zooModalOpen}
-          onOpenChange={setZooModalOpen}
-          lancamentoId={lancamento.id}
-          onEditSuccess={() => {
-            // Cache invalidado pelo useLancamentos.editarLancamento internamente.
-            // Fechar modal soberano + propagar para o parent (que pode refetchar listas).
-            setZooModalOpen(false);
-          }}
-        />
+        <ZooModalErrorBoundary>
+          <LancamentoZooModal
+            open={zooModalOpen}
+            onOpenChange={setZooModalOpen}
+            lancamentoId={lancamento.id}
+            onEditSuccess={() => {
+              // Cache invalidado pelo useLancamentos.editarLancamento internamente.
+              // Fechar modal soberano + propagar para o parent (que pode refetchar listas).
+              setZooModalOpen(false);
+            }}
+          />
+        </ZooModalErrorBoundary>
       </>
     );
   }
