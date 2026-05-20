@@ -17,6 +17,7 @@
  * da tela onde o modal é aberto. Regra soberana: o mesmo `id` deve produzir
  * o mesmo resultado independente da tela de origem.
  */
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
@@ -111,7 +112,15 @@ export function useLancamento(id: string | null | undefined): UseLancamentoResul
   });
 
   const raw = query.data ?? null;
-  const lancamento = raw ? mapRowToLancamento(raw) : null;
+  // Z4.4: memoiza `lancamento` para estabilizar referência.
+  // mapRowToLancamento(raw) cria novo objeto a cada chamada — sem
+  // useMemo, qualquer useEffect downstream com deps `[lancamento, ...]`
+  // dispararia em loop a cada render do consumer (causa raiz do
+  // bug onde useEffects async eram cancelados antes de completar).
+  const lancamento = useMemo(
+    () => (raw ? mapRowToLancamento(raw) : null),
+    [raw]
+  );
 
   return {
     lancamento,
