@@ -160,6 +160,32 @@ export function FornecedorSelect({
     },
   });
 
+  // ── Query interna: resolução do fornecedor selecionado por ID ──
+  // Z4.3: desacopla resolução do item selecionado da lista paginada.
+  // A lista (fornecedoresQuery) alimenta o combobox de busca/filtro
+  // com paginação default do Supabase REST. Esta query auxiliar
+  // resolve EXCLUSIVAMENTE o fornecedor selecionado, garantindo
+  // display correto em qualquer escala (10, 1000, 50.000 fornecedores).
+  //
+  // Soberania: busca por UUID (fornecedor_id é source of truth).
+  // Multi-tenant: filtra também por cliente_id (defesa em profundidade).
+  const fornecedorAtualQuery = useQuery({
+    queryKey: ['fornecedor-por-id', fornecedorId, clienteId] as const,
+    enabled: !!fornecedorId && !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Pick<FornecedorRow, 'id' | 'nome'> | null> => {
+      if (!fornecedorId) return null;
+      const { data, error } = await supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome')
+        .eq('id', fornecedorId)
+        .eq('cliente_id', clienteId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return (data as { id: string; nome: string } | null) ?? null;
+    },
+  });
+
   // ── Query interna: fazendas do cliente (necessária p/ FornecedorFormDialog) ──
   const fazendasQuery = useQuery({
     queryKey: ['fazendas-cliente', clienteId] as const,
@@ -193,10 +219,15 @@ export function FornecedorSelect({
   }, [fornecedores, pendingNewName, onFornecedorChange]);
 
   // ── Fornecedor selecionado atual ──
-  const fornecedorSelecionado = useMemo(
-    () => fornecedores.find(f => f.id === fornecedorId) ?? null,
-    [fornecedores, fornecedorId],
-  );
+  // Z4.3: prioridade lista local (tem todos os campos para edição),
+  // fallback no fetch por ID (só nome — suficiente para display).
+  // Quando o fornecedor está fora do range da lista paginada,
+  // a query auxiliar garante resolução do nome.
+  const fornecedorSelecionado = useMemo(() => {
+    const naLista = fornecedores.find(f => f.id === fornecedorId);
+    if (naLista) return naLista;
+    return fornecedorAtualQuery.data ?? null;
+  }, [fornecedores, fornecedorId, fornecedorAtualQuery.data]);
 
   // ── Filtro do combobox ──
   const filtrados = useMemo(() => {
