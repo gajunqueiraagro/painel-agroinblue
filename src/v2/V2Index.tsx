@@ -19,6 +19,7 @@ import { V2AreasMeta } from './pages/V2AreasMeta';
 import { V2PlanejamentoVisaoGeral } from './pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from './pages/V2FechamentoPeriodo';
 import V2ExecutivePreview from './pages/V2ExecutivePreview';
+import { LancamentoZooModal } from './components/edicao/LancamentoZooModal';
 import V2VisaoGeralRebanho from './pages/V2VisaoGeralRebanho';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
@@ -294,6 +295,11 @@ export default function V2Index() {
   // Quando setado, navega para `lancamentos-zoot` e abre LancamentosTab em edit mode.
   const [abateParaEditar, setAbateParaEditar] = useState<Lancamento | null>(null);
   const [vendaParaEditar, setVendaParaEditar] = useState<Lancamento | null>(null);
+  // Atalho arquitetural: entrypoint soberano de edição V2 (carrega por id).
+  // Substitui setAbateParaEditar/setVendaParaEditar + setSection('lancamentos-zoot')
+  // nos handlers de edição da Conferência. State legado preservado para
+  // não quebrar V2LancamentosWrapper.
+  const [zooEditId, setZooEditId] = useState<string | null>(null);
   // Drill filtrado vindo de EvolucaoCategoriaTab: navega para
   // 'conferencia-lancamentos' (FinanceiroTab) com subAba+ano+mês+categoria
   // +cenário pré-aplicados. Mesmo padrão do onNavigateToMovimentacao do
@@ -481,16 +487,8 @@ export default function V2Index() {
             } : undefined}
             onRemover={removerLancamento}
             onEditar={editarLancamento}
-            onEditarAbate={(l) => {
-              setAbateParaEditar(l);
-              setVendaParaEditar(null);
-              setSection('lancamentos-zoot');
-            }}
-            onEditarVenda={(l) => {
-              setVendaParaEditar(l);
-              setAbateParaEditar(null);
-              setSection('lancamentos-zoot');
-            }}
+            onEditarAbate={(l) => setZooEditId(l.id)}
+            onEditarVenda={(l) => setZooEditId(l.id)}
           />
         )}
       </V2ZootWrapper>
@@ -865,6 +863,18 @@ export default function V2Index() {
 
       {/* MOBILE BOTTOM NAV — fixed bottom-0 + md:hidden internos no componente */}
       <V2MobileNav activeSection={section} onNavigate={setSection} />
+
+      {/* Atalho arquitetural: modal soberano de edição zoo. Disponível em
+          qualquer section. Carrega pelo lancamento.id — fazendaAtual não é
+          fonte. Substitui navegação para 'lancamentos-zoot' nos handlers. */}
+      {zooEditId && (
+        <LancamentoZooModal
+          open
+          onOpenChange={(o) => { if (!o) setZooEditId(null); }}
+          lancamentoId={zooEditId}
+          onEditSuccess={() => setZooEditId(null)}
+        />
+      )}
 
     </div>
   );
