@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle } from 'lucide-react';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, isValid } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -57,6 +57,18 @@ export interface CompraFinanceiroPanelRef {
   getValorBase: () => number;
   getTipoPreco: () => string;
   resetForm: () => void;
+}
+
+/**
+ * Formata data ISO (YYYY-MM-DD) em pt-BR (DD/MM/YYYY) com guard contra
+ * strings parciais/inválidas. Inputs `type=date` emitem valores intermediários
+ * durante a edição (ex.: "2026-06-" ao trocar só o mês) — sem o guard,
+ * format() de date-fns lança RangeError no render → tela branca.
+ */
+function fmtDataPtBR(s: string | undefined | null): string {
+  if (!s) return '—';
+  const d = parseISO(s);
+  return isValid(d) ? format(d, 'dd/MM/yyyy') : '—';
 }
 
 function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { title: string; open: boolean; onOpenChange: (v: boolean) => void; children: React.ReactNode; summary?: string }) {
@@ -202,7 +214,9 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     const p: Parcela[] = [];
     const vp = base / n;
     for (let i = 0; i < n; i++) {
-      const d = addDays(parseISO(data || format(new Date(), 'yyyy-MM-dd')), 30 * (i + 1));
+      // Guard: data principal pode estar parcial/inválida durante edição.
+      const baseData = data && isValid(parseISO(data)) ? parseISO(data) : new Date();
+      const d = addDays(baseData, 30 * (i + 1));
       p.push({ data: format(d, 'yyyy-MM-dd'), valor: Math.round(vp * 100) / 100 });
     }
     if (p.length > 0) {
@@ -658,7 +672,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             {formaPag === 'prazo' && parcelas.length > 0 ? (
               parcelas.map((p, i) => (
                 <div key={i} className="flex justify-between text-[10px]">
-                  <span>Parcela {i + 1}/{parcelas.length} — {format(parseISO(p.data), 'dd/MM/yyyy')}</span>
+                  <span>Parcela {i + 1}/{parcelas.length} — {fmtDataPtBR(p.data)}</span>
                   <span className="font-semibold">{formatMoeda(p.valor)}</span>
                 </div>
               ))
