@@ -40,7 +40,7 @@ const CARDS: CardDef[] = [
   { tipo: 'mortes',    label: 'Mortes',     ehDespesa: true,  corValor: 'text-red-600' },
 ];
 
-function fmtCab(v: number | null): string {
+export function fmtCab(v: number | null): string {
   if (v === null || !isFinite(v)) return '—';
   return Math.round(v).toLocaleString('pt-BR');
 }
@@ -60,15 +60,15 @@ function DeltaTag({ delta, ehDespesa }: { delta: number | null; ehDespesa: boole
   return <span className={cls}>{sinal}{delta.toFixed(1)}%</span>;
 }
 
-const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+export const MESES_CURTOS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-interface RowDef {
+export interface RowDef {
   label: string;
   tipo: TipoMov | null;
   sinal: 'entrada' | 'saida' | null;
 }
 
-function buildLinhas(isGlobal: boolean): RowDef[] {
+export function buildLinhas(isGlobal: boolean): RowDef[] {
   return [
     { label: 'Saldo Início',      tipo: null,             sinal: null },
     { label: 'Nascimentos',       tipo: 'nascimentos',    sinal: 'entrada' },
@@ -83,7 +83,7 @@ function buildLinhas(isGlobal: boolean): RowDef[] {
   ];
 }
 
-function corSinal(sinal: 'entrada' | 'saida' | null): string {
+export function corSinal(sinal: 'entrada' | 'saida' | null): string {
   if (sinal === 'entrada') return 'text-emerald-700';
   if (sinal === 'saida')   return 'text-red-600';
   return 'font-semibold text-foreground';
@@ -177,9 +177,9 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
   return (
     <ExecutiveSlide
       title="Movimentações do Rebanho"
-      subtitle={`Jan a ${String(mes).padStart(2, '0')}/${ano}`}
+      subtitle={`Jan a ${String(mes).padStart(2, '0')}/${ano} · Narrativa executiva`}
       className="my-6"
-      footer={`Fonte: lançamentos realizados · ${viewMode === 'periodo' ? 'Período acumulado' : 'Mês selecionado'}`}
+      footer={`Fonte: lançamentos realizados · ${viewMode === 'periodo' ? 'Período acumulado' : 'Mês selecionado'} · Detalhe mês a mês na próxima prancha`}
     >
       <div className="flex flex-col gap-3 h-full">
 
@@ -256,8 +256,8 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
           ))}
         </div>
 
-        {/* ── MEIO — Narrativa esquerda/direita ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
+        {/* ── PAINÉIS NARRATIVOS — Entradas vs Saídas (cresce no espaço livre) ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
 
           {/* LADO ESQUERDO — Entradas */}
           <div className="border border-emerald-200 dark:border-emerald-800 rounded-lg overflow-hidden">
@@ -332,80 +332,6 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
             </div>
           </div>
 
-        </div>
-
-        {/* ── BASE — Tabela de conferência Jan→Dez compacta ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full border-collapse" style={{ fontSize: '10px' }}>
-            <thead>
-              <tr className="bg-muted/60">
-                <th className="text-left px-1.5 py-1 font-semibold sticky left-0 bg-muted/60 min-w-[90px]">
-                  Movimentação
-                </th>
-                {colunas.map(m => (
-                  <th key={m} className="text-right px-1 py-1 font-semibold min-w-[40px]">
-                    {MESES_CURTOS[m - 1]}
-                  </th>
-                ))}
-                <th className="text-right px-1.5 py-1 font-semibold min-w-[44px] border-l border-border/60">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((row, idx) => {
-                const isSaldoInicio = row.label === 'Saldo Início';
-                const isSaldoFinal  = row.label === 'Saldo Final';
-                const isSaldo = isSaldoInicio || isSaldoFinal;
-                return (
-                  <tr
-                    key={idx}
-                    className={isSaldo ? 'bg-muted/40 border-t border-border/40' : ''}
-                  >
-                    <td className={`px-1.5 py-0.5 sticky left-0 ${isSaldo ? 'bg-muted/40' : 'bg-background'} ${corSinal(row.sinal)}`}>
-                      {!isSaldo && (
-                        <span className="mr-0.5 opacity-40">
-                          {row.sinal === 'entrada' ? '+' : '–'}
-                        </span>
-                      )}
-                      {row.label}
-                    </td>
-                    {colunas.map(m => {
-                      const futuro = m > mes;
-                      let v: number;
-                      if (isSaldoInicio)     v = saldoInicial[m];
-                      else if (isSaldoFinal)  v = saldoFinal[m];
-                      else                    v = porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0;
-                      return (
-                        <td
-                          key={m}
-                          className={`text-right px-1 py-0.5 tabular-nums ${
-                            futuro ? 'text-muted-foreground/25 bg-muted/10' : corSinal(row.sinal)
-                          }`}
-                        >
-                          {futuro || v === 0
-                            ? <span className="text-muted-foreground/25">—</span>
-                            : fmtCab(v)}
-                        </td>
-                      );
-                    })}
-                    <td className={`text-right px-1.5 py-0.5 tabular-nums border-l border-border/60 ${corSinal(row.sinal)}`}>
-                      {(() => {
-                        if (isSaldoInicio) return fmtCab(saldoInicial[1]);
-                        if (isSaldoFinal)  return fmtCab(saldoFinal[mes]);
-                        const tot = colunas
-                          .filter(m => m <= mes)
-                          .reduce((s, m) => s + (porTipo[row.tipo!]?.seriesJanDez.cab.real[m] ?? 0), 0);
-                        return tot !== 0
-                          ? fmtCab(tot)
-                          : <span className="text-muted-foreground/25">—</span>;
-                      })()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
 
       </div>

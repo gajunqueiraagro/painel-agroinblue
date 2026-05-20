@@ -37,6 +37,7 @@ import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAna
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
 import { BlocoMovimentacoesRebanhoFechamento } from './V2FechamentoPeriodo.parts/BlocoMovimentacoesRebanhoFechamento';
+import { BlocoConferenciaMensalRebanhoFechamento } from './V2FechamentoPeriodo.parts/BlocoConferenciaMensalRebanhoFechamento';
 import { FluxoCaixaModal } from '@/v2/components/modais/FluxoCaixaModal';
 import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
 import type { LinhaModalKey } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
@@ -593,6 +594,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
       <BlocoMovimentacoesRebanhoFechamento
+        ano={ano}
+        mes={mesAlvo}
+        viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+        isGlobal={isGlobal}
+      />
+      <BlocoConferenciaMensalRebanhoFechamento
         ano={ano}
         mes={mesAlvo}
         viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
