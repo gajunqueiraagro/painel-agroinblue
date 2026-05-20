@@ -123,6 +123,18 @@ export function LancamentoZooModal({
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
 
+  // Z4.2: clienteId/fazendaId derivados do registro com fallback no raw.
+  // NUNCA usar contexto visual (ClienteContext/FazendaContext) — viola
+  // soberania do modal. raw.cliente_id/raw.fazenda_id vêm do mesmo
+  // supabase response que alimenta `lancamento`, então são confiáveis.
+  const clienteIdLancamento = useMemo(() => {
+    return lancamento?.clienteId ?? raw?.cliente_id ?? '';
+  }, [lancamento?.clienteId, raw?.cliente_id]);
+
+  const fazendaIdLancamento = useMemo(() => {
+    return lancamento?.fazendaId ?? raw?.fazenda_id ?? '';
+  }, [lancamento?.fazendaId, raw?.fazenda_id]);
+
   // Lista de fazendas APENAS como lookup table para resolver o nome textual
   // da fazenda do lançamento via UUID. NUNCA lemos `fazendaAtual` daqui —
   // esse é o sentinel que vira "Global" em modo Global.
@@ -294,6 +306,18 @@ export function LancamentoZooModal({
   const handleSalvarCompraZoo = useCallback(async () => {
     if (!lancamento || !compraForm) return;
 
+    // GUARD 0 — Z4.2: sem cliente do registro, save bloqueado.
+    // raw.cliente_id é a única fonte confiável; sem ele, não há
+    // operação segura — fornecedor não pode ser consolidado sem
+    // identificar a tenant do registro.
+    if (!clienteIdLancamento) {
+      toast.error(
+        'Cliente do lançamento não identificado. ' +
+        'Reabra o lançamento ou contate o suporte.'
+      );
+      return;
+    }
+
     // GUARD 1 — Anti-regressão: nunca limpar fornecedor consolidado.
     if (lancamento.fornecedorId && !fornecedorIdEdit) {
       toast.error(
@@ -349,7 +373,7 @@ export function LancamentoZooModal({
 
     // Sem mudança OU sem parcelas — save direto
     await doSaveZoo();
-  }, [lancamento, compraForm, fornecedorIdEdit, fornecedorNomeEdit, snapshotNomeInicial, doSaveZoo]);
+  }, [lancamento, compraForm, fornecedorIdEdit, fornecedorNomeEdit, snapshotNomeInicial, doSaveZoo, clienteIdLancamento]);
 
   // ── Handlers do SincronizacaoFornecedorDialog ──
   const handleAtualizarSincronizaveis = useCallback(async () => {
@@ -475,6 +499,19 @@ export function LancamentoZooModal({
             <div className="mt-2 space-y-2.5">
               <BannerBloqueio reason={permissions.blockReason} />
 
+              {/* Z4.2: guard visual quando cliente do registro não resolveu. */}
+              {!clienteIdLancamento && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-200">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-xs font-semibold">Cliente do lançamento não identificado</div>
+                    <div className="text-[11px] leading-snug mt-0.5">
+                      Reabra o lançamento ou contate o suporte. Seleção de fornecedor desabilitada e save bloqueado.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <EditCompraForm
                 lancamento={lancamento}
                 form={compraForm}
@@ -495,7 +532,7 @@ export function LancamentoZooModal({
                 }}
                 textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
                 snapshotNome={snapshotNomeInicial ?? undefined}
-                clienteId={lancamento.clienteId ?? ''}
+                clienteId={clienteIdLancamento}
                 readOnly={!permissions.canEdit}
                 blockReason={permissions.blockReason}
               />
@@ -524,8 +561,8 @@ export function LancamentoZooModal({
                 fornecedorId={fornecedorIdEdit ?? ''}
                 lancamentoId={lancamento.id}
                 mode="update"
-                fazendaIdLancamento={lancamento.fazendaId}
-                clienteIdLancamento={lancamento.clienteId}
+                fazendaIdLancamento={fazendaIdLancamento || undefined}
+                clienteIdLancamento={clienteIdLancamento || undefined}
                 onFinanceiroUpdated={() => {
                   onOpenChange(false);
                   onEditSuccess?.();
