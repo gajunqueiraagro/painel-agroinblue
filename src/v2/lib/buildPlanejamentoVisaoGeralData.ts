@@ -202,6 +202,11 @@ export interface ZootCompPreload {
    *  Regra Gabriel: DRE pecuária NÃO vem do financeiro. Venda/abate de
    *  animais pode existir sem movimentação financeira no período. */
   receitaPecAnoCorrente?: AgregadoZootCompResult | null;
+  /** Reposição Bovinos ANO CORRENTE realizada por competência zoot — fonte
+   *  soberana da DRE no Fechamento. Quando presente, sobrescreve o cálculo
+   *  via caixa (agregaInvBovinos sobre financeiro_lancamentos_v2).
+   *  Sem fallback financeiro: ausente/null → linha mostra null ("—") na UI. */
+  reposicaoBovinosAnoCorrente?: AgregadoZootCompResult;
 }
 
 /** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
@@ -1369,9 +1374,13 @@ function buildBloco3AnaliseEconomica(
   // ─── 5. (−) Reposição de Bovinos ─────────────────────────────
   const reposMeta = bloco1.reposicaoBovinos.valor;
   const reposAnoAnt = bloco1.reposicaoBovinos.vsAnoFechado.valor;
-  // Marco F2.1: Reposição ano-corrente via agregador financeiro
-  // (agregaInvBovinos — fonte oficial sobre lancFinAnoCorrente).
-  const reposAnoCorr = valorAnoCorrFin(agregaInvBovinos);
+  // DRE Reposição Bovinos realizada deve vir de COMPETÊNCIA ZOOT (lancamentos
+  // tipo='compra'), não de caixa. Regra Gabriel: compra de animal pode existir
+  // sem movimentação financeira no período. Sem fallback financeiro — se
+  // zootComp.reposicaoBovinosAnoCorrente ausente/null, linha mostra null.
+  const reposAnoCorr = input.zootComp?.reposicaoBovinosAnoCorrente
+    ? somaAteMes(input.zootComp.reposicaoBovinosAnoCorrente.meses, mesAlvo, modo)
+    : null;
   const reposicaoBovinos = mkLinha(
     '5. (−) Reposição de Bovinos', reposMeta, reposAnoAnt, reposAnoCorr,
   );

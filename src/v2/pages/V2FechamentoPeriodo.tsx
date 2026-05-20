@@ -418,6 +418,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           receitaPec, deducoes, reposicaoBovinos,
           receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
           receitaPecAnoCorrente,
+          reposicaoBovinosAnoCorrente,
         ] = await Promise.all([
           agregaReceitaPecZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
           agregaDeducoesZootComp({ clienteId, ano, cenario: 'meta' }, supabase),
@@ -429,12 +430,17 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           // soberana da DRE Receita Pecuária. Regra Gabriel: DRE pecuária NÃO
           // vem do financeiro.
           agregaReceitaPecZootComp({ clienteId, ano, cenario: 'realizado' }, supabase),
+          // Reposição Bovinos realizada do ano corrente por competência zoot —
+          // fonte soberana da DRE Reposição (lancamentos tipo='compra'). Sem
+          // fallback financeiro.
+          agregaReposicaoBovinosZootComp({ clienteId, ano, cenario: 'realizado' }, supabase),
         ]);
         if (!cancelado) {
           setZootComp({
             receitaPec, deducoes, reposicaoBovinos,
             receitaPecAnoAnt, deducoesAnoAnt, reposicaoBovinosAnoAnt,
             receitaPecAnoCorrente,
+            reposicaoBovinosAnoCorrente,
           });
         }
       } catch (e) {
