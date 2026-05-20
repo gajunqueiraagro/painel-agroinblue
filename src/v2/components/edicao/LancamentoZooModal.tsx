@@ -117,15 +117,8 @@ export function LancamentoZooModal({
   lancamentoId,
   onEditSuccess,
 }: LancamentoZooModalProps) {
-  // Diagnóstico temporário — remover após bug isolado.
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] render', { lancamentoId, open });
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] useLancamento', { hasLancamento: !!lancamento, loading, error: error?.message });
   const permissions = useEditPermissions(raw);
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] permissions', permissions);
 
   // Lista de fazendas APENAS como lookup table para resolver o nome textual
   // da fazenda do lançamento via UUID. NUNCA lemos `fazendaAtual` daqui —
@@ -135,11 +128,7 @@ export function LancamentoZooModal({
   // editarLancamento canonical — usar cenário do lançamento como queryKey
   // (fallback 'realizado' enquanto carrega).
   const cenarioParam = lancamento?.cenario ?? 'realizado';
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] before useLancamentos', { cenarioParam, hasFazendas: fazendas.length });
   const { editarLancamento } = useLancamentos({ cenario: cenarioParam });
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] after useLancamentos', { hasEditar: typeof editarLancamento === 'function' });
 
   // ── Nome da fazenda do registro (texto persistido > lookup por UUID > '')
   const nomeFazendaDoRegistro = useMemo(() => {
@@ -273,9 +262,6 @@ export function LancamentoZooModal({
     temAlteracaoEstrutural,
     nomeFazenda: nomeFazendaDoRegistro,
   };
-
-  // eslint-disable-next-line no-console
-  console.log('[ZooModal] before switch', { tipo: lancamento.tipo, fazendaId: lancamento.fazendaId, clienteId: lancamento.clienteId });
 
   switch (lancamento.tipo) {
     case 'nascimento':
