@@ -46,15 +46,14 @@ export function ExecutiveSlide({
   return (
     <section
       className={cn(
-        // Proporção 16:9 reservada para PDF/apresentação. Em telas estreitas
-        // (mobile) o aspect-video ainda calcula a altura; conteúdo interno
-        // pode rolar se ultrapassar.
-        'aspect-video w-full max-w-[1280px] mx-auto',
+        // Altura fixa 560px = canvas soberano do ExecutiveSlide.
+        // Funciona com sidebar (~210px) em telas 1280px+.
+        // overflow-hidden garante que nada vaza; flex-1 interno gerencia scroll.
+        // Print: mantém aspect-ratio 16:9 forçado via CSS (não depende de largura de tela).
+        'w-full max-w-[1280px] mx-auto h-[560px]',
         'bg-card border border-border rounded-lg shadow-sm overflow-hidden',
         'flex flex-col',
-        // Print: preserva proporção, evita corte no meio do slide,
-        // remove sombra (papel branco).
-        'print:break-inside-avoid print:shadow-none print:max-w-full print:aspect-[16/9]',
+        'print:break-inside-avoid print:shadow-none print:max-w-full print:h-auto print:aspect-[16/9]',
         className,
       )}
     >
