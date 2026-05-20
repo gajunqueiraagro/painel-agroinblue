@@ -223,8 +223,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       quantidade: Number(form.quantidade),
       categoria: form.categoria,
       categoriaDestino: form.categoriaDestino,
-      fazendaOrigem: isSaidaAuto ? nomeFazenda : (form.fazendaOrigem || undefined),
-      fazendaDestino: isEntradaAuto ? nomeFazenda : (form.fazendaDestino || undefined),
+      // Bug 1.1: usar fazenda do próprio registro — nunca o nome do
+      // FazendaContext (que pode ser "Global" no modo Global, poluindo o banco).
+      fazendaOrigem: isSaidaAuto ? (lancamento.fazendaOrigem ?? undefined) : (form.fazendaOrigem || undefined),
+      fazendaDestino: isEntradaAuto ? (lancamento.fazendaDestino ?? undefined) : (form.fazendaDestino || undefined),
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
@@ -270,7 +272,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       quantidade: Number(compraForm.quantidade),
       categoria: compraForm.categoria,
       fazendaOrigem: compraForm.fazendaOrigem || undefined,
-      fazendaDestino: nomeFazenda,
+      // Bug 1.1: fazenda destino é a do próprio registro, não do contexto Global.
+      fazendaDestino: lancamento.fazendaDestino ?? '',
       pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
       pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
       cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
@@ -713,7 +716,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 onSubmitZoo={handleSalvarCompraZoo}
                 canEditMeta={canEditMeta}
                 finRecordsCount={finRecords.length}
-                nomeFazendaDestino={nomeFazenda}
+                nomeFazendaDestino={lancamento.fazendaDestino || ''}
               />
 
               <Separator />
