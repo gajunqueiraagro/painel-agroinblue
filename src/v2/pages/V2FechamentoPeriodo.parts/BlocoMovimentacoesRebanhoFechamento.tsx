@@ -195,51 +195,66 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
           {([
             {
               label: 'Σ Entradas',
-              valor: porTipo['soma_entradas']?.mesAtual.cab ?? null,
-              meta:  porTipo['soma_entradas']?.meta.cab ?? null,
+              valor:  porTipo['soma_entradas']?.mesAtual.cab ?? null,
+              meta:   porTipo['soma_entradas']?.meta.cab ?? null,
+              anoAnt: porTipo['soma_entradas']?.mesAnoAnt.cab ?? null,
               fmt: (v: number | null) => `${fmtCab(v)} cab`,
               cor: 'text-emerald-700',
               bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
               ehDespesa: false,
+              modoComparativo: 'meta-anoant' as const,
             },
             {
+              // Σ Saídas = saídas produtivas (desfrute). NÃO é despesa.
+              // Menos saída produtiva que a meta = ruim (vermelho).
+              // Mais saída produtiva que a meta = bom (verde).
               label: 'Σ Saídas',
-              valor: porTipo['soma_saidas']?.mesAtual.cab ?? null,
-              meta:  porTipo['soma_saidas']?.meta.cab ?? null,
+              valor:  porTipo['soma_saidas']?.mesAtual.cab ?? null,
+              meta:   porTipo['soma_saidas']?.meta.cab ?? null,
+              anoAnt: porTipo['soma_saidas']?.mesAnoAnt.cab ?? null,
               fmt: (v: number | null) => `${fmtCab(v)} cab`,
               cor: 'text-red-700',
               bg: 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800',
-              ehDespesa: true,
+              ehDespesa: false,
+              modoComparativo: 'meta-anoant' as const,
             },
             {
               label: 'Desfrute',
-              valor: porTipo['desfrute_pct']?.mesAtual.cab ?? null,
-              meta:  porTipo['desfrute_pct']?.meta.cab ?? null,
+              valor:  porTipo['desfrute_pct']?.mesAtual.cab ?? null,
+              meta:   porTipo['desfrute_pct']?.meta.cab ?? null,
+              anoAnt: porTipo['desfrute_pct']?.mesAnoAnt.cab ?? null,
               fmt: (v: number | null) =>
                 v !== null && isFinite(v) ? `${v.toFixed(1)}%` : '—',
               cor: 'text-foreground',
               bg: 'bg-muted/40 border-border',
               ehDespesa: false,
+              modoComparativo: 'meta-anoant' as const,
             },
             {
+              // Mortes: única métrica onde menor é melhor.
               label: 'Mortalidade',
-              valor: porTipo['mortes']?.mesAtual.cab ?? null,
-              meta:  porTipo['mortes']?.meta.cab ?? null,
+              valor:  porTipo['mortes']?.mesAtual.cab ?? null,
+              meta:   porTipo['mortes']?.meta.cab ?? null,
+              anoAnt: porTipo['mortes']?.mesAnoAnt.cab ?? null,
               fmt: (v: number | null) => `${fmtCab(v)} cab`,
               cor: 'text-red-600',
               bg: 'bg-muted/40 border-border',
               ehDespesa: true,
+              modoComparativo: 'meta-anoant' as const,
             },
             {
+              // Saldo Final: compara vs início do período, não vs meta.
               label: 'Saldo Final',
-              valor: saldoFinal[mes] ?? null,
-              meta:  null,
+              valor:  saldoFinal[mes] ?? null,
+              meta:   saldoInicial[1] ?? null,   // reutiliza slot 'meta' como referência de "início"
+              anoAnt: null,
               fmt: (v: number | null) => `${fmtCab(v)} cab`,
               cor: 'text-foreground font-semibold',
               bg: 'bg-card border-border',
               ehDespesa: false,
+              modoComparativo: 'inicio' as const,
             },
-          ] as const).map(({ label, valor, meta, fmt, cor, bg, ehDespesa }) => (
+          ] as const).map(({ label, valor, meta, anoAnt, fmt, cor, bg, ehDespesa, modoComparativo }) => (
             <div key={label} className={`border rounded-lg px-2.5 py-2 ${bg}`}>
               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
                 {label}
@@ -247,10 +262,28 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
               <div className={`text-base font-bold tabular-nums leading-tight ${cor}`}>
                 {fmt(valor)}
               </div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">
-                {meta !== null
-                  ? <>vs Meta <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} /></>
-                  : <span className="opacity-50">—</span>}
+              <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
+                {modoComparativo === 'inicio' ? (
+                  <div>
+                    vs início{' '}
+                    <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      vs Meta{' '}
+                      {meta !== null
+                        ? <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} />
+                        : <span className="opacity-50">—</span>}
+                    </div>
+                    <div>
+                      vs {ano - 1}{' '}
+                      {anoAnt !== null
+                        ? <DeltaTag delta={calcDeltaPct(valor, anoAnt)} ehDespesa={ehDespesa} />
+                        : <span className="opacity-50">—</span>}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ))}
