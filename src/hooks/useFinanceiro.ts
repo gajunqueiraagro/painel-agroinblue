@@ -92,6 +92,10 @@ export interface FinanceiroLancamento {
   lote_importacao_id?: string | null;
   cancelado?: boolean;
   editado_manual?: boolean;
+  /** FK para `lancamentos.id` quando o registro foi gerado a partir de uma
+   *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
+   *  indicador visual nas listagens financeiras. */
+  movimentacao_rebanho_id?: string | null;
 }
 
 interface ContaBancariaImportacao {
@@ -235,6 +239,7 @@ export function mapV2ToLancamento(r: any): FinanceiroLancamento {
     lote_importacao_id: r.lote_importacao_id,
     cancelado: r.cancelado,
     editado_manual: r.editado_manual,
+    movimentacao_rebanho_id: r.movimentacao_rebanho_id ?? null,
   };
 }
 

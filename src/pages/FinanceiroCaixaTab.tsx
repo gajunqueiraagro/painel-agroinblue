@@ -20,7 +20,8 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { usePastos } from '@/hooks/usePastos';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FazendaSelector } from '@/components/FazendaSelector';
-import { ArrowLeft, Loader2, Filter, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Filter, X, Beef } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -355,7 +356,17 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                   {drillDownLancamentos.map(l => (
                     <TableRow key={l.id}>
                       <TableCell className="text-[10px] px-2 py-1.5 whitespace-nowrap">{l.data_pagamento || '-'}</TableCell>
-                      <TableCell className="text-[10px] px-2 py-1.5 max-w-[140px] truncate">{l.produto || '-'}</TableCell>
+                      <TableCell className="text-[10px] px-2 py-1.5 max-w-[140px] truncate">
+                        <span className="truncate inline-block max-w-full align-middle">{l.produto || '-'}</span>
+                        {l.movimentacao_rebanho_id && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Beef className="inline h-3 w-3 text-muted-foreground ml-1 shrink-0 align-middle" />
+                            </TooltipTrigger>
+                            <TooltipContent>Gerado a partir de lançamento zootécnico</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </TableCell>
                       <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.fornecedor || '-'}</TableCell>
                       <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.centro_custo || '-'}</TableCell>
                       <TableCell className={`text-[10px] px-2 py-1.5 text-right font-mono font-bold ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
