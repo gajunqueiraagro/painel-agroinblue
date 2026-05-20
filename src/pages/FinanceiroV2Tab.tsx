@@ -24,7 +24,6 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2, type FiltrosV2 } from '@/hooks/useFinanceiroV2';
 import { useFechamentoMensal } from '@/hooks/useFechamentoMensal';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
-import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
@@ -323,9 +322,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const [mode, setMode] = useState<'list' | 'rapido'>('list');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLanc, setEditingLanc] = useState<LancamentoV2 | null>(null);
-  // Modal soberano zoo — para lançamentos financeiros com vínculo a movimentação.
-  // Escopo local; convive com zooEditId/zooModalIdFin em outros arquivos sem colisão.
-  const [zooModalId, setZooModalId] = useState<string | null>(null);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -597,12 +593,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const openNew = () => { setEditingLanc(null); setDialogOpen(true); };
   const openEdit = (l: LancamentoV2) => {
-    // Se lançamento financeiro veio de movimentação zoo → modal soberano zoo.
-    // Lançamentos sem vínculo (histórico + manuais) seguem o fluxo atual.
-    if (l.movimentacao_rebanho_id) {
-      setZooModalId(l.movimentacao_rebanho_id);
-      return;
-    }
     console.log('[FinV2] reopen edit object', {
       id: l.id,
       tipo_operacao: l.tipo_operacao,
@@ -1528,19 +1518,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
       />
-
-      {/* Modal soberano zoo — para lançamentos financeiros com vínculo a movimentação. */}
-      {zooModalId && (
-        <LancamentoZooModal
-          open
-          onOpenChange={(o) => { if (!o) setZooModalId(null); }}
-          lancamentoId={zooModalId}
-          onEditSuccess={() => {
-            setZooModalId(null);
-            hook.loadLancamentos(filtros, hook.page);
-          }}
-        />
-      )}
 
 
       {/* Bulk delete confirmation */}

@@ -118,42 +118,12 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   const [existingCount, setExistingCount] = useState(0);
   const [existingLoaded, setExistingLoaded] = useState(false);
 
-  // ── Dados bancários do lançamento financeiro (PR1 zoo-fin) ─────────────
-  // Aplicados uniformemente a todos os inserts via baseRecord. Em modo prazo,
-  // todas as parcelas herdam os mesmos dados (granularidade por parcela é
-  // PR futuro).
-  const [contaBancariaId, setContaBancariaId] = useState<string | null>(null);
-  const [statusTransacao, setStatusTransacao] = useState<'programado' | 'realizado'>('programado');
-  const [formaPagamento, setFormaPagamento] = useState<string | null>(null);
-  const [dadosPagamento, setDadosPagamento] = useState<string>('');
-
-  // Lista de contas bancárias do cliente para o select. Query local pequena
-  // — evita acoplamento com useFinanceiroV2 (que carrega bem mais).
-  type ContaOpt = { id: string; nome_exibicao: string | null; nome_conta: string; banco: string | null; ativa: boolean };
-  const [contasOpcoes, setContasOpcoes] = useState<ContaOpt[]>([]);
-  useEffect(() => {
-    const cli = clienteIdLancamento ?? clienteAtual?.id;
-    if (!cli || cli === '__global__') { setContasOpcoes([]); return; }
-    let cancelado = false;
-    supabase
-      .from('financeiro_contas_bancarias')
-      .select('id, nome_exibicao, nome_conta, banco, ativa')
-      .eq('cliente_id', cli)
-      .eq('ativa', true)
-      .order('nome_conta', { ascending: true })
-      .then(({ data }) => {
-        if (cancelado) return;
-        setContasOpcoes((data as ContaOpt[]) || []);
-      });
-    return () => { cancelado = true; };
-  }, [clienteIdLancamento, clienteAtual?.id]);
-
   // Load existing financial records in update mode
   useEffect(() => {
     if (mode !== 'update' || !lancamentoId) { setExistingLoaded(true); return; }
     supabase
       .from('financeiro_lancamentos_v2')
-      .select('id, valor, data_competencia, data_pagamento, descricao, origem_tipo, favorecido_id, numero_documento, conta_bancaria_id, status_transacao, forma_pagamento, dados_pagamento')
+      .select('id, valor, data_competencia, data_pagamento, descricao, origem_tipo, favorecido_id, numero_documento')
       .eq('movimentacao_rebanho_id', lancamentoId)
       .eq('cancelado', false)
       .order('data_pagamento', { ascending: true })
@@ -163,18 +133,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         setExistingLoaded(true);
 
         if (recs.length === 0) return;
-
-        // PR1 zoo-fin: dados bancários — usar primeira parcela como referência.
-        // Em modo prazo as parcelas herdam mesmos dados; recuperá-los uniforme.
-        const firstParcela = recs.find(r => r.origem_tipo?.includes('parcela')) ?? recs[0];
-        if (firstParcela) {
-          if (firstParcela.conta_bancaria_id) setContaBancariaId(firstParcela.conta_bancaria_id);
-          if (firstParcela.status_transacao === 'realizado' || firstParcela.status_transacao === 'programado') {
-            setStatusTransacao(firstParcela.status_transacao);
-          }
-          if (firstParcela.forma_pagamento) setFormaPagamento(firstParcela.forma_pagamento);
-          if (firstParcela.dados_pagamento) setDadosPagamento(firstParcela.dados_pagamento);
-        }
 
         const parcelaRecs = recs.filter(r => r.origem_tipo?.includes('parcela'));
         const freteRec = recs.find(r => r.origem_tipo?.includes('frete'));
@@ -369,9 +327,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         }
       }
 
-      // PR1 zoo-fin: status agora vem do toggle. Default 'programado' preserva
-      // comportamento legado quando o usuário não escolhe.
-      const statusFin = statusTransacao;
+      const statusFin = 'programado';
       const catLabel = CATEGORIAS.find(c => c.value === categoria)?.label || categoria;
       const compraLabel = `Compra ${quantidade} ${catLabel}`;
       const anoMes = data.slice(0, 7);
@@ -421,12 +377,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       };
 
       if (fornecedorId) baseRecord.favorecido_id = fornecedorId;
-      // PR1 zoo-fin: dados bancários propagados a todos os inserts.
-      // Em modo prazo, parcelas herdam os mesmos dados (granularidade por
-      // parcela é PR futuro). Campos opcionais — nunca fallback silencioso.
-      if (contaBancariaId) baseRecord.conta_bancaria_id = contaBancariaId;
-      if (formaPagamento) baseRecord.forma_pagamento = formaPagamento;
-      if (dadosPagamento.trim()) baseRecord.dados_pagamento = dadosPagamento.trim();
 
       if (formaPag === 'prazo' && parcelas.length > 0) {
         parcelas.forEach((p, i) => {
@@ -513,7 +463,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     } finally {
       setGerando(false);
     }
-  }, [lancamentoId, fazendaAtual, clienteAtual, fazendaIdLancamento, clienteIdLancamento, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated, contaBancariaId, statusTransacao, formaPagamento, dadosPagamento]);
+  }, [lancamentoId, fazendaAtual, clienteAtual, fazendaIdLancamento, clienteIdLancamento, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
 
   const resetForm = useCallback(() => {
     setTipoPreco('por_kg');
@@ -646,73 +596,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
         <div>
           <Label className="text-[10px]">Nota Fiscal</Label>
           <Input value={notaFiscal} onChange={e => onNotaFiscalChange(e.target.value)} placeholder="Nº da nota" className="h-7 text-[11px]" />
-        </div>
-
-        {/* PR1 zoo-fin: Conta Origem — necessário para conciliação bancária */}
-        <div>
-          <Label className="text-[10px]">Conta Origem</Label>
-          <Select value={contaBancariaId ?? '__none__'} onValueChange={v => setContaBancariaId(v === '__none__' ? null : v)}>
-            <SelectTrigger className="h-7 text-[11px]">
-              <SelectValue placeholder="Selecione uma conta" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">— Não definida —</SelectItem>
-              {contasOpcoes.map(c => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nome_exibicao || c.nome_conta}{c.banco ? ` · ${c.banco}` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!contaBancariaId && (
-            <p className="text-[9px] text-muted-foreground mt-0.5 italic">Conta bancária não definida — necessária para conciliação.</p>
-          )}
-        </div>
-
-        {/* PR1 zoo-fin: Status (programado/realizado) — remove hardcoded */}
-        <div>
-          <Label className="text-[10px]">Status</Label>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button type="button" onClick={() => setStatusTransacao('programado')}
-              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${statusTransacao === 'programado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              Programado
-            </button>
-            <button type="button" onClick={() => setStatusTransacao('realizado')}
-              className={`h-7 rounded text-[11px] font-bold border-2 transition-all ${statusTransacao === 'realizado' ? 'border-primary bg-primary/10' : 'border-border text-muted-foreground'}`}>
-              Realizado
-            </button>
-          </div>
-        </div>
-
-        {/* PR1 zoo-fin: Forma de Pagamento */}
-        <div>
-          <Label className="text-[10px]">Forma de Pagamento</Label>
-          <Select value={formaPagamento ?? '__none__'} onValueChange={v => setFormaPagamento(v === '__none__' ? null : v)}>
-            <SelectTrigger className="h-7 text-[11px]">
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">— Não definida —</SelectItem>
-              <SelectItem value="pix">PIX</SelectItem>
-              <SelectItem value="ted_doc">TED / DOC</SelectItem>
-              <SelectItem value="boleto">Boleto</SelectItem>
-              <SelectItem value="dinheiro">Dinheiro</SelectItem>
-              <SelectItem value="cheque">Cheque</SelectItem>
-              <SelectItem value="cartao">Cartão</SelectItem>
-              <SelectItem value="outro">Outro</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* PR1 zoo-fin: Dados do Pagamento (chave PIX / banco / observação) */}
-        <div>
-          <Label className="text-[10px]">Dados do Pagamento</Label>
-          <Input
-            value={dadosPagamento}
-            onChange={e => setDadosPagamento(e.target.value)}
-            placeholder="Chave PIX, banco, agência/conta, observação..."
-            className="h-7 text-[11px]"
-          />
         </div>
 
         <div className="grid grid-cols-2 gap-1.5">
