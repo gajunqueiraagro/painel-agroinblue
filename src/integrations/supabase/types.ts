@@ -3435,6 +3435,8 @@ export type Database = {
           fazenda_id: string
           fazenda_origem: string | null
           finalidade: string | null
+          fornecedor_id: string | null
+          fornecedor_nome_snapshot: string
           frigorifico: string | null
           hash_linha: string | null
           id: string
@@ -3498,6 +3500,8 @@ export type Database = {
           fazenda_id: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          fornecedor_id?: string | null
+          fornecedor_nome_snapshot?: string
           frigorifico?: string | null
           hash_linha?: string | null
           id?: string
@@ -3561,6 +3565,8 @@ export type Database = {
           fazenda_id?: string
           fazenda_origem?: string | null
           finalidade?: string | null
+          fornecedor_id?: string | null
+          fornecedor_nome_snapshot?: string
           frigorifico?: string | null
           hash_linha?: string | null
           id?: string

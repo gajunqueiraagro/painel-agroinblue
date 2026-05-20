@@ -60,7 +60,15 @@ export interface Lancamento {
   observacao?: string;
   motivo?: string;
   rendimento?: number;
+  // legado — remover apenas após Z5/Z6 estabilizados.
+  // Coexiste com fornecedorId/fornecedorNomeSnapshot durante a transição.
   compradorFornecedor?: string;
+  // Z1+: fornecedor mestre soberano do zoo (UUID em financeiro_fornecedores).
+  fornecedorId?: string;
+  // Z1+: snapshot imutável do nome no momento do save.
+  // O sentinel '[nao informado]' do banco é traduzido para undefined no mapper
+  // (camada de domínio trata como ausência semântica — nunca renderizar em UI).
+  fornecedorNomeSnapshot?: string;
   // Financial fields
   precoArroba?: number;
   pesoCarcacaKg?: number;

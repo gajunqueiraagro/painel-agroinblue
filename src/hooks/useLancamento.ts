@@ -47,6 +47,12 @@ function mapRowToLancamento(l: LancamentoRow): Lancamento {
     motivo: r.motivo ?? undefined,
     rendimento: r.rendimento ?? undefined,
     compradorFornecedor: r.comprador_fornecedor ?? undefined,
+    fornecedorId: (r as { fornecedor_id?: string | null }).fornecedor_id ?? undefined,
+    // Sentinel '[nao informado]' → undefined (ausência semântica na UI).
+    fornecedorNomeSnapshot: (() => {
+      const snap = (r as { fornecedor_nome_snapshot?: string | null }).fornecedor_nome_snapshot;
+      return snap && snap !== '[nao informado]' ? snap : undefined;
+    })(),
     precoArroba: r.preco_arroba ?? undefined,
     pesoCarcacaKg: r.peso_carcaca_kg ?? undefined,
     bonusPrecoce: r.bonus_precoce ?? undefined,
