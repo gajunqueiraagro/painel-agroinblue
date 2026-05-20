@@ -195,6 +195,13 @@ export interface ZootCompPreload {
   receitaPecAnoAnt: AgregadoZootCompResult | null;
   deducoesAnoAnt: AgregadoZootCompResult | null;
   reposicaoBovinosAnoAnt: AgregadoZootCompResult;
+  /** Receita Pecuária ANO CORRENTE realizada por competência zoot — fonte
+   *  soberana da DRE no Fechamento. Quando presente, sobrescreve o cálculo
+   *  via caixa (agregaReceitaPec sobre financeiro_lancamentos_v2).
+   *  Ausente no Planejamento (preserva comportamento legado).
+   *  Regra Gabriel: DRE pecuária NÃO vem do financeiro. Venda/abate de
+   *  animais pode existir sem movimentação financeira no período. */
+  receitaPecAnoCorrente?: AgregadoZootCompResult | null;
 }
 
 /** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
@@ -1211,7 +1218,14 @@ function buildBloco3AnaliseEconomica(
   // ─── 1. Faturamento ──────────────────────────────────────────
   const recPecMeta = bloco1.receitasPecuaria.valor;
   const recPecAnoAnt = bloco1.receitasPecuaria.vsAnoFechado.valor;
-  const recPecAnoCorr = valorAnoCorrFin(agregaReceitaPec);
+  // DRE Receita Pec realizada deve vir de COMPETÊNCIA ZOOT (lancamentos),
+  // não de caixa (financeiro_lancamentos_v2). Regra Gabriel: venda/abate
+  // pode existir sem movimentação financeira no período. Quando
+  // zootComp.receitaPecAnoCorrente está presente (Fechamento), usa esse;
+  // senão fallback financeiro (mantém comportamento Planejamento).
+  const recPecAnoCorr = input.zootComp?.receitaPecAnoCorrente
+    ? somaAteMes(input.zootComp.receitaPecAnoCorrente.meses, mesAlvo, modo)
+    : valorAnoCorrFin(agregaReceitaPec);
   const outRecMeta = bloco1.outrasReceitas.valor;
   const outRecAnoAnt = bloco1.outrasReceitas.vsAnoFechado.valor;
   const outRecAnoCorr = valorAnoCorrFin(agregaOutrasReceitas);
