@@ -18,6 +18,7 @@ import { V2AuditoriaAnual } from './pages/V2AuditoriaAnual';
 import { V2AreasMeta } from './pages/V2AreasMeta';
 import { V2PlanejamentoVisaoGeral } from './pages/V2PlanejamentoVisaoGeral';
 import V2FechamentoPeriodo from './pages/V2FechamentoPeriodo';
+import V2ExecutivePreview from './pages/V2ExecutivePreview';
 import V2VisaoGeralRebanho from './pages/V2VisaoGeralRebanho';
 import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
 import { MetaPrecoTab } from '@/pages/MetaPrecoTab';
@@ -667,6 +668,7 @@ export default function V2Index() {
     if (section === 'areas-meta') return <V2AreasMeta ano={ano} />;
     if (section === 'planejamento-home') return <V2PlanejamentoVisaoGeral ano={Number(ano)} mes={Number(mes)} />;
     if (section === 'fechamento-periodo') return <V2FechamentoPeriodo periodo={periodo} onPeriodoChange={setPeriodo} />;
+    if (section === 'executive-preview') return <V2ExecutivePreview />;
     if (section === 'meta-precos') {
       if (isGlobal) {
         return (

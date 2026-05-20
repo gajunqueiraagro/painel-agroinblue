@@ -44,7 +44,8 @@ export type V2Section =
   | 'divergencias'           // (em construção)
   | 'logs'                   // (em construção)
   | 'validacoes'             // (em construção)
-  | 'fechamento-periodo';    // Marco 2.4 — cockpit Fechamento do Período
+  | 'fechamento-periodo'    // Marco 2.4 — cockpit Fechamento do Período
+  | 'executive-preview';    // FASE 3 / PR3.3A — sandbox isolado do ExecutiveSlide (fake data)
 
 export type ItemStatus = 'ready' | 'needs-wrapper';
 
