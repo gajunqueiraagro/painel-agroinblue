@@ -25,6 +25,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import { EditCompraForm } from '@/components/edit/EditCompraForm';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
 import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
@@ -699,109 +700,21 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               </p>
             </SheetHeader>
             <div className="mt-2 space-y-2.5">
-              {/* BLOCO 1 — Zootécnico */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-muted-foreground tracking-wide">
-                  📋 Dados Zootécnicos
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Data</Label>
-                    <Input type="date" value={compraForm.data} onChange={e => setCompraForm(f => ({ ...f, data: e.target.value }))} className="mt-0.5 h-7 text-[11px]" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Quantidade</Label>
-                    <Input type="number" value={compraForm.quantidade} onChange={e => setCompraForm(f => ({ ...f, quantidade: Number(e.target.value) }))} className="mt-0.5 h-7 text-[11px]" min="1" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Peso (kg)</Label>
-                    <Input type="number" value={compraForm.pesoMedioKg || ''} onChange={e => setCompraForm(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))} className="mt-0.5 h-7 text-[11px]" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Categoria</Label>
-                    <Select value={compraForm.categoria} onValueChange={v => setCompraForm(f => ({ ...f, categoria: v as Categoria }))}>
-                      <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Origem</Label>
-                    <Input value={compraForm.fazendaOrigem || ''} onChange={e => setCompraForm(f => ({ ...f, fazendaOrigem: e.target.value }))} className="mt-0.5 h-7 text-[11px]" placeholder="Faz. Boa Vista" />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-foreground">Destino</Label>
-                    <Input value={nomeFazenda} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
-                  </div>
-                </div>
-                {/* Status */}
-                <div>
-                  <Label className="text-[10px] font-bold text-foreground">Status</Label>
-                  <div className="flex gap-1 mt-0.5">
-                    {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
-                      const disabled = s.value === 'meta' && !canEditMeta;
-                      return (
-                      <button
-                        key={s.value}
-                        type="button"
-                        onClick={() => {
-                          if (disabled) return;
-                          setCompraStatusMode(s.value as any);
-                          setCompraForm(f => ({
-                            ...f,
-                            statusOperacional: s.value === 'meta' ? null : s.value,
-                            cenario: s.value === 'meta' ? 'meta' : 'realizado',
-                          }));
-                        }}
-                        disabled={disabled}
-                        className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
-                          disabled ? 'opacity-40 cursor-not-allowed' : ''
-                        } ${
-                          compraStatusMode === s.value
-                            ? `${s.bg} text-white border-transparent shadow-md`
-                            : 'border-border text-muted-foreground bg-muted/30'
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                {/* Warning: zootécnico changes impact financeiro */}
-                {finRecords.length > 0 && (
-                  compraForm.quantidade !== lancamento.quantidade ||
-                  compraForm.pesoMedioKg !== lancamento.pesoMedioKg ||
-                  compraForm.categoria !== lancamento.categoria
-                ) && (
-                  <div className="flex items-center gap-1 text-[10px] p-1.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>Alterações nos dados zootécnicos impactam o financeiro.</span>
-                  </div>
-                )}
-                {/* Save zootécnico button — só aparece se há alteração não salva */}
-                {!compraZooDirty ? (
-                  <div className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-muted/30 rounded px-2 py-1 border border-border/40">
-                    Sem alterações zootécnicas — financeiro disponível abaixo.
-                  </div>
-                ) : !compraZooSaved ? (
-                  <Button
-                    className="w-full h-7 text-[10px] font-bold"
-                    size="sm"
-                    onClick={handleSalvarCompraZoo}
-                    disabled={compraSaving}
-                  >
-                    {compraSaving ? 'Salvando...' : '1. Salvar dados zootécnicos'}
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 rounded px-2 py-1 border border-green-200 dark:border-green-800">
-                    ✅ Dados zootécnicos salvos
-                  </div>
-                )}
-              </div>
+              {/* BLOCO 1 — Zootécnico (F3a: extraído para EditCompraForm). */}
+              <EditCompraForm
+                lancamento={lancamento}
+                form={compraForm}
+                onFormChange={setCompraForm}
+                statusMode={compraStatusMode}
+                onStatusModeChange={setCompraStatusMode}
+                saving={compraSaving}
+                zooSaved={compraZooSaved}
+                zooDirty={compraZooDirty}
+                onSubmitZoo={handleSalvarCompraZoo}
+                canEditMeta={canEditMeta}
+                finRecordsCount={finRecords.length}
+                nomeFazendaDestino={nomeFazenda}
+              />
 
               <Separator />
 
