@@ -32,7 +32,7 @@ export type TipoMov =
   | 'nascimentos' | 'compras' | 'transf_entradas' | 'soma_entradas'
   | 'vendas' | 'abates' | 'consumos' | 'mortes' | 'transf_saidas'
   | 'soma_saidas' | 'desfrute' | 'desfrute_pct'
-  | 'reposicao' | 'reposicao_pct';
+  | 'reposicao';
 
 export type PorLente = Record<Lente, number | null>;
 
@@ -65,6 +65,9 @@ export type CardData = {
 export type MovimentacoesAgregadas = {
   loading: boolean;
   porTipo: Record<TipoMov, CardData>;
+  /** Saldo inicial total do rebanho em Jan/ano. Usado para encadear
+   * saldo mês a mês na TabelaConferencia. */
+  saldoInicialAnual: number;
 };
 
 interface Args {
@@ -103,7 +106,6 @@ function getTiposLancDeMov(isGlobal: boolean): Record<TipoMov, Lancamento['tipo'
     desfrute_pct:    ['abate', 'venda', 'consumo'], // mesmo agreg; valorPorLente força % p/ qualquer lente
     // reposicao: compra sempre; + transf_entrada em modo individual (movimentação real p/ a fazenda)
     reposicao:       isGlobal ? ['compra'] : ['compra', 'transferencia_entrada'],
-    reposicao_pct:   isGlobal ? ['compra'] : ['compra', 'transferencia_entrada'],
   };
 }
 
@@ -128,14 +130,13 @@ const LENTES_APLICAVEIS: Record<TipoMov, ReadonlySet<Lente>> = {
   desfrute:        new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
   desfrute_pct:    new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
   reposicao:       new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
-  reposicao_pct:   new Set(['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total']),
 };
 
 const TIPOS_TODOS: TipoMov[] = [
   'nascimentos', 'compras', 'transf_entradas', 'soma_entradas',
   'vendas', 'abates', 'consumos', 'mortes', 'transf_saidas',
   'soma_saidas', 'desfrute', 'desfrute_pct',
-  'reposicao', 'reposicao_pct',
+  'reposicao',
 ];
 
 const LENTES_TODAS: Lente[] = ['cab', 'arroba_total', 'arroba_media', 'preco_arroba', 'valor_total'];
@@ -377,35 +378,13 @@ export function useMovimentacoesAgregadas({ ano, mes, viewMode, isGlobal }: Args
       };
     }
 
-    // PR3.1 — pós-processamento reposicao_pct: % = reposicao.cab / desfrute.cab × 100.
-    // Sobrescreve apenas os 4 pontos pontuais (mesAtual/mesAnt/mesAnoAnt/meta);
-    // reposicao_pct.cab é o único lente com valor, demais ficam null.
-    // Zero-guard: desfrute.cab <= 0 → null (evita divisão por zero).
-    {
-      const pct = (repCab: number | null, defCab: number | null): number | null => {
-        if (repCab === null || !defCab || defCab === 0) return null;
-        return (repCab / defCab) * 100;
-      };
-      const reps = result['reposicao'];
-      const desf = result['desfrute'];
-      const mkPorLente = (repPl: PorLente, defPl: PorLente): PorLente => ({
-        cab:          pct(repPl.cab, defPl.cab),
-        arroba_total: null,
-        arroba_media: null,
-        preco_arroba: null,
-        valor_total:  null,
-      });
-      result['reposicao_pct'] = {
-        ...result['reposicao_pct'],
-        mesAtual:  mkPorLente(reps.mesAtual,  desf.mesAtual),
-        mesAnt:    mkPorLente(reps.mesAnt,    desf.mesAnt),
-        mesAnoAnt: mkPorLente(reps.mesAnoAnt, desf.mesAnoAnt),
-        meta:      mkPorLente(reps.meta,      desf.meta),
-      };
-    }
-
     return result;
   }, [lancCorr, lancAnoAnt, lancMeta, saldosCorr, saldosAnoAnt, ano, mes, viewMode, TIPOS_LANC_DE_MOV]);
 
-  return { loading, porTipo };
+  const saldoInicialAnual = useMemo(
+    () => calcularSaldoInicialAno(saldosCorr, ano),
+    [saldosCorr, ano],
+  );
+
+  return { loading, porTipo, saldoInicialAnual };
 }

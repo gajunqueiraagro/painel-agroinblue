@@ -592,7 +592,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       )}
 
       {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
-      <BlocoMovimentacoesRebanhoFechamento ano={ano} mes={mesAlvo} isGlobal={isGlobal} />
+      <BlocoMovimentacoesRebanhoFechamento
+        ano={ano}
+        mes={mesAlvo}
+        viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+        isGlobal={isGlobal}
+      />
 
       {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — movido para
           após Movimentações conforme decisão FASE 3 (Capa → DRE → Fluxo →
