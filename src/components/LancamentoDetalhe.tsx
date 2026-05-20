@@ -23,7 +23,6 @@ import { Pencil, Trash2, DollarSign, AlertTriangle } from 'lucide-react';
 import { AbateShareButtons } from '@/components/AbateExportMenu';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
-import { usePermissions } from '@/hooks/usePermissions';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
 import { EditNascimentoSheet } from '@/components/edit/EditNascimentoSheet';
@@ -65,10 +64,19 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
     const fz = fazendas.find(f => f.id === lancamento.fazendaId);
     return fz?.nome || '';
   }, [lancamento.fazendaDestino, lancamento.fazendaId, fazendas]);
-  const { canEditMeta } = usePermissions();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
   const lancamentoIsMeta = isMeta(lancamento);
+  // Bug 2: na edição OPERACIONAL de lançamentos zoo, "Meta" não é opção
+  // de menu — é ESTADO do lançamento. Antes vinha de usePermissions
+  // (permissão de criar Meta no Planejamento), o que era semanticamente
+  // errado: permitia trocar cenário realizado→meta pela edição operacional.
+  // Regra soberana: Meta só aparece quando o lançamento JÁ é Meta.
+  const canEditMeta = lancamentoIsMeta;
+  // metaLocked = "Meta sem permissão para editar". Antes dependia da
+  // permissão do usuário; agora, com canEditMeta = lancamentoIsMeta, a
+  // expressão é sempre false (preserva forma para usos downstream e evita
+  // remoção arriscada de condicionais).
   const metaLocked = lancamentoIsMeta && !canEditMeta;
 
   // ─── P1 governance for this lancamento's month ───

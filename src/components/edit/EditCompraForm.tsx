@@ -160,18 +160,22 @@ export function EditCompraForm({
           />
         </div>
       </div>
-      {/* Status */}
+      {/* Status — Bug 2: filtra opções pelo cenário do lançamento.
+          - lancamento.cenario='meta' (canEditMeta=true): mostra APENAS Meta.
+          - lancamento.cenario='realizado'|'programado' (canEditMeta=false):
+            mostra APENAS Realizado/Programado.
+          Meta NÃO é opção na edição operacional zoo — é estado do registro. */}
       <div>
         <Label className="text-[10px] font-bold text-foreground">Status</Label>
         <div className="flex gap-1 mt-0.5">
-          {STATUS_OPTIONS_ZOOTECNICO_COM_META.map(s => {
-            const disabled = s.value === 'meta' && !canEditMeta;
+          {STATUS_OPTIONS_ZOOTECNICO_COM_META
+            .filter(s => canEditMeta ? s.value === 'meta' : s.value !== 'meta')
+            .map(s => {
             return (
               <button
                 key={s.value}
                 type="button"
                 onClick={() => {
-                  if (disabled) return;
                   onStatusModeChange(s.value as CompraStatusMode);
                   onFormChange(f => ({
                     ...f,
@@ -179,10 +183,7 @@ export function EditCompraForm({
                     cenario: s.value === 'meta' ? 'meta' : 'realizado',
                   }));
                 }}
-                disabled={disabled}
                 className={`flex-1 py-1 rounded text-[10px] font-bold border-2 transition-all ${
-                  disabled ? 'opacity-40 cursor-not-allowed' : ''
-                } ${
                   statusMode === s.value
                     ? `${s.bg} text-white border-transparent shadow-md`
                     : 'border-border text-muted-foreground bg-muted/30'
