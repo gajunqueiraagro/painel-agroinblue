@@ -125,6 +125,7 @@ function mapRowToLancamento(l: any, profileMap: Record<string, string>): Lancame
     createdByNome: l.created_by ? profileMap[l.created_by] : undefined,
     updatedByNome: l.updated_by ? profileMap[l.updated_by] : undefined,
     fazendaId: l.fazenda_id,
+    clienteId: l.cliente_id ?? undefined,
     origemRegistro: l.origem_registro ?? undefined,
     loteImportacaoId: l.lote_importacao_id ?? undefined,
   };

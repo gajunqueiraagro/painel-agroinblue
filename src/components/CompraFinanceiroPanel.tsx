@@ -41,6 +41,13 @@ interface Props {
   onRequestRegister?: () => void;
   registerLabel?: string;
   submitting?: boolean;
+  /** UUID soberano da fazenda do lançamento. Quando presente, prevalece sobre
+   *  fazendaAtual (FazendaContext) em todos os INSERT/UPDATE financeiros.
+   *  Em modo Global, fazendaAtual.id === '__global__' (sentinel não-UUID) —
+   *  recálculo bloqueia se essa prop não vier resolvida. */
+  fazendaIdLancamento?: string;
+  /** UUID soberano do cliente do lançamento. Mesma regra. */
+  clienteIdLancamento?: string;
 }
 
 export interface CompraFinanceiroPanelRef {
@@ -71,6 +78,7 @@ function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { ti
 
 export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
   quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, fornecedorId, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange, onRequestRegister, registerLabel, submitting: externalSubmitting,
+  fazendaIdLancamento, clienteIdLancamento,
 }, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -248,6 +256,17 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     const effectiveId = overrideLancamentoId || lancamentoId;
     if (!effectiveId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return false; }
     if (!fazendaAtual || !clienteAtual) return false;
+    // Bug 1.2: fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da
+    // tela. Em modo Global, fazendaAtual.id === '__global__' (sentinel) —
+    // gravar isso no banco quebra (Postgres rejeita UUID inválido).
+    // Sem prop resolvida, bloquear com erro amigável.
+    const effectiveFazendaId = fazendaIdLancamento ?? fazendaAtual.id;
+    const effectiveClienteId = clienteIdLancamento ?? clienteAtual.id;
+    if (!effectiveFazendaId || effectiveFazendaId === '__global__' ||
+        !effectiveClienteId || effectiveClienteId === '__global__') {
+      toast.error('Não foi possível identificar a fazenda/cliente do lançamento. Recálculo bloqueado.');
+      return false;
+    }
     if (validationErrors.length > 0) { toast.error(validationErrors[0]); return false; }
 
     setGerando(true);
@@ -271,7 +290,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           // await deleteMetaPlanejamentoByMovimentacao(effectiveId, clienteAtual.id);
 
           await supabase.from('audit_log_movimentacoes').insert({
-            cliente_id: clienteAtual.id,
+            cliente_id: effectiveClienteId,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_compra',
             movimentacao_id: effectiveId,
@@ -328,8 +347,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       const clasCompra = planoMap.get(subcentroCompra)!;
 
       const baseRecord: Record<string, any> = {
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaAtual.id,
+        cliente_id: effectiveClienteId,
+        fazenda_id: effectiveFazendaId,
         tipo_operacao: '2-Saídas',
         sinal: -1,
         status_transacao: statusFin,
@@ -430,7 +449,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
     } finally {
       setGerando(false);
     }
-  }, [lancamentoId, fazendaAtual, clienteAtual, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
+  }, [lancamentoId, fazendaAtual, clienteAtual, fazendaIdLancamento, clienteIdLancamento, validationErrors, mode, statusOp, categoria, quantidade, data, fazendaOrigem, notaFiscal, fornecedorId, formaPag, parcelas, calc, onFinanceiroUpdated]);
 
   const resetForm = useCallback(() => {
     setTipoPreco('por_kg');

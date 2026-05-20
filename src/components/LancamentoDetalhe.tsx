@@ -55,6 +55,16 @@ interface Props {
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, fazendaId }: Props) {
   const { fazendaAtual, fazendas } = useFazenda();
+  // Bug 1.2: nome da fazenda DO LANÇAMENTO (texto persistido > lookup pelo
+  // UUID fazendaId > vazio). NUNCA cair em FazendaContext, pois em modo
+  // Global esse nome vira "Global" e polui o banco. Usado APENAS para
+  // display e write de campos TEXTO em `lancamentos` (fazendaOrigem/Destino).
+  // Para INSERTs financeiros, sempre usar `lancamento.fazendaId` (UUID).
+  const nomeFazendaResolvido = useMemo(() => {
+    if (lancamento.fazendaDestino) return lancamento.fazendaDestino;
+    const fz = fazendas.find(f => f.id === lancamento.fazendaId);
+    return fz?.nome || '';
+  }, [lancamento.fazendaDestino, lancamento.fazendaId, fazendas]);
   const { canEditMeta } = usePermissions();
   const nomeFazenda = fazendaAtual?.nome || '';
   const outrasFazendas = useMemo(() => fazendas.filter(f => f.id !== fazendaAtual?.id), [fazendas, fazendaAtual]);
@@ -223,10 +233,10 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       quantidade: Number(form.quantidade),
       categoria: form.categoria,
       categoriaDestino: form.categoriaDestino,
-      // Bug 1.1: usar fazenda do próprio registro — nunca o nome do
-      // FazendaContext (que pode ser "Global" no modo Global, poluindo o banco).
-      fazendaOrigem: isSaidaAuto ? (lancamento.fazendaOrigem ?? undefined) : (form.fazendaOrigem || undefined),
-      fazendaDestino: isEntradaAuto ? (lancamento.fazendaDestino ?? undefined) : (form.fazendaDestino || undefined),
+      // Bug 1.2: nome da fazenda do registro resolvido (texto > lookup UUID),
+      // nunca do FazendaContext.
+      fazendaOrigem: isSaidaAuto ? (nomeFazendaResolvido || undefined) : (form.fazendaOrigem || undefined),
+      fazendaDestino: isEntradaAuto ? (nomeFazendaResolvido || undefined) : (form.fazendaDestino || undefined),
       pesoMedioKg: form.pesoMedioKg ? Number(form.pesoMedioKg) : undefined,
       pesoMedioArrobas: form.pesoMedioKg ? kgToArrobas(Number(form.pesoMedioKg)) : undefined,
       precoMedioCabeca: form.precoMedioCabeca ? Number(form.precoMedioCabeca) : undefined,
@@ -272,8 +282,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       quantidade: Number(compraForm.quantidade),
       categoria: compraForm.categoria,
       fazendaOrigem: compraForm.fazendaOrigem || undefined,
-      // Bug 1.1: fazenda destino é a do próprio registro, não do contexto Global.
-      fazendaDestino: lancamento.fazendaDestino ?? '',
+      // Bug 1.2: usa nome resolvido (texto persistido > lookup pela fazendaId).
+      fazendaDestino: nomeFazendaResolvido,
       pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
       pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
       cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
@@ -716,7 +726,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 onSubmitZoo={handleSalvarCompraZoo}
                 canEditMeta={canEditMeta}
                 finRecordsCount={finRecords.length}
-                nomeFazendaDestino={lancamento.fazendaDestino || ''}
+                nomeFazendaDestino={nomeFazendaResolvido}
               />
 
               <Separator />
@@ -755,6 +765,8 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                   fornecedorId={detalheFornecedorId}
                   lancamentoId={lancamento.id}
                   mode="update"
+                  fazendaIdLancamento={lancamento.fazendaId}
+                  clienteIdLancamento={lancamento.clienteId}
                   onFinanceiroUpdated={() => {
                     setCompraEditSheetOpen(false);
                     loadFinRecords();

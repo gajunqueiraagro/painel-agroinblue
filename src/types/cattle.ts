@@ -102,6 +102,7 @@ export interface Lancamento {
   createdByNome?: string;
   updatedByNome?: string;
   fazendaId?: string;
+  clienteId?: string;
   origemRegistro?: string;
   loteImportacaoId?: string;
 }
