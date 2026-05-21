@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
+import DialogVerLancamentosOficiais from '@/components/financiamentos/DialogVerLancamentosOficiais';
 import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
 import { ArrowLeft, Pencil, Trash2, DollarSign, CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -50,6 +51,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const [editingCell, setEditingCell] = useState<{ parcelaId: string; field: 'valor_principal' | 'valor_juros' } | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [parcelaEdit, setParcelaEdit] = useState<any>(null);
+  const [parcelaLancamentosOpen, setParcelaLancamentosOpen] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -449,8 +451,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       <TableCell className="tabular-nums">{fmtDate(p.data_pagamento)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {p.status === 'pago' && p.lancamento_id && (
-                            <Button variant="ghost" size="sm" className="text-[10px] h-6" disabled>
+                          {(p.lancamento_id || (p as any).lancamento_juros_id) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-[10px] h-6"
+                              onClick={() => setParcelaLancamentosOpen(p)}
+                            >
                               Ver lançamento
                             </Button>
                           )}
@@ -631,6 +638,17 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         financiamento={fin}
         onClose={() => setParcelaEdit(null)}
         modo="editar"
+      />
+
+      {/* ── Dialog read-only: ver lançamentos oficiais da parcela ── */}
+      <DialogVerLancamentosOficiais
+        parcela={parcelaLancamentosOpen}
+        financiamento={fin}
+        onClose={() => setParcelaLancamentosOpen(null)}
+        onEditarParcela={(p) => {
+          setParcelaLancamentosOpen(null);
+          setParcelaEdit(p);
+        }}
       />
     </div>
   );
