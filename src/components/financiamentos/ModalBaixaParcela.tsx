@@ -383,10 +383,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         // Recria mirror com novos valores/data e marca como realizado.
         // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
         // await deletarMirrorParcela(supabase as any, parcela.id);
-        await supabase
-          .from('financiamento_parcelas')
-          .update({ lancamento_id: null })
-          .eq('id', parcela.id);
         if (tipoValido && (principal > 0 || juros > 0)) {
           // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
           // const { lancamentoIdPrincipal: newLancId, lancamentoIdJuros: newJurosId } =
@@ -423,10 +419,6 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         // Pendente com valores/data alterados — recria mirror programado.
         // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
         // await deletarMirrorParcela(supabase as any, parcela.id);
-        await supabase
-          .from('financiamento_parcelas')
-          .update({ lancamento_id: null })
-          .eq('id', parcela.id);
         if (tipoValido && (principal > 0 || juros > 0)) {
           // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
           // await criarMirrorParcela(supabase as any, {
