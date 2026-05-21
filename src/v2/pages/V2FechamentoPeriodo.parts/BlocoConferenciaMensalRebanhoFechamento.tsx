@@ -17,13 +17,13 @@
 import { useMemo } from 'react';
 import { Baby, Beef, DollarSign, ShoppingCart, Skull, Utensils } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   useMovimentacoesAgregadas,
   type TipoMov,
   type Lente,
   type CardData,
 } from '@/v2/hooks/useMovimentacoesAgregadas';
-import { ExecutiveSlide } from '@/v2/components/executive/ExecutiveSlide';
 import {
   fmtCab,
   MESES_CURTOS,
@@ -90,8 +90,10 @@ function tri(card: CardData | undefined, lente: Lente): MetricaTrio {
   };
 }
 
+// Desktop-first: MOVIMENTO mais estreita, cabecas/preco/valor mais largas
+// para evitar wrap dos deltas. Sum fixos = 640px + label max 140 = 780px.
 const GRID_FAIXA =
-  'grid grid-cols-[minmax(140px,180px)_64px_38px_42px_84px_38px_42px_96px_38px_42px] gap-1 items-center';
+  'grid grid-cols-[minmax(110px,140px)_72px_60px_60px_96px_60px_60px_112px_60px_60px] gap-1 items-center';
 
 function FaixaExecutivaResumo({
   porTipo,
@@ -131,37 +133,37 @@ function FaixaExecutivaResumo({
         return (
           <div
             key={linha.tipo}
-            className={`${GRID_FAIXA} px-1 py-1 border-b border-border/20 last:border-0 hover:bg-muted/20`}
+            className={`${GRID_FAIXA} px-1 py-0.5 border-b border-border/20 last:border-0 hover:bg-muted/20`}
           >
             {/* Label */}
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Icone className={`h-3.5 w-3.5 shrink-0 ${linha.corLabel}`} />
-              <span className={`text-[15px] font-semibold truncate ${linha.corLabel}`}>
+            <div className="flex items-center gap-1 min-w-0">
+              <Icone className={`h-4 w-4 shrink-0 ${linha.corLabel}`} />
+              <span className={`text-[14px] font-semibold truncate ${linha.corLabel}`}>
                 {linha.label}
               </span>
             </div>
 
             {/* Qtde + deltas */}
-            <div className="text-right tabular-nums text-[14px] font-bold">
+            <div className="text-right tabular-nums text-[14px] font-bold whitespace-nowrap">
               {fmtCab(qtde.valor)}
             </div>
-            <div className="text-right text-[12px]">
+            <div className="text-right text-[12px] whitespace-nowrap">
               <DeltaTag delta={calcDeltaPct(qtde.valor, qtde.meta)} ehDespesa={linha.qtdeEhDespesa} />
             </div>
-            <div className="text-right text-[12px]">
+            <div className="text-right text-[12px] whitespace-nowrap">
               <DeltaTag delta={calcDeltaPct(qtde.valor, qtde.anoAnt)} ehDespesa={linha.qtdeEhDespesa} />
             </div>
 
             {/* Preço @ + deltas */}
             {preco ? (
               <>
-                <div className="text-right tabular-nums text-[13px] font-semibold">
+                <div className="text-right tabular-nums text-[13px] font-semibold whitespace-nowrap">
                   {fmtMoeda(preco.valor)}
                 </div>
-                <div className="text-right text-[12px]">
+                <div className="text-right text-[12px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(preco.valor, preco.meta)}   ehDespesa={linha.precoEhDespesa} />
                 </div>
-                <div className="text-right text-[12px]">
+                <div className="text-right text-[12px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(preco.valor, preco.anoAnt)} ehDespesa={linha.precoEhDespesa} />
                 </div>
               </>
@@ -176,13 +178,13 @@ function FaixaExecutivaResumo({
             {/* Valor R$ + deltas */}
             {valor ? (
               <>
-                <div className="text-right tabular-nums text-[13px] font-semibold">
+                <div className="text-right tabular-nums text-[13px] font-semibold whitespace-nowrap">
                   {fmtMoeda(valor.valor)}
                 </div>
-                <div className="text-right text-[12px]">
+                <div className="text-right text-[12px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(valor.valor, valor.meta)}   ehDespesa={linha.valorEhDespesa} />
                 </div>
-                <div className="text-right text-[12px]">
+                <div className="text-right text-[12px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(valor.valor, valor.anoAnt)} ehDespesa={linha.valorEhDespesa} />
                 </div>
               </>
@@ -239,17 +241,34 @@ export function BlocoConferenciaMensalRebanhoFechamento({
     );
   }
 
+  // Wrapper inline (não usa ExecutiveSlide aqui): bloco renderiza em altura
+  // NATURAL — sem h-[560px] fixo nem overflow interno. Pagina externa scrolla.
+  // Visual identico ao ExecutiveSlide (header/body/footer + tokens shadcn).
   return (
-    <ExecutiveSlide
-      title="Conferência Mensal — Movimentação do Rebanho"
-      subtitle={`Jan a ${String(mes).padStart(2, '0')}/${ano} · Auditoria operacional + Resumo executivo`}
-      className="my-6"
-      footer="Saldos encadeados mês a mês · Meses futuros em cinza · Fonte: lançamentos realizados"
+    <section
+      className={cn(
+        'w-full max-w-[1280px] mx-auto my-6',
+        'bg-card border border-border rounded-lg shadow-sm',
+        'flex flex-col',
+        'print:break-inside-avoid print:shadow-none print:max-w-full',
+      )}
     >
-      <div className="h-full flex flex-col gap-1 min-h-0">
-        {/* Tabela mensal — flex-1 para preencher altura disponível,
-            scroll vertical preservado (não introduz novo scrollbar). */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
+      {/* Header */}
+      <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-2.5 border-b border-border">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-semibold text-foreground leading-tight truncate">
+            Conferência Mensal — Movimentação do Rebanho
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5 leading-snug">
+            {`Jan a ${String(mes).padStart(2, '0')}/${ano} · Auditoria operacional + Resumo executivo`}
+          </p>
+        </div>
+      </header>
+
+      {/* Conteudo — sem overflow interno. Tabela e Faixa empilhadas em altura natural. */}
+      <div className="px-5 py-3 flex flex-col gap-2">
+        {/* Tabela mensal — sem container scrollavel; pagina scrolla se exceder viewport. */}
+        <div>
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-muted/60">
@@ -325,6 +344,11 @@ export function BlocoConferenciaMensalRebanhoFechamento({
         {/* Faixa executiva resumida (Resumo) — consome lentes oficiais. */}
         <FaixaExecutivaResumo porTipo={porTipo} />
       </div>
-    </ExecutiveSlide>
+
+      {/* Footer */}
+      <footer className="shrink-0 px-5 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground">
+        Saldos encadeados mês a mês · Meses futuros em cinza · Fonte: lançamentos realizados
+      </footer>
+    </section>
   );
 }
