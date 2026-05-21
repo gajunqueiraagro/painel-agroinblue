@@ -12,8 +12,11 @@
 import {
   Area,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -347,6 +350,76 @@ function CardTotal({
   );
 }
 
+// ─── Pizza Compacta (Bloco 2 — Detalhamento Fluxo de Caixa) ──────────
+// Visual executivo: pizza ~112px + legenda lateral compacta.
+// Zero cálculo: usa realAnoCorrente já presente em cada LinhaExecutiva.
+
+interface PizzaItem { nome: string; valor: number; cor: string }
+
+const CORES_PIZZA_ENTRADAS = ['#0284c7', '#16a34a', '#f59e0b', '#7c3aed'];
+const CORES_PIZZA_SAIDAS = ['#dc2626', '#ea580c', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6', '#ec4899', '#6b7280'];
+
+function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaItem[]; total: number }) {
+  // total === 0 → sem dados, mostrar placeholder discreto.
+  if (data.length === 0 || total <= 0) {
+    return (
+      <div className="border border-border rounded-md p-3 flex items-center justify-center min-h-[140px]">
+        <span className="text-[11px] text-muted-foreground italic">Sem dados</span>
+      </div>
+    );
+  }
+  return (
+    <div className="border border-border rounded-md p-3">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+        {titulo}
+      </h4>
+      <div className="flex items-center gap-3">
+        <div className="w-28 h-28 shrink-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="valor"
+                nameKey="nome"
+                cx="50%"
+                cy="50%"
+                outerRadius={52}
+                stroke="none"
+                isAnimationActive={false}
+              >
+                {data.map((d, i) => (
+                  <Cell key={i} fill={d.cor} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: number, name: string) => [fmtBRL(v), name]}
+                contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex-1 flex flex-col gap-1 text-[11px] leading-tight min-w-0">
+          {data.map((d) => {
+            const pct = (d.valor / total) * 100;
+            return (
+              <div key={d.nome} className="flex items-center gap-1.5 min-w-0">
+                <span
+                  className="inline-block w-2 h-2 rounded-sm shrink-0"
+                  style={{ background: d.cor }}
+                />
+                <span className="truncate flex-1">{d.nome}</span>
+                <span className="tabular-nums text-muted-foreground shrink-0">
+                  {pct.toFixed(0)}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────
 
 export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo, motivoFluxoBloqueado }: Props) {
@@ -383,6 +456,32 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     [data.dividendos, 'dividendos'],
     [data.deducoesReceita, 'deducoesReceita'],
   ];
+
+  const isFechamento = modo === 'fechamento';
+
+  // Pizzas de composição (Bloco 2 — Fechamento). Zero cálculo: usa
+  // realAnoCorrente já presente em cada LinhaExecutiva. Filtra zeros para
+  // não poluir o pie com fatias vazias.
+  const pizzaEntradas: PizzaItem[] = isFechamento
+    ? linhasEntrada
+        .map(([l], i) => ({
+          nome: l.label,
+          valor: Math.max(0, l.realAnoCorrente ?? 0),
+          cor: CORES_PIZZA_ENTRADAS[i % CORES_PIZZA_ENTRADAS.length],
+        }))
+        .filter((d) => d.valor > 0)
+    : [];
+  const pizzaSaidas: PizzaItem[] = isFechamento
+    ? linhasSaida
+        .map(([l], i) => ({
+          nome: l.label,
+          valor: Math.max(0, l.realAnoCorrente ?? 0),
+          cor: CORES_PIZZA_SAIDAS[i % CORES_PIZZA_SAIDAS.length],
+        }))
+        .filter((d) => d.valor > 0)
+    : [];
+  const totalEntradasReal = Math.max(0, data.totalEntradas.realAnoCorrente ?? 0);
+  const totalSaidasReal = Math.max(0, data.totalSaidas.realAnoCorrente ?? 0);
 
   // Limite do mesAlvo para cortar a linha REAL 2026 — Recharts trata null
   // como quebra de linha (a curva termina visualmente no mês alvo).
@@ -434,8 +533,79 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     }
   }
 
+  // Tabelas Entradas/Saídas — extraídas para reuso em Planejamento (dentro
+  // da section única) e Fechamento (dentro da section "Detalhamento").
+  const tabelasJsx = (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+          Entradas
+        </h3>
+        <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
+          <div></div>
+          {isFechamento ? (
+            <>
+              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+              <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
+            </>
+          ) : (
+            <>
+              <div className="text-right">REAL 2025</div>
+              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+            </>
+          )}
+          <div className="text-right">Δ%</div>
+        </div>
+        <LinhaRow linha={data.totalEntradas} destaque modo={modo} />
+        {linhasEntrada.map(([l, key]) => (
+          <LinhaRow
+            key={key}
+            linha={l}
+            onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+            modo={modo}
+          />
+        ))}
+      </div>
+
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+          Saídas
+        </h3>
+        <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
+          <div></div>
+          {isFechamento ? (
+            <>
+              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+              <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
+            </>
+          ) : (
+            <>
+              <div className="text-right">REAL 2025</div>
+              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
+            </>
+          )}
+          <div className="text-right">Δ%</div>
+        </div>
+        <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={isFechamento} />
+        {linhasSaida.map(([l, key]) => (
+          <LinhaRow
+            key={key}
+            linha={l}
+            onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+            modo={modo}
+            inverterSemantica={isFechamento}
+          />
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <section className="bg-card border border-border rounded-lg p-4 mb-4">
+    <>
+    <section className={cn(
+      'bg-card border border-border rounded-lg',
+      isFechamento ? 'p-3 mb-3' : 'p-4 mb-4',
+    )}>
       <div
         className={cn(
           'flex items-center gap-2 flex-wrap mb-1',
@@ -495,10 +665,14 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 mb-4">
+      <div className={cn(
+        'grid grid-cols-1 lg:grid-cols-5 gap-3',
+        isFechamento ? 'mb-0' : 'mb-4',
+      )}>
         <div
           className={cn(
-            'lg:col-span-3 border border-border rounded-md p-2 h-72 relative',
+            'lg:col-span-3 border border-border rounded-md p-2 relative',
+            isFechamento ? 'h-64' : 'h-72',
             desfocarDashboard && 'overflow-hidden',
           )}
         >
@@ -574,7 +748,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           )}
         </div>
 
-        <div className="lg:col-span-2 flex flex-col gap-2">
+        <div className={cn('lg:col-span-2 flex flex-col', isFechamento ? 'gap-1.5' : 'gap-2')}>
           <CardTotal
             titulo={modo === 'fechamento' ? 'Total Entradas Real' : 'Total Entradas META'}
             linha={data.totalEntradas}
@@ -625,68 +799,21 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
-            Entradas
-          </h3>
-          <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
-            <div></div>
-            {modo === 'fechamento' ? (
-              <>
-                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
-                <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
-              </>
-            ) : (
-              <>
-                <div className="text-right">REAL 2025</div>
-                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
-              </>
-            )}
-            <div className="text-right">Δ%</div>
-          </div>
-          <LinhaRow linha={data.totalEntradas} destaque modo={modo} />
-          {linhasEntrada.map(([l, key]) => (
-            <LinhaRow
-              key={key}
-              linha={l}
-              onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
-              modo={modo}
-            />
-          ))}
-        </div>
-
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
-            Saídas
-          </h3>
-          <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
-            <div></div>
-            {modo === 'fechamento' ? (
-              <>
-                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
-                <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
-              </>
-            ) : (
-              <>
-                <div className="text-right">REAL 2025</div>
-                <div className={cn('text-right', META_COLUNA)}>META 2026</div>
-              </>
-            )}
-            <div className="text-right">Δ%</div>
-          </div>
-          <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={modo === 'fechamento'} />
-          {linhasSaida.map(([l, key]) => (
-            <LinhaRow
-              key={key}
-              linha={l}
-              onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
-              modo={modo}
-              inverterSemantica={modo === 'fechamento'}
-            />
-          ))}
-        </div>
-      </div>
+      {!isFechamento && tabelasJsx}
     </section>
+    {isFechamento && (
+      <section className="bg-card border border-border rounded-lg p-3 mb-4">
+        <div className="mb-3">
+          <h3 className="text-base font-bold text-foreground">Detalhamento Fluxo de Caixa</h3>
+          <p className="text-xs text-muted-foreground">composição das entradas e saídas</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <PizzaCompacta titulo="Entradas" data={pizzaEntradas} total={totalEntradasReal} />
+          <PizzaCompacta titulo="Saídas" data={pizzaSaidas} total={totalSaidasReal} />
+        </div>
+        {tabelasJsx}
+      </section>
+    )}
+    </>
   );
 }
