@@ -31,9 +31,10 @@ interface Props {
 // Ordem da Fase 1 Marco 2.5: passado → planejado → atual, apenas deltas percentuais
 // (cabe sem cortar; deltas R$ removidos para leitura executiva).
 const GRID_4_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_70px]';
-// Fechamento — grid executivo: colunas estreitas, label flex,
-// hierarquia visual clara (terminal financeiro, não planilha).
-const GRID_5_COLS = 'grid-cols-[minmax(160px,1fr)_84px_84px_84px_58px_58px]';
+// Fechamento — grid executivo: label LIMITADO (sem 1fr) para que descrições
+// fiquem coladas aos números, não esticadas pelo card. Tracks intrínsecos
+// somam ~742px; o card maior centraliza-os via justify-center.
+const GRID_5_COLS = 'grid-cols-[minmax(260px,340px)_92px_92px_92px_58px_58px]';
 
 const fmtBRLAbs = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -351,7 +352,9 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
     <section
       className={cn(
         'bg-card border border-border rounded-lg mb-3',
-        mostrarAnoCorrente ? 'px-3 py-2 max-w-[940px] mx-auto' : 'p-4',
+        mostrarAnoCorrente
+          ? 'px-3 py-2 w-full lg:w-[80%] xl:w-[78%] max-w-[940px] mx-auto'
+          : 'p-4',
         desfocar && 'opacity-40 pointer-events-none',
       )}
     >
@@ -384,8 +387,11 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
 
       {/* Header da tabela.
           Modo Fechamento (5 cols após label): Real ano-1 | Meta | Real ano | Δ Ano Ant % | Δ Meta %
-          - Fechamento: cabeçalho azul escuro compacto + texto branco. */}
+          - Fechamento: cabeçalho azul escuro compacto + texto branco.
+          - No modo Fechamento, envolvemos header + dados em w-fit mx-auto para
+            que toda a tabela centralize na largura natural dentro do card. */}
       <div className={cn('overflow-x-auto', m && 'min-w-0')}>
+      <div className={cn(m && 'w-fit mx-auto')}>
       <div className={cn(
         'grid items-center uppercase tracking-wide font-semibold rounded-t-md',
         m
@@ -436,6 +442,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
           destaqueFinal
           mostrarAnoCorrente={m}
         />
+      </div>
       </div>
       {/* Legenda discreta — só no modo Fechamento. */}
       {m && (
