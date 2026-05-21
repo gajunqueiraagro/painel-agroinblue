@@ -57,12 +57,12 @@ export function fmtCab(v: number | null): string {
   return Math.round(v).toLocaleString('pt-BR');
 }
 
-function calcDeltaPct(real: number | null, ref: number | null): number | null {
+export function calcDeltaPct(real: number | null, ref: number | null): number | null {
   if (real === null || ref === null || ref === 0) return null;
   return ((real - ref) / ref) * 100;
 }
 
-function DeltaTag({ delta, ehDespesa }: { delta: number | null; ehDespesa: boolean }) {
+export function DeltaTag({ delta, ehDespesa }: { delta: number | null; ehDespesa: boolean }) {
   if (delta === null || !isFinite(delta)) {
     return <span className="text-muted-foreground">—</span>;
   }
