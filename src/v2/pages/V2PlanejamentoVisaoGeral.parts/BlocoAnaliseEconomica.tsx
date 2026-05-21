@@ -31,9 +31,9 @@ interface Props {
 // Ordem da Fase 1 Marco 2.5: passado → planejado → atual, apenas deltas percentuais
 // (cabe sem cortar; deltas R$ removidos para leitura executiva).
 const GRID_4_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_70px]';
-// Fechamento — grid compacto: descrições mais próximas dos números,
-// colunas estreitas, sem whitespace lateral exagerado.
-const GRID_5_COLS = 'grid-cols-[minmax(180px,1fr)_95px_95px_95px_72px_72px]';
+// Fechamento — grid executivo: colunas mais estreitas, label flex,
+// hierarquia visual clara (terminal financeiro, não planilha).
+const GRID_5_COLS = 'grid-cols-[minmax(160px,1fr)_88px_88px_88px_62px_62px]';
 
 const fmtBRLAbs = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -110,8 +110,8 @@ function pillDelta(v: number | null, tipoSinal: TipoSinal): string {
   const ehDespesa = tipoSinal === 'despesa';
   const bom = ehDespesa ? !positivo : positivo;
   return bom
-    ? 'inline-flex items-center justify-end px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold'
-    : 'inline-flex items-center justify-end px-1.5 py-0.5 rounded bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 text-[10px] font-semibold';
+    ? 'inline-flex items-center justify-end h-5 px-1.5 rounded bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold leading-none'
+    : 'inline-flex items-center justify-end h-5 px-1.5 rounded bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 text-[10px] font-semibold leading-none';
 }
 
 function LinhaRow({
@@ -133,34 +133,71 @@ function LinhaRow({
 }) {
   // tipoSinal define a formatação das colunas de valor (Real ano-1, Real ano, Meta)
   const fmt = tipoSinal === 'despesa' ? formatBRLDespesa : formatBRL;
+  const m = mostrarAnoCorrente;
 
-  const valorClass = cn(
-    'text-right tabular-nums',
-    indentado ? 'text-[10px]' : 'text-[11px]',
-    destaque ? 'font-semibold' : '',
-    destaqueFinal ? 'font-bold' : '',
-  );
+  // Hierarquia visual executiva no modo Fechamento; legado preservado.
+  //   Nível 3 (indentado): sub-itens — text-[11px], h-6, pl-8, muted
+  //   Nível 2 (normal):     totais de grupo — text-[12px], h-7
+  //   Nível 1 (destaque):   subtotais DRE — text-[13px], h-9, font-semibold
+  //   Final (destaqueFinal): Lucro Líquido — text-[13px], h-9, font-bold, bg-primary
+  let valorClass: string;
+  let labelClass: string;
+  let rowClass: string;
 
-  const labelClass = cn(
-    'truncate',
-    indentado ? 'pl-6 text-[10px] text-muted-foreground' : '',
-    destaque ? 'font-medium text-[11px]' : '',
-    destaqueFinal ? 'font-bold text-[11px] tracking-wide' : '',
-    !indentado && !destaque && !destaqueFinal ? 'text-[11px]' : '',
-    italic ? 'italic' : '',
-  );
+  if (m) {
+    const valorTxt = destaqueFinal
+      ? 'text-[13px] font-bold'
+      : destaque
+        ? 'text-[13px] font-semibold'
+        : indentado
+          ? 'text-[11px]'
+          : 'text-[12px]';
+    const labelTxt = destaqueFinal
+      ? 'text-[13px] font-bold tracking-wide'
+      : destaque
+        ? 'text-[13px] font-semibold'
+        : indentado
+          ? 'pl-8 text-[11px] text-muted-foreground'
+          : 'text-[12px] font-medium';
+    const heightCls = destaqueFinal || destaque
+      ? 'h-9'
+      : indentado
+        ? 'h-6'
+        : 'h-7';
 
-  const rowClass = cn(
-    'grid gap-1 items-center px-2 py-[3px] border-b border-border/30 last:border-0',
-    mostrarAnoCorrente ? GRID_5_COLS : GRID_4_COLS,
-    destaque ? 'bg-muted/40 border-t border-border/40' : '',
-    // Linha final "Lucro Líquido" no Fechamento: fundo azul escuro + texto branco.
-    destaqueFinal && mostrarAnoCorrente
-      ? 'bg-primary text-primary-foreground border-t border-primary py-1.5'
-      : destaqueFinal
-        ? 'bg-muted/60 border-t border-border'
+    valorClass = cn('text-right tabular-nums whitespace-nowrap leading-none', valorTxt);
+    labelClass = cn('truncate leading-none', labelTxt, italic ? 'italic' : '');
+    rowClass = cn(
+      'grid gap-0.5 items-center px-2 border-b border-border/30 last:border-0',
+      heightCls,
+      GRID_5_COLS,
+      destaque ? 'bg-muted/30 border-t border-border/30' : '',
+      destaqueFinal
+        ? 'bg-primary text-primary-foreground border-t border-primary'
         : '',
-  );
+    );
+  } else {
+    valorClass = cn(
+      'text-right tabular-nums',
+      indentado ? 'text-[10px]' : 'text-[11px]',
+      destaque ? 'font-semibold' : '',
+      destaqueFinal ? 'font-bold' : '',
+    );
+    labelClass = cn(
+      'truncate',
+      indentado ? 'pl-6 text-[10px] text-muted-foreground' : '',
+      destaque ? 'font-medium text-[11px]' : '',
+      destaqueFinal ? 'font-bold text-[11px] tracking-wide' : '',
+      !indentado && !destaque && !destaqueFinal ? 'text-[11px]' : '',
+      italic ? 'italic' : '',
+    );
+    rowClass = cn(
+      'grid gap-1 items-center px-2 py-[3px] border-b border-border/30 last:border-0',
+      GRID_4_COLS,
+      destaque ? 'bg-muted/40 border-t border-border/40' : '',
+      destaqueFinal ? 'bg-muted/60 border-t border-border' : '',
+    );
+  }
 
   // Fase 1 Marco 2.5 — Δ Ano Ant %: compara Real ano vs Real ano-1.
   //                   Δ Meta %: compara Real ano vs Meta. Propaga null estrita.
@@ -268,14 +305,22 @@ function GrupoRow({
  * (aguardam reestruturação do plano de contas).
  */
 function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string; mostrarAnoCorrente?: boolean }) {
-  const valorMuted = 'text-right tabular-nums text-[11px] text-muted-foreground';
-  const deltaMuted = 'text-right tabular-nums text-[10px] font-medium text-muted-foreground';
+  const m = mostrarAnoCorrente;
+  const valorMuted = cn(
+    'text-right tabular-nums text-muted-foreground whitespace-nowrap',
+    m ? 'text-[12px] leading-none' : 'text-[11px]',
+  );
+  const deltaMuted = cn(
+    'text-right tabular-nums font-medium text-muted-foreground',
+    m ? 'text-[10px] leading-none' : 'text-[10px]',
+  );
   return (
     <div className={cn(
-      'grid gap-1 items-center px-2 py-[2px] border-b border-border/30 last:border-0',
-      mostrarAnoCorrente ? GRID_5_COLS : GRID_4_COLS,
+      'grid items-center border-b border-border/30 last:border-0',
+      m ? 'gap-0.5 px-2 h-7' : 'gap-1 px-2 py-[2px]',
+      m ? GRID_5_COLS : GRID_4_COLS,
     )}>
-      <div className="truncate text-[11px]">
+      <div className={cn('truncate', m ? 'text-[12px] leading-none' : 'text-[11px]')}>
         {label} <span className="text-[10px] italic text-muted-foreground">(aguarda plano de contas)</span>
       </div>
       {mostrarAnoCorrente ? (
@@ -303,7 +348,8 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
   return (
     <section
       className={cn(
-        'bg-card border border-border rounded-lg p-4 mb-4',
+        'bg-card border border-border rounded-lg mb-4',
+        mostrarAnoCorrente ? 'px-3 py-3' : 'p-4',
         desfocar && 'opacity-40 pointer-events-none',
       )}
     >
@@ -337,12 +383,12 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       {/* Header da tabela.
           Modo Fechamento (5 cols após label): Real ano-1 | Meta | Real ano | Δ Ano Ant % | Δ Meta %
           - Fechamento: cabeçalho azul escuro sólido + texto branco, max-width centralizado. */}
-      <div className={cn('overflow-x-auto', m && 'min-w-0 max-w-5xl mx-auto')}>
+      <div className={cn('overflow-x-auto', m && 'min-w-0 max-w-[880px] mx-auto')}>
       <div className={cn(
-        'grid gap-1 items-center px-2.5 py-1.5 text-[10px] uppercase tracking-wide font-semibold rounded-t-md',
+        'grid items-center text-[10px] uppercase tracking-wide font-semibold rounded-t-md',
         m
-          ? 'bg-primary text-primary-foreground'
-          : 'bg-muted/40 text-muted-foreground',
+          ? 'bg-primary text-primary-foreground gap-0.5 px-2 py-1'
+          : 'bg-muted/40 text-muted-foreground gap-1 px-2.5 py-1.5',
         m ? GRID_5_COLS : GRID_4_COLS,
       )}>
         <div>{m ? 'Descrição' : ''}</div>
