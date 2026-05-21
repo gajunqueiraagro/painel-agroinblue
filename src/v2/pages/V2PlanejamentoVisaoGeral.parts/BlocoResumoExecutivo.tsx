@@ -253,7 +253,13 @@ function LinhaRow({
       onClick={onClick}
       className={cn(
         'grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center py-[2px] border-b border-border/30 last:border-0',
-        destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20 py-[4px]',
+        // Modo Fechamento: rows mais compactas (leading-none remove
+        // entrelinhas; py reduzido). TOTAL ENTRADAS / TOTAL SAÍDAS
+        // mantêm py-[4px] e font-bold via destaque.
+        isFechamento && !destaque && 'leading-none py-[1px]',
+        isFechamento && destaque && 'leading-none py-[3px]',
+        destaque && 'bg-muted/40 font-bold border-b-2 border-foreground/20',
+        !isFechamento && destaque && 'py-[4px]',
         onClick && 'cursor-pointer hover:bg-muted/40 transition-colors',
       )}
     >
@@ -360,21 +366,27 @@ const CORES_PIZZA_ENTRADAS = ['#0284c7', '#16a34a', '#f59e0b', '#7c3aed'];
 const CORES_PIZZA_SAIDAS = ['#dc2626', '#ea580c', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6', '#ec4899', '#6b7280'];
 
 function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaItem[]; total: number }) {
-  // total === 0 → sem dados, mostrar placeholder discreto.
+  // Container leve: sem border/shadow. Apenas layout flex+grid.
+  // total === 0 → sem dados, placeholder discreto.
   if (data.length === 0 || total <= 0) {
     return (
-      <div className="border border-border rounded-md p-3 flex items-center justify-center min-h-[140px]">
-        <span className="text-[11px] text-muted-foreground italic">Sem dados</span>
+      <div className="flex flex-col gap-1">
+        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {titulo}
+        </h4>
+        <div className="flex items-center justify-center min-h-[160px]">
+          <span className="text-[11px] text-muted-foreground italic">Sem dados</span>
+        </div>
       </div>
     );
   }
   return (
-    <div className="border border-border rounded-md p-3">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+    <div className="flex flex-col gap-1">
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {titulo}
       </h4>
-      <div className="flex items-center gap-3">
-        <div className="w-28 h-28 shrink-0">
+      <div className="flex items-center gap-2">
+        <div className="w-40 h-40 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -383,7 +395,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
                 nameKey="nome"
                 cx="50%"
                 cy="50%"
-                outerRadius={52}
+                outerRadius={72}
                 stroke="none"
                 isAnimationActive={false}
               >
@@ -398,7 +410,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex-1 flex flex-col gap-1 text-[11px] leading-tight min-w-0">
+        <div className="flex-1 flex flex-col gap-0.5 text-[11px] leading-tight min-w-0">
           {data.map((d) => {
             const pct = (d.valor / total) * 100;
             return (
@@ -407,7 +419,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
                   className="inline-block w-2 h-2 rounded-sm shrink-0"
                   style={{ background: d.cor }}
                 />
-                <span className="truncate flex-1">{d.nome}</span>
+                <span className="truncate min-w-0">{d.nome}</span>
                 <span className="tabular-nums text-muted-foreground shrink-0">
                   {pct.toFixed(0)}%
                 </span>
@@ -538,7 +550,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
   const tabelasJsx = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
           Entradas
         </h3>
         <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
@@ -568,7 +580,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
       </div>
 
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
           Saídas
         </h3>
         <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
@@ -803,11 +815,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     </section>
     {isFechamento && (
       <section className="bg-card border border-border rounded-lg p-3 mb-4">
-        <div className="mb-3">
-          <h3 className="text-base font-bold text-foreground">Detalhamento Fluxo de Caixa</h3>
-          <p className="text-xs text-muted-foreground">composição das entradas e saídas</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
           <PizzaCompacta titulo="Entradas" data={pizzaEntradas} total={totalEntradasReal} />
           <PizzaCompacta titulo="Saídas" data={pizzaSaidas} total={totalSaidasReal} />
         </div>
