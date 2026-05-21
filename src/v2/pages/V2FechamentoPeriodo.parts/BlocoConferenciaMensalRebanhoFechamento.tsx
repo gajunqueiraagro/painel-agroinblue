@@ -102,25 +102,26 @@ function FaixaExecutivaResumo({
 }) {
   return (
     <div className="shrink-0 border-t border-border/40 pt-1.5 mt-1.5">
-      {/* Header de grupos */}
+      {/* Header de grupos — fundos suaves para diferenciar Movimento /
+          Cabecas / Precos / Valor sem poluir. */}
       <div className={`${GRID_FAIXA} text-[9px] text-muted-foreground uppercase tracking-wider px-1`}>
-        <div />
-        <div className="col-span-3 text-center border-b border-border/30 pb-0.5">Cabeças</div>
-        <div className="col-span-3 text-center border-b border-border/30 pb-0.5">Preço R$/@</div>
-        <div className="col-span-3 text-center border-b border-border/30 pb-0.5">Valor R$</div>
+        <div className="bg-muted/30 rounded-t-sm" />
+        <div className="col-span-3 text-center border-b border-border/30 pb-0.5 bg-slate-50/60 dark:bg-slate-900/30 rounded-t-sm font-semibold">Cabeças</div>
+        <div className="col-span-3 text-center border-b border-border/30 pb-0.5 bg-amber-50/40 dark:bg-amber-950/20 rounded-t-sm font-semibold">Preço R$/@</div>
+        <div className="col-span-3 text-center border-b border-border/30 pb-0.5 bg-emerald-50/40 dark:bg-emerald-950/20 rounded-t-sm font-semibold">Valor R$</div>
       </div>
       {/* Sub-header de colunas */}
       <div className={`${GRID_FAIXA} text-[9px] text-muted-foreground tracking-wider px-1 pt-0.5 pb-1 border-b border-border/30`}>
-        <div className="font-semibold">MOVIMENTO</div>
-        <div className="text-right">Qtde</div>
-        <div className="text-right">vs M</div>
-        <div className="text-right">vs A-1</div>
-        <div className="text-right">R$/@</div>
-        <div className="text-right">vs M</div>
-        <div className="text-right">vs A-1</div>
-        <div className="text-right">Total</div>
-        <div className="text-right">vs M</div>
-        <div className="text-right">vs A-1</div>
+        <div className="font-semibold bg-muted/30">MOVIMENTO</div>
+        <div className="text-right bg-slate-50/40 dark:bg-slate-900/20">Qtde</div>
+        <div className="text-right bg-slate-50/40 dark:bg-slate-900/20">vs M</div>
+        <div className="text-right bg-slate-50/40 dark:bg-slate-900/20">vs A-1</div>
+        <div className="text-right bg-amber-50/30 dark:bg-amber-950/10">R$/@</div>
+        <div className="text-right bg-amber-50/30 dark:bg-amber-950/10">vs M</div>
+        <div className="text-right bg-amber-50/30 dark:bg-amber-950/10">vs A-1</div>
+        <div className="text-right bg-emerald-50/30 dark:bg-emerald-950/10">Total</div>
+        <div className="text-right bg-emerald-50/30 dark:bg-emerald-950/10">vs M</div>
+        <div className="text-right bg-emerald-50/30 dark:bg-emerald-950/10">vs A-1</div>
       </div>
       {/* Linhas */}
       {LINHAS_GLOBAIS.map((linha) => {
@@ -147,10 +148,10 @@ function FaixaExecutivaResumo({
             <div className="text-right tabular-nums text-[14px] font-bold whitespace-nowrap">
               {fmtCab(qtde.valor)}
             </div>
-            <div className="text-right text-[12px] whitespace-nowrap">
+            <div className="text-right text-[11px] whitespace-nowrap">
               <DeltaTag delta={calcDeltaPct(qtde.valor, qtde.meta)} ehDespesa={linha.qtdeEhDespesa} />
             </div>
-            <div className="text-right text-[12px] whitespace-nowrap">
+            <div className="text-right text-[11px] whitespace-nowrap">
               <DeltaTag delta={calcDeltaPct(qtde.valor, qtde.anoAnt)} ehDespesa={linha.qtdeEhDespesa} />
             </div>
 
@@ -160,10 +161,10 @@ function FaixaExecutivaResumo({
                 <div className="text-right tabular-nums text-[13px] font-semibold whitespace-nowrap">
                   {fmtMoeda(preco.valor)}
                 </div>
-                <div className="text-right text-[12px] whitespace-nowrap">
+                <div className="text-right text-[11px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(preco.valor, preco.meta)}   ehDespesa={linha.precoEhDespesa} />
                 </div>
-                <div className="text-right text-[12px] whitespace-nowrap">
+                <div className="text-right text-[11px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(preco.valor, preco.anoAnt)} ehDespesa={linha.precoEhDespesa} />
                 </div>
               </>
@@ -181,10 +182,10 @@ function FaixaExecutivaResumo({
                 <div className="text-right tabular-nums text-[13px] font-semibold whitespace-nowrap">
                   {fmtMoeda(valor.valor)}
                 </div>
-                <div className="text-right text-[12px] whitespace-nowrap">
+                <div className="text-right text-[11px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(valor.valor, valor.meta)}   ehDespesa={linha.valorEhDespesa} />
                 </div>
-                <div className="text-right text-[12px] whitespace-nowrap">
+                <div className="text-right text-[11px] whitespace-nowrap">
                   <DeltaTag delta={calcDeltaPct(valor.valor, valor.anoAnt)} ehDespesa={linha.valorEhDespesa} />
                 </div>
               </>
@@ -275,11 +276,20 @@ export function BlocoConferenciaMensalRebanhoFechamento({
                 <th className="text-left px-2 py-1.5 font-semibold sticky left-0 bg-muted/60 min-w-[120px]">
                   Movimentação
                 </th>
-                {colunas.map(m => (
-                  <th key={m} className="text-right px-2 py-1.5 font-semibold min-w-[52px]">
-                    {MESES_CURTOS[m - 1]}
-                  </th>
-                ))}
+                {colunas.map(m => {
+                  // Separador fino por trimestre: borda direita reforcada
+                  // apos Mar (3), Jun (6), Set (9). Util para leitura
+                  // trimestral em relatorio executivo.
+                  const fimTrimestre = m === 3 || m === 6 || m === 9;
+                  return (
+                    <th
+                      key={m}
+                      className={`text-right px-2 py-1.5 font-semibold min-w-[52px] ${fimTrimestre ? 'border-r border-border/60' : ''}`}
+                    >
+                      {MESES_CURTOS[m - 1]}
+                    </th>
+                  );
+                })}
                 <th className="text-right px-2 py-1.5 font-semibold min-w-[64px] border-l border-border/60">
                   Total
                 </th>
@@ -305,6 +315,7 @@ export function BlocoConferenciaMensalRebanhoFechamento({
                     </td>
                     {colunas.map(m => {
                       const futuro = m > mes;
+                      const fimTrimestre = m === 3 || m === 6 || m === 9;
                       let v: number;
                       if (isSaldoInicio)     v = saldoInicial[m];
                       else if (isSaldoFinal)  v = saldoFinal[m];
@@ -314,7 +325,7 @@ export function BlocoConferenciaMensalRebanhoFechamento({
                           key={m}
                           className={`text-right px-2 py-1 tabular-nums ${
                             futuro ? 'text-muted-foreground/30 bg-muted/10' : corSinal(row.sinal)
-                          }`}
+                          } ${fimTrimestre ? 'border-r border-border/40' : ''}`}
                         >
                           {futuro || v === 0
                             ? <span className="text-muted-foreground/30">—</span>

@@ -150,10 +150,16 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   const breakInvest  = calcBreakdownPecAgri(investPec, investAgri);
   const breakJuros   = calcBreakdownPecAgri(jurosPec, jurosAgri);
 
+  // Fazendas ativas (com pecuaria) e seus hectares — vem do PC-100 oficial.
+  // areaProdutivaHa pode ser null quando nao ha fonte oficial por fazenda
+  // (campo documentado em ItemComposicaoFazenda). Render "—" sem inventar.
+  const fazendasAtivas = painel?.rebanho?.composicaoFazenda ?? null;
+  const temFazendasAtivas = !!fazendasAtivas && fazendasAtivas.length > 0;
+
   return (
-    <section className="pagina-fechamento bg-card border border-border rounded-lg p-4 mb-4">
+    <section className="pagina-fechamento bg-card border border-border rounded-lg p-5 mb-4">
       {/* LINHA 1 — Metadata + logo */}
-      <header className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-border">
+      <header className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-border">
         <div className="text-xs text-muted-foreground truncate">
           <span className="font-semibold text-foreground">{nomeCliente ?? '—'}</span>
           {nomeFazenda && <> • <span className="font-semibold text-foreground">{nomeFazenda}</span></>}
@@ -168,16 +174,30 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
           gridMetaConsolidado (hoje useFechamentoPeriodoData usa
           planFin.buildGrid() base, sem extras). */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-2">
           Resumo Executivo
         </h3>
-        <ul className="text-sm text-foreground space-y-1 leading-snug">
-          {/* 1. Área Produtiva */}
+        <ul className="text-sm text-foreground space-y-1.5 leading-relaxed">
+          {/* 1. Área Produtiva (+ sub-linha fazendas ativas/hectares) */}
           <li>
             Área Produtiva: <strong className="font-semibold">{area.total != null ? `${fmt(area.total, 0)} ha` : '—'}</strong>
             {area.pctPec !== null && area.pctAgri !== null && (
               <span className="text-xs text-muted-foreground"> ({Math.round(area.pctPec)}% Pec • {Math.round(area.pctAgri)}% Agri)</span>
             )}
+            {/* Sub-linha: fazendas ativas + hectares (fonte: PC-100 composicaoFazenda).
+                Se areaProdutivaHa for null, exibe "—" — sem inventar dado. */}
+            <div className="text-xs text-muted-foreground mt-0.5 pl-1">
+              {temFazendasAtivas ? (
+                fazendasAtivas!.map((f, i) => (
+                  <span key={f.fazendaId}>
+                    {i > 0 && <span className="opacity-60"> / </span>}
+                    Faz. {f.fazenda} — {f.areaProdutivaHa != null ? `${fmt(f.areaProdutivaHa, 0)} ha` : '—'}
+                  </span>
+                ))
+              ) : (
+                <span>—</span>
+              )}
+            </div>
           </li>
           {/* 2. Rebanho (médio + final) */}
           <li>

@@ -38,18 +38,18 @@ const BORDA_ECONOMICO = 'border-l-[3px] border-l-emerald-400 dark:border-l-emera
 
 export function BlocoProducaoPecuariaRealizada({ data }: Props) {
   return (
-    <section className="bg-card border border-border rounded-lg p-4 mb-4">
-      <div className="flex items-center gap-2 flex-wrap mb-1">
+    <section className="bg-card border border-border rounded-lg p-5 mb-4">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
         <h2 className="text-base font-bold text-foreground">Produção Pecuária Realizada</h2>
         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-900/60">
           Operacional
         </span>
       </div>
-      <p className="text-xs text-muted-foreground mb-2">
+      <p className="text-xs text-muted-foreground mb-3">
         Realizado Jan→mês selecionado • vs Meta período
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Linha 1: Estoque/Patrimônio (slate) + Área Produtiva (violet) */}
         <CardComparativo titulo="Rebanho Médio"        dado={data.rebanhoMedio}       className={`${PALETA_NEUTRO} ${BORDA_ESTOQUE}`}     densidade="compacta" mostrarVsAnoAnt comparativoLabel="meta" />
         <CardComparativo titulo="Peso Médio (período)" dado={data.pesoMedioPeriodo}   className={`${PALETA_NEUTRO} ${BORDA_ESTOQUE}`}     densidade="compacta" mostrarVsAnoAnt comparativoLabel="meta" />

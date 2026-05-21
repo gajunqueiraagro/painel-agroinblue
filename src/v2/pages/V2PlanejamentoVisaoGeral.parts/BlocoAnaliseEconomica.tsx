@@ -187,9 +187,14 @@ function LinhaRow({
       'grid gap-0.5 items-center px-2 border-b border-border/30 last:border-0',
       heightCls,
       GRID_5_COLS,
-      destaque ? 'bg-muted/30 border-t border-border/30' : '',
+      // Subtotais (Receita Liquida, Resultado Bruto, etc): bg ligeiramente
+      // mais escuro para destacar a hierarquia sem ser agressivo.
+      destaque ? 'bg-muted/60 border-t border-border/40' : '',
+      // Lucro Liquido (linha final): cinza claro neutro em vez do azul escuro.
+      // text-foreground (em vez de primary-foreground) garante contraste sobre
+      // bg-muted. font-bold + h-9 preservam destaque hierarquico.
       destaqueFinal
-        ? 'bg-primary text-primary-foreground border-t border-primary'
+        ? 'bg-muted border-t border-border'
         : '',
     );
   } else {
@@ -233,30 +238,24 @@ function LinhaRow({
   //   Meta ano   → laranja (referência planejada, mesmo tom do header)
   //   Real ano   → semântica (azul positivo / vermelho negativo) preserva
   //                significado financeiro do valor atual
-  // Linha final "Lucro Líquido" no Fechamento: fundo azul + texto branco
-  // (sobrescreve as cores semânticas atuais).
+  // Linha final "Lucro Líquido" no Fechamento: bg-muted cinza claro neutro.
+  // Texto usa cores semanticas padrao (com bg claro, sao legiveis).
   const ehLinhaFinalFechamento = destaqueFinal && mostrarAnoCorrente;
-  const realAnoAntClass = ehLinhaFinalFechamento
-    ? cn(valorClass, 'text-primary-foreground/80')
-    : mostrarAnoCorrente
-      ? cn(valorClass, 'text-muted-foreground')
-      : cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal));
-  const metaClass = ehLinhaFinalFechamento
-    ? cn(valorClass, 'text-orange-200')
-    : mostrarAnoCorrente
-      ? cn(valorClass, 'text-orange-600 dark:text-orange-400')
-      : cn(valorClass, corValor(linha.valor, tipoSinal));
-  const realAnoCorrClass = ehLinhaFinalFechamento
-    ? cn(valorClass, 'text-primary-foreground font-bold')
-    : cn(valorClass, corValor(linha.valorAnoCorrente, tipoSinal));
+  const realAnoAntClass = mostrarAnoCorrente
+    ? cn(valorClass, 'text-muted-foreground')
+    : cn(valorClass, corValor(linha.valorAnoAnt, tipoSinal));
+  const metaClass = mostrarAnoCorrente
+    ? cn(valorClass, 'text-orange-600 dark:text-orange-400')
+    : cn(valorClass, corValor(linha.valor, tipoSinal));
+  const realAnoCorrClass = cn(valorClass, corValor(linha.valorAnoCorrente, tipoSinal));
 
   const deltaRsClassLegado = cn('text-right tabular-nums text-[10px] font-medium', corDelta(linha.deltaRs));
   const deltaPctClassLegado = cn('text-right tabular-nums text-[10px] font-medium', corDelta(linha.deltaPct));
   // Modo Fechamento: deltas viram pills coloridas (semântica igual Fluxo Caixa).
-  // Quando linha final "Lucro Líquido" (destaqueFinal + fundo azul), usar
-  // versão neutra clara — pills coloridas perdem contraste sobre azul.
-  const wrapDelta = (v: number | null): string => destaqueFinal && mostrarAnoCorrente
-    ? cn('text-right tabular-nums text-[11px] font-bold', corDeltaSemanticoFinal(v, tipoSinal))
+  // Linha final Lucro Liquido agora usa bg-muted claro — pills coloridas
+  // tem contraste correto novamente; usar pillDelta como nas demais linhas.
+  const wrapDelta = (v: number | null): string => ehLinhaFinalFechamento
+    ? cn('text-right tabular-nums text-[11px] font-bold', corDeltaSemantico(v, tipoSinal))
     : cn('text-right', pillDelta(v, tipoSinal));
   const deltaPctClassAnoAnt = wrapDelta(deltaAnoAntPct);
   const deltaPctClassMeta = wrapDelta(deltaMetaPct);
@@ -323,23 +322,24 @@ function GrupoRow({
 function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string; mostrarAnoCorrente?: boolean }) {
   const m = mostrarAnoCorrente;
   // Placeholders são meramente posicionais (aguardam plano de contas).
-  // Devem ser visualmente discretos: fonte normal, muted, sem destaque.
+  // Modo Fechamento: linhas h-5 e fonte 10px — minimo possivel para nao
+  // chamar atencao. Aguarda plano de contas oficial.
   const valorMuted = cn(
     'text-right tabular-nums text-muted-foreground font-normal whitespace-nowrap',
-    m ? 'text-[11px] leading-none' : 'text-[11px]',
+    m ? 'text-[10px] leading-none' : 'text-[11px]',
   );
   const deltaMuted = cn(
     'text-right tabular-nums text-muted-foreground font-normal',
-    m ? 'text-[11px] leading-none' : 'text-[10px]',
+    m ? 'text-[10px] leading-none' : 'text-[10px]',
   );
   return (
     <div className={cn(
       'grid items-center border-b border-border/30 last:border-0',
-      m ? 'gap-0.5 px-2 h-6' : 'gap-1 px-2 py-[2px]',
+      m ? 'gap-0.5 px-2 h-5' : 'gap-1 px-2 py-[2px]',
       m ? GRID_5_COLS : GRID_4_COLS,
     )}>
-      <div className={cn('truncate font-normal', m ? 'text-[11px] leading-none text-muted-foreground' : 'text-[11px]')}>
-        {label} <span className="text-[10px] italic text-muted-foreground">(aguarda plano de contas)</span>
+      <div className={cn('truncate font-normal', m ? 'text-[10px] leading-none text-muted-foreground' : 'text-[11px]')}>
+        {label} <span className="text-[9px] italic text-muted-foreground">(aguarda plano de contas)</span>
       </div>
       {mostrarAnoCorrente ? (
         <>
@@ -366,10 +366,10 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
   return (
     <section
       className={cn(
-        'bg-card border border-border rounded-lg mb-3',
-        mostrarAnoCorrente
-          ? 'px-3 py-2 max-w-[1060px] ml-4 mr-auto'
-          : 'p-4',
+        'bg-card border border-border rounded-lg mb-4',
+        // Container externo na largura padrao dos demais blocos.
+        // A tabela interna continua compacta/centralizada via w-fit mx-auto.
+        mostrarAnoCorrente ? 'p-4' : 'p-4',
         desfocar && 'opacity-40 pointer-events-none',
       )}
     >

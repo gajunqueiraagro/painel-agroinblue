@@ -109,8 +109,19 @@ function montarLinhaSaldoFinal(
   // Builder entrega valores prontos via saldoCaixaFinalMeta /
   // saldoCaixaFinalReal — zero cálculo aqui.
   if (modo === 'fechamento') {
-    const meta = data.saldoCaixaFinalReal ?? 0;
-    return { label: 'Saldo Caixa Final', meta, real: 0, delta: 0 };
+    // Card Saldo Caixa Final Real precisa mostrar:
+    // - valor grande: realizado (saldoCaixaFinalReal)
+    // - sublinha Meta R$ + delta (saldoCaixaFinalMeta / deltaAnoCorrente)
+    const meta = data.saldoCaixaFinalMeta;
+    const real = data.saldoCaixaFinalReal ?? 0;
+    return {
+      label: 'Saldo Caixa Final',
+      meta,
+      real: 0,
+      delta: 0,
+      realAnoCorrente: real,
+      deltaAnoCorrente: calcDeltaLocal(meta, real),
+    };
   }
   const meta = data.saldoCaixaFinalMeta;
   const real = data.serieReal[11];
@@ -362,8 +373,10 @@ function CardTotal({
 
 interface PizzaItem { nome: string; valor: number; cor: string }
 
-const CORES_PIZZA_ENTRADAS = ['#0284c7', '#16a34a', '#f59e0b', '#7c3aed'];
-const CORES_PIZZA_SAIDAS = ['#dc2626', '#ea580c', '#f59e0b', '#84cc16', '#06b6d4', '#8b5cf6', '#ec4899', '#6b7280'];
+// Paleta mais suave (tons 400-500 em vez de 500-700) — menos saturada,
+// visualmente mais agradavel para leitura executiva.
+const CORES_PIZZA_ENTRADAS = ['#60a5fa', '#4ade80', '#fbbf24', '#a78bfa'];
+const CORES_PIZZA_SAIDAS = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#22d3ee', '#a78bfa', '#f472b6', '#9ca3af'];
 
 function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaItem[]; total: number }) {
   // Container leve: sem border/shadow. Apenas layout flex+grid.
@@ -405,7 +418,15 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
               </Pie>
               <Tooltip
                 formatter={(v: number, name: string) => [fmtBRL(v), name]}
-                contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+                contentStyle={{
+                  fontSize: 11,
+                  padding: '4px 8px',
+                  background: 'hsl(var(--background) / 0.85)',
+                  border: '1px solid hsl(var(--border) / 0.5)',
+                  borderRadius: 6,
+                  boxShadow: '0 1px 4px hsl(var(--foreground) / 0.05)',
+                  backdropFilter: 'blur(4px)',
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -787,7 +808,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
                 titulo={modo === 'fechamento' ? 'Saldo Caixa Final Real' : 'Saldo Caixa Final Meta'}
                 linha={montarLinhaSaldoFinal(data, modo)}
                 variant="neutral"
-                metaOnly
+                modo={modo}
+                metaOnly={modo !== 'fechamento'}
               />
             </div>
             {modo !== 'fechamento' && (

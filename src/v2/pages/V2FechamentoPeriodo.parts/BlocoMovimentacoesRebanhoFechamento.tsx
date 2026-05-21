@@ -248,12 +248,13 @@ function PainelComposicaoHistorico({
               </div>
             )}
           </div>
-          {/* Legenda compacta */}
-          <div className="flex flex-col gap-0.5 text-[11px] leading-tight min-w-0">
+          {/* Legenda compacta — overflow-hidden + min-w-0 + text-[10px]
+              evitam que labels longos (Compras/Reposicao) invadam grafico. */}
+          <div className="flex flex-col gap-0.5 text-[10px] leading-tight min-w-0 overflow-hidden">
             {composicao.map((c) => {
               const pct = totalComp > 0 ? (c.valor / totalComp) * 100 : 0;
               return (
-                <div key={c.nome} className="flex items-center gap-1.5 min-w-0">
+                <div key={c.nome} className="flex items-center gap-1 min-w-0">
                   <span
                     className="inline-block w-2 h-2 rounded-sm shrink-0"
                     style={{ background: c.cor }}
@@ -433,16 +434,20 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
               modoComparativo: 'meta-anoant' as const,
             },
             {
-              // Saldo Final: compara vs início do período, não vs meta.
+              // Saldo Final: compara vs inicio do periodo E vs Meta de saldo
+              // final (saldoInicial + meta entradas - meta saidas). Derivacao
+              // simples de valores ja presentes no hook.
               label: 'Saldo Final',
               valor:  saldoFinal[mes] ?? null,
               meta:   saldoInicial[1] ?? null,   // reutiliza slot 'meta' como referência de "início"
-              anoAnt: null,
+              anoAnt: (saldoInicial[1] ?? 0)
+                + ((porTipo['soma_entradas']?.meta.cab) ?? 0)
+                - ((porTipo['soma_saidas']?.meta.cab) ?? 0),  // reutiliza slot 'anoAnt' como Meta Saldo Final
               fmt: (v: number | null) => `${fmtCab(v)} cab`,
               cor: 'text-foreground font-semibold',
               bg: 'bg-card border-border',
               ehDespesa: false,
-              modoComparativo: 'inicio' as const,
+              modoComparativo: 'inicio-meta' as const,
             },
           ] as const).map(({ label, valor, meta, anoAnt, fmt, cor, bg, ehDespesa, modoComparativo }) => (
             <div key={label} className={`border rounded-lg px-2.5 py-2 ${bg}`}>
@@ -453,11 +458,19 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
                 {fmt(valor)}
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5 space-y-0.5">
-                {modoComparativo === 'inicio' ? (
-                  <div>
-                    vs início{' '}
-                    <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} />
-                  </div>
+                {modoComparativo === 'inicio-meta' ? (
+                  <>
+                    <div>
+                      vs início{' '}
+                      <DeltaTag delta={calcDeltaPct(valor, meta)} ehDespesa={ehDespesa} />
+                    </div>
+                    <div>
+                      vs Meta{' '}
+                      {anoAnt !== null
+                        ? <DeltaTag delta={calcDeltaPct(valor, anoAnt)} ehDespesa={ehDespesa} />
+                        : <span className="opacity-50">—</span>}
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div>
