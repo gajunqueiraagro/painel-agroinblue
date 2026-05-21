@@ -64,7 +64,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const [filtroVencAte, setFiltroVencAte] = useState('');
 
   const [sortCol, setSortCol] = useState<string>('data_contrato');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Default ASC: contratos mais antigos primeiro ao abrir a tela.
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const handleSort = (col: string) => {
     if (sortCol === col) {
       setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
