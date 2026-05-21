@@ -304,8 +304,25 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         //   Number(parcelaAtualizada.valor_juros) || 0,
         // );
       }
+      // Aciona motor oficial de reconciliacao financeira (uma chamada por funcao,
+      // no estado final da parcela apos o UPDATE inline). Motor le parcela e
+      // reconcilia espelhos em financeiro_lancamentos_v2.
+      // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
+      // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      const { error: motorError } = await (supabase as any).rpc(
+        'fn_reconciliar_parcela_financiamento',
+        { p_parcela_id: editingCell.parcelaId, p_dry_run: false, p_recalcula_vt: true },
+      );
+      if (motorError) {
+        toast.error(
+          'Parcela salva, mas sincronizacao financeira falhou: ' + motorError.message,
+        );
+      }
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
       qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });
+      qc.invalidateQueries({ queryKey: ['financeiro-data'] });
+      qc.invalidateQueries({ queryKey: ['fluxoCaixaModalLancs'] });
+      qc.invalidateQueries({ queryKey: ['parcela-lancamentos-oficiais'] });
     }
     setEditingCell(null);
   };

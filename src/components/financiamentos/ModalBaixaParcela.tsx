@@ -255,10 +255,29 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         .eq('id', parcela.id);
       if (errParc) throw errParc;
 
+      // Aciona motor oficial de reconciliacao financeira (uma chamada por funcao,
+      // no estado final da parcela). Motor le parcela e reconcilia espelhos em
+      // financeiro_lancamentos_v2 (cria/atualiza/cancela conforme estado).
+      // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
+      // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      const { error: motorError } = await (supabase as any).rpc(
+        'fn_reconciliar_parcela_financiamento',
+        { p_parcela_id: parcela.id, p_dry_run: false, p_recalcula_vt: true },
+      );
+      if (motorError) {
+        toast.error(
+          'Parcela salva, mas sincronizacao financeira falhou: ' + motorError.message,
+        );
+      }
+
       toast.success('Parcela registrada com sucesso!');
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamento.id] });
       qc.invalidateQueries({ queryKey: ['financiamentos-lista', financiamento.cliente_id] });
       qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamento.id] });
+      qc.invalidateQueries({ queryKey: ['financeiro-data'] });
+      qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });
+      qc.invalidateQueries({ queryKey: ['fluxoCaixaModalLancs'] });
+      qc.invalidateQueries({ queryKey: ['parcela-lancamentos-oficiais'] });
       onClose();
     } catch (e: any) {
       toast.error('Erro ao registrar pagamento: ' + (e?.message ?? e));
@@ -444,10 +463,30 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
         }
       }
 
+      // Aciona motor oficial de reconciliacao financeira (uma chamada por funcao,
+      // apos todos os branches de cancelamento/limpeza terem manipulado o estado).
+      // Motor le o estado FINAL da parcela e reconcilia espelhos em
+      // financeiro_lancamentos_v2 (cria/atualiza/cancela conforme estado).
+      // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
+      // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      const { error: motorError } = await (supabase as any).rpc(
+        'fn_reconciliar_parcela_financiamento',
+        { p_parcela_id: parcela.id, p_dry_run: false, p_recalcula_vt: true },
+      );
+      if (motorError) {
+        toast.error(
+          'Parcela salva, mas sincronizacao financeira falhou: ' + motorError.message,
+        );
+      }
+
       toast.success('Parcela atualizada');
       qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamento.id] });
       qc.invalidateQueries({ queryKey: ['financiamentos-lista', financiamento.cliente_id] });
       qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamento.id] });
+      qc.invalidateQueries({ queryKey: ['financeiro-data'] });
+      qc.invalidateQueries({ queryKey: ['financeiro-lancamentos'] });
+      qc.invalidateQueries({ queryKey: ['fluxoCaixaModalLancs'] });
+      qc.invalidateQueries({ queryKey: ['parcela-lancamentos-oficiais'] });
       onClose();
     } catch (e: any) {
       toast.error('Erro ao salvar: ' + (e?.message ?? e));
