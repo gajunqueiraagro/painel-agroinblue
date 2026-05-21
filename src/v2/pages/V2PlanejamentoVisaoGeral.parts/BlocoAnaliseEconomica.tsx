@@ -31,9 +31,9 @@ interface Props {
 // Ordem da Fase 1 Marco 2.5: passado → planejado → atual, apenas deltas percentuais
 // (cabe sem cortar; deltas R$ removidos para leitura executiva).
 const GRID_4_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_70px]';
-// Fechamento — grid executivo: colunas mais estreitas, label flex,
+// Fechamento — grid executivo: colunas estreitas, label flex,
 // hierarquia visual clara (terminal financeiro, não planilha).
-const GRID_5_COLS = 'grid-cols-[minmax(160px,1fr)_88px_88px_88px_62px_62px]';
+const GRID_5_COLS = 'grid-cols-[minmax(160px,1fr)_84px_84px_84px_58px_58px]';
 
 const fmtBRLAbs = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -148,22 +148,24 @@ function LinhaRow({
     const valorTxt = destaqueFinal
       ? 'text-[13px] font-bold'
       : destaque
-        ? 'text-[13px] font-semibold'
+        ? 'text-[12px] font-semibold'
         : indentado
-          ? 'text-[11px]'
-          : 'text-[12px]';
+          ? 'text-[10px]'
+          : 'text-[11px]';
     const labelTxt = destaqueFinal
       ? 'text-[13px] font-bold tracking-wide'
       : destaque
-        ? 'text-[13px] font-semibold'
+        ? 'text-[12px] font-semibold'
         : indentado
-          ? 'pl-8 text-[11px] text-muted-foreground'
-          : 'text-[12px] font-medium';
-    const heightCls = destaqueFinal || destaque
-      ? 'h-9'
-      : indentado
-        ? 'h-6'
-        : 'h-7';
+          ? 'pl-5 text-[10px] text-muted-foreground'
+          : 'text-[11px] font-medium';
+    const heightCls = destaqueFinal
+      ? 'h-8'
+      : destaque
+        ? 'h-7'
+        : indentado
+          ? 'h-5'
+          : 'h-6';
 
     valorClass = cn('text-right tabular-nums whitespace-nowrap leading-none', valorTxt);
     labelClass = cn('truncate leading-none', labelTxt, italic ? 'italic' : '');
@@ -308,7 +310,7 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
   const m = mostrarAnoCorrente;
   const valorMuted = cn(
     'text-right tabular-nums text-muted-foreground whitespace-nowrap',
-    m ? 'text-[12px] leading-none' : 'text-[11px]',
+    m ? 'text-[11px] leading-none' : 'text-[11px]',
   );
   const deltaMuted = cn(
     'text-right tabular-nums font-medium text-muted-foreground',
@@ -317,10 +319,10 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
   return (
     <div className={cn(
       'grid items-center border-b border-border/30 last:border-0',
-      m ? 'gap-0.5 px-2 h-7' : 'gap-1 px-2 py-[2px]',
+      m ? 'gap-0.5 px-2 h-6' : 'gap-1 px-2 py-[2px]',
       m ? GRID_5_COLS : GRID_4_COLS,
     )}>
-      <div className={cn('truncate', m ? 'text-[12px] leading-none' : 'text-[11px]')}>
+      <div className={cn('truncate', m ? 'text-[11px] leading-none font-medium' : 'text-[11px]')}>
         {label} <span className="text-[10px] italic text-muted-foreground">(aguarda plano de contas)</span>
       </div>
       {mostrarAnoCorrente ? (
@@ -348,18 +350,18 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
   return (
     <section
       className={cn(
-        'bg-card border border-border rounded-lg mb-4',
-        mostrarAnoCorrente ? 'px-3 py-3' : 'p-4',
+        'bg-card border border-border rounded-lg mb-3',
+        mostrarAnoCorrente ? 'px-3 py-2 max-w-[940px] mx-auto' : 'p-4',
         desfocar && 'opacity-40 pointer-events-none',
       )}
     >
-      <div className="flex items-baseline justify-between mb-1 flex-wrap gap-2">
+      <div className={cn('flex items-baseline justify-between flex-wrap gap-2', mostrarAnoCorrente ? 'mb-0.5' : 'mb-1')}>
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-sm font-semibold text-foreground">
+          <h2 className={cn('font-semibold text-foreground', mostrarAnoCorrente ? 'text-[13px] leading-none' : 'text-sm')}>
             {mostrarAnoCorrente ? 'Análise Econômica Realizada — DRE' : 'Análise Econômica META'}
           </h2>
           {mostrarAnoCorrente && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border leading-none">
               Competência
             </span>
           )}
@@ -370,11 +372,11 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       </div>
 
       {desfocar ? (
-        <p className="text-[10px] text-muted-foreground mb-2">
+        <p className={cn('text-[10px] text-muted-foreground', mostrarAnoCorrente ? 'mb-1' : 'mb-2')}>
           Disponível apenas em modo Global.
         </p>
       ) : (
-        <p className="text-[10px] text-muted-foreground mb-2">
+        <p className={cn('text-[10px] text-muted-foreground', mostrarAnoCorrente ? 'mb-1' : 'mb-2')}>
           DRE pecuária. Tributos serão calculados após reestruturação
           do plano de contas.
         </p>
@@ -382,13 +384,13 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
 
       {/* Header da tabela.
           Modo Fechamento (5 cols após label): Real ano-1 | Meta | Real ano | Δ Ano Ant % | Δ Meta %
-          - Fechamento: cabeçalho azul escuro sólido + texto branco, max-width centralizado. */}
-      <div className={cn('overflow-x-auto', m && 'min-w-0 max-w-[880px] mx-auto')}>
+          - Fechamento: cabeçalho azul escuro compacto + texto branco. */}
+      <div className={cn('overflow-x-auto', m && 'min-w-0')}>
       <div className={cn(
-        'grid items-center text-[10px] uppercase tracking-wide font-semibold rounded-t-md',
+        'grid items-center uppercase tracking-wide font-semibold rounded-t-md',
         m
-          ? 'bg-primary text-primary-foreground gap-0.5 px-2 py-1'
-          : 'bg-muted/40 text-muted-foreground gap-1 px-2.5 py-1.5',
+          ? 'bg-primary text-primary-foreground gap-0.5 px-2 h-6 text-[10px] leading-none'
+          : 'bg-muted/40 text-muted-foreground gap-1 px-2.5 py-1.5 text-[10px]',
         m ? GRID_5_COLS : GRID_4_COLS,
       )}>
         <div>{m ? 'Descrição' : ''}</div>
@@ -437,13 +439,13 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       </div>
       {/* Legenda discreta — só no modo Fechamento. */}
       {m && (
-        <div className="flex items-center justify-end gap-3 mt-1.5 text-[9px] text-muted-foreground italic">
+        <div className="flex items-center justify-end gap-3 mt-1 text-[9px] text-muted-foreground italic leading-none">
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
             Variação favorável
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
             Variação desfavorável
           </span>
         </div>
