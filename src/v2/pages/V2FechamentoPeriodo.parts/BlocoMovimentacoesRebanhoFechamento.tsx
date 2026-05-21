@@ -10,7 +10,19 @@
  * PR3.4 = gráficos Recharts. PR3.5 = drill via MovimentacaoHistoricoModal.
  */
 import { useMemo } from 'react';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+} from 'recharts';
 import { ExecutiveSlide } from '@/v2/components/executive/ExecutiveSlide';
+import { cn } from '@/lib/utils';
 import {
   useMovimentacoesAgregadas,
   type TipoMov,
@@ -128,6 +140,184 @@ function gerarFraseExecutiva(
   }
 
   return `As entradas compensaram integralmente as saídas, mantendo estabilidade do estoque (${fmt(saldoFim)} cabeças).`;
+}
+
+// ─── PainelComposicaoHistorico ───────────────────────────────────────
+// Card visual: donut (composição) + barchart (histórico) + comparativos.
+// Cores e variantes (emerald/red) determinam identidade Entradas vs Saídas.
+// Zero cálculo aqui — recebe dados pré-agregados do componente pai.
+
+interface ItemComposicao { nome: string; valor: number; cor: string }
+interface ItemHistorico { label: string; valor: number; cor: string }
+
+function PainelComposicaoHistorico({
+  titulo,
+  icone,
+  variantCor,
+  composicao,
+  historico,
+  vsMetaDelta,
+  vsAnoAntDelta,
+  anoAnt,
+  pctDoFluxo,
+  ehDespesaMeta = false,
+  ehDespesaAnoAnt = false,
+}: {
+  titulo: string;
+  icone: string;
+  variantCor: 'emerald' | 'red';
+  composicao: ItemComposicao[];
+  historico: ItemHistorico[];
+  vsMetaDelta: number | null;
+  vsAnoAntDelta: number | null;
+  anoAnt: number;
+  pctDoFluxo: number | null;
+  ehDespesaMeta?: boolean;
+  ehDespesaAnoAnt?: boolean;
+}) {
+  const totalComp = composicao.reduce((s, c) => s + c.valor, 0);
+
+  const variantCls = variantCor === 'emerald'
+    ? {
+        borda: 'border-emerald-200 dark:border-emerald-800',
+        bg: 'bg-emerald-50/40 dark:bg-emerald-950/20',
+        headerBg: 'bg-emerald-100/70 dark:bg-emerald-950/40',
+        headerTxt: 'text-emerald-700 dark:text-emerald-300',
+        footerBg: 'bg-emerald-50/30 dark:bg-emerald-950/10',
+      }
+    : {
+        borda: 'border-red-200 dark:border-red-800',
+        bg: 'bg-red-50/30 dark:bg-red-950/20',
+        headerBg: 'bg-red-100/60 dark:bg-red-950/40',
+        headerTxt: 'text-red-700 dark:text-red-300',
+        footerBg: 'bg-red-50/20 dark:bg-red-950/10',
+      };
+
+  return (
+    <div className={cn('border rounded-lg overflow-hidden flex flex-col', variantCls.borda, variantCls.bg)}>
+      {/* Header */}
+      <div className={cn('px-3 py-1.5 border-b', variantCls.headerBg, variantCls.borda)}>
+        <span className={cn('text-xs font-semibold uppercase tracking-wide', variantCls.headerTxt)}>
+          {icone} {titulo.toUpperCase()} — composição e histórico
+        </span>
+      </div>
+
+      {/* Corpo: donut+legenda | barchart */}
+      <div className="grid grid-cols-2 gap-2 p-3 flex-1 min-h-0">
+        {/* Esquerda — donut + legenda */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="relative w-full h-28">
+            {totalComp > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={composicao}
+                    dataKey="valor"
+                    nameKey="nome"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={32}
+                    outerRadius={52}
+                    stroke="none"
+                    isAnimationActive={false}
+                  >
+                    {composicao.map((c, i) => (
+                      <Cell key={i} fill={c.cor} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(v: number, name: string) => [`${fmtCab(v)} cab`, name]}
+                    contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-[11px] text-muted-foreground italic">Sem dados</span>
+              </div>
+            )}
+            {/* Centro do donut: % do fluxo total */}
+            {pctDoFluxo !== null && isFinite(pctDoFluxo) && totalComp > 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-sm font-bold tabular-nums leading-none">
+                  {pctDoFluxo.toFixed(0)}%
+                </span>
+                <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
+                  do fluxo
+                </span>
+              </div>
+            )}
+          </div>
+          {/* Legenda compacta */}
+          <div className="flex flex-col gap-0.5 text-[11px] leading-tight min-w-0">
+            {composicao.map((c) => {
+              const pct = totalComp > 0 ? (c.valor / totalComp) * 100 : 0;
+              return (
+                <div key={c.nome} className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className="inline-block w-2 h-2 rounded-sm shrink-0"
+                    style={{ background: c.cor }}
+                  />
+                  <span className="truncate min-w-0">{c.nome}</span>
+                  <span className="tabular-nums text-muted-foreground shrink-0">
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Direita — barchart histórico */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            Histórico (cabeças)
+          </div>
+          <div className="w-full h-36 flex-1 min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={historico} margin={{ top: 18, right: 4, left: 4, bottom: 0 }}>
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Bar dataKey="valor" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+                  {historico.map((d, i) => (
+                    <Cell key={i} fill={d.cor} />
+                  ))}
+                  <LabelList
+                    dataKey="valor"
+                    position="top"
+                    formatter={(v: number) => fmtCab(v)}
+                    style={{ fontSize: 10, fontWeight: 600, fill: '#475569' }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Rodapé — comparativos */}
+      <div className={cn('grid grid-cols-2 border-t', variantCls.borda, variantCls.footerBg)}>
+        <div className={cn('px-3 py-1.5 text-center border-r', variantCls.borda)}>
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">vs Meta</div>
+          <div className="text-xs font-semibold mt-0.5">
+            <DeltaTag delta={vsMetaDelta} ehDespesa={ehDespesaMeta} />
+          </div>
+        </div>
+        <div className="px-3 py-1.5 text-center">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">
+            vs {anoAnt}
+          </div>
+          <div className="text-xs font-semibold mt-0.5">
+            <DeltaTag delta={vsAnoAntDelta} ehDespesa={ehDespesaAnoAnt} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlobal }: Props) {
@@ -289,83 +479,93 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
           ))}
         </div>
 
-        {/* ── PAINÉIS NARRATIVOS — Entradas vs Saídas (cresce no espaço livre) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+        {/* ── PAINÉIS — Composição + Histórico (Entradas / Saídas) ──
+            Dados disponíveis no hook (audited): mesAtual.cab (Real ano),
+            mesAnoAnt.cab (Real ano-1), meta.cab (Meta ano). Histórico
+            multi-ano (2022-2024) NÃO está no hook — barras = 3 (Ano-1, Meta, Real). */}
+        {(() => {
+          const totalEntradas = porTipo['soma_entradas']?.mesAtual.cab ?? 0;
+          const totalSaidas = porTipo['soma_saidas']?.mesAtual.cab ?? 0;
+          const totalFluxo = totalEntradas + totalSaidas;
+          const pctEntradas = totalFluxo > 0 ? (totalEntradas / totalFluxo) * 100 : null;
+          const pctSaidas = totalFluxo > 0 ? (totalSaidas / totalFluxo) * 100 : null;
 
-          {/* LADO ESQUERDO — Entradas */}
-          <div className="border border-emerald-200 dark:border-emerald-800 rounded-lg overflow-hidden">
-            <div className="bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 border-b border-emerald-200 dark:border-emerald-800">
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
-                ↑ Entradas que aumentam o rebanho
-              </span>
-            </div>
-            <div className="px-3 divide-y divide-border/20">
-              {([
-                { tipo: 'nascimentos' as TipoMov, label: 'Nascimentos' },
-                { tipo: 'compras'     as TipoMov, label: 'Compras / Reposição' },
-                ...(!isGlobal ? [{ tipo: 'transf_entradas' as TipoMov, label: 'Transf. Entrada' }] : []),
-              ] as const).map(({ tipo, label }) => {
-                const card   = porTipo[tipo];
-                const real   = card?.mesAtual.cab ?? null;
-                const anoAnt = card?.mesAnoAnt.cab ?? null;
-                return (
-                  <div key={tipo} className="flex items-center justify-between py-1.5">
-                    <span className="text-xs text-foreground">{label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                        {fmtCab(real)} cab
-                      </span>
-                      <span className="text-[10px] text-muted-foreground w-14 text-right">
-                        vs {ano - 1}{' '}
-                        <DeltaTag delta={calcDeltaPct(real, anoAnt)} ehDespesa={false} />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          const composicaoEntradas: ItemComposicao[] = [
+            { nome: 'Nascimentos',         valor: porTipo['nascimentos']?.mesAtual.cab ?? 0, cor: '#059669' },
+            { nome: 'Compras / Reposição', valor: porTipo['compras']?.mesAtual.cab ?? 0,     cor: '#2563eb' },
+            ...(!isGlobal
+              ? [{ nome: 'Transf. Entrada', valor: porTipo['transf_entradas']?.mesAtual.cab ?? 0, cor: '#7c3aed' }]
+              : []),
+          ].filter((c) => c.valor > 0);
 
-          {/* LADO DIREITO — Saídas */}
-          <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
-            <div className="bg-red-50 dark:bg-red-950/30 px-3 py-1.5 border-b border-red-200 dark:border-red-800">
-              <span className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide">
-                ↓ Saídas que reduzem o rebanho
-              </span>
-            </div>
-            <div className="px-3 divide-y divide-border/20">
-              {([
-                { tipo: 'abates'   as TipoMov, label: 'Abates',   ehDespesa: false },
-                { tipo: 'vendas'   as TipoMov, label: 'Vendas',   ehDespesa: false },
-                { tipo: 'consumos' as TipoMov, label: 'Consumo',  ehDespesa: false },
-                { tipo: 'mortes'   as TipoMov, label: 'Mortes',   ehDespesa: true  },
-                ...(!isGlobal ? [{ tipo: 'transf_saidas' as TipoMov, label: 'Transf. Saída', ehDespesa: false }] : []),
-              ] as const).map(({ tipo, label, ehDespesa }) => {
-                const card   = porTipo[tipo];
-                const real   = card?.mesAtual.cab ?? null;
-                const anoAnt = card?.mesAnoAnt.cab ?? null;
-                const isMorte = tipo === 'mortes';
-                return (
-                  <div key={tipo} className="flex items-center justify-between py-1.5">
-                    <span className={`text-xs ${isMorte ? 'text-red-600 font-medium' : 'text-foreground'}`}>
-                      {label}{isMorte && real !== null && (real as number) > 0 ? ' ⚠' : ''}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-bold tabular-nums ${isMorte ? 'text-red-600' : 'text-foreground'}`}>
-                        {fmtCab(real)} cab
-                      </span>
-                      <span className="text-[10px] text-muted-foreground w-14 text-right">
-                        vs {ano - 1}{' '}
-                        <DeltaTag delta={calcDeltaPct(real, anoAnt)} ehDespesa={ehDespesa} />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          const composicaoSaidas: ItemComposicao[] = [
+            { nome: 'Abates',   valor: porTipo['abates']?.mesAtual.cab   ?? 0, cor: '#dc2626' },
+            { nome: 'Vendas',   valor: porTipo['vendas']?.mesAtual.cab   ?? 0, cor: '#f97316' },
+            { nome: 'Consumo',  valor: porTipo['consumos']?.mesAtual.cab ?? 0, cor: '#06b6d4' },
+            { nome: 'Mortes',   valor: porTipo['mortes']?.mesAtual.cab   ?? 0, cor: '#9ca3af' },
+            ...(!isGlobal
+              ? [{ nome: 'Transf. Saída', valor: porTipo['transf_saidas']?.mesAtual.cab ?? 0, cor: '#a855f7' }]
+              : []),
+          ].filter((c) => c.valor > 0);
 
-        </div>
+          // Histórico: 3 barras (Ano-1 cinza, Meta dourado, Real azul/vermelho).
+          // TODO multi-year: hook só carrega ano-1; queries para 2022-2024
+          // exigiriam expansão do useLancamentos (fora de escopo deste PR).
+          const histEntradas: ItemHistorico[] = [
+            { label: String(ano - 1), valor: porTipo['soma_entradas']?.mesAnoAnt.cab ?? 0, cor: '#9ca3af' },
+            { label: 'Meta',          valor: porTipo['soma_entradas']?.meta.cab     ?? 0, cor: '#fbbf24' },
+            { label: 'Real',          valor: porTipo['soma_entradas']?.mesAtual.cab ?? 0, cor: '#2563eb' },
+          ];
+          const histSaidas: ItemHistorico[] = [
+            { label: String(ano - 1), valor: porTipo['soma_saidas']?.mesAnoAnt.cab ?? 0, cor: '#9ca3af' },
+            { label: 'Meta',          valor: porTipo['soma_saidas']?.meta.cab     ?? 0, cor: '#fbbf24' },
+            { label: 'Real',          valor: porTipo['soma_saidas']?.mesAtual.cab ?? 0, cor: '#dc2626' },
+          ];
+
+          const vsMetaEntradas = calcDeltaPct(
+            porTipo['soma_entradas']?.mesAtual.cab ?? null,
+            porTipo['soma_entradas']?.meta.cab ?? null,
+          );
+          const vsAnoAntEntradas = calcDeltaPct(
+            porTipo['soma_entradas']?.mesAtual.cab ?? null,
+            porTipo['soma_entradas']?.mesAnoAnt.cab ?? null,
+          );
+          const vsMetaSaidas = calcDeltaPct(
+            porTipo['soma_saidas']?.mesAtual.cab ?? null,
+            porTipo['soma_saidas']?.meta.cab ?? null,
+          );
+          const vsAnoAntSaidas = calcDeltaPct(
+            porTipo['soma_saidas']?.mesAtual.cab ?? null,
+            porTipo['soma_saidas']?.mesAnoAnt.cab ?? null,
+          );
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+              <PainelComposicaoHistorico
+                titulo="Entradas"
+                icone="↑"
+                variantCor="emerald"
+                composicao={composicaoEntradas}
+                historico={histEntradas}
+                vsMetaDelta={vsMetaEntradas}
+                vsAnoAntDelta={vsAnoAntEntradas}
+                anoAnt={ano - 1}
+                pctDoFluxo={pctEntradas}
+              />
+              <PainelComposicaoHistorico
+                titulo="Saídas"
+                icone="↓"
+                variantCor="red"
+                composicao={composicaoSaidas}
+                historico={histSaidas}
+                vsMetaDelta={vsMetaSaidas}
+                vsAnoAntDelta={vsAnoAntSaidas}
+                anoAnt={ano - 1}
+                pctDoFluxo={pctSaidas}
+              />
+            </div>
+          );
+        })()}
 
       </div>
     </ExecutiveSlide>
