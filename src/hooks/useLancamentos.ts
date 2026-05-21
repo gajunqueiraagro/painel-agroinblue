@@ -366,6 +366,12 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
       doc_acerto: lancamento.docAcerto || null,
       anexo_nf_url: lancamento.anexoNfUrl || null,
       anexo_acerto_url: lancamento.anexoAcertoUrl || null,
+      // Z5a: persiste fornecedor capturado no nascimento. NULL é válido
+      // (mantém compatibilidade com callers que ainda não preenchem;
+      // Z5b futuro obrigará no UI antes do submit).
+      comprador_fornecedor: lancamento.compradorFornecedor || null,
+      fornecedor_id: lancamento.fornecedorId || null,
+      fornecedor_nome_snapshot: lancamento.fornecedorNomeSnapshot || null,
     };
 
     if (!isOnline()) {
@@ -519,6 +525,12 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     if (dados.docAcerto !== undefined) update.doc_acerto = dados.docAcerto;
     if (dados.anexoNfUrl !== undefined) update.anexo_nf_url = dados.anexoNfUrl;
     if (dados.anexoAcertoUrl !== undefined) update.anexo_acerto_url = dados.anexoAcertoUrl;
+    // Z5a: cobertura defensiva — Z4 modal continua usando UPDATE direto
+    // via supabase.from('lancamentos').update, mas este caminho fica
+    // disponível caso futuras telas precisem editar via hook plural.
+    if (dados.compradorFornecedor !== undefined) update.comprador_fornecedor = dados.compradorFornecedor;
+    if (dados.fornecedorId !== undefined) update.fornecedor_id = dados.fornecedorId;
+    if (dados.fornecedorNomeSnapshot !== undefined) update.fornecedor_nome_snapshot = dados.fornecedorNomeSnapshot;
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {

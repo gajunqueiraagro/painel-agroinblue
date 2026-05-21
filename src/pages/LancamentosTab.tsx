@@ -1989,7 +1989,22 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           restoreEditOrigin();
         }
       } else {
-        const returnedId = await onAdicionar(lancamentoDados as Omit<Lancamento, 'id'>);
+        // Z5a: enriquece payload com fornecedor capturado no form, soberano por tipo.
+        // abateFornecedores é a lista ÚNICA do componente (apesar do nome legacy
+        // "abate", é populada sem filtro de tipo via query em financeiro_fornecedores
+        // WHERE cliente_id=X AND ativo=true) — segura para resolver nome de
+        // compra/abate/venda. Confirmado em Z5a audit Task 0.
+        const fornecedorIdPorTipo = isCompra ? compraFornecedorId
+          : isAbate ? abateFornecedorId
+          : isVenda ? vendaDestinoFornecedorId
+          : null;
+        const fornecedorNomePorTipo = fornecedorIdPorTipo
+          ? (abateFornecedores.find(f => f.id === fornecedorIdPorTipo)?.nome ?? null)
+          : null;
+        const lancamentoDadosComForn = fornecedorIdPorTipo
+          ? { ...lancamentoDados, fornecedorId: fornecedorIdPorTipo, fornecedorNomeSnapshot: fornecedorNomePorTipo }
+          : lancamentoDados;
+        const returnedId = await onAdicionar(lancamentoDadosComForn as Omit<Lancamento, 'id'>);
 
         if (isCompra && returnedId) {
           if (compraDetalhes && fazendaAtual && clienteAtual) {
