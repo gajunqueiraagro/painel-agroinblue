@@ -32,9 +32,9 @@ interface Props {
 // (cabe sem cortar; deltas R$ removidos para leitura executiva).
 const GRID_4_COLS = 'grid-cols-[minmax(220px,420px)_110px_110px_110px_70px]';
 // Fechamento — grid executivo: label LIMITADO (sem 1fr) para que descrições
-// fiquem coladas aos números, não esticadas pelo card. Tracks intrínsecos
-// somam ~742px; o card maior centraliza-os via justify-center.
-const GRID_5_COLS = 'grid-cols-[minmax(260px,340px)_92px_92px_92px_58px_58px]';
+// fiquem coladas aos números, não esticadas pelo card. Colunas numéricas
+// com folga moderada para valores longos (R$ 12.345.678).
+const GRID_5_COLS = 'grid-cols-[minmax(260px,340px)_100px_100px_100px_64px_64px]';
 
 const fmtBRLAbs = (v: number): string =>
   new Intl.NumberFormat('pt-BR', {
@@ -99,6 +99,19 @@ function corDeltaSemantico(v: number | null, tipoSinal: TipoSinal): string {
   return bom
     ? 'text-emerald-700 dark:text-emerald-300'
     : 'text-red-700 dark:text-red-300';
+}
+
+// Variante para a linha final "Lucro Líquido" com fundo bg-primary (azul escuro):
+// tons claros (300) para garantir contraste sobre azul; valor null/zero usa
+// branco discreto (não muted) para não sumir contra o azul.
+function corDeltaSemanticoFinal(v: number | null, tipoSinal: TipoSinal): string {
+  if (v == null || !Number.isFinite(v) || Math.abs(v) < 0.0001) {
+    return 'text-primary-foreground/70';
+  }
+  const positivo = v > 0;
+  const ehDespesa = tipoSinal === 'despesa';
+  const bom = ehDespesa ? !positivo : positivo;
+  return bom ? 'text-emerald-300' : 'text-red-300';
 }
 
 // Pill suave para deltas no modo Fechamento. Background sutil + texto colorido.
@@ -243,7 +256,7 @@ function LinhaRow({
   // Quando linha final "Lucro Líquido" (destaqueFinal + fundo azul), usar
   // versão neutra clara — pills coloridas perdem contraste sobre azul.
   const wrapDelta = (v: number | null): string => destaqueFinal && mostrarAnoCorrente
-    ? cn('text-right tabular-nums text-[10px] font-bold', corDeltaSemantico(v, tipoSinal))
+    ? cn('text-right tabular-nums text-[11px] font-bold', corDeltaSemanticoFinal(v, tipoSinal))
     : cn('text-right', pillDelta(v, tipoSinal));
   const deltaPctClassAnoAnt = wrapDelta(deltaAnoAntPct);
   const deltaPctClassMeta = wrapDelta(deltaMetaPct);
@@ -309,13 +322,15 @@ function GrupoRow({
  */
 function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string; mostrarAnoCorrente?: boolean }) {
   const m = mostrarAnoCorrente;
+  // Placeholders são meramente posicionais (aguardam plano de contas).
+  // Devem ser visualmente discretos: fonte normal, muted, sem destaque.
   const valorMuted = cn(
-    'text-right tabular-nums text-muted-foreground whitespace-nowrap',
+    'text-right tabular-nums text-muted-foreground font-normal whitespace-nowrap',
     m ? 'text-[11px] leading-none' : 'text-[11px]',
   );
   const deltaMuted = cn(
-    'text-right tabular-nums font-medium text-muted-foreground',
-    m ? 'text-[10px] leading-none' : 'text-[10px]',
+    'text-right tabular-nums text-muted-foreground font-normal',
+    m ? 'text-[11px] leading-none' : 'text-[10px]',
   );
   return (
     <div className={cn(
@@ -323,7 +338,7 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
       m ? 'gap-0.5 px-2 h-6' : 'gap-1 px-2 py-[2px]',
       m ? GRID_5_COLS : GRID_4_COLS,
     )}>
-      <div className={cn('truncate', m ? 'text-[11px] leading-none font-medium' : 'text-[11px]')}>
+      <div className={cn('truncate font-normal', m ? 'text-[11px] leading-none text-muted-foreground' : 'text-[11px]')}>
         {label} <span className="text-[10px] italic text-muted-foreground">(aguarda plano de contas)</span>
       </div>
       {mostrarAnoCorrente ? (
@@ -353,7 +368,7 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
       className={cn(
         'bg-card border border-border rounded-lg mb-3',
         mostrarAnoCorrente
-          ? 'px-3 py-2 w-full lg:w-[80%] xl:w-[78%] max-w-[940px] mx-auto'
+          ? 'px-3 py-2 max-w-[1060px] ml-4 mr-auto'
           : 'p-4',
         desfocar && 'opacity-40 pointer-events-none',
       )}
