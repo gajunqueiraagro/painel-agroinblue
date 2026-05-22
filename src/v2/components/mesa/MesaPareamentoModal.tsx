@@ -18,7 +18,12 @@ import {
 } from '@/components/ui/command';
 import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCatalogoCliente, type CatalogoCliente } from '@/v2/lib/excelPreview/catalogoCliente';
+import {
+  useCatalogoCliente,
+  type CatalogoCliente,
+  type SubcentroUsado,
+  type NaturezaSubcentro,
+} from '@/v2/lib/excelPreview/catalogoCliente';
 import { sugerirTodasLinhas, type Sugestao } from '@/v2/lib/excelPreview/sugestaoEngine';
 import type { LoteExcel, MatchResult, ExcelLinhaNormalizada } from '@/v2/lib/excelPreview/types';
 
@@ -159,6 +164,14 @@ function buildFallbacks(
     dataMovimentoOfx: ofx?.data_movimento ?? null,
     produtoExcel: linha?.produto ?? null,
   };
+}
+
+// PR4.2 — label legível de natureza para o operador.
+function labelNatureza(n: NaturezaSubcentro | null): string {
+  if (n === 'entrada') return 'entrada';
+  if (n === 'saida') return 'saída';
+  if (n === 'transferencia') return 'transferência';
+  return 'desconhecida';
 }
 
 // PR3.2 — abrevia rótulo da conta sugerida para virar tag de 8 chars no máximo.
@@ -722,6 +735,19 @@ export function MesaPareamentoModal({
     return n;
   }, [pares]);
 
+  // PR4.2 — natureza alvo (entrada/saida) derivada da linha em correção.
+  // Usada pra particionar subcentros em primários/secundários.
+  const naturezaAlvoCorrecao = useMemo<NaturezaSubcentro | null>(() => {
+    if (!corrigindoExcelKey) return null;
+    const linha = linhasExcel.find(
+      (l) => `${l.loteId}:${l.indiceLinha}` === corrigindoExcelKey,
+    );
+    if (!linha) return null;
+    if (linha.sinal === 'entrada') return 'entrada';
+    if (linha.sinal === 'saida') return 'saida';
+    return null;
+  }, [corrigindoExcelKey, linhasExcel]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
@@ -1072,6 +1098,7 @@ export function MesaPareamentoModal({
                   subcentroBusca={subcentroBusca}
                   setSubcentroBusca={setSubcentroBusca}
                   fornecedorExcelOriginal={linhaAtiva?.fornecedor || null}
+                  naturezaAlvo={naturezaAlvoCorrecao}
                   onAplicar={aplicarCorrecao}
                   onAplicarEAprovar={aplicarEAprovar}
                   onCancelar={cancelarCorrecao}
@@ -1540,6 +1567,7 @@ function FormularioCorrecao({
   fornecedorBusca, setFornecedorBusca,
   subcentroBusca, setSubcentroBusca,
   fornecedorExcelOriginal,
+  naturezaAlvo,
   onAplicar, onAplicarEAprovar, onCancelar,
 }: {
   rascunho: ParCorrecao;
@@ -1550,6 +1578,7 @@ function FormularioCorrecao({
   subcentroBusca: string;
   setSubcentroBusca: (v: string) => void;
   fornecedorExcelOriginal: string | null;
+  naturezaAlvo: NaturezaSubcentro | null;
   onAplicar: () => void;
   onAplicarEAprovar: () => void;
   onCancelar: () => void;
@@ -1566,13 +1595,43 @@ function FormularioCorrecao({
       .slice(0, 5);
   }, [fornecedorBusca, catalogo.fornecedores]);
 
-  const subcentrosFiltrados = useMemo(() => {
+  // PR4.2 — particiona subcentros pela natureza alvo:
+  //   primários = natureza casa com linha.sinal (qt_uso da natureza alvo)
+  //   secundários = não casa (fallback "outras naturezas")
+  // Caso sem natureza (raro): 1 grupo geral com comportamento PR4 preservado.
+  const subcentrosParticionados = useMemo<{
+    primarios: SubcentroUsado[];
+    secundarios: SubcentroUsado[];
+  }>(() => {
     const q = subcentroBusca.toLowerCase().trim();
-    if (!q) return catalogo.subcentros.slice(0, 12);
-    return catalogo.subcentros
-      .filter((s) => s.subcentro.toLowerCase().includes(q))
-      .slice(0, 12);
-  }, [subcentroBusca, catalogo.subcentros]);
+    const todos = catalogo.subcentros.filter((s) =>
+      !q || s.subcentro.toLowerCase().includes(q),
+    );
+
+    if (!naturezaAlvo) {
+      return { primarios: todos.slice(0, 15), secundarios: [] };
+    }
+
+    const primariosRaw = todos.filter((s) => s.naturezas.has(naturezaAlvo));
+    const secundariosRaw = todos.filter((s) => !s.naturezas.has(naturezaAlvo));
+
+    primariosRaw.sort((a, b) => {
+      const qa =
+        naturezaAlvo === 'entrada' ? a.qt_uso_entrada :
+        naturezaAlvo === 'saida' ? a.qt_uso_saida :
+        a.qt_uso_transferencia;
+      const qb =
+        naturezaAlvo === 'entrada' ? b.qt_uso_entrada :
+        naturezaAlvo === 'saida' ? b.qt_uso_saida :
+        b.qt_uso_transferencia;
+      return qb - qa;
+    });
+
+    return {
+      primarios: primariosRaw.slice(0, 12),
+      secundarios: secundariosRaw.slice(0, 6),
+    };
+  }, [subcentroBusca, catalogo.subcentros, naturezaAlvo]);
 
   function set<K extends keyof ParCorrecao>(field: K, value: ParCorrecao[K]) {
     setRascunho((prev) => (prev ? { ...prev, [field]: value } : prev));
@@ -1770,25 +1829,63 @@ function FormularioCorrecao({
             placeholder="Buscar subcentro… (↑↓ Enter)"
             className="text-[11px] h-7"
           />
-          <CommandList className="max-h-32">
+          <CommandList className="max-h-44">
             <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">
               Nenhum subcentro encontrado
             </CommandEmpty>
-            <CommandGroup>
-              {subcentrosFiltrados.map((s) => (
-                <CommandItem
-                  key={`${s.subcentro}-${s.macro_custo ?? ''}-${s.grupo_custo ?? ''}-${s.centro_custo ?? ''}`}
-                  value={s.subcentro}
-                  onSelect={() => escolherSubcentro(s)}
-                  className="text-[11px]"
-                >
-                  <span className="flex-1">{s.subcentro}</span>
-                  <span className="text-[9px] text-muted-foreground ml-2">
-                    ({s.qt_uso}x)
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
+
+            {/* PR4.2 — primário: natureza casa com linha.sinal */}
+            {subcentrosParticionados.primarios.length > 0 && (
+              <CommandGroup heading={
+                naturezaAlvo
+                  ? `Da natureza ${labelNatureza(naturezaAlvo)}`
+                  : 'Subcentros'
+              }>
+                {subcentrosParticionados.primarios.map((s) => {
+                  const qt = !naturezaAlvo
+                    ? s.qt_uso
+                    : naturezaAlvo === 'entrada' ? s.qt_uso_entrada
+                    : naturezaAlvo === 'saida' ? s.qt_uso_saida
+                    : s.qt_uso_transferencia;
+                  return (
+                    <CommandItem
+                      key={`prim|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
+                      value={s.subcentro}
+                      onSelect={() => escolherSubcentro(s)}
+                      className="text-[11px]"
+                    >
+                      <span className="flex-1 truncate">{s.subcentro}</span>
+                      <span className="text-[9px] text-muted-foreground ml-2">({qt}x)</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
+
+            {/* PR4.2 — secundário: outras naturezas, fallback discreto */}
+            {subcentrosParticionados.secundarios.length > 0 && (
+              <CommandGroup heading="Outras naturezas (não recomendado)">
+                {subcentrosParticionados.secundarios.map((s) => {
+                  const naturezasLabel = Array.from(s.naturezas)
+                    .map((n) => labelNatureza(n))
+                    .join('/');
+                  return (
+                    <CommandItem
+                      key={`sec|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
+                      value={`outras-${s.subcentro}`}
+                      onSelect={() => escolherSubcentro(s)}
+                      className="text-[11px] opacity-60"
+                    >
+                      <span className="text-amber-700 mr-1">⚠</span>
+                      <span className="flex-1 truncate text-muted-foreground">{s.subcentro}</span>
+                      <span className="text-[9px] text-muted-foreground ml-2">
+                        ({naturezasLabel || 's/ natureza'})
+                      </span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
         {rascunho.subcentro && (

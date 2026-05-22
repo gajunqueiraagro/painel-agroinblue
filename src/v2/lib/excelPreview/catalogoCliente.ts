@@ -19,12 +19,20 @@ export interface Fazenda {
   status_operacional: string | null;
 }
 
+// PR4.2 — natureza inferida do tipo_operacao histórico do cliente.
+export type NaturezaSubcentro = 'entrada' | 'saida' | 'transferencia';
+
 export interface SubcentroUsado {
   subcentro: string;
   macro_custo: string | null;
   grupo_custo: string | null;
   centro_custo: string | null;
   qt_uso: number;
+  // PR4.2 — contadores por natureza + set de naturezas vistas
+  qt_uso_entrada: number;
+  qt_uso_saida: number;
+  qt_uso_transferencia: number;
+  naturezas: Set<NaturezaSubcentro>;
 }
 
 export interface FornecedorOficial {
@@ -53,6 +61,17 @@ interface HistoricoRow {
   macro_custo: string | null;
   grupo_custo: string | null;
   centro_custo: string | null;
+  tipo_operacao: string | null;
+}
+
+// PR4.2 — mapping do enum financeiro_lancamentos_v2.tipo_operacao para
+// a natureza canônica do subcentro.
+function tipoOperacaoToNatureza(t: string | null): NaturezaSubcentro | null {
+  if (!t) return null;
+  if (t === '1-Entradas') return 'entrada';
+  if (t === '2-Saídas') return 'saida';
+  if (t === '3-Transferências') return 'transferencia';
+  return null;
 }
 
 export function useCatalogoCliente(clienteId: string | null) {
@@ -91,7 +110,7 @@ export function useCatalogoCliente(clienteId: string | null) {
 
         sb
           .from('financeiro_lancamentos_v2')
-          .select('favorecido_id, subcentro, macro_custo, grupo_custo, centro_custo')
+          .select('favorecido_id, subcentro, macro_custo, grupo_custo, centro_custo, tipo_operacao')
           .eq('cliente_id', clienteId)
           .eq('cancelado', false)
           .not('subcentro', 'is', null)
@@ -106,24 +125,38 @@ export function useCatalogoCliente(clienteId: string | null) {
 
       const hist = ((histRes.data ?? []) as unknown) as HistoricoRow[];
 
-      // agrega subcentros usados (chave: subcentro+macro+grupo+centro)
+      // PR4.2 — agrega subcentros usados acumulando natureza (entrada/saida/transferência)
+      // derivada de tipo_operacao histórico. Chave: subcentro+macro+grupo+centro.
       const mapSub = new Map<string, SubcentroUsado>();
       hist.forEach((r) => {
         if (!r.subcentro) return;
         const key = `${r.subcentro}|${r.macro_custo ?? ''}|${r.grupo_custo ?? ''}|${r.centro_custo ?? ''}`;
+        const natureza = tipoOperacaoToNatureza(r.tipo_operacao);
         const cur = mapSub.get(key);
         if (cur) {
           cur.qt_uso++;
+          if (natureza === 'entrada') cur.qt_uso_entrada++;
+          else if (natureza === 'saida') cur.qt_uso_saida++;
+          else if (natureza === 'transferencia') cur.qt_uso_transferencia++;
+          if (natureza) cur.naturezas.add(natureza);
         } else {
+          const naturezas = new Set<NaturezaSubcentro>();
+          if (natureza) naturezas.add(natureza);
           mapSub.set(key, {
             subcentro: r.subcentro,
             macro_custo: r.macro_custo,
             grupo_custo: r.grupo_custo,
             centro_custo: r.centro_custo,
             qt_uso: 1,
+            qt_uso_entrada: natureza === 'entrada' ? 1 : 0,
+            qt_uso_saida: natureza === 'saida' ? 1 : 0,
+            qt_uso_transferencia: natureza === 'transferencia' ? 1 : 0,
+            naturezas,
           });
         }
       });
+      // Ordenação geral mantida (por qt_uso total) — específica por natureza
+      // fica no consumer (MesaPareamentoModal/subcentrosParticionados).
       const subcentros = Array.from(mapSub.values()).sort((a, b) => b.qt_uso - a.qt_uso);
 
       // índice fornecedor → subcentro mais usado
