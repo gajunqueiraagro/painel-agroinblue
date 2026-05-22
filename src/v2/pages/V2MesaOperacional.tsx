@@ -13,15 +13,20 @@
  *   3. Aprovação humana obrigatória
  *   4. Diferença explícita é FEATURE
  */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Upload, X } from 'lucide-react';
+import { parseExcelToLote } from '@/v2/lib/excelPreview/parser';
+import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matchEngine';
+import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
 
 interface V2MesaOperacionalProps {
   initialAno?: string;
@@ -80,6 +85,14 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
   const [saldos, setSaldos] = useState<SaldoMes[]>([]);
   const [extratosConciliados, setExtratosConciliados] = useState<Set<string>>(new Set<string>());
   const [lancsConciliados, setLancsConciliados] = useState<Set<string>>(new Set<string>());
+
+  // PR2 — Preview Excel × OFX (zero persistência, vive em memória)
+  const [previewAtivo, setPreviewAtivo] = useState<boolean>(false);
+  const [lotes, setLotes] = useState<LoteExcel[]>([]);
+  const [matches, setMatches] = useState<Map<string, MatchResult>>(new Map<string, MatchResult>());
+  const [importando, setImportando] = useState<boolean>(false);
+  const [erroImport, setErroImport] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── 1) CARREGA CONTAS DO CLIENTE ─────────────────────────────────────
   useEffect(() => {
@@ -267,6 +280,82 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
 
   const contaSelecionada = contas.find((c) => c.id === contaId);
 
+  // ── PR2 PREVIEW EXCEL ────────────────────────────────────────────────
+  // Handlers: parse + match em memória. Zero persistência.
+  async function onArquivosSelecionados(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setImportando(true);
+    setErroImport(null);
+    try {
+      const novosLotes: LoteExcel[] = [];
+      for (const f of Array.from(files)) {
+        if (!f.name.toLowerCase().endsWith('.xlsx')) {
+          throw new Error(`Arquivo "${f.name}" não é .xlsx`);
+        }
+        const lote = await parseExcelToLote(f);
+        novosLotes.push(lote);
+      }
+      const todasLinhas = novosLotes.flatMap((l) => l.linhas);
+      const ofxMatcher: ExtratoMatcher[] = extratos.map((e) => ({
+        id: e.id, data_movimento: e.data_movimento,
+        valor: Number(e.valor), descricao: e.descricao,
+      }));
+      const newMatches = matchTodosLotes(todasLinhas, ofxMatcher);
+      setLotes(novosLotes);
+      setMatches(newMatches);
+      setPreviewAtivo(true);
+    } catch (err) {
+      setErroImport((err as Error).message);
+    } finally {
+      setImportando(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function fecharPreview() {
+    setPreviewAtivo(false);
+    setLotes([]);
+    setMatches(new Map<string, MatchResult>());
+    setErroImport(null);
+  }
+
+  // Recalcula matches quando OFX visualizado muda (operador troca mês/conta)
+  useEffect(() => {
+    if (!previewAtivo || lotes.length === 0) return;
+    const todasLinhas = lotes.flatMap((l) => l.linhas);
+    const ofxMatcher: ExtratoMatcher[] = extratos.map((e) => ({
+      id: e.id, data_movimento: e.data_movimento,
+      valor: Number(e.valor), descricao: e.descricao,
+    }));
+    setMatches(matchTodosLotes(todasLinhas, ofxMatcher));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extratos, previewAtivo, lotes]);
+
+  const previewStats = useMemo(() => {
+    if (!previewAtivo) {
+      return { total: 0, forte: 0, fraco: 0, nenhum: 0,
+               flagSemDataRef: 0, flagCompetenciaForaMes: 0,
+               flagTipoInconsistente: 0, flagContaInvalida: 0 };
+    }
+    const linhas = lotes.flatMap((l) => l.linhas);
+    let forte = 0, fraco = 0, nenhum = 0;
+    let flagSemDataRef = 0, flagCompetenciaForaMes = 0,
+        flagTipoInconsistente = 0, flagContaInvalida = 0;
+    linhas.forEach((l) => {
+      const m = matches.get(`${l.loteId}:${l.indiceLinha}`);
+      if (m?.faixa === 'forte') forte++;
+      else if (m?.faixa === 'fraco') fraco++;
+      else nenhum++;
+      if (l.flags.semDataRef) flagSemDataRef++;
+      if (l.flags.competenciaForaDoMes) flagCompetenciaForaMes++;
+      if (l.flags.tipoInconsistente) flagTipoInconsistente++;
+      if (l.flags.contaInvalida) flagContaInvalida++;
+    });
+    return { total: linhas.length, forte, fraco, nenhum,
+             flagSemDataRef, flagCompetenciaForaMes,
+             flagTipoInconsistente, flagContaInvalida };
+  }, [previewAtivo, lotes, matches]);
+
   // ── 4) RENDER ────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-3 max-w-[1400px] mx-auto">
@@ -411,6 +500,74 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
         </div>
       </Card>
 
+      {/* ── PR2: Botão Importar Excel (preview) ──────────────────────── */}
+      {!previewAtivo && (
+        <div className="flex items-center gap-2 justify-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            multiple
+            className="hidden"
+            onChange={(e) => onArquivosSelecionados(e.target.files)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importando}
+            className="text-xs"
+          >
+            <Upload className="h-3 w-3 mr-1.5" />
+            {importando ? 'Lendo Excel…' : 'Importar Excel (preview)'}
+          </Button>
+          {erroImport && (
+            <span className="text-[10px] text-rose-600">{erroImport}</span>
+          )}
+        </div>
+      )}
+
+      {/* ── PR2: Barra de preview ativo ───────────────────────────────── */}
+      {previewAtivo && (
+        <Card className="p-2 border-l-[4px] border-l-blue-500 bg-blue-50/40 dark:bg-blue-950/20">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 text-xs flex-wrap">
+              <span className="font-semibold text-foreground">📁 PREVIEW Excel ativo</span>
+              <span className="text-muted-foreground">
+                {lotes.length} arquivo(s) · {previewStats.total} linhas
+              </span>
+              <span className="text-blue-700 dark:text-blue-300 font-medium">
+                ✓ {previewStats.forte} forte
+              </span>
+              <span className="text-amber-700 dark:text-amber-300 font-medium">
+                ⚠ {previewStats.fraco} fraco
+              </span>
+              <span className="text-rose-700 dark:text-rose-300 font-medium">
+                ✗ {previewStats.nenhum} sem match
+              </span>
+              {(previewStats.flagSemDataRef + previewStats.flagCompetenciaForaMes
+                + previewStats.flagTipoInconsistente + previewStats.flagContaInvalida) > 0 && (
+                <span className="text-[10px] text-muted-foreground">
+                  (flags: {previewStats.flagSemDataRef} sem data |
+                  {' '}{previewStats.flagCompetenciaForaMes} comp. fora do mês |
+                  {' '}{previewStats.flagTipoInconsistente} tipo inconsist. |
+                  {' '}{previewStats.flagContaInvalida} conta inválida)
+                </span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fecharPreview}
+              className="text-xs h-7"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Fechar Preview
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* ── BLOCO 2 — SPLIT 50/50 ───────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
@@ -465,21 +622,78 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
           </div>
         </Card>
 
-        {/* Direita — Sistema */}
+        {/* Direita — Sistema OU Preview Excel (PR2) */}
         <Card className="p-2 max-h-[calc(100vh-280px)] flex flex-col">
           <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1">
-            Lançamentos sistema ({lancamentos.length} lançamentos)
+            {previewAtivo
+              ? `Preview Excel (${previewStats.total} linhas de ${lotes.length} arquivo${lotes.length === 1 ? '' : 's'})`
+              : `Lançamentos sistema (${lancamentos.length} lançamentos)`
+            }
           </div>
           <div className="flex-1 overflow-y-auto space-y-0.5">
             {loading && Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-9 w-full" />
             ))}
-            {!loading && lancamentos.length === 0 && (
+            {!loading && previewAtivo && (
+              // Render linhas do Excel (memória) com badge por faixa de match
+              lotes.flatMap((l) => l.linhas).length === 0 ? (
+                <div className="text-xs text-muted-foreground text-center py-8">
+                  Excel sem linhas válidas.
+                </div>
+              ) : (
+                lotes.flatMap((l) => l.linhas).map((linha) => {
+                  const m = matches.get(`${linha.loteId}:${linha.indiceLinha}`);
+                  const faixa = m?.faixa ?? 'nenhum';
+                  const data = linha.dataPagamento ?? linha.dataCompetencia;
+                  const valorSinalizado = (linha.sinal === 'entrada' ? 1 : -1) * (linha.valorCentavos / 100);
+                  const corBorda =
+                    faixa === 'forte' ? 'border-l-blue-500' :
+                    faixa === 'fraco' ? 'border-l-amber-500' :
+                    'border-l-rose-500';
+                  const badgeLabel =
+                    faixa === 'forte' ? `Forte (${m?.score ?? 0})` :
+                    faixa === 'fraco' ? `Fraco (${m?.score ?? 0})` :
+                    'Sem match';
+                  const titulo = `${linha.fornecedor} · ${linha.subcentro}${linha.observacao ? ' · ' + linha.observacao : ''}`;
+                  return (
+                    <div
+                      key={`${linha.loteId}:${linha.indiceLinha}`}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 text-xs border-l-[3px] rounded-r hover:bg-muted/30',
+                        corBorda,
+                        linha.flags.tipoInconsistente && 'bg-rose-50/30 dark:bg-rose-950/10',
+                      )}
+                      title={titulo}
+                    >
+                      <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
+                        {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
+                      </span>
+                      <span className="flex-1 truncate text-foreground">
+                        {linha.fornecedor || <span className="italic">{linha.subcentro}</span>}
+                        {linha.flags.semDataRef && <span className="text-amber-600 ml-1">⚠</span>}
+                      </span>
+                      <span className={cn('tabular-nums shrink-0 font-medium',
+                        linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
+                      )}>
+                        {fmtBRL(valorSinalizado)}
+                      </span>
+                      <Badge
+                        variant={faixa === 'forte' ? 'default' : faixa === 'fraco' ? 'secondary' : 'destructive'}
+                        className="text-[9px] h-4 px-1.5 shrink-0"
+                      >
+                        {badgeLabel}
+                      </Badge>
+                    </div>
+                  );
+                })
+              )
+            )}
+            {!loading && !previewAtivo && lancamentos.length === 0 && (
               <div className="text-xs text-muted-foreground text-center py-8">
                 Sem lançamentos no período.
               </div>
             )}
-            {!loading && lancamentos.map((l) => {
+            {!loading && !previewAtivo && lancamentos.map((l) => {
               const conciliado = lancsConciliados.has(l.id);
               const data = l.data_pagamento ?? l.data_competencia;
               const valorSinalizado = (l.sinal === 'entrada' ? 1 : -1) * Number(l.valor);
