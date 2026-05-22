@@ -31,6 +31,7 @@ export const SECTION_PERIODO: Partial<Record<V2Section, PeriodoTipo>> = {
   'importacao-extratos':   'nenhum',
   'financeiro-lanc':       'nenhum',
   'conciliacao':           'nenhum',
+  'mesa-operacional':      'nenhum',
   'saldos-mensais':        'nenhum',
   'financiamentos':        'nenhum',
   'painel-financiamentos': 'ano',

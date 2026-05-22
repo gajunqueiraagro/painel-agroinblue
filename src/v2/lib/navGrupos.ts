@@ -2,6 +2,7 @@
  * navGrupos.ts — Fonte única de verdade para a navegação do /v2
  * Atualizado com estrutura completa do módulo Financeiro.
  */
+import { FEATURE_FLAGS } from '@/lib/featureFlags';
 
 export type V2Section =
   | 'home'
@@ -17,7 +18,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'saldos-mensais'
+  | 'conciliacao' | 'saldos-mensais' | 'mesa-operacional'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -105,6 +106,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
+          ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
+            ? [{ id: 'mesa-operacional' as const, label: 'Mesa Operacional ⚡', status: 'ready' as const }]
+            : []),
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
           { id: 'importacao-extratos', label: 'Importação Extratos',     status: 'needs-wrapper' },
@@ -216,6 +220,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
   'importacao-extratos': 'financeiro', 'financeiro-lanc': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro',
+  'mesa-operacional': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',
   'analise-trimestral': 'financeiro',

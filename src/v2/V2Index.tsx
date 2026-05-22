@@ -52,6 +52,7 @@ import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { V2MesaOperacional } from './pages/V2MesaOperacional';
 import { V2Configuracoes } from './pages/V2Configuracoes';
 import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
@@ -388,6 +389,12 @@ export default function V2Index() {
           setVoltarParaConciliacao(true);
           setSection('financeiro-lanc');
         }}
+      />
+    );
+    if (section === 'mesa-operacional') return (
+      <V2MesaOperacional
+        initialAno={ano}
+        initialMes={mes !== '0' ? Number(mes) : undefined}
       />
     );
     if (section === 'painel-financiamentos') return (
