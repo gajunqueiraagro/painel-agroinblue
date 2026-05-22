@@ -23,10 +23,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, LayoutGrid } from 'lucide-react';
 import { parseExcelToLote } from '@/v2/lib/excelPreview/parser';
 import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matchEngine';
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
+import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
 
 interface V2MesaOperacionalProps {
   initialAno?: string;
@@ -93,6 +94,9 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
   const [importando, setImportando] = useState<boolean>(false);
   const [erroImport, setErroImport] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // PR3 — Modal de pareamento (preserva preview; só fecha a janela)
+  const [modalAberto, setModalAberto] = useState<boolean>(false);
 
   // ── 1) CARREGA CONTAS DO CLIENTE ─────────────────────────────────────
   useEffect(() => {
@@ -555,15 +559,26 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
                 </span>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fecharPreview}
-              className="text-xs h-7"
-            >
-              <X className="h-3 w-3 mr-1" />
-              Fechar Preview
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setModalAberto(true)}
+                className="text-xs h-7"
+              >
+                <LayoutGrid className="h-3 w-3 mr-1" />
+                Abrir Mesa de Pareamento
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fecharPreview}
+                className="text-xs h-7"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Fechar Preview
+              </Button>
+            </div>
           </div>
         </Card>
       )}
@@ -736,6 +751,27 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
         </Card>
 
       </div>
+
+      {/* PR3 — Modal largo de pareamento (3 colunas). Aprovações em memória. */}
+      {previewAtivo && contaSelecionada && clienteAtual?.id && (
+        <MesaPareamentoModal
+          open={modalAberto}
+          onOpenChange={setModalAberto}
+          clienteId={clienteAtual.id}
+          contaNome={contaSelecionada.nome_exibicao ?? '—'}
+          anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
+          saldoOfxResumo={`${fmtBRL(calc.entradasOfx)} / ${fmtBRL(calc.saidasOfx)}`}
+          naoExplicado={fmtBRL(calc.naoExplicado)}
+          lotes={lotes}
+          matches={matches}
+          extratos={extratos.map((e) => ({
+            id: e.id,
+            data_movimento: e.data_movimento,
+            descricao: e.descricao,
+            valor: Number(e.valor),
+          }))}
+        />
+      )}
 
     </div>
   );
