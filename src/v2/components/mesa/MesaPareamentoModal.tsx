@@ -76,6 +76,21 @@ interface ParEscopo {
   rotuloConta: string | null;
 }
 
+// PR3.3 — Modo OFX (visão bancária)
+type ModoVisualizacao = 'excel' | 'ofx';
+type OfxValidacaoStatus = 'pendente' | 'ofx_orfao_validado';
+type FiltroMostrarOfx = 'todos' | 'pendentes' | 'com_sugestao'
+                      | 'sem_sugestao' | 'aprovados' | 'ofx_orfao_validado';
+type FiltroOrdemOfx = 'original' | 'data_asc' | 'data_desc'
+                    | 'valor_desc' | 'valor_asc' | 'score_desc';
+
+interface CandidatoExcelParaOfx {
+  excelKey: string;
+  score: number;
+  faixa: 'forte' | 'fraco' | 'nenhum';
+  linha: ExcelLinhaNormalizada;
+}
+
 export function MesaPareamentoModal({
   open, onOpenChange, clienteId, contaNome, contaId, anoMes,
   saldoOfxResumo, naoExplicado, lotes, matches, extratos,
@@ -144,6 +159,15 @@ export function MesaPareamentoModal({
   const [filtroMostrar, setFiltroMostrar] = useState<FiltroMostrar>('todos');
   const [filtroEscopo, setFiltroEscopo] = useState<FiltroEscopo>('todos');
   const [filtroOrdem, setFiltroOrdem] = useState<FiltroOrdem>('score_desc');
+
+  // PR3.3 — Modo OFX (lente bancária)
+  const [modoVisualizacao, setModoVisualizacao] = useState<ModoVisualizacao>('excel');
+  const [ofxValidacoes, setOfxValidacoes] = useState<Map<string, OfxValidacaoStatus>>(
+    new Map<string, OfxValidacaoStatus>(),
+  );
+  const [filtroOfxMostrar, setFiltroOfxMostrar] = useState<FiltroMostrarOfx>('todos');
+  const [filtroOfxOrdem, setFiltroOfxOrdem] = useState<FiltroOrdemOfx>('original');
+  const [ofxAtivoId, setOfxAtivoId] = useState<string | null>(null);
 
   // ---------- ações de decisão ----------
 
@@ -320,6 +344,121 @@ export function MesaPareamentoModal({
     return out;
   }, [linhaAtiva, sugAtiva, ofxAtivo, contaId, contaNome]);
 
+  // ──────────────────────────────────────────────────────────────────────
+  // PR3.3 — Modo OFX: derivações e ações
+  // ──────────────────────────────────────────────────────────────────────
+
+  // candidatosPorOfx: inverte `matches` (Excel→OFX) em OFX→Excel.
+  // Não recalcula score — apenas reorganiza top-5 já existente em
+  // MatchResult.ofxIdCandidatos do PR3.1.
+  const candidatosPorOfx = useMemo<Map<string, CandidatoExcelParaOfx[]>>(() => {
+    const out = new Map<string, CandidatoExcelParaOfx[]>();
+    extratos.forEach((e) => out.set(e.id, []));
+    linhasExcel.forEach((l) => {
+      const key = `${l.loteId}:${l.indiceLinha}`;
+      const m = matches.get(key);
+      if (!m) return;
+      const ids = new Set<string>([
+        ...(m.ofxIdMatched ? [m.ofxIdMatched] : []),
+        ...m.ofxIdCandidatos,
+      ]);
+      ids.forEach((ofxId) => {
+        const arr = out.get(ofxId);
+        if (!arr) return;
+        arr.push({ excelKey: key, score: m.score, faixa: m.faixa, linha: l });
+      });
+    });
+    out.forEach((arr, ofxId) => {
+      arr.sort((a, b) => b.score - a.score);
+      out.set(ofxId, arr.slice(0, 10));
+    });
+    return out;
+  }, [extratos, linhasExcel, matches]);
+
+  // Contadores específicos do Modo OFX
+  const contadoresOfx = useMemo(() => {
+    let pendentes = 0;
+    let aprovados = 0;
+    let orfaoValidado = 0;
+    let semSugestao = 0;
+    extratos.forEach((e) => {
+      const validacao = ofxValidacoes.get(e.id) ?? 'pendente';
+      const consumido = ofxConsumidos.has(e.id);
+      const candidatos = candidatosPorOfx.get(e.id) ?? [];
+      if (validacao === 'ofx_orfao_validado') orfaoValidado++;
+      else if (consumido) aprovados++;
+      else pendentes++;
+      if (candidatos.length === 0) semSugestao++;
+    });
+    return { pendentes, aprovados, orfaoValidado, semSugestao };
+  }, [extratos, ofxConsumidos, ofxValidacoes, candidatosPorOfx]);
+
+  // Lista filtrada/ordenada de OFX
+  const ofxFiltrados = useMemo<OfxItem[]>(() => {
+    let arr = extratos.slice();
+    arr = arr.filter((e) => {
+      const validacao = ofxValidacoes.get(e.id) ?? 'pendente';
+      const consumido = ofxConsumidos.has(e.id);
+      const candidatos = candidatosPorOfx.get(e.id) ?? [];
+      switch (filtroOfxMostrar) {
+        case 'pendentes':
+          return validacao === 'pendente' && !consumido;
+        case 'com_sugestao':
+          return candidatos.length > 0;
+        case 'sem_sugestao':
+          return candidatos.length === 0;
+        case 'aprovados':
+          return consumido;
+        case 'ofx_orfao_validado':
+          return validacao === 'ofx_orfao_validado';
+        default:
+          return true;
+      }
+    });
+    if (filtroOfxOrdem === 'data_asc') {
+      arr.sort((a, b) => a.data_movimento.localeCompare(b.data_movimento));
+    } else if (filtroOfxOrdem === 'data_desc') {
+      arr.sort((a, b) => b.data_movimento.localeCompare(a.data_movimento));
+    } else if (filtroOfxOrdem === 'valor_desc') {
+      arr.sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+    } else if (filtroOfxOrdem === 'valor_asc') {
+      arr.sort((a, b) => Math.abs(a.valor) - Math.abs(b.valor));
+    } else if (filtroOfxOrdem === 'score_desc') {
+      arr.sort((a, b) => {
+        const sa = candidatosPorOfx.get(a.id)?.[0]?.score ?? 0;
+        const sb = candidatosPorOfx.get(b.id)?.[0]?.score ?? 0;
+        return sb - sa;
+      });
+    }
+    return arr;
+  }, [extratos, ofxConsumidos, ofxValidacoes, candidatosPorOfx, filtroOfxMostrar, filtroOfxOrdem]);
+
+  // Ações Modo OFX
+  function marcarOfxOrfaoValidado(ofxId: string) {
+    setOfxValidacoes((prev) => {
+      const next = new Map<string, OfxValidacaoStatus>(prev);
+      next.set(ofxId, 'ofx_orfao_validado');
+      return next;
+    });
+  }
+  function desfazerOfxOrfaoValidado(ofxId: string) {
+    setOfxValidacoes((prev) => {
+      const next = new Map<string, OfxValidacaoStatus>(prev);
+      next.delete(ofxId);
+      return next;
+    });
+  }
+  // Aprovar via candidato Excel: ajusta ofxIdAtivo e decisao do par
+  // numa única passagem de setPares (sem race).
+  function aprovarOfxComExcel(ofxId: string, excelKey: string) {
+    setPares((prev) => {
+      const next = new Map<string, ParEstado>(prev);
+      const cur = next.get(excelKey);
+      if (cur) next.set(excelKey, { ...cur, ofxIdAtivo: ofxId, decisao: 'aprovado' });
+      return next;
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
@@ -329,52 +468,113 @@ export function MesaPareamentoModal({
             <div className="flex items-center gap-3 text-xs font-normal flex-wrap">
               <span className="text-muted-foreground">OFX entr./saí.: {saldoOfxResumo}</span>
               <span className="text-rose-700 font-medium">Não explicado: {naoExplicado}</span>
-              <span className="text-emerald-700">✓ {contadores.aprovados} aprov.</span>
-              <span className="text-rose-700">✗ {contadores.rejeitados} rej.</span>
-              <span className="text-amber-700">→ {contadores.orfaos} excel órf.</span>
-              <span className="text-muted-foreground">— {contadores.pendentes} pend.</span>
-              <span className="text-muted-foreground">| banco órf.: {contadores.bancoOrfao}</span>
+              {modoVisualizacao === 'excel' ? (
+                <>
+                  <span className="text-emerald-700">✓ {contadores.aprovados} aprov.</span>
+                  <span className="text-rose-700">✗ {contadores.rejeitados} rej.</span>
+                  <span className="text-amber-700">→ {contadores.orfaos} excel órf.</span>
+                  <span className="text-muted-foreground">— {contadores.pendentes} pend.</span>
+                  <span className="text-muted-foreground">| banco órf.: {contadores.bancoOrfao}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-emerald-700">✓ {contadoresOfx.aprovados} aprov.</span>
+                  <span className="text-muted-foreground">— {contadoresOfx.pendentes} pend.</span>
+                  <span className="text-amber-700">⊘ {contadoresOfx.orfaoValidado} órfão validado</span>
+                  <span className="text-muted-foreground">| sem sugestão: {contadoresOfx.semSugestao}</span>
+                </>
+              )}
             </div>
           </DialogTitle>
+          {/* PR3.3 — Toggle Modo Excel / Modo OFX */}
+          <div className="flex items-center gap-1 pt-1">
+            <Button
+              variant={modoVisualizacao === 'excel' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setModoVisualizacao('excel')}
+              className="text-xs h-7"
+            >
+              Modo Excel
+            </Button>
+            <Button
+              variant={modoVisualizacao === 'ofx' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setModoVisualizacao('ofx')}
+              className="text-xs h-7"
+            >
+              Modo OFX
+            </Button>
+          </div>
           <div className="flex items-center gap-2 text-xs pt-2 flex-wrap">
-            <span className="text-muted-foreground">Mostrar:</span>
-            <Select value={filtroMostrar} onValueChange={(v) => setFiltroMostrar(v as FiltroMostrar)}>
-              <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos ({linhasExcel.length})</SelectItem>
-                <SelectItem value="forte">Forte</SelectItem>
-                <SelectItem value="fraco">Fraco</SelectItem>
-                <SelectItem value="sem_match">Sem match</SelectItem>
-                <SelectItem value="pendentes">Pendentes</SelectItem>
-                <SelectItem value="aprovados">Aprovados</SelectItem>
-                <SelectItem value="rejeitados">Rejeitados</SelectItem>
-                <SelectItem value="orfaos">Excel órfãos</SelectItem>
-                <SelectItem value="banco_orfao">Banco órfão</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-muted-foreground ml-2">Escopo:</span>
-            <Select value={filtroEscopo} onValueChange={(v) => setFiltroEscopo(v as FiltroEscopo)}>
-              <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="desta_conta">Excel desta conta</SelectItem>
-                <SelectItem value="outras_contas">Excel outras contas (divergência)</SelectItem>
-                <SelectItem value="sem_inferencia">Sem inferência de conta</SelectItem>
-                <SelectItem value="sem_ofx">Sem OFX vinculado</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-muted-foreground ml-2">Ordenar:</span>
-            <Select value={filtroOrdem} onValueChange={(v) => setFiltroOrdem(v as FiltroOrdem)}>
-              <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="score_desc">Score desc</SelectItem>
-                <SelectItem value="valor_desc">Valor desc</SelectItem>
-                <SelectItem value="valor_asc">Valor asc</SelectItem>
-                <SelectItem value="data_asc">Data asc</SelectItem>
-                <SelectItem value="data_desc">Data desc</SelectItem>
-                <SelectItem value="original">Original</SelectItem>
-              </SelectContent>
-            </Select>
+            {modoVisualizacao === 'excel' ? (
+              <>
+                <span className="text-muted-foreground">Mostrar:</span>
+                <Select value={filtroMostrar} onValueChange={(v) => setFiltroMostrar(v as FiltroMostrar)}>
+                  <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos ({linhasExcel.length})</SelectItem>
+                    <SelectItem value="forte">Forte</SelectItem>
+                    <SelectItem value="fraco">Fraco</SelectItem>
+                    <SelectItem value="sem_match">Sem match</SelectItem>
+                    <SelectItem value="pendentes">Pendentes</SelectItem>
+                    <SelectItem value="aprovados">Aprovados</SelectItem>
+                    <SelectItem value="rejeitados">Rejeitados</SelectItem>
+                    <SelectItem value="orfaos">Excel órfãos</SelectItem>
+                    <SelectItem value="banco_orfao">Banco órfão</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground ml-2">Escopo:</span>
+                <Select value={filtroEscopo} onValueChange={(v) => setFiltroEscopo(v as FiltroEscopo)}>
+                  <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="desta_conta">Excel desta conta</SelectItem>
+                    <SelectItem value="outras_contas">Excel outras contas (divergência)</SelectItem>
+                    <SelectItem value="sem_inferencia">Sem inferência de conta</SelectItem>
+                    <SelectItem value="sem_ofx">Sem OFX vinculado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground ml-2">Ordenar:</span>
+                <Select value={filtroOrdem} onValueChange={(v) => setFiltroOrdem(v as FiltroOrdem)}>
+                  <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="score_desc">Score desc</SelectItem>
+                    <SelectItem value="valor_desc">Valor desc</SelectItem>
+                    <SelectItem value="valor_asc">Valor asc</SelectItem>
+                    <SelectItem value="data_asc">Data asc</SelectItem>
+                    <SelectItem value="data_desc">Data desc</SelectItem>
+                    <SelectItem value="original">Original</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            ) : (
+              <>
+                <span className="text-muted-foreground">Mostrar:</span>
+                <Select value={filtroOfxMostrar} onValueChange={(v) => setFiltroOfxMostrar(v as FiltroMostrarOfx)}>
+                  <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos ({extratos.length})</SelectItem>
+                    <SelectItem value="pendentes">Pendentes</SelectItem>
+                    <SelectItem value="com_sugestao">Com sugestão</SelectItem>
+                    <SelectItem value="sem_sugestao">Sem sugestão</SelectItem>
+                    <SelectItem value="aprovados">Aprovados</SelectItem>
+                    <SelectItem value="ofx_orfao_validado">OFX órfão validado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground ml-2">Ordenar:</span>
+                <Select value={filtroOfxOrdem} onValueChange={(v) => setFiltroOfxOrdem(v as FiltroOrdemOfx)}>
+                  <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="original">Original (extrato)</SelectItem>
+                    <SelectItem value="data_asc">Data asc</SelectItem>
+                    <SelectItem value="data_desc">Data desc</SelectItem>
+                    <SelectItem value="valor_desc">Valor desc</SelectItem>
+                    <SelectItem value="valor_asc">Valor asc</SelectItem>
+                    <SelectItem value="score_desc">Score top desc</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            )}
             {catalogoCarregando && (
               <span className="text-muted-foreground ml-2">Carregando catálogo…</span>
             )}
@@ -391,6 +591,8 @@ export function MesaPareamentoModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden grid grid-cols-[1.15fr_1.35fr_1fr] gap-2 p-2">
+
+          {modoVisualizacao === 'excel' && <>
 
           {/* COL 1 — LISTA DE PARES */}
           <Card className="p-2 flex flex-col overflow-hidden">
@@ -638,6 +840,244 @@ export function MesaPareamentoModal({
               )}
             </div>
           </Card>
+
+          </>}
+
+          {modoVisualizacao === 'ofx' && <>
+
+          {/* COL 1 — LISTA DE OFX */}
+          <Card className="p-2 flex flex-col overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1 shrink-0">
+              OFX ({ofxFiltrados.length} de {extratos.length})
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-0.5">
+              {ofxFiltrados.map((e) => {
+                const validacao = ofxValidacoes.get(e.id) ?? 'pendente';
+                const consumido = ofxConsumidos.has(e.id);
+                const candidatos = candidatosPorOfx.get(e.id) ?? [];
+                const ativo = ofxAtivoId === e.id;
+                const topScore = candidatos[0]?.score ?? 0;
+
+                const corBorda =
+                  validacao === 'ofx_orfao_validado'
+                    ? 'border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/20'
+                    : consumido
+                      ? 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
+                      : candidatos.length === 0
+                        ? 'border-l-slate-400'
+                        : topScore >= 80
+                          ? 'border-l-blue-500'
+                          : topScore >= 60
+                            ? 'border-l-amber-500'
+                            : 'border-l-rose-500';
+
+                const icone =
+                  validacao === 'ofx_orfao_validado' ? '⊘' :
+                  consumido ? '✓' : '—';
+
+                return (
+                  <button
+                    key={e.id}
+                    onClick={() => setOfxAtivoId(e.id)}
+                    className={cn(
+                      'w-full flex items-center gap-1 px-2 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      corBorda,
+                      ativo && 'ring-2 ring-primary ring-inset bg-muted',
+                    )}
+                  >
+                    <span className="shrink-0 w-3 text-center text-muted-foreground">{icone}</span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
+                      {format(new Date(e.data_movimento + 'T12:00:00'), 'dd/MM', { locale: ptBR })}
+                    </span>
+                    <span className="flex-1 truncate">{e.descricao}</span>
+                    <span className={cn('tabular-nums shrink-0 font-medium',
+                      e.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
+                    )}>{fmtBRL(e.valor)}</span>
+                    {candidatos.length > 0 ? (
+                      <Badge
+                        variant={topScore >= 80 ? 'default' : topScore >= 60 ? 'secondary' : 'destructive'}
+                        className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
+                      >{topScore}</Badge>
+                    ) : (
+                      <span className="text-[9px] text-muted-foreground shrink-0">—</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* COL 2 — DETALHE DO OFX */}
+          <Card className="p-3 flex flex-col overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
+              Detalhe do OFX
+            </div>
+            {(() => {
+              if (!ofxAtivoId) return (
+                <div className="flex-1 text-center text-muted-foreground italic py-12">
+                  Selecione um OFX na lista à esquerda
+                </div>
+              );
+              const ofx = extratos.find((e) => e.id === ofxAtivoId);
+              if (!ofx) return null;
+              const candidatos = candidatosPorOfx.get(ofx.id) ?? [];
+              const validacao = ofxValidacoes.get(ofx.id) ?? 'pendente';
+
+              return (
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  <div className="border rounded p-2.5 space-y-1 bg-muted/30">
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground">OFX</div>
+                    <div className="text-xs flex items-center gap-3">
+                      <span className="tabular-nums text-muted-foreground">
+                        {format(new Date(ofx.data_movimento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                      </span>
+                      <span className={cn('tabular-nums font-bold',
+                        ofx.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
+                      )}>{fmtBRL(ofx.valor)}</span>
+                    </div>
+                    <div className="text-xs">{ofx.descricao}</div>
+                    {validacao === 'ofx_orfao_validado' && (
+                      <div className="text-[10px] font-semibold px-2 py-1 mt-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                        ⊘ OFX órfão validado — operador marcou como sem Excel correspondente
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border rounded p-2.5">
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1.5">
+                      Candidatos Excel ({candidatos.length})
+                    </div>
+                    {candidatos.length === 0 ? (
+                      <div className="text-xs italic text-muted-foreground">
+                        Nenhum candidato encontrado pelo motor de match
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {candidatos.slice(0, 5).map((cand) => {
+                          const data = cand.linha.dataPagamento ?? cand.linha.dataCompetencia;
+                          const valorSinalizado = (cand.linha.sinal === 'entrada' ? 1 : -1)
+                            * (cand.linha.valorCentavos / 100);
+                          const par = pares.get(cand.excelKey);
+                          const jaAprovadoOutroOfx = par?.decisao === 'aprovado' && par.ofxIdAtivo !== ofx.id;
+                          return (
+                            <div
+                              key={cand.excelKey}
+                              className={cn(
+                                'flex items-center gap-2 px-2 py-1.5 text-[11px] border rounded',
+                                cand.faixa === 'forte' && 'border-blue-300',
+                                cand.faixa === 'fraco' && 'border-amber-300',
+                                jaAprovadoOutroOfx && 'opacity-50',
+                              )}
+                            >
+                              <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
+                                {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
+                              </span>
+                              <span className="flex-1 truncate">
+                                {cand.linha.fornecedor || cand.linha.subcentro || '—'}
+                              </span>
+                              <span className={cn('tabular-nums shrink-0',
+                                cand.linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
+                              )}>{fmtBRL(valorSinalizado)}</span>
+                              <Badge
+                                variant={cand.faixa === 'forte' ? 'default' :
+                                         cand.faixa === 'fraco' ? 'secondary' : 'destructive'}
+                                className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
+                              >{cand.score}</Badge>
+                              {jaAprovadoOutroOfx && (
+                                <span className="text-[9px] text-amber-700 shrink-0">já aprov. em outro OFX</span>
+                              )}
+                              <Button
+                                size="sm" variant="outline"
+                                className="h-6 text-[10px] shrink-0"
+                                disabled={jaAprovadoOutroOfx || validacao === 'ofx_orfao_validado'}
+                                onClick={() => aprovarOfxComExcel(ofx.id, cand.excelKey)}
+                              >
+                                Aprovar
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
+
+          {/* COL 3 — DECISÃO OFX */}
+          <Card className="p-3 flex flex-col overflow-hidden">
+            <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
+              Decisão
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {!ofxAtivoId ? (
+                <div className="text-center text-muted-foreground italic py-12">
+                  Selecione um OFX
+                </div>
+              ) : (() => {
+                const validacao = ofxValidacoes.get(ofxAtivoId) ?? 'pendente';
+                const consumido = ofxConsumidos.has(ofxAtivoId);
+
+                if (consumido) {
+                  // Encontrar qual par consumiu
+                  let parKey: string | null = null;
+                  pares.forEach((p, k) => {
+                    if (p.decisao === 'aprovado' && p.ofxIdAtivo === ofxAtivoId) parKey = k;
+                  });
+                  return (
+                    <>
+                      <div className="text-[11px] text-emerald-700 px-1">
+                        ✓ Aprovado via par Excel
+                      </div>
+                      {parKey && (
+                        <Button
+                          size="sm" variant="ghost"
+                          className="w-full justify-start text-xs h-8"
+                          onClick={() => { if (parKey) desfazer(parKey); }}
+                        >
+                          <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer aprovação
+                        </Button>
+                      )}
+                    </>
+                  );
+                }
+
+                if (validacao === 'ofx_orfao_validado') {
+                  return (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="w-full justify-start text-xs h-8"
+                      onClick={() => desfazerOfxOrfaoValidado(ofxAtivoId)}
+                    >
+                      <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer (ofx órfão validado)
+                    </Button>
+                  );
+                }
+
+                return (
+                  <>
+                    <div className="text-[11px] text-muted-foreground px-1 pb-1">
+                      OFX pendente. Aprove via candidato Excel (col. 2) ou marque como órfão validado:
+                    </div>
+                    <Button
+                      size="sm" variant="outline"
+                      className="w-full justify-start text-xs h-8"
+                      onClick={() => marcarOfxOrfaoValidado(ofxAtivoId)}
+                    >
+                      ⊘ Marcar como OFX órfão validado
+                    </Button>
+                    <div className="text-[10px] text-muted-foreground px-1 pt-1">
+                      Use para: rendimentos automáticos, IOF, tarifas, estornos internos —
+                      qualquer OFX que nunca terá Excel correspondente.
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </Card>
+
+          </>}
 
         </div>
       </DialogContent>
