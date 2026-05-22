@@ -1,27 +1,19 @@
 import type { ExcelLinhaNormalizada, MatchResult } from './types';
 
 /**
- * Match Excel × OFX (totalmente em memória).
+ * Match Excel × OFX (totalmente em memória) — versão PR3.1.
  *
- * Pesos (gate obrigatório: valor exato em centavos):
- *   valor exato (centavos)   = OBRIGATÓRIO (sem isso, score=0, faixa=nenhum)
- *   mesma data               = +20
- *   ±1 dia                   = +12
- *   ±3 dias                  = +6
- *   similaridade fornecedor >0.7  = +15
- *   mesma conta (texto OFX descrição contém Conta Excel) = +10 (PR5 fará dicionário)
- *   mesma fazenda                 = +3 (limitado nesse PR — sem de-para)
- *
- * Faixas:
- *   >= 75 → forte (azul)
- *   40-74 → fraco (amarelo)
- *   < 40  → nenhum (cinza)
+ * Mudanças vs PR2:
+ *   - Pesos data: +30/+20/+10 (era +20/+12/+6)
+ *   - Novo: bônus +10 / penalidade -30 por sinal coerente/incoerente
+ *   - Faixas: ≥80 forte, 60-79 fraco, <60 nenhum (era ≥75/40-74/<40)
+ *   - top 5 candidatos (era top 3) — alimenta "Outro OFX" no PR3.1
  */
 
 export interface ExtratoMatcher {
   id: string;
   data_movimento: string;     // 'YYYY-MM-DD'
-  valor: number;              // positivo entrada / negativo saída
+  valor: number;              // POSITIVO entrada / NEGATIVO saída — sinal importa
   descricao: string;
 }
 
@@ -30,9 +22,8 @@ export function matchExcelLinha(
   ofxLista: ExtratoMatcher[],
 ): MatchResult {
   const valorAlvo = excel.valorCentavos;
-  // filtra candidatos com valor exato (em centavos absolutos)
   const candidatos = ofxLista.filter(
-    e => Math.round(Math.abs(Number(e.valor)) * 100) === valorAlvo,
+    (e) => Math.round(Math.abs(Number(e.valor)) * 100) === valorAlvo,
   );
 
   if (candidatos.length === 0) {
@@ -54,34 +45,45 @@ export function matchExcelLinha(
     };
   }
 
-  // para cada candidato, calcular score completo
   const dataExcel = excel.dataPagamento ?? excel.dataCompetencia;
-  const scored = candidatos.map(c => {
+
+  const scored = candidatos.map((c) => {
     const dias = dataExcel ? diffDias(dataExcel, c.data_movimento) : null;
+
+    // PR3.1: pesos de data aumentados — data exata + valor exato é evidência fortíssima
     const pontosData =
       dias === null ? 0 :
-      Math.abs(dias) === 0 ? 20 :
-      Math.abs(dias) <= 1 ? 12 :
-      Math.abs(dias) <= 3 ? 6 :
+      Math.abs(dias) === 0 ? 30 :
+      Math.abs(dias) <= 1 ? 20 :
+      Math.abs(dias) <= 3 ? 10 :
       0;
 
     const sim = similaridadeNome(excel.fornecedor, c.descricao);
     const pontosNome = sim >= 0.7 ? 15 : 0;
 
-    // conta: o OFX não tem campo "conta" estruturado bom; PR2 pula este sinal
-    // (PR5 vai fazer dicionário de conta texto → conta_bancaria_id)
-    const pontosConta = 0;
-    const pontosFazenda = 0;  // idem
+    // PR3.1: verificação de sinal Excel ↔ OFX
+    // Excel entrada (sinal='entrada') deve casar com OFX positivo (valor > 0).
+    // Excel saída (sinal='saida') deve casar com OFX negativo (valor < 0).
+    // Sinal desconhecido = neutro (sem bônus, sem penalidade).
+    const ofxValor = Number(c.valor);
+    const sinalCoerente =
+      (excel.sinal === 'entrada' && ofxValor > 0) ||
+      (excel.sinal === 'saida' && ofxValor < 0);
+    const sinalIncoerente =
+      (excel.sinal === 'entrada' && ofxValor < 0) ||
+      (excel.sinal === 'saida' && ofxValor > 0);
+    const pontosSinal = sinalCoerente ? 10 : sinalIncoerente ? -30 : 0;
 
-    const score = 50  // gate de valor já vale base
-      + pontosData
-      + pontosNome
-      + pontosConta
-      + pontosFazenda;
+    const pontosConta = 0;     // mantido — PR5 dicionário
+    const pontosFazenda = 0;
+
+    const score = Math.max(0, Math.min(100,
+      50 + pontosData + pontosNome + pontosSinal + pontosConta + pontosFazenda,
+    ));
 
     return {
       ofx: c,
-      score: Math.min(score, 100),
+      score,
       detalhe: { dias, pontosData, sim, pontosNome, pontosConta, pontosFazenda },
     };
   });
@@ -89,9 +91,10 @@ export function matchExcelLinha(
   scored.sort((a, b) => b.score - a.score);
   const melhor = scored[0];
 
+  // PR3.1: novas faixas
   const faixa: MatchResult['faixa'] =
-    melhor.score >= 75 ? 'forte' :
-    melhor.score >= 40 ? 'fraco' :
+    melhor.score >= 80 ? 'forte' :
+    melhor.score >= 60 ? 'fraco' :
     'nenhum';
 
   return {
@@ -99,7 +102,7 @@ export function matchExcelLinha(
     ofxIdMatched: faixa === 'nenhum' ? null : melhor.ofx.id,
     score: melhor.score,
     faixa,
-    ofxIdCandidatos: scored.slice(0, 3).map(x => x.ofx.id),
+    ofxIdCandidatos: scored.slice(0, 5).map((x) => x.ofx.id),  // top 5 — pro "Outro OFX"
     detalheScore: {
       valorBate: true,
       diasDistancia: melhor.detalhe.dias,
@@ -121,7 +124,7 @@ export function matchTodosLotes(
   ofxLista: ExtratoMatcher[],
 ): Map<string, MatchResult> {
   const out = new Map<string, MatchResult>();
-  linhasExcel.forEach(l => {
+  linhasExcel.forEach((l) => {
     out.set(`${l.loteId}:${l.indiceLinha}`, matchExcelLinha(l, ofxLista));
   });
   return out;
@@ -150,10 +153,10 @@ function similaridadeNome(a: string, b: string): number {
   const nb = norm(b);
   if (!na || !nb) return 0;
   if (na === nb) return 1;
-  const ta = new Set(na.split(' ').filter(t => t.length >= 3));
-  const tb = new Set(nb.split(' ').filter(t => t.length >= 3));
+  const ta = new Set<string>(na.split(' ').filter((t) => t.length >= 3));
+  const tb = new Set<string>(nb.split(' ').filter((t) => t.length >= 3));
   if (ta.size === 0 || tb.size === 0) return 0;
-  const inter = new Set([...ta].filter(x => tb.has(x)));
-  const union = new Set([...ta, ...tb]);
+  const inter = new Set<string>([...ta].filter((x) => tb.has(x)));
+  const union = new Set<string>([...ta, ...tb]);
   return inter.size / union.size;
 }

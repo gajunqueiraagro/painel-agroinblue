@@ -759,6 +759,7 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
           onOpenChange={setModalAberto}
           clienteId={clienteAtual.id}
           contaNome={contaSelecionada.nome_exibicao ?? '—'}
+          contaId={contaSelecionada.id}
           anoMes={`${ano}-${String(mes).padStart(2, '0')}`}
           saldoOfxResumo={`${fmtBRL(calc.entradasOfx)} / ${fmtBRL(calc.saidasOfx)}`}
           naoExplicado={fmtBRL(calc.naoExplicado)}
