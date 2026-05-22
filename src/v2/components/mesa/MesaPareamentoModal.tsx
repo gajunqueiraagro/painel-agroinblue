@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,19 +8,38 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
-import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search } from 'lucide-react';
+import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCatalogoCliente } from '@/v2/lib/excelPreview/catalogoCliente';
+import { useCatalogoCliente, type CatalogoCliente } from '@/v2/lib/excelPreview/catalogoCliente';
 import { sugerirTodasLinhas, type Sugestao } from '@/v2/lib/excelPreview/sugestaoEngine';
 import type { LoteExcel, MatchResult, ExcelLinhaNormalizada } from '@/v2/lib/excelPreview/types';
 
 type DecisaoStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'excel_orfao';
+
+// PR4 — overrides do operador sobre os campos sugeridos pela IA.
+// Vive dentro do ParEstado; quando null, aprovação usa sugestão pura.
+interface ParCorrecao {
+  contaId: string | null;
+  contaRotulo: string | null;
+  fazendaId: string | null;
+  fazendaNome: string | null;
+  fornecedorId: string | null;
+  fornecedorNome: string | null;
+  dataCompetencia: string | null;
+  subcentro: string | null;
+  macro_custo: string | null;
+  grupo_custo: string | null;
+  centro_custo: string | null;
+  descricao: string | null;
+  corrigidoEm: string;
+}
 
 interface ParEstado {
   excelKey: string;
   ofxIdAtivo: string | null;
   ofxIdSugeridoOriginal: string | null;
   decisao: DecisaoStatus;
+  correcao: ParCorrecao | null;  // PR4
 }
 
 interface OfxItem {
@@ -28,6 +47,26 @@ interface OfxItem {
   data_movimento: string;
   descricao: string;
   valor: number;
+}
+
+// PR4 — fotografia consolidada (correcao ?? sugestao) na aprovação.
+// Schema renomeado vs PR3.1 para ser agnóstico de origem.
+interface AprovacaoLocal {
+  aprovadoEm: string;
+  origem_aprovacao: 'sugestao_direta' | 'corrigido';
+  contaId: string | null;
+  contaRotulo: string | null;
+  fazendaId: string | null;
+  fazendaNome: string | null;
+  fornecedorId: string | null;
+  fornecedorNome: string | null;
+  dataCompetencia: string | null;
+  subcentro: string;
+  macro: string | null;
+  grupo: string | null;
+  centro: string | null;
+  descricao: string | null;
+  ofxIdVinculado: string | null;
 }
 
 interface Props {
@@ -47,6 +86,33 @@ interface Props {
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
+// PR4 — consolida fotografia da aprovação: correcao[field] ?? sugestao[field].
+// Helper puro, sem state. Chamado em aprovarPar e aprovarOfxComExcel.
+function consolidarFotografia(
+  sug: Sugestao | undefined,
+  cor: ParCorrecao | null,
+  ofxIdVinculado: string | null,
+): AprovacaoLocal {
+  const usaCorrecao = cor !== null;
+  return {
+    aprovadoEm: new Date().toISOString(),
+    origem_aprovacao: usaCorrecao ? 'corrigido' : 'sugestao_direta',
+    contaId: cor?.contaId ?? sug?.contaSugerida?.id ?? null,
+    contaRotulo: cor?.contaRotulo ?? sug?.contaSugerida?.rotulo ?? null,
+    fazendaId: cor?.fazendaId ?? sug?.fazendaSugerida?.id ?? null,
+    fazendaNome: cor?.fazendaNome ?? sug?.fazendaSugerida?.nome ?? null,
+    fornecedorId: cor?.fornecedorId ?? sug?.fornecedorOficial?.id ?? null,
+    fornecedorNome: cor?.fornecedorNome ?? sug?.fornecedorOficial?.nome ?? null,
+    dataCompetencia: cor?.dataCompetencia ?? null,
+    subcentro: cor?.subcentro ?? sug?.subcentroSugerido?.subcentro ?? '',
+    macro: cor?.macro_custo ?? sug?.subcentroSugerido?.macro_custo ?? null,
+    grupo: cor?.grupo_custo ?? sug?.subcentroSugerido?.grupo_custo ?? null,
+    centro: cor?.centro_custo ?? sug?.subcentroSugerido?.centro_custo ?? null,
+    descricao: cor?.descricao ?? null,
+    ofxIdVinculado,
+  };
+}
+
 // PR3.2 — abrevia rótulo da conta sugerida para virar tag de 8 chars no máximo.
 function abreviarBanco(rotulo: string): string {
   const palavras = rotulo
@@ -64,7 +130,7 @@ function abreviarBanco(rotulo: string): string {
 
 type FiltroMostrar = 'todos' | 'forte' | 'fraco' | 'sem_match'
                    | 'pendentes' | 'aprovados' | 'rejeitados' | 'orfaos'
-                   | 'banco_orfao';
+                   | 'banco_orfao' | 'corrigidos';
 type FiltroOrdem = 'score_desc' | 'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'original';
 type FiltroEscopo = 'todos' | 'desta_conta' | 'outras_contas' | 'sem_inferencia' | 'sem_ofx';
 
@@ -150,6 +216,7 @@ export function MesaPareamentoModal({
         ofxIdAtivo: mt?.ofxIdMatched ?? null,
         ofxIdSugeridoOriginal: mt?.ofxIdMatched ?? null,
         decisao: 'pendente',
+        correcao: null,
       });
     });
     return m;
@@ -169,13 +236,32 @@ export function MesaPareamentoModal({
   const [filtroOfxOrdem, setFiltroOfxOrdem] = useState<FiltroOrdemOfx>('original');
   const [ofxAtivoId, setOfxAtivoId] = useState<string | null>(null);
 
+  // PR4 — Modo Corrigir: fotografia consolidada + draft de correção em memória
+  const [aprovacoes, setAprovacoes] = useState<Map<string, AprovacaoLocal>>(
+    new Map<string, AprovacaoLocal>(),
+  );
+  const [corrigindoExcelKey, setCorrigindoExcelKey] = useState<string | null>(null);
+  const [rascunhoCorrecao, setRascunhoCorrecao] = useState<ParCorrecao | null>(null);
+  const [fornecedorBusca, setFornecedorBusca] = useState<string>('');
+  const [subcentroBusca, setSubcentroBusca] = useState<string>('');
+
   // ---------- ações de decisão ----------
 
   function aprovarPar(key: string) {
+    // PR4: consolida fotografia (correcao ?? sugestao) antes de marcar aprovado.
+    const sug = sugestoes.get(key);
+    const cur = pares.get(key);
+    if (!cur) return;
+    const fotografia = consolidarFotografia(sug, cur.correcao, cur.ofxIdAtivo);
+    setAprovacoes((prev) => {
+      const next = new Map<string, AprovacaoLocal>(prev);
+      next.set(key, fotografia);
+      return next;
+    });
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
-      const cur = next.get(key);
-      if (cur) next.set(key, { ...cur, decisao: 'aprovado' });
+      const c2 = next.get(key);
+      if (c2) next.set(key, { ...c2, decisao: 'aprovado' });
       return next;
     });
   }
@@ -270,6 +356,8 @@ export function MesaPareamentoModal({
         // PR3.2 — banco órfão: par com OFX vinculado ainda não consumido por aprovação
         case 'banco_orfao':
           return p?.ofxIdAtivo != null && !ofxConsumidos.has(p.ofxIdAtivo);
+        // PR4 — corrigidos: par com correção aplicada (independente de decisão)
+        case 'corrigidos': return p?.correcao != null;
         default: return true;
       }
     });
@@ -449,15 +537,91 @@ export function MesaPareamentoModal({
     });
   }
   // Aprovar via candidato Excel: ajusta ofxIdAtivo e decisao do par
-  // numa única passagem de setPares (sem race).
+  // numa única passagem de setPares (sem race). PR4: também produz
+  // fotografia consolidada na Map de aprovações.
   function aprovarOfxComExcel(ofxId: string, excelKey: string) {
+    const sug = sugestoes.get(excelKey);
+    const cur = pares.get(excelKey);
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
-      const cur = next.get(excelKey);
-      if (cur) next.set(excelKey, { ...cur, ofxIdAtivo: ofxId, decisao: 'aprovado' });
+      const c2 = next.get(excelKey);
+      if (c2) next.set(excelKey, { ...c2, ofxIdAtivo: ofxId, decisao: 'aprovado' });
+      return next;
+    });
+    setAprovacoes((prev) => {
+      const next = new Map<string, AprovacaoLocal>(prev);
+      next.set(excelKey, consolidarFotografia(sug, cur?.correcao ?? null, ofxId));
       return next;
     });
   }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // PR4 — Handlers Modo Corrigir
+  // ──────────────────────────────────────────────────────────────────────
+
+  function iniciarCorrecao(excelKey: string) {
+    const sug = sugestoes.get(excelKey);
+    const parAtual = pares.get(excelKey);
+    const correcaoInicial: ParCorrecao = parAtual?.correcao ?? {
+      contaId: sug?.contaSugerida?.id ?? null,
+      contaRotulo: sug?.contaSugerida?.rotulo ?? null,
+      fazendaId: sug?.fazendaSugerida?.id ?? null,
+      fazendaNome: sug?.fazendaSugerida?.nome ?? null,
+      fornecedorId: sug?.fornecedorOficial?.id ?? null,
+      fornecedorNome: sug?.fornecedorOficial?.nome ?? null,
+      dataCompetencia: null,
+      subcentro: sug?.subcentroSugerido?.subcentro ?? null,
+      macro_custo: sug?.subcentroSugerido?.macro_custo ?? null,
+      grupo_custo: sug?.subcentroSugerido?.grupo_custo ?? null,
+      centro_custo: sug?.subcentroSugerido?.centro_custo ?? null,
+      descricao: null,
+      corrigidoEm: new Date().toISOString(),
+    };
+    setRascunhoCorrecao(correcaoInicial);
+    setCorrigindoExcelKey(excelKey);
+    setFornecedorBusca(correcaoInicial.fornecedorNome ?? '');
+    setSubcentroBusca(correcaoInicial.subcentro ?? '');
+  }
+
+  function aplicarCorrecao() {
+    if (!corrigindoExcelKey || !rascunhoCorrecao) return;
+    setPares((prev) => {
+      const next = new Map<string, ParEstado>(prev);
+      const cur = next.get(corrigindoExcelKey);
+      if (cur) next.set(corrigindoExcelKey, {
+        ...cur,
+        correcao: { ...rascunhoCorrecao, corrigidoEm: new Date().toISOString() },
+      });
+      return next;
+    });
+    setCorrigindoExcelKey(null);
+    setRascunhoCorrecao(null);
+    setFornecedorBusca('');
+    setSubcentroBusca('');
+  }
+
+  function cancelarCorrecao() {
+    setCorrigindoExcelKey(null);
+    setRascunhoCorrecao(null);
+    setFornecedorBusca('');
+    setSubcentroBusca('');
+  }
+
+  function limparCorrecao(excelKey: string) {
+    setPares((prev) => {
+      const next = new Map<string, ParEstado>(prev);
+      const cur = next.get(excelKey);
+      if (cur) next.set(excelKey, { ...cur, correcao: null });
+      return next;
+    });
+  }
+
+  // Contador de corrigidos pro header
+  const totalCorrigidos = useMemo<number>(() => {
+    let n = 0;
+    pares.forEach((p) => { if (p.correcao) n++; });
+    return n;
+  }, [pares]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -474,6 +638,7 @@ export function MesaPareamentoModal({
                   <span className="text-rose-700">✗ {contadores.rejeitados} rej.</span>
                   <span className="text-amber-700">→ {contadores.orfaos} excel órf.</span>
                   <span className="text-muted-foreground">— {contadores.pendentes} pend.</span>
+                  <span className="text-blue-700">✎ {totalCorrigidos} corrig.</span>
                   <span className="text-muted-foreground">| banco órf.: {contadores.bancoOrfao}</span>
                 </>
               ) : (
@@ -521,6 +686,7 @@ export function MesaPareamentoModal({
                     <SelectItem value="rejeitados">Rejeitados</SelectItem>
                     <SelectItem value="orfaos">Excel órfãos</SelectItem>
                     <SelectItem value="banco_orfao">Banco órfão</SelectItem>
+                    <SelectItem value="corrigidos">Corrigidos</SelectItem>
                   </SelectContent>
                 </Select>
                 <span className="text-muted-foreground ml-2">Escopo:</span>
@@ -651,6 +817,7 @@ export function MesaPareamentoModal({
                     )}
                   >
                     <span className="shrink-0 w-3 text-center text-muted-foreground">{iconeDecisao}</span>
+                    {p?.correcao && <span className="shrink-0 text-[9px] text-blue-700" title="Par corrigido">✎</span>}
                     <span className="text-[10px] text-muted-foreground tabular-nums w-10 shrink-0">
                       {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
                     </span>
@@ -774,35 +941,95 @@ export function MesaPareamentoModal({
             </div>
           </Card>
 
-          {/* COL 3 — SUGESTÃO + DECISÃO */}
+          {/* COL 3 — SUGESTÃO/CORRIGIDO + DECISÃO (PR4: switch para FormularioCorrecao) */}
           <Card className="p-3 flex flex-col overflow-hidden">
-            <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
-              IA sugere + Decisão
-            </div>
             <div className="flex-1 overflow-y-auto space-y-3">
               {!parAtivo || !sugAtiva ? (
-                <div className="text-center text-muted-foreground italic py-12">
-                  Selecione um par para ver a sugestão e decidir
-                </div>
+                <>
+                  <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2">
+                    IA sugere + Decisão
+                  </div>
+                  <div className="text-center text-muted-foreground italic py-12">
+                    Selecione um par para ver a sugestão e decidir
+                  </div>
+                </>
+              ) : corrigindoExcelKey === parAtivoKey && rascunhoCorrecao && catalogo ? (
+                // PR4 — modo edição: formulário inline substitui card + botões
+                <FormularioCorrecao
+                  rascunho={rascunhoCorrecao}
+                  setRascunho={setRascunhoCorrecao}
+                  catalogo={catalogo}
+                  fornecedorBusca={fornecedorBusca}
+                  setFornecedorBusca={setFornecedorBusca}
+                  subcentroBusca={subcentroBusca}
+                  setSubcentroBusca={setSubcentroBusca}
+                  onAplicar={aplicarCorrecao}
+                  onCancelar={cancelarCorrecao}
+                />
               ) : (
                 <>
-                  <div className="space-y-1 text-[11px]">
-                    <SugLinha label="Conta" valor={sugAtiva.contaSugerida?.rotulo}
-                              conf={sugAtiva.contaSugerida?.confianca} />
-                    <SugLinha label="Fazenda" valor={sugAtiva.fazendaSugerida?.nome}
-                              conf={sugAtiva.fazendaSugerida?.confianca} />
-                    <SugLinha label="Subc." valor={sugAtiva.subcentroSugerido?.subcentro}
-                              conf={sugAtiva.subcentroSugerido?.confianca} />
-                    {sugAtiva.subcentroSugerido && (
-                      <div className="text-[10px] text-muted-foreground pl-14">
-                        {sugAtiva.subcentroSugerido.macro_custo ?? '—'} /
-                        {' '}{sugAtiva.subcentroSugerido.grupo_custo ?? '—'} /
-                        {' '}{sugAtiva.subcentroSugerido.centro_custo ?? '—'}
+                  {/* Header: IA sugere | ✎ Corrigido (com Limpar correção) */}
+                  {parAtivo.correcao ? (
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">
+                        ✎ Corrigido
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-5 text-[10px]"
+                              onClick={() => parAtivoKey && limparCorrecao(parAtivoKey)}>
+                        Limpar correção
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">
+                      IA sugere
+                    </div>
+                  )}
+
+                  {/* Valores: correção (se houver) prevalece sobre sugestão field-a-field */}
+                  {(() => {
+                    const cor = parAtivo.correcao;
+                    const exibir = {
+                      conta: cor?.contaRotulo ?? sugAtiva.contaSugerida?.rotulo ?? null,
+                      fazenda: cor?.fazendaNome ?? sugAtiva.fazendaSugerida?.nome ?? null,
+                      subc: cor?.subcentro ?? sugAtiva.subcentroSugerido?.subcentro ?? null,
+                      macro: cor?.macro_custo ?? sugAtiva.subcentroSugerido?.macro_custo ?? null,
+                      grupo: cor?.grupo_custo ?? sugAtiva.subcentroSugerido?.grupo_custo ?? null,
+                      centro: cor?.centro_custo ?? sugAtiva.subcentroSugerido?.centro_custo ?? null,
+                      forn: cor?.fornecedorNome ?? sugAtiva.fornecedorOficial?.nome ?? null,
+                      dataComp: cor?.dataCompetencia ?? null,
+                      desc: cor?.descricao ?? null,
+                    };
+                    // Quando corrigido, confiança não se aplica (operador validou).
+                    const confConta = cor ? undefined : sugAtiva.contaSugerida?.confianca;
+                    const confFaz = cor ? undefined : sugAtiva.fazendaSugerida?.confianca;
+                    const confSub = cor ? undefined : sugAtiva.subcentroSugerido?.confianca;
+                    const confFor = cor ? undefined : sugAtiva.fornecedorOficial?.confianca;
+                    return (
+                      <div className="space-y-1 text-[11px]">
+                        <SugLinha label="Conta" valor={exibir.conta} conf={confConta} />
+                        <SugLinha label="Fazenda" valor={exibir.fazenda} conf={confFaz} />
+                        <SugLinha label="Subc." valor={exibir.subc} conf={confSub} />
+                        {exibir.subc && (
+                          <div className="text-[10px] text-muted-foreground pl-14">
+                            {exibir.macro ?? '—'} / {exibir.grupo ?? '—'} / {exibir.centro ?? '—'}
+                          </div>
+                        )}
+                        <SugLinha label="Forn." valor={exibir.forn} conf={confFor} />
+                        {exibir.dataComp && (
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-muted-foreground w-12 shrink-0">Data:</span>
+                            <span>{exibir.dataComp}</span>
+                          </div>
+                        )}
+                        {exibir.desc && (
+                          <div className="text-[11px]">
+                            <span className="text-muted-foreground">Obs:</span>{' '}
+                            <span className="italic">{exibir.desc}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <SugLinha label="Forn." valor={sugAtiva.fornecedorOficial?.nome}
-                              conf={sugAtiva.fornecedorOficial?.confianca} />
-                  </div>
+                    );
+                  })()}
 
                   {/* Botões de decisão */}
                   <div className="border-t pt-3 space-y-2">
@@ -824,6 +1051,10 @@ export function MesaPareamentoModal({
                           ofxAtualId={parAtivo.ofxIdAtivo}
                           onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
                         />
+                        <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8"
+                                onClick={() => parAtivoKey && iniciarCorrecao(parAtivoKey)}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Corrigir manualmente
+                        </Button>
                         <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8"
                                 onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
                           <ArrowRight className="h-3.5 w-3.5 mr-2" /> Marcar Excel órfão
@@ -1173,5 +1404,224 @@ function PopoverOutroOfx({ extratos, ofxConsumidos, ofxAtualId, onEscolher }: {
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+// PR4 — Formulário inline de correção. Aparece na Col 3 quando
+// `corrigindoExcelKey === parAtivoKey`. Substitui o card de sugestão +
+// 5 botões de decisão. Operador refina os campos; "Aplicar correção"
+// salva no ParEstado.correcao.
+function FormularioCorrecao({
+  rascunho, setRascunho, catalogo,
+  fornecedorBusca, setFornecedorBusca,
+  subcentroBusca, setSubcentroBusca,
+  onAplicar, onCancelar,
+}: {
+  rascunho: ParCorrecao;
+  setRascunho: Dispatch<SetStateAction<ParCorrecao | null>>;
+  catalogo: CatalogoCliente;
+  fornecedorBusca: string;
+  setFornecedorBusca: (v: string) => void;
+  subcentroBusca: string;
+  setSubcentroBusca: (v: string) => void;
+  onAplicar: () => void;
+  onCancelar: () => void;
+}) {
+  const fornecedoresFiltrados = useMemo(() => {
+    const q = fornecedorBusca.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    return catalogo.fornecedores
+      .filter((f) =>
+        f.nome.toLowerCase().includes(q)
+        || (f.nome_normalizado ?? '').includes(q)
+        || (f.aliases ?? []).some((a) => a.toLowerCase().includes(q)),
+      )
+      .slice(0, 8);
+  }, [fornecedorBusca, catalogo.fornecedores]);
+
+  const subcentrosFiltrados = useMemo(() => {
+    const q = subcentroBusca.toLowerCase().trim();
+    if (!q) return catalogo.subcentros.slice(0, 12);
+    return catalogo.subcentros
+      .filter((s) => s.subcentro.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [subcentroBusca, catalogo.subcentros]);
+
+  function set<K extends keyof ParCorrecao>(field: K, value: ParCorrecao[K]) {
+    setRascunho((prev) => (prev ? { ...prev, [field]: value } : prev));
+  }
+
+  function escolherFornecedor(f: CatalogoCliente['fornecedores'][number]) {
+    setRascunho((prev) => (prev ? { ...prev, fornecedorId: f.id, fornecedorNome: f.nome } : prev));
+    setFornecedorBusca(f.nome);
+  }
+
+  function escolherSubcentro(s: CatalogoCliente['subcentros'][number]) {
+    setRascunho((prev) => (prev ? {
+      ...prev,
+      subcentro: s.subcentro,
+      macro_custo: s.macro_custo,
+      grupo_custo: s.grupo_custo,
+      centro_custo: s.centro_custo,
+    } : prev));
+    setSubcentroBusca(s.subcentro);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300 pb-1">
+        ✎ Corrigir
+      </div>
+
+      {/* Conta */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Conta</label>
+        <Select
+          value={rascunho.contaId ?? ''}
+          onValueChange={(v) => {
+            const c = catalogo.contas.find((x) => x.id === v);
+            set('contaId', v || null);
+            set('contaRotulo', c ? (c.nome_exibicao ?? c.nome_conta) : null);
+          }}
+        >
+          <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectContent>
+            {catalogo.contas.map((c) => (
+              <SelectItem key={c.id} value={c.id} className="text-[11px]">
+                {c.nome_exibicao ?? c.nome_conta}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Fazenda */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Fazenda</label>
+        <Select
+          value={rascunho.fazendaId ?? ''}
+          onValueChange={(v) => {
+            const f = catalogo.fazendas.find((x) => x.id === v);
+            set('fazendaId', v || null);
+            set('fazendaNome', f?.nome ?? null);
+          }}
+        >
+          <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectContent>
+            {catalogo.fazendas.map((f) => (
+              <SelectItem key={f.id} value={f.id} className="text-[11px]">
+                {f.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Fornecedor — autocomplete (digita pra filtrar) */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Fornecedor</label>
+        <Input
+          value={fornecedorBusca}
+          onChange={(e) => {
+            setFornecedorBusca(e.target.value);
+            if (rascunho.fornecedorNome !== e.target.value) {
+              set('fornecedorId', null);
+              set('fornecedorNome', e.target.value || null);
+            }
+          }}
+          placeholder="Buscar fornecedor…"
+          className="h-7 text-[11px]"
+        />
+        {fornecedoresFiltrados.length > 0 && (
+          <div className="border rounded max-h-32 overflow-y-auto bg-background">
+            {fornecedoresFiltrados.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => escolherFornecedor(f)}
+                className="w-full text-left px-2 py-1 text-[11px] hover:bg-muted"
+              >
+                {f.nome}
+              </button>
+            ))}
+          </div>
+        )}
+        {rascunho.fornecedorId && (
+          <div className="text-[10px] text-emerald-700">
+            ✓ vinculado a fornecedor oficial
+          </div>
+        )}
+      </div>
+
+      {/* Subcentro — combobox com busca */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Subcentro</label>
+        <Input
+          value={subcentroBusca}
+          onChange={(e) => setSubcentroBusca(e.target.value)}
+          placeholder="Buscar subcentro…"
+          className="h-7 text-[11px]"
+        />
+        {subcentrosFiltrados.length > 0 && (
+          <div className="border rounded max-h-32 overflow-y-auto bg-background">
+            {subcentrosFiltrados.map((s) => (
+              <button
+                key={`${s.subcentro}-${s.macro_custo ?? ''}-${s.grupo_custo ?? ''}-${s.centro_custo ?? ''}`}
+                type="button"
+                onClick={() => escolherSubcentro(s)}
+                className={cn(
+                  'w-full text-left px-2 py-1 text-[11px] hover:bg-muted',
+                  rascunho.subcentro === s.subcentro && 'bg-muted font-semibold',
+                )}
+              >
+                {s.subcentro}
+                <span className="text-[9px] text-muted-foreground ml-2">
+                  ({s.qt_uso}x)
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {rascunho.subcentro && (
+          <div className="text-[10px] text-muted-foreground">
+            {rascunho.macro_custo ?? '—'} / {rascunho.grupo_custo ?? '—'} / {rascunho.centro_custo ?? '—'}
+          </div>
+        )}
+      </div>
+
+      {/* Data competência */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Data competência</label>
+        <Input
+          type="date"
+          value={rascunho.dataCompetencia ?? ''}
+          onChange={(e) => set('dataCompetencia', e.target.value || null)}
+          className="h-7 text-[11px]"
+        />
+      </div>
+
+      {/* Descrição livre */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Descrição (opcional)</label>
+        <Input
+          value={rascunho.descricao ?? ''}
+          onChange={(e) => set('descricao', e.target.value || null)}
+          placeholder='ex: "parcela 3/10", "ajuste cliente"…'
+          className="h-7 text-[11px]"
+        />
+      </div>
+
+      {/* Ações */}
+      <div className="flex items-center gap-1 pt-2 border-t">
+        <Button size="sm" variant="default" className="flex-1 h-7 text-[11px]"
+                onClick={onAplicar}>
+          Aplicar correção
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 text-[11px]"
+                onClick={onCancelar}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
   );
 }
