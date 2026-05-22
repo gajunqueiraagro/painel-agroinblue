@@ -239,20 +239,48 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     if (!id) return;
     setDeleting(true);
     try {
-      // Apaga mirrors (financeiro_lancamentos_v2 + planejamento_financeiro) de cada parcela
-      const { data: pRows } = await supabase
-        .from('financiamento_parcelas')
-        .select('id')
-        .eq('financiamento_id', id);
-      if (pRows && pRows.length > 0) {
-        // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
-        // const { deletarMirrorParcela } = await import('@/lib/financiamentos/parcelaMirror');
-        // await Promise.all(pRows.map((p: any) => deletarMirrorParcela(supabase as any, p.id)));
+      // ETAPA 1: Cancelar lancamentos financeiros vinculados em cascata
+      const { cancelarLancamentosDoFinanciamento } = await import('@/lib/financiamentos/parcelaMirror');
+      const result = await cancelarLancamentosDoFinanciamento(supabase as any, id);
+
+      // Bloqueio: conciliados ou editados manualmente
+      if (!result.ok) {
+        const partes: string[] = [];
+        if (result.conciliados > 0) {
+          partes.push(`${result.conciliados} lancamento(s) conciliado(s) — desconcilie antes de excluir`);
+        }
+        if (result.editadosManual > 0) {
+          partes.push(`${result.editadosManual} lancamento(s) editado(s) manualmente — exclua individualmente primeiro`);
+        }
+        toast.error(`Exclusao bloqueada: ${partes.join(' / ')}`);
+        return;
       }
-      await supabase.from('financiamento_parcelas').delete().eq('financiamento_id', id);
+
+      // Garantia adicional no caller: totalizadores devem bater
+      if (result.totalCancelados !== result.totalCandidatos) {
+        toast.error(
+          `Operacao abortada: esperados ${result.totalCandidatos} cancelamentos, ` +
+          `executados ${result.totalCancelados}. Financiamento NAO foi excluido.`
+        );
+        return;
+      }
+
+      // ETAPA 2: Apagar parcelas (so apos cascade soft cancel confirmado)
+      const { error: errPar } = await supabase
+        .from('financiamento_parcelas')
+        .delete()
+        .eq('financiamento_id', id);
+      if (errPar) throw errPar;
+
+      // ETAPA 3: Apagar financiamento
       const { error } = await supabase.from('financiamentos').delete().eq('id', id);
       if (error) throw error;
-      toast.success('Financiamento excluído');
+
+      toast.success(
+        result.totalCancelados > 0
+          ? `Financiamento excluido. ${result.totalCancelados} lancamento(s) financeiro(s) cancelado(s) em cascata.`
+          : 'Financiamento excluido.'
+      );
       qc.invalidateQueries({ queryKey: ['financiamentos-lista'] });
       setConfirmDelete(false);
       setEditOpen(false);
@@ -633,7 +661,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir financiamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação remove permanentemente o contrato e todas as parcelas associadas. Não pode ser desfeita.
+              Esta acao remove o contrato e todas as parcelas, e CANCELA todos os lancamentos
+              financeiros vinculados (soft delete via observacao, reversivel).
+              Se houver lancamentos conciliados ou editados manualmente, a exclusao sera bloqueada.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
