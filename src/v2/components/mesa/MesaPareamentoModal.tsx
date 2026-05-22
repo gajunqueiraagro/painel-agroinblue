@@ -47,9 +47,34 @@ interface Props {
 const fmtBRL = (v: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
+// PR3.2 — abrevia rótulo da conta sugerida para virar tag de 8 chars no máximo.
+function abreviarBanco(rotulo: string): string {
+  const palavras = rotulo
+    .replace(/[—\-]/g, ' ')
+    .split(/\s+/)
+    .filter((p) => p.length >= 2 && !/^\d+$/.test(p));
+  if (palavras.length === 0) return rotulo.slice(0, 6);
+  const p = palavras[0];
+  const lower = p.toLowerCase();
+  if (lower.startsWith('banco') && palavras.length > 1) return palavras[1].slice(0, 8);
+  if (lower === 'itau' || lower === 'itaú') return 'Itaú';
+  if (lower === 'bb' || lower === 'brasil') return 'BB';
+  return p.slice(0, 8);
+}
+
 type FiltroMostrar = 'todos' | 'forte' | 'fraco' | 'sem_match'
-                   | 'pendentes' | 'aprovados' | 'rejeitados' | 'orfaos';
+                   | 'pendentes' | 'aprovados' | 'rejeitados' | 'orfaos'
+                   | 'banco_orfao';
 type FiltroOrdem = 'score_desc' | 'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'original';
+type FiltroEscopo = 'todos' | 'desta_conta' | 'outras_contas' | 'sem_inferencia' | 'sem_ofx';
+
+interface ParEscopo {
+  isDestaConta: boolean;
+  isDivergente: boolean;
+  isContaIndefinida: boolean;
+  tagBanco: string | null;
+  rotuloConta: string | null;
+}
 
 export function MesaPareamentoModal({
   open, onOpenChange, clienteId, contaNome, contaId, anoMes,
@@ -67,6 +92,36 @@ export function MesaPareamentoModal({
     () => (catalogo ? sugerirTodasLinhas(linhasExcel, catalogo) : new Map<string, Sugestao>()),
     [linhasExcel, catalogo],
   );
+
+  // PR3.2 — escopo por par: indica se a conta sugerida pela IA bate com a
+  // conta visualizada (verde), diverge (roxo), ou não foi inferida (cinza).
+  const escopoPorPar = useMemo<Map<string, ParEscopo>>(() => {
+    const m = new Map<string, ParEscopo>();
+    linhasExcel.forEach((l) => {
+      const key = `${l.loteId}:${l.indiceLinha}`;
+      const sug = sugestoes.get(key);
+      const contaSug = sug?.contaSugerida ?? null;
+      if (!contaSug) {
+        m.set(key, {
+          isDestaConta: false,
+          isDivergente: false,
+          isContaIndefinida: true,
+          tagBanco: null,
+          rotuloConta: null,
+        });
+      } else {
+        const isDesta = contaSug.id === contaId;
+        m.set(key, {
+          isDestaConta: isDesta,
+          isDivergente: !isDesta,
+          isContaIndefinida: false,
+          tagBanco: abreviarBanco(contaSug.rotulo),
+          rotuloConta: contaSug.rotulo,
+        });
+      }
+    });
+    return m;
+  }, [linhasExcel, sugestoes, contaId]);
 
   // Estado de pares: inicializa com ofxIdAtivo = sugerido pelo engine, decisao pendente.
   // Lazy init: roda só na primeira render do modal.
@@ -87,6 +142,7 @@ export function MesaPareamentoModal({
 
   const [parAtivoKey, setParAtivoKey] = useState<string | null>(null);
   const [filtroMostrar, setFiltroMostrar] = useState<FiltroMostrar>('todos');
+  const [filtroEscopo, setFiltroEscopo] = useState<FiltroEscopo>('todos');
   const [filtroOrdem, setFiltroOrdem] = useState<FiltroOrdem>('score_desc');
 
   // ---------- ações de decisão ----------
@@ -160,6 +216,21 @@ export function MesaPareamentoModal({
   const linhasFiltradas = useMemo<ExcelLinhaNormalizada[]>(() => {
     let arr = linhasExcel.slice();
 
+    // PR3.2 — Filtro 1: ESCOPO (verde/roxo/cinza/sem OFX)
+    arr = arr.filter((l) => {
+      const key = `${l.loteId}:${l.indiceLinha}`;
+      const esc = escopoPorPar.get(key);
+      const p = pares.get(key);
+      switch (filtroEscopo) {
+        case 'desta_conta': return esc?.isDestaConta === true;
+        case 'outras_contas': return esc?.isDivergente === true;
+        case 'sem_inferencia': return esc?.isContaIndefinida === true;
+        case 'sem_ofx': return !p?.ofxIdAtivo;
+        default: return true;
+      }
+    });
+
+    // Filtro 2: MOSTRAR (existente + banco_orfao)
     arr = arr.filter((l) => {
       const key = `${l.loteId}:${l.indiceLinha}`;
       const p = pares.get(key);
@@ -172,6 +243,9 @@ export function MesaPareamentoModal({
         case 'aprovados': return p?.decisao === 'aprovado';
         case 'rejeitados': return p?.decisao === 'rejeitado';
         case 'orfaos': return p?.decisao === 'excel_orfao';
+        // PR3.2 — banco órfão: par com OFX vinculado ainda não consumido por aprovação
+        case 'banco_orfao':
+          return p?.ofxIdAtivo != null && !ofxConsumidos.has(p.ofxIdAtivo);
         default: return true;
       }
     });
@@ -200,7 +274,7 @@ export function MesaPareamentoModal({
       });
     }
     return arr;
-  }, [linhasExcel, matches, pares, filtroMostrar, filtroOrdem]);
+  }, [linhasExcel, matches, pares, filtroMostrar, filtroEscopo, filtroOrdem, escopoPorPar, ofxConsumidos]);
 
   // Linha Excel ativa
   const linhaAtiva = useMemo<ExcelLinhaNormalizada | null>(() => {
@@ -275,6 +349,18 @@ export function MesaPareamentoModal({
                 <SelectItem value="aprovados">Aprovados</SelectItem>
                 <SelectItem value="rejeitados">Rejeitados</SelectItem>
                 <SelectItem value="orfaos">Excel órfãos</SelectItem>
+                <SelectItem value="banco_orfao">Banco órfão</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-muted-foreground ml-2">Escopo:</span>
+            <Select value={filtroEscopo} onValueChange={(v) => setFiltroEscopo(v as FiltroEscopo)}>
+              <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="desta_conta">Excel desta conta</SelectItem>
+                <SelectItem value="outras_contas">Excel outras contas (divergência)</SelectItem>
+                <SelectItem value="sem_inferencia">Sem inferência de conta</SelectItem>
+                <SelectItem value="sem_ofx">Sem OFX vinculado</SelectItem>
               </SelectContent>
             </Select>
             <span className="text-muted-foreground ml-2">Ordenar:</span>
@@ -304,7 +390,7 @@ export function MesaPareamentoModal({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden grid grid-cols-[1fr_1.4fr_1fr] gap-2 p-2">
+        <div className="flex-1 overflow-hidden grid grid-cols-[1.15fr_1.35fr_1fr] gap-2 p-2">
 
           {/* COL 1 — LISTA DE PARES */}
           <Card className="p-2 flex flex-col overflow-hidden">
@@ -316,19 +402,34 @@ export function MesaPareamentoModal({
                 const key = `${linha.loteId}:${linha.indiceLinha}`;
                 const p = pares.get(key);
                 const m = matches.get(key);
+                const esc = escopoPorPar.get(key);
                 const faixa = m?.faixa ?? 'nenhum';
                 const data = linha.dataPagamento ?? linha.dataCompetencia;
                 const valorSinalizado = (linha.sinal === 'entrada' ? 1 : -1) * (linha.valorCentavos / 100);
                 const ativo = parAtivoKey === key;
                 const decisao = p?.decisao ?? 'pendente';
 
-                const corDecisao =
-                  decisao === 'aprovado' ? 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20' :
-                  decisao === 'rejeitado' ? 'border-l-rose-500 bg-rose-50/40 dark:bg-rose-950/20' :
-                  decisao === 'excel_orfao' ? 'border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/20' :
-                  faixa === 'forte' ? 'border-l-blue-500' :
-                  faixa === 'fraco' ? 'border-l-amber-500' :
-                  'border-l-rose-500';
+                // PR3.2 — cor de borda: decisão sobrescreve escopo, que sobrescreve faixa
+                const corBorda = (() => {
+                  if (decisao === 'aprovado') return 'border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20';
+                  if (decisao === 'rejeitado') return 'border-l-rose-500 bg-rose-50/40 dark:bg-rose-950/20';
+                  if (decisao === 'excel_orfao') return 'border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/20';
+                  // pendente: prioriza divergência
+                  if (esc?.isDivergente) return 'border-l-purple-500';
+                  if (esc?.isContaIndefinida) return 'border-l-slate-400';
+                  if (esc?.isDestaConta) {
+                    if (faixa === 'forte') return 'border-l-blue-500';
+                    if (faixa === 'fraco') return 'border-l-amber-500';
+                    return 'border-l-rose-500';
+                  }
+                  return 'border-l-rose-500';
+                })();
+
+                const corTag = (() => {
+                  if (esc?.isDestaConta) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
+                  if (esc?.isDivergente) return 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300';
+                  return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
+                })();
 
                 const iconeDecisao =
                   decisao === 'aprovado' ? '✓' :
@@ -340,17 +441,24 @@ export function MesaPareamentoModal({
                   <button
                     key={key}
                     onClick={() => setParAtivoKey(key)}
+                    title={esc?.rotuloConta ? `Conta sugerida: ${esc.rotuloConta}` : undefined}
                     className={cn(
-                      'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs border-l-[3px] rounded-r text-left',
-                      corDecisao,
+                      'w-full flex items-center gap-1 px-2 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      corBorda,
                       ativo && 'ring-2 ring-primary ring-inset bg-muted',
                     )}
                   >
-                    <span className="shrink-0 w-3 text-center">{iconeDecisao}</span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
+                    <span className="shrink-0 w-3 text-center text-muted-foreground">{iconeDecisao}</span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums w-10 shrink-0">
                       {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
                     </span>
-                    <span className="flex-1 truncate">
+                    <span className={cn(
+                      'shrink-0 text-[9px] font-semibold px-1 py-[1px] rounded leading-none',
+                      corTag,
+                    )}>
+                      {esc?.tagBanco ?? '?'}
+                    </span>
+                    <span className="flex-1 truncate font-normal">
                       {linha.fornecedor || <span className="italic text-muted-foreground">{linha.subcentro}</span>}
                     </span>
                     <span className={cn('tabular-nums shrink-0 font-medium',
@@ -359,7 +467,7 @@ export function MesaPareamentoModal({
                     <Badge
                       variant={faixa === 'forte' ? 'default' :
                                faixa === 'fraco' ? 'secondary' : 'destructive'}
-                      className="text-[9px] h-4 px-1.5 shrink-0"
+                      className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
                     >{m?.score ?? 0}</Badge>
                   </button>
                 );
@@ -379,6 +487,13 @@ export function MesaPareamentoModal({
                 </div>
               ) : (
                 <>
+                  {/* PR3.2 — faixa roxa de divergência de conta */}
+                  {parAtivoKey && escopoPorPar.get(parAtivoKey)?.isDivergente && (
+                    <div className="text-[10px] font-semibold px-2 py-1 rounded bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300">
+                      ⚠ Divergência de conta — Excel classificado em "{escopoPorPar.get(parAtivoKey)?.rotuloConta}", visualizando "{contaNome}"
+                    </div>
+                  )}
+
                   {/* OFX vinculado */}
                   <div className="border rounded p-2.5 space-y-1 bg-muted/30">
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">
