@@ -1,8 +1,9 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -48,6 +49,9 @@ import { useSalvamentoAuto } from '@/v2/lib/mesaSessao/useSalvamentoAuto';
 // PR6.1 — gerar staging ao finalizar sessão
 import { gerarStagingDaSessao } from '@/v2/lib/staging/mutations';
 import type { ResultadoGeracaoStaging } from '@/v2/lib/staging/types';
+// PR6.1A — aba interna substitui página V2StagingRevisao (deletada)
+import { useStaging } from '@/v2/lib/staging/useStaging';
+import { MesaStagingTab } from './MesaStagingTab';
 // PR6.1 — query fresh direto no banco depois de salvar+finalizar, evitando
 // stale state. Não usamos sessaoCompleta.pares do cache local pra gerar staging.
 import { supabase } from '@/integrations/supabase/client';
@@ -200,12 +204,17 @@ export function MesaPareamentoModal({
   saldoOfxResumo, naoExplicado, lotes, matches, extratos,
   sessaoCompleta, onSessaoMudou,
 }: Props) {
-  // PR6.1 — navegação pra tela de revisão de staging
-  const navigate = useNavigate();
+  // PR6.1A — staging vive em aba interna; pré-fetch usa o cache do TanStack
+  const queryClient = useQueryClient();
   // PR6.1 — resultado da última geração de staging + flag de operação em curso
   const [resultadoStaging, setResultadoStaging] = useState<ResultadoGeracaoStaging | null>(null);
   const [gerandoStaging, setGerandoStaging] = useState<boolean>(false);
   const [erroStaging, setErroStaging] = useState<string | null>(null);
+  // PR6.1A — aba ativa do modal (sempre default 'pareamento' ao reabrir)
+  const [abaAtiva, setAbaAtiva] = useState<'pareamento' | 'staging'>('pareamento');
+  // PR6.1A — dot indicator na aba "Revisão Staging" quando há registros gerados
+  const { data: stagingData } = useStaging(sessaoCompleta?.sessao.id ?? null);
+  const stagingTemRegistros = (stagingData?.length ?? 0) > 0;
 
   const { data: catalogo, isLoading: catalogoCarregando, isError: catalogoErro } =
     useCatalogoCliente(clienteId);
@@ -847,6 +856,12 @@ export function MesaPareamentoModal({
       // 5. Gera staging usando dados frescos
       const resultado = await gerarStagingDaSessao(sessaoFresh, paresFresh);
       setResultadoStaging(resultado);
+
+      // 6. PR6.1A — pré-fetch da query do staging. Quando operador clicar na aba
+      //    "Revisão Staging", os dados já estão no cache (zero flash de loading).
+      await queryClient.prefetchQuery({
+        queryKey: ['mesa-staging', sessaoId],
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErroStaging(msg);
@@ -942,17 +957,16 @@ export function MesaPareamentoModal({
                       ⚠ {resultadoStaging.erros.length} linha(s) não geraram staging
                     </span>
                   )}
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="h-6 text-[10px]"
-                    onClick={() => {
-                      onOpenChange(false);
-                      navigate(`/v2/mesa-staging/${sessaoCompleta.sessao.id}`);
-                    }}
-                  >
-                    Ver staging →
-                  </Button>
+                  {resultadoStaging && resultadoStaging.total_apos > 0 && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-6 text-[10px]"
+                      onClick={() => setAbaAtiva('staging')}
+                    >
+                      Ver staging →
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -1098,7 +1112,33 @@ export function MesaPareamentoModal({
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden grid grid-cols-[1.15fr_1.35fr_1fr] gap-2 p-2">
+        {/* PR6.1A — Tabs internas: Pareamento (conteúdo atual) + Revisão Staging */}
+        <Tabs
+          value={abaAtiva}
+          onValueChange={(v) => setAbaAtiva(v as 'pareamento' | 'staging')}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
+          <TabsList className="shrink-0 mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
+            <TabsTrigger value="pareamento" className="text-xs">
+              Pareamento
+            </TabsTrigger>
+            <TabsTrigger value="staging" className="text-xs relative">
+              Revisão Staging
+              {stagingTemRegistros && (
+                <span
+                  className="ml-2 inline-block w-2 h-2 rounded-full bg-blue-500"
+                  aria-label="Há registros em staging"
+                />
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent
+            value="pareamento"
+            className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
+            forceMount
+          >
+        <div className="h-full overflow-hidden grid grid-cols-[1.15fr_1.35fr_1fr] gap-2 p-2">
 
           {modoVisualizacao === 'excel' && <>
 
@@ -1679,6 +1719,21 @@ export function MesaPareamentoModal({
           </>}
 
         </div>
+          </TabsContent>
+
+          <TabsContent
+            value="staging"
+            className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
+          >
+            {sessaoCompleta?.sessao.id ? (
+              <MesaStagingTab sessaoId={sessaoCompleta.sessao.id} />
+            ) : (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                Sessão não disponível.
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

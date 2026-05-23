@@ -44,6 +44,11 @@ export interface StagingRow {
 
   created_at: string;
   updated_at: string;
+
+  // PR6.1A — campos resolvidos via JOIN no useStaging (opcionais para preservar
+  // compatibilidade com código existente que itera StagingRow)
+  conta_nome?: string | null;       // financeiro_contas_bancarias.nome_exibicao
+  favorecido_nome?: string | null;  // financeiro_fornecedores.nome
 }
 
 /** Resultado da geração de staging */
