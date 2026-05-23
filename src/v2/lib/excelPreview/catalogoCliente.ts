@@ -22,6 +22,12 @@ export interface Fazenda {
 // PR4.2 — natureza inferida do tipo_operacao histórico do cliente.
 export type NaturezaSubcentro = 'entrada' | 'saida' | 'transferencia';
 
+// PR4.3 — origem do subcentro no catálogo híbrido (oficial + histórico).
+// 'oficial'   = só no plano oficial (qt_uso = 0)
+// 'historico' = só no histórico (legado, fora do plano atual)
+// 'ambos'     = no plano + usado (caso normal)
+export type OrigemSubcentro = 'oficial' | 'historico' | 'ambos';
+
 export interface SubcentroUsado {
   subcentro: string;
   macro_custo: string | null;
@@ -33,6 +39,9 @@ export interface SubcentroUsado {
   qt_uso_saida: number;
   qt_uso_transferencia: number;
   naturezas: Set<NaturezaSubcentro>;
+  // PR4.3 — origem hierárquica + escopo de negócio (do plano oficial)
+  origem: OrigemSubcentro;
+  escopo_negocio: string | null;
 }
 
 export interface FornecedorOficial {
@@ -64,6 +73,18 @@ interface HistoricoRow {
   tipo_operacao: string | null;
 }
 
+// PR4.3 — linha do plano oficial (financeiro_plano_contas).
+// cliente_id NULL = global soberano; cliente_id = X = custom do cliente.
+interface PlanoOficialRow {
+  subcentro: string | null;
+  macro_custo: string | null;
+  grupo_custo: string | null;
+  centro_custo: string | null;
+  tipo_operacao: string | null;
+  escopo_negocio: string | null;
+  cliente_id: string | null;
+}
+
 // PR4.2 — mapping do enum financeiro_lancamentos_v2.tipo_operacao para
 // a natureza canônica do subcentro.
 function tipoOperacaoToNatureza(t: string | null): NaturezaSubcentro | null {
@@ -87,7 +108,7 @@ export function useCatalogoCliente(clienteId: string | null) {
       // de leitura; cast preserva runtime e tipos da UI (interfaces locais).
       const sb = supabase as any;
 
-      const [contasRes, fazendasRes, fornecedoresRes, histRes] = await Promise.all([
+      const [contasRes, fazendasRes, fornecedoresRes, histRes, planoRes] = await Promise.all([
         sb
           .from('financeiro_contas_bancarias')
           .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, conta_digito, fazenda_id')
@@ -116,47 +137,94 @@ export function useCatalogoCliente(clienteId: string | null) {
           .not('subcentro', 'is', null)
           .order('id', { ascending: false })
           .limit(50000),
+
+        // PR4.3 — plano oficial (global soberano + custom do cliente)
+        sb
+          .from('financeiro_plano_contas')
+          .select('subcentro, macro_custo, grupo_custo, centro_custo, tipo_operacao, escopo_negocio, cliente_id')
+          .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`)
+          .eq('ativo', true)
+          .not('subcentro', 'is', null),
       ]);
 
       if (contasRes.error) throw contasRes.error;
       if (fazendasRes.error) throw fazendasRes.error;
       if (fornecedoresRes.error) throw fornecedoresRes.error;
       if (histRes.error) throw histRes.error;
+      if (planoRes.error) throw planoRes.error;
 
       const hist = ((histRes.data ?? []) as unknown) as HistoricoRow[];
+      const plano = ((planoRes.data ?? []) as unknown) as PlanoOficialRow[];
 
-      // PR4.2 — agrega subcentros usados acumulando natureza (entrada/saida/transferência)
-      // derivada de tipo_operacao histórico. Chave: subcentro+macro+grupo+centro.
+      // PR4.3 — catálogo híbrido em 2 fases:
+      //   FASE 1: inicializa pelo plano oficial (origem='oficial', qt_uso=0)
+      //   FASE 2: enriquece pelo histórico — promove a 'ambos' OU cria 'historico'
+      // Naturezas: plano oficial fornece a autoritativa; histórico só ADICIONA ao Set.
       const mapSub = new Map<string, SubcentroUsado>();
+
+      // FASE 1 — Plano oficial (soberano: global + custom do cliente, dedup)
+      plano.forEach((p) => {
+        if (!p.subcentro) return;
+        const key = `${p.subcentro}|${p.macro_custo ?? ''}|${p.grupo_custo ?? ''}|${p.centro_custo ?? ''}`;
+        if (mapSub.has(key)) return;  // dedupe global + custom da mesma chave
+
+        const naturezas = new Set<NaturezaSubcentro>();
+        const natOficial = tipoOperacaoToNatureza(p.tipo_operacao);
+        if (natOficial) naturezas.add(natOficial);
+
+        mapSub.set(key, {
+          subcentro: p.subcentro,
+          macro_custo: p.macro_custo,
+          grupo_custo: p.grupo_custo,
+          centro_custo: p.centro_custo,
+          qt_uso: 0,
+          qt_uso_entrada: 0,
+          qt_uso_saida: 0,
+          qt_uso_transferencia: 0,
+          naturezas,
+          origem: 'oficial',
+          escopo_negocio: p.escopo_negocio,
+        });
+      });
+
+      // FASE 2 — Enriquecimento histórico
       hist.forEach((r) => {
         if (!r.subcentro) return;
         const key = `${r.subcentro}|${r.macro_custo ?? ''}|${r.grupo_custo ?? ''}|${r.centro_custo ?? ''}`;
-        const natureza = tipoOperacaoToNatureza(r.tipo_operacao);
+        const natObservada = tipoOperacaoToNatureza(r.tipo_operacao);
+
         const cur = mapSub.get(key);
         if (cur) {
+          // Já existe (do plano oficial) → promove a 'ambos', incrementa contadores
+          cur.origem = 'ambos';
           cur.qt_uso++;
-          if (natureza === 'entrada') cur.qt_uso_entrada++;
-          else if (natureza === 'saida') cur.qt_uso_saida++;
-          else if (natureza === 'transferencia') cur.qt_uso_transferencia++;
-          if (natureza) cur.naturezas.add(natureza);
+          if (natObservada === 'entrada') cur.qt_uso_entrada++;
+          else if (natObservada === 'saida') cur.qt_uso_saida++;
+          else if (natObservada === 'transferencia') cur.qt_uso_transferencia++;
+          if (natObservada) cur.naturezas.add(natObservada);
         } else {
+          // Não existe no plano → legado/fora do plano oficial
           const naturezas = new Set<NaturezaSubcentro>();
-          if (natureza) naturezas.add(natureza);
+          if (natObservada) naturezas.add(natObservada);
           mapSub.set(key, {
             subcentro: r.subcentro,
             macro_custo: r.macro_custo,
             grupo_custo: r.grupo_custo,
             centro_custo: r.centro_custo,
             qt_uso: 1,
-            qt_uso_entrada: natureza === 'entrada' ? 1 : 0,
-            qt_uso_saida: natureza === 'saida' ? 1 : 0,
-            qt_uso_transferencia: natureza === 'transferencia' ? 1 : 0,
+            qt_uso_entrada: natObservada === 'entrada' ? 1 : 0,
+            qt_uso_saida: natObservada === 'saida' ? 1 : 0,
+            qt_uso_transferencia: natObservada === 'transferencia' ? 1 : 0,
             naturezas,
+            origem: 'historico',
+            escopo_negocio: null,
           });
         }
       });
+
       // Ordenação geral mantida (por qt_uso total) — específica por natureza
       // fica no consumer (MesaPareamentoModal/subcentrosParticionados).
+      // Oficiais sem uso (qt_uso=0) caem no fim, mas aparecem na busca.
       const subcentros = Array.from(mapSub.values()).sort((a, b) => b.qt_uso - a.qt_uso);
 
       // índice fornecedor → subcentro mais usado

@@ -1855,6 +1855,14 @@ function FormularioCorrecao({
                       className="text-[11px]"
                     >
                       <span className="flex-1 truncate">{s.subcentro}</span>
+                      {s.origem === 'historico' && (
+                        <span
+                          className="text-[9px] text-amber-700 mr-2"
+                          title="Subcentro legado — não está no plano oficial atual"
+                        >
+                          ⚠ legado
+                        </span>
+                      )}
                       <span className="text-[9px] text-muted-foreground ml-2">({qt}x)</span>
                     </CommandItem>
                   );
@@ -1878,6 +1886,9 @@ function FormularioCorrecao({
                     >
                       <span className="text-amber-700 mr-1">⚠</span>
                       <span className="flex-1 truncate text-muted-foreground">{s.subcentro}</span>
+                      {s.origem === 'historico' && (
+                        <span className="text-[9px] text-amber-700 mr-2">legado</span>
+                      )}
                       <span className="text-[9px] text-muted-foreground ml-2">
                         ({naturezasLabel || 's/ natureza'})
                       </span>
