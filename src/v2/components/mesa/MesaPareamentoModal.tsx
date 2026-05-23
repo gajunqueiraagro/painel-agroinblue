@@ -26,64 +26,30 @@ import {
 } from '@/v2/lib/excelPreview/catalogoCliente';
 import { sugerirTodasLinhas, type Sugestao } from '@/v2/lib/excelPreview/sugestaoEngine';
 import type { LoteExcel, MatchResult, ExcelLinhaNormalizada } from '@/v2/lib/excelPreview/types';
-
-type DecisaoStatus = 'pendente' | 'aprovado' | 'rejeitado' | 'excel_orfao';
-
-// PR4 — overrides do operador sobre os campos sugeridos pela IA.
-// Vive dentro do ParEstado; quando null, aprovação usa sugestão pura.
-interface ParCorrecao {
-  contaId: string | null;
-  contaRotulo: string | null;
-  fazendaId: string | null;
-  fazendaNome: string | null;
-  fornecedorId: string | null;
-  fornecedorNome: string | null;
-  fornecedorMarcadoNovo: boolean;  // PR4.1 — marca pra criar no PR6+
-  dataCompetencia: string | null;
-  subcentro: string | null;
-  macro_custo: string | null;
-  grupo_custo: string | null;
-  centro_custo: string | null;
-  produto: string | null;          // PR4.1 — separado de descricao
-  descricao: string | null;        // PR4.1 — "observação operador"
-  corrigidoEm: string;
-}
-
-interface ParEstado {
-  excelKey: string;
-  ofxIdAtivo: string | null;
-  ofxIdSugeridoOriginal: string | null;
-  decisao: DecisaoStatus;
-  correcao: ParCorrecao | null;  // PR4
-}
+// PR5 — tipos de domínio agora moram em src/v2/lib/mesaSessao/types.ts
+// (fonte única, sem dep cíclica com componentes React)
+import type {
+  ParCorrecao,
+  ParEstado,
+  AprovacaoLocal,
+  MesaDecisao,
+  MesaOfxValidacaoStatus,
+  SessaoCompleta,
+} from '@/v2/lib/mesaSessao/types';
+import {
+  salvarPares,
+  salvarOfxValidacoes,
+  finalizarSessao,
+  reabrirSessao,
+  descartarSessao,
+} from '@/v2/lib/mesaSessao/mutations';
+import { useSalvamentoAuto } from '@/v2/lib/mesaSessao/useSalvamentoAuto';
 
 interface OfxItem {
   id: string;
   data_movimento: string;
   descricao: string;
   valor: number;
-}
-
-// PR4 — fotografia consolidada (correcao ?? sugestao) na aprovação.
-// Schema renomeado vs PR3.1 para ser agnóstico de origem.
-interface AprovacaoLocal {
-  aprovadoEm: string;
-  origem_aprovacao: 'sugestao_direta' | 'corrigido';
-  contaId: string | null;
-  contaRotulo: string | null;
-  fazendaId: string | null;
-  fazendaNome: string | null;
-  fornecedorId: string | null;
-  fornecedorNome: string | null;
-  fornecedorMarcadoNovo: boolean;  // PR4.1
-  dataCompetencia: string | null;
-  subcentro: string;
-  macro: string | null;
-  grupo: string | null;
-  centro: string | null;
-  produto: string | null;          // PR4.1
-  descricao: string | null;
-  ofxIdVinculado: string | null;
 }
 
 // PR4.1 — fallbacks pra consolidarFotografia
@@ -106,6 +72,9 @@ interface Props {
   lotes: LoteExcel[];
   matches: Map<string, MatchResult>;
   extratos: OfxItem[];
+  // PR5 — sessão persistida (opcional; null = sem sessão ainda)
+  sessaoCompleta: SessaoCompleta | null;
+  onSessaoMudou: () => Promise<unknown>;
 }
 
 const fmtBRL = (v: number): string =>
@@ -203,9 +172,9 @@ interface ParEscopo {
   rotuloConta: string | null;
 }
 
-// PR3.3 — Modo OFX (visão bancária)
+// PR3.3 — Modo OFX (visão bancária). PR5 — OfxValidacaoStatus movida para
+// mesaSessao/types.ts como MesaOfxValidacaoStatus.
 type ModoVisualizacao = 'excel' | 'ofx';
-type OfxValidacaoStatus = 'pendente' | 'ofx_orfao_validado';
 type FiltroMostrarOfx = 'todos' | 'pendentes' | 'com_sugestao'
                       | 'sem_sugestao' | 'aprovados' | 'ofx_orfao_validado';
 type FiltroOrdemOfx = 'original' | 'data_asc' | 'data_desc'
@@ -221,6 +190,7 @@ interface CandidatoExcelParaOfx {
 export function MesaPareamentoModal({
   open, onOpenChange, clienteId, contaNome, contaId, anoMes,
   saldoOfxResumo, naoExplicado, lotes, matches, extratos,
+  sessaoCompleta, onSessaoMudou,
 }: Props) {
   const { data: catalogo, isLoading: catalogoCarregando, isError: catalogoErro } =
     useCatalogoCliente(clienteId);
@@ -266,6 +236,7 @@ export function MesaPareamentoModal({
   }, [linhasExcel, sugestoes, contaId]);
 
   // Estado de pares: inicializa com ofxIdAtivo = sugerido pelo engine, decisao pendente.
+  // PR5 — depois sobrescreve com dados persistidos da sessão (mesa_par rows).
   // Lazy init: roda só na primeira render do modal.
   const [pares, setPares] = useState<Map<string, ParEstado>>(() => {
     const m = new Map<string, ParEstado>();
@@ -280,6 +251,21 @@ export function MesaPareamentoModal({
         correcao: null,
       });
     });
+    // PR5 — sobrescreve com persistido
+    if (sessaoCompleta) {
+      sessaoCompleta.pares.forEach((row) => {
+        const exist = m.get(row.excel_key);
+        if (exist) {
+          m.set(row.excel_key, {
+            ...exist,
+            ofxIdAtivo: row.ofx_id_ativo,
+            ofxIdSugeridoOriginal: row.ofx_id_sugerido_original ?? exist.ofxIdSugeridoOriginal,
+            decisao: row.decisao,
+            correcao: row.correcao_json,
+          });
+        }
+      });
+    }
     return m;
   });
 
@@ -290,17 +276,29 @@ export function MesaPareamentoModal({
 
   // PR3.3 — Modo OFX (lente bancária)
   const [modoVisualizacao, setModoVisualizacao] = useState<ModoVisualizacao>('excel');
-  const [ofxValidacoes, setOfxValidacoes] = useState<Map<string, OfxValidacaoStatus>>(
-    new Map<string, OfxValidacaoStatus>(),
-  );
+  // PR5 — inicializa Map ofxValidacoes a partir da sessão persistida
+  const [ofxValidacoes, setOfxValidacoes] = useState<Map<string, MesaOfxValidacaoStatus>>(() => {
+    const m = new Map<string, MesaOfxValidacaoStatus>();
+    if (sessaoCompleta) {
+      sessaoCompleta.ofxValidacoes.forEach((row) => m.set(row.ofx_id, row.status));
+    }
+    return m;
+  });
   const [filtroOfxMostrar, setFiltroOfxMostrar] = useState<FiltroMostrarOfx>('todos');
   const [filtroOfxOrdem, setFiltroOfxOrdem] = useState<FiltroOrdemOfx>('original');
   const [ofxAtivoId, setOfxAtivoId] = useState<string | null>(null);
 
   // PR4 — Modo Corrigir: fotografia consolidada + draft de correção em memória
-  const [aprovacoes, setAprovacoes] = useState<Map<string, AprovacaoLocal>>(
-    new Map<string, AprovacaoLocal>(),
-  );
+  // PR5 — inicializa a partir da sessão persistida (aprovacao_json das rows)
+  const [aprovacoes, setAprovacoes] = useState<Map<string, AprovacaoLocal>>(() => {
+    const m = new Map<string, AprovacaoLocal>();
+    if (sessaoCompleta) {
+      sessaoCompleta.pares.forEach((row) => {
+        if (row.aprovacao_json) m.set(row.excel_key, row.aprovacao_json);
+      });
+    }
+    return m;
+  });
   const [corrigindoExcelKey, setCorrigindoExcelKey] = useState<string | null>(null);
   const [rascunhoCorrecao, setRascunhoCorrecao] = useState<ParCorrecao | null>(null);
   const [fornecedorBusca, setFornecedorBusca] = useState<string>('');
@@ -309,6 +307,7 @@ export function MesaPareamentoModal({
   // ---------- ações de decisão ----------
 
   function aprovarPar(key: string) {
+    if (edicaoBloqueada) return;
     // PR4 + PR4.1: consolida fotografia com fallbacks (chain de data e produto).
     const sug = sugestoes.get(key);
     const cur = pares.get(key);
@@ -328,6 +327,7 @@ export function MesaPareamentoModal({
     });
   }
   function rejeitarPar(key: string) {
+    if (edicaoBloqueada) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
       const cur = next.get(key);
@@ -336,6 +336,7 @@ export function MesaPareamentoModal({
     });
   }
   function marcarExcelOrfao(key: string) {
+    if (edicaoBloqueada) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
       const cur = next.get(key);
@@ -344,6 +345,7 @@ export function MesaPareamentoModal({
     });
   }
   function desfazer(key: string) {
+    if (edicaoBloqueada) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
       const cur = next.get(key);
@@ -352,6 +354,7 @@ export function MesaPareamentoModal({
     });
   }
   function trocarOfx(key: string, novoOfxId: string) {
+    if (edicaoBloqueada) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
       const cur = next.get(key);
@@ -585,15 +588,17 @@ export function MesaPareamentoModal({
 
   // Ações Modo OFX
   function marcarOfxOrfaoValidado(ofxId: string) {
+    if (edicaoBloqueada) return;
     setOfxValidacoes((prev) => {
-      const next = new Map<string, OfxValidacaoStatus>(prev);
+      const next = new Map<string, MesaOfxValidacaoStatus>(prev);
       next.set(ofxId, 'ofx_orfao_validado');
       return next;
     });
   }
   function desfazerOfxOrfaoValidado(ofxId: string) {
+    if (edicaoBloqueada) return;
     setOfxValidacoes((prev) => {
-      const next = new Map<string, OfxValidacaoStatus>(prev);
+      const next = new Map<string, MesaOfxValidacaoStatus>(prev);
       next.delete(ofxId);
       return next;
     });
@@ -602,6 +607,7 @@ export function MesaPareamentoModal({
   // numa única passagem de setPares (sem race). PR4: também produz
   // fotografia consolidada na Map de aprovações.
   function aprovarOfxComExcel(ofxId: string, excelKey: string) {
+    if (edicaoBloqueada) return;
     const sug = sugestoes.get(excelKey);
     const cur = pares.get(excelKey);
     setPares((prev) => {
@@ -623,6 +629,7 @@ export function MesaPareamentoModal({
   // ──────────────────────────────────────────────────────────────────────
 
   function iniciarCorrecao(excelKey: string) {
+    if (edicaoBloqueada) return;
     const sug = sugestoes.get(excelKey);
     const parAtual = pares.get(excelKey);
     const linha = linhasExcel.find((l) => `${l.loteId}:${l.indiceLinha}` === excelKey);
@@ -661,6 +668,7 @@ export function MesaPareamentoModal({
   }
 
   function aplicarCorrecao() {
+    if (edicaoBloqueada) return;
     if (!corrigindoExcelKey || !rascunhoCorrecao) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
@@ -681,6 +689,7 @@ export function MesaPareamentoModal({
   // produz fotografia com correção, marca decisão aprovado, persiste em
   // aprovacoes e pares de uma vez. Botão primário do formulário.
   function aplicarEAprovar() {
+    if (edicaoBloqueada) return;
     if (!corrigindoExcelKey || !rascunhoCorrecao) return;
     const excelKey = corrigindoExcelKey;
     const sug = sugestoes.get(excelKey);
@@ -720,6 +729,7 @@ export function MesaPareamentoModal({
   }
 
   function limparCorrecao(excelKey: string) {
+    if (edicaoBloqueada) return;
     setPares((prev) => {
       const next = new Map<string, ParEstado>(prev);
       const cur = next.get(excelKey);
@@ -747,6 +757,33 @@ export function MesaPareamentoModal({
     if (linha.sinal === 'saida') return 'saida';
     return null;
   }, [corrigindoExcelKey, linhasExcel]);
+
+  // PR5 — bloqueio de edição quando sessão finalizada
+  const edicaoBloqueada = sessaoCompleta?.sessao.status === 'finalizada';
+
+  // PR5 — hash leve para watch de auto-save (sem JSON.stringify do Map inteiro)
+  const watchKey = useMemo<string>(() => {
+    let h = '';
+    pares.forEach((p) => {
+      h += `${p.excelKey}:${p.decisao}:${p.ofxIdAtivo ?? ''}:${p.correcao ? '1' : '0'}|`;
+    });
+    ofxValidacoes.forEach((s, id) => {
+      h += `o:${id}:${s}|`;
+    });
+    return h;
+  }, [pares, ofxValidacoes]);
+
+  // PR5 — auto-save com debounce 5s
+  const { status: statusSalvamento, ultimoSalvamento, salvarAgora } = useSalvamentoAuto({
+    enabled: !!sessaoCompleta && !edicaoBloqueada,
+    debounceMs: 5000,
+    watchKey,
+    onSalvar: async () => {
+      if (!sessaoCompleta) return;
+      await salvarPares(sessaoCompleta.sessao.id, pares, aprovacoes);
+      await salvarOfxValidacoes(sessaoCompleta.sessao.id, ofxValidacoes);
+    },
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -776,6 +813,85 @@ export function MesaPareamentoModal({
               )}
             </div>
           </DialogTitle>
+          {/* PR5 — Persistência: status salvamento + botões de sessão */}
+          {sessaoCompleta && (
+            <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
+              {statusSalvamento === 'salvo' && ultimoSalvamento && (
+                <span className="text-emerald-700">
+                  ✓ Salvo às {ultimoSalvamento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {statusSalvamento === 'salvo' && !ultimoSalvamento && (
+                <span className="text-muted-foreground">Sessão pronta</span>
+              )}
+              {statusSalvamento === 'salvando' && (
+                <span className="text-blue-700">Salvando…</span>
+              )}
+              {statusSalvamento === 'pendente' && (
+                <span className="text-amber-700">Não salvo (auto em 5s)</span>
+              )}
+              {statusSalvamento === 'erro' && (
+                <span className="text-rose-700">Erro ao salvar</span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px]"
+                onClick={() => void salvarAgora()}
+                disabled={edicaoBloqueada}
+              >
+                Salvar agora
+              </Button>
+              {sessaoCompleta.sessao.status === 'em_andamento' && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-6 text-[10px]"
+                  onClick={async () => {
+                    if (!window.confirm('Marcar sessão como finalizada? Edição ficará bloqueada (pode reabrir depois).')) return;
+                    await salvarAgora();
+                    await finalizarSessao(sessaoCompleta.sessao.id);
+                    await onSessaoMudou();
+                  }}
+                >
+                  Finalizar sessão
+                </Button>
+              )}
+              {sessaoCompleta.sessao.status === 'finalizada' && (
+                <>
+                  <span className="text-emerald-700 font-semibold">✓ Finalizada</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[10px]"
+                    onClick={async () => {
+                      await reabrirSessao(sessaoCompleta.sessao.id);
+                      await onSessaoMudou();
+                    }}
+                  >
+                    Reabrir para edição
+                  </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] text-rose-700"
+                onClick={async () => {
+                  const corrigidos = Array.from(pares.values()).filter((p) => p.correcao).length;
+                  const aprov = Array.from(pares.values()).filter((p) => p.decisao === 'aprovado').length;
+                  if (!window.confirm(
+                    `Descartar sessão atual? Vai apagar ${pares.size} pares (${aprov} aprovados, ${corrigidos} corrigidos). Não pode desfazer.`,
+                  )) return;
+                  await descartarSessao(sessaoCompleta.sessao.id);
+                  onOpenChange(false);
+                  await onSessaoMudou();
+                }}
+              >
+                Descartar
+              </Button>
+            </div>
+          )}
           {/* PR3.3 — Toggle Modo Excel / Modo OFX */}
           <div className="flex items-center gap-1 pt-1">
             <Button

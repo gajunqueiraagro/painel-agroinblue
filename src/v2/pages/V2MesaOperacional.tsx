@@ -28,6 +28,8 @@ import { parseExcelToLote } from '@/v2/lib/excelPreview/parser';
 import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matchEngine';
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
 import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
+import { useMesaSessao } from '@/v2/lib/mesaSessao/useMesaSessao';
+import { criarOuRecuperarSessao } from '@/v2/lib/mesaSessao/mutations';
 
 interface V2MesaOperacionalProps {
   initialAno?: string;
@@ -97,6 +99,8 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
 
   // PR3 — Modal de pareamento (preserva preview; só fecha a janela)
   const [modalAberto, setModalAberto] = useState<boolean>(false);
+  // PR5 — flag de criando sessão (pra evitar duplo clique no botão)
+  const [criandoSessao, setCriandoSessao] = useState<boolean>(false);
 
   // ── 1) CARREGA CONTAS DO CLIENTE ─────────────────────────────────────
   useEffect(() => {
@@ -360,6 +364,37 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
              flagTipoInconsistente, flagContaInvalida };
   }, [previewAtivo, lotes, matches]);
 
+  // PR5 — sessão persistida (cliente + conta + ano_mes). Fetch reativo:
+  // mesmo se mudar mês/conta, query atualiza.
+  const anoMesPR5 = `${ano}-${String(mes).padStart(2, '0')}`;
+  const {
+    data: sessaoCompleta,
+    refetch: refetchSessao,
+  } = useMesaSessao(
+    clienteAtual?.id ?? null,
+    contaId,
+    anoMesPR5,
+  );
+
+  // Handler: cria/recupera sessão antes de abrir modal
+  async function abrirMesaPareamento() {
+    if (!clienteAtual?.id || !contaId || criandoSessao) return;
+    setCriandoSessao(true);
+    try {
+      await criarOuRecuperarSessao(
+        clienteAtual.id,
+        contaId,
+        anoMesPR5,
+        lotes,
+        extratos.map((e) => e.id),
+      );
+      await refetchSessao();
+      setModalAberto(true);
+    } finally {
+      setCriandoSessao(false);
+    }
+  }
+
   // ── 4) RENDER ────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-3 max-w-[1400px] mx-auto">
@@ -563,11 +598,12 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
               <Button
                 variant="default"
                 size="sm"
-                onClick={() => setModalAberto(true)}
+                onClick={() => { void abrirMesaPareamento(); }}
+                disabled={criandoSessao}
                 className="text-xs h-7"
               >
                 <LayoutGrid className="h-3 w-3 mr-1" />
-                Abrir Mesa de Pareamento
+                {criandoSessao ? 'Preparando…' : 'Abrir Mesa de Pareamento'}
               </Button>
               <Button
                 variant="ghost"
@@ -771,6 +807,8 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
             descricao: e.descricao,
             valor: Number(e.valor),
           }))}
+          sessaoCompleta={sessaoCompleta ?? null}
+          onSessaoMudou={refetchSessao}
         />
       )}
 
