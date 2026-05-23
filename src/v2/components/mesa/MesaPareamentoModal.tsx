@@ -1,4 +1,5 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -44,6 +45,13 @@ import {
   descartarSessao,
 } from '@/v2/lib/mesaSessao/mutations';
 import { useSalvamentoAuto } from '@/v2/lib/mesaSessao/useSalvamentoAuto';
+// PR6.1 — gerar staging ao finalizar sessão
+import { gerarStagingDaSessao } from '@/v2/lib/staging/mutations';
+import type { ResultadoGeracaoStaging } from '@/v2/lib/staging/types';
+// PR6.1 — query fresh direto no banco depois de salvar+finalizar, evitando
+// stale state. Não usamos sessaoCompleta.pares do cache local pra gerar staging.
+import { supabase } from '@/integrations/supabase/client';
+import type { MesaSessaoRow, MesaParRow } from '@/v2/lib/mesaSessao/types';
 
 interface OfxItem {
   id: string;
@@ -192,6 +200,13 @@ export function MesaPareamentoModal({
   saldoOfxResumo, naoExplicado, lotes, matches, extratos,
   sessaoCompleta, onSessaoMudou,
 }: Props) {
+  // PR6.1 — navegação pra tela de revisão de staging
+  const navigate = useNavigate();
+  // PR6.1 — resultado da última geração de staging + flag de operação em curso
+  const [resultadoStaging, setResultadoStaging] = useState<ResultadoGeracaoStaging | null>(null);
+  const [gerandoStaging, setGerandoStaging] = useState<boolean>(false);
+  const [erroStaging, setErroStaging] = useState<string | null>(null);
+
   const { data: catalogo, isLoading: catalogoCarregando, isError: catalogoErro } =
     useCatalogoCliente(clienteId);
 
@@ -785,6 +800,61 @@ export function MesaPareamentoModal({
     },
   });
 
+  // PR6.1 — Finaliza sessão e gera staging com dados FRESCOS do banco.
+  // Fluxo obrigatório:
+  //   1. salvarAgora()        — flush dos Maps em memória pro banco
+  //   2. finalizarSessao()    — mesa_sessao.status = 'finalizada'
+  //   3. onSessaoMudou()      — refetch do TanStack pra alinhar cache
+  //   4. query fresh direto   — re-busca sessao + pares pelo id, sem confiar no cache
+  //   5. gerarStagingDaSessao(sessaoFresh, paresFresh)
+  // Se a query fresh falhar/retornar null, aborta com erro explícito —
+  // NÃO usa sessaoCompleta.pares stale como fallback.
+  async function finalizarEGerarStaging() {
+    if (!sessaoCompleta) return;
+    if (!window.confirm(
+      'Marcar sessão como finalizada e gerar staging? Você poderá revisar antes de promover ao banco real.',
+    )) return;
+
+    setGerandoStaging(true);
+    setErroStaging(null);
+    try {
+      const sessaoId = sessaoCompleta.sessao.id;
+
+      // 1. Flush obrigatório do estado React → banco (pares + validações OFX)
+      await salvarAgora();
+
+      // 2. Marca sessão como finalizada no banco
+      await finalizarSessao(sessaoId);
+
+      // 3. Refetch do TanStack (atualiza cache do useMesaSessao no V2MesaOperacional)
+      await onSessaoMudou();
+
+      // 4. Query fresh DIRETO no banco — fonte da verdade, sem cache local.
+      //    Cast em supabase: tabelas mesa_* ainda não estão nos tipos gerados.
+      const sb = supabase as any;
+      const [sessRes, paresRes] = await Promise.all([
+        sb.from('mesa_sessao').select('*').eq('id', sessaoId).maybeSingle(),
+        sb.from('mesa_par').select('*').eq('sessao_id', sessaoId),
+      ]);
+      if (sessRes.error) throw sessRes.error;
+      if (paresRes.error) throw paresRes.error;
+      if (!sessRes.data) {
+        throw new Error('Sessão não encontrada no banco após finalizar');
+      }
+      const sessaoFresh = sessRes.data as MesaSessaoRow;
+      const paresFresh = ((paresRes.data ?? []) as unknown) as MesaParRow[];
+
+      // 5. Gera staging usando dados frescos
+      const resultado = await gerarStagingDaSessao(sessaoFresh, paresFresh);
+      setResultadoStaging(resultado);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErroStaging(msg);
+    } finally {
+      setGerandoStaging(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
@@ -847,19 +917,42 @@ export function MesaPareamentoModal({
                   size="sm"
                   variant="default"
                   className="h-6 text-[10px]"
-                  onClick={async () => {
-                    if (!window.confirm('Marcar sessão como finalizada? Edição ficará bloqueada (pode reabrir depois).')) return;
-                    await salvarAgora();
-                    await finalizarSessao(sessaoCompleta.sessao.id);
-                    await onSessaoMudou();
-                  }}
+                  disabled={gerandoStaging}
+                  onClick={() => { void finalizarEGerarStaging(); }}
                 >
-                  Finalizar sessão
+                  {gerandoStaging ? 'Gerando staging…' : 'Finalizar e gerar staging'}
                 </Button>
               )}
               {sessaoCompleta.sessao.status === 'finalizada' && (
                 <>
                   <span className="text-emerald-700 font-semibold">✓ Finalizada</span>
+                  {/* PR6.1 — resumo do staging gerado + atalho pra revisão */}
+                  {resultadoStaging && (
+                    <span className="text-muted-foreground text-[11px]">
+                      Staging: {resultadoStaging.total_apos} registros
+                      {resultadoStaging.gerados > 0 && ` (${resultadoStaging.gerados} novos)`}
+                      {resultadoStaging.ja_existentes > 0 && resultadoStaging.gerados === 0 && ` (já existiam)`}
+                    </span>
+                  )}
+                  {resultadoStaging && resultadoStaging.erros.length > 0 && (
+                    <span
+                      className="text-rose-700 text-[11px]"
+                      title={resultadoStaging.erros.map((e) => `${e.excel_key}: ${e.motivo}`).join('\n')}
+                    >
+                      ⚠ {resultadoStaging.erros.length} linha(s) não geraram staging
+                    </span>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-6 text-[10px]"
+                    onClick={() => {
+                      onOpenChange(false);
+                      navigate(`/v2/mesa-staging/${sessaoCompleta.sessao.id}`);
+                    }}
+                  >
+                    Ver staging →
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -872,6 +965,14 @@ export function MesaPareamentoModal({
                     Reabrir para edição
                   </Button>
                 </>
+              )}
+              {erroStaging && (
+                <span
+                  className="text-rose-700 text-[11px] font-medium"
+                  title={erroStaging}
+                >
+                  Erro ao gerar staging — passe o mouse
+                </span>
               )}
               <Button
                 size="sm"
