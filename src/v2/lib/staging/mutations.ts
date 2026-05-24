@@ -113,8 +113,9 @@ export async function gerarStagingDaSessao(
       return;
     }
 
-    // valorCentavos é sempre positivo no parser. Usar Math.abs por garantia.
-    const valorReais = Math.abs(Number(linha.valorCentavos) / 100);
+    // PR6.1B-6 — valorCentavos vem em CENTAVOS do parser. Math.abs primeiro
+    // (garantia anti-negativo do CHECK valor >= 0), depois /100 pra obter reais.
+    const valorReais = Math.abs(Number(linha.valorCentavos)) / 100;
     if (!Number.isFinite(valorReais)) {
       erros.push({
         excel_key: p.excel_key,
