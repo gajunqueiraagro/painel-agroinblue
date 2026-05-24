@@ -811,6 +811,21 @@ export function MesaPareamentoModal({
     return s;
   }, [sessaoCompleta]);
 
+  // PR6.1C-4 — index excel_key → ExcelLinhaNormalizada construído do snapshot
+  // imutável da sessão. salvarPares usa pra validar cada aprovação contra a
+  // linha Excel correspondente (defesa última no write path).
+  const linhasPorKey = useMemo<Map<string, ExcelLinhaNormalizada>>(() => {
+    const m = new Map<string, ExcelLinhaNormalizada>();
+    if (!sessaoCompleta) return m;
+    (sessaoCompleta.sessao.excel_lotes_json ?? []).forEach((lote) => {
+      (lote.linhas ?? []).forEach((linha) => {
+        const key = `${lote.loteId}:${linha.indiceLinha}`;
+        m.set(key, linha);
+      });
+    });
+    return m;
+  }, [sessaoCompleta]);
+
   // PR5 — auto-save com debounce 5s
   const { status: statusSalvamento, ultimoSalvamento, salvarAgora } = useSalvamentoAuto({
     enabled: !!sessaoCompleta && !edicaoBloqueada,
@@ -818,7 +833,13 @@ export function MesaPareamentoModal({
     watchKey,
     onSalvar: async () => {
       if (!sessaoCompleta) return;
-      await salvarPares(sessaoCompleta.sessao.id, pares, aprovacoes, lotesValidos);
+      await salvarPares(
+        sessaoCompleta.sessao.id,
+        pares,
+        aprovacoes,
+        lotesValidos,
+        linhasPorKey,
+      );
       await salvarOfxValidacoes(sessaoCompleta.sessao.id, ofxValidacoes);
     },
   });

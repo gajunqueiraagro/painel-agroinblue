@@ -6,7 +6,9 @@ import type {
   AprovacaoLocal,
   ResultadoCriarOuRecuperar,
 } from './types';
-import type { LoteExcel } from '@/v2/lib/excelPreview/types';
+import type { LoteExcel, ExcelLinhaNormalizada } from '@/v2/lib/excelPreview/types';
+// PR6.1C-4 — guard defensivo no write path consome o helper soberano
+import { validarAprovacao } from '@/v2/lib/mesa/validacao';
 
 /**
  * PR6.1B — Hash ordem-independente do conjunto de lotes.
@@ -96,6 +98,13 @@ export async function salvarPares(
   // silenciosamente, sem chegar ao banco. Opcional para preservar chamadores
   // legados — quando undefined, comportamento anterior é mantido.
   lotesValidos?: Set<string>,
+  // PR6.1C-4 — defesa última no write path. Quando fornecido, salvarPares
+  // valida cada aprovação via validarAprovacao() antes do upsert. Pares
+  // 'aprovado' com aprovação inválida são revertidos SILENCIOSAMENTE a
+  // 'pendente' (schema NOT NULL DEFAULT 'pendente' impede null real) e
+  // aprovacao_json zerado. correcao_json é PRESERVADO em qualquer caminho.
+  // Backward-compatible: undefined → não valida (preserva legado).
+  linhasPorKey?: Map<string, ExcelLinhaNormalizada>,
 ): Promise<void> {
   if (pares.size === 0) return;
   const sb = supabase as any;
@@ -115,14 +124,30 @@ export async function salvarPares(
       const loteIdDoPar = key.split(':')[0];
       if (!lotesValidos.has(loteIdDoPar)) return; // par órfão — pula
     }
+
+    let decisaoFinal: ParEstado['decisao'] = p.decisao;
+    let aprovacaoFinal: AprovacaoLocal | null = aprovacoes.get(key) ?? null;
+
+    // PR6.1C-4 — guard final: aprovação inválida reverte par pra 'pendente'
+    // (semanticamente equivalente a 'desfeito', já que o schema do banco é
+    // text NOT NULL DEFAULT 'pendente'). correcao_json INTACTO (A2).
+    if (linhasPorKey && decisaoFinal === 'aprovado') {
+      const linha = linhasPorKey.get(key);
+      const v = validarAprovacao(aprovacaoFinal, linha);
+      if (!v.valido) {
+        decisaoFinal = 'pendente';
+        aprovacaoFinal = null;
+      }
+    }
+
     rows.push({
       sessao_id: sessaoId,
       excel_key: key,
       ofx_id_ativo: p.ofxIdAtivo,
       ofx_id_sugerido_original: p.ofxIdSugeridoOriginal,
-      decisao: p.decisao,
-      correcao_json: p.correcao,
-      aprovacao_json: aprovacoes.get(key) ?? null,
+      decisao: decisaoFinal,
+      correcao_json: p.correcao, // INTACTO sempre (A2 — regra absoluta)
+      aprovacao_json: aprovacaoFinal,
     });
   });
 
