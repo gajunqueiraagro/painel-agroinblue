@@ -1500,7 +1500,7 @@ export function MesaPareamentoModal({
             <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
               Detalhe do par
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3">
+            <div className="flex-1 overflow-y-auto space-y-1.5">
               {!parAtivo || !linhaAtiva ? (
                 <div className="text-center text-muted-foreground italic py-12">
                   Selecione um par na lista à esquerda
@@ -1514,34 +1514,37 @@ export function MesaPareamentoModal({
                     </div>
                   )}
 
-                  {/* OFX vinculado */}
-                  <div className="border rounded p-2.5 space-y-1 bg-muted/30">
+                  {/* PR6.1F-1 — OFX (denso, sem card duplo) */}
+                  <div className="space-y-0.5 py-1">
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">
-                      OFX vinculado
+                      OFX
                     </div>
                     {!ofxAtivo ? (
-                      <div className="text-xs italic text-muted-foreground">Nenhum OFX vinculado</div>
+                      <div className="text-[11px] italic text-muted-foreground">Sem OFX</div>
                     ) : (
                       <>
-                        <div className="text-xs flex items-center gap-3">
+                        <div className="text-[11px] flex items-center gap-2">
                           <span className="tabular-nums text-muted-foreground">
                             {format(new Date(ofxAtivo.data_movimento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                           </span>
+                          <span className="text-muted-foreground">·</span>
                           <span className={cn('tabular-nums font-bold',
                             ofxAtivo.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
                           )}>{fmtBRL(ofxAtivo.valor)}</span>
                         </div>
-                        <div className="text-xs">{ofxAtivo.descricao}</div>
+                        <div className="text-[11px] truncate" title={ofxAtivo.descricao}>
+                          {ofxAtivo.descricao}
+                        </div>
                       </>
                     )}
                   </div>
 
-                  {/* Excel */}
-                  <div className="border rounded p-2.5 space-y-1">
+                  {/* PR6.1F-1 — Excel (denso, sem card duplo) */}
+                  <div className="space-y-0.5 py-1">
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">
                       Excel
                     </div>
-                    <div className="text-xs flex items-center gap-3">
+                    <div className="text-[11px] flex items-center gap-2">
                       <span className="tabular-nums text-muted-foreground">
                         {linhaAtiva.dataPagamento
                           ? format(new Date(linhaAtiva.dataPagamento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })
@@ -1549,23 +1552,24 @@ export function MesaPareamentoModal({
                               ? `comp. ${format(new Date(linhaAtiva.dataCompetencia + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}`
                               : '—')}
                       </span>
+                      <span className="text-muted-foreground">·</span>
                       <span className={cn('tabular-nums font-bold',
                         linhaAtiva.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
                       )}>{fmtBRL((linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100))}</span>
                     </div>
-                    <div className="text-xs"><strong>Forn.:</strong> {linhaAtiva.fornecedor || '—'}</div>
-                    <div className="text-xs"><strong>Conta:</strong> {linhaAtiva.contaTexto || '—'}</div>
-                    <div className="text-xs"><strong>Fazenda:</strong> {linhaAtiva.fazendaTexto || '—'}</div>
-                    <div className="text-xs"><strong>Subc.:</strong> {linhaAtiva.subcentro || '—'}</div>
+                    <div className="text-[11px]"><strong>Forn.:</strong> {linhaAtiva.fornecedor || '—'}</div>
+                    <div className="text-[11px]"><strong>Conta:</strong> {linhaAtiva.contaTexto || '—'}</div>
+                    <div className="text-[11px]"><strong>Fazenda:</strong> {linhaAtiva.fazendaTexto || '—'}</div>
+                    <div className="text-[11px]"><strong>Subc.:</strong> {linhaAtiva.subcentro || '—'}</div>
                     {/* PR4.1 — Produto/Doc/Histórico Excel como blocos read-only */}
                     {linhaAtiva.produto && (
-                      <div className="text-xs"><strong>Produto (Excel):</strong> {linhaAtiva.produto}</div>
+                      <div className="text-[11px]"><strong>Produto (Excel):</strong> {linhaAtiva.produto}</div>
                     )}
                     {linhaAtiva.documento && (
-                      <div className="text-xs"><strong>Doc (Excel):</strong> {linhaAtiva.documento}</div>
+                      <div className="text-[11px]"><strong>Doc (Excel):</strong> {linhaAtiva.documento}</div>
                     )}
                     {linhaAtiva.observacao && (
-                      <div className="text-xs"><strong>Histórico Excel:</strong>{' '}
+                      <div className="text-[11px]"><strong>Histórico Excel:</strong>{' '}
                         <span className="italic">{linhaAtiva.observacao}</span>
                       </div>
                     )}
