@@ -1394,7 +1394,7 @@ export function MesaPareamentoModal({
           {modoVisualizacao === 'excel' && <>
 
           {/* COL 1 — LISTA DE PARES */}
-          <Card className="p-2 flex flex-col overflow-hidden">
+          <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1 shrink-0">
               Pares ({linhasFiltradas.length} de {linhasExcel.length})
             </div>
@@ -1496,7 +1496,7 @@ export function MesaPareamentoModal({
           </Card>
 
           {/* COL 2 — DETALHE DO PAR ATIVO */}
-          <Card className="p-3 flex flex-col overflow-hidden">
+          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
               Detalhe do par
             </div>
@@ -1602,7 +1602,7 @@ export function MesaPareamentoModal({
           </Card>
 
           {/* COL 3 — SUGESTÃO/CORRIGIDO + DECISÃO (PR4: switch para FormularioCorrecao) */}
-          <Card className="p-3 flex flex-col overflow-hidden">
+          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="flex-1 overflow-y-auto space-y-3">
               {!parAtivo || !sugAtiva ? (
                 <>
@@ -1794,7 +1794,7 @@ export function MesaPareamentoModal({
           {modoVisualizacao === 'ofx' && <>
 
           {/* COL 1 — LISTA DE OFX */}
-          <Card className="p-2 flex flex-col overflow-hidden">
+          <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1 shrink-0">
               OFX ({ofxFiltrados.length} de {extratos.length})
             </div>
@@ -1856,7 +1856,7 @@ export function MesaPareamentoModal({
           </Card>
 
           {/* COL 2 — DETALHE DO OFX */}
-          <Card className="p-3 flex flex-col overflow-hidden">
+          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
               Detalhe do OFX
             </div>
@@ -1995,7 +1995,7 @@ export function MesaPareamentoModal({
           </Card>
 
           {/* COL 3 — DECISÃO OFX */}
-          <Card className="p-3 flex flex-col overflow-hidden">
+          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
               Decisão
             </div>
