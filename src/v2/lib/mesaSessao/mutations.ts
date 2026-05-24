@@ -4,12 +4,31 @@ import type {
   MesaOfxValidacaoStatus,
   ParEstado,
   AprovacaoLocal,
+  ResultadoCriarOuRecuperar,
 } from './types';
 import type { LoteExcel } from '@/v2/lib/excelPreview/types';
 
 /**
- * Cria nova sessão (idempotente via UNIQUE constraint).
- * Retorna a sessão criada OU a existente (com snapshot Excel atualizado).
+ * PR6.1B — Hash ordem-independente do conjunto de lotes.
+ * Aceita LoteExcel[] (novo upload) ou o array bruto vindo do JSON da sessão.
+ */
+function hashLotes(lotes: ReadonlyArray<{ loteId: string }>): string {
+  return lotes
+    .map((l) => l.loteId)
+    .sort()
+    .join('|');
+}
+
+/**
+ * PR6.1B — Sessão Mesa é IMUTÁVEL em relação ao snapshot Excel.
+ *
+ * Cenários:
+ * - Não existe sessão → INSERT, retorna { tipo: 'criada' }
+ * - Existe e hash bate → retorna { tipo: 'existente_igual' } SEM UPDATE
+ * - Existe e hash diverge → retorna { tipo: 'divergencia' } SEM UPDATE
+ *
+ * Esta função NÃO executa UPDATE em mesa_sessao em hipótese alguma.
+ * UI decide o que fazer no caso de divergência (Commit 3).
  */
 export async function criarOuRecuperarSessao(
   clienteId: string,
@@ -17,7 +36,7 @@ export async function criarOuRecuperarSessao(
   anoMes: string,
   excelLotes: LoteExcel[],
   ofxIds: string[],
-): Promise<MesaSessaoRow> {
+): Promise<ResultadoCriarOuRecuperar> {
   // Cast em supabase: tabelas novas do PR5 ainda não estão nos tipos gerados.
   const sb = supabase as any;
 
@@ -30,22 +49,24 @@ export async function criarOuRecuperarSessao(
     .maybeSingle();
 
   if (existRes.error) throw existRes.error;
+
   if (existRes.data) {
-    // Atualiza snapshot Excel + OFX se houve nova importação
-    const updRes = await sb
-      .from('mesa_sessao')
-      .update({
-        excel_lotes_json: excelLotes,
-        ofx_extratos_ids: ofxIds,
-      })
-      .eq('id', existRes.data.id)
-      .select()
-      .single();
-    if (updRes.error) throw updRes.error;
-    return updRes.data as MesaSessaoRow;
+    const sessao = existRes.data as MesaSessaoRow;
+    const hashNovo = hashLotes(excelLotes);
+    const hashExistente = hashLotes(
+      (sessao.excel_lotes_json ?? []) as Array<{ loteId: string }>,
+    );
+
+    if (hashNovo === hashExistente) {
+      // Mesmo conjunto de arquivos → continua sessão existente, NÃO sobrescreve.
+      return { tipo: 'existente_igual', sessao };
+    }
+
+    // Conjunto diferente → operador decide via UI (não toca no banco aqui).
+    return { tipo: 'divergencia', sessaoExistente: sessao, hashNovo };
   }
 
-  // Cria nova
+  // Não existe → cria nova.
   const insRes = await sb
     .from('mesa_sessao')
     .insert({
@@ -59,7 +80,7 @@ export async function criarOuRecuperarSessao(
     .single();
 
   if (insRes.error) throw insRes.error;
-  return insRes.data as MesaSessaoRow;
+  return { tipo: 'criada', sessao: insRes.data as MesaSessaoRow };
 }
 
 /**

@@ -102,6 +102,16 @@ export interface MesaOfxValidacaoRow {
   updated_at: string;
 }
 
+/**
+ * PR6.1B — Resultado discriminado de criarOuRecuperarSessao.
+ * Sessão Mesa é imutável: existindo sessão com mesmos arquivos, continua;
+ * com arquivos diferentes, UI decide (Commit 3).
+ */
+export type ResultadoCriarOuRecuperar =
+  | { tipo: 'criada'; sessao: MesaSessaoRow }
+  | { tipo: 'existente_igual'; sessao: MesaSessaoRow }
+  | { tipo: 'divergencia'; sessaoExistente: MesaSessaoRow; hashNovo: string };
+
 export interface SessaoCompleta {
   sessao: MesaSessaoRow;
   pares: MesaParRow[];
