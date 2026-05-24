@@ -1607,7 +1607,7 @@ export function MesaPareamentoModal({
 
           {/* COL 3 — SUGESTÃO/CORRIGIDO + DECISÃO (PR4: switch para FormularioCorrecao) */}
           <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="flex-1 overflow-y-auto space-y-3">
+            <div className="flex-1 overflow-y-auto space-y-1.5">
               {!parAtivo || !sugAtiva ? (
                 <>
                   <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2">
@@ -1674,38 +1674,33 @@ export function MesaPareamentoModal({
                     const confFaz = cor ? undefined : sugAtiva.fazendaSugerida?.confianca;
                     const confSub = cor ? undefined : sugAtiva.subcentroSugerido?.confianca;
                     const confFor = cor ? undefined : sugAtiva.fornecedorOficial?.confianca;
+                    // PR6.1F-2 — grid responsivo 2 colunas. Hierarquia do Subc.
+                    // preservada via title (tooltip). Ordem JSX em flow:
+                    //   esq col: Conta / Fazenda / Subc.   dir col: Forn. / Produto / Comp.
+                    const subcHierarquia = exibir.subc
+                      ? `${exibir.macro ?? '—'} / ${exibir.grupo ?? '—'} / ${exibir.centro ?? '—'}`
+                      : undefined;
                     return (
-                      <div className="space-y-1 text-[11px]">
-                        <SugLinha label="Conta" valor={exibir.conta} conf={confConta} />
-                        <SugLinha label="Fazenda" valor={exibir.fazenda} conf={confFaz} />
-                        <SugLinha label="Subc." valor={exibir.subc} conf={confSub} />
-                        {exibir.subc && (
-                          <div className="text-[10px] text-muted-foreground pl-14">
-                            {exibir.macro ?? '—'} / {exibir.grupo ?? '—'} / {exibir.centro ?? '—'}
-                          </div>
-                        )}
-                        <SugLinha label="Forn." valor={exibir.forn} conf={confFor} />
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-3 gap-y-1">
+                          <SugLinha label="Conta" valor={exibir.conta} conf={confConta} />
+                          <SugLinha label="Forn." valor={exibir.forn} conf={confFor} />
+                          <SugLinha label="Fazenda" valor={exibir.fazenda} conf={confFaz} />
+                          <SugLinha label="Produto" valor={exibir.produto ?? null} />
+                          <SugLinha label="Subc." valor={exibir.subc} conf={confSub} title={subcHierarquia} />
+                          <SugLinha label="Comp." valor={exibir.dataComp ?? null} />
+                        </div>
                         {exibir.fornecedorMarcadoNovo && (
-                          <div className="text-[10px] text-amber-700 pl-14">
-                            ⚑ marcado como novo (criar no PR6+)
-                          </div>
-                        )}
-                        {exibir.produto && (
-                          <div className="text-[11px]">
-                            <span className="text-muted-foreground">Produto:</span>{' '}
-                            {exibir.produto}
-                          </div>
-                        )}
-                        {exibir.dataComp && (
-                          <div className="text-[11px]">
-                            <span className="text-muted-foreground">Data comp.:</span>{' '}
-                            {exibir.dataComp}
+                          <div className="text-[10px] text-amber-700">
+                            ⚑ Fornecedor marcado como novo (criar no PR6+)
                           </div>
                         )}
                         {exibir.desc && (
-                          <div className="text-[11px]">
-                            <span className="text-muted-foreground">Obs operador:</span>{' '}
-                            <span className="italic">{exibir.desc}</span>
+                          <div className="text-[11px] flex items-baseline gap-1.5">
+                            <span className="text-[10px] uppercase font-medium text-muted-foreground shrink-0">
+                              Obs
+                            </span>
+                            <span className="italic flex-1">{exibir.desc}</span>
                           </div>
                         )}
                       </div>
@@ -1713,7 +1708,7 @@ export function MesaPareamentoModal({
                   })()}
 
                   {/* Botões de decisão */}
-                  <div className="border-t pt-3 space-y-2">
+                  <div className="border-t pt-2 space-y-1.5">
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">Decisão</div>
                     {parAtivo.decisao === 'pendente' ? (
                       <>
@@ -1735,7 +1730,7 @@ export function MesaPareamentoModal({
                           const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
                           if (validacaoAtivo.valido) {
                             return (
-                              <Button size="sm" variant="default" className="w-full justify-start text-xs h-8"
+                              <Button size="sm" variant="default" className="w-full justify-start text-[11px] h-7"
                                       onClick={() => aprovarPar(parAtivoKey)}
                                       disabled={!parAtivo.ofxIdAtivo}>
                                 <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
@@ -1746,7 +1741,7 @@ export function MesaPareamentoModal({
                             <>
                               <Button
                                 size="sm" variant="outline"
-                                className="w-full justify-start text-xs h-8 border-amber-300 text-amber-800 hover:bg-amber-50"
+                                className="w-full justify-start text-[11px] h-7 border-amber-300 text-amber-800 hover:bg-amber-50"
                                 disabled={!parAtivo.ofxIdAtivo}
                                 title={validacaoAtivo.mensagem}
                                 onClick={() => iniciarCorrecao(parAtivoKey)}
@@ -1762,7 +1757,7 @@ export function MesaPareamentoModal({
                             </>
                           );
                         })()}
-                        <Button size="sm" variant="destructive" className="w-full justify-start text-xs h-8"
+                        <Button size="sm" variant="destructive" className="w-full justify-start text-[11px] h-7"
                                 onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
                           <X className="h-3.5 w-3.5 mr-2" /> Rejeitar (sugestão errada)
                         </Button>
@@ -1772,17 +1767,17 @@ export function MesaPareamentoModal({
                           ofxAtualId={parAtivo.ofxIdAtivo}
                           onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
                         />
-                        <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8"
+                        <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
                                 onClick={() => parAtivoKey && iniciarCorrecao(parAtivoKey)}>
                           <Pencil className="h-3.5 w-3.5 mr-2" /> Corrigir manualmente
                         </Button>
-                        <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8"
+                        <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
                                 onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
                           <ArrowRight className="h-3.5 w-3.5 mr-2" /> Marcar Excel órfão
                         </Button>
                       </>
                     ) : (
-                      <Button size="sm" variant="ghost" className="w-full justify-start text-xs h-8"
+                      <Button size="sm" variant="ghost" className="w-full justify-start text-[11px] h-7"
                               onClick={() => parAtivoKey && desfazer(parAtivoKey)}>
                         <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
                       </Button>
@@ -2093,28 +2088,35 @@ export function MesaPareamentoModal({
   );
 }
 
-function SugLinha({ label, valor, conf }: {
+function SugLinha({ label, valor, conf, title }: {
   label: string;
   valor: string | null | undefined;
-  conf: number | undefined;
+  conf?: number | undefined;
+  title?: string;
 }) {
-  if (!valor) {
-    return (
-      <div className="flex items-baseline gap-2">
-        <span className="text-muted-foreground w-12 shrink-0">{label}:</span>
-        <span className="text-muted-foreground italic">—</span>
-      </div>
-    );
-  }
   const pct = conf != null ? Math.round(conf * 100) : null;
   const corPct = pct != null && pct >= 80 ? 'text-emerald-700'
               : pct != null && pct >= 50 ? 'text-amber-700'
               : 'text-rose-700';
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="text-muted-foreground w-12 shrink-0">{label}:</span>
-      <span className="truncate flex-1">{valor}</span>
-      {pct != null && <span className={cn('text-[10px] tabular-nums shrink-0', corPct)}>{pct}%</span>}
+    // PR6.1F-2 — denso: label uppercase mini sem ':', valor truncate,
+    // title opcional para preservar contexto longo (ex.: hierarquia do Subc.).
+    <div className="flex items-baseline gap-1.5 min-w-0">
+      <span className="text-[10px] uppercase font-medium text-muted-foreground shrink-0">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'text-[11px] truncate flex-1',
+          !valor && 'italic text-muted-foreground',
+        )}
+        title={title}
+      >
+        {valor ?? '—'}
+      </span>
+      {pct != null && valor && (
+        <span className={cn('text-[10px] tabular-nums shrink-0', corPct)}>{pct}%</span>
+      )}
     </div>
   );
 }
