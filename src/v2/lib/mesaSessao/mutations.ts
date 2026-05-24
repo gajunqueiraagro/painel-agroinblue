@@ -91,6 +91,11 @@ export async function salvarPares(
   sessaoId: string,
   pares: Map<string, ParEstado>,
   aprovacoes: Map<string, AprovacaoLocal>,
+  // PR6.1B-4 — defesa em profundidade contra pares órfãos. Pares cujo loteId
+  // (prefixo do excel_key antes do ':') não estiver neste Set são descartados
+  // silenciosamente, sem chegar ao banco. Opcional para preservar chamadores
+  // legados — quando undefined, comportamento anterior é mantido.
+  lotesValidos?: Set<string>,
 ): Promise<void> {
   if (pares.size === 0) return;
   const sb = supabase as any;
@@ -106,6 +111,10 @@ export async function salvarPares(
   }> = [];
 
   pares.forEach((p, key) => {
+    if (lotesValidos) {
+      const loteIdDoPar = key.split(':')[0];
+      if (!lotesValidos.has(loteIdDoPar)) return; // par órfão — pula
+    }
     rows.push({
       sessao_id: sessaoId,
       excel_key: key,
@@ -116,6 +125,8 @@ export async function salvarPares(
       aprovacao_json: aprovacoes.get(key) ?? null,
     });
   });
+
+  if (rows.length === 0) return;
 
   const res = await sb
     .from('mesa_par')

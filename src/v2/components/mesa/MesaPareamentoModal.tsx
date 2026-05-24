@@ -797,6 +797,18 @@ export function MesaPareamentoModal({
     return h;
   }, [pares, ofxValidacoes]);
 
+  // PR6.1B-4 — set de loteIds válidos do snapshot imutável da sessão.
+  // Usado como guard em salvarPares: pares cujo loteId não esteja aqui são
+  // pulados (defesa contra órfãos remanescentes do bug pré-PR6.1B).
+  const lotesValidos = useMemo<Set<string>>(() => {
+    const s = new Set<string>();
+    if (!sessaoCompleta) return s;
+    (sessaoCompleta.sessao.excel_lotes_json ?? []).forEach((lote) => {
+      if (lote?.loteId) s.add(lote.loteId);
+    });
+    return s;
+  }, [sessaoCompleta]);
+
   // PR5 — auto-save com debounce 5s
   const { status: statusSalvamento, ultimoSalvamento, salvarAgora } = useSalvamentoAuto({
     enabled: !!sessaoCompleta && !edicaoBloqueada,
@@ -804,7 +816,7 @@ export function MesaPareamentoModal({
     watchKey,
     onSalvar: async () => {
       if (!sessaoCompleta) return;
-      await salvarPares(sessaoCompleta.sessao.id, pares, aprovacoes);
+      await salvarPares(sessaoCompleta.sessao.id, pares, aprovacoes, lotesValidos);
       await salvarOfxValidacoes(sessaoCompleta.sessao.id, ofxValidacoes);
     },
   });
