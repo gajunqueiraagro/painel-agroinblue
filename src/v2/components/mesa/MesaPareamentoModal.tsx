@@ -185,6 +185,15 @@ function abreviarBanco(rotulo: string): string {
   return p.slice(0, 8);
 }
 
+// PR6.1D-5 — Helper puro: linha é transferência (entre contas) se o tipo
+// bruto do Excel começa com '3-' ou contém 'transfer'. Padrão idêntico ao
+// derivarTipoOperacao do PR6.1C-1 (validacao.ts). Reusado pelo pré-filtro
+// das pills (PR6.1D-3) e pela marcação visual de linha (PR6.1D-5).
+function ehTransferencia(linha: ExcelLinhaNormalizada): boolean {
+  const t = (linha.raw?.Tipo ?? '').toString().toLowerCase().trim();
+  return t.startsWith('3-') || t.includes('transfer');
+}
+
 // PR6.1D-4 — Badge curto que indica a conta-da-linha-Excel resolvida via
 // resolverContaPorTexto (helper soberano do PR6.1D-1). 3 estados visuais:
 //   - Match conta-da-sessao: verde (linha pertence à conta do OFX)
@@ -503,11 +512,9 @@ export function MesaPareamentoModal({
     // PR6.1D-3 — pré-filtro de escopo (pills do header). PURAMENTE VISUAL:
     // atua só na lista renderizada do Modo Excel, sem tocar pares/aprovacoes
     // ou contadores globais (estado de cada par segue soberano em mesa_par).
+    // ehTransferencia é module-level (PR6.1D-5) — mesmo helper usado pela
+    // marcação visual da linha.
     const contaSessaoId = sessaoCompleta?.sessao.conta_bancaria_id ?? null;
-    const ehTransferencia = (l: ExcelLinhaNormalizada): boolean => {
-      const t = (l.raw?.Tipo ?? '').toString().toLowerCase().trim();
-      return t.startsWith('3-') || t.includes('transfer');
-    };
     if (escopoFiltro === 'transferencias') {
       arr = arr.filter((l) => ehTransferencia(l));
     } else if (escopoFiltro === 'externos') {
@@ -1434,6 +1441,12 @@ export function MesaPareamentoModal({
                   decisao === 'excel_orfao' ? '→' :
                   '—';
 
+                // PR6.1D-5 — marcação sutil de transferência (mesma decisão usada
+                // pelo filtro pill). Ordem do cn() garante que corBorda (status da
+                // decisão) sobreponha o azul: linha aprovada/rejeitada/órfã mantém
+                // a cor de status; transferência pendente recebe a tinta azul.
+                const linhaEhTransferencia = ehTransferencia(linha);
+
                 return (
                   <button
                     key={key}
@@ -1441,6 +1454,7 @@ export function MesaPareamentoModal({
                     title={esc?.rotuloConta ? `Conta sugerida: ${esc.rotuloConta}` : undefined}
                     className={cn(
                       'w-full flex items-center gap-1 px-2 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      linhaEhTransferencia && 'bg-blue-500/5',
                       corBorda,
                       ativo && 'ring-2 ring-primary ring-inset bg-muted',
                     )}
@@ -1458,6 +1472,15 @@ export function MesaPareamentoModal({
                           sessaoCompleta.sessao.conta_bancaria_id
                       }
                     />
+                    {linhaEhTransferencia && (
+                      <span
+                        className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-blue-500/15 text-blue-700 border border-blue-500/30 leading-none"
+                        title="Movimento de transferência entre contas"
+                      >
+                        <ArrowLeftRight className="h-2.5 w-2.5" aria-hidden="true" />
+                        <span className="tracking-tight">Transferência</span>
+                      </span>
+                    )}
                     <span className="flex-1 truncate font-normal">
                       {linha.fornecedor || <span className="italic text-muted-foreground">{linha.subcentro}</span>}
                     </span>
