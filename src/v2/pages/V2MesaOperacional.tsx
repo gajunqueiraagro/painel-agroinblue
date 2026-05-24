@@ -29,7 +29,18 @@ import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matc
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
 import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
 import { useMesaSessao } from '@/v2/lib/mesaSessao/useMesaSessao';
-import { criarOuRecuperarSessao } from '@/v2/lib/mesaSessao/mutations';
+import { criarOuRecuperarSessao, descartarSessao } from '@/v2/lib/mesaSessao/mutations';
+import type { MesaSessaoRow } from '@/v2/lib/mesaSessao/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface V2MesaOperacionalProps {
   initialAno?: string;
@@ -101,6 +112,12 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
   const [modalAberto, setModalAberto] = useState<boolean>(false);
   // PR5 — flag de criando sessão (pra evitar duplo clique no botão)
   const [criandoSessao, setCriandoSessao] = useState<boolean>(false);
+  // PR6.1B-3 — modal de divergência: surge quando criarOuRecuperarSessao
+  // detecta sessão existente com hash de lotes diferente do upload atual.
+  const [divergenciaInfo, setDivergenciaInfo] = useState<{
+    sessaoExistente: MesaSessaoRow;
+    hashNovo: string;
+  } | null>(null);
 
   // ── 1) CARREGA CONTAS DO CLIENTE ─────────────────────────────────────
   useEffect(() => {
@@ -376,23 +393,73 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
     anoMesPR5,
   );
 
-  // Handler: cria/recupera sessão antes de abrir modal
+  // Handler: cria/recupera sessão antes de abrir modal.
+  // PR6.1B-3 — trata discriminated union de criarOuRecuperarSessao.
   async function abrirMesaPareamento() {
     if (!clienteAtual?.id || !contaId || criandoSessao) return;
     setCriandoSessao(true);
     try {
-      await criarOuRecuperarSessao(
+      const resultado = await criarOuRecuperarSessao(
         clienteAtual.id,
         contaId,
         anoMesPR5,
         lotes,
         extratos.map((e) => e.id),
       );
+
+      if (resultado.tipo === 'divergencia') {
+        // Hash dos lotes novos ≠ hash da sessão existente → operador decide.
+        setDivergenciaInfo({
+          sessaoExistente: resultado.sessaoExistente,
+          hashNovo: resultado.hashNovo,
+        });
+        return;
+      }
+
+      // 'criada' | 'existente_igual' → abre Mesa direto.
       await refetchSessao();
       setModalAberto(true);
     } finally {
       setCriandoSessao(false);
     }
+  }
+
+  // PR6.1B-3 — operador opta por continuar a sessão existente: upload novo
+  // é ignorado (sessão imutável preserva os arquivos originais).
+  async function continuarSessaoAnterior() {
+    setDivergenciaInfo(null);
+    await refetchSessao();
+    setModalAberto(true);
+  }
+
+  // PR6.1B-3 — operador opta por descartar a sessão antiga e iniciar uma
+  // nova com os arquivos atuais. CASCADE limpa mesa_par e staging vinculados.
+  async function descartarECriarNova() {
+    if (!divergenciaInfo || !clienteAtual?.id || !contaId) return;
+    setCriandoSessao(true);
+    try {
+      await descartarSessao(divergenciaInfo.sessaoExistente.id);
+      setDivergenciaInfo(null);
+      const resultado = await criarOuRecuperarSessao(
+        clienteAtual.id,
+        contaId,
+        anoMesPR5,
+        lotes,
+        extratos.map((e) => e.id),
+      );
+      // Esperado 'criada' (sessão antiga foi apagada). Defensivo: só
+      // abrimos Mesa se NÃO retornou divergência (corrida extrema).
+      if (resultado.tipo !== 'divergencia') {
+        await refetchSessao();
+        setModalAberto(true);
+      }
+    } finally {
+      setCriandoSessao(false);
+    }
+  }
+
+  function cancelarDivergencia() {
+    setDivergenciaInfo(null);
   }
 
   // ── 4) RENDER ────────────────────────────────────────────────────────
@@ -811,6 +878,56 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
           onSessaoMudou={refetchSessao}
         />
       )}
+
+      {/* PR6.1B-3 — modal de divergência de upload */}
+      <AlertDialog
+        open={!!divergenciaInfo}
+        onOpenChange={(o) => {
+          if (!o) cancelarDivergencia();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sessão já iniciada para esta conta/mês</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2">
+                <div>Encontramos uma sessão já iniciada para esta conta/mês.</div>
+                <div>
+                  Os arquivos enviados agora são diferentes dos arquivos usados
+                  nessa sessão.
+                </div>
+                {divergenciaInfo?.sessaoExistente.updated_at && (
+                  <div className="text-xs text-muted-foreground pt-2 border-t">
+                    Sessão anterior atualizada em:{' '}
+                    {new Date(
+                      divergenciaInfo.sessaoExistente.updated_at,
+                    ).toLocaleString('pt-BR')}
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <AlertDialogAction
+              onClick={() => {
+                void continuarSessaoAnterior();
+              }}
+              className="w-full"
+            >
+              Continuar sessão anterior
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                void descartarECriarNova();
+              }}
+              className="w-full bg-rose-600 hover:bg-rose-700"
+            >
+              Descartar sessão anterior e iniciar nova com estes arquivos
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full mt-0">Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
