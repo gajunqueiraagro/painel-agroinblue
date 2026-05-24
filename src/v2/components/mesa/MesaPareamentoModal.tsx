@@ -1458,11 +1458,51 @@ export function MesaPareamentoModal({
                     <div className="text-[10px] font-bold uppercase text-muted-foreground">Decisão</div>
                     {parAtivo.decisao === 'pendente' ? (
                       <>
-                        <Button size="sm" variant="default" className="w-full justify-start text-xs h-8"
-                                onClick={() => parAtivoKey && aprovarPar(parAtivoKey)}
-                                disabled={!parAtivo.ofxIdAtivo}>
-                          <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
-                        </Button>
+                        {(() => {
+                          // PR6.1C-3 — valida payload da aprovação ANTES de oferecer o botão.
+                          // Mesmo padrão do Modo OFX (PR6.1C-2): consolidarFotografia +
+                          // buildFallbacks (helpers ja usados por aprovarPar). Reuso direto
+                          // do helper soberano validarAprovacao — zero regra inline aqui.
+                          if (!parAtivoKey) return null;
+                          const fallbacksAtivo = buildFallbacks(
+                            parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos,
+                          );
+                          const payloadAtivo = consolidarFotografia(
+                            sugAtiva ?? undefined,
+                            parAtivo.correcao,
+                            parAtivo.ofxIdAtivo,
+                            fallbacksAtivo,
+                          );
+                          const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
+                          if (validacaoAtivo.valido) {
+                            return (
+                              <Button size="sm" variant="default" className="w-full justify-start text-xs h-8"
+                                      onClick={() => aprovarPar(parAtivoKey)}
+                                      disabled={!parAtivo.ofxIdAtivo}>
+                                <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                              </Button>
+                            );
+                          }
+                          return (
+                            <>
+                              <Button
+                                size="sm" variant="outline"
+                                className="w-full justify-start text-xs h-8 border-amber-300 text-amber-800 hover:bg-amber-50"
+                                disabled={!parAtivo.ofxIdAtivo}
+                                title={validacaoAtivo.mensagem}
+                                onClick={() => iniciarCorrecao(parAtivoKey)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Corrigir antes
+                              </Button>
+                              <Badge
+                                variant="outline"
+                                className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
+                              >
+                                Faltam: {validacaoAtivo.camposFaltantes.join(', ')}
+                              </Badge>
+                            </>
+                          );
+                        })()}
                         <Button size="sm" variant="destructive" className="w-full justify-start text-xs h-8"
                                 onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
                           <X className="h-3.5 w-3.5 mr-2" /> Rejeitar (sugestão errada)
