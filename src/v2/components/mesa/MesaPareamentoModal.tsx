@@ -1032,12 +1032,15 @@ export function MesaPareamentoModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
-        <DialogHeader className="p-3 border-b shrink-0 space-y-2">
-          {/* PR6.1D-2 — linha 1: título soberano + tooltip educativo */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <DialogTitle className="text-base font-bold tracking-tight uppercase flex items-center gap-2">
-              <Globe2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-              <span>Mesa Global de Conciliação</span>
+        <DialogHeader className="px-3 py-2 border-b shrink-0 space-y-1">
+          {/* PR6.1E-1 — Linha A: identidade + contexto + métricas + status + ações.
+              Density refactor: todo o conteúdo do header (antes em 4 linhas
+              verticais) agora flui horizontal com flex-wrap. Preserva 100% da
+              semântica/funções/badges; só re-arranja layout e reduz py/px/gaps. */}
+          <div className="flex items-center gap-2 flex-wrap text-[11px]">
+            <DialogTitle className="text-xs font-bold tracking-tight uppercase flex items-center gap-1 shrink-0">
+              <Globe2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>Mesa Global</span>
               <TooltipProvider delayDuration={150}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1046,7 +1049,7 @@ export function MesaPareamentoModal({
                       aria-label="Por que vejo movimentos de outras contas?"
                       className="opacity-60 hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity"
                     >
-                      <HelpCircle className="h-4 w-4" aria-hidden="true" />
+                      <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" align="start" className="max-w-sm text-xs leading-relaxed normal-case font-normal">
@@ -1063,222 +1066,211 @@ export function MesaPareamentoModal({
                 </Tooltip>
               </TooltipProvider>
             </DialogTitle>
-            <div className="flex items-center gap-3 text-xs font-normal flex-wrap">
-              <span className="text-muted-foreground">OFX entr./saí.: {saldoOfxResumo}</span>
-              <span className="text-rose-700 font-medium">Não explicado: {naoExplicado}</span>
-              {modoVisualizacao === 'excel' ? (
-                <>
-                  <span className="text-emerald-700">✓ {contadores.aprovados} aprov.</span>
-                  <span className="text-rose-700">✗ {contadores.rejeitados} rej.</span>
-                  <span className="text-amber-700">→ {contadores.orfaos} excel órf.</span>
-                  <span className="text-muted-foreground">— {contadores.pendentes} pend.</span>
-                  <span className="text-blue-700">✎ {totalCorrigidos} corrig.</span>
-                  <span className="text-muted-foreground">| banco órf.: {contadores.bancoOrfao}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-emerald-700">✓ {contadoresOfx.aprovados} aprov.</span>
-                  <span className="text-muted-foreground">— {contadoresOfx.pendentes} pend.</span>
-                  <span className="text-amber-700">⊘ {contadoresOfx.orfaoValidado} órfão validado</span>
-                  <span className="text-muted-foreground">| sem sugestão: {contadoresOfx.semSugestao}</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* PR6.1D-2 — linha 2: badge gritante da conta-origem da sessão */}
-          <div>
-            <Badge className="bg-primary/10 text-primary border border-primary/30 px-3 py-1.5 text-sm font-semibold uppercase hover:bg-primary/15 inline-flex items-center">
-              <Building2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
-              Upload OFX • {contaNome ? contaNome.toUpperCase() : '—'}
+            <Badge className="bg-primary/10 text-primary border border-primary/30 px-2 py-0.5 text-[11px] font-semibold uppercase hover:bg-primary/15 inline-flex items-center gap-1 leading-none">
+              <Building2 className="h-3 w-3" aria-hidden="true" />
+              OFX: {contaNome ? contaNome.toUpperCase() : '—'}
             </Badge>
-          </div>
-
-          {/* PR6.1D-2 — linha 3: metadados secundários */}
-          <div className="text-xs text-muted-foreground font-normal">
-            Cliente: {clienteAtual?.nome ?? '—'}
-            <span className="mx-1.5">·</span>
-            Período: {periodoLabel}
-          </div>
-
-          {/* PR5 — Persistência: status salvamento + botões de sessão */}
-          {sessaoCompleta && (
-            <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
-              {statusSalvamento === 'salvo' && ultimoSalvamento && (
-                <span className="text-emerald-700">
-                  ✓ Salvo às {ultimoSalvamento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              {statusSalvamento === 'salvo' && !ultimoSalvamento && (
-                <span className="text-muted-foreground">Sessão pronta</span>
-              )}
-              {statusSalvamento === 'salvando' && (
-                <span className="text-blue-700">Salvando…</span>
-              )}
-              {statusSalvamento === 'pendente' && (
-                <span className="text-amber-700">Não salvo (auto em 5s)</span>
-              )}
-              {statusSalvamento === 'erro' && (
-                <span className="text-rose-700">Erro ao salvar</span>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-6 text-[10px]"
-                onClick={() => void salvarAgora()}
-                disabled={edicaoBloqueada}
-              >
-                Salvar agora
-              </Button>
-              {sessaoCompleta.sessao.status === 'em_andamento' && (
+            <span className="text-muted-foreground text-[10px]">
+              {clienteAtual?.nome ?? '—'} · {periodoLabel}
+            </span>
+            <span className="text-muted-foreground text-[10px]">
+              OFX entr./saí.: {saldoOfxResumo}
+            </span>
+            <span className="text-rose-700 font-medium text-[10px]">
+              Não explicado: {naoExplicado}
+            </span>
+            {modoVisualizacao === 'excel' ? (
+              <span className="flex items-center gap-1.5 text-[10px]">
+                <span className="text-emerald-700">✓{contadores.aprovados}</span>
+                <span className="text-rose-700">✗{contadores.rejeitados}</span>
+                <span className="text-amber-700">→{contadores.orfaos}</span>
+                <span className="text-muted-foreground">—{contadores.pendentes}</span>
+                <span className="text-blue-700">✎{totalCorrigidos}</span>
+                <span className="text-muted-foreground">| banco órf.: {contadores.bancoOrfao}</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[10px]">
+                <span className="text-emerald-700">✓{contadoresOfx.aprovados}</span>
+                <span className="text-muted-foreground">—{contadoresOfx.pendentes}</span>
+                <span className="text-amber-700">⊘{contadoresOfx.orfaoValidado}</span>
+                <span className="text-muted-foreground">| sem sug.: {contadoresOfx.semSugestao}</span>
+              </span>
+            )}
+            {sessaoCompleta && (
+              <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                {statusSalvamento === 'salvo' && ultimoSalvamento && (
+                  <span className="text-emerald-700 text-[10px]">
+                    ✓ {ultimoSalvamento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                {statusSalvamento === 'salvo' && !ultimoSalvamento && (
+                  <span className="text-muted-foreground text-[10px]">Sessão pronta</span>
+                )}
+                {statusSalvamento === 'salvando' && (
+                  <span className="text-blue-700 text-[10px]">Salvando…</span>
+                )}
+                {statusSalvamento === 'pendente' && (
+                  <span className="text-amber-700 text-[10px]">Não salvo (auto 5s)</span>
+                )}
+                {statusSalvamento === 'erro' && (
+                  <span className="text-rose-700 text-[10px]">Erro ao salvar</span>
+                )}
                 <Button
                   size="sm"
-                  variant="default"
-                  className="h-6 text-[10px]"
-                  disabled={gerandoStaging}
-                  onClick={() => { void finalizarEGerarStaging(); }}
+                  variant="outline"
+                  className="h-6 text-[10px] px-2"
+                  onClick={() => void salvarAgora()}
+                  disabled={edicaoBloqueada}
                 >
-                  {gerandoStaging ? 'Gerando staging…' : 'Finalizar e gerar staging'}
+                  Salvar
                 </Button>
-              )}
-              {sessaoCompleta.sessao.status === 'finalizada' && (
-                <>
-                  <span className="text-emerald-700 font-semibold">✓ Finalizada</span>
-                  {/* PR6.1 — resumo do staging gerado + atalho pra revisão */}
-                  {resultadoStaging && (
-                    <span className="text-muted-foreground text-[11px]">
-                      Staging: {resultadoStaging.total_apos} registros
-                      {resultadoStaging.gerados > 0 && ` (${resultadoStaging.gerados} novos)`}
-                      {resultadoStaging.ja_existentes > 0 && resultadoStaging.gerados === 0 && ` (já existiam)`}
-                    </span>
-                  )}
-                  {resultadoStaging && resultadoStaging.erros.length > 0 && (
-                    <span
-                      className="text-rose-700 text-[11px]"
-                      title={resultadoStaging.erros.map((e) => `${e.excel_key}: ${e.motivo}`).join('\n')}
-                    >
-                      ⚠ {resultadoStaging.erros.length} linha(s) não geraram staging
-                    </span>
-                  )}
-                  {resultadoStaging && resultadoStaging.total_apos > 0 && (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="h-6 text-[10px]"
-                      onClick={() => setAbaAtiva('staging')}
-                    >
-                      Ver staging →
-                    </Button>
-                  )}
+                {sessaoCompleta.sessao.status === 'em_andamento' && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="h-6 text-[10px]"
-                    onClick={async () => {
-                      await reabrirSessao(sessaoCompleta.sessao.id);
-                      await onSessaoMudou();
-                    }}
+                    variant="default"
+                    className="h-6 text-[10px] px-2"
+                    disabled={gerandoStaging}
+                    onClick={() => { void finalizarEGerarStaging(); }}
                   >
-                    Reabrir para edição
+                    {gerandoStaging ? 'Gerando…' : 'Finalizar + staging'}
                   </Button>
-                </>
-              )}
-              {erroStaging && (
-                <span
-                  className="text-rose-700 text-[11px] font-medium"
-                  title={erroStaging}
+                )}
+                {sessaoCompleta.sessao.status === 'finalizada' && (
+                  <>
+                    <span className="text-emerald-700 font-semibold text-[10px]">✓ Finalizada</span>
+                    {resultadoStaging && (
+                      <span className="text-muted-foreground text-[10px]">
+                        Staging: {resultadoStaging.total_apos}
+                        {resultadoStaging.gerados > 0 && ` (${resultadoStaging.gerados} novos)`}
+                        {resultadoStaging.ja_existentes > 0 && resultadoStaging.gerados === 0 && ' (já existiam)'}
+                      </span>
+                    )}
+                    {resultadoStaging && resultadoStaging.erros.length > 0 && (
+                      <span
+                        className="text-rose-700 text-[10px]"
+                        title={resultadoStaging.erros.map((e) => `${e.excel_key}: ${e.motivo}`).join('\n')}
+                      >
+                        ⚠ {resultadoStaging.erros.length} n/g
+                      </span>
+                    )}
+                    {resultadoStaging && resultadoStaging.total_apos > 0 && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() => setAbaAtiva('staging')}
+                      >
+                        Ver staging →
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] px-2"
+                      onClick={async () => {
+                        await reabrirSessao(sessaoCompleta.sessao.id);
+                        await onSessaoMudou();
+                      }}
+                    >
+                      Reabrir
+                    </Button>
+                  </>
+                )}
+                {erroStaging && (
+                  <span
+                    className="text-rose-700 text-[10px] font-medium"
+                    title={erroStaging}
+                  >
+                    Erro staging — hover
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px] px-2 text-rose-700"
+                  onClick={async () => {
+                    const corrigidos = Array.from(pares.values()).filter((p) => p.correcao).length;
+                    const aprov = Array.from(pares.values()).filter((p) => p.decisao === 'aprovado').length;
+                    if (!window.confirm(
+                      `Descartar sessão atual? Vai apagar ${pares.size} pares (${aprov} aprovados, ${corrigidos} corrigidos). Não pode desfazer.`,
+                    )) return;
+                    await descartarSessao(sessaoCompleta.sessao.id);
+                    onOpenChange(false);
+                    await onSessaoMudou();
+                  }}
                 >
-                  Erro ao gerar staging — passe o mouse
-                </span>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 text-[10px] text-rose-700"
-                onClick={async () => {
-                  const corrigidos = Array.from(pares.values()).filter((p) => p.correcao).length;
-                  const aprov = Array.from(pares.values()).filter((p) => p.decisao === 'aprovado').length;
-                  if (!window.confirm(
-                    `Descartar sessão atual? Vai apagar ${pares.size} pares (${aprov} aprovados, ${corrigidos} corrigidos). Não pode desfazer.`,
-                  )) return;
-                  await descartarSessao(sessaoCompleta.sessao.id);
-                  onOpenChange(false);
-                  await onSessaoMudou();
-                }}
-              >
-                Descartar
-              </Button>
-            </div>
-          )}
-          {/* PR6.1D-3 — Pills de escopo (puramente visual; afeta só lista do Modo Excel) */}
-          <div className="flex items-center gap-2 flex-wrap pt-1 overflow-x-auto">
+                  Descartar
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* PR6.1E-1 — Linha B: pills de escopo + toggle Modo + indicador.
+              Mantém PR6.1D-3 (4 pills puramente visuais) + PR3.3 (toggle modo). */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               size="sm"
               variant={escopoFiltro === 'todas' ? 'default' : 'outline'}
-              className="h-7 text-xs rounded-full px-3"
+              className="h-6 text-[10px] rounded-full px-2.5"
               onClick={() => setEscopoFiltro('todas')}
             >
-              <Globe2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
-              Todas contas
+              <Globe2 className="h-3 w-3 mr-1" aria-hidden="true" />
+              Todas
             </Button>
             <Button
               size="sm"
               variant={escopoFiltro === 'sessao' ? 'default' : 'outline'}
-              className="h-7 text-xs rounded-full px-3"
+              className="h-6 text-[10px] rounded-full px-2.5"
               onClick={() => setEscopoFiltro('sessao')}
             >
-              <Building2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              <Building2 className="h-3 w-3 mr-1" aria-hidden="true" />
               Apenas {contaNome}
             </Button>
             <Button
               size="sm"
               variant="outline"
               className={cn(
-                'h-7 text-xs rounded-full px-3',
+                'h-6 text-[10px] rounded-full px-2.5',
                 escopoFiltro === 'transferencias' &&
                   'bg-blue-500/15 text-blue-700 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-700',
               )}
               onClick={() => setEscopoFiltro('transferencias')}
             >
-              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              <ArrowLeftRight className="h-3 w-3 mr-1" aria-hidden="true" />
               Transferências
             </Button>
             <Button
               size="sm"
               variant={escopoFiltro === 'externos' ? 'default' : 'outline'}
-              className="h-7 text-xs rounded-full px-3"
+              className="h-6 text-[10px] rounded-full px-2.5"
               onClick={() => setEscopoFiltro('externos')}
             >
-              <Coins className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              <Coins className="h-3 w-3 mr-1" aria-hidden="true" />
               Externos
             </Button>
-          </div>
-          {/* PR6.1D-3 — Indicador "Mostrando N de TOTAL" (anti-pânico de sumiço).
-              Aparece só no Modo Excel, único onde o pré-filtro de fato reduz a
-              lista renderizada. Pills continuam visíveis em qualquer modo. */}
-          {escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
-            <div className="text-xs text-muted-foreground italic">
-              Mostrando {linhasFiltradas.length} de {linhasExcel.length} linhas
+            {escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
+              <span className="text-[10px] text-muted-foreground italic">
+                Mostrando {linhasFiltradas.length} de {linhasExcel.length}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant={modoVisualizacao === 'excel' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setModoVisualizacao('excel')}
+                className="text-[10px] h-6 px-2"
+              >
+                Modo Excel
+              </Button>
+              <Button
+                variant={modoVisualizacao === 'ofx' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setModoVisualizacao('ofx')}
+                className="text-[10px] h-6 px-2"
+              >
+                Modo OFX
+              </Button>
             </div>
-          )}
-          {/* PR3.3 — Toggle Modo Excel / Modo OFX */}
-          <div className="flex items-center gap-1 pt-1">
-            <Button
-              variant={modoVisualizacao === 'excel' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setModoVisualizacao('excel')}
-              className="text-xs h-7"
-            >
-              Modo Excel
-            </Button>
-            <Button
-              variant={modoVisualizacao === 'ofx' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setModoVisualizacao('ofx')}
-              className="text-xs h-7"
-            >
-              Modo OFX
-            </Button>
           </div>
           <div className="flex items-center gap-2 text-xs pt-2 flex-wrap">
             {modoVisualizacao === 'excel' ? (
