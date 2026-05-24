@@ -65,6 +65,7 @@ import { validarAprovacao } from '@/v2/lib/mesa/validacao';
 import {
   resolverContaPorTexto,
   type ContaBancariaRow,
+  type ContaResolvida,
 } from '@/v2/lib/mesa/resolverConta';
 // PR6.1 — query fresh direto no banco depois de salvar+finalizar, evitando
 // stale state. Não usamos sessaoCompleta.pares do cache local pra gerar staging.
@@ -182,6 +183,53 @@ function abreviarBanco(rotulo: string): string {
   if (lower === 'itau' || lower === 'itaú') return 'Itaú';
   if (lower === 'bb' || lower === 'brasil') return 'BB';
   return p.slice(0, 8);
+}
+
+// PR6.1D-4 — Badge curto que indica a conta-da-linha-Excel resolvida via
+// resolverContaPorTexto (helper soberano do PR6.1D-1). 3 estados visuais:
+//   - Match conta-da-sessao: verde (linha pertence à conta do OFX)
+//   - Resolvido p/ outra conta: primary (movimento cross-bank do Excel
+//     multi-conta)
+//   - Não resolvido: amber + ícone "?" (defeito de cadastro ou parser)
+// Cor reflete SEMÂNTICA DE MATCH (não banco). Cor por banco viraria
+// mosaico visual.
+function BadgeContaResolvida({
+  resolvido,
+  ehContaDaSessao,
+}: {
+  resolvido: ContaResolvida | null;
+  ehContaDaSessao: boolean;
+}) {
+  if (!resolvido) {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-semibold px-1 py-[1px] rounded leading-none bg-amber-500/15 text-amber-700 border border-amber-500/30"
+        title="Conta não reconhecida"
+        aria-label="Conta não reconhecida"
+      >
+        <HelpCircle className="h-2.5 w-2.5" aria-hidden="true" />
+        <span>?</span>
+      </span>
+    );
+  }
+  const labelCru = resolvido.nome_exibicao;
+  const label =
+    labelCru.length > 12 ? labelCru.slice(0, 11) + '…' : labelCru;
+  const cor = ehContaDaSessao
+    ? 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/30'
+    : 'bg-primary/10 text-primary border border-primary/30';
+  return (
+    <span
+      className={cn(
+        'shrink-0 inline-flex items-center gap-0.5 text-[9px] font-semibold px-1 py-[1px] rounded leading-none uppercase',
+        cor,
+      )}
+      title={resolvido.nome_exibicao}
+    >
+      <Building2 className="h-2.5 w-2.5" aria-hidden="true" />
+      <span className="tracking-tight">{label}</span>
+    </span>
+  );
 }
 
 type FiltroMostrar = 'todos' | 'forte' | 'fraco' | 'sem_match'
@@ -431,6 +479,22 @@ export function MesaPareamentoModal({
     const bancoOrfao = extratos.length - ofxConsumidos.size;
     return { aprovados, rejeitados, orfaos, pendentes, bancoOrfao };
   }, [pares, ofxConsumidos, extratos.length]);
+
+  // PR6.1D-4 — resolução memoizada por contaTexto único. Performance: lista
+  // pode ter 1000+ linhas com poucos contaTexto distintos. Map evita reexec
+  // do helper soberano por linha em cada render. Re-roda só quando linhasExcel
+  // ou contas do catálogo mudam.
+  const resolucaoPorContaTexto = useMemo<Map<string, ContaResolvida | null>>(() => {
+    const m = new Map<string, ContaResolvida | null>();
+    const contasCadastro = (catalogo?.contas ?? []) as unknown as readonly ContaBancariaRow[];
+    for (const l of linhasExcel) {
+      const tex = l.contaTexto ?? '';
+      if (!m.has(tex)) {
+        m.set(tex, resolverContaPorTexto(tex, contasCadastro));
+      }
+    }
+    return m;
+  }, [linhasExcel, catalogo]);
 
   // Lista filtrada e ordenada
   const linhasFiltradas = useMemo<ExcelLinhaNormalizada[]>(() => {
@@ -1386,12 +1450,14 @@ export function MesaPareamentoModal({
                     <span className="text-[10px] text-muted-foreground tabular-nums w-10 shrink-0">
                       {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
                     </span>
-                    <span className={cn(
-                      'shrink-0 text-[9px] font-semibold px-1 py-[1px] rounded leading-none',
-                      corTag,
-                    )}>
-                      {esc?.tagBanco ?? '?'}
-                    </span>
+                    <BadgeContaResolvida
+                      resolvido={resolucaoPorContaTexto.get(linha.contaTexto ?? '') ?? null}
+                      ehContaDaSessao={
+                        !!sessaoCompleta?.sessao.conta_bancaria_id &&
+                        resolucaoPorContaTexto.get(linha.contaTexto ?? '')?.id ===
+                          sessaoCompleta.sessao.conta_bancaria_id
+                      }
+                    />
                     <span className="flex-1 truncate font-normal">
                       {linha.fornecedor || <span className="italic text-muted-foreground">{linha.subcentro}</span>}
                     </span>
