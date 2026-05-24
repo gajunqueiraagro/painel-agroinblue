@@ -18,7 +18,7 @@ import {
   CommandEmpty,
   CommandGroup,
 } from '@/components/ui/command';
-import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil, Globe2, Building2, HelpCircle } from 'lucide-react';
+import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil, Globe2, Building2, HelpCircle, Coins } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -61,6 +61,11 @@ import { useStaging } from '@/v2/lib/staging/useStaging';
 import { MesaStagingTab } from './MesaStagingTab';
 // PR6.1C — fonte única de validação de aprovação
 import { validarAprovacao } from '@/v2/lib/mesa/validacao';
+// PR6.1D — resolução de conta-da-linha-Excel para o cadastro (helper soberano)
+import {
+  resolverContaPorTexto,
+  type ContaBancariaRow,
+} from '@/v2/lib/mesa/resolverConta';
 // PR6.1 — query fresh direto no banco depois de salvar+finalizar, evitando
 // stale state. Não usamos sessaoCompleta.pares do cache local pra gerar staging.
 import { supabase } from '@/integrations/supabase/client';
@@ -184,6 +189,9 @@ type FiltroMostrar = 'todos' | 'forte' | 'fraco' | 'sem_match'
                    | 'banco_orfao' | 'corrigidos';
 type FiltroOrdem = 'score_desc' | 'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'original';
 type FiltroEscopo = 'todos' | 'desta_conta' | 'outras_contas' | 'sem_inferencia' | 'sem_ofx';
+// PR6.1D-3 — escopo via pills (puramente visual, atua na lista renderizada
+// do Modo Excel; não altera Map pares/aprovacoes, contadores ou staging)
+type EscopoFiltro = 'todas' | 'sessao' | 'transferencias' | 'externos';
 
 interface ParEscopo {
   isDestaConta: boolean;
@@ -311,6 +319,8 @@ export function MesaPareamentoModal({
 
   // PR3.3 — Modo OFX (lente bancária)
   const [modoVisualizacao, setModoVisualizacao] = useState<ModoVisualizacao>('excel');
+  // PR6.1D-3 — pills de escopo (puramente visual; default 'todas' = comportamento atual)
+  const [escopoFiltro, setEscopoFiltro] = useState<EscopoFiltro>('todas');
   // PR5 — inicializa Map ofxValidacoes a partir da sessão persistida
   const [ofxValidacoes, setOfxValidacoes] = useState<Map<string, MesaOfxValidacaoStatus>>(() => {
     const m = new Map<string, MesaOfxValidacaoStatus>();
@@ -426,6 +436,26 @@ export function MesaPareamentoModal({
   const linhasFiltradas = useMemo<ExcelLinhaNormalizada[]>(() => {
     let arr = linhasExcel.slice();
 
+    // PR6.1D-3 — pré-filtro de escopo (pills do header). PURAMENTE VISUAL:
+    // atua só na lista renderizada do Modo Excel, sem tocar pares/aprovacoes
+    // ou contadores globais (estado de cada par segue soberano em mesa_par).
+    const contaSessaoId = sessaoCompleta?.sessao.conta_bancaria_id ?? null;
+    const ehTransferencia = (l: ExcelLinhaNormalizada): boolean => {
+      const t = (l.raw?.Tipo ?? '').toString().toLowerCase().trim();
+      return t.startsWith('3-') || t.includes('transfer');
+    };
+    if (escopoFiltro === 'transferencias') {
+      arr = arr.filter((l) => ehTransferencia(l));
+    } else if (escopoFiltro === 'externos') {
+      arr = arr.filter((l) => !ehTransferencia(l));
+    } else if (escopoFiltro === 'sessao' && contaSessaoId) {
+      const contasCadastro = (catalogo?.contas ?? []) as unknown as readonly ContaBancariaRow[];
+      arr = arr.filter((l) => {
+        const res = resolverContaPorTexto(l.contaTexto, contasCadastro);
+        return res?.id === contaSessaoId;
+      });
+    }
+
     // PR3.2 — Filtro 1: ESCOPO (verde/roxo/cinza/sem OFX)
     arr = arr.filter((l) => {
       const key = `${l.loteId}:${l.indiceLinha}`;
@@ -486,7 +516,12 @@ export function MesaPareamentoModal({
       });
     }
     return arr;
-  }, [linhasExcel, matches, pares, filtroMostrar, filtroEscopo, filtroOrdem, escopoPorPar, ofxConsumidos]);
+  }, [
+    linhasExcel, matches, pares, filtroMostrar, filtroEscopo, filtroOrdem,
+    escopoPorPar, ofxConsumidos,
+    // PR6.1D-3 — pré-filtro pelas pills
+    escopoFiltro, sessaoCompleta?.sessao.conta_bancaria_id, catalogo,
+  ]);
 
   // Linha Excel ativa
   const linhaAtiva = useMemo<ExcelLinhaNormalizada | null>(() => {
@@ -1102,6 +1137,57 @@ export function MesaPareamentoModal({
               >
                 Descartar
               </Button>
+            </div>
+          )}
+          {/* PR6.1D-3 — Pills de escopo (puramente visual; afeta só lista do Modo Excel) */}
+          <div className="flex items-center gap-2 flex-wrap pt-1 overflow-x-auto">
+            <Button
+              size="sm"
+              variant={escopoFiltro === 'todas' ? 'default' : 'outline'}
+              className="h-7 text-xs rounded-full px-3"
+              onClick={() => setEscopoFiltro('todas')}
+            >
+              <Globe2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              Todas contas
+            </Button>
+            <Button
+              size="sm"
+              variant={escopoFiltro === 'sessao' ? 'default' : 'outline'}
+              className="h-7 text-xs rounded-full px-3"
+              onClick={() => setEscopoFiltro('sessao')}
+            >
+              <Building2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              Apenas {contaNome}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn(
+                'h-7 text-xs rounded-full px-3',
+                escopoFiltro === 'transferencias' &&
+                  'bg-blue-500/15 text-blue-700 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-700',
+              )}
+              onClick={() => setEscopoFiltro('transferencias')}
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              Transferências
+            </Button>
+            <Button
+              size="sm"
+              variant={escopoFiltro === 'externos' ? 'default' : 'outline'}
+              className="h-7 text-xs rounded-full px-3"
+              onClick={() => setEscopoFiltro('externos')}
+            >
+              <Coins className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+              Externos
+            </Button>
+          </div>
+          {/* PR6.1D-3 — Indicador "Mostrando N de TOTAL" (anti-pânico de sumiço).
+              Aparece só no Modo Excel, único onde o pré-filtro de fato reduz a
+              lista renderizada. Pills continuam visíveis em qualquer modo. */}
+          {escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
+            <div className="text-xs text-muted-foreground italic">
+              Mostrando {linhasFiltradas.length} de {linhasExcel.length} linhas
             </div>
           )}
           {/* PR3.3 — Toggle Modo Excel / Modo OFX */}
