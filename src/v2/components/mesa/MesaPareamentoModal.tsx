@@ -18,7 +18,14 @@ import {
   CommandEmpty,
   CommandGroup,
 } from '@/components/ui/command';
-import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil } from 'lucide-react';
+import { Check, X, ArrowLeftRight, ArrowRight, Undo2, AlertTriangle, Search, Pencil, Globe2, Building2, HelpCircle } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useCliente } from '@/contexts/ClienteContext';
 import { cn } from '@/lib/utils';
 import {
   useCatalogoCliente,
@@ -208,6 +215,8 @@ export function MesaPareamentoModal({
 }: Props) {
   // PR6.1A — staging vive em aba interna; pré-fetch usa o cache do TanStack
   const queryClient = useQueryClient();
+  // PR6.1D-2 — header soberano exibe nome do cliente na linha de metadados
+  const { clienteAtual } = useCliente();
   // PR6.1 — resultado da última geração de staging + flag de operação em curso
   const [resultadoStaging, setResultadoStaging] = useState<ResultadoGeracaoStaging | null>(null);
   const [gerandoStaging, setGerandoStaging] = useState<boolean>(false);
@@ -905,12 +914,49 @@ export function MesaPareamentoModal({
     }
   }
 
+  // PR6.1D-2 — período pt-BR a partir do anoMes ('YYYY-MM' → 'Abr/2026').
+  const periodoLabel = (() => {
+    const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const [ano, mes] = anoMes.split('-');
+    const idx = Number(mes) - 1;
+    if (!ano || Number.isNaN(idx) || idx < 0 || idx > 11) return anoMes;
+    return `${meses[idx]}/${ano}`;
+  })();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
-        <DialogHeader className="p-3 border-b shrink-0">
-          <DialogTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
-            <span>Mesa de Pareamento — {contaNome} · {anoMes}</span>
+        <DialogHeader className="p-3 border-b shrink-0 space-y-2">
+          {/* PR6.1D-2 — linha 1: título soberano + tooltip educativo */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <DialogTitle className="text-base font-bold tracking-tight uppercase flex items-center gap-2">
+              <Globe2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span>Mesa Global de Conciliação</span>
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Por que vejo movimentos de outras contas?"
+                      className="opacity-60 hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity"
+                    >
+                      <HelpCircle className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="start" className="max-w-sm text-xs leading-relaxed normal-case font-normal">
+                    <div className="font-semibold mb-1">Por que vejo movimentos de outras contas?</div>
+                    <p>
+                      O Excel é seu ledger multi-conta do mês — todas as receitas e despesas,
+                      de todas as contas. Apenas o OFX é específico da conta acima.
+                    </p>
+                    <p className="mt-2">
+                      Isso permite identificar transferências entre contas e conciliar
+                      automaticamente.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </DialogTitle>
             <div className="flex items-center gap-3 text-xs font-normal flex-wrap">
               <span className="text-muted-foreground">OFX entr./saí.: {saldoOfxResumo}</span>
               <span className="text-rose-700 font-medium">Não explicado: {naoExplicado}</span>
@@ -932,7 +978,23 @@ export function MesaPareamentoModal({
                 </>
               )}
             </div>
-          </DialogTitle>
+          </div>
+
+          {/* PR6.1D-2 — linha 2: badge gritante da conta-origem da sessão */}
+          <div>
+            <Badge className="bg-primary/10 text-primary border border-primary/30 px-3 py-1.5 text-sm font-semibold uppercase hover:bg-primary/15 inline-flex items-center">
+              <Building2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              Upload OFX • {contaNome ? contaNome.toUpperCase() : '—'}
+            </Badge>
+          </div>
+
+          {/* PR6.1D-2 — linha 3: metadados secundários */}
+          <div className="text-xs text-muted-foreground font-normal">
+            Cliente: {clienteAtual?.nome ?? '—'}
+            <span className="mx-1.5">·</span>
+            Período: {periodoLabel}
+          </div>
+
           {/* PR5 — Persistência: status salvamento + botões de sessão */}
           {sessaoCompleta && (
             <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
