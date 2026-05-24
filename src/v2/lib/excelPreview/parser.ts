@@ -14,12 +14,18 @@ const COLUNAS_OBRIGATORIAS: (keyof ExcelLinhaRaw)[] = [
  * SEM persistência. SEM chamada de banco.
  */
 export async function parseExcelToLote(file: File): Promise<LoteExcel> {
-  const loteId = crypto.randomUUID();
   const bytes = await file.arrayBuffer();
   const hashBuf = await crypto.subtle.digest('SHA-256', bytes);
   const hashConteudo = Array.from(new Uint8Array(hashBuf))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
+  // PR6.1B-1 — loteId determinístico derivado do hash do conteúdo (formato
+  // UUID v4 8-4-4-4-12). Mesmo arquivo Excel = mesmo loteId sempre.
+  // Reusa hashConteudo já calculado acima (sem duplicar SHA-256).
+  const loteId =
+    `${hashConteudo.slice(0, 8)}-${hashConteudo.slice(8, 12)}-` +
+    `${hashConteudo.slice(12, 16)}-${hashConteudo.slice(16, 20)}-` +
+    `${hashConteudo.slice(20, 32)}`;
 
   const wb = XLSX.read(bytes, { type: 'array', cellDates: false });
   if (!wb.SheetNames.includes(SHEET_ESPERADO)) {
