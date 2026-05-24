@@ -1272,12 +1272,15 @@ export function MesaPareamentoModal({
               </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs pt-2 flex-wrap">
+          {/* PR6.1E-2 — Toolbar densa de filtros internos da lista.
+              Compactacao pura: labels encurtados (Ver/Origem/Ord.), triggers
+              h-6 text-[10px], gap-1.5. Logica e opcoes 100% preservadas. */}
+          <div className="flex items-center gap-1.5 pt-1 flex-wrap">
             {modoVisualizacao === 'excel' ? (
               <>
-                <span className="text-muted-foreground">Mostrar:</span>
+                <span className="text-[10px] text-muted-foreground">Ver:</span>
                 <Select value={filtroMostrar} onValueChange={(v) => setFiltroMostrar(v as FiltroMostrar)}>
-                  <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-6 w-[130px] text-[10px] px-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos ({linhasExcel.length})</SelectItem>
                     <SelectItem value="forte">Forte</SelectItem>
@@ -1291,9 +1294,9 @@ export function MesaPareamentoModal({
                     <SelectItem value="corrigidos">Corrigidos</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-muted-foreground ml-2">Escopo:</span>
+                <span className="text-[10px] text-muted-foreground">Origem:</span>
                 <Select value={filtroEscopo} onValueChange={(v) => setFiltroEscopo(v as FiltroEscopo)}>
-                  <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-6 w-[150px] text-[10px] px-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
                     <SelectItem value="desta_conta">Excel desta conta</SelectItem>
@@ -1302,9 +1305,9 @@ export function MesaPareamentoModal({
                     <SelectItem value="sem_ofx">Sem OFX vinculado</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-muted-foreground ml-2">Ordenar:</span>
+                <span className="text-[10px] text-muted-foreground">Ord.:</span>
                 <Select value={filtroOrdem} onValueChange={(v) => setFiltroOrdem(v as FiltroOrdem)}>
-                  <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-6 w-[120px] text-[10px] px-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="score_desc">Score desc</SelectItem>
                     <SelectItem value="valor_desc">Valor desc</SelectItem>
@@ -1317,9 +1320,9 @@ export function MesaPareamentoModal({
               </>
             ) : (
               <>
-                <span className="text-muted-foreground">Mostrar:</span>
+                <span className="text-[10px] text-muted-foreground">Ver:</span>
                 <Select value={filtroOfxMostrar} onValueChange={(v) => setFiltroOfxMostrar(v as FiltroMostrarOfx)}>
-                  <SelectTrigger className="h-7 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-6 w-[150px] text-[10px] px-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos ({extratos.length})</SelectItem>
                     <SelectItem value="pendentes">Pendentes</SelectItem>
@@ -1329,9 +1332,9 @@ export function MesaPareamentoModal({
                     <SelectItem value="ofx_orfao_validado">OFX órfão validado</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-muted-foreground ml-2">Ordenar:</span>
+                <span className="text-[10px] text-muted-foreground">Ord.:</span>
                 <Select value={filtroOfxOrdem} onValueChange={(v) => setFiltroOfxOrdem(v as FiltroOrdemOfx)}>
-                  <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-6 w-[120px] text-[10px] px-2"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="original">Original (extrato)</SelectItem>
                     <SelectItem value="data_asc">Data asc</SelectItem>
@@ -1344,15 +1347,17 @@ export function MesaPareamentoModal({
               </>
             )}
             {catalogoCarregando && (
-              <span className="text-muted-foreground ml-2">Carregando catálogo…</span>
+              <span className="text-[10px] text-muted-foreground">Cat.: carregando…</span>
             )}
             {catalogoErro && (
-              <span className="text-rose-600 ml-2">Erro carregando catálogo</span>
+              <span className="text-[10px] text-rose-600">Cat.: erro</span>
             )}
             {catalogo && (
-              <span className="text-muted-foreground ml-2">
-                Catálogo: {catalogo.contas.length} contas · {catalogo.fazendas.length} fazendas ·
-                {' '}{catalogo.subcentros.length} subc · {catalogo.fornecedores.length} fornec.
+              <span
+                className="text-[10px] text-muted-foreground"
+                title={`Catálogo: ${catalogo.contas.length} contas · ${catalogo.fazendas.length} fazendas · ${catalogo.subcentros.length} subcentros · ${catalogo.fornecedores.length} fornecedores`}
+              >
+                Cat.: {catalogo.contas.length}c · {catalogo.fazendas.length}f · {catalogo.subcentros.length}s · {catalogo.fornecedores.length}fn
               </span>
             )}
           </div>
