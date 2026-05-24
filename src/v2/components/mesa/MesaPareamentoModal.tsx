@@ -1395,10 +1395,13 @@ export function MesaPareamentoModal({
 
           {/* COL 1 — LISTA DE PARES */}
           <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1 shrink-0">
+            {/* PR6.1F-3 — header densidade extrato: sem font-bold, com tracking-wide */}
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-1 pb-1 shrink-0">
               Pares ({linhasFiltradas.length} de {linhasExcel.length})
             </div>
-            <div className="flex-1 overflow-y-auto space-y-0.5">
+            {/* PR6.1F-3 — divide-y substitui space-y-0.5: linhas finas
+                separam itens como em extrato bancário real */}
+            <div className="flex-1 overflow-y-auto divide-y divide-border/40">
               {linhasFiltradas.map((linha) => {
                 const key = `${linha.loteId}:${linha.indiceLinha}`;
                 const p = pares.get(key);
@@ -1450,7 +1453,8 @@ export function MesaPareamentoModal({
                     onClick={() => setParAtivoKey(key)}
                     title={esc?.rotuloConta ? `Conta sugerida: ${esc.rotuloConta}` : undefined}
                     className={cn(
-                      'w-full flex items-center gap-1 px-2 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      // PR6.1F-3 — densidade extrato: px-1.5 py-1, gap-1.5
+                      'w-full flex items-center gap-1.5 px-1.5 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
                       linhaEhTransferencia && 'bg-blue-500/5',
                       corBorda,
                       ativo && 'ring-2 ring-primary ring-inset bg-muted',
@@ -1478,17 +1482,27 @@ export function MesaPareamentoModal({
                         <span className="tracking-tight">Transferência</span>
                       </span>
                     )}
-                    <span className="flex-1 truncate font-normal">
+                    <span
+                      className="flex-1 truncate font-normal"
+                      title={linha.fornecedor || linha.subcentro || ''}
+                    >
                       {linha.fornecedor || <span className="italic text-muted-foreground">{linha.subcentro}</span>}
                     </span>
                     <span className={cn('tabular-nums shrink-0 font-medium',
                       linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
                     )}>{fmtBRL(valorSinalizado)}</span>
-                    <Badge
-                      variant={faixa === 'forte' ? 'default' :
-                               faixa === 'fraco' ? 'secondary' : 'destructive'}
-                      className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
-                    >{m?.score ?? 0}</Badge>
+                    {/* PR6.1F-3 — score sem badge, com cor semântica por faixa */}
+                    <span
+                      className={cn(
+                        'shrink-0 text-[10px] tabular-nums w-7 text-right',
+                        faixa === 'forte' && 'text-emerald-700 font-semibold',
+                        faixa === 'fraco' && 'text-amber-700',
+                        faixa === 'nenhum' && 'text-rose-700',
+                      )}
+                      title={`Score: ${m?.score ?? 0} (${faixa})`}
+                    >
+                      {m?.score ?? 0}
+                    </span>
                   </button>
                 );
               })}
@@ -1794,10 +1808,12 @@ export function MesaPareamentoModal({
 
           {/* COL 1 — LISTA DE OFX */}
           <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1 shrink-0">
+            {/* PR6.1F-3 — header densidade extrato (mesmo padrão da Lista Excel) */}
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-1 pb-1 shrink-0">
               OFX ({ofxFiltrados.length} de {extratos.length})
             </div>
-            <div className="flex-1 overflow-y-auto space-y-0.5">
+            {/* PR6.1F-3 — divide-y para separar linhas como extrato bancário */}
+            <div className="flex-1 overflow-y-auto divide-y divide-border/40">
               {ofxFiltrados.map((e) => {
                 const validacao = ofxValidacoes.get(e.id) ?? 'pendente';
                 const consumido = ofxConsumidos.has(e.id);
@@ -1827,7 +1843,8 @@ export function MesaPareamentoModal({
                     key={e.id}
                     onClick={() => setOfxAtivoId(e.id)}
                     className={cn(
-                      'w-full flex items-center gap-1 px-2 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      // PR6.1F-3 — densidade extrato (mesmo padrão da Lista Excel)
+                      'w-full flex items-center gap-1.5 px-1.5 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
                       corBorda,
                       ativo && 'ring-2 ring-primary ring-inset bg-muted',
                     )}
@@ -1836,17 +1853,25 @@ export function MesaPareamentoModal({
                     <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
                       {format(new Date(e.data_movimento + 'T12:00:00'), 'dd/MM', { locale: ptBR })}
                     </span>
-                    <span className="flex-1 truncate">{e.descricao}</span>
+                    <span className="flex-1 truncate" title={e.descricao}>{e.descricao}</span>
                     <span className={cn('tabular-nums shrink-0 font-medium',
                       e.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
                     )}>{fmtBRL(e.valor)}</span>
+                    {/* PR6.1F-3 — score sem badge, cor semantica por faixa */}
                     {candidatos.length > 0 ? (
-                      <Badge
-                        variant={topScore >= 80 ? 'default' : topScore >= 60 ? 'secondary' : 'destructive'}
-                        className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
-                      >{topScore}</Badge>
+                      <span
+                        className={cn(
+                          'shrink-0 text-[10px] tabular-nums w-7 text-right',
+                          topScore >= 80 && 'text-emerald-700 font-semibold',
+                          topScore >= 60 && topScore < 80 && 'text-amber-700',
+                          topScore < 60 && 'text-rose-700',
+                        )}
+                        title={`Top score: ${topScore}`}
+                      >
+                        {topScore}
+                      </span>
                     ) : (
-                      <span className="text-[9px] text-muted-foreground shrink-0">—</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground w-7 text-right">—</span>
                     )}
                   </button>
                 );
