@@ -52,6 +52,8 @@ import type { ResultadoGeracaoStaging } from '@/v2/lib/staging/types';
 // PR6.1A — aba interna substitui página V2StagingRevisao (deletada)
 import { useStaging } from '@/v2/lib/staging/useStaging';
 import { MesaStagingTab } from './MesaStagingTab';
+// PR6.1C — fonte única de validação de aprovação
+import { validarAprovacao } from '@/v2/lib/mesa/validacao';
 // PR6.1 — query fresh direto no banco depois de salvar+finalizar, evitando
 // stale state. Não usamos sessaoCompleta.pares do cache local pra gerar staging.
 import { supabase } from '@/integrations/supabase/client';
@@ -1610,41 +1612,82 @@ export function MesaPareamentoModal({
                             * (cand.linha.valorCentavos / 100);
                           const par = pares.get(cand.excelKey);
                           const jaAprovadoOutroOfx = par?.decisao === 'aprovado' && par.ofxIdAtivo !== ofx.id;
+                          // PR6.1C-2 — valida payload da aprovação ANTES de oferecer o botão.
+                          // Payload reproduz exatamente o que aprovarOfxComExcel salvaria.
+                          const sugCand = sugestoes.get(cand.excelKey);
+                          const fallbacksCand = buildFallbacks(
+                            cand.excelKey, ofx.id, linhasExcel, extratos,
+                          );
+                          const payloadCand = consolidarFotografia(
+                            sugCand, par?.correcao ?? null, ofx.id, fallbacksCand,
+                          );
+                          const validacaoCand = validarAprovacao(payloadCand, cand.linha);
+                          const acaoDesabilitada =
+                            jaAprovadoOutroOfx || validacao === 'ofx_orfao_validado';
                           return (
                             <div
                               key={cand.excelKey}
                               className={cn(
-                                'flex items-center gap-2 px-2 py-1.5 text-[11px] border rounded',
+                                'border rounded',
                                 cand.faixa === 'forte' && 'border-blue-300',
                                 cand.faixa === 'fraco' && 'border-amber-300',
                                 jaAprovadoOutroOfx && 'opacity-50',
                               )}
                             >
-                              <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
-                                {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
-                              </span>
-                              <span className="flex-1 truncate">
-                                {cand.linha.fornecedor || cand.linha.subcentro || '—'}
-                              </span>
-                              <span className={cn('tabular-nums shrink-0',
-                                cand.linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
-                              )}>{fmtBRL(valorSinalizado)}</span>
-                              <Badge
-                                variant={cand.faixa === 'forte' ? 'default' :
-                                         cand.faixa === 'fraco' ? 'secondary' : 'destructive'}
-                                className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
-                              >{cand.score}</Badge>
-                              {jaAprovadoOutroOfx && (
-                                <span className="text-[9px] text-amber-700 shrink-0">já aprov. em outro OFX</span>
+                              <div className="flex items-center gap-2 px-2 py-1.5 text-[11px]">
+                                <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
+                                  {data ? format(new Date(data + 'T12:00:00'), 'dd/MM', { locale: ptBR }) : '—'}
+                                </span>
+                                <span className="flex-1 truncate">
+                                  {cand.linha.fornecedor || cand.linha.subcentro || '—'}
+                                </span>
+                                <span className={cn('tabular-nums shrink-0',
+                                  cand.linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
+                                )}>{fmtBRL(valorSinalizado)}</span>
+                                <Badge
+                                  variant={cand.faixa === 'forte' ? 'default' :
+                                           cand.faixa === 'fraco' ? 'secondary' : 'destructive'}
+                                  className="text-[9px] h-3.5 px-1 shrink-0 leading-none"
+                                >{cand.score}</Badge>
+                                {jaAprovadoOutroOfx && (
+                                  <span className="text-[9px] text-amber-700 shrink-0">já aprov. em outro OFX</span>
+                                )}
+                                {validacaoCand.valido ? (
+                                  <Button
+                                    size="sm" variant="outline"
+                                    className="h-6 text-[10px] shrink-0"
+                                    disabled={acaoDesabilitada}
+                                    onClick={() => aprovarOfxComExcel(ofx.id, cand.excelKey)}
+                                  >
+                                    Aprovar
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm" variant="outline"
+                                    className="h-6 text-[10px] shrink-0 border-amber-300 text-amber-800 hover:bg-amber-50"
+                                    disabled={acaoDesabilitada}
+                                    title={validacaoCand.mensagem}
+                                    onClick={() => {
+                                      // Abre Modo Corrigir populado com a sugestão atual.
+                                      setParAtivoKey(cand.excelKey);
+                                      setModoVisualizacao('excel');
+                                      iniciarCorrecao(cand.excelKey);
+                                    }}
+                                  >
+                                    Corrigir antes
+                                  </Button>
+                                )}
+                              </div>
+                              {!validacaoCand.valido && (
+                                <div className="px-2 pb-1.5">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal"
+                                  >
+                                    Faltam: {validacaoCand.camposFaltantes.join(', ')}
+                                  </Badge>
+                                </div>
                               )}
-                              <Button
-                                size="sm" variant="outline"
-                                className="h-6 text-[10px] shrink-0"
-                                disabled={jaAprovadoOutroOfx || validacao === 'ofx_orfao_validado'}
-                                onClick={() => aprovarOfxComExcel(ofx.id, cand.excelKey)}
-                              >
-                                Aprovar
-                              </Button>
                             </div>
                           );
                         })}
