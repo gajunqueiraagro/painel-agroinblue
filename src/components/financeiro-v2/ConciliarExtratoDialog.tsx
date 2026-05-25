@@ -18,10 +18,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { useConciliacaoBancariaItens } from '@/hooks/useConciliacaoBancariaItens';
+import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
+import { useExcelLinhasAux, type ExcelLinhaAux } from '@/hooks/useExcelLinhasAux';
+import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -69,11 +74,61 @@ function fmtData(s: string | null): string {
 
 export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado }: Props) {
   const { clienteAtual } = useCliente();
-  const { insert } = useConciliacaoBancariaItens();
+  const { fazendas } = useFazenda();
+  const { insert: insertVinculo } = useConciliacaoBancariaItens();
+  // PR2 — hooks para o fluxo "Usar como base" (referência operacional → criar
+  // lançamento via LancamentoV2Dialog oficial, padrão idêntico ao ExtratoListaTab).
+  const {
+    contasBancarias,
+    fornecedores,
+    classificacoes,
+    loadContas,
+    loadFornecedores,
+    loadClassificacoes,
+    criarLancamentoComId,
+    criarFornecedor,
+  } = useFinanceiroV2();
+  const { buscarSugestoesPorMovimento, marcarAplicada } = useExcelLinhasAux();
+
   const [candidatos, setCandidatos] = useState<CandidatoLancamento[]>([]);
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [marcados, setMarcados] = useState<Map<string, number>>(new Map());
+
+  // PR2 — sugestões de referência operacional + estado da seleção
+  const [sugestoes, setSugestoes] = useState<ExcelLinhaAux[]>([]);
+  const [loadingSugestoes, setLoadingSugestoes] = useState(false);
+  const [referenciaSelected, setReferenciaSelected] = useState<ExcelLinhaAux | null>(null);
+
+  // PR2 — pré-carrega listas necessárias ao LancamentoV2Dialog.
+  // useCallback estáveis no useFinanceiroV2 (confirmado nos commits anteriores).
+  useEffect(() => {
+    loadContas();
+    loadFornecedores();
+    loadClassificacoes();
+  }, [loadContas, loadFornecedores, loadClassificacoes]);
+
+  // PR2 — busca sugestões por movimento (TRAVA 10: janela ±3 dias direto).
+  useEffect(() => {
+    if (!open || !movimento || !clienteAtual?.id) {
+      setSugestoes([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSugestoes(true);
+    buscarSugestoesPorMovimento(
+      clienteAtual.id,
+      movimento.conta_bancaria_id,
+      movimento.data_movimento,
+      movimento.valor,
+    ).then((rows) => {
+      if (cancelled) return;
+      setSugestoes(rows);
+      setLoadingSugestoes(false);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, movimento?.id, movimento?.conta_bancaria_id, movimento?.data_movimento, movimento?.valor, clienteAtual?.id]);
 
   useEffect(() => {
     if (!open || !movimento || !clienteAtual?.id) return;
@@ -145,7 +200,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
     setSalvando(true);
     try {
       for (const [lancId, valorAplicado] of marcados.entries()) {
-        await insert({
+        await insertVinculo({
           extrato_id: movimento.id,
           lancamento_id: lancId,
           valor_aplicado: valorAplicado,
@@ -159,6 +214,72 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
       toast.error('Erro ao vincular: ' + (e?.message ?? e));
     } finally {
       setSalvando(false);
+    }
+  };
+
+  // PR2 — handler do fluxo "Usar como base" (referência operacional → criar
+  // lançamento + vincular ao extrato + marcar referência aplicada).
+  // Mesmo padrão de retry/erro do ExtratoListaTab.handleCriarFromExtrato.
+  const handleSalvarFromReferencia = async (
+    form: LancamentoV2Form,
+    _id?: string,
+  ): Promise<boolean> => {
+    if (!movimento || !referenciaSelected) return false;
+
+    // PATCH 2 — Revalidação anti-duplicação: confirma que a referência ainda
+    // está pendente ANTES de criar lançamento. Cobre cenário de 2 dialogs
+    // abertos em paralelo. Janela de microssegundos entre SELECT e INSERT
+    // aceita como dívida técnica (RPC com FOR UPDATE em PR futuro).
+    const refCheck = await supabase
+      .from('excel_linhas_aux' as any)
+      .select('status')
+      .eq('id', referenciaSelected.id)
+      .maybeSingle();
+
+    if (refCheck.error) {
+      toast.error('Erro ao validar referência: ' + refCheck.error.message);
+      return false;
+    }
+    const statusAtual = (refCheck.data as { status?: string } | null)?.status;
+    if (statusAtual !== 'pendente') {
+      toast.error('Esta referência já foi utilizada em outro lançamento.');
+      const refId = referenciaSelected.id;
+      setReferenciaSelected(null);
+      setSugestoes((prev) => prev.filter((r) => r.id !== refId));
+      return false;
+    }
+
+    const id = await criarLancamentoComId(form, { origem: 'referencia_operacional' });
+    if (!id) return false; // hook já mostrou toast de erro — modal fica aberto pra retry
+
+    const refId = referenciaSelected.id;
+    try {
+      await insertVinculo({
+        extrato_id: movimento.id,
+        lancamento_id: id,
+        valor_aplicado: Math.abs(movimento.valor),
+        cliente_id: movimento.cliente_id,
+      });
+      await marcarAplicada(refId, id, movimento.id);
+      toast.success('Lançamento criado e conciliado via referência operacional');
+      setReferenciaSelected(null);
+      setSugestoes((prev) => prev.filter((r) => r.id !== refId));
+      onConciliado?.();
+      // PATCH 4 — NÃO fechar ConciliarExtratoDialog automaticamente.
+      // Operador permanece no movimento (agora conciliado) e fecha manualmente.
+      return true;
+    } catch (e: any) {
+      // Lançamento já criado — fechar LancamentoV2Dialog pra evitar duplicação
+      // se operador re-clicar Salvar. Vínculo pode ser refeito via "Conciliar".
+      toast.error(
+        'Lançamento criado, mas erro ao vincular ao extrato: '
+        + (e?.message ?? e)
+        + '. Use o botão Conciliar para vincular manualmente.',
+      );
+      setReferenciaSelected(null);
+      setSugestoes((prev) => prev.filter((r) => r.id !== refId));
+      onConciliado?.();
+      return true;
     }
   };
 
@@ -243,6 +364,59 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           </span>
         </div>
 
+        {/* PR2 — Sugestões Referência Operacional (TRAVA 8: separadas dos
+            candidatos oficiais; TRAVA 9: linha aplicada some daqui mas fica
+            visível na aba ReferenciasOperacionaisTab com badge verde). */}
+        {sugestoes.length > 0 && (
+          <div className="mt-3 border-t border-dashed pt-3">
+            <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+              Sugestões Referência Operacional ({sugestoes.length})
+            </div>
+            <div className="space-y-1.5 max-h-[180px] overflow-auto">
+              {sugestoes.map((ref) => (
+                <div
+                  key={ref.id}
+                  className="flex items-start justify-between gap-2 rounded border bg-blue-50/30 px-2 py-1.5 text-[11px]"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-muted-foreground">{fmtData(ref.data_referencia)}</span>
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[9px] uppercase font-normal">
+                        {ref.origem}
+                      </Badge>
+                      {ref.fornecedor_texto && (
+                        <span className="font-semibold truncate">{ref.fornecedor_texto}</span>
+                      )}
+                      {ref.fazenda_texto && (
+                        <span className="text-muted-foreground">· {ref.fazenda_texto}</span>
+                      )}
+                      <span className={`ml-auto tabular-nums font-semibold ${ref.valor != null && ref.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {ref.valor != null ? formatMoeda(ref.valor) : '-'}
+                      </span>
+                    </div>
+                    {ref.plano_texto && (
+                      <div className="text-muted-foreground mt-0.5">Plano: {ref.plano_texto}</div>
+                    )}
+                    {ref.observacao && (
+                      <div className="text-muted-foreground mt-0.5 truncate" title={ref.observacao}>
+                        {ref.observacao}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] px-2 flex-shrink-0"
+                    onClick={() => setReferenciaSelected(ref)}
+                  >
+                    Usar como base
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={salvando}>Fechar</Button>
           <Button onClick={handleVincular} disabled={salvando || marcados.size === 0}>
@@ -250,6 +424,35 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* PR2 — Modal oficial pra criar lançamento a partir da referência
+          operacional. Mesmo padrão de ExtratoListaTab.handleCriarFromExtrato. */}
+      <LancamentoV2Dialog
+        open={!!referenciaSelected}
+        onClose={() => setReferenciaSelected(null)}
+        onSave={handleSalvarFromReferencia}
+        fazendas={fazendas}
+        contas={contasBancarias}
+        classificacoes={classificacoes}
+        fornecedores={fornecedores}
+        onCriarFornecedor={criarFornecedor}
+        prefill={(referenciaSelected && movimento) ? {
+          data_pagamento: movimento.data_movimento,
+          data_competencia: movimento.data_movimento,
+          valor: Math.abs(movimento.valor),
+          tipo_operacao: movimento.valor < 0 ? '2-Saídas' : '1-Entradas',
+          status_transacao: 'realizado',
+          conta_bancaria_id: movimento.conta_bancaria_id,
+          descricao: [
+            referenciaSelected.fornecedor_texto,
+            referenciaSelected.plano_texto,
+            referenciaSelected.fazenda_texto,
+            referenciaSelected.observacao,
+          ].filter(Boolean).join(' · ') || (movimento.descricao ?? undefined),
+          numero_documento: movimento.documento ?? undefined,
+        } : undefined}
+        lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
+      />
     </Dialog>
   );
 }

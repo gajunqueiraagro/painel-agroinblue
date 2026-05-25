@@ -183,5 +183,91 @@ export function useExcelLinhasAux() {
     toast.success('Linha descartada');
   }
 
-  return { inserirBatch, listarPorContaMes, apagarBatch, descartarLinha };
+  /**
+   * PR2 — Busca sugestões de referência operacional para um movimento OFX.
+   * TRAVA 10: filtra pela data_movimento ±3 dias (cruza meses), NÃO pelo
+   * mês do header. TRAVA 2A: sinal+valor exato com tolerância R$ 0,01.
+   * Ordenação 5B: distância de data ASC (linhas mais próximas vêm primeiro).
+   */
+  async function buscarSugestoesPorMovimento(
+    clienteId: string,
+    contaBancariaId: string,
+    dataMovimento: string,    // ISO 'YYYY-MM-DD'
+    valorMovimento: number,   // signed
+  ): Promise<ExcelLinhaAux[]> {
+    const valorAbs = Math.abs(valorMovimento);
+    const TOL = 0.01;
+
+    const base = new Date(`${dataMovimento}T00:00:00`);
+    const isoDay = (n: number): string =>
+      new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10);
+    const dataMin = isoDay(-3);
+    const dataMax = isoDay(3);
+
+    let q = sb
+      .from('excel_linhas_aux')
+      .select('*')
+      .eq('cliente_id', clienteId)
+      .eq('conta_bancaria_id', contaBancariaId)
+      .eq('status', 'pendente')
+      .gte('data_referencia', dataMin)
+      .lte('data_referencia', dataMax);
+
+    if (valorMovimento < 0) {
+      q = q.gte('valor', -(valorAbs + TOL)).lte('valor', -(valorAbs - TOL));
+    } else {
+      q = q.gte('valor', valorAbs - TOL).lte('valor', valorAbs + TOL);
+    }
+
+    const { data, error } = await q;
+    if (error) {
+      console.error('[useExcelLinhasAux] buscarSugestoesPorMovimento error:', error);
+      return [];
+    }
+
+    const rows = ((data ?? []) as unknown) as ExcelLinhaAux[];
+    return rows.sort((a, b) => {
+      if (!a.data_referencia || !b.data_referencia) return 0;
+      const da = Math.abs(new Date(a.data_referencia).getTime() - base.getTime());
+      const db = Math.abs(new Date(b.data_referencia).getTime() - base.getTime());
+      return da - db;
+    });
+  }
+
+  /**
+   * PR2 — Marca uma referência como aplicada após criação do lançamento +
+   * vínculo no extrato. Idempotente: `.eq('status','pendente')` no UPDATE
+   * impede dupla marcação por clique duplo.
+   */
+  async function marcarAplicada(
+    id: string,
+    lancamentoId: string,
+    extratoId: string,
+  ): Promise<{ ok: boolean }> {
+    const { error } = await sb
+      .from('excel_linhas_aux')
+      .update({
+        status: 'aplicada',
+        aplicada_lancamento_id: lancamentoId,
+        aplicada_extrato_id: extratoId,
+        aplicada_em: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('status', 'pendente');
+
+    if (error) {
+      console.error('[useExcelLinhasAux] marcarAplicada error:', error);
+      return { ok: false };
+    }
+    return { ok: true };
+  }
+
+  return {
+    inserirBatch,
+    listarPorContaMes,
+    apagarBatch,
+    descartarLinha,
+    buscarSugestoesPorMovimento,
+    marcarAplicada,
+  };
 }
