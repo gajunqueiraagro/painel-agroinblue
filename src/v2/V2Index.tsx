@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { useLancamentos } from '@/hooks/useLancamentos';
+import { useLancamento } from '@/hooks/useLancamento';
 import type { Lancamento } from '@/types/cattle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteSelector } from '@/components/ClienteSelector';
@@ -58,7 +59,7 @@ import { V2Fazendas } from './pages/V2Fazendas';
 import { ClientesTab } from '@/pages/ClientesTab';
 import { AuditoriaTab } from '@/pages/AuditoriaTab';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, Sparkles } from 'lucide-react';
 
 /**
@@ -325,6 +326,48 @@ export default function V2Index() {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
   };
+
+  // PR-E — Redirect tático para form principal de venda/abate.
+  //   - Caller dentro do V2Index (zooEditId modal) usa `redirecionarParaFormPrincipal`
+  //     diretamente: set state + setSection.
+  //   - Callers EXTERNOS (LancamentoDetalhe, LancamentoV2Dialog) navegam via URL
+  //     `/v2?section=lancamentos-zoot&edit=<id>&tipo=<venda|abate>`. O useEffect
+  //     abaixo lê os params, carrega o lançamento via useLancamento, e roteia.
+  const redirecionarParaFormPrincipal = (lancamento: Lancamento) => {
+    setZooEditId(null);
+    if (lancamento.tipo === 'venda') setVendaParaEditar(lancamento);
+    else if (lancamento.tipo === 'abate') setAbateParaEditar(lancamento);
+    setSection('lancamentos-zoot');
+  };
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
+  // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
+  const [editFromUrlId, setEditFromUrlId] = useState<string | null>(null);
+  const [editFromUrlTipo, setEditFromUrlTipo] = useState<'venda' | 'abate' | null>(null);
+  useEffect(() => {
+    const id = searchParams.get('edit');
+    const tipo = searchParams.get('tipo');
+    if (id && (tipo === 'venda' || tipo === 'abate')) {
+      setEditFromUrlId(id);
+      setEditFromUrlTipo(tipo);
+      // Consome os params imediatamente — evita re-trigger em re-render.
+      const next = new URLSearchParams(searchParams);
+      next.delete('edit');
+      next.delete('tipo');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+  const { lancamento: lancamentoFromUrl } = useLancamento(editFromUrlId);
+  useEffect(() => {
+    if (!lancamentoFromUrl || !editFromUrlTipo) return;
+    if (lancamentoFromUrl.tipo !== editFromUrlTipo) return;
+    redirecionarParaFormPrincipal(lancamentoFromUrl);
+    setEditFromUrlId(null);
+    setEditFromUrlTipo(null);
+    // redirecionarParaFormPrincipal é estável o suficiente (setters + setSection).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lancamentoFromUrl, editFromUrlTipo]);
   // Limpa estado de edição se sair da seção `lancamentos-zoot` por qualquer
   // motivo (menu, drawer, navegação direta) — evita criação normal travada
   // em modo edição.
@@ -880,6 +923,7 @@ export default function V2Index() {
           onOpenChange={(o) => { if (!o) setZooEditId(null); }}
           lancamentoId={zooEditId}
           onEditSuccess={() => setZooEditId(null)}
+          onAbrirNoFormPrincipal={redirecionarParaFormPrincipal}
         />
       )}
 

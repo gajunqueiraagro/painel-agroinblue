@@ -23,10 +23,11 @@
  *    (CompraFinanceiroPanel preserva o comportamento atual).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-import { AlertTriangle, Lock, Ban } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, Lock, Ban, ExternalLink } from 'lucide-react';
 
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamento } from '@/hooks/useLancamento';
@@ -54,6 +55,16 @@ interface LancamentoZooModalProps {
   lancamentoId: string;
   /** Callback para invalidar lista/cache no caller após save bem-sucedido. */
   onEditSuccess?: () => void;
+  /**
+   * PR-E — redirect tático para o form principal (aba "Lançamentos") nos
+   * tipos sem EditForm dedicado dentro deste modal (hoje: venda/abate).
+   * Quando informado, substitui o placeholder "Fases A7/A8" por um botão
+   * "Abrir no formulário principal" que chama esse callback com o
+   * `lancamento` carregado. Caller decide como navegar (set state no
+   * V2Index ou navigate para `/v2?section=lancamentos-zoot&edit=...`).
+   * Se ausente, o modal mantém o placeholder honesto (zero regressão).
+   */
+  onAbrirNoFormPrincipal?: (lancamento: Lancamento) => void;
 }
 
 // ─── Helpers locais ──────────────────────────────────────────────────────────
@@ -119,6 +130,7 @@ export function LancamentoZooModal({
   onOpenChange,
   lancamentoId,
   onEditSuccess,
+  onAbrirNoFormPrincipal,
 }: LancamentoZooModalProps) {
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
@@ -587,18 +599,56 @@ export function LancamentoZooModal({
         </Sheet>
       );
 
-    // TODO Fase A7 — extrair FormVenda completo (zoo + boitel + recálculo fin).
-    // TODO Fase A8 — extrair FormAbate completo (zoo + bônus + descontos + frigorífico).
-    // Hoje os Dialogs *DetalhesDialog são apenas subforms financeiros que recebem
-    // initialData específico — não cobrem a edição completa (qtd, peso, categoria,
-    // fazenda, NF, fornecedor vêm do form principal na LancamentosTab).
+    // BACKLOG — extrair FormVenda/FormAbate completos para dentro deste modal
+    // (zoo + boitel/bônus/descontos + recálculo financeiro). Era previsto como
+    // Fases A7/A8 mas foi desbloqueado em PR-E via redirect tático ao form
+    // principal da aba "Lançamentos", que já edita venda/abate corretamente
+    // (qtd, peso, categoria, fazenda, NF, fornecedor). Sem ETA para a versão
+    // unificada — o redirect cobre 100% das operações.
+    //
+    // PR-E (redirect tático): se o caller forneceu `onAbrirNoFormPrincipal`,
+    // substituímos o placeholder por um botão que redireciona ao form principal
+    // da aba "Lançamentos" (que já edita venda/abate corretamente). Caller é
+    // responsável pela navegação (set state no V2Index ou navigate por URL).
     case 'venda':
-    case 'abate':
+    case 'abate': {
+      const tipoLabel = lancamento.tipo === 'venda' ? 'Venda' : 'Abate';
+      if (onAbrirNoFormPrincipal) {
+        return (
+          <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Editar {tipoLabel} no formulário principal</DialogTitle>
+                <DialogDescription>
+                  A edição completa de {lancamento.tipo} (quantidade, peso,
+                  categoria, fazenda, NF, fornecedor) acontece no formulário
+                  principal da aba "Lançamentos". Vamos abrir o registro lá.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    onAbrirNoFormPrincipal(lancamento);
+                    onOpenChange(false);
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                  Abrir no formulário principal
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      }
+      // Fallback: caller não passou callback — manter placeholder honesto.
       return (
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Edição de {lancamento.tipo === 'venda' ? 'Venda' : 'Abate'} indisponível neste fluxo</DialogTitle>
+              <DialogTitle>Edição de {tipoLabel} indisponível neste fluxo</DialogTitle>
               <DialogDescription>
                 A edição completa de {lancamento.tipo} ainda passa pela aba "Lançamentos"
                 (form principal). Esta unificação chega nas Fases A7/A8.
@@ -607,6 +657,7 @@ export function LancamentoZooModal({
           </DialogContent>
         </Dialog>
       );
+    }
 
     default:
       return (

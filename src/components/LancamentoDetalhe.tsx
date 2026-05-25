@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Lancamento,
   CATEGORIAS,
@@ -54,6 +55,7 @@ interface Props {
 }
 
 export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemover, onCountFinanceiros, onEditarAbate, onEditarVenda, onEditarCompra, onEditarTransferencia, onEditarReclass, onEditarMorte, onEditarConsumo, fazendaId }: Props) {
+  const navigate = useNavigate();
   const { fazendaAtual, fazendas } = useFazenda();
   // Bug 1.2: nome da fazenda DO LANÇAMENTO (texto persistido > lookup pelo
   // UUID fazendaId > vazio). NUNCA cair em FazendaContext, pois em modo
@@ -848,6 +850,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             // Cache invalidado pelo useLancamentos.editarLancamento internamente.
             // Fechar modal soberano + propagar para o parent (que pode refetchar listas).
             setZooModalOpen(false);
+          }}
+          onAbrirNoFormPrincipal={(lanc) => {
+            // PR-E — redirect tático: navega ao V2Index com edit=<id>&tipo=<venda|abate>.
+            // V2Index lê os params, carrega o lancamento e roteia para a aba
+            // "Lançamentos" com VendaDetalhesDialog/AbateDetalhesDialog aberto.
+            setZooModalOpen(false);
+            navigate(`/v2?section=lancamentos-zoot&edit=${lanc.id}&tipo=${lanc.tipo}`);
           }}
         />
       </>

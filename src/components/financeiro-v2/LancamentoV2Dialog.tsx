@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
@@ -188,6 +189,7 @@ export function LancamentoV2Dialog({
   referenciaOperacionalInfo,
 }: Props) {
   const { clienteAtual } = useCliente();
+  const navigate = useNavigate();
   const isEdit = !!lancamento;
   // Store the editing ID in a ref so it can't become stale during async save
   const editingIdRef = useRef<string | null>(null);
@@ -1507,6 +1509,12 @@ export function LancamentoV2Dialog({
           open
           onOpenChange={(o) => { if (!o) setZooModalId(null); }}
           lancamentoId={zooModalId}
+          onAbrirNoFormPrincipal={(lanc) => {
+            // PR-E — redirect tático: navega ao V2Index com edit=<id>&tipo=<venda|abate>
+            // para abrir o form principal da aba "Lançamentos" com o registro carregado.
+            setZooModalId(null);
+            navigate(`/v2?section=lancamentos-zoot&edit=${lanc.id}&tipo=${lanc.tipo}`);
+          }}
         />
       )}
 
