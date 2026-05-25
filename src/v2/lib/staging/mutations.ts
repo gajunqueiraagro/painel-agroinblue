@@ -56,7 +56,7 @@ function indexarLinhas(excelLotes: LoteExcel[]): Map<string, ExcelLinhaNormaliza
  * NÃO grava em financeiro_lancamentos_v2 (PR6.2-M1 fará isso via RPC).
  *
  * Cuidados do adendo PR6.1:
- * - Linha sem data_pagamento resolvida → não vira staging, vai pra `erros`
+ * - Linha sem data_pagamento OU data_competencia → não vira staging, vai pra `erros` (PR6.2-M0.6).
  * - valor sempre via Math.abs (CHECK valor >= 0; sinal carrega natureza)
  * - linhasPorKey indexa pelo snapshot da sessão (sessao.excel_lotes_json)
  *
@@ -110,17 +110,26 @@ export async function gerarStagingDaSessao(
 
     const ehOrfao = p.decisao === 'excel_orfao';
 
-    // Resolve data com prioridade: correção/aprov manual > linha Excel pag > linha Excel comp > NADA
-    const dataPagamento =
-      aprov.dataCompetencia
-      ?? linha?.dataPagamento
-      ?? linha?.dataCompetencia
-      ?? null;
+    // PR6.2-M0.6 — separar data_pagamento (banco/Excel imutável) de data_competencia
+    // (decisão contábil do operador). aprov.dataPagamento foi construído no
+    // consolidarFotografia com chain OFX → Excel.Data_Ref → Excel.Data_Competencia.
+    // Compat retroativa: pares aprovados antes do M0.6 não têm aprov.dataPagamento
+    // no aprovacao_json; nesse caso o staging é rejeitado e o operador precisa
+    // re-aprovar o par pra regerar aprovacao_json com a chain nova.
+    const dataPagamento = aprov.dataPagamento ?? null;
+    const dataCompetencia = aprov.dataCompetencia ?? null;
 
     if (!dataPagamento) {
       erros.push({
         excel_key: p.excel_key,
-        motivo: 'Sem data_pagamento — linha Excel sem data e operador não corrigiu',
+        motivo: 'Sem data_pagamento — par sem OFX, linha Excel sem Data_Ref nem Data_Competencia, OU par aprovado antes do PR6.2-M0.6 (re-aprovar)',
+      });
+      return;
+    }
+    if (!dataCompetencia) {
+      erros.push({
+        excel_key: p.excel_key,
+        motivo: 'Sem data_competencia — operador precisa preencher no painel direito',
       });
       return;
     }
@@ -177,8 +186,8 @@ export async function gerarStagingDaSessao(
       fazenda_id: aprov.fazendaId,
       conta_bancaria_id: ehOrfao ? null : aprov.contaId,
       ano_mes: sessao.ano_mes,
-      data_pagamento: dataPagamento,
-      data_competencia: aprov.dataCompetencia,
+      data_pagamento: dataPagamento,         // PR6.2-M0.6: do aprov, chain OFX→Excel.Data_Ref→Excel.Data_Competencia
+      data_competencia: dataCompetencia,     // PR6.2-M0.6: do aprov, inclui correção operador
       valor: valorReais,
       sinal: mapSinalParaBanco(linha.sinal),
       tipo_operacao: mapSinalParaTipoOperacao(linha.sinal),

@@ -52,6 +52,9 @@ export interface AprovacaoLocal {
   fornecedorNome: string | null;
   fornecedorMarcadoNovo: boolean;
   dataCompetencia: string | null;
+  // PR6.2-M0.6 — data de pagamento (não editável pelo operador).
+  // Chain: ofx.data_movimento → linha.dataPagamento (Data_Ref) → linha.dataCompetencia.
+  dataPagamento: string | null;
   subcentro: string;
   macro: string | null;
   grupo: string | null;

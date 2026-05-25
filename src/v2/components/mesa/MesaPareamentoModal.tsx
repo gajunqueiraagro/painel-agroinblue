@@ -127,12 +127,19 @@ function consolidarFotografia(
     fornecedorId: cor?.fornecedorId ?? sug?.fornecedorOficial?.id ?? null,
     fornecedorNome: cor?.fornecedorNome ?? sug?.fornecedorOficial?.nome ?? null,
     fornecedorMarcadoNovo: cor?.fornecedorMarcadoNovo ?? false,
-    // PR4.1 — chain de data competência
+    // PR4.1 — chain de data competência (editável: cor → Excel comp → Excel pag → OFX)
     dataCompetencia:
       cor?.dataCompetencia
       ?? fallbacks.dataCompetenciaExcel
       ?? fallbacks.dataPagamentoExcel
       ?? fallbacks.dataMovimentoOfx
+      ?? null,
+    // PR6.2-M0.6 — chain de data PAGAMENTO (NÃO editável pelo operador).
+    // Prioridade SOBERANA: OFX banco real → Data_Ref Excel → Data_Competencia Excel.
+    dataPagamento:
+      fallbacks.dataMovimentoOfx
+      ?? fallbacks.dataPagamentoExcel
+      ?? fallbacks.dataCompetenciaExcel
       ?? null,
     subcentro: cor?.subcentro ?? sug?.subcentroSugerido?.subcentro ?? '',
     macro: cor?.macro_custo ?? sug?.subcentroSugerido?.macro_custo ?? null,
@@ -1656,6 +1663,8 @@ export function MesaPareamentoModal({
                   setSubcentroBusca={setSubcentroBusca}
                   fornecedorExcelOriginal={linhaAtiva?.fornecedor || null}
                   naturezaAlvo={naturezaAlvoCorrecao}
+                  ofxAtivo={ofxAtivo ?? null}
+                  linhaAtiva={linhaAtiva ?? null}
                   onAplicar={aplicarCorrecao}
                   onAplicarEAprovar={aplicarEAprovar}
                   onCancelar={cancelarCorrecao}
@@ -2234,6 +2243,9 @@ function FormularioCorrecao({
   subcentroBusca, setSubcentroBusca,
   fornecedorExcelOriginal,
   naturezaAlvo,
+  // PR6.2-M0.6 — props read-only para computar Pgto. (banco/Excel imutável)
+  ofxAtivo,
+  linhaAtiva,
   onAplicar, onAplicarEAprovar, onCancelar,
 }: {
   rascunho: ParCorrecao;
@@ -2245,6 +2257,8 @@ function FormularioCorrecao({
   setSubcentroBusca: (v: string) => void;
   fornecedorExcelOriginal: string | null;
   naturezaAlvo: NaturezaSubcentro | null;
+  ofxAtivo: OfxItem | null;
+  linhaAtiva: ExcelLinhaNormalizada | null;
   onAplicar: () => void;
   onAplicarEAprovar: () => void;
   onCancelar: () => void;
@@ -2583,7 +2597,30 @@ function FormularioCorrecao({
         />
       </div>
 
-      {/* Data competência */}
+      {/* PR6.2-M0.6 — Data pagamento (read-only, NÃO editável pelo operador).
+          Chain: OFX banco real → Data_Ref do Excel → Data_Competencia (último recurso). */}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-muted-foreground">Pgto. (banco/Excel)</label>
+        {(() => {
+          const pgto =
+            ofxAtivo?.data_movimento
+            ?? linhaAtiva?.dataPagamento
+            ?? linhaAtiva?.dataCompetencia
+            ?? null;
+          return (
+            <div className={cn(
+              'h-7 px-2 flex items-center text-[11px] tabular-nums rounded-sm border bg-muted/30',
+              !pgto && 'text-rose-600 border-rose-200',
+            )}>
+              {pgto
+                ? format(new Date(pgto + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+                : 'não definida'}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Data competência (editável pelo operador) */}
       <div className="space-y-0.5">
         <label className="text-[10px] text-muted-foreground">Data competência</label>
         <Input
