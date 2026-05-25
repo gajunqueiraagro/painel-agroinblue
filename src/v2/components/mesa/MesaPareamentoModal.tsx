@@ -160,7 +160,7 @@ function buildFallbacks(
   linhasExcel: ExcelLinhaNormalizada[],
   extratos: OfxItem[],
 ): ConsolidarFallbacks {
-  const linha = linhasExcel.find((l) => `${l.loteId}:${l.indiceLinha}` === excelKey);
+  const linha = linhasExcel.find((l) => l.chaveLinha === excelKey);
   const ofx = ofxIdAtivo ? extratos.find((e) => e.id === ofxIdAtivo) : null;
   return {
     dataPagamentoExcel: linha?.dataPagamento ?? null,
@@ -318,7 +318,7 @@ export function MesaPareamentoModal({
   const escopoPorPar = useMemo<Map<string, ParEscopo>>(() => {
     const m = new Map<string, ParEscopo>();
     linhasExcel.forEach((l) => {
-      const key = `${l.loteId}:${l.indiceLinha}`;
+      const key = l.chaveLinha;
       const sug = sugestoes.get(key);
       const contaSug = sug?.contaSugerida ?? null;
       if (!contaSug) {
@@ -349,7 +349,7 @@ export function MesaPareamentoModal({
   const [pares, setPares] = useState<Map<string, ParEstado>>(() => {
     const m = new Map<string, ParEstado>();
     linhasExcel.forEach((l) => {
-      const key = `${l.loteId}:${l.indiceLinha}`;
+      const key = l.chaveLinha;
       const mt = matches.get(key);
       m.set(key, {
         excelKey: key,
@@ -537,7 +537,7 @@ export function MesaPareamentoModal({
 
     // PR3.2 — Filtro 1: ESCOPO (verde/roxo/cinza/sem OFX)
     arr = arr.filter((l) => {
-      const key = `${l.loteId}:${l.indiceLinha}`;
+      const key = l.chaveLinha;
       const esc = escopoPorPar.get(key);
       const p = pares.get(key);
       switch (filtroEscopo) {
@@ -551,7 +551,7 @@ export function MesaPareamentoModal({
 
     // Filtro 2: MOSTRAR (existente + banco_orfao)
     arr = arr.filter((l) => {
-      const key = `${l.loteId}:${l.indiceLinha}`;
+      const key = l.chaveLinha;
       const p = pares.get(key);
       const m = matches.get(key);
       switch (filtroMostrar) {
@@ -573,8 +573,8 @@ export function MesaPareamentoModal({
 
     if (filtroOrdem === 'score_desc') {
       arr.sort((a, b) => {
-        const sa = matches.get(`${a.loteId}:${a.indiceLinha}`)?.score ?? 0;
-        const sb = matches.get(`${b.loteId}:${b.indiceLinha}`)?.score ?? 0;
+        const sa = matches.get(a.chaveLinha)?.score ?? 0;
+        const sb = matches.get(b.chaveLinha)?.score ?? 0;
         return sb - sa;
       });
     } else if (filtroOrdem === 'valor_desc') {
@@ -605,7 +605,7 @@ export function MesaPareamentoModal({
   // Linha Excel ativa
   const linhaAtiva = useMemo<ExcelLinhaNormalizada | null>(() => {
     if (!parAtivoKey) return null;
-    return linhasExcel.find((l) => `${l.loteId}:${l.indiceLinha}` === parAtivoKey) ?? null;
+    return linhasExcel.find((l) => l.chaveLinha === parAtivoKey) ?? null;
   }, [parAtivoKey, linhasExcel]);
 
   const parAtivo = parAtivoKey ? pares.get(parAtivoKey) ?? null : null;
@@ -657,7 +657,7 @@ export function MesaPareamentoModal({
     const out = new Map<string, CandidatoExcelParaOfx[]>();
     extratos.forEach((e) => out.set(e.id, []));
     linhasExcel.forEach((l) => {
-      const key = `${l.loteId}:${l.indiceLinha}`;
+      const key = l.chaveLinha;
       const m = matches.get(key);
       if (!m) return;
       const ids = new Set<string>([
@@ -781,7 +781,7 @@ export function MesaPareamentoModal({
     if (edicaoBloqueada) return;
     const sug = sugestoes.get(excelKey);
     const parAtual = pares.get(excelKey);
-    const linha = linhasExcel.find((l) => `${l.loteId}:${l.indiceLinha}` === excelKey);
+    const linha = linhasExcel.find((l) => l.chaveLinha === excelKey);
     const ofx = parAtual?.ofxIdAtivo
       ? extratos.find((e) => e.id === parAtual.ofxIdAtivo)
       : null;
@@ -899,7 +899,7 @@ export function MesaPareamentoModal({
   const naturezaAlvoCorrecao = useMemo<NaturezaSubcentro | null>(() => {
     if (!corrigindoExcelKey) return null;
     const linha = linhasExcel.find(
-      (l) => `${l.loteId}:${l.indiceLinha}` === corrigindoExcelKey,
+      (l) => l.chaveLinha === corrigindoExcelKey,
     );
     if (!linha) return null;
     if (linha.sinal === 'entrada') return 'entrada';
@@ -922,33 +922,6 @@ export function MesaPareamentoModal({
     return h;
   }, [pares, ofxValidacoes]);
 
-  // PR6.1B-4 — set de loteIds válidos do snapshot imutável da sessão.
-  // Usado como guard em salvarPares: pares cujo loteId não esteja aqui são
-  // pulados (defesa contra órfãos remanescentes do bug pré-PR6.1B).
-  const lotesValidos = useMemo<Set<string>>(() => {
-    const s = new Set<string>();
-    if (!sessaoCompleta) return s;
-    (sessaoCompleta.sessao.excel_lotes_json ?? []).forEach((lote) => {
-      if (lote?.loteId) s.add(lote.loteId);
-    });
-    return s;
-  }, [sessaoCompleta]);
-
-  // PR6.1C-4 — index excel_key → ExcelLinhaNormalizada construído do snapshot
-  // imutável da sessão. salvarPares usa pra validar cada aprovação contra a
-  // linha Excel correspondente (defesa última no write path).
-  const linhasPorKey = useMemo<Map<string, ExcelLinhaNormalizada>>(() => {
-    const m = new Map<string, ExcelLinhaNormalizada>();
-    if (!sessaoCompleta) return m;
-    (sessaoCompleta.sessao.excel_lotes_json ?? []).forEach((lote) => {
-      (lote.linhas ?? []).forEach((linha) => {
-        const key = `${lote.loteId}:${linha.indiceLinha}`;
-        m.set(key, linha);
-      });
-    });
-    return m;
-  }, [sessaoCompleta]);
-
   // PR5 — auto-save com debounce 5s
   const { status: statusSalvamento, ultimoSalvamento, salvarAgora } = useSalvamentoAuto({
     enabled: !!sessaoCompleta && !edicaoBloqueada,
@@ -960,8 +933,6 @@ export function MesaPareamentoModal({
         sessaoCompleta.sessao.id,
         pares,
         aprovacoes,
-        lotesValidos,
-        linhasPorKey,
       );
       await salvarOfxValidacoes(sessaoCompleta.sessao.id, ofxValidacoes);
     },
@@ -1423,7 +1394,7 @@ export function MesaPareamentoModal({
                 separam itens como em extrato bancário real */}
             <div className="flex-1 overflow-y-auto divide-y divide-border/40">
               {linhasFiltradas.map((linha) => {
-                const key = `${linha.loteId}:${linha.indiceLinha}`;
+                const key = linha.chaveLinha;
                 const p = pares.get(key);
                 const m = matches.get(key);
                 const esc = escopoPorPar.get(key);

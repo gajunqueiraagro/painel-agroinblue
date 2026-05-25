@@ -33,6 +33,12 @@ export interface ExcelLinhaNormalizada {
   loteNomeArquivo: string;
   indiceLinha: number;  // posição na planilha original (zero-based)
 
+  /** Identidade determinística da linha — hash dos 5 campos canônicos.
+   *  Construída pelo parser via buildLinhaKeyDeterministica.
+   *  Esta é a chave que persiste como excel_key em mesa_par.
+   */
+  chaveLinha: string;
+
   // canonicalizado
   dataPagamento: string | null;       // Data_Ref → 'YYYY-MM-DD' ou null
   dataCompetencia: string | null;     // Data_Competencia → 'YYYY-MM-DD'
@@ -74,7 +80,7 @@ export interface LoteExcel {
 
 // Resultado do motor de match para UMA linha Excel
 export interface MatchResult {
-  excelKey: string;            // `${loteId}:${indiceLinha}`
+  excelKey: string;            // chaveLinha (hash determinístico — ver linhaKey.ts)
   ofxIdMatched: string | null; // id do extrato_bancario_v2 que casou; null se nenhum
   score: number;               // 0-100
   faixa: 'forte' | 'fraco' | 'nenhum';
@@ -94,5 +100,5 @@ export interface MatchResult {
 export interface PreviewState {
   ativo: boolean;
   lotes: LoteExcel[];
-  matches: Map<string, MatchResult>;  // key = `${loteId}:${indiceLinha}`
+  matches: Map<string, MatchResult>;  // key = chaveLinha (hash determinístico — ver linhaKey.ts)
 }

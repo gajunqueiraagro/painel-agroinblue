@@ -28,7 +28,7 @@ export function matchExcelLinha(
 
   if (candidatos.length === 0) {
     return {
-      excelKey: `${excel.loteId}:${excel.indiceLinha}`,
+      excelKey: excel.chaveLinha,
       ofxIdMatched: null,
       score: 0,
       faixa: 'nenhum',
@@ -98,7 +98,7 @@ export function matchExcelLinha(
     'nenhum';
 
   return {
-    excelKey: `${excel.loteId}:${excel.indiceLinha}`,
+    excelKey: excel.chaveLinha,
     ofxIdMatched: faixa === 'nenhum' ? null : melhor.ofx.id,
     score: melhor.score,
     faixa,
@@ -125,7 +125,7 @@ export function matchTodosLotes(
 ): Map<string, MatchResult> {
   const out = new Map<string, MatchResult>();
   linhasExcel.forEach((l) => {
-    out.set(`${l.loteId}:${l.indiceLinha}`, matchExcelLinha(l, ofxLista));
+    out.set(l.chaveLinha, matchExcelLinha(l, ofxLista));
   });
   return out;
 }

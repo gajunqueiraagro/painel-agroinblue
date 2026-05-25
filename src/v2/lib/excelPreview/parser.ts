@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { parse as parseDateFns, isValid as isValidDate, format as fmtDate } from 'date-fns';
 import type { LoteExcel, ExcelLinhaRaw, ExcelLinhaNormalizada } from './types';
+import { buildLinhaKeyDeterministica } from '@/v2/lib/mesa/linhaKey';
 
 const SHEET_ESPERADO = 'EXPORT_APP_UNICO';
 
@@ -78,10 +79,11 @@ export async function parseExcelToLote(file: File): Promise<LoteExcel> {
       const valorStr = String(r.Valor ?? '');
       const impreciFloat = /\.\d{3,}(99|00)\d+$/.test(valorStr);
 
-      linhas.push({
+      const linhaParcial: ExcelLinhaNormalizada = {
         loteId,
         loteNomeArquivo: file.name,
         indiceLinha: idx,
+        chaveLinha: '',  // placeholder — preenchido logo abaixo
         dataPagamento,
         dataCompetencia,
         valorCentavos,
@@ -101,7 +103,11 @@ export async function parseExcelToLote(file: File): Promise<LoteExcel> {
           impreciFloat,
         },
         raw: r,
-      });
+      };
+
+      linhaParcial.chaveLinha = buildLinhaKeyDeterministica(linhaParcial);
+
+      linhas.push(linhaParcial);
       linhasValidas++;
     } catch (e) {
       linhasComErro++;

@@ -367,7 +367,7 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
     let flagSemDataRef = 0, flagCompetenciaForaMes = 0,
         flagTipoInconsistente = 0, flagContaInvalida = 0;
     linhas.forEach((l) => {
-      const m = matches.get(`${l.loteId}:${l.indiceLinha}`);
+      const m = matches.get(l.chaveLinha);
       if (m?.faixa === 'forte') forte++;
       else if (m?.faixa === 'fraco') fraco++;
       else nenhum++;
@@ -760,7 +760,7 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
                 </div>
               ) : (
                 lotes.flatMap((l) => l.linhas).map((linha) => {
-                  const m = matches.get(`${linha.loteId}:${linha.indiceLinha}`);
+                  const m = matches.get(linha.chaveLinha);
                   const faixa = m?.faixa ?? 'nenhum';
                   const data = linha.dataPagamento ?? linha.dataCompetencia;
                   const valorSinalizado = (linha.sinal === 'entrada' ? 1 : -1) * (linha.valorCentavos / 100);
@@ -775,7 +775,7 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
                   const titulo = `${linha.fornecedor} · ${linha.subcentro}${linha.observacao ? ' · ' + linha.observacao : ''}`;
                   return (
                     <div
-                      key={`${linha.loteId}:${linha.indiceLinha}`}
+                      key={linha.chaveLinha}
                       className={cn(
                         'flex items-center gap-2 px-2 py-1.5 text-xs border-l-[3px] rounded-r hover:bg-muted/30',
                         corBorda,

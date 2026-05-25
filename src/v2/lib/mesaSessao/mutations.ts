@@ -6,7 +6,7 @@ import type {
   AprovacaoLocal,
   ResultadoCriarOuRecuperar,
 } from './types';
-import type { LoteExcel, ExcelLinhaNormalizada } from '@/v2/lib/excelPreview/types';
+import type { LoteExcel } from '@/v2/lib/excelPreview/types';
 // PR6.1C-4 — guard defensivo no write path consome o helper soberano
 import { validarAprovacao } from '@/v2/lib/mesa/validacao';
 
@@ -93,18 +93,6 @@ export async function salvarPares(
   sessaoId: string,
   pares: Map<string, ParEstado>,
   aprovacoes: Map<string, AprovacaoLocal>,
-  // PR6.1B-4 — defesa em profundidade contra pares órfãos. Pares cujo loteId
-  // (prefixo do excel_key antes do ':') não estiver neste Set são descartados
-  // silenciosamente, sem chegar ao banco. Opcional para preservar chamadores
-  // legados — quando undefined, comportamento anterior é mantido.
-  lotesValidos?: Set<string>,
-  // PR6.1C-4 — defesa última no write path. Quando fornecido, salvarPares
-  // valida cada aprovação via validarAprovacao() antes do upsert. Pares
-  // 'aprovado' com aprovação inválida são revertidos SILENCIOSAMENTE a
-  // 'pendente' (schema NOT NULL DEFAULT 'pendente' impede null real) e
-  // aprovacao_json zerado. correcao_json é PRESERVADO em qualquer caminho.
-  // Backward-compatible: undefined → não valida (preserva legado).
-  linhasPorKey?: Map<string, ExcelLinhaNormalizada>,
 ): Promise<void> {
   if (pares.size === 0) return;
   const sb = supabase as any;
@@ -113,8 +101,6 @@ export async function salvarPares(
     sessao_id: sessaoId,
     pares_size: pares.size,
     aprovacoes_size: aprovacoes.size,
-    lotesValidos_size: lotesValidos?.size ?? 'undefined',
-    tem_linhasPorKey: !!linhasPorKey,
     amostra_decisoes: Array.from(pares.values())
       .filter((p) => p.decisao !== 'pendente')
       .slice(0, 5)

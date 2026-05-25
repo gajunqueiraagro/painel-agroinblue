@@ -35,7 +35,7 @@ export function sugerirParaLinha(
   if (linha.flags.impreciFloat) alertas.push('Possível imprecisão float');
 
   return {
-    excelKey: `${linha.loteId}:${linha.indiceLinha}`,
+    excelKey: linha.chaveLinha,
     contaSugerida: sugerirConta(linha.contaTexto, cat.contas),
     fazendaSugerida: sugerirFazenda(linha.fazendaTexto, cat.fazendas),
     fornecedorOficial: sugerirFornecedor(linha.fornecedor, cat.fornecedores),
@@ -50,7 +50,7 @@ export function sugerirTodasLinhas(
 ): Map<string, Sugestao> {
   const out = new Map<string, Sugestao>();
   linhas.forEach((l) => {
-    out.set(`${l.loteId}:${l.indiceLinha}`, sugerirParaLinha(l, cat));
+    out.set(l.chaveLinha, sugerirParaLinha(l, cat));
   });
   return out;
 }

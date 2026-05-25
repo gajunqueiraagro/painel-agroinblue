@@ -42,7 +42,7 @@ function indexarLinhas(excelLotes: LoteExcel[]): Map<string, ExcelLinhaNormaliza
   const m = new Map<string, ExcelLinhaNormalizada>();
   excelLotes.forEach((lote) => {
     lote.linhas.forEach((linha) => {
-      const key = `${lote.loteId}:${linha.indiceLinha}`;
+      const key = linha.chaveLinha;
       m.set(key, linha);
     });
   });
