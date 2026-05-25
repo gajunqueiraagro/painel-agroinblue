@@ -81,6 +81,8 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
     setMarcados(new Map());
     const dataIni = addDays(movimento.data_movimento, -7);
     const dataFim = addDays(movimento.data_movimento, +7);
+    const valorAbs = Math.abs(movimento.valor);
+    const sinalEsperado = movimento.valor < 0 ? -1 : 1;
 
     supabase
       .from('financeiro_lancamentos_v2')
@@ -91,6 +93,9 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
       .or(`conta_bancaria_id.eq.${movimento.conta_bancaria_id},conta_destino_id.eq.${movimento.conta_bancaria_id}`)
       .gte('data_pagamento', dataIni)
       .lte('data_pagamento', dataFim)
+      .eq('sinal', sinalEsperado)
+      .gte('valor', valorAbs - 0.01)
+      .lte('valor', valorAbs + 0.01)
       .order('data_pagamento', { ascending: true })
       .then(({ data, error }) => {
         if (error) { toast.error('Erro ao buscar candidatos: ' + error.message); setCandidatos([]); }
