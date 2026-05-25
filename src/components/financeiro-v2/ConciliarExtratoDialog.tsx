@@ -23,7 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { useConciliacaoBancariaItens } from '@/hooks/useConciliacaoBancariaItens';
+import { useConciliacaoBancariaItens, type ConciliacaoItem } from '@/hooks/useConciliacaoBancariaItens';
 import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { useExcelLinhasAux, type ExcelLinhaAux } from '@/hooks/useExcelLinhasAux';
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
@@ -75,7 +75,7 @@ function fmtData(s: string | null): string {
 export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
-  const { insert: insertVinculo } = useConciliacaoBancariaItens();
+  const { insert: insertVinculo, listarPorExtrato } = useConciliacaoBancariaItens();
   // PR2 — hooks para o fluxo "Usar como base" (referência operacional → criar
   // lançamento via LancamentoV2Dialog oficial, padrão idêntico ao ExtratoListaTab).
   const {
@@ -94,6 +94,13 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [marcados, setMarcados] = useState<Map<string, number>>(new Map());
+
+  // PR1 Allianz — vínculos JÁ EXISTENTES neste movimento (de conciliacao_bancaria_itens).
+  // Carregado ao abrir o dialog. Usado para:
+  //   1. mostrar badge "Já vinculado: R$ X · Diferença pendente: R$ Y" no card OFX
+  //   2. desabilitar checkbox dos lançamentos que já estão vinculados (anti-duplicação)
+  //   3. defesa em profundidade no handleVincular (filtra antes do INSERT)
+  const [vinculosExistentes, setVinculosExistentes] = useState<ConciliacaoItem[]>([]);
 
   // PR2 — sugestões de referência operacional + estado da seleção
   const [sugestoes, setSugestoes] = useState<ExcelLinhaAux[]>([]);
@@ -129,6 +136,25 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, movimento?.id, movimento?.conta_bancaria_id, movimento?.data_movimento, movimento?.valor, clienteAtual?.id]);
+
+  // PR1 Allianz — carrega vínculos existentes do extrato ao abrir o dialog.
+  // Cobre o caso: OFX já tem 1+ INSERT em conciliacao_bancaria_itens (parcial),
+  // operador reabre Conciliar e a tela precisa MOSTRAR + BLOQUEAR re-vínculo.
+  useEffect(() => {
+    if (!open || !movimento) {
+      setVinculosExistentes([]);
+      return;
+    }
+    let cancelled = false;
+    listarPorExtrato(movimento.id)
+      .then((rows) => { if (!cancelled) setVinculosExistentes(rows); })
+      .catch((e) => {
+        console.error('[ConciliarExtratoDialog] erro ao carregar vínculos:', e);
+        if (!cancelled) setVinculosExistentes([]);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, movimento?.id]);
 
   useEffect(() => {
     if (!open || !movimento || !clienteAtual?.id) return;
@@ -167,7 +193,22 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
   }, [marcados]);
   const restante = Math.max(0, valorMov - totalSelecionado);
 
+  // PR1 Allianz — somatórios dos vínculos JÁ existentes no banco.
+  const somaAplicadaExistente = useMemo(() => {
+    return vinculosExistentes.reduce(
+      (s, v) => s + Math.abs(Number(v.valor_aplicado) || 0),
+      0,
+    );
+  }, [vinculosExistentes]);
+  const diferencaPendente = Math.max(0, valorMov - somaAplicadaExistente);
+  const lancamentosJaVinculadosIds = useMemo(() => {
+    return new Set(vinculosExistentes.map((v) => v.lancamento_id));
+  }, [vinculosExistentes]);
+  const totalmenteConciliado = somaAplicadaExistente + 0.005 >= valorMov && valorMov > 0;
+
   const toggleMarcado = (l: CandidatoLancamento) => {
+    // PR1 Allianz — ignora clique em lançamento já vinculado (defesa UI).
+    if (lancamentosJaVinculadosIds.has(l.id)) return;
     setMarcados(prev => {
       const next = new Map(prev);
       if (next.has(l.id)) {
@@ -193,13 +234,39 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
     if (!movimento || !clienteAtual?.id) return;
     if (marcados.size === 0) { toast.error('Selecione ao menos um lançamento'); return; }
     if (totalSelecionado <= 0) { toast.error('Total aplicado deve ser maior que zero'); return; }
-    if (totalSelecionado > valorMov + 0.01) {
-      toast.error('Total aplicado excede o valor do movimento do extrato');
+
+    // PR1 Allianz — defesa em profundidade: filtra IDs já vinculados antes do
+    // INSERT. UI já bloqueia checkbox via toggleMarcado, mas state poderia
+    // ficar stale (vínculo criado em outra aba enquanto este modal está aberto).
+    const marcadosFiltrados = new Map<string, number>();
+    let ignoradosDuplicados = 0;
+    for (const [id, valor] of marcados.entries()) {
+      if (lancamentosJaVinculadosIds.has(id)) {
+        ignoradosDuplicados++;
+        continue;
+      }
+      marcadosFiltrados.set(id, valor);
+    }
+    if (marcadosFiltrados.size === 0) {
+      toast.error(
+        ignoradosDuplicados > 0
+          ? 'Todos os selecionados já estão vinculados a este movimento'
+          : 'Nenhum lançamento válido para vincular',
+      );
       return;
     }
+    const totalFiltrado = Array.from(marcadosFiltrados.values())
+      .reduce((s, v) => s + Math.abs(Number(v) || 0), 0);
+
+    // Limite considera o que JÁ existe no banco (somaAplicadaExistente).
+    if (somaAplicadaExistente + totalFiltrado > valorMov + 0.01) {
+      toast.error('Total aplicado (incluindo vínculos existentes) excede o valor do movimento');
+      return;
+    }
+
     setSalvando(true);
     try {
-      for (const [lancId, valorAplicado] of marcados.entries()) {
+      for (const [lancId, valorAplicado] of marcadosFiltrados.entries()) {
         await insertVinculo({
           extrato_id: movimento.id,
           lancamento_id: lancId,
@@ -207,7 +274,10 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           cliente_id: clienteAtual.id,
         });
       }
-      toast.success(`${marcados.size} vínculo(s) criado(s)`);
+      const sufixoDup = ignoradosDuplicados > 0
+        ? ` · ${ignoradosDuplicados} já vinculado(s) ignorado(s)`
+        : '';
+      toast.success(`${marcadosFiltrados.size} vínculo(s) criado(s)${sufixoDup}`);
       onConciliado?.();
       onClose();
     } catch (e: any) {
@@ -311,6 +381,33 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
             </div>
             <div><strong>Descrição:</strong> {movimento.descricao || '-'}</div>
             <div><strong>Documento:</strong> {movimento.documento || '-'}</div>
+            {/* PR1 Allianz — situação atual dos vínculos existentes neste OFX */}
+            {vinculosExistentes.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap pt-1 mt-1 border-t border-muted-foreground/20">
+                <Badge
+                  variant="secondary"
+                  className={`h-5 px-2 text-[10px] ${
+                    totalmenteConciliado
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {totalmenteConciliado
+                    ? `✓ Conciliado (${vinculosExistentes.length} vínculo${vinculosExistentes.length > 1 ? 's' : ''})`
+                    : `⚠ Parcial (${vinculosExistentes.length} vínculo${vinculosExistentes.length > 1 ? 's' : ''})`}
+                </Badge>
+                <span className="tabular-nums">
+                  <strong>Já aplicado:</strong>{' '}
+                  <span className="font-semibold">{formatMoeda(somaAplicadaExistente)}</span>
+                </span>
+                {!totalmenteConciliado && (
+                  <span className="tabular-nums text-amber-700">
+                    <strong>Diferença pendente:</strong>{' '}
+                    <span className="font-semibold">{formatMoeda(diferencaPendente)}</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -347,17 +444,54 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
               ) : candidatos.map(l => {
                 const marcado = marcados.has(l.id);
                 const valorSigned = (Number(l.valor) || 0) * (l.sinal >= 0 ? 1 : -1);
+                // PR1 Allianz — este lançamento já tem vínculo neste OFX?
+                const jaVinculado = lancamentosJaVinculadosIds.has(l.id);
+                const vinculoExistente = jaVinculado
+                  ? vinculosExistentes.find((v) => v.lancamento_id === l.id)
+                  : null;
                 return (
-                  <TableRow key={l.id} className={marcado ? 'bg-blue-50/40' : ''}>
-                    <TableCell><Checkbox checked={marcado} onCheckedChange={() => toggleMarcado(l)} /></TableCell>
+                  <TableRow
+                    key={l.id}
+                    className={
+                      jaVinculado
+                        ? 'bg-emerald-50/40 opacity-75'
+                        : marcado
+                          ? 'bg-blue-50/40'
+                          : ''
+                    }
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={marcado}
+                        disabled={jaVinculado}
+                        onCheckedChange={() => toggleMarcado(l)}
+                      />
+                    </TableCell>
                     <TableCell className="text-[11px] font-mono">{fmtData(l.data_pagamento)}</TableCell>
-                    <TableCell className="text-[11px] max-w-[260px] truncate" title={l.descricao || ''}>{l.descricao || '-'}</TableCell>
+                    <TableCell className="text-[11px] max-w-[260px] truncate" title={l.descricao || ''}>
+                      <div className="flex items-center gap-1.5">
+                        {jaVinculado && (
+                          <Badge
+                            variant="secondary"
+                            className="h-4 px-1.5 text-[9px] bg-emerald-100 text-emerald-800 shrink-0"
+                            title={vinculoExistente ? `Aplicado: ${formatMoeda(vinculoExistente.valor_aplicado)}` : undefined}
+                          >
+                            ✓ Já vinculado
+                          </Badge>
+                        )}
+                        <span className="truncate">{l.descricao || '-'}</span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-[11px] font-mono text-muted-foreground">{l.numero_documento || '-'}</TableCell>
                     <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${valorSigned < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                       {formatMoeda(valorSigned)}
                     </TableCell>
                     <TableCell className="text-[11px] text-right">
-                      {marcado ? (
+                      {jaVinculado && vinculoExistente ? (
+                        <span className="text-[10px] text-emerald-700 tabular-nums" title="Valor aplicado neste vínculo">
+                          {formatMoeda(vinculoExistente.valor_aplicado)}
+                        </span>
+                      ) : marcado ? (
                         <Input
                           type="number"
                           step="0.01"
