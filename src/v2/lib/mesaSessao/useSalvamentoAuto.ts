@@ -33,7 +33,8 @@ export function useSalvamentoAuto({
       await onSalvar();
       setStatus('salvo');
       setUltimoSalvamento(new Date());
-    } catch {
+    } catch (err) {
+      console.error('[useSalvamentoAuto] onSalvar falhou:', err);
       setStatus('erro');
     }
   }, [onSalvar]);

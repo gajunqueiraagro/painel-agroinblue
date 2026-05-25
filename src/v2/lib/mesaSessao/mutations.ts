@@ -135,6 +135,13 @@ export async function salvarPares(
       const linha = linhasPorKey.get(key);
       const v = validarAprovacao(aprovacaoFinal, linha);
       if (!v.valido) {
+        console.error('[salvarPares] PR6.1C-4 reverteu par aprovado→pendente:', {
+          excel_key: key,
+          motivo: v.mensagem,
+          camposFaltantes: v.camposFaltantes,
+          aprovacao_recebida: aprovacaoFinal,
+          linha_disponivel: !!linha,
+        });
         decisaoFinal = 'pendente';
         aprovacaoFinal = null;
       }
