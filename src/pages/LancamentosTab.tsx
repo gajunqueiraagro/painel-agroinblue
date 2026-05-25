@@ -1699,12 +1699,17 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           const orig = editOriginalRef.current;
           // CREATE em mês fechado: bloqueio total (lançamento novo é
           // zootécnico por definição). EDIT: comparar campos zoo.
+          // Peso médio entra no conjunto porque é dado físico — P1 fechado
+          // protege o snapshot oficial e peso afeta saldo de rebanho. (O
+          // gate P1 paralelo em handleRequestRegister hoje não compara peso;
+          // isso é omissão histórica — não replicar.)
           const zooChanged = !isEditing || !orig
             ? true
             : (
               String(orig.data) !== String(data) ||
               String(orig.tipo) !== String(tipo) ||
               Number(orig.quantidade) !== parseNumericValue(quantidade) ||
+              Number(orig.pesoMedioKg || 0) !== parseNumericValue(pesoKg) ||
               String(orig.categoria) !== String(categoria) ||
               String(orig.fazendaOrigem || '') !== String(fazendaOrigem || '') ||
               String(orig.fazendaDestino || '') !== String(fazendaDestino || '')
