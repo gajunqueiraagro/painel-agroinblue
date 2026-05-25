@@ -128,6 +128,25 @@ export async function parseExcelToLote(file: File): Promise<LoteExcel> {
     });
   }
 
+  // PR ordinal — distingue duplicatas exatas legítimas no Excel.
+  // Linhas com TODOS os 5 campos canônicos idênticos (data_competencia,
+  // valor_signed, conta, documento, descricao) recebem sufixo #N.
+  // Grupo com 1 linha permanece sem sufixo (chave base limpa).
+  // Ordem do ordinal: ordem de iteração do parser sobre raw (ordem do arquivo).
+  // Re-upload do mesmo arquivo na mesma ordem produz exatamente os mesmos sufixos.
+  {
+    const contagens = new Map<string, number>();
+    for (const l of linhas) contagens.set(l.chaveLinha, (contagens.get(l.chaveLinha) ?? 0) + 1);
+    const ordinais = new Map<string, number>();
+    for (const l of linhas) {
+      const base = l.chaveLinha;
+      if ((contagens.get(base) ?? 0) <= 1) continue;
+      const n = (ordinais.get(base) ?? 0) + 1;
+      ordinais.set(base, n);
+      l.chaveLinha = `${base}#${n}`;
+    }
+  }
+
   return {
     loteId,
     nomeArquivo: file.name,
