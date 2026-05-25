@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { sincronizarVinculosDoLancamento } from '@/lib/financeiro/conciliacaoSync';
 
 
 export interface LancamentoV2 {
@@ -530,6 +531,18 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .eq('id', id)
       .single();
     console.log('[FinV2] POST-SAVE VERIFY', verify);
+
+    // PR4 — sync best-effort dos vínculos de conciliação bancária.
+    // Se o novo valor do lançamento bate EXATO (±0.01) com o OFX vinculado,
+    // atualiza valor_aplicado e recomputa status do extrato. Caso Allianz:
+    // operador corrige Hilux 1.108,37 → 1.126,30 e o badge "Parcial" da lista
+    // some sem ação adicional. Falha aqui NÃO bloqueia o save do lançamento.
+    try {
+      const valorAbs = Math.abs(Number(form.valor) || 0);
+      await sincronizarVinculosDoLancamento(id, valorAbs);
+    } catch (syncErr) {
+      console.warn('[FinV2] sincronizacao vinculo cbi falhou', syncErr);
+    }
 
     toast.success('Lançamento atualizado');
     return true;
