@@ -109,6 +109,22 @@ export async function salvarPares(
   if (pares.size === 0) return;
   const sb = supabase as any;
 
+  console.log('[salvar-debug] entrada salvarPares:', {
+    sessao_id: sessaoId,
+    pares_size: pares.size,
+    aprovacoes_size: aprovacoes.size,
+    lotesValidos_size: lotesValidos?.size ?? 'undefined',
+    tem_linhasPorKey: !!linhasPorKey,
+    amostra_decisoes: Array.from(pares.values())
+      .filter((p) => p.decisao !== 'pendente')
+      .slice(0, 5)
+      .map((p) => ({
+        excel_key: p.excelKey,
+        decisao: p.decisao,
+        tem_correcao: !!p.correcao,
+      })),
+  });
+
   const rows: Array<{
     sessao_id: string;
     excel_key: string;
@@ -139,11 +155,23 @@ export async function salvarPares(
     });
   });
 
+  console.log('[salvar-debug] rows construídas:', {
+    rows_length: rows.length,
+    rows_nao_pendente: rows.filter((r) => r.decisao !== 'pendente').length,
+    amostra_rows: rows.filter((r) => r.decisao !== 'pendente').slice(0, 3),
+  });
+
   if (rows.length === 0) return;
 
   const res = await sb
     .from('mesa_par')
     .upsert(rows, { onConflict: 'sessao_id,excel_key' });
+
+  console.log('[salvar-debug] resultado upsert:', {
+    error: res.error,
+    status: res.status,
+    count: res.count,
+  });
 
   if (res.error) throw res.error;
 }
