@@ -59,6 +59,12 @@ interface Props {
   onClose: () => void;
   movimento: ExtratoMovimentoRef | null;
   onConciliado?: () => void;
+  /**
+   * PR3 — vínculos já carregados pelo caller (ex.: ExtratoListaTab carrega
+   * em lote). Se `undefined`, o dialog faz fetch via listarPorExtrato (PR1).
+   * Se `null` ou `[]`, considera que NÃO HÁ vínculos sem disparar fetch.
+   */
+  vinculosPreCarregados?: ConciliacaoItem[] | null;
 }
 
 function addDays(iso: string, n: number): string {
@@ -72,7 +78,7 @@ function fmtData(s: string | null): string {
   try { return format(parseISO(s), 'dd/MM/yy'); } catch { return s; }
 }
 
-export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado }: Props) {
+export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado, vinculosPreCarregados }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
   const { insert: insertVinculo, listarPorExtrato } = useConciliacaoBancariaItens();
@@ -140,9 +146,15 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
   // PR1 Allianz — carrega vínculos existentes do extrato ao abrir o dialog.
   // Cobre o caso: OFX já tem 1+ INSERT em conciliacao_bancaria_itens (parcial),
   // operador reabre Conciliar e a tela precisa MOSTRAR + BLOQUEAR re-vínculo.
+  // PR3 — se o caller pré-carregou (vinculosPreCarregados !== undefined),
+  // pula o fetch e usa direto. Mantém comportamento PR1 quando undefined.
   useEffect(() => {
     if (!open || !movimento) {
       setVinculosExistentes([]);
+      return;
+    }
+    if (vinculosPreCarregados !== undefined) {
+      setVinculosExistentes(vinculosPreCarregados ?? []);
       return;
     }
     let cancelled = false;
@@ -154,7 +166,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, movimento?.id]);
+  }, [open, movimento?.id, vinculosPreCarregados]);
 
   useEffect(() => {
     if (!open || !movimento || !clienteAtual?.id) return;

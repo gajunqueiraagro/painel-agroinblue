@@ -86,6 +86,28 @@ export function useConciliacaoBancariaItens() {
     return (data as unknown as ConciliacaoItem[]) ?? [];
   }
 
+  // PR3 — versão em lote: retorna Map<extrato_id, ConciliacaoItem[]> para
+  // que ExtratoListaTab carregue vínculos de todas as linhas do mês em 1 query.
+  async function listarPorExtratos(
+    extratoIds: string[],
+  ): Promise<Map<string, ConciliacaoItem[]>> {
+    if (extratoIds.length === 0) return new Map();
+    const { data, error } = await supabase
+      .from('conciliacao_bancaria_itens' as any)
+      .select('*')
+      .in('extrato_id', extratoIds)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    const items = (data as unknown as ConciliacaoItem[]) ?? [];
+    const map = new Map<string, ConciliacaoItem[]>();
+    for (const item of items) {
+      const arr = map.get(item.extrato_id) ?? [];
+      arr.push(item);
+      map.set(item.extrato_id, arr);
+    }
+    return map;
+  }
+
   async function remover(id: string): Promise<void> {
     // Buscar extrato_id antes de deletar para recomputar status depois.
     const { data: row } = await supabase
@@ -104,5 +126,5 @@ export function useConciliacaoBancariaItens() {
     if (extratoId) await recomputarStatusExtrato(extratoId);
   }
 
-  return { insert, listarPorExtrato, remover, recomputarStatusExtrato };
+  return { insert, listarPorExtrato, listarPorExtratos, remover, recomputarStatusExtrato };
 }
