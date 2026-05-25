@@ -67,12 +67,13 @@ function dedupKey(
   fornecedor: string | null | undefined,
   fazenda: string | null | undefined,
   plano: string | null | undefined,
+  produto: string | null | undefined,
 ): string {
   if (!data) return ''; // sem data não participa de dedup
   const norm = (s: string | null | undefined): string =>
     (s ?? '').trim().toLowerCase();
   const v = valor == null ? '∅' : Math.round(valor * 100).toString();
-  return [data, v, norm(fornecedor), norm(fazenda), norm(plano)].join('|');
+  return [data, v, norm(fornecedor), norm(fazenda), norm(plano), norm(produto)].join('|');
 }
 
 export function useExcelLinhasAux() {
@@ -104,7 +105,7 @@ export function useExcelLinhasAux() {
 
       const { data: existentes, error: errSelect } = await sb
         .from('excel_linhas_aux')
-        .select('data_referencia,valor,fornecedor_texto,fazenda_texto,plano_texto,status')
+        .select('data_referencia,valor,fornecedor_texto,fazenda_texto,plano_texto,produto_texto,status')
         .eq('cliente_id', clienteId)
         .eq('conta_bancaria_id', contaBancariaId)
         .eq('origem', origem)
@@ -124,6 +125,7 @@ export function useExcelLinhasAux() {
           fornecedor_texto: string | null;
           fazenda_texto: string | null;
           plano_texto: string | null;
+          produto_texto: string | null;
         }>) {
           const k = dedupKey(
             e.data_referencia,
@@ -131,6 +133,7 @@ export function useExcelLinhasAux() {
             e.fornecedor_texto,
             e.fazenda_texto,
             e.plano_texto,
+            e.produto_texto,
           );
           if (k) setExistentes.add(k);
         }
@@ -143,6 +146,7 @@ export function useExcelLinhasAux() {
             r.fornecedor_texto,
             r.fazenda_texto,
             r.plano_texto,
+            r.produto_texto,
           );
           if (k && setExistentes.has(k)) {
             duplicadas++;
