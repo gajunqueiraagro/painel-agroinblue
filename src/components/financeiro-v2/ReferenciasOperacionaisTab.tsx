@@ -20,6 +20,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { useCliente } from '@/contexts/ClienteContext';
 import {
@@ -58,6 +66,13 @@ export function ReferenciasOperacionaisTab({ contaBancariaId, anoMes }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [acaoEmAndamento, setAcaoEmAndamento] = useState<string | null>(null);
 
+  // PR2.1 — filtros básicos (status/origem/busca/ordenação) aplicados ANTES
+  // do agrupamento por batch (grupos só mostra o que passou nos filtros).
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'aplicada' | 'descartada'>('todos');
+  const [filtroOrigem, setFiltroOrigem] = useState<string>('todos');
+  const [ordenacao, setOrdenacao] = useState<'data_asc' | 'data_desc' | 'valor_desc' | 'valor_asc'>('data_asc');
+
   const refetch = async (): Promise<void> => {
     if (!contaBancariaId || !clienteAtual?.id) {
       setLinhas([]);
@@ -84,16 +99,70 @@ export function ReferenciasOperacionaisTab({ contaBancariaId, anoMes }: Props) {
     return { pendente, aplicada, descartada };
   }, [linhas]);
 
-  // Agrupar por batch_id preservando ordem do retorno (já vem ordenado).
+  // PR2.1 — origens disponíveis (derivadas) para o filtro de origem.
+  const origensDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    linhas.forEach((l) => set.add(l.origem));
+    return Array.from(set).sort();
+  }, [linhas]);
+
+  // PR2.1 — aplica filtros (status/origem/busca) e ordenação ANTES do
+  // agrupamento. Contagens (acima) seguem sobre o universo total.
+  const linhasFiltradas = useMemo(() => {
+    const buscaNorm = busca.trim().toLowerCase();
+    let res = linhas;
+
+    if (filtroStatus !== 'todos') {
+      res = res.filter((l) => l.status === filtroStatus);
+    }
+    if (filtroOrigem !== 'todos') {
+      res = res.filter((l) => l.origem === filtroOrigem);
+    }
+    if (buscaNorm) {
+      res = res.filter((l) => {
+        const hay = [
+          l.fornecedor_texto,
+          l.fazenda_texto,
+          l.plano_texto,
+          l.centro_texto,
+          l.produto_texto,
+          l.observacao,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(buscaNorm);
+      });
+    }
+
+    const sorted = [...res];
+    switch (ordenacao) {
+      case 'data_asc':
+        sorted.sort((a, b) => (a.data_referencia ?? '').localeCompare(b.data_referencia ?? ''));
+        break;
+      case 'data_desc':
+        sorted.sort((a, b) => (b.data_referencia ?? '').localeCompare(a.data_referencia ?? ''));
+        break;
+      case 'valor_desc':
+        sorted.sort((a, b) => Math.abs(b.valor ?? 0) - Math.abs(a.valor ?? 0));
+        break;
+      case 'valor_asc':
+        sorted.sort((a, b) => Math.abs(a.valor ?? 0) - Math.abs(b.valor ?? 0));
+        break;
+    }
+    return sorted;
+  }, [linhas, busca, filtroStatus, filtroOrigem, ordenacao]);
+
+  // Agrupar por batch_id (já filtrado e ordenado).
   const grupos = useMemo(() => {
     const map = new Map<string, ExcelLinhaAux[]>();
-    linhas.forEach((l) => {
+    linhasFiltradas.forEach((l) => {
       const arr = map.get(l.batch_id) ?? [];
       arr.push(l);
       map.set(l.batch_id, arr);
     });
     return Array.from(map.entries());
-  }, [linhas]);
+  }, [linhasFiltradas]);
 
   if (!contaBancariaId) {
     return (
@@ -127,6 +196,46 @@ export function ReferenciasOperacionaisTab({ contaBancariaId, anoMes }: Props) {
         >
           Importar Excel
         </Button>
+      </div>
+
+      {/* PR2.1 — barra de filtros (busca + status + ordenação + origem opcional) */}
+      <div className="flex items-center gap-2 flex-wrap pb-1 border-b">
+        <Input
+          type="text"
+          placeholder="Buscar fornecedor, fazenda, plano, observação..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="h-7 text-xs flex-1 min-w-[200px]"
+        />
+        <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as typeof filtroStatus)}>
+          <SelectTrigger className="h-7 text-xs w-[130px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos status</SelectItem>
+            <SelectItem value="pendente">Pendentes</SelectItem>
+            <SelectItem value="aplicada">Aplicadas</SelectItem>
+            <SelectItem value="descartada">Descartadas</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={ordenacao} onValueChange={(v) => setOrdenacao(v as typeof ordenacao)}>
+          <SelectTrigger className="h-7 text-xs w-[150px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="data_asc">Data ↑</SelectItem>
+            <SelectItem value="data_desc">Data ↓</SelectItem>
+            <SelectItem value="valor_desc">Valor (maior)</SelectItem>
+            <SelectItem value="valor_asc">Valor (menor)</SelectItem>
+          </SelectContent>
+        </Select>
+        {origensDisponiveis.length > 1 && (
+          <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+            <SelectTrigger className="h-7 text-xs w-[110px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Toda origem</SelectItem>
+              {origensDisponiveis.map((o) => (
+                <SelectItem key={o} value={o}>{o}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {!loading && grupos.length === 0 && (

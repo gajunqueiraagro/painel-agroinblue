@@ -107,16 +107,54 @@ function parseDataExcel(raw: unknown): string | null {
   return null;
 }
 
-function parseValorBR(raw: unknown): number | null {
+/**
+ * Parser de valor tolerante a formato BR ('1.234,56') e US ('1,234.56').
+ * Decide o separador decimal pela posição do último '.' vs último ','.
+ * Caso edge: "8.600" sem decimal — heurística: 1 ponto + 3 dígitos depois + sem
+ * vírgula = milhar BR sem decimal → 8600. "8.6" / "8.60" → US → 8.6.
+ *
+ * IMPORTANTE: o caminho principal espera typeof === 'number' (Excel raw:true).
+ * O caminho string é residual para células que vêm como texto literal.
+ */
+function parseValor(raw: unknown): number | null {
   if (raw == null || raw === '') return null;
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-  const s = String(raw)
-    .replace(/\s/g, '')
-    .replace(/R\$/gi, '')
-    .replace(/\./g, '')   // remove separador de milhar
-    .replace(',', '.');
+
+  let s = String(raw).replace(/\s/g, '').replace(/R\$/gi, '').trim();
+  if (!s) return null;
+
+  // sinal
+  let neg = false;
+  if (s.startsWith('-') || s.startsWith('(')) neg = true;
+  s = s.replace(/^[-(]/, '').replace(/\)$/, '');
+  if (!s) return null;
+
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+
+  if (lastDot === -1 && lastComma === -1) {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? (neg ? -n : n) : null;
+  }
+
+  if (lastComma > lastDot) {
+    // BR: vírgula é decimal, ponto é milhar — "1.234.567,89"
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // lastDot >= lastComma. Pode ser US ("1,234.56") ou BR sem decimal ("8.600")
+    const aposPonto = s.length - lastDot - 1;
+    const totalDots = (s.match(/\./g) || []).length;
+    if (totalDots > 1 || (aposPonto === 3 && lastComma === -1 && totalDots === 1)) {
+      // múltiplos pontos = milhar BR; ou 1 ponto + 3 dígitos sem vírgula = milhar BR
+      s = s.replace(/\./g, '');
+    } else {
+      // US: vírgula é milhar (remover), ponto é decimal (manter)
+      s = s.replace(/,/g, '');
+    }
+  }
+
   const n = parseFloat(s);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? (neg ? -n : n) : null;
 }
 
 export function ExcelImportDialog({
@@ -174,6 +212,37 @@ export function ExcelImportDialog({
     return ['data_referencia', 'valor', ...base.slice(1)];
   }, [sinalPadrao]);
 
+  // PR2.1 — Preview do passo 1: 3 primeiras linhas + contagem + alerta
+  // bloqueante quando maior valor absoluto > R$ 10M (provável bug de parser
+  // ou formatação anômala da planilha).
+  const previewInfo = useMemo(() => {
+    if (!arquivo || mapping.data_referencia == null || mapping.valor == null) {
+      return null;
+    }
+    const idxData = mapping.data_referencia;
+    const idxValor = mapping.valor;
+    const valoresProcessados: number[] = [];
+    for (const row of linhasBrutas) {
+      const v = parseValor(row[idxValor]);
+      if (v != null) {
+        const final = sinalPadrao === 'saida' ? -Math.abs(v) : Math.abs(v);
+        valoresProcessados.push(final);
+      }
+    }
+    const positivos = valoresProcessados.filter((v) => v > 0).length;
+    const negativos = valoresProcessados.filter((v) => v < 0).length;
+    const maxAbs = valoresProcessados.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+    const temAlerta = maxAbs > 10_000_000;
+    const primeiras3 = linhasBrutas.slice(0, 3).map((row) => {
+      const dataIso = parseDataExcel(row[idxData]);
+      const vRaw = parseValor(row[idxValor]);
+      const valorFinal =
+        vRaw == null ? null : sinalPadrao === 'saida' ? -Math.abs(vRaw) : Math.abs(vRaw);
+      return { data: dataIso, valor: valorFinal };
+    });
+    return { positivos, negativos, maxAbs, temAlerta, primeiras3 };
+  }, [arquivo, linhasBrutas, mapping.data_referencia, mapping.valor, sinalPadrao]);
+
   async function handleArquivo(file: File): Promise<void> {
     if (file.size > MAX_FILE_BYTES) {
       toast.error('Arquivo grande demais. Limite: 10 MB.');
@@ -187,7 +256,7 @@ export function ExcelImportDialog({
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
         header: 1,
         defval: null,
-        raw: false,
+        raw: true, // número nativo do Excel; cellDates:true mantém datas como Date
       });
       if (matrix.length === 0) {
         toast.error('Planilha vazia');
@@ -251,15 +320,15 @@ export function ExcelImportDialog({
 
       let valor: number | null = null;
       if (sinalPadrao === 'excel_define') {
-        const deb = idxDeb != null ? parseValorBR(row[idxDeb]) : null;
-        const cred = idxCred != null ? parseValorBR(row[idxCred]) : null;
+        const deb = idxDeb != null ? parseValor(row[idxDeb]) : null;
+        const cred = idxCred != null ? parseValor(row[idxCred]) : null;
         if ((deb == null || deb === 0) && (cred == null || cred === 0)) {
           invalidas.push({ linha: linhaNum, motivo: 'débito e crédito vazios' });
           return;
         }
         valor = (cred ?? 0) - (deb ?? 0);
       } else {
-        const v = idxValor != null ? parseValorBR(row[idxValor]) : null;
+        const v = idxValor != null ? parseValor(row[idxValor]) : null;
         if (v == null) {
           invalidas.push({ linha: linhaNum, motivo: 'valor não numérico' });
           return;
@@ -320,7 +389,7 @@ export function ExcelImportDialog({
           <DialogTitle>Importar Excel — Referências Operacionais (Passo {step}/3)</DialogTitle>
         </DialogHeader>
 
-        {/* Passo 1 — Setup */}
+        {/* Passo 1 — Setup + Upload + Preview (PR2.1) */}
         {step === 1 && (
           <div className="space-y-4 flex-1 overflow-auto">
             <div className="space-y-1">
@@ -339,37 +408,60 @@ export function ExcelImportDialog({
             <div className="space-y-2">
               <Label className="text-xs">Sinal padrão do lote *</Label>
               <RadioGroup value={sinalPadrao} onValueChange={(v) => setSinalPadrao(v as SinalPadrao)}>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="saida" id="r-saida" />
-                  <Label htmlFor="r-saida" className="text-xs font-normal">Todas saídas — valor fica negativo</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="entrada" id="r-entrada" />
-                  <Label htmlFor="r-entrada" className="text-xs font-normal">Todas entradas — valor fica positivo</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="excel_define" id="r-define" />
-                  <Label htmlFor="r-define" className="text-xs font-normal">Excel define — procurar coluna débito/crédito</Label>
+                <div className="space-y-3">
+                  <div className="border rounded p-2.5 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="saida" id="r-saida" />
+                      <Label htmlFor="r-saida" className="text-xs font-medium">
+                        Todas saídas — valores serão gravados negativos
+                      </Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1 ml-6">
+                      Ex.: fornecedores, manutenção, folha, combustível, pagamentos.
+                    </p>
+                  </div>
+                  <div className="border rounded p-2.5 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="entrada" id="r-entrada" />
+                      <Label htmlFor="r-entrada" className="text-xs font-medium">
+                        Todas entradas — valores serão gravados positivos
+                      </Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1 ml-6">
+                      Ex.: vendas, recebimentos, aluguel, PIX recebido.
+                    </p>
+                  </div>
+                  {/* PR2.1 — "excel_define" desabilitado até parser ser validado */}
+                  <div className="border rounded p-2.5 opacity-50 cursor-not-allowed">
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="excel_define" id="r-define" disabled />
+                      <Label htmlFor="r-define" className="text-xs font-medium text-muted-foreground">
+                        Excel define — colunas débito/crédito separadas
+                      </Label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1 ml-6">
+                      Desabilitado temporariamente. Disponível em versão futura.
+                    </p>
+                  </div>
                 </div>
               </RadioGroup>
             </div>
-          </div>
-        )}
 
-        {/* Passo 2 — Upload + Mapping */}
-        {step === 2 && (
-          <div className="space-y-3 flex-1 overflow-auto">
-            <div className="space-y-1">
+            <div className="space-y-1 pt-2 border-t">
               <Label className="text-xs">Arquivo (.xlsx ou .xls)</Label>
               <Input
                 type="file"
                 accept=".xlsx,.xls"
                 className="h-8 text-xs"
+                disabled={!contaBancariaId}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) void handleArquivo(f);
                 }}
               />
+              {!contaBancariaId && (
+                <p className="text-[10px] text-muted-foreground">Selecione a conta antes de fazer upload.</p>
+              )}
               {arquivo && (
                 <p className="text-[10px] text-muted-foreground">
                   {arquivo.name} · {linhasBrutas.length} linha(s) · {headers.length} coluna(s)
@@ -377,6 +469,53 @@ export function ExcelImportDialog({
               )}
             </div>
 
+            {/* Preview 3 linhas + contagem + alerta (PR2.1) */}
+            {previewInfo && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-xs">Preview (3 primeiras linhas — valor final)</Label>
+                <div className="border rounded p-2 text-[11px] space-y-1 bg-muted/30">
+                  {previewInfo.primeiras3.map((p, i) => (
+                    <div key={i} className="flex justify-between font-mono">
+                      <span>{p.data ?? '-'}</span>
+                      <span className={p.valor != null && p.valor < 0 ? 'text-red-700' : 'text-emerald-700'}>
+                        {p.valor != null
+                          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor)
+                          : '-'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 text-[10px]">
+                  <span className="text-emerald-700"><strong>{previewInfo.positivos}</strong> entrada(s)</span>
+                  <span className="text-red-700"><strong>{previewInfo.negativos}</strong> saída(s)</span>
+                  <span className="text-muted-foreground ml-auto">
+                    Maior valor abs:{' '}
+                    <strong className="tabular-nums">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previewInfo.maxAbs)}
+                    </strong>
+                  </span>
+                </div>
+                {previewInfo.temAlerta && (
+                  <div className="rounded border border-red-300 bg-red-50 p-2 text-[11px] text-red-800">
+                    <strong>⚠ Alerta:</strong> valor acima de R$ 10 milhões detectado (
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previewInfo.maxAbs)}).
+                    <br />
+                    Provável erro de parser ou formatação. Não avance — revise o Excel.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Passo 2 — Mapping (PR2.1: upload movido pro passo 1) */}
+        {step === 2 && (
+          <div className="space-y-3 flex-1 overflow-auto">
+            {headers.length === 0 && (
+              <div className="text-[11px] text-muted-foreground italic">
+                Volte ao passo 1 para selecionar o arquivo.
+              </div>
+            )}
             {headers.length > 0 && (
               <>
                 <div className="space-y-1.5">
@@ -470,7 +609,18 @@ export function ExcelImportDialog({
             </Button>
           )}
           {step === 1 && (
-            <Button disabled={!contaBancariaId} onClick={() => setStep(2)}>Avançar</Button>
+            <Button
+              disabled={
+                !contaBancariaId
+                || !arquivo
+                || headers.length === 0
+                || !podeAvancarPasso2()
+                || (previewInfo?.temAlerta ?? false)
+              }
+              onClick={() => setStep(2)}
+            >
+              Avançar
+            </Button>
           )}
           {step === 2 && (
             <Button

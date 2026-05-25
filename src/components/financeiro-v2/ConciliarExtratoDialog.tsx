@@ -285,7 +285,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col gap-2">
         <DialogHeader>
           <DialogTitle>Conciliar movimento do extrato</DialogTitle>
           <DialogDescription>
@@ -293,6 +293,13 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
             O extrato passa a 'parcial' ou 'conciliado' conforme a soma dos valores aplicados.
           </DialogDescription>
         </DialogHeader>
+
+        {/* PR2.1 — Container único de scroll entre Header e Footer.
+            flex-1 min-h-0 overflow-auto: garante que tudo (card OFX + tabela
+            candidatos + rodapé totais + sugestões) compartilhe o mesmo scroll
+            e que DialogFooter fique sempre visível. min-h-0 é crítico em
+            flex child — sem ele o overflow não funciona em browsers. */}
+        <div className="flex-1 min-h-0 overflow-auto pr-1 space-y-3">
 
         {movimento && (
           <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs space-y-0.5">
@@ -307,7 +314,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           </div>
         )}
 
-        <div className="flex-1 overflow-auto border rounded min-h-[200px] max-h-[45vh]">
+        <div className="border rounded">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
@@ -372,7 +379,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
             <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               Sugestões Referência Operacional ({sugestoes.length})
             </div>
-            <div className="space-y-1.5 max-h-[180px] overflow-auto">
+            <div className="space-y-1.5">
               {sugestoes.map((ref) => (
                 <div
                   key={ref.id}
@@ -416,6 +423,9 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
             </div>
           </div>
         )}
+
+        </div>
+        {/* /scroll container PR2.1 */}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={salvando}>Fechar</Button>
