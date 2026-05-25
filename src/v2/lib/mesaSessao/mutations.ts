@@ -136,11 +136,6 @@ export async function salvarPares(
   }> = [];
 
   pares.forEach((p, key) => {
-    if (lotesValidos) {
-      const loteIdDoPar = key.split(':')[0];
-      if (!lotesValidos.has(loteIdDoPar)) return; // par órfão — pula
-    }
-
     const decisaoFinal: ParEstado['decisao'] = p.decisao;
     const aprovacaoFinal: AprovacaoLocal | null = aprovacoes.get(key) ?? null;
 
