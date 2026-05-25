@@ -104,9 +104,12 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     staleTime: 30_000,
   });
 
-  // PR3 — lançamentos órfãos do mês na conta (sem vínculo em cbi).
-  const { data: lancamentosOrfaosDoMes } = useQuery({
-    queryKey: ['lancs-orfaos', clienteAtual?.id, contaBancariaId, anoMes],
+  // PR-C — lançamentos REALIZADOS do mês na conta (com flag de vínculo cbi).
+  // Substitui a query 'lancs-orfaos' do PR3: agora carrega TODOS os realizados
+  // pra somar entradas/saídas do sistema no resumo do topo. Órfãos são
+  // derivados via memo abaixo (compat com extratoEnriquecer).
+  const { data: lancamentosRealizadosDoMes } = useQuery({
+    queryKey: ['lancs-realizados', clienteAtual?.id, contaBancariaId, anoMes],
     enabled: !!clienteAtual?.id && !!contaBancariaId && !!anoMes,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -138,21 +141,50 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         conciliacao_bancaria_itens: Array<{ id: string }> | null;
       }>;
       return rows
-        .filter(
-          (l) =>
-            !l.conciliacao_bancaria_itens ||
-            l.conciliacao_bancaria_itens.length === 0,
-        )
         .filter((l): l is typeof l & { data_pagamento: string } => !!l.data_pagamento)
         .map((l) => ({
           id: l.id,
           data_pagamento: l.data_pagamento,
           valor: Math.abs(Number(l.valor) || 0),
+          valorSigned: (Number(l.valor) || 0) * (Number(l.sinal) >= 0 ? 1 : -1),
           sinal: Number(l.sinal),
           descricao: l.descricao,
           conta_bancaria_id: l.conta_bancaria_id,
           conta_destino_id: l.conta_destino_id,
+          temVinculo:
+            !!l.conciliacao_bancaria_itens && l.conciliacao_bancaria_itens.length > 0,
         }));
+    },
+    staleTime: 30_000,
+  });
+
+  // PR3 (compat) — derivar órfãos do array de realizados.
+  const lancamentosOrfaosDoMes = useMemo(
+    () => lancamentosRealizadosDoMes?.filter((l) => !l.temVinculo),
+    [lancamentosRealizadosDoMes],
+  );
+
+  // PR-C — saldo oficial do sistema para conta/mês (saldo_inicial/saldo_final).
+  // Tabela financeiro_saldos_bancarios_v2 tem registro único por
+  // (cliente_id, conta_bancaria_id, ano_mes). null se ainda não foi calculado.
+  const { data: saldoSistema } = useQuery({
+    queryKey: ['saldo-sistema-conta', clienteAtual?.id, contaBancariaId, anoMes],
+    enabled: !!clienteAtual?.id && !!contaBancariaId && !!anoMes,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('financeiro_saldos_bancarios_v2' as any)
+        .select('saldo_inicial, saldo_final, fechado, status_mes')
+        .eq('cliente_id', clienteAtual!.id)
+        .eq('conta_bancaria_id', contaBancariaId!)
+        .eq('ano_mes', anoMes!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as unknown as {
+        saldo_inicial: number;
+        saldo_final: number;
+        fechado: boolean;
+        status_mes: string;
+      } | null) ?? null;
     },
     staleTime: 30_000,
   });
@@ -183,6 +215,95 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       lancamentosOrfaosDoMes,
     });
   }, [movimentos, vinculosByExtratoId, refsExcelPendentes, lancamentosOrfaosDoMes]);
+
+  // PR-C — resumo BANCO (OFX) vs SISTEMA (apontamento).
+  // - BANCO: entradas/saídas somam os movimentos do extrato; saldo inicial/final
+  //   derivam de saldo_apos do primeiro/último movimento (não há campo
+  //   saldo_inicial/saldo_final no extrato_bancario_v2). Se saldo_apos for null
+  //   em alguma ponta, mostramos `null` (UI exibe "—") — sem invenção.
+  // - SISTEMA: entradas/saídas somam lancamentos_v2 realizados do mês;
+  //   saldo inicial/final vêm de financeiro_saldos_bancarios_v2.
+  // - Diferença principal: saldo_final_banco − saldo_final_sistema.
+  const resumoConciliacao = useMemo(() => {
+    // BANCO
+    let entradasBanco = 0;
+    let saidasBanco = 0;
+    for (const m of movimentos) {
+      const v = Number(m.valor) || 0;
+      if (v > 0) entradasBanco += v;
+      else if (v < 0) saidasBanco += -v;
+    }
+    // movimentos vem em ordem DESC (mais recente primeiro) — useExtratoBancario.
+    const primeiroDoPeriodo = movimentos[movimentos.length - 1]; // mais antigo
+    const ultimoDoPeriodo = movimentos[0]; // mais recente
+    const saldoFinalBanco =
+      ultimoDoPeriodo?.saldo_apos == null
+        ? null
+        : Number(ultimoDoPeriodo.saldo_apos);
+    const saldoInicialBanco =
+      primeiroDoPeriodo?.saldo_apos == null
+        ? null
+        : Number(primeiroDoPeriodo.saldo_apos) -
+          (Number(primeiroDoPeriodo.valor) || 0);
+
+    // SISTEMA
+    let entradasSistema = 0;
+    let saidasSistema = 0;
+    for (const l of lancamentosRealizadosDoMes ?? []) {
+      if (l.valorSigned > 0) entradasSistema += l.valorSigned;
+      else if (l.valorSigned < 0) saidasSistema += -l.valorSigned;
+    }
+    const saldoInicialSistema = saldoSistema
+      ? Number(saldoSistema.saldo_inicial)
+      : null;
+    const saldoFinalSistema = saldoSistema
+      ? Number(saldoSistema.saldo_final)
+      : null;
+
+    // Diferença operacional principal (Banco − Sistema). null se faltar dado.
+    const diferencaSaldoFinal =
+      saldoFinalBanco != null && saldoFinalSistema != null
+        ? saldoFinalBanco - saldoFinalSistema
+        : null;
+
+    return {
+      banco: {
+        saldoInicial: saldoInicialBanco,
+        entradas: entradasBanco,
+        saidas: saidasBanco,
+        saldoFinal: saldoFinalBanco,
+      },
+      sistema: {
+        saldoInicial: saldoInicialSistema,
+        entradas: entradasSistema,
+        saidas: saidasSistema,
+        saldoFinal: saldoFinalSistema,
+      },
+      diferencaSaldoFinal,
+      saldoSistemaFechado: saldoSistema?.fechado ?? false,
+    };
+  }, [movimentos, lancamentosRealizadosDoMes, saldoSistema]);
+
+  // PR-C — contadores de badge derivados de enriquecidos (PR3).
+  const contadoresBadge = useMemo(() => {
+    let conciliado = 0;
+    let parcial = 0;
+    let bancoOrfao = 0; // OFX sem vínculo (qualquer status enriquecido órfão)
+    for (const m of enriquecidos) {
+      if (m.statusEnriquecido === 'conciliado') conciliado++;
+      else if (m.statusEnriquecido === 'parcial') parcial++;
+      else if (
+        m.statusEnriquecido === 'orfao_com_sistema' ||
+        m.statusEnriquecido === 'orfao_com_excel' ||
+        m.statusEnriquecido === 'orfao_com_ambos' ||
+        m.statusEnriquecido === 'orfao_sem_pista'
+      ) {
+        bancoOrfao++;
+      }
+    }
+    const apontamentoOrfao = lancamentosOrfaosDoMes?.length ?? 0;
+    return { conciliado, parcial, bancoOrfao, apontamentoOrfao };
+  }, [enriquecidos, lancamentosOrfaosDoMes]);
 
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
@@ -252,8 +373,124 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     );
   }
 
+  const fmtSaldo = (v: number | null) => (v == null ? '—' : formatMoeda(v));
+  const diffCls = (() => {
+    const d = resumoConciliacao.diferencaSaldoFinal;
+    if (d == null) return 'text-muted-foreground';
+    if (Math.abs(d) < 0.01) return 'text-emerald-700';
+    return 'text-red-700';
+  })();
+
   return (
     <div className="space-y-2">
+      {/* PR-C — Resumo Banco OFX vs Sistema (apontamento) */}
+      <div className="border rounded-md bg-card">
+        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
+          {/* COLUNA BANCO */}
+          <div className="p-3 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                Banco (OFX)
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                fonte: extrato_bancario_v2
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+              <span className="text-muted-foreground">Saldo inicial</span>
+              <span className="text-right tabular-nums font-mono">
+                {fmtSaldo(resumoConciliacao.banco.saldoInicial)}
+              </span>
+              <span className="text-muted-foreground">Entradas</span>
+              <span className="text-right tabular-nums font-mono text-emerald-700">
+                {fmtSaldo(resumoConciliacao.banco.entradas)}
+              </span>
+              <span className="text-muted-foreground">Saídas</span>
+              <span className="text-right tabular-nums font-mono text-red-700">
+                {fmtSaldo(resumoConciliacao.banco.saidas)}
+              </span>
+              <span className="text-foreground font-semibold">Saldo final</span>
+              <span className="text-right tabular-nums font-mono font-semibold">
+                {fmtSaldo(resumoConciliacao.banco.saldoFinal)}
+              </span>
+            </div>
+          </div>
+          {/* COLUNA SISTEMA */}
+          <div className="p-3 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                Sistema (apontamento)
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                fonte: financeiro_saldos_bancarios_v2
+              </span>
+              {resumoConciliacao.saldoSistemaFechado && (
+                <Badge
+                  variant="outline"
+                  className="h-4 px-1.5 text-[9px] bg-slate-100 text-slate-700"
+                >
+                  fechado
+                </Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+              <span className="text-muted-foreground">Saldo inicial</span>
+              <span className="text-right tabular-nums font-mono">
+                {fmtSaldo(resumoConciliacao.sistema.saldoInicial)}
+              </span>
+              <span className="text-muted-foreground">Entradas</span>
+              <span className="text-right tabular-nums font-mono text-emerald-700">
+                {fmtSaldo(resumoConciliacao.sistema.entradas)}
+              </span>
+              <span className="text-muted-foreground">Saídas</span>
+              <span className="text-right tabular-nums font-mono text-red-700">
+                {fmtSaldo(resumoConciliacao.sistema.saidas)}
+              </span>
+              <span className="text-foreground font-semibold">Saldo final</span>
+              <span className="text-right tabular-nums font-mono font-semibold">
+                {fmtSaldo(resumoConciliacao.sistema.saldoFinal)}
+              </span>
+            </div>
+          </div>
+        </div>
+        {/* Diferença operacional principal */}
+        <div className="border-t px-3 py-2 flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">
+            Diferença (Banco − Sistema)
+          </span>
+          <span className={`text-sm font-mono font-bold tabular-nums ${diffCls}`}>
+            {fmtSaldo(resumoConciliacao.diferencaSaldoFinal)}
+          </span>
+        </div>
+        {/* Badges de status agregado */}
+        <div className="border-t px-3 py-2 flex flex-wrap gap-1.5 items-center">
+          <Badge
+            variant="outline"
+            className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] h-5 px-1.5"
+          >
+            Conciliado {contadoresBadge.conciliado}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-700 border-amber-300 text-[10px] h-5 px-1.5"
+          >
+            Parcial {contadoresBadge.parcial}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="bg-red-50 text-red-700 border-red-300 text-[10px] h-5 px-1.5"
+          >
+            Banco órfão {contadoresBadge.bancoOrfao}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="bg-blue-50 text-blue-700 border-blue-300 text-[10px] h-5 px-1.5"
+          >
+            Apontamento órfão {contadoresBadge.apontamentoOrfao}
+          </Badge>
+        </div>
+      </div>
+
       <div className="text-[11px] text-muted-foreground">
         {loading ? 'Carregando...' : `${movimentos.length} movimento(s) no período.`}
       </div>
