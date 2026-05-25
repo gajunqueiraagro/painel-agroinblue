@@ -89,6 +89,16 @@ export async function gerarStagingDaSessao(
       && p.aprovacao_json !== null,
   );
 
+  console.log('[staging-debug] entrada gerarStagingDaSessao:', {
+    pares_total: pares.length,
+    elegiveis_count: elegiveis.length,
+    pares_amostra: pares.slice(0, 5).map((p) => ({
+      excel_key: p.excel_key,
+      decisao: p.decisao,
+      tem_aprovacao_json: p.aprovacao_json !== null,
+    })),
+  });
+
   if (elegiveis.length === 0) {
     return { gerados: 0, ja_existentes: 0, total_apos: 0, erros: [] };
   }
@@ -120,6 +130,12 @@ export async function gerarStagingDaSessao(
     const dataCompetencia = aprov.dataCompetencia ?? null;
 
     if (!dataPagamento) {
+      console.log('[staging-debug] descartado por dataPagamento null:', {
+        excel_key: p.excel_key,
+        aprov_keys: Object.keys(aprov),
+        aprov_dataPagamento: aprov.dataPagamento,
+        aprov_dataCompetencia: aprov.dataCompetencia,
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Sem data_pagamento — par sem OFX, linha Excel sem Data_Ref nem Data_Competencia, OU par aprovado antes do PR6.2-M0.6 (re-aprovar)',
@@ -127,6 +143,10 @@ export async function gerarStagingDaSessao(
       return;
     }
     if (!dataCompetencia) {
+      console.log('[staging-debug] descartado por dataCompetencia null:', {
+        excel_key: p.excel_key,
+        aprov_dataPagamento: aprov.dataPagamento,
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Sem data_competencia — operador precisa preencher no painel direito',
@@ -135,6 +155,10 @@ export async function gerarStagingDaSessao(
     }
 
     if (!linha) {
+      console.log('[staging-debug] descartado por linha não encontrada:', {
+        excel_key: p.excel_key,
+        keys_disponiveis: Array.from(linhasPorKey.keys()).slice(0, 5),
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Linha Excel não encontrada no snapshot da sessão',
@@ -146,6 +170,10 @@ export async function gerarStagingDaSessao(
     // (garantia anti-negativo do CHECK valor >= 0), depois /100 pra obter reais.
     const valorReais = Math.abs(Number(linha.valorCentavos)) / 100;
     if (!Number.isFinite(valorReais)) {
+      console.log('[staging-debug] descartado por valor inválido:', {
+        excel_key: p.excel_key,
+        valorCentavos: linha.valorCentavos,
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Valor inválido na linha Excel',
@@ -163,6 +191,10 @@ export async function gerarStagingDaSessao(
       : null;
 
     if (contaTexto && !contaResolvida) {
+      console.log('[staging-debug] descartado por conta não reconhecida:', {
+        excel_key: p.excel_key,
+        contaTexto,
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Conta Excel não reconhecida',
@@ -171,6 +203,10 @@ export async function gerarStagingDaSessao(
       return;
     }
     if (!ehOrfao && !contaTexto) {
+      console.log('[staging-debug] descartado por sem coluna Conta:', {
+        excel_key: p.excel_key,
+        linha_raw_keys: linha.raw ? Object.keys(linha.raw) : null,
+      });
       erros.push({
         excel_key: p.excel_key,
         motivo: 'Linha Excel sem coluna Conta',
@@ -179,6 +215,11 @@ export async function gerarStagingDaSessao(
       return;
     }
 
+    console.log('[staging-debug] linha vai virar staging:', {
+      excel_key: p.excel_key,
+      conta_bancaria_id: ehOrfao ? null : aprov.contaId,
+      contaResolvida_id: contaResolvida?.id,
+    });
     rowsValidas.push({
       sessao_id: sessao.id,
       excel_key: p.excel_key,
