@@ -12,6 +12,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1084,14 +1085,15 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
                 </div>
                 <div>
                   <Label className="text-xs">Conta *</Label>
-                  <Select value={contaId} onValueChange={setContaId} disabled={!!editing}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      {contas.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                  <ContaBancariaSelect
+                    value={contaId}
+                    onValueChange={setContaId}
+                    contas={contas}
+                    placeholder="Selecione"
+                    disabled={!!editing}
+                    className="h-9"
+                  />
                 </div>
               </div>
 

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -145,7 +146,8 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
     queryFn: async () => {
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
-        .select('id, nome_conta, nome_exibicao')
+        // PR-H2 — tipo_conta para agrupamento no ContaBancariaSelect.
+        .select('id, nome_conta, nome_exibicao, tipo_conta')
         .eq('cliente_id', financiamento.cliente_id)
         .eq('ativa', true)
         .order('ordem_exibicao');
@@ -523,14 +525,13 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
               </div>
               <div>
                 <Label className="text-xs">Conta bancária</Label>
-                <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {contas.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                <ContaBancariaSelect
+                  value={contaBancariaId}
+                  onValueChange={setContaBancariaId}
+                  contas={contas}
+                  placeholder="Selecione"
+                />
               </div>
               <div>
                 <Label className="text-xs">Observação</Label>
@@ -586,14 +587,13 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
               {status === 'pago' && (
                 <div>
                   <Label className="text-xs">Conta bancária *</Label>
-                  <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      {contas.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                  <ContaBancariaSelect
+                    value={contaBancariaId}
+                    onValueChange={setContaBancariaId}
+                    contas={contas}
+                    placeholder="Selecione"
+                  />
                   {erros.conta_bancaria_id && <p className="text-[10px] text-destructive mt-0.5">{erros.conta_bancaria_id}</p>}
                 </div>
               )}

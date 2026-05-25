@@ -5,6 +5,7 @@ import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -1182,51 +1183,63 @@ export function LancamentoV2Dialog({
                   )}
                 </div>
 
-                {/* Conta Bancária */}
+                {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado
+                    (agrupado por tipo_conta + dark/glass). Sentinela '__none__'
+                    preservada na semântica interna do dialog. */}
                 {isTransferencia ? (
                   <>
                     <div>
                       <Label className="text-[10px]">Conta Origem *</Label>
-                      <Select value={contaOrigemId} onValueChange={setContaOrigemId} disabled={lockedFields?.includes('conta_bancaria_id')}>
-                        <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Nenhuma</SelectItem>
-                          {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <ContaBancariaSelect
+                        value={contaOrigemId}
+                        onValueChange={setContaOrigemId}
+                        contas={contas}
+                        placeholder="Selecione"
+                        disabled={lockedFields?.includes('conta_bancaria_id')}
+                        prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                        excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
+                        className={cn("h-8", fieldBg)}
+                      />
                     </div>
                     <div>
                       <Label className="text-[10px]">Conta Destino *</Label>
-                      <Select value={contaDestinoId} onValueChange={setContaDestinoId} disabled={lockedFields?.includes('conta_destino_id')}>
-                        <SelectTrigger tabIndex={9} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Nenhuma</SelectItem>
-                          {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <ContaBancariaSelect
+                        value={contaDestinoId}
+                        onValueChange={setContaDestinoId}
+                        contas={contas}
+                        placeholder="Selecione"
+                        disabled={lockedFields?.includes('conta_destino_id')}
+                        prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                        excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
+                        className={cn("h-8", fieldBg)}
+                      />
                     </div>
                   </>
                 ) : isEntrada ? (
                   <div>
                     <Label className="text-[10px]">Conta Destino *</Label>
-                    <Select value={contaDestinoId} onValueChange={setContaDestinoId} disabled={lockedFields?.includes('conta_destino_id')}>
-                      <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Nenhuma</SelectItem>
-                        {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <ContaBancariaSelect
+                      value={contaDestinoId}
+                      onValueChange={setContaDestinoId}
+                      contas={contas}
+                      placeholder="Selecione"
+                      disabled={lockedFields?.includes('conta_destino_id')}
+                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      className={cn("h-8", fieldBg)}
+                    />
                   </div>
                 ) : (
                   <div>
                     <Label className="text-[10px]">Conta Origem *</Label>
-                    <Select value={contaOrigemId} onValueChange={setContaOrigemId} disabled={lockedFields?.includes('conta_bancaria_id')}>
-                      <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Nenhuma</SelectItem>
-                        {contas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <ContaBancariaSelect
+                      value={contaOrigemId}
+                      onValueChange={setContaOrigemId}
+                      contas={contas}
+                      placeholder="Selecione"
+                      disabled={lockedFields?.includes('conta_bancaria_id')}
+                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      className={cn("h-8", fieldBg)}
+                    />
                   </div>
                 )}
               </div>

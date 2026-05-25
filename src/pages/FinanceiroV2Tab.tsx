@@ -10,6 +10,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -991,23 +992,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <div className="grid grid-cols-3 gap-1 items-end">
                 <div>
                   <label className={lblCls}>Conta Origem</label>
-                  <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                      {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                  <ContaBancariaSelect
+                    value={contaOrigem}
+                    onValueChange={setContaOrigem}
+                    contas={sortedContas}
+                    placeholder="Todas"
+                    disabled={isEntrada}
+                    showBankDetails="agencia"
+                    prependItems={[{ value: '__all__', label: 'Todas' }]}
+                    className={`${selCls} bg-white border-[#C9D4E2] ${isEntrada ? 'opacity-40' : ''}`}
+                  />
                 </div>
                 <div>
                   <label className={lblCls}>Conta Destino</label>
-                  <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                      {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <ContaBancariaSelect
+                    value={contaDestino}
+                    onValueChange={setContaDestino}
+                    contas={sortedContas}
+                    placeholder="Todas"
+                    disabled={isSaida}
+                    showBankDetails="agencia"
+                    prependItems={[{ value: '__all__', label: 'Todas' }]}
+                    className={`${selCls} bg-white border-[#C9D4E2] ${isSaida ? 'opacity-40' : ''}`}
+                  />
                 </div>
                 <div>
                   <label className={lblCls}>Macro</label>
@@ -1220,23 +1228,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <div className="grid grid-cols-[120px_120px_110px_110px_110px_110px] gap-1 items-end flex-1 min-w-0">
                   <div>
                     <label className={lblCls}>Conta Origem</label>
-                    <Select value={contaOrigem} onValueChange={setContaOrigem} disabled={isEntrada}>
-                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+                    <ContaBancariaSelect
+                      value={contaOrigem}
+                      onValueChange={setContaOrigem}
+                      contas={sortedContas}
+                      placeholder="Todas"
+                      disabled={isEntrada}
+                      showBankDetails="agencia"
+                      prependItems={[{ value: '__all__', label: 'Todas' }]}
+                      className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isEntrada ? 'opacity-40' : ''}`}
+                    />
                   </div>
                   <div>
                     <label className={lblCls}>Conta Destino</label>
-                    <Select value={contaDestino} onValueChange={setContaDestino} disabled={isSaida}>
-                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}><SelectValue placeholder="Todas" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__" className={itemCls}>Todas</SelectItem>
-                        {sortedContas.map(c => <SelectItem key={c.id} value={c.id} className={itemCls}>{contaLabel(c)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <ContaBancariaSelect
+                      value={contaDestino}
+                      onValueChange={setContaDestino}
+                      contas={sortedContas}
+                      placeholder="Todas"
+                      disabled={isSaida}
+                      showBankDetails="agencia"
+                      prependItems={[{ value: '__all__', label: 'Todas' }]}
+                      className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F] ${isSaida ? 'opacity-40' : ''}`}
+                    />
                   </div>
                   <div>
                     <label className={lblCls}>Macro</label>

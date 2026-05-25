@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -398,13 +399,15 @@ export function ContratoDialog({
               </div>
               <div>
                 <Label className="text-xs">Conta Bancária</Label>
-                <Select value={contaBancariaId || '__none__'} onValueChange={v => setContaBancariaId(v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={10}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Nenhuma</SelectItem>
-                    {sortedContas.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {/* PR-H2 — ContaBancariaSelect compartilhado (agrupado por tipo_conta). */}
+                <ContaBancariaSelect
+                  value={contaBancariaId}
+                  onValueChange={(v) => setContaBancariaId(v === '__none__' ? '' : v)}
+                  contas={contas}
+                  placeholder="Selecione"
+                  prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                  className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
+                />
                 {/* DEBUG */}
                 <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 font-mono break-all">{debugContas}</p>
               </div>

@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter,
 } from '@/components/ui/table';
@@ -114,16 +115,14 @@ export default function FinanciamentoCadastro({ onVoltar, onSalvo }: Financiamen
 
           <div>
             <Label className="text-xs">Conta bancária</Label>
-            <Select value={form.conta_bancaria_id} onValueChange={v => set('conta_bancaria_id', v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {contas.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* PR-H2 — ContaBancariaSelect compartilhado (display nome + banco). */}
+            <ContaBancariaSelect
+              value={form.conta_bancaria_id}
+              onValueChange={(v) => set('conta_bancaria_id', v)}
+              contas={contas}
+              placeholder="Selecione"
+              showBankDetails="banco"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

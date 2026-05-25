@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import {
@@ -2352,26 +2353,20 @@ function FormularioCorrecao({
         ✎ Corrigir
       </div>
 
-      {/* Conta */}
+      {/* Conta — PR-H2: ContaBancariaSelect compartilhado. */}
       <div className="space-y-0.5">
         <label className="text-[10px] text-muted-foreground">Conta</label>
-        <Select
+        <ContaBancariaSelect
           value={rascunho.contaId ?? ''}
           onValueChange={(v) => {
             const c = catalogo.contas.find((x) => x.id === v);
             set('contaId', v || null);
             set('contaRotulo', c ? (c.nome_exibicao ?? c.nome_conta) : null);
           }}
-        >
-          <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-          <SelectContent>
-            {catalogo.contas.map((c) => (
-              <SelectItem key={c.id} value={c.id} className="text-[11px]">
-                {c.nome_exibicao ?? c.nome_conta}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          contas={catalogo.contas}
+          placeholder="—"
+          className="h-7 text-[11px]"
+        />
       </div>
 
       {/* Fazenda */}

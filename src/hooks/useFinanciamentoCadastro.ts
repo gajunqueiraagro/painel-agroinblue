@@ -111,7 +111,8 @@ export function useFinanciamentoCadastro() {
     queryFn: async () => {
       const { data } = await supabase
         .from('financeiro_contas_bancarias')
-        .select('id, nome_conta, nome_exibicao, banco')
+        // PR-H2 — tipo_conta para agrupamento no ContaBancariaSelect.
+        .select('id, nome_conta, nome_exibicao, banco, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true)
         // PR-H1 — vocabulário oficial: 'cc' virou 'corrente'.

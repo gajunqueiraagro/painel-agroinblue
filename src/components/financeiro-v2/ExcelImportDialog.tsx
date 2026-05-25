@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useExcelLinhasAux, type ExcelLinhaCru } from '@/hooks/useExcelLinhasAux';
@@ -394,14 +395,14 @@ export function ExcelImportDialog({
           <div className="space-y-4 flex-1 overflow-auto">
             <div className="space-y-1">
               <Label className="text-xs">Conta bancária *</Label>
-              <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
-                <SelectContent>
-                  {contasBancarias.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome_exibicao ?? c.nome_conta}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+              <ContaBancariaSelect
+                value={contaBancariaId}
+                onValueChange={setContaBancariaId}
+                contas={contasBancarias}
+                placeholder="Selecione a conta"
+                className="h-8 text-xs"
+              />
               <p className="text-[10px] text-muted-foreground">Todo o lote será atribuído a esta conta. Não há texto livre de conta no Excel.</p>
             </div>
 

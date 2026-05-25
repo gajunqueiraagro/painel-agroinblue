@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
@@ -197,6 +198,7 @@ interface Conta {
   id: string;
   nome_conta: string;
   nome_exibicao: string | null;
+  tipo_conta: string | null;
 }
 
 interface Props {
@@ -275,7 +277,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     }
     supabase
       .from('financeiro_contas_bancarias')
-      .select('id, nome_conta, nome_exibicao')
+      // PR-H2 — tipo_conta para agrupamento no ContaBancariaSelect.
+      .select('id, nome_conta, nome_exibicao, tipo_conta')
       .eq('cliente_id', clienteId)
       .eq('ativa', true)
       .order('ordem_exibicao')
@@ -719,16 +722,14 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </div>
           <div className="min-w-[160px] max-w-[220px] flex-1">
             <Label className="text-xs">Conta bancária *</Label>
-            <Select value={contaId} onValueChange={setContaId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {contas.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nome_exibicao || c.nome_conta}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* PR-H2 — ContaBancariaSelect compartilhado. */}
+            <ContaBancariaSelect
+              value={contaId}
+              onValueChange={setContaId}
+              contas={contas}
+              placeholder="Selecione"
+              className="h-9"
+            />
           </div>
           <Button
             onClick={handleGerar}

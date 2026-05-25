@@ -10,6 +10,7 @@ export interface ContaBancaria {
   numero_conta: string | null;
   conta_digito: string | null;
   fazenda_id: string | null;
+  tipo_conta: string | null;
 }
 
 export interface Fazenda {
@@ -111,7 +112,8 @@ export function useCatalogoCliente(clienteId: string | null) {
       const [contasRes, fazendasRes, fornecedoresRes, histRes, planoRes] = await Promise.all([
         sb
           .from('financeiro_contas_bancarias')
-          .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, conta_digito, fazenda_id')
+          // PR-H2 — tipo_conta para agrupamento no ContaBancariaSelect.
+          .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, conta_digito, fazenda_id, tipo_conta')
           .eq('cliente_id', clienteId)
           .eq('ativa', true)
           .order('ordem_exibicao', { ascending: true })
