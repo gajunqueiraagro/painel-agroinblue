@@ -1001,7 +1001,7 @@ export function MesaPareamentoModal({
       const sb = supabase as any;
       const [sessRes, paresRes] = await Promise.all([
         sb.from('mesa_sessao').select('*').eq('id', sessaoId).maybeSingle(),
-        sb.from('mesa_par').select('*').eq('sessao_id', sessaoId),
+        sb.from('mesa_par').select('*').eq('sessao_id', sessaoId).range(0, 9999),
       ]);
       if (sessRes.error) throw sessRes.error;
       if (paresRes.error) throw paresRes.error;
