@@ -12,15 +12,19 @@
  *
  * NÃO altera lançamentos. NÃO cria lançamentos.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { useExtratoBancario, type ExtratoMovimento } from '@/hooks/useExtratoBancario';
 import { ConciliarExtratoDialog, type ExtratoMovimentoRef } from './ConciliarExtratoDialog';
+import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
+import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useConciliacaoBancariaItens } from '@/hooks/useConciliacaoBancariaItens';
 
 interface Props {
   contaBancariaId: string | null;
@@ -54,8 +58,31 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     enabled: !!contaBancariaId,
   });
 
+  // Hooks para o caminho "Criar lançamento" a partir de OFX órfão.
+  const { fazendas } = useFazenda();
+  const {
+    contasBancarias,
+    fornecedores,
+    classificacoes,
+    loadContas,
+    loadFornecedores,
+    loadClassificacoes,
+    criarLancamentoComId,
+    criarFornecedor,
+  } = useFinanceiroV2();
+  const { insert: insertVinculo } = useConciliacaoBancariaItens();
+
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
+  const [movCriando, setMovCriando] = useState<ExtratoMovimento | null>(null);
+
+  // Carrega as listas necessárias para o LancamentoV2Dialog uma vez no mount.
+  // Os 3 loaders são useCallback estáveis no useFinanceiroV2.
+  useEffect(() => {
+    loadContas();
+    loadFornecedores();
+    loadClassificacoes();
+  }, [loadContas, loadFornecedores, loadClassificacoes]);
 
   const handleIgnorar = async (mov: ExtratoMovimento) => {
     setIgnorandoId(mov.id);
@@ -70,6 +97,39 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     }
     toast.success('Movimento marcado como ignorado');
     refetch();
+  };
+
+  const handleCriarFromExtrato = async (
+    form: LancamentoV2Form,
+    _id?: string,
+  ): Promise<boolean> => {
+    if (!movCriando) return false;
+    const id = await criarLancamentoComId(form, { origem: 'extrato' });
+    if (!id) return false; // hook já mostrou toast de erro — modal fica aberto pra retry
+    try {
+      await insertVinculo({
+        extrato_id: movCriando.id,
+        lancamento_id: id,
+        valor_aplicado: Math.abs(movCriando.valor),
+        cliente_id: movCriando.cliente_id,
+      });
+      toast.success('Lançamento criado e conciliado');
+      setMovCriando(null);
+      refetch();
+      return true;
+    } catch (e: any) {
+      // Lançamento já está em financeiro_lancamentos_v2 — fechar modal pra evitar
+      // duplicação acidental se operador re-clicar Salvar. Operador re-tenta o
+      // vínculo via botão "Conciliar" (que agora filtra valor/sinal corretamente).
+      toast.error(
+        'Lançamento criado, mas erro ao vincular ao extrato: '
+        + (e?.message ?? e)
+        + '. Use o botão Conciliar para vincular manualmente.',
+      );
+      setMovCriando(null);
+      refetch();
+      return true;
+    }
   };
 
   if (!contaBancariaId) {
@@ -141,6 +201,15 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                       >
                         Conciliar
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-2"
+                        disabled={m.status === 'ignorado' || m.status === 'conciliado'}
+                        onClick={() => setMovCriando(m)}
+                      >
+                        Criar lançamento
+                      </Button>
                       {m.status !== 'ignorado' && (
                         <Button
                           size="sm"
@@ -160,6 +229,28 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
           </TableBody>
         </Table>
       </div>
+
+      <LancamentoV2Dialog
+        open={!!movCriando}
+        onClose={() => setMovCriando(null)}
+        onSave={handleCriarFromExtrato}
+        fazendas={fazendas}
+        contas={contasBancarias}
+        classificacoes={classificacoes}
+        fornecedores={fornecedores}
+        onCriarFornecedor={criarFornecedor}
+        prefill={movCriando ? {
+          data_pagamento: movCriando.data_movimento,
+          data_competencia: movCriando.data_movimento,
+          valor: Math.abs(movCriando.valor),
+          tipo_operacao: movCriando.valor < 0 ? '2-Saídas' : '1-Entradas',
+          status_transacao: 'realizado',
+          conta_bancaria_id: movCriando.conta_bancaria_id,
+          descricao: movCriando.descricao ?? undefined,
+          numero_documento: movCriando.documento ?? undefined,
+        } : undefined}
+        lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
+      />
 
       <ConciliarExtratoDialog
         open={!!conciliando}

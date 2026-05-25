@@ -374,7 +374,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return cls.escopo_negocio || null;
   }, [classificacoes]);
 
-  const buildInsertRow = (form: LancamentoV2Form, userId: string) => {
+  const buildInsertRow = (form: LancamentoV2Form, userId: string, origem: string = 'manual') => {
     const anoMes = form.data_pagamento
       ? form.data_pagamento.substring(0, 7)
       : form.data_competencia.substring(0, 7);
@@ -406,7 +406,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       forma_pagamento: form.forma_pagamento || null,
       dados_pagamento: form.dados_pagamento || null,
       ano_mes: anoMes,
-      origem_lancamento: 'manual',
+      origem_lancamento: origem,
       created_by: userId,
       sem_movimentacao_caixa: false,
     };
@@ -425,6 +425,34 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
     toast.success('Lançamento criado');
     return true;
+  }, [clienteId, user]);
+
+  /**
+   * Versão-irmã de criarLancamento que retorna o ID do lançamento criado
+   * (em vez de boolean). Não compartilha throws com criarLancamento.
+   * Use quando precisar do ID para criar um vínculo subsequente (ex.: a
+   * partir de movimento OFX, conciliacao_bancaria_itens).
+   */
+  const criarLancamentoComId = useCallback(async (
+    form: LancamentoV2Form,
+    opts?: { origem?: string },
+  ): Promise<string | null> => {
+    if (!clienteId || !user) return null;
+
+    const row = buildInsertRow(form, user.id, opts?.origem ?? 'manual');
+    const { data, error } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .insert(row as any)
+      .select('id')
+      .single();
+
+    if (error) {
+      toast.error('Erro ao criar lançamento');
+      console.error(error);
+      return null;
+    }
+    toast.success('Lançamento criado');
+    return data?.id ?? null;
   }, [clienteId, user]);
 
   const editarLancamento = useCallback(async (id: string, form: LancamentoV2Form) => {
@@ -787,6 +815,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     loadLancamentos,
     loadAllForExport,
     criarLancamento,
+    criarLancamentoComId,
     criarLancamentosEmLote,
     editarLancamento,
     excluirLancamento,

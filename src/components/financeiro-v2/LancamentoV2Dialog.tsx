@@ -32,7 +32,25 @@ interface Props {
   fornecedores: FornecedorV2[];
   defaultFazendaId?: string;
   onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
-  
+  prefill?: {
+    fazenda_id?: string;
+    conta_bancaria_id?: string;
+    conta_destino_id?: string;
+    data_pagamento?: string;
+    data_competencia?: string;
+    valor?: number;
+    tipo_operacao?: string;
+    status_transacao?: string;
+    descricao?: string;
+    numero_documento?: string;
+  };
+  lockedFields?: Array<
+    | 'valor'
+    | 'data_pagamento'
+    | 'conta_bancaria_id'
+    | 'conta_destino_id'
+    | 'tipo_operacao'
+  >;
 }
 
 const TIPOS_OPERACAO = [
@@ -152,7 +170,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, defaultFazendaId, onCriarFornecedor,
+  fornecedores, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
@@ -294,6 +312,42 @@ export function LancamentoV2Dialog({
       setFrequencia('pontual');
       setRecorrenciaRows([]);
       setRecorrenciaEditada(false);
+    } else if (prefill) {
+      // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
+      // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
+      // modo criação. Conta segue o mesmo padrão do branch `lancamento`:
+      // Entradas → destino; demais → origem.
+      const today = new Date().toISOString().slice(0, 10);
+      setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
+      setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
+      setDataPagamento(prefill.data_pagamento ?? today);
+      setStatusTransacao(prefill.status_transacao ?? 'realizado');
+      setTipoOperacao(prefill.tipo_operacao ?? '2-Saídas');
+      setValorDisplay(prefill.valor !== undefined ? toBRL(Math.abs(prefill.valor)) : '0,00');
+      setDescricao(prefill.descricao ?? '');
+      setNotaFiscal(prefill.numero_documento ?? '');
+      if (prefill.tipo_operacao === '1-Entradas') {
+        setContaOrigemId('');
+        setContaDestinoId(prefill.conta_bancaria_id ?? prefill.conta_destino_id ?? '');
+      } else {
+        setContaOrigemId(prefill.conta_bancaria_id ?? '');
+        setContaDestinoId(prefill.conta_destino_id ?? '');
+      }
+      setFavorecidoId('');
+      setSubcentro('');
+      setMacroCusto('');
+      setCentroCusto('');
+      setEscopoNegocio('');
+      setTipoDocumento('');
+      setObservacao('');
+      setFormaPagamentoParc('avista');
+      setNumParcelas(2);
+      setParcelaRows([]);
+      setFormaPgto('');
+      setDadosPagamento('');
+      setFrequencia('pontual');
+      setRecorrenciaRows([]);
+      setRecorrenciaEditada(false);
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
@@ -325,7 +379,7 @@ export function LancamentoV2Dialog({
     }
     setSubcentroSearch('');
     setFornecedorSearch('');
-  }, [open, lancamento, defaultFazendaId]);
+  }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
 
   // Fetch distinct product names for suggestions
   useEffect(() => {
@@ -901,7 +955,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-4 gap-2">
                 <div>
                   <Label className="text-[10px]">Tipo Operação *</Label>
-                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }}>
+                  <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao')}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -914,7 +968,7 @@ export function LancamentoV2Dialog({
                 </div>
                 <div>
                   <Label className="text-[10px]">Data Pagamento *</Label>
-                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-8", fieldBg)} />
+                  <Input tabIndex={3} type="date" value={dataPagamento} onChange={e => handleDataPagamentoChange(e.target.value)} className={cn("h-8", fieldBg)} disabled={lockedFields?.includes('data_pagamento')} />
                 </div>
                 <div>
                   <Label className="text-[10px]">Status *</Label>
@@ -1046,7 +1100,7 @@ export function LancamentoV2Dialog({
                   <>
                     <div>
                       <Label className="text-[10px]">Conta Origem *</Label>
-                      <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
+                      <Select value={contaOrigemId} onValueChange={setContaOrigemId} disabled={lockedFields?.includes('conta_bancaria_id')}>
                         <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
@@ -1056,7 +1110,7 @@ export function LancamentoV2Dialog({
                     </div>
                     <div>
                       <Label className="text-[10px]">Conta Destino *</Label>
-                      <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
+                      <Select value={contaDestinoId} onValueChange={setContaDestinoId} disabled={lockedFields?.includes('conta_destino_id')}>
                         <SelectTrigger tabIndex={9} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__">Nenhuma</SelectItem>
@@ -1068,7 +1122,7 @@ export function LancamentoV2Dialog({
                 ) : isEntrada ? (
                   <div>
                     <Label className="text-[10px]">Conta Destino *</Label>
-                    <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
+                    <Select value={contaDestinoId} onValueChange={setContaDestinoId} disabled={lockedFields?.includes('conta_destino_id')}>
                       <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
@@ -1079,7 +1133,7 @@ export function LancamentoV2Dialog({
                 ) : (
                   <div>
                     <Label className="text-[10px]">Conta Origem *</Label>
-                    <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
+                    <Select value={contaOrigemId} onValueChange={setContaOrigemId} disabled={lockedFields?.includes('conta_bancaria_id')}>
                       <SelectTrigger tabIndex={8} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Nenhuma</SelectItem>
@@ -1097,7 +1151,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
                   <Label className="text-[10px]">Valor (R$) *</Label>
-                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" />
+                  <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor')} />
                 </div>
                 <div>
                   <Label className="text-[10px]">Subcentro *</Label>
