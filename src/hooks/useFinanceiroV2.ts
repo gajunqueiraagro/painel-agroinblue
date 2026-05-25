@@ -70,12 +70,19 @@ export interface LancamentoV2Form {
   dados_pagamento?: string | null;
 }
 
+/**
+ * PR-H1 — classificação oficial da conta bancária. Schema enforce via
+ * CHECK constraint em financeiro_contas_bancarias.tipo_conta. NULL é
+ * tolerado apenas para registros legados.
+ */
+export type TipoConta = 'corrente' | 'investimento' | 'cartao' | 'caixa' | 'outro';
+
 export interface ContaBancariaV2 {
   id: string;
   nome_conta: string;
   banco: string | null;
   fazenda_id: string;
-  tipo_conta: string | null;
+  tipo_conta: TipoConta | null;
   codigo_conta: string | null;
   nome_exibicao: string | null;
   agencia: string | null;

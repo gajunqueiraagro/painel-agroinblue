@@ -40,13 +40,34 @@ interface ContaBancaria {
   saldo_inicial_oficial: number | null;
 }
 
-const TIPO_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
-const TIPO_LABEL: Record<string, string> = { cc: 'Conta Corrente', inv: 'Investimentos', cartao: 'Cartão de Crédito' };
-const BADGE_LABEL: Record<string, string> = { cc: 'CC', inv: 'INV', cartao: 'CARTÃO' };
+// PR-H1 — vocabulário oficial: corrente | investimento | cartao | caixa | outro.
+const TIPO_ORDER: Record<string, number> = {
+  corrente: 0,
+  investimento: 1,
+  cartao: 2,
+  caixa: 3,
+  outro: 4,
+};
+const TIPO_LABEL: Record<string, string> = {
+  corrente: 'Conta Corrente',
+  investimento: 'Investimentos',
+  cartao: 'Cartão de Crédito',
+  caixa: 'Caixa',
+  outro: 'Outro',
+};
+const BADGE_LABEL: Record<string, string> = {
+  corrente: 'CC',
+  investimento: 'INV',
+  cartao: 'CARTÃO',
+  caixa: 'CAIXA',
+  outro: 'OUTRO',
+};
 const BADGE_CLASS: Record<string, string> = {
-  cc: 'bg-blue-100 text-blue-700 border-blue-200',
-  inv: 'bg-purple-100 text-purple-700 border-purple-200',
+  corrente: 'bg-blue-100 text-blue-700 border-blue-200',
+  investimento: 'bg-purple-100 text-purple-700 border-purple-200',
   cartao: 'bg-orange-100 text-orange-700 border-orange-200',
+  caixa: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  outro: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 function parseNum(code: string | null) {
@@ -87,7 +108,7 @@ export function FinV2ContasTab() {
 
   // Form fields — principal
   const [nomeExibicao, setNomeExibicao] = useState('');
-  const [tipoConta, setTipoConta] = useState('cc');
+  const [tipoConta, setTipoConta] = useState('corrente');
   const [banco, setBanco] = useState('');
   const [bancoOutro, setBancoOutro] = useState('');
   const [fazendaId, setFazendaId] = useState('');
@@ -156,19 +177,22 @@ export function FinV2ContasTab() {
   }, [contas, mostrarInativas]);
 
   const grouped = useMemo(() => {
+    // PR-H1 — vocabulário oficial corrente/investimento/cartao/caixa/outro.
     const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
-      { tipo: 'cc', label: TIPO_LABEL.cc, items: [] },
-      { tipo: 'inv', label: TIPO_LABEL.inv, items: [] },
-      { tipo: 'cartao', label: TIPO_LABEL.cartao, items: [] },
+      { tipo: 'corrente',     label: TIPO_LABEL.corrente,     items: [] },
+      { tipo: 'investimento', label: TIPO_LABEL.investimento, items: [] },
+      { tipo: 'cartao',       label: TIPO_LABEL.cartao,       items: [] },
+      { tipo: 'caixa',        label: TIPO_LABEL.caixa,        items: [] },
+      { tipo: 'outro',        label: TIPO_LABEL.outro,        items: [] },
     ];
     const sorted = [...contasFiltradas].sort((a, b) => {
-      const ga = TIPO_ORDER[a.tipo_conta || 'cc'] ?? 99;
-      const gb = TIPO_ORDER[b.tipo_conta || 'cc'] ?? 99;
+      const ga = TIPO_ORDER[a.tipo_conta || 'corrente'] ?? 99;
+      const gb = TIPO_ORDER[b.tipo_conta || 'corrente'] ?? 99;
       if (ga !== gb) return ga - gb;
       return parseNum(a.codigo_conta) - parseNum(b.codigo_conta);
     });
     sorted.forEach(c => {
-      const t = c.tipo_conta || 'cc';
+      const t = c.tipo_conta || 'corrente';
       const g = groups.find(g => g.tipo === t);
       if (g) g.items.push(c);
       else groups[0].items.push(c);
@@ -181,7 +205,7 @@ export function FinV2ContasTab() {
   const openNew = () => {
     setEditing(null);
     setNomeExibicao('');
-    setTipoConta('cc');
+    setTipoConta('corrente');
     setBanco('');
     setBancoOutro('');
     setFazendaId(fazendas[0]?.id || '');
@@ -199,7 +223,7 @@ export function FinV2ContasTab() {
   const openEdit = (c: ContaBancaria) => {
     setEditing(c);
     setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
-    setTipoConta(c.tipo_conta || 'cc');
+    setTipoConta(c.tipo_conta || 'corrente');
     const knownBanco = bancos.find(b => b.nome_curto === c.banco);
     if (knownBanco) {
       setBanco(c.banco || '');
@@ -442,8 +466,8 @@ export function FinV2ContasTab() {
                     return (
                       <TableRow key={c.id} className={`h-auto ${!c.ativa ? 'opacity-50' : ''}`}>
                         <TableCell className={cellClass}>
-                          <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 leading-tight border ${BADGE_CLASS[c.tipo_conta || 'cc']}`}>
-                            {BADGE_LABEL[c.tipo_conta || 'cc']}
+                          <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 leading-tight border ${BADGE_CLASS[c.tipo_conta || 'corrente']}`}>
+                            {BADGE_LABEL[c.tipo_conta || 'corrente']}
                           </Badge>
                         </TableCell>
                         <TableCell className={cellClass}>
@@ -518,9 +542,12 @@ export function FinV2ContasTab() {
                 <Select value={tipoConta} onValueChange={setTipoConta}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cc">Conta Corrente</SelectItem>
-                    <SelectItem value="inv">Investimento</SelectItem>
+                    {/* PR-H1 — vocabulário oficial corrente/investimento/cartao/caixa/outro. */}
+                    <SelectItem value="corrente">Conta Corrente</SelectItem>
+                    <SelectItem value="investimento">Investimento</SelectItem>
                     <SelectItem value="cartao">Cartão de Crédito</SelectItem>
+                    <SelectItem value="caixa">Caixa</SelectItem>
+                    <SelectItem value="outro">Outro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

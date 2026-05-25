@@ -33,7 +33,14 @@ function parseBRL(s: string): number {
   return isNaN(n) ? 0 : n;
 }
 
-const TIPO_CONTA_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
+// PR-H1 — vocabulário oficial: corrente | investimento | cartao | caixa | outro.
+const TIPO_CONTA_ORDER: Record<string, number> = {
+  corrente: 0,
+  investimento: 1,
+  cartao: 2,
+  caixa: 3,
+  outro: 4,
+};
 
 export function ContratoDialog({
   open, onClose, onSave, contrato, fazendas, contas, classificacoes, fornecedores, defaultFazendaId,

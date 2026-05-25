@@ -116,7 +116,14 @@ const STATUS_META: Record<string, {label:string; Icon: typeof CheckCircle2; sub:
   pendente:       {label:'Pendente',        Icon:AlertTriangle, sub:'Informe o saldo do extrato'},
 };
 
-const CONTA_GROUP_ORDER: Record<string, number> = { cc: 0, inv: 1, cartao: 2 };
+// PR-H1 — vocabulário oficial: corrente | investimento | cartao | caixa | outro.
+const CONTA_GROUP_ORDER: Record<string, number> = {
+  corrente: 0,
+  investimento: 1,
+  cartao: 2,
+  caixa: 3,
+  outro: 4,
+};
 
 /* ── Helpers ── */
 function fmtDate(d: string | null) {
