@@ -1684,15 +1684,39 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     // ─── Gate de master lock: bloqueia se o mês da data está fechado ───
     // Meta (cenario='meta') é permitido em qualquer mês — trigger trg_guard_lancamento_mes_fechado_p1
     // no banco também tem bypass equivalente.
+    //
+    // PR-I — mês fechado NÃO deve bloquear ajustes puramente FINANCEIROS
+    // (conta, data_pagamento, status_transacao, fornecedor, valor financeiro,
+    // descontos, forma de pagamento, documento). Só bloqueia se houve mudança
+    // em campo ZOOTÉCNICO que afeta saldo físico/peso/rebanho. O critério
+    // espelha o gate P1 em handleRequestRegister para manter coerência.
     if (data && !isCenarioMeta && !masterLock.isMaster) {
       const anoMesData = data.slice(0, 7); // 'YYYY-MM'
       if (!masterLock.isUnlocked(anoMesData)) {
         const locked = await masterLock.checkLockNow(anoMesData);
         if (locked) {
-          toast.error(
-            `🔒 Mês ${anoMesData} fechado — alterações zootécnicas exigem autorização master.`
-          );
-          return;
+          const isEditing = !!editingAbateId;
+          const orig = editOriginalRef.current;
+          // CREATE em mês fechado: bloqueio total (lançamento novo é
+          // zootécnico por definição). EDIT: comparar campos zoo.
+          const zooChanged = !isEditing || !orig
+            ? true
+            : (
+              String(orig.data) !== String(data) ||
+              String(orig.tipo) !== String(tipo) ||
+              Number(orig.quantidade) !== parseNumericValue(quantidade) ||
+              String(orig.categoria) !== String(categoria) ||
+              String(orig.fazendaOrigem || '') !== String(fazendaOrigem || '') ||
+              String(orig.fazendaDestino || '') !== String(fazendaDestino || '')
+            );
+          if (zooChanged) {
+            toast.error(
+              `🔒 Mês ${anoMesData} fechado — alterações zootécnicas exigem autorização master.`
+            );
+            return;
+          }
+          // Apenas financeiro mudou: deixa o save seguir para o resto do
+          // handleSubmit (snapshot zoo e P1 permanecem intactos).
         }
       }
     }
