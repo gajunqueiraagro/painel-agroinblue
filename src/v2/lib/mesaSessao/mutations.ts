@@ -125,27 +125,8 @@ export async function salvarPares(
       if (!lotesValidos.has(loteIdDoPar)) return; // par órfão — pula
     }
 
-    let decisaoFinal: ParEstado['decisao'] = p.decisao;
-    let aprovacaoFinal: AprovacaoLocal | null = aprovacoes.get(key) ?? null;
-
-    // PR6.1C-4 — guard final: aprovação inválida reverte par pra 'pendente'
-    // (semanticamente equivalente a 'desfeito', já que o schema do banco é
-    // text NOT NULL DEFAULT 'pendente'). correcao_json INTACTO (A2).
-    if (linhasPorKey && decisaoFinal === 'aprovado') {
-      const linha = linhasPorKey.get(key);
-      const v = validarAprovacao(aprovacaoFinal, linha);
-      if (!v.valido) {
-        console.error('[salvarPares] PR6.1C-4 reverteu par aprovado→pendente:', {
-          excel_key: key,
-          motivo: v.mensagem,
-          camposFaltantes: v.camposFaltantes,
-          aprovacao_recebida: aprovacaoFinal,
-          linha_disponivel: !!linha,
-        });
-        decisaoFinal = 'pendente';
-        aprovacaoFinal = null;
-      }
-    }
+    const decisaoFinal: ParEstado['decisao'] = p.decisao;
+    const aprovacaoFinal: AprovacaoLocal | null = aprovacoes.get(key) ?? null;
 
     rows.push({
       sessao_id: sessaoId,
