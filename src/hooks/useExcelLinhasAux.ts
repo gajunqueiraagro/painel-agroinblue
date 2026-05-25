@@ -53,6 +53,28 @@ export interface ExcelLinhaCru {
 
 const CHUNK_SIZE = 500;
 
+/**
+ * PR2.3 — Chave de dedup determinística para detectar reimportação do mesmo
+ * Excel. Normaliza texto (trim + lowercase) e valor (centavos inteiros para
+ * evitar problema de ponto flutuante).
+ *
+ * Linhas com data_referencia=null retornam '' e NÃO entram em dedup
+ * (não dá pra comparar sem âncora temporal).
+ */
+function dedupKey(
+  data: string | null | undefined,
+  valor: number | null | undefined,
+  fornecedor: string | null | undefined,
+  fazenda: string | null | undefined,
+  plano: string | null | undefined,
+): string {
+  if (!data) return ''; // sem data não participa de dedup
+  const norm = (s: string | null | undefined): string =>
+    (s ?? '').trim().toLowerCase();
+  const v = valor == null ? '∅' : Math.round(valor * 100).toString();
+  return [data, v, norm(fornecedor), norm(fazenda), norm(plano)].join('|');
+}
+
 export function useExcelLinhasAux() {
   const sb = supabase as any;
 
@@ -61,11 +83,87 @@ export function useExcelLinhasAux() {
     contaBancariaId: string,
     clienteId: string,
     origem: string = 'excel',
-  ): Promise<{ batchId: string; inseridas: number; falhadas: number }> {
+  ): Promise<{ batchId: string; inseridas: number; duplicadas: number; falhadas: number }> {
     const batchId = crypto.randomUUID();
-    if (rows.length === 0) return { batchId, inseridas: 0, falhadas: 0 };
+    if (rows.length === 0) return { batchId, inseridas: 0, duplicadas: 0, falhadas: 0 };
 
-    const payload = rows.map((r) => ({
+    // PR2.3 — Anti-duplicação: detecta reimportação do mesmo Excel.
+    // Compara cliente+conta+origem+(data,valor,forn,faz,plano) com linhas
+    // pendentes/aplicadas existentes no banco. Descartadas NÃO bloqueiam
+    // (operador pode ter descartado de propósito e querer re-importar).
+    const datasNovas = rows
+      .map((r) => r.data_referencia)
+      .filter((d): d is string => typeof d === 'string' && d.length > 0);
+
+    let duplicadas = 0;
+    let rowsNovas: ExcelLinhaCru[] = rows;
+
+    if (datasNovas.length > 0) {
+      const dataMin = datasNovas.reduce((m, d) => (d < m ? d : m), datasNovas[0]);
+      const dataMax = datasNovas.reduce((m, d) => (d > m ? d : m), datasNovas[0]);
+
+      const { data: existentes, error: errSelect } = await sb
+        .from('excel_linhas_aux')
+        .select('data_referencia,valor,fornecedor_texto,fazenda_texto,plano_texto,status')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaBancariaId)
+        .eq('origem', origem)
+        .in('status', ['pendente', 'aplicada'])
+        .gte('data_referencia', dataMin)
+        .lte('data_referencia', dataMax);
+
+      if (errSelect) {
+        // Falha na pré-validação: NÃO bloquear o import (dedup é best-effort).
+        // Logar e prosseguir com todas as linhas como novas.
+        console.error('[useExcelLinhasAux] dedup pre-check error:', errSelect);
+      } else {
+        const setExistentes = new Set<string>();
+        for (const e of (existentes ?? []) as Array<{
+          data_referencia: string | null;
+          valor: number | null;
+          fornecedor_texto: string | null;
+          fazenda_texto: string | null;
+          plano_texto: string | null;
+        }>) {
+          const k = dedupKey(
+            e.data_referencia,
+            e.valor,
+            e.fornecedor_texto,
+            e.fazenda_texto,
+            e.plano_texto,
+          );
+          if (k) setExistentes.add(k);
+        }
+
+        rowsNovas = [];
+        for (const r of rows) {
+          const k = dedupKey(
+            r.data_referencia,
+            r.valor,
+            r.fornecedor_texto,
+            r.fazenda_texto,
+            r.plano_texto,
+          );
+          if (k && setExistentes.has(k)) {
+            duplicadas++;
+          } else {
+            rowsNovas.push(r);
+          }
+        }
+      }
+    }
+
+    // Se TODAS são duplicadas, retornar sem chamar INSERT.
+    if (rowsNovas.length === 0) {
+      toast.warning(
+        duplicadas > 0
+          ? `Nenhuma linha importada — ${duplicadas} já existia(m) no sistema`
+          : 'Nenhuma linha para importar',
+      );
+      return { batchId, inseridas: 0, duplicadas, falhadas: 0 };
+    }
+
+    const payload = rowsNovas.map((r) => ({
       cliente_id: clienteId,
       batch_id: batchId,
       origem,
@@ -99,15 +197,23 @@ export function useExcelLinhasAux() {
       }
     }
 
+    const sufixoDup = duplicadas > 0 ? `, ${duplicadas} duplicada(s) ignorada(s)` : '';
+
     if (falhadas > 0 && inseridas === 0) {
-      toast.error('Erro ao importar lote');
+      toast.error(`Erro ao importar lote${sufixoDup}`);
     } else if (falhadas > 0) {
-      toast.warning(`Lote parcial: ${inseridas} inseridas, ${falhadas} falharam`);
+      toast.warning(
+        `Lote parcial: ${inseridas} inserida(s), ${falhadas} falharam${sufixoDup}`,
+      );
+    } else if (duplicadas > 0) {
+      toast.success(
+        `Lote importado: ${inseridas} nova(s), ${duplicadas} duplicada(s) ignorada(s)`,
+      );
     } else {
       toast.success(`Lote importado: ${inseridas} linha(s)`);
     }
 
-    return { batchId, inseridas, falhadas };
+    return { batchId, inseridas, duplicadas, falhadas };
   }
 
   async function listarPorContaMes(
