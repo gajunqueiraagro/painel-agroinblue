@@ -13,10 +13,19 @@
  * NÃO altera lançamentos. NÃO cria lançamentos.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { useExtratoBancario, type ExtratoMovimento } from '@/hooks/useExtratoBancario';
 import { ConciliarExtratoDialog, type ExtratoMovimentoRef } from './ConciliarExtratoDialog';
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
@@ -309,6 +318,182 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
   const [movCriando, setMovCriando] = useState<ExtratoMovimento | null>(null);
 
+  // PR-D — seleção em massa para criação de lançamentos a partir do OFX.
+  // Elegibilidade: status='nao_conciliado' && sem vínculo em cbi && não ignorado.
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [mostrarConfirmacaoLote, setMostrarConfirmacaoLote] = useState(false);
+  const [processandoLote, setProcessandoLote] = useState(false);
+  const queryClient = useQueryClient();
+
+  const idsElegiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of enriquecidos) {
+      if (
+        m.status === 'nao_conciliado' &&
+        m.vinculos.length === 0
+      ) {
+        set.add(m.id);
+      }
+    }
+    return set;
+  }, [enriquecidos]);
+
+  // Sanitização: se elegibilidade muda (refetch, novos vínculos), remover
+  // da seleção qualquer ID que deixou de ser elegível.
+  useEffect(() => {
+    setSelecionados((prev) => {
+      let mudou = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (idsElegiveis.has(id)) next.add(id);
+        else mudou = true;
+      }
+      return mudou ? next : prev;
+    });
+  }, [idsElegiveis]);
+
+  const resumoSelecao = useMemo(() => {
+    let entradas = 0;
+    let saidas = 0;
+    for (const m of enriquecidos) {
+      if (!selecionados.has(m.id)) continue;
+      const v = Number(m.valor) || 0;
+      if (v > 0) entradas += v;
+      else if (v < 0) saidas += -v;
+    }
+    return { qt: selecionados.size, entradas, saidas };
+  }, [enriquecidos, selecionados]);
+
+  const toggleSelecao = (id: string) => {
+    if (!idsElegiveis.has(id)) return;
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelecionarTodosElegiveis = () => {
+    setSelecionados((prev) => {
+      // Se TODOS os elegíveis já estão marcados, limpar; senão marcar todos.
+      const todosMarcados =
+        idsElegiveis.size > 0 &&
+        Array.from(idsElegiveis).every((id) => prev.has(id));
+      if (todosMarcados) return new Set();
+      return new Set(idsElegiveis);
+    });
+  };
+
+  const limparSelecao = () => setSelecionados(new Set());
+
+  // PR-D — contexto pra modal de confirmação (conta + fazenda).
+  const contaSelecionada = useMemo(
+    () => contasBancarias.find((c) => c.id === contaBancariaId) ?? null,
+    [contasBancarias, contaBancariaId],
+  );
+
+  const handleCriarLote = async () => {
+    if (!clienteAtual?.id || !contaBancariaId) return;
+    if (selecionados.size === 0) return;
+    const conta = contaSelecionada;
+    if (!conta) {
+      toast.error('Conta bancária não encontrada — aguarde o carregamento');
+      return;
+    }
+    const fazendaId = conta.fazenda_id;
+    if (!fazendaId) {
+      toast.error('Conta sem fazenda vinculada — não é possível criar em lote');
+      return;
+    }
+
+    // Itera enriquecidos pra preservar a ordem visual (mais recente primeiro).
+    const alvos = enriquecidos.filter((m) => selecionados.has(m.id));
+    setProcessandoLote(true);
+    let criados = 0;
+    let falhas = 0;
+    const idsCriados: string[] = [];
+
+    for (const mov of alvos) {
+      try {
+        const valorAbs = Math.abs(Number(mov.valor) || 0);
+        const ehEntrada = (Number(mov.valor) || 0) >= 0;
+        const form: LancamentoV2Form = {
+          fazenda_id: fazendaId,
+          conta_bancaria_id: contaBancariaId,
+          conta_destino_id: null,
+          data_competencia: mov.data_movimento,
+          data_pagamento: mov.data_movimento,
+          valor: valorAbs,
+          tipo_operacao: ehEntrada ? '1-Entradas' : '2-Saídas',
+          status_transacao: 'realizado',
+          descricao: mov.descricao ?? undefined,
+          numero_documento: mov.documento ?? undefined,
+        };
+        const lancId = await criarLancamentoComId(form, {
+          origem: 'ofx',
+          silent: true,
+        });
+        if (!lancId) {
+          falhas++;
+          console.error('[ExtratoListaTab] lote: falha ao criar lancamento', {
+            extrato_id: mov.id,
+            descricao: mov.descricao,
+            valor: mov.valor,
+          });
+          continue;
+        }
+        await insertVinculo({
+          extrato_id: mov.id,
+          lancamento_id: lancId,
+          valor_aplicado: valorAbs,
+          cliente_id: mov.cliente_id,
+        });
+        criados++;
+        idsCriados.push(mov.id);
+      } catch (err) {
+        falhas++;
+        console.error('[ExtratoListaTab] lote: erro ao processar OFX', {
+          extrato_id: mov.id,
+          descricao: mov.descricao,
+          valor: mov.valor,
+          err,
+        });
+      }
+    }
+
+    // Limpa apenas os IDs efetivamente processados; falhas continuam selecionadas.
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      for (const id of idsCriados) next.delete(id);
+      return next;
+    });
+    setMostrarConfirmacaoLote(false);
+    setProcessandoLote(false);
+
+    // Refetch das queries dependentes (extrato + vínculos + realizados + saldo).
+    refetch();
+    queryClient.invalidateQueries({
+      queryKey: ['cbi-batch', contaBancariaId, anoMes],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ['lancs-realizados', clienteAtual.id, contaBancariaId, anoMes],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ['saldo-sistema-conta', clienteAtual.id, contaBancariaId, anoMes],
+    });
+
+    if (criados > 0 && falhas === 0) {
+      toast.success(`${criados} lançamento(s) criado(s) e conciliado(s)`);
+    } else if (criados > 0 && falhas > 0) {
+      toast.warning(
+        `${criados} criado(s), ${falhas} falharam — verifique o console`,
+      );
+    } else {
+      toast.error(`Nenhum lançamento criado — ${falhas} falha(s)`);
+    }
+  };
+
   // Carrega as listas necessárias para o LancamentoV2Dialog uma vez no mount.
   // Os 3 loaders são useCallback estáveis no useFinanceiroV2.
   useEffect(() => {
@@ -495,10 +680,56 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         {loading ? 'Carregando...' : `${movimentos.length} movimento(s) no período.`}
       </div>
 
+      {/* PR-D — Barra de ação em massa (apenas quando há seleção). */}
+      {selecionados.size > 0 && (
+        <div className="border rounded-md bg-blue-50/50 border-blue-200 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-[11px] font-semibold text-blue-900">
+            {resumoSelecao.qt} selecionado{resumoSelecao.qt > 1 ? 's' : ''}
+          </span>
+          <span className="text-[11px] text-emerald-700 tabular-nums font-mono">
+            Entradas {formatMoeda(resumoSelecao.entradas)}
+          </span>
+          <span className="text-[11px] text-red-700 tabular-nums font-mono">
+            Saídas {formatMoeda(resumoSelecao.saidas)}
+          </span>
+          <div className="ml-auto flex gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              onClick={limparSelecao}
+              disabled={processandoLote}
+            >
+              Limpar seleção
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={() => setMostrarConfirmacaoLote(true)}
+              disabled={processandoLote}
+            >
+              Criar lançamentos em lote
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="border rounded overflow-auto max-h-[60vh]">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
+              <TableHead className="text-[10px] w-[36px]">
+                {/* PR-D — checkbox cabeçalho: marca/desmarca todos elegíveis. */}
+                <Checkbox
+                  aria-label="Selecionar todos elegíveis"
+                  disabled={idsElegiveis.size === 0}
+                  checked={
+                    idsElegiveis.size > 0 &&
+                    Array.from(idsElegiveis).every((id) => selecionados.has(id))
+                  }
+                  onCheckedChange={toggleSelecionarTodosElegiveis}
+                />
+              </TableHead>
               <TableHead className="text-[10px]">Data</TableHead>
               <TableHead className="text-[10px]">Descrição</TableHead>
               <TableHead className="text-[10px]">Documento</TableHead>
@@ -510,15 +741,26 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
           <TableBody>
             {!loading && movimentos.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">
+                <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-6">
                   Nenhum movimento importado para esta conta/período.
                 </TableCell>
               </TableRow>
             )}
             {enriquecidos.map(m => {
               const badge = STATUS_BADGE[m.status];
+              const elegivel = idsElegiveis.has(m.id);
+              const marcado = selecionados.has(m.id);
               return (
-                <TableRow key={m.id}>
+                <TableRow key={m.id} className={marcado ? 'bg-blue-50/40' : undefined}>
+                  <TableCell className="text-[11px]">
+                    {/* PR-D — checkbox por linha (apenas elegíveis). */}
+                    <Checkbox
+                      aria-label={`Selecionar movimento ${m.id}`}
+                      disabled={!elegivel || processandoLote}
+                      checked={marcado}
+                      onCheckedChange={() => toggleSelecao(m.id)}
+                    />
+                  </TableCell>
                   <TableCell className="text-[11px] font-mono">{fmtData(m.data_movimento)}</TableCell>
                   <TableCell className="text-[11px] max-w-[260px]" title={m.descricao || ''}>
                     <div className="truncate">{m.descricao || '-'}</div>
@@ -663,6 +905,68 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         }
         onConciliado={() => { setConciliando(null); refetch(); }}
       />
+
+      {/* PR-D — Dialog de confirmação para criação em lote a partir do OFX. */}
+      <Dialog
+        open={mostrarConfirmacaoLote}
+        onOpenChange={(o) => !processandoLote && setMostrarConfirmacaoLote(o)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Criar lançamentos em lote
+            </DialogTitle>
+            <DialogDescription className="text-[12px]">
+              Serão criados lançamentos realizados no sistema e vinculados aos
+              movimentos OFX selecionados. Esta ação não classifica plano de
+              contas nem associa fornecedor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-[12px] space-y-1.5">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">Movimentos</span>
+              <span className="text-right font-mono tabular-nums">
+                {resumoSelecao.qt}
+              </span>
+              <span className="text-muted-foreground">Total entradas</span>
+              <span className="text-right font-mono tabular-nums text-emerald-700">
+                {formatMoeda(resumoSelecao.entradas)}
+              </span>
+              <span className="text-muted-foreground">Total saídas</span>
+              <span className="text-right font-mono tabular-nums text-red-700">
+                {formatMoeda(resumoSelecao.saidas)}
+              </span>
+              <span className="text-muted-foreground">Conta bancária</span>
+              <span className="text-right">
+                {contaSelecionada
+                  ? (contaSelecionada.nome_exibicao || contaSelecionada.nome_conta)
+                  : '—'}
+              </span>
+              <span className="text-muted-foreground">Mês/ano</span>
+              <span className="text-right font-mono">{anoMes ?? '—'}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMostrarConfirmacaoLote(false)}
+              disabled={processandoLote}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCriarLote}
+              disabled={processandoLote || resumoSelecao.qt === 0}
+            >
+              {processandoLote
+                ? 'Processando...'
+                : `Confirmar criação (${resumoSelecao.qt})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

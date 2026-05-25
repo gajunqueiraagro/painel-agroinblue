@@ -436,7 +436,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    */
   const criarLancamentoComId = useCallback(async (
     form: LancamentoV2Form,
-    opts?: { origem?: string },
+    opts?: { origem?: string; silent?: boolean },
   ): Promise<string | null> => {
     if (!clienteId || !user) return null;
 
@@ -448,11 +448,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .single();
 
     if (error) {
-      toast.error('Erro ao criar lançamento');
+      if (!opts?.silent) toast.error('Erro ao criar lançamento');
       console.error(error);
       return null;
     }
-    toast.success('Lançamento criado');
+    if (!opts?.silent) toast.success('Lançamento criado');
     return data?.id ?? null;
   }, [clienteId, user]);
 
