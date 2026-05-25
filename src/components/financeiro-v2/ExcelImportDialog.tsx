@@ -614,7 +614,6 @@ export function ExcelImportDialog({
                 !contaBancariaId
                 || !arquivo
                 || headers.length === 0
-                || !podeAvancarPasso2()
                 || (previewInfo?.temAlerta ?? false)
               }
               onClick={() => setStep(2)}
