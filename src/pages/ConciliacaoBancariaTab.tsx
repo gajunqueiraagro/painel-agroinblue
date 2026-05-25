@@ -23,6 +23,7 @@ import {
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
+import { ReferenciasOperacionaisTab } from '@/components/financeiro-v2/ReferenciasOperacionaisTab';
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
 type MesStatusExt = ConciliacaoStatus | 'parcial';
@@ -331,7 +332,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   /* Fase 1B: import OFX/CSV + visualização do extrato importado */
   const [showImportExtrato, setShowImportExtrato] = useState(false);
-  const [vistaExtrato, setVistaExtrato] = useState<'conciliacao' | 'extrato'>('conciliacao');
+  const [vistaExtrato, setVistaExtrato] = useState<'conciliacao' | 'extrato' | 'referencias'>('conciliacao');
 
   /* Edit saldo */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
@@ -741,6 +742,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             >
               Extrato Importado
             </button>
+            <button
+              onClick={() => setVistaExtrato('referencias')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'referencias' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Referências Operacionais
+            </button>
           </div>
         )}
 
@@ -748,6 +755,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
         {!loading && selectedCard && vistaExtrato === 'extrato' && (
           <ExtratoListaTab
+            contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
+            anoMes={`${ano}-${selectedMes}`}
+          />
+        )}
+
+        {!loading && selectedCard && vistaExtrato === 'referencias' && (
+          <ReferenciasOperacionaisTab
             contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
             anoMes={`${ano}-${selectedMes}`}
           />
