@@ -2009,7 +2009,11 @@ export function MesaPareamentoModal({
                                     disabled={acaoDesabilitada}
                                     title={validacaoCand.mensagem}
                                     onClick={() => {
-                                      // Abre Modo Corrigir populado com a sugestão atual.
+                                      // PR6.2-M0.7 — vincular OFX sugerido ao par ANTES de navegar pro Modo Excel.
+                                      // Sem isso, o par chegava no Excel com ofxIdAtivo=null, exibindo "Sem OFX"
+                                      // e perdendo o contexto da sugestão que motivou o "Corrigir antes".
+                                      // trocarOfx mantém decisao='pendente' — NÃO aprova automaticamente.
+                                      trocarOfx(cand.excelKey, ofx.id);
                                       setParAtivoKey(cand.excelKey);
                                       setModoVisualizacao('excel');
                                       iniciarCorrecao(cand.excelKey);
