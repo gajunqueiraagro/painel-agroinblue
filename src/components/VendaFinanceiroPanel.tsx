@@ -76,6 +76,14 @@ interface Props {
   initialBoitelData?: Partial<BoitelData> | null;
   initialFormaReceb?: 'avista' | 'prazo';
   initialParcelas?: Parcela[];
+  /**
+   * PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da tela.
+   * Em modo Global, `fazendaAtual.id === '__global__'` (sentinel) — gravar
+   * isso quebra o banco (Postgres rejeita UUID inválido). Sem prop resolvida,
+   * bloqueia com toast amigável. Mesmo padrão do CompraFinanceiroPanel.
+   */
+  fazendaIdLancamento?: string;
+  clienteIdLancamento?: string;
 }
 
 export interface VendaFinanceiroPanelRef {
@@ -104,6 +112,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   comissaoVal, freteVal,
   onBoitelDataChange, initialBoitelData,
   initialFormaReceb, initialParcelas,
+  fazendaIdLancamento, clienteIdLancamento,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -375,6 +384,19 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       return false;
     }
 
+    // PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da
+    // tela. Em modo Global, fazendaAtual.id === '__global__' (sentinel) —
+    // gravar isso quebra o banco (Postgres rejeita UUID inválido). Posiciona
+    // ANTES do ramo Boitel pra cobrir ambos os caminhos (boitel + venda normal).
+    const effectiveFazendaId = fazendaIdLancamento ?? fazendaAtual.id;
+    const effectiveClienteId = clienteIdLancamento ?? clienteAtual.id;
+    if (!effectiveFazendaId || effectiveFazendaId === '__global__' ||
+        !effectiveClienteId || effectiveClienteId === '__global__') {
+      console.error('[Venda Financeiro] fazenda/cliente inválido (modo Global sem registro carregado)', { effectiveFazendaId, effectiveClienteId });
+      toast.error('Não foi possível identificar a fazenda/cliente do lançamento. Operação bloqueada.');
+      return false;
+    }
+
     // ── BOITEL FLOW ──
     if (tipoPeso === 'boitel') {
       if (!boitelData) {
@@ -402,8 +424,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         // 1. Save/update lote
         const loteId = await salvarBoitelLote({
           id: resolvedLoteId || undefined,
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
+          cliente_id: effectiveClienteId,
+          fazenda_id: effectiveFazendaId,
           lote_codigo: boitelData.lote || '',
           data_envio: boitelData.dataEnvio || data,
           boitel_destino: boitelData.nomeBoitel || '',
@@ -484,7 +506,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           adiantamento_observacao: boitelData.adiantamentoObservacao || null,
         };
         const lote = {
-          id: loteId, cliente_id: clienteAtual.id, fazenda_id: fazendaAtual.id,
+          id: loteId, cliente_id: effectiveClienteId, fazenda_id: effectiveFazendaId,
           lote_codigo: boitelData.lote || '', data_envio: boitelData.dataEnvio || data,
           boitel_destino: boitelData.nomeBoitel || '', contrato_baia: boitelData.numeroContrato || '',
           quantidade_cab: boitelData.qtdCabecas, peso_saida_fazenda_kg: boitelData.pesoInicial,
@@ -543,7 +565,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
           // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
           // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
           await supabase.from('audit_log_movimentacoes').insert({
-            cliente_id: clienteAtual.id, usuario_id: userId || null,
+            cliente_id: effectiveClienteId, usuario_id: userId || null,
             acao: 'recalculo_financeiro_venda', movimentacao_id: targetLancamentoId,
             financeiro_ids: oldIds, detalhes: { registros_cancelados: oldIds.length, motivo: 'Recálculo financeiro da venda' },
           });
@@ -607,8 +629,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
       const statusFin = 'programado';
 
       const baseRecord: Record<string, any> = {
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaAtual.id,
+        cliente_id: effectiveClienteId,
+        fazenda_id: effectiveFazendaId,
         tipo_operacao: '1-Entradas',
         sinal: 1,
         status_transacao: statusFin,
@@ -685,8 +707,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const clasDed = planoDeducao[0];
         saidasSeparadas.forEach(item => {
           inserts.push({
-            cliente_id: clienteAtual.id,
-            fazenda_id: fazendaAtual.id,
+            cliente_id: effectiveClienteId,
+            fazenda_id: effectiveFazendaId,
             tipo_operacao: '2-Saídas',
             sinal: -1,
             status_transacao: statusFin,

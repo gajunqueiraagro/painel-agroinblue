@@ -42,6 +42,14 @@ interface Props {
    */
   initialFormaReceb?: 'avista' | 'prazo';
   initialParcelas?: Parcela[];
+  /**
+   * PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da tela.
+   * Em modo Global, `fazendaAtual.id === '__global__'` (sentinel) — gravar
+   * isso quebra o banco (Postgres rejeita UUID inválido). Sem prop resolvida,
+   * bloqueia com toast amigável. Mesmo padrão do CompraFinanceiroPanel.
+   */
+  fazendaIdLancamento?: string;
+  clienteIdLancamento?: string;
 }
 
 export interface AbateFinanceiroOverrides {
@@ -61,6 +69,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
   fornecedorId, notaFiscal, onNotaFiscalChange, lancamentoId, mode = 'create', onFinanceiroUpdated,
   statusOperacional = 'realizado',
   initialFormaReceb, initialParcelas,
+  fazendaIdLancamento, clienteIdLancamento,
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -190,6 +199,19 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       console.warn('[AbateFinanceiro] ABORT: fazendaAtual or clienteAtual is null');
       return false;
     }
+
+    // PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da tela.
+    // Em modo Global, fazendaAtual.id === '__global__' (sentinel) — gravar
+    // isso quebra o banco (Postgres rejeita UUID inválido).
+    const effectiveFazendaId = fazendaIdLancamento ?? fazendaAtual.id;
+    const effectiveClienteId = clienteIdLancamento ?? clienteAtual.id;
+    if (!effectiveFazendaId || effectiveFazendaId === '__global__' ||
+        !effectiveClienteId || effectiveClienteId === '__global__') {
+      console.error('[AbateFinanceiro] fazenda/cliente inválido (modo Global sem registro carregado)', { effectiveFazendaId, effectiveClienteId });
+      toast.error('Não foi possível identificar a fazenda/cliente do lançamento. Operação bloqueada.');
+      return false;
+    }
+
     if (efValorLiquido <= 0) {
       console.warn('[AbateFinanceiro] ABORT: efValorLiquido <= 0', efValorLiquido);
       toast.error('Valor líquido do abate deve ser maior que zero.');
@@ -246,7 +268,7 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
 
           await supabase.from('audit_log_movimentacoes').insert({
-            cliente_id: clienteAtual.id,
+            cliente_id: effectiveClienteId,
             usuario_id: userId || null,
             acao: 'recalculo_financeiro_abate',
             movimentacao_id: targetLancamentoId,
@@ -300,8 +322,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
       const clasReceita = planoReceita[0];
 
       const baseRecord: Record<string, any> = {
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaAtual.id,
+        cliente_id: effectiveClienteId,
+        fazenda_id: effectiveFazendaId,
         tipo_operacao: '1-Entradas',
         sinal: 1,
         status_transacao: 'programado',
@@ -370,8 +392,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
         // Funrural deductions are fiscal-only (no cash movement)
         const isFunrural = /funrural/i.test(descDeducao) || /funrural/i.test(frigorifico || '');
         inserts.push({
-          cliente_id: clienteAtual.id,
-          fazenda_id: fazendaAtual.id,
+          cliente_id: effectiveClienteId,
+          fazenda_id: effectiveFazendaId,
           tipo_operacao: '2-Saídas',
           sinal: -1,
           status_transacao: 'programado',

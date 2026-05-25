@@ -2462,6 +2462,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           categoria={categoria}
           data={data}
           destino={fazendaDestino}
+          // PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o contexto da
+          // tela (modo Global tem fazendaAtual.id === '__global__').
+          fazendaIdLancamento={editingFazendaId ?? undefined}
+          clienteIdLancamento={clienteAtual?.id}
           fornecedorId={vendaDestinoFornecedorId}
           onFornecedorIdChange={(id) => {
             setVendaDestinoFornecedorId(id);
@@ -3588,6 +3592,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                     mode={editingAbateId ? 'update' : 'create'}
                     onFinanceiroUpdated={() => {}}
                     statusOperacional={effectiveStatusOp}
+                    // PR-G — fazenda/cliente do LANÇAMENTO prevalecem sobre o
+                    // contexto da tela (modo Global tem fazendaAtual.id === '__global__').
+                    fazendaIdLancamento={editingFazendaId ?? undefined}
+                    clienteIdLancamento={clienteAtual?.id}
                   />
                 </div>
                 {/* Fallback: gerar financeiro quando não foi gerado automaticamente */}
