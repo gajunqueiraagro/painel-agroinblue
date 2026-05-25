@@ -1,5 +1,6 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1004,8 +1005,20 @@ export function MesaPareamentoModal({
       const paresFresh = ((paresRes.data ?? []) as unknown) as MesaParRow[];
 
       // 5. Gera staging usando dados frescos
-      const resultado = await gerarStagingDaSessao(sessaoFresh, paresFresh);
+      // PR6.2-M0.5 — passa contas do catálogo (helper soberano usa, mesma
+      // lista já consumida pelas pills/badges do PR6.1D-3/D-4).
+      const contasCadastro = (catalogo?.contas ?? []) as unknown as readonly ContaBancariaRow[];
+      const resultado = await gerarStagingDaSessao(sessaoFresh, paresFresh, contasCadastro);
       setResultadoStaging(resultado);
+
+      // PR6.2-M0.5 — alerta operacional quando linhas foram puladas por
+      // resolução de conta inválida (não bloqueia o restante: rowsValidas
+      // que conseguiram resolver seguiram normalmente).
+      if (resultado.erros.length > 0) {
+        toast.warning(
+          `${resultado.erros.length} linha(s) não geraram staging — passe o mouse no aviso do header para detalhes.`,
+        );
+      }
 
       // 6. PR6.1A — pré-fetch da query do staging. Quando operador clicar na aba
       //    "Revisão Staging", os dados já estão no cache (zero flash de loading).

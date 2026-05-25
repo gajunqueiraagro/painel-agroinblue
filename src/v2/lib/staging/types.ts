@@ -49,6 +49,28 @@ export interface StagingRow {
   // compatibilidade com código existente que itera StagingRow)
   conta_nome?: string | null;       // financeiro_contas_bancarias.nome_exibicao
   favorecido_nome?: string | null;  // financeiro_fornecedores.nome
+
+  // PR6.2-M0 — auditoria soberana da resolução de conta (Cenário 2).
+  // Populado por gerarStagingDaSessao a partir do PR6.2-M0.5.
+  conta_texto_excel?: string | null;
+  conta_resolvida_id?: string | null;
+  conta_resolvida_score?: number | null;
+  conta_resolvida_estrategia?:
+    | 'agencia_numero'
+    | 'substring_exibicao'
+    | 'substring_banco'
+    | null;
+}
+
+/**
+ * Entrada agregada de erro na geração de staging.
+ * PR6.2-M0.5 — campo opcional conta_texto_excel preservado para auditoria
+ * quando o motivo for relacionado à resolução de conta.
+ */
+export interface ErroGeracaoStaging {
+  excel_key: string;
+  motivo: string;
+  conta_texto_excel?: string | null;
 }
 
 /** Resultado da geração de staging */
@@ -56,5 +78,5 @@ export interface ResultadoGeracaoStaging {
   gerados: number;       // INSERTs novos
   ja_existentes: number; // Já estavam na tabela (idempotência via UNIQUE)
   total_apos: number;    // Total de rows na sessão após operação
-  erros: Array<{ excel_key: string; motivo: string }>;
+  erros: ErroGeracaoStaging[];
 }

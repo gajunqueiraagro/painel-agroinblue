@@ -8,9 +8,16 @@ import type {
   LoteExcel,
 } from '@/v2/lib/excelPreview/types';
 import type {
+  ErroGeracaoStaging,
   ResultadoGeracaoStaging,
   OrigemAprovacaoStaging,
 } from './types';
+// PR6.2-M0.5 — helper puro soberano para resolução de conta da linha Excel.
+// Sem React/hook/side-effect — dependência inter-lib permitida.
+import {
+  resolverContaPorTexto,
+  type ContaBancariaRow,
+} from '@/v2/lib/mesa/resolverConta';
 
 /** Mapeia sinal front → sinal banco (string numérica). */
 function mapSinalParaBanco(sinalFront: string | undefined | null): '1' | '-1' | '0' | null {
@@ -46,16 +53,29 @@ function indexarLinhas(excelLotes: LoteExcel[]): Map<string, ExcelLinhaNormaliza
  * Gera staging a partir dos pares aprovados/excel_orfao da sessão.
  * Idempotente via UNIQUE (sessao_id, excel_key) — re-execução não duplica.
  *
- * NÃO grava em financeiro_lancamentos_v2 (PR6.2 vai cuidar disso).
+ * NÃO grava em financeiro_lancamentos_v2 (PR6.2-M1 fará isso via RPC).
  *
  * Cuidados do adendo PR6.1:
  * - Linha sem data_pagamento resolvida → não vira staging, vai pra `erros`
  * - valor sempre via Math.abs (CHECK valor >= 0; sinal carrega natureza)
  * - linhasPorKey indexa pelo snapshot da sessão (sessao.excel_lotes_json)
+ *
+ * PR6.2-M0.5 (Cenário 2):
+ * - Recebe contasBancarias como parâmetro (não faz fetch interno).
+ * - Resolve conta da linha Excel via resolverContaPorTexto soberano (PR6.1D-1).
+ * - Persiste 4 metadados de auditoria (conta_texto_excel,
+ *   conta_resolvida_id, conta_resolvida_score, conta_resolvida_estrategia).
+ * - Linha com texto de Conta mas sem resolução → NÃO gera staging,
+ *   agrega em erros (motivo 'Conta Excel não reconhecida').
+ * - Linha sem texto de Conta (e não-órfã) → mesmo tratamento (motivo
+ *   'Linha Excel sem coluna Conta').
+ * - Órfãos seguem a mesma regra (tentam resolver; se falha, agrega erro).
+ * - conta_bancaria_id continua = aprov.contaId (decisão humana/IA preservada).
  */
 export async function gerarStagingDaSessao(
   sessao: MesaSessaoRow,
   pares: MesaParRow[],
+  contasBancarias: readonly ContaBancariaRow[],
 ): Promise<ResultadoGeracaoStaging> {
   // Cast: tabela PR6.1 ainda não está nos tipos gerados.
   const sb = supabase as any;
@@ -81,7 +101,7 @@ export async function gerarStagingDaSessao(
   const totalAntes = antesRes.count ?? 0;
 
   const rowsValidas: Array<Record<string, unknown>> = [];
-  const erros: Array<{ excel_key: string; motivo: string }> = [];
+  const erros: ErroGeracaoStaging[] = [];
 
   elegiveis.forEach((p) => {
     const linha = linhasPorKey.get(p.excel_key);
@@ -124,6 +144,32 @@ export async function gerarStagingDaSessao(
       return;
     }
 
+    // PR6.2-M0.5 — REGRA SOBERANA: resolver conta da linha Excel via helper
+    // puro do PR6.1D-1. Falha vira erro agregado, linha não gera staging.
+    // raw.Conta é a fonte primária (texto bruto do Excel); contaTexto é a
+    // versão canonicalizada do parser (PR6.1A). Usar raw quando disponível.
+    const contaTexto = linha.raw?.Conta ?? linha.contaTexto ?? null;
+    const contaResolvida = contaTexto
+      ? resolverContaPorTexto(contaTexto, contasBancarias)
+      : null;
+
+    if (contaTexto && !contaResolvida) {
+      erros.push({
+        excel_key: p.excel_key,
+        motivo: 'Conta Excel não reconhecida',
+        conta_texto_excel: contaTexto,
+      });
+      return;
+    }
+    if (!ehOrfao && !contaTexto) {
+      erros.push({
+        excel_key: p.excel_key,
+        motivo: 'Linha Excel sem coluna Conta',
+        conta_texto_excel: null,
+      });
+      return;
+    }
+
     rowsValidas.push({
       sessao_id: sessao.id,
       excel_key: p.excel_key,
@@ -148,6 +194,14 @@ export async function gerarStagingDaSessao(
       ofx_extrato_id: ehOrfao ? null : aprov.ofxIdVinculado,
       produto: aprov.produto,
       origem_aprovacao: (ehOrfao ? 'excel_orfao' : aprov.origem_aprovacao) as OrigemAprovacaoStaging,
+      // PR6.2-M0.5 — auditoria soberana da resolução de conta da linha Excel.
+      // conta_bancaria_id acima (decisão humana) pode divergir de
+      // conta_resolvida_id (verdade objetiva do Excel). RPC fn_promover_staging
+      // (PR6.2-M1) rejeitará a divergência.
+      conta_texto_excel: contaTexto,
+      conta_resolvida_id: contaResolvida?.id ?? null,
+      conta_resolvida_score: contaResolvida?.score ?? null,
+      conta_resolvida_estrategia: contaResolvida?.estrategia ?? null,
     });
   });
 
