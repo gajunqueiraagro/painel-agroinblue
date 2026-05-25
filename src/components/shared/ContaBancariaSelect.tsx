@@ -69,7 +69,9 @@ interface Props {
   prependItems?: Array<{ value: string; label: string }>;
 }
 
-const TIPO_ORDER: Array<'corrente' | 'investimento' | 'cartao' | 'caixa' | 'outro'> = [
+type TipoOficial = 'corrente' | 'investimento' | 'cartao' | 'caixa' | 'outro';
+
+const TIPO_ORDER: TipoOficial[] = [
   'corrente',
   'investimento',
   'cartao',
@@ -77,13 +79,38 @@ const TIPO_ORDER: Array<'corrente' | 'investimento' | 'cartao' | 'caixa' | 'outr
   'outro',
 ];
 
-const TIPO_LABEL: Record<string, string> = {
+const TIPO_LABEL: Record<TipoOficial, string> = {
   corrente: 'Contas Correntes',
   investimento: 'Investimentos',
   cartao: 'Cartões',
   caixa: 'Caixa',
   outro: 'Outros',
 };
+
+/**
+ * Compat transitória PR-H1: enquanto a migration `20260525_pr_h1_tipo_conta_oficial`
+ * não roda no Supabase remoto, registros legados ainda têm `tipo_conta` = `'cc'`
+ * ou `'inv'`. Normalizamos para o vocabulário oficial APENAS no render (não no
+ * banco). Após a migration rodar, `cc`/`inv` deixam de existir e este mapeamento
+ * vira no-op — pode ser removido em PR futuro.
+ *
+ * Sem fuzzy/heurística: mapeamento por valor exato. Tipo desconhecido → 'outro'.
+ */
+function normalizarTipo(tipo: string | null | undefined): TipoOficial {
+  if (!tipo) return 'corrente';
+  if (tipo === 'cc') return 'corrente';
+  if (tipo === 'inv') return 'investimento';
+  if (
+    tipo === 'corrente' ||
+    tipo === 'investimento' ||
+    tipo === 'cartao' ||
+    tipo === 'caixa' ||
+    tipo === 'outro'
+  ) {
+    return tipo;
+  }
+  return 'outro';
+}
 
 function buildLabel(c: ContaSelecionavel, mode: Props['showBankDetails']): string {
   const nome = c.nome_exibicao || c.nome_conta;
@@ -122,12 +149,13 @@ export function ContaBancariaSelect({
   const excl = new Set(excluirIds ?? []);
   const visiveis = contas.filter((c) => !excl.has(c.id));
 
-  // Agrupa por tipo_conta (fallback 'corrente' quando null).
+  // Agrupa por tipo_conta normalizado (compat cc/inv → corrente/investimento
+  // enquanto a migration PR-H1 não roda remotamente).
   const grupos = TIPO_ORDER.map((tipo) => ({
     tipo,
     label: TIPO_LABEL[tipo],
     items: visiveis
-      .filter((c) => (c.tipo_conta ?? 'corrente') === tipo)
+      .filter((c) => normalizarTipo(c.tipo_conta) === tipo)
       .map((c) => ({ conta: c, label: buildLabel(c, showBankDetails) }))
       .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
   })).filter((g) => g.items.length > 0);

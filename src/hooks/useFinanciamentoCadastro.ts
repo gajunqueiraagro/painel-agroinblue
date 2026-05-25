@@ -115,8 +115,10 @@ export function useFinanciamentoCadastro() {
         .select('id, nome_conta, nome_exibicao, banco, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true)
-        // PR-H1 — vocabulário oficial: 'cc' virou 'corrente'.
-        .eq('tipo_conta', 'corrente')
+        // PR-H1 — vocabulário oficial 'corrente'. Compat transitória de
+        // LEITURA: tolera 'cc' legado enquanto a migration não roda no
+        // Supabase remoto. Remover 'cc' após confirmar que o backfill rodou.
+        .in('tipo_conta', ['corrente', 'cc'])
         .order('ordem_exibicao');
       return data ?? [];
     },
