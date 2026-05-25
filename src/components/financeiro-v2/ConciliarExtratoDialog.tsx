@@ -314,7 +314,20 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           </div>
         )}
 
-        <div className="border rounded">
+        {/* PR2.2 — quando NÃO há candidatos oficiais E há sugestões, colapsa
+            a tabela em texto pequeno; a seção de sugestões abaixo vira o
+            destaque central. Quando há candidatos OU não há sugestões,
+            renderiza a tabela completa com header textual de seção. */}
+        {!loading && candidatos.length === 0 && sugestoes.length > 0 ? (
+          <div className="text-[10px] text-muted-foreground italic">
+            Nenhum lançamento oficial corresponde a este movimento. Use uma referência operacional abaixo ou crie um novo lançamento.
+          </div>
+        ) : (
+          <>
+            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Lançamentos oficiais encontrados ({candidatos.length})
+            </div>
+            <div className="border rounded">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
@@ -360,24 +373,32 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
               })}
             </TableBody>
           </Table>
-        </div>
+            </div>
+          </>
+        )}
 
-        <div className="flex items-center justify-between text-xs gap-2 flex-wrap pt-2">
-          <span><strong>Selecionados:</strong> {marcados.size}</span>
-          <span><strong>Aplicado:</strong> <span className="tabular-nums">{formatMoeda(totalSelecionado)}</span></span>
-          <span><strong>Movimento:</strong> <span className="tabular-nums">{formatMoeda(valorMov)}</span></span>
-          <span className={restante > 0.005 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}>
-            Restante: {formatMoeda(restante)}
-          </span>
-        </div>
+        {/* PR2.2 — rodapé de totais só faz sentido quando há candidatos pra
+            marcar. Esconde quando candidatos=0. */}
+        {candidatos.length > 0 && (
+          <div className="flex items-center justify-between text-xs gap-2 flex-wrap pt-2">
+            <span><strong>Selecionados:</strong> {marcados.size}</span>
+            <span><strong>Aplicado:</strong> <span className="tabular-nums">{formatMoeda(totalSelecionado)}</span></span>
+            <span><strong>Movimento:</strong> <span className="tabular-nums">{formatMoeda(valorMov)}</span></span>
+            <span className={restante > 0.005 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'}>
+              Restante: {formatMoeda(restante)}
+            </span>
+          </div>
+        )}
 
         {/* PR2 — Sugestões Referência Operacional (TRAVA 8: separadas dos
             candidatos oficiais; TRAVA 9: linha aplicada some daqui mas fica
-            visível na aba ReferenciasOperacionaisTab com badge verde). */}
+            visível na aba ReferenciasOperacionaisTab com badge verde).
+            PR2.2 — quando NÃO há candidatos, vira destaque central (sem
+            border-dashed superior) e título muda. */}
         {sugestoes.length > 0 && (
-          <div className="mt-3 border-t border-dashed pt-3">
+          <div className={candidatos.length === 0 ? '' : 'mt-3 border-t border-dashed pt-3'}>
             <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-              Sugestões Referência Operacional ({sugestoes.length})
+              Referências Operacionais sugeridas ({sugestoes.length})
             </div>
             <div className="space-y-1.5">
               {sugestoes.map((ref) => (
@@ -429,9 +450,12 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={salvando}>Fechar</Button>
-          <Button onClick={handleVincular} disabled={salvando || marcados.size === 0}>
-            {salvando ? 'Vinculando...' : `Vincular (${marcados.size})`}
-          </Button>
+          {/* PR2.2 — botão Vincular só aparece se há candidatos pra marcar */}
+          {candidatos.length > 0 && (
+            <Button onClick={handleVincular} disabled={salvando || marcados.size === 0}>
+              {salvando ? 'Vinculando...' : `Vincular (${marcados.size})`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
 
@@ -453,15 +477,24 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado 
           tipo_operacao: movimento.valor < 0 ? '2-Saídas' : '1-Entradas',
           status_transacao: 'realizado',
           conta_bancaria_id: movimento.conta_bancaria_id,
-          descricao: [
-            referenciaSelected.fornecedor_texto,
-            referenciaSelected.plano_texto,
-            referenciaSelected.fazenda_texto,
-            referenciaSelected.observacao,
-          ].filter(Boolean).join(' · ') || (movimento.descricao ?? undefined),
+          descricao:
+            referenciaSelected.produto_texto
+            || referenciaSelected.fornecedor_texto
+            || referenciaSelected.observacao
+            || (movimento.descricao ?? undefined),
           numero_documento: movimento.documento ?? undefined,
         } : undefined}
         lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
+        referenciaOperacionalInfo={referenciaSelected ? {
+          fornecedor_texto: referenciaSelected.fornecedor_texto,
+          fazenda_texto: referenciaSelected.fazenda_texto,
+          plano_texto: referenciaSelected.plano_texto,
+          centro_texto: referenciaSelected.centro_texto,
+          produto_texto: referenciaSelected.produto_texto,
+          observacao: referenciaSelected.observacao,
+          valor: referenciaSelected.valor,
+          data_referencia: referenciaSelected.data_referencia,
+        } : undefined}
       />
     </Dialog>
   );

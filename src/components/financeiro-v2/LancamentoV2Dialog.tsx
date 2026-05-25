@@ -51,6 +51,20 @@ interface Props {
     | 'conta_destino_id'
     | 'tipo_operacao'
   >;
+  // PR2.2 — Box informativo (read-only) com dados da referência operacional
+  // que originou esta criação. Puramente visual: NÃO resolve UUIDs por nome.
+  // Operador continua escolhendo fornecedor/fazenda/plano oficial manualmente.
+  // Sem essa prop, o componente se comporta idêntico ao atual.
+  referenciaOperacionalInfo?: {
+    fornecedor_texto?: string | null;
+    fazenda_texto?: string | null;
+    plano_texto?: string | null;
+    centro_texto?: string | null;
+    produto_texto?: string | null;
+    observacao?: string | null;
+    valor?: number | null;
+    data_referencia?: string | null;
+  };
 }
 
 const TIPOS_OPERACAO = [
@@ -171,6 +185,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
+  referenciaOperacionalInfo,
 }: Props) {
   const { clienteAtual } = useCliente();
   const isEdit = !!lancamento;
@@ -922,6 +937,76 @@ export function LancamentoV2Dialog({
 
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
+
+            {/* PR2.2 — Box informativo da referência operacional que originou
+                esta criação. Read-only, não bloqueia nada. Operador continua
+                escolhendo fornecedor/fazenda/plano oficial manualmente. */}
+            {referenciaOperacionalInfo && (
+              <div className="rounded-md border border-blue-200 bg-blue-50/60 dark:bg-blue-950/30 px-3 py-2 text-[11px] space-y-1.5">
+                <div className="font-semibold text-blue-900 dark:text-blue-200 uppercase tracking-wider text-[10px]">
+                  📋 Referência Operacional usada
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                  {referenciaOperacionalInfo.fornecedor_texto && (
+                    <div>
+                      <span className="text-muted-foreground">Fornecedor (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.fornecedor_texto}</span>
+                    </div>
+                  )}
+                  {referenciaOperacionalInfo.fazenda_texto && (
+                    <div>
+                      <span className="text-muted-foreground">Fazenda (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.fazenda_texto}</span>
+                    </div>
+                  )}
+                  {referenciaOperacionalInfo.plano_texto && (
+                    <div>
+                      <span className="text-muted-foreground">Plano (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.plano_texto}</span>
+                    </div>
+                  )}
+                  {referenciaOperacionalInfo.centro_texto && (
+                    <div>
+                      <span className="text-muted-foreground">Centro (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.centro_texto}</span>
+                    </div>
+                  )}
+                  {referenciaOperacionalInfo.produto_texto && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Produto/Hist. (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.produto_texto}</span>
+                    </div>
+                  )}
+                  {referenciaOperacionalInfo.observacao && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Obs (Excel): </span>
+                      <span className="font-medium">{referenciaOperacionalInfo.observacao}</span>
+                    </div>
+                  )}
+                  {(referenciaOperacionalInfo.valor != null || referenciaOperacionalInfo.data_referencia) && (
+                    <div className="col-span-2 flex gap-3 pt-1 mt-1 border-t border-blue-200">
+                      {referenciaOperacionalInfo.data_referencia && (
+                        <span>
+                          <span className="text-muted-foreground">Data Excel: </span>
+                          <span className="font-mono">{referenciaOperacionalInfo.data_referencia}</span>
+                        </span>
+                      )}
+                      {referenciaOperacionalInfo.valor != null && (
+                        <span>
+                          <span className="text-muted-foreground">Valor Excel: </span>
+                          <span className={`font-mono font-semibold ${referenciaOperacionalInfo.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(referenciaOperacionalInfo.valor)}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="text-[9px] text-blue-900/70 dark:text-blue-200/70 italic pt-1">
+                  Use as informações acima como referência. Os campos oficiais (fornecedor, fazenda, plano) devem ser escolhidos manualmente.
+                </div>
+              </div>
+            )}
 
             {/* FASE 1 zoo-fin: aviso de origem zootécnica + link para LancamentoZooModal. */}
             {lancamento?.movimentacao_rebanho_id && (
