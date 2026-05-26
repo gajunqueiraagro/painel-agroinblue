@@ -5,7 +5,7 @@ import { normalizeStatusTransacao } from '@/lib/financeiro/v2Transferencia';
 import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -1045,7 +1045,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Tipo Operação *</Label>
                   <Select value={tipoOperacao} onValueChange={v => { setTipoOperacao(v); setSubcentro(''); setMacroCusto(''); setCentroCusto(''); setSubcentroSearch(''); }} disabled={lockedFields?.includes('tipo_operacao')}>
                     <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
                       {TIPOS_OPERACAO.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1062,7 +1062,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Status *</Label>
                   <Select value={statusTransacao} onValueChange={setStatusTransacao}>
                     <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
                       {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1171,7 +1171,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Fazenda *</Label>
                   <Select value={fazendaId} onValueChange={setFazendaId} disabled={macroCusto === 'Dividendos'}>
                     <SelectTrigger tabIndex={7} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
                       {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1317,7 +1317,7 @@ export function LancamentoV2Dialog({
                       <Label className="text-[10px]">Frequência</Label>
                       <Select value={frequencia} onValueChange={(v: 'pontual' | 'recorrente') => setFrequencia(v)}>
                         <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className={DARK_GLASS_CONTENT}>
                           <SelectItem value="pontual">Pontual</SelectItem>
                           <SelectItem value="recorrente">Recorrente</SelectItem>
                         </SelectContent>
@@ -1328,7 +1328,7 @@ export function LancamentoV2Dialog({
                         <Label className="text-[10px]">Modalidade</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
                           <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className={DARK_GLASS_CONTENT}>
                             <SelectItem value="avista">À vista</SelectItem>
                             <SelectItem value="parcelada">Parcelada</SelectItem>
                           </SelectContent>
@@ -1426,7 +1426,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Tipo Documento</Label>
                   <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
                     <SelectTrigger tabIndex={12} className={cn("h-8 text-xs", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
                       <SelectItem value="__none_td__">Nenhum</SelectItem>
                       {TIPOS_DOCUMENTO.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
@@ -1447,7 +1447,7 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Forma de Pagamento</Label>
                   <Select value={formaPgto || '__none_fp__'} onValueChange={handleFormaPgtoChange}>
                     <SelectTrigger tabIndex={13} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
                       <SelectItem value="__none_fp__">Nenhuma</SelectItem>
                       <SelectItem value="PIX">PIX</SelectItem>
                       <SelectItem value="Cartão">Cartão</SelectItem>

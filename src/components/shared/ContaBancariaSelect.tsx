@@ -125,13 +125,20 @@ function buildLabel(c: ContaSelecionavel, mode: Props['showBankDetails']): strin
   return parts.length > 0 ? `${nome} (${parts.join(' ')})` : nome;
 }
 
-// Estilo dark/glass conservador (PR-H2). Documentado para ajuste futuro.
-const CONTENT_DEFAULT =
-  'bg-zinc-950/90 backdrop-blur-xl border-zinc-800 text-zinc-100';
+// Estilo dark/glass aprovado (PR-H2b — mais transparente que a v1).
+// Exportado para reuso em <SelectContent> inline de outros dropdowns
+// no LancamentoV2Dialog e quaisquer dropdowns do modal financeiro.
+// O seletor descendente `[&_[role=option]]:...` cobre TODOS os SelectItems
+// internos sem precisar passar className em cada um.
+export const DARK_GLASS_CONTENT =
+  'bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100 ' +
+  '[&_[role=option]]:text-zinc-100 ' +
+  '[&_[role=option]]:focus:bg-zinc-800/45 ' +
+  '[&_[role=option]]:data-[state=checked]:bg-zinc-800/55';
 const GROUP_LABEL_CLS =
   'text-zinc-400 text-[10px] font-semibold uppercase tracking-wide px-2 py-1';
 const ITEM_CLS =
-  'text-zinc-100 focus:bg-zinc-800/60 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/80';
+  'text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/55';
 
 export function ContaBancariaSelect({
   value,
@@ -175,7 +182,7 @@ export function ContaBancariaSelect({
       <SelectTrigger className={className}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className={contentClassName ?? CONTENT_DEFAULT}>
+      <SelectContent className={contentClassName ?? DARK_GLASS_CONTENT}>
         {prependItems?.map((it) => (
           <SelectItem key={it.value} value={it.value} className={ITEM_CLS}>
             {it.label}
