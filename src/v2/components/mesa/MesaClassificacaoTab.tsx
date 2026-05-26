@@ -143,6 +143,25 @@ export function MesaClassificacaoTab() {
     };
   }, [staging]);
 
+  // PR-M5-A2 ajuste: 2 contadores de órfãos.
+  // nOrfaosAplicaveis = exatamente o que apply tocaria hoje (filtro
+  //   match_status='exato' bate com o LOOP da fn_classificacao_apply).
+  //   Usado pra bloquear o botão Apply.
+  // nOrfaosTotal = todos os órfãos da sessão (qualquer status).
+  //   Usado pra contexto do alerta — mostra escopo do problema.
+  const nOrfaosAplicaveis = useMemo(
+    () => staging.filter(
+      (r) => r.will_create_subcentro_orfao && !r.aplicado && r.match_status === 'exato'
+    ).length,
+    [staging],
+  );
+  const nOrfaosTotal = useMemo(
+    () => staging.filter(
+      (r) => r.will_create_subcentro_orfao && !r.aplicado
+    ).length,
+    [staging],
+  );
+
   function resetSessao() {
     setArquivo(null);
     setLote(null);
@@ -353,6 +372,38 @@ export function MesaClassificacaoTab() {
             alinháveis.
           </p>
 
+          {/* PR-M5-A2 ajuste: alerta usa 2 contadores (aplicáveis + total) e tom neutro */}
+          {nOrfaosTotal > 0 && (
+            <div className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5">
+              <p className="text-sm font-semibold text-red-900">
+                ⚠ {nOrfaosAplicaveis} {nOrfaosAplicaveis === 1 ? 'proposta exata' : 'propostas exatas'} com
+                subcentro fora do plano oficial
+              </p>
+              <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                Há <strong>{nOrfaosTotal}</strong> {nOrfaosTotal === 1 ? 'proposta órfã' : 'propostas órfãs'} na sessão inteira
+                (todos os status).
+                {nOrfaosAplicaveis > 0 && (
+                  <>
+                    {' '}O Apply está <strong>bloqueado</strong> porque {nOrfaosAplicaveis}{' '}
+                    {nOrfaosAplicaveis === 1 ? 'delas seria aplicada' : 'delas seriam aplicadas'} agora.
+                    Corrija o Excel para usar exatamente as strings canônicas do{' '}
+                    <code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>
+                    antes de aplicar. Revise as linhas marcadas em vermelho.
+                  </>
+                )}
+                {nOrfaosAplicaveis === 0 && (
+                  <>
+                    {' '}Nenhuma das propostas exatas tem subcentro órfão — o bloqueio
+                    anti-órfão não impede o Apply. As demais propostas indicam que o
+                    Excel ainda contém strings fora do plano oficial
+                    (<code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>).
+                    Revise as linhas vermelhas antes de continuar.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 cursor-pointer pt-1 border-t mt-2 select-none">
             <Checkbox
               checked={confirmadoCheckbox}
@@ -368,7 +419,12 @@ export function MesaClassificacaoTab() {
           <Button
             size="sm"
             className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
-            disabled={!confirmadoCheckbox || isApplying || headerStats.total === 0}
+            disabled={
+              !confirmadoCheckbox ||
+              isApplying ||
+              headerStats.total === 0 ||
+              nOrfaosAplicaveis > 0
+            }
             onClick={handleAplicar}
           >
             <Check className="h-3.5 w-3.5 mr-1.5" />
@@ -475,7 +531,8 @@ type CellKind =
   | 'value'         // valor sem destaque
   | 'value-equal'   // valor sem destaque (alias semântico)
   | 'value-diff'    // vai gravar (exato + will_set_*) → bg-emerald-50
-  | 'value-conflict'; // sistema ≠ proposta em row não-exato → bg-amber-50
+  | 'value-conflict' // sistema ≠ proposta em row não-exato → bg-amber-50
+  | 'value-orfao';  // PR-M5-A2: subcentro proposto NÃO EXISTS no plano → bg-red-100
 
 interface CellSpec {
   kind: CellKind;
@@ -491,6 +548,7 @@ const CELL_CLS: Record<CellKind, string> = {
   'value-equal': '',
   'value-diff': 'bg-emerald-50',
   'value-conflict': 'bg-amber-50',
+  'value-orfao': 'bg-red-100 text-red-900 font-medium',
 };
 
 function Cell({ spec }: { spec: CellSpec }) {
@@ -535,14 +593,24 @@ function RowPreview({ row, onOpenCandidatos }: RowPreviewProps) {
     console.warn('[MesaClassificacao] L%s: match_status inesperado: %s', row.excel_linha_origem ?? '?', status);
   }
 
-  // Kind da célula proposta para subcentro
-  const propostaSubKind: CellKind = !row.proposto_subcentro
-    ? 'empty'
-    : status === 'exato' && row.will_set_subcentro
-      ? 'value-diff'
-      : status !== 'exato' && row.conflito_subcentro
-        ? 'value-conflict'
-        : 'value-equal';
+  // Kind da célula proposta para subcentro.
+  // PR-M5-A2: 'value-orfao' tem PRIORIDADE MÁXIMA — vermelho sobrepõe
+  // verde (will_set) e âmbar (conflito). Mesmo apply em row exato
+  // gravaria string órfã se passasse, então sinalizar como erro grave.
+  let propostaSubKind: CellKind;
+  if (!row.proposto_subcentro) {
+    propostaSubKind = 'empty';
+  } else if (row.will_create_subcentro_orfao) {
+    propostaSubKind = 'value-orfao';
+  } else if (status === 'exato' && row.will_set_subcentro) {
+    propostaSubKind = 'value-diff';
+  } else if (status !== 'exato' && row.conflito_subcentro) {
+    propostaSubKind = 'value-conflict';
+  } else if (row.proposto_subcentro === row.lanc_subcentro_atual) {
+    propostaSubKind = 'value-equal';
+  } else {
+    propostaSubKind = 'value';
+  }
 
   // Kind da célula proposta para favorecido
   const favConflito = !!(

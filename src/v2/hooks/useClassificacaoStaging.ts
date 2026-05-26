@@ -119,6 +119,10 @@ export interface ClassificacaoStagingPreviewRow {
   /** Flag-mãe (A1): true se QUALQUER campo será gravado. */
   will_change_anything: boolean;
   conflito_subcentro: boolean;
+
+  // PR-M5-A2: proteção anti-órfão (cells em vermelho + bloqueio Apply)
+  proposto_subcentro_existe_no_plano: boolean;
+  will_create_subcentro_orfao: boolean;
 }
 
 export interface PopulateResult {
