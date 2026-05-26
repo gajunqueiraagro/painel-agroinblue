@@ -20,7 +20,11 @@ export type MatchStatus =
   | 'ja_classificado'
   | 'divergente';
 
-/** Espelho da row em financeiro_classificacao_staging. */
+/**
+ * @deprecated PR-M4: substituído por ClassificacaoStagingPreviewRow.
+ * Mantido como referência durante a transição — pode ser removido
+ * num PR posterior se nenhum consumidor restante depender deste shape.
+ */
 export interface ClassificacaoStagingRow {
   staging_id: string;
   sessao_id: string;
@@ -46,6 +50,75 @@ export interface ClassificacaoStagingRow {
   erro_apply: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * PR-M4: shape da view vw_classificacao_staging_preview.
+ * Enriquece staging com estado vivo do lançamento (lanc_*) + proposta
+ * resolvida (proposto_*) + flags calculadas pelo banco (will_set_*,
+ * will_change_anything, conflito_subcentro).
+ *
+ * Flags espelham EXATAMENTE o COALESCE do apply — não duplicar lógica
+ * no front.
+ */
+export interface ClassificacaoStagingPreviewRow {
+  staging_id: string;
+  sessao_id: string;
+  cliente_id: string;
+  match_status: MatchStatus;
+  aplicado: boolean;
+  aplicado_em: string | null;
+  aplicado_por: string | null;
+  erro_apply: string | null;
+  created_at: string;
+  updated_at: string;
+
+  // EXCEL
+  excel_linha_origem: number | null;
+  excel_data: string | null;
+  excel_valor: number | null;
+  excel_tipo_operacao: string | null;
+  excel_conta_origem: string | null;
+  excel_conta_destino: string | null;
+  excel_subcentro: string | null;
+  excel_fornecedor: string | null;
+  excel_produto: string | null;
+  excel_fazenda_codigo: string | null;
+
+  // SISTEMA (estado vivo do lançamento)
+  lanc_id: string | null;
+  lanc_descricao: string | null;
+  lanc_observacao: string | null;
+  lanc_data_pagamento: string | null;
+  lanc_data_competencia: string | null;
+  lanc_valor: number | null;
+  lanc_sinal: string | null;
+  lanc_tipo_operacao: string | null;
+  lanc_status: string | null;
+  lanc_subcentro_atual: string | null;
+  lanc_macro_atual: string | null;
+  lanc_grupo_atual: string | null;
+  lanc_centro_atual: string | null;
+  lanc_plano_conta_id_atual: string | null;
+  lanc_favorecido_id_atual: string | null;
+  lanc_favorecido_nome_atual: string | null;
+  lanc_conta_bancaria_id: string | null;
+  lanc_conta_bancaria_nome: string | null;
+  lanc_conta_destino_id: string | null;
+  lanc_conta_destino_nome: string | null;
+  lanc_fazenda_id: string | null;
+
+  // PROPOSTA (apenas o que apply realmente toca)
+  proposto_subcentro: string | null;
+  proposto_favorecido_id: string | null;
+  proposto_favorecido_nome: string | null;
+
+  // FLAGS (calculadas pelo banco — espelham COALESCE do apply)
+  will_set_subcentro: boolean;
+  will_set_favorecido: boolean;
+  /** Flag-mãe (A1): true se QUALQUER campo será gravado. */
+  will_change_anything: boolean;
+  conflito_subcentro: boolean;
 }
 
 export interface PopulateResult {
@@ -82,14 +155,17 @@ export function useClassificacaoStaging(
     queryKey: queryKeyStaging(sessaoId),
     enabled: !!sessaoId,
     queryFn: async () => {
-      // PR-M2: tipos de RPC/tabelas novas ainda não regenerados — cast `any`.
+      // PR-M4: view de preview substitui SELECT direto na staging — traz
+      // enriquecimento Excel+Sistema+Proposta + flags will_set_*. Tipos
+      // do Supabase não regenerados (PR-M2 aplicado via Chrome MCP);
+      // cast `(supabase as any)` mantido conforme padrão do projeto.
       const { data, error } = await (supabase as any)
-        .from('financeiro_classificacao_staging')
+        .from('vw_classificacao_staging_preview')
         .select('*')
         .eq('sessao_id', sessaoId)
         .order('excel_linha_origem', { ascending: true });
       if (error) throw error;
-      return (data ?? []) as ClassificacaoStagingRow[];
+      return (data ?? []) as ClassificacaoStagingPreviewRow[];
     },
     staleTime: 30_000,
   });
