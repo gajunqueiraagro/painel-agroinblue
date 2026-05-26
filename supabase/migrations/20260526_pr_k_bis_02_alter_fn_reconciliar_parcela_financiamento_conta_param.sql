@@ -19,6 +19,12 @@
 -- — os INSERTs lêem v_novo->>'conta_bancaria_id', não precisam mudar.
 -- ====================================================================
 
+-- Garantia: remove assinatura antiga (3 params) se existir.
+-- PostgreSQL não substitui automaticamente quando muda assinatura;
+-- sem este DROP, aplicar esta migration num banco com a versão
+-- antiga ainda viva resulta em 2 funções coexistindo (overload).
+DROP FUNCTION IF EXISTS public.fn_reconciliar_parcela_financiamento(uuid, boolean, boolean);
+
 CREATE OR REPLACE FUNCTION public.fn_reconciliar_parcela_financiamento(p_parcela_id uuid, p_dry_run boolean DEFAULT true, p_recalcula_vt boolean DEFAULT false, p_conta_bancaria_id uuid DEFAULT NULL)
  RETURNS jsonb
  LANGUAGE plpgsql
