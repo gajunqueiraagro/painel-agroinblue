@@ -26,6 +26,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { ArrowLeftRight } from 'lucide-react';
 import { useExtratoBancario, type ExtratoMovimento } from '@/hooks/useExtratoBancario';
 import { ConciliarExtratoDialog, type ExtratoMovimentoRef } from './ConciliarExtratoDialog';
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
@@ -77,7 +78,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   });
 
   // Hooks para o caminho "Criar lançamento" a partir de OFX órfão.
-  const { fazendas } = useFazenda();
+  const { fazendas, fazendaAtual } = useFazenda();
   const {
     contasBancarias,
     fornecedores,
@@ -318,6 +319,11 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
   const [movCriando, setMovCriando] = useState<ExtratoMovimento | null>(null);
+  // PR-F — fluxo "Transferência" via OFX (3-Transferências). Reaproveita
+  // o LancamentoV2Dialog em modo pré-populado com a conta OFX travada
+  // conforme o sinal: OFX < 0 trava conta_bancaria_id (origem),
+  // OFX > 0 trava conta_destino_id. Operador escolhe a contraparte.
+  const [movTransferencia, setMovTransferencia] = useState<ExtratoMovimento | null>(null);
 
   // PR-D — seleção em massa para criação de lançamentos a partir do OFX.
   // Elegibilidade: status='nao_conciliado' && sem vínculo em cbi && não ignorado.
@@ -550,6 +556,42 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         + '. Use o botão Conciliar para vincular manualmente.',
       );
       setMovCriando(null);
+      refetch();
+      return true;
+    }
+  };
+
+  // PR-F — handler análogo a handleCriarFromExtrato, mas para transferência.
+  // O LancamentoV2Dialog já valida origem≠destino e exige conta destino
+  // via v2Transferencia.validateTransferenciaAccounts. Aqui só conectamos
+  // o save ao vínculo cbi (mesmo padrão da rota "Criar lançamento").
+  const handleTransferenciaFromExtrato = async (
+    form: LancamentoV2Form,
+    _id?: string,
+  ): Promise<boolean> => {
+    if (!movTransferencia) return false;
+    const id = await criarLancamentoComId(form, { origem: 'extrato' });
+    if (!id) return false;
+    try {
+      await insertVinculo({
+        extrato_id: movTransferencia.id,
+        lancamento_id: id,
+        valor_aplicado: Math.abs(movTransferencia.valor),
+        cliente_id: movTransferencia.cliente_id,
+      });
+      toast.success('Transferência criada e conciliada');
+      setMovTransferencia(null);
+      refetch();
+      return true;
+    } catch (e: any) {
+      // Lançamento de transferência já está em financeiro_lancamentos_v2.
+      // Fechar modal pra evitar duplicação. Operador refaz vínculo via Conciliar.
+      toast.error(
+        'Transferência criada, mas erro ao vincular ao extrato: '
+        + (e?.message ?? e)
+        + '. Use o botão Conciliar para vincular manualmente.',
+      );
+      setMovTransferencia(null);
       refetch();
       return true;
     }
@@ -859,6 +901,19 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                       >
                         Criar lançamento
                       </Button>
+                      {/* PR-F — abrir LancamentoV2Dialog em modo transferência
+                          com a conta OFX travada conforme sinal. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-2"
+                        disabled={m.status === 'ignorado' || m.status === 'conciliado'}
+                        onClick={() => setMovTransferencia(m)}
+                        title="Registrar como transferência entre contas"
+                      >
+                        <ArrowLeftRight className="h-3 w-3 mr-1" />
+                        Transferência
+                      </Button>
                       {m.status !== 'ignorado' && (
                         <Button
                           size="sm"
@@ -899,6 +954,51 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
           numero_documento: movCriando.documento ?? undefined,
         } : undefined}
         lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
+      />
+
+      {/* PR-F — instância dedicada para modo "Transferência via OFX".
+          Reaproveita o mesmo LancamentoV2Dialog em modo 3-Transferências,
+          travando a conta OFX (origem ou destino, conforme sinal) e
+          deixando o operador preencher a contraparte. */}
+      <LancamentoV2Dialog
+        open={!!movTransferencia}
+        onClose={() => setMovTransferencia(null)}
+        onSave={handleTransferenciaFromExtrato}
+        fazendas={fazendas}
+        contas={contasBancarias}
+        classificacoes={classificacoes}
+        fornecedores={fornecedores}
+        onCriarFornecedor={criarFornecedor}
+        prefill={movTransferencia ? {
+          // Em modo Global, fazendaAtual.id === '__global__' (sentinel);
+          // passar string vazia força o operador a escolher fazenda real
+          // no form. Fora de Global, prefill com a fazenda atual.
+          fazenda_id:
+            !fazendaAtual || fazendaAtual.id === '__global__'
+              ? ''
+              : fazendaAtual.id,
+          data_pagamento: movTransferencia.data_movimento,
+          data_competencia: movTransferencia.data_movimento,
+          valor: Math.abs(movTransferencia.valor),
+          tipo_operacao: '3-Transferências',
+          status_transacao: 'realizado',
+          // OFX < 0 (saída): conta OFX = origem (conta_bancaria_id).
+          // OFX > 0 (entrada): conta OFX = destino (conta_destino_id).
+          // Convenção PR-K respeitada.
+          conta_bancaria_id:
+            movTransferencia.valor < 0 ? movTransferencia.conta_bancaria_id : '',
+          conta_destino_id:
+            movTransferencia.valor > 0 ? movTransferencia.conta_bancaria_id : null,
+          descricao: movTransferencia.descricao ?? undefined,
+          numero_documento: movTransferencia.documento ?? undefined,
+        } : undefined}
+        lockedFields={movTransferencia ? [
+          'valor',
+          'data_pagamento',
+          'tipo_operacao',
+          // Trava só o lado da conta OFX; contraparte fica editável.
+          movTransferencia.valor < 0 ? 'conta_bancaria_id' : 'conta_destino_id',
+        ] : []}
       />
 
       <ConciliarExtratoDialog
