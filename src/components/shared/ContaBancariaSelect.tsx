@@ -104,11 +104,14 @@ export const DARK_GLASS_CONTENT =
   'bg-zinc-950/55 backdrop-blur-xl border-zinc-700/40 text-zinc-100 ' +
   '[&_[role=option]]:text-zinc-100 ' +
   '[&_[role=option]]:focus:bg-zinc-800/45 ' +
-  '[&_[role=option]]:data-[state=checked]:bg-zinc-800/55';
+  '[&_[role=option]]:focus:text-zinc-100 ' +
+  '[&_[role=option]]:data-[state=checked]:bg-zinc-800/55 ' +
+  '[&_[role=option]]:data-[state=checked]:text-zinc-100';
 const GROUP_LABEL_CLS =
   'text-zinc-400 text-[10px] font-semibold uppercase tracking-wide px-2 py-1';
 const ITEM_CLS =
-  'text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 data-[state=checked]:bg-zinc-800/55';
+  'text-zinc-100 focus:bg-zinc-800/45 focus:text-zinc-100 ' +
+  'data-[state=checked]:bg-zinc-800/55 data-[state=checked]:text-zinc-100';
 
 export function ContaBancariaSelect({
   value,
