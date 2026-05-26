@@ -1,16 +1,15 @@
 /**
  * MesaClassificacaoTab — UI da tab "Classificação Excel" na Mesa Operacional.
  *
- * Reaproveita `parseExcelToLote` (parser puro existente) + adapter
- * `loteExcelToClassificacaoRows` (PR-M2) para alimentar a RPC
- * `fn_classificacao_populate_staging` (PR-M). Apresenta preview
- * com counts por match_status, tabela filtrável, e botão de Apply
- * (`fn_classificacao_apply`).
+ * Usa parser PRÓPRIO `parseExcelClassificacao` (PR-M2.1) — validação
+ * mínima (linha rejeitada só se faltar Data_Ref/Valor/Tipo/Subcentro).
+ * O parser OFX é incompatível (schema/validação OFX-específicos);
+ * detalhes em parserClassificacao.ts.
  *
  * Fluxo:
  *   1. Operador escolhe arquivo (input file accept=.xlsx)
  *   2. handleSelectFile reseta TUDO (arquivo, lote, sessaoId, errosParser, filtroStatus)
- *   3. parseExcelToLote → exibe contagens brutas do parser + botão "Popular staging"
+ *   3. parseExcelClassificacao → exibe contagens + botão "Popular staging"
  *   4. Click "Popular" → crypto.randomUUID() → setSessaoId → populate RPC
  *      → useQuery dispara → tabela populada
  *   5. Operador revisa cards/tabela
@@ -26,9 +25,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Upload, Play, AlertTriangle, Check, FileX, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
-import { parseExcelToLote } from '@/v2/lib/excelPreview/parser';
-import type { LoteExcel } from '@/v2/lib/excelPreview/types';
-import { loteExcelToClassificacaoRows } from '@/v2/lib/excelPreview/loteToClassificacao';
+import {
+  parseExcelClassificacao,
+  type ClassificacaoParseResult,
+} from '@/v2/lib/excelPreview/parserClassificacao';
 import {
   useClassificacaoStaging,
   type MatchStatus,
@@ -78,8 +78,8 @@ export function MesaClassificacaoTab() {
 
   // Estado local da sessão atual.
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [lote, setLote] = useState<LoteExcel | null>(null);
-  const [errosParser, setErrosParser] = useState<string[]>([]);
+  const [lote, setLote] = useState<ClassificacaoParseResult | null>(null);
+  const [errosParser, setErrosParser] = useState<Array<{ linha: number; motivo: string }>>([]);
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<MatchStatus | 'todos'>('todos');
   const [parsing, setParsing] = useState(false);
@@ -135,18 +135,20 @@ export function MesaClassificacaoTab() {
     setArquivo(file);
     setParsing(true);
     try {
-      const parsed = await parseExcelToLote(file);
+      const parsed = await parseExcelClassificacao(file);
       setLote(parsed);
       setErrosParser(parsed.erros);
-      if (parsed.linhasComErro > 0) {
-        toast.warning(`${parsed.linhasComErro} linha(s) com erro no parser — verifique antes de popular.`);
+      if (parsed.linhasValidas === 0 && parsed.linhasComErro > 0) {
+        toast.error(`Nenhuma linha válida — todas as ${parsed.linhasComErro} linhas foram rejeitadas.`);
+      } else if (parsed.linhasComErro > 0) {
+        toast.warning(`${parsed.linhasValidas} linha(s) válida(s) · ${parsed.linhasComErro} rejeitada(s) — revisar antes de popular.`);
       } else {
         toast.success(`Excel lido: ${parsed.linhasValidas} linha(s) válida(s).`);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`Erro ao ler Excel: ${msg}`);
-      setErrosParser([msg]);
+      setErrosParser([{ linha: 0, motivo: msg }]);
     } finally {
       setParsing(false);
     }
@@ -158,7 +160,8 @@ export function MesaClassificacaoTab() {
       return;
     }
     const novaSessao = crypto.randomUUID();
-    const rows = loteExcelToClassificacaoRows(lote);
+    // PR-M2.1: parser já retorna rows no shape exato da RPC.
+    const rows = lote.rows;
     try {
       setSessaoId(novaSessao);
       const res = await populate({ sessao_id: novaSessao, rows });
@@ -243,8 +246,11 @@ export function MesaClassificacaoTab() {
           <div className="text-[10px] text-red-700 flex items-start gap-1.5">
             <FileX className="h-3 w-3 mt-0.5 shrink-0" />
             <div>
-              <strong>Erros do parser:</strong>{' '}
-              {errosParser.slice(0, 3).join(' · ')}
+              <strong>Linhas rejeitadas pelo parser ({errosParser.length}):</strong>{' '}
+              {errosParser
+                .slice(0, 3)
+                .map((e) => `Linha ${e.linha}: ${e.motivo}`)
+                .join(' · ')}
               {errosParser.length > 3 && ` (+${errosParser.length - 3})`}
             </div>
           </div>
