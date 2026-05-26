@@ -19,8 +19,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -417,37 +417,24 @@ export function MesaClassificacaoTab() {
         </div>
       )}
 
-      {/* ─── Tabela 3-zonas ──────────────────────────────────── */}
+      {/* ─── PR-M5-A: Lista de Cards 4 colunas × 10 linhas ──── */}
       {sessaoId && (
-        <div className="border rounded overflow-auto max-h-[65vh]">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
-              <TableRow>
-                <TableHead className="text-[10px] w-[140px]">Status</TableHead>
-                <TableHead className="text-[10px] w-[280px]">Excel</TableHead>
-                <TableHead className="text-[10px] w-[280px]">Sistema (estado atual)</TableHead>
-                <TableHead className="text-[10px] w-[220px]">Proposta</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rowsFiltradas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-6">
-                    {staging.length === 0
-                      ? 'Aguardando populate da staging...'
-                      : 'Nenhuma linha bate com o filtro selecionado.'}
-                  </TableCell>
-                </TableRow>
-              )}
-              {rowsFiltradas.map((r) => (
-                <RowPreview
-                  key={r.staging_id}
-                  row={r}
-                  onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
-                />
-              ))}
-            </TableBody>
-          </Table>
+        <div className="max-h-[65vh] overflow-auto pr-1">
+          {rowsFiltradas.length === 0 ? (
+            <div className="text-center text-xs text-muted-foreground py-6 border rounded-md">
+              {staging.length === 0
+                ? 'Aguardando populate da staging...'
+                : 'Nenhuma linha bate com o filtro selecionado.'}
+            </div>
+          ) : (
+            rowsFiltradas.map((r) => (
+              <RowPreview
+                key={r.staging_id}
+                row={r}
+                onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
+              />
+            ))
+          )}
         </div>
       )}
 
@@ -469,7 +456,63 @@ export function MesaClassificacaoTab() {
   );
 }
 
-// ─── Render de uma linha ──────────────────────────────────────────────
+// ─── PR-M5-A: Visual Diff Alinhado ────────────────────────────────────
+//
+// Cada staging row vira um Card com 2 zonas:
+//   1) HEADER do card — badge + L# + R$ valor + descrição + msg status
+//      (+ botão "Ver candidatos" se ambiguo)
+//   2) Sub-grid 4 colunas × 10 linhas alinhadas
+//      (Campo / Excel / Sistema / Proposta)
+//
+// Ordem das 10 linhas é canônica para toda a Mesa — operador escaneia
+// sempre na mesma posição.
+// ─────────────────────────────────────────────────────────────────────
+
+type CellKind =
+  | 'empty'         // valor null/'' → muted italic "∅ vazio"
+  | 'na'            // não se aplica → "—" muted
+  | 'no-lanc'       // sistema/proposta quando lanc_id === null
+  | 'value'         // valor sem destaque
+  | 'value-equal'   // valor sem destaque (alias semântico)
+  | 'value-diff'    // vai gravar (exato + will_set_*) → bg-emerald-50
+  | 'value-conflict'; // sistema ≠ proposta em row não-exato → bg-amber-50
+
+interface CellSpec {
+  kind: CellKind;
+  value?: string | null;
+  title?: string;
+}
+
+const CELL_CLS: Record<CellKind, string> = {
+  empty: 'text-muted-foreground italic',
+  na: 'text-muted-foreground',
+  'no-lanc': 'text-muted-foreground italic',
+  value: '',
+  'value-equal': '',
+  'value-diff': 'bg-emerald-50',
+  'value-conflict': 'bg-amber-50',
+};
+
+function Cell({ spec }: { spec: CellSpec }) {
+  const base = `px-3 py-1.5 align-top text-[11px] ${CELL_CLS[spec.kind]}`;
+  if (spec.kind === 'empty') return <td className={base}>∅ vazio</td>;
+  if (spec.kind === 'na')    return <td className={base}>—</td>;
+  if (spec.kind === 'no-lanc') return <td className={base}>∅ Sem lançamento</td>;
+  return (
+    <td className={base} title={spec.title ?? spec.value ?? undefined}>
+      <div className="truncate">{spec.value}</div>
+    </td>
+  );
+}
+
+function hierarquia(
+  macro: string | null,
+  grupo: string | null,
+  centro: string | null,
+): string | null {
+  const parts = [macro, grupo, centro].filter((p): p is string => !!p);
+  return parts.length > 0 ? parts.join(' › ') : null;
+}
 
 interface RowPreviewProps {
   row: ClassificacaoStagingPreviewRow;
@@ -478,229 +521,236 @@ interface RowPreviewProps {
 
 function RowPreview({ row, onOpenCandidatos }: RowPreviewProps) {
   const status = row.match_status;
-  const contaSistema =
-    row.lanc_tipo_operacao === '1-Entradas'
-      ? row.lanc_conta_destino_nome
-      : row.lanc_conta_bancaria_nome;
+  const noLanc = !row.lanc_id;
+
+  // Logs defensivos (console only — não-bloqueante)
+  const sistemaPlano = hierarquia(row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual);
+  if (row.lanc_subcentro_atual && !sistemaPlano) {
+    console.warn(
+      '[MesaClassificacao] L%s: subcentro preenchido sem hierarquia macro/grupo/centro (staging=%s)',
+      row.excel_linha_origem ?? '?', row.staging_id,
+    );
+  }
+  if (!STATUS_LABEL[status]) {
+    console.warn('[MesaClassificacao] L%s: match_status inesperado: %s', row.excel_linha_origem ?? '?', status);
+  }
+
+  // Kind da célula proposta para subcentro
+  const propostaSubKind: CellKind = !row.proposto_subcentro
+    ? 'empty'
+    : status === 'exato' && row.will_set_subcentro
+      ? 'value-diff'
+      : status !== 'exato' && row.conflito_subcentro
+        ? 'value-conflict'
+        : 'value-equal';
+
+  // Kind da célula proposta para favorecido
+  const favConflito = !!(
+    status !== 'exato'
+    && row.lanc_favorecido_id_atual
+    && row.proposto_favorecido_id
+    && row.lanc_favorecido_id_atual !== row.proposto_favorecido_id
+  );
+  const propostaFavKind: CellKind = !row.proposto_favorecido_nome
+    ? 'empty'
+    : status === 'exato' && row.will_set_favorecido
+      ? 'value-diff'
+      : favConflito
+        ? 'value-conflict'
+        : 'value-equal';
+
+  // Helpers locais para spec de células
+  const cellExcel = (value: string | null): CellSpec =>
+    value ? { kind: 'value-equal', value, title: value } : { kind: 'empty' };
+  const cellSistema = (value: string | null): CellSpec => {
+    if (noLanc) return { kind: 'no-lanc' };
+    return value ? { kind: 'value-equal', value, title: value } : { kind: 'empty' };
+  };
+  const cellPropostaStatic = (value: string | null): CellSpec => {
+    if (noLanc) return { kind: 'no-lanc' };
+    return value ? { kind: 'value-equal', value, title: value } : { kind: 'empty' };
+  };
+  const cellNoLancOrNA = (): CellSpec => (noLanc ? { kind: 'no-lanc' } : { kind: 'na' });
+
+  const fields: Array<{
+    label: string;
+    excel: CellSpec;
+    sistema: CellSpec;
+    proposta: CellSpec;
+  }> = [
+    {
+      label: '📅 Data',
+      excel:    cellExcel(row.excel_data ? fmtData(row.excel_data) : null),
+      sistema:  cellSistema(row.lanc_data_pagamento ? fmtData(row.lanc_data_pagamento) : null),
+      proposta: cellPropostaStatic(row.lanc_data_pagamento ? fmtData(row.lanc_data_pagamento) : null),
+    },
+    {
+      label: '💰 Valor',
+      excel:    cellExcel(row.excel_valor != null ? formatMoeda(row.excel_valor) : null),
+      sistema:  cellSistema(row.lanc_valor != null ? formatMoeda(row.lanc_valor) : null),
+      proposta: cellPropostaStatic(row.lanc_valor != null ? formatMoeda(row.lanc_valor) : null),
+    },
+    {
+      label: '🔄 Tipo',
+      excel:    cellExcel(row.excel_tipo_operacao),
+      sistema:  cellSistema(row.lanc_tipo_operacao),
+      proposta: cellPropostaStatic(row.lanc_tipo_operacao),
+    },
+    {
+      label: '🏦 Conta De',
+      excel:    cellExcel(row.excel_conta_origem),
+      sistema:  cellSistema(row.lanc_conta_bancaria_nome),
+      proposta: cellPropostaStatic(row.lanc_conta_bancaria_nome),
+    },
+    {
+      label: '🏦 Conta Para',
+      excel:    cellExcel(row.excel_conta_destino),
+      sistema:  cellSistema(row.lanc_conta_destino_nome),
+      proposta: cellPropostaStatic(row.lanc_conta_destino_nome),
+    },
+    {
+      label: '🧩 Subcentro',
+      excel:    cellExcel(row.excel_subcentro),
+      sistema:  cellSistema(row.lanc_subcentro_atual),
+      proposta: noLanc
+        ? { kind: 'no-lanc' }
+        : !row.proposto_subcentro
+          ? { kind: 'empty' }
+          : { kind: propostaSubKind, value: row.proposto_subcentro, title: row.proposto_subcentro },
+    },
+    {
+      label: '👤 Fornecedor',
+      excel:    cellExcel(row.excel_fornecedor),
+      sistema:  cellNoLancOrNA(),
+      proposta: cellNoLancOrNA(),
+    },
+    {
+      label: '📦 Produto',
+      excel:    cellExcel(row.excel_produto),
+      sistema:  cellNoLancOrNA(),
+      proposta: cellNoLancOrNA(),
+    },
+    {
+      label: '📚 Plano',
+      excel:    { kind: 'na' },
+      sistema:  noLanc
+        ? { kind: 'no-lanc' }
+        : sistemaPlano
+          ? { kind: 'value-equal', value: sistemaPlano, title: sistemaPlano }
+          : { kind: 'empty' },
+      // Apply atual NÃO preenche plano — sempre NA na coluna Proposta
+      proposta: cellNoLancOrNA(),
+    },
+    {
+      label: '✅ Favorecido',
+      excel:    { kind: 'na' },
+      sistema:  cellSistema(row.lanc_favorecido_nome_atual),
+      proposta: noLanc
+        ? { kind: 'no-lanc' }
+        : !row.proposto_favorecido_nome
+          ? { kind: 'empty' }
+          : { kind: propostaFavKind, value: row.proposto_favorecido_nome, title: row.proposto_favorecido_nome },
+    },
+  ];
 
   return (
-    <TableRow className={row.aplicado ? 'opacity-60' : undefined}>
-      {/* STATUS */}
-      <TableCell className="align-top">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <Badge
-              variant="outline"
-              className={`h-4 px-1.5 text-[9px] ${STATUS_BADGE_CLS[status]}`}
+    <Card className={`my-3 ${row.aplicado ? 'opacity-60' : ''}`}>
+      {/* ─── Header do card ─────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b flex-wrap">
+        <Badge
+          variant="outline"
+          className={`h-5 px-2 text-[10px] ${STATUS_BADGE_CLS[status]}`}
+        >
+          {STATUS_LABEL[status]}
+        </Badge>
+        <span className="text-[11px] font-mono text-muted-foreground">
+          L{row.excel_linha_origem ?? '-'}
+        </span>
+        <span className="font-bold tabular-nums text-sm">
+          {row.excel_valor != null ? formatMoeda(row.excel_valor) : '-'}
+        </span>
+        <span
+          className="text-xs truncate max-w-md"
+          title={row.lanc_descricao ?? ''}
+        >
+          {row.lanc_descricao ?? (
+            <span className="italic text-muted-foreground">∅ Sem lançamento vinculado</span>
+          )}
+        </span>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {STATUS_MESSAGE[status]}
+        </span>
+        {row.aplicado && (
+          <span className="text-[10px] text-emerald-700 font-semibold">✓ aplicado</span>
+        )}
+        {row.erro_apply && (
+          <AlertTriangle
+            className="h-3.5 w-3.5 text-red-600"
+            aria-label={row.erro_apply}
+          />
+        )}
+        {status === 'ambiguo' && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] px-2"
+            onClick={onOpenCandidatos}
+          >
+            <ExternalLink className="h-3 w-3 mr-1" />
+            Ver candidatos
+          </Button>
+        )}
+      </div>
+
+      {/* ─── Sub-grid 4 col × (1 thead + 10 tbody) ──────────────── */}
+      <table className="w-full table-fixed border-collapse text-xs leading-tight">
+        <colgroup>
+          <col className="w-40" />
+          <col />
+          <col />
+          <col />
+        </colgroup>
+        <thead>
+          <tr className="border-b bg-slate-50/60">
+            <th className="text-left px-3 py-1.5 font-semibold text-[11px] text-slate-700">
+              Campo
+            </th>
+            <th className="text-left px-3 py-1.5 font-semibold text-[11px] text-slate-700">
+              Excel
+              <span className="block text-[10px] font-normal text-muted-foreground">
+                Sugestão Excel
+              </span>
+            </th>
+            <th className="text-left px-3 py-1.5 font-semibold text-[11px] text-slate-700">
+              Sistema
+              <span className="block text-[10px] font-normal text-muted-foreground">
+                Plano soberano atual
+              </span>
+            </th>
+            <th className="text-left px-3 py-1.5 font-semibold text-[11px] text-slate-700">
+              Proposta
+              <span className="block text-[10px] font-normal text-muted-foreground">
+                Após apply
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {fields.map((fr, idx) => (
+            <tr
+              key={idx}
+              className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60"
             >
-              {STATUS_LABEL[status]}
-            </Badge>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              L{row.excel_linha_origem ?? '-'}
-            </span>
-            {row.aplicado && (
-              <span className="text-[9px] text-emerald-700 font-semibold">✓</span>
-            )}
-            {row.erro_apply && (
-              <AlertTriangle
-                className="inline h-3 w-3 text-red-600"
-                aria-label={row.erro_apply}
-              />
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            {STATUS_MESSAGE[status]}
-          </p>
-        </div>
-      </TableCell>
-
-      {/* EXCEL */}
-      <TableCell className="align-top text-[11px]">
-        <div className="font-semibold tabular-nums">
-          {fmtData(row.excel_data)} · {row.excel_valor != null ? formatMoeda(row.excel_valor) : '-'}
-        </div>
-        <div className="text-[10px]">{row.excel_tipo_operacao ?? '-'}</div>
-        <div className="text-[10px] text-muted-foreground truncate" title={row.excel_conta_origem ?? ''}>
-          De: {row.excel_conta_origem ?? '-'}
-        </div>
-        <div className="text-[10px] text-muted-foreground truncate" title={row.excel_conta_destino ?? ''}>
-          Para: {row.excel_conta_destino ?? '-'}
-        </div>
-        <div className="text-[10px] mt-1 truncate" title={row.excel_subcentro ?? ''}>
-          <span className="text-muted-foreground">Sub Excel:</span> {row.excel_subcentro ?? '-'}
-        </div>
-        <div className="text-[10px] truncate" title={row.excel_fornecedor ?? ''}>
-          <span className="text-muted-foreground">Forn:</span> {row.excel_fornecedor ?? '-'}
-        </div>
-        {row.excel_produto && (
-          <div className="text-[10px] truncate" title={row.excel_produto}>
-            <span className="text-muted-foreground">Prod:</span> {row.excel_produto}
-          </div>
-        )}
-      </TableCell>
-
-      {/* SISTEMA */}
-      <TableCell className="align-top text-[11px]">
-        {!row.lanc_id ? (
-          <div className="text-[10px] text-muted-foreground italic">
-            — (nenhum lançamento vinculado)
-          </div>
-        ) : (
-          <>
-            <div className="font-medium truncate" title={row.lanc_descricao ?? ''}>
-              {row.lanc_descricao ?? '(sem descrição)'}
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              {fmtData(row.lanc_data_pagamento)} · {row.lanc_tipo_operacao} · sinal: {row.lanc_sinal ?? '-'}
-            </div>
-            <div className="text-[10px] truncate" title={contaSistema ?? ''}>
-              <span className="text-muted-foreground">Conta:</span> {contaSistema ?? '-'}
-            </div>
-            <div className="text-[10px] mt-1">
-              <span className="text-muted-foreground">Sub atual:</span>{' '}
-              {row.lanc_subcentro_atual ? (
-                <span className={row.conflito_subcentro ? 'text-amber-700 font-medium' : ''}>
-                  {row.lanc_subcentro_atual}
-                  {row.conflito_subcentro && (
-                    <Badge
-                      variant="outline"
-                      className="h-3 px-1 ml-1 text-[8px] bg-amber-50 text-amber-700 border-amber-300"
-                    >
-                      ≠ Excel
-                    </Badge>
-                  )}
-                </span>
-              ) : (
-                <span className="italic text-muted-foreground">∅ vazio</span>
-              )}
-            </div>
-            {(row.lanc_macro_atual || row.lanc_grupo_atual || row.lanc_centro_atual) && (
-              <div className="text-[10px] text-muted-foreground truncate">
-                {[row.lanc_macro_atual, row.lanc_grupo_atual, row.lanc_centro_atual]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
-            )}
-            <div className="text-[10px]">
-              <span className="text-muted-foreground">Forn atual:</span>{' '}
-              {row.lanc_favorecido_nome_atual ?? (
-                <span className="italic text-muted-foreground">∅ vazio</span>
-              )}
-            </div>
-          </>
-        )}
-      </TableCell>
-
-      {/* PROPOSTA */}
-      <TableCell className="align-top text-[11px]">
-        {status === 'ambiguo' ? (
-          <div className="space-y-1">
-            <div className="text-[10px] text-muted-foreground">Múltiplos candidatos</div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 text-[10px] px-2"
-              onClick={onOpenCandidatos}
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />
-              Ver candidatos
-            </Button>
-          </div>
-        ) : status === 'sem_match' ? (
-          <div className="space-y-0.5">
-            <div className="text-[10px]">Sem lançamento compatível</div>
-            <div className="text-[10px] text-muted-foreground italic">
-              Apply NÃO criará lançamento.
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {/* Subcentro */}
-            <div className="flex items-start gap-1.5 flex-wrap">
-              <div className="flex-1 min-w-0 truncate" title={row.proposto_subcentro ?? ''}>
-                <span className="text-muted-foreground">Subcentro:</span>{' '}
-                {row.proposto_subcentro ?? '—'}
-              </div>
-              {status === 'exato' && row.will_set_subcentro && (
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-emerald-100 text-emerald-800 border-emerald-300"
-                >
-                  ✓ Gravará subcentro
-                </Badge>
-              )}
-              {!row.will_set_subcentro &&
-                row.lanc_subcentro_atual &&
-                row.proposto_subcentro &&
-                row.lanc_subcentro_atual === row.proposto_subcentro && (
-                  <Badge
-                    variant="outline"
-                    className="h-4 px-1.5 text-[9px] bg-slate-100 text-slate-700 border-slate-300"
-                  >
-                    ⊘ Já igual
-                  </Badge>
-                )}
-              {row.conflito_subcentro && (
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-amber-100 text-amber-800 border-amber-300"
-                >
-                  ⚠ Sistema tem outro
-                </Badge>
-              )}
-            </div>
-
-            {/* Favorecido */}
-            <div className="flex items-start gap-1.5 flex-wrap">
-              <div className="flex-1 min-w-0 truncate" title={row.proposto_favorecido_nome ?? ''}>
-                <span className="text-muted-foreground">Favorecido:</span>{' '}
-                {row.proposto_favorecido_nome ?? '—'}
-              </div>
-              {status === 'exato' && row.will_set_favorecido && (
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-emerald-100 text-emerald-800 border-emerald-300"
-                >
-                  ✓ Gravará favorecido
-                </Badge>
-              )}
-              {!row.will_set_favorecido && row.lanc_favorecido_id_atual && (
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-slate-100 text-slate-700 border-slate-300"
-                >
-                  ⊘ Já preenchido
-                </Badge>
-              )}
-            </div>
-
-            {/* PR-M4 ajuste: row fora de 'exato' com campos alinháveis —
-                badge muted explicando por que apply NÃO processará. */}
-            {status !== 'exato' && row.will_change_anything && STATUS_APPLY_NAO_PROCESSA[status] && (
-              <div className="pt-0.5">
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-slate-100 text-slate-600 border-slate-300"
-                >
-                  ⊘ {STATUS_APPLY_NAO_PROCESSA[status]}
-                </Badge>
-              </div>
-            )}
-
-            {/* A1: badge "Nada será alterado" */}
-            {row.lanc_id && !row.will_change_anything && (
-              <div className="pt-0.5">
-                <Badge
-                  variant="outline"
-                  className="h-4 px-1.5 text-[9px] bg-slate-100 text-slate-600 border-slate-300"
-                >
-                  ⊘ Nada será alterado neste lançamento
-                </Badge>
-              </div>
-            )}
-          </div>
-        )}
-      </TableCell>
-    </TableRow>
+              <td className="px-3 py-1.5 text-[11px] font-medium text-slate-700">
+                {fr.label}
+              </td>
+              <Cell spec={fr.excel} />
+              <Cell spec={fr.sistema} />
+              <Cell spec={fr.proposta} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
