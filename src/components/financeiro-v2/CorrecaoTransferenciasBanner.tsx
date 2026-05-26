@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -68,7 +68,6 @@ export function CorrecaoTransferenciasBanner({ contas, onFixed }: Props) {
   // Don't render if no pending or dismissed or loading
   if (loading || totalPendente === 0 || dismissed) return null;
 
-  const contasDisponiveis = contas.filter(c => current && c.id !== current.conta_bancaria_id);
   const contaOrigemNome = current ? contas.find(c => c.id === current.conta_bancaria_id) : null;
 
   const handleSalvar = async () => {
@@ -128,16 +127,15 @@ export function CorrecaoTransferenciasBanner({ contas, onFixed }: Props) {
           </span>
 
           <div className="flex items-center gap-1.5 ml-auto">
-            <Select value={selectedDestino} onValueChange={setSelectedDestino}>
-              <SelectTrigger className="h-6 text-[10px] w-[180px] bg-white">
-                <SelectValue placeholder="Conta destino" />
-              </SelectTrigger>
-              <SelectContent>
-                {contasDisponiveis.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{contaLabel(c)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* PR-H2c — ContaBancariaSelect compartilhado (agrupado por tipo_conta + dark/glass). */}
+            <ContaBancariaSelect
+              value={selectedDestino}
+              onValueChange={setSelectedDestino}
+              contas={contas}
+              excluirIds={current?.conta_bancaria_id ? [current.conta_bancaria_id] : []}
+              placeholder="Conta destino"
+              className="h-6 text-[10px] w-[180px] bg-white"
+            />
 
             <div className="flex gap-0.5">
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleVoltar} disabled={currentIdx === 0}>

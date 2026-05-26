@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
@@ -67,10 +67,6 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
   }, [open, loadPendentes]);
 
   const current = pendentes[currentIdx] || null;
-
-  const contasDisponiveis = contas.filter(c =>
-    current && c.id !== current.conta_bancaria_id
-  );
 
   const contaOrigemNome = current
     ? contas.find(c => c.id === current.conta_bancaria_id)
@@ -183,18 +179,14 @@ export function CorrecaoTransferenciasDialog({ open, onClose, contas, onFixed }:
               <label className="text-sm font-medium text-[hsl(var(--primary))]">
                 Conta Destino *
               </label>
-              <Select value={selectedDestino} onValueChange={setSelectedDestino}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a conta destino" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contasDisponiveis.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {contaLabel(c)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* PR-H2c — ContaBancariaSelect compartilhado (agrupado por tipo_conta + dark/glass). */}
+              <ContaBancariaSelect
+                value={selectedDestino}
+                onValueChange={setSelectedDestino}
+                contas={contas}
+                excluirIds={current?.conta_bancaria_id ? [current.conta_bancaria_id] : []}
+                placeholder="Selecione a conta destino"
+              />
             </div>
 
             {/* Actions */}
