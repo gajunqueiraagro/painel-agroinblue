@@ -262,9 +262,16 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       // financeiro_lancamentos_v2 (cria/atualiza/cancela conforme estado).
       // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
       // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      // PR-K-bis: passa p_conta_bancaria_id explicito quando operador escolheu
+      // conta na baixa. Fallback (null) -> RPC pega financiamentos.conta_bancaria_id.
       const { error: motorError } = await (supabase as any).rpc(
         'fn_reconciliar_parcela_financiamento',
-        { p_parcela_id: parcela.id, p_dry_run: false, p_recalcula_vt: true },
+        {
+          p_parcela_id: parcela.id,
+          p_dry_run: false,
+          p_recalcula_vt: true,
+          p_conta_bancaria_id: contaBancariaId || null,
+        },
       );
       if (motorError) {
         toast.error(
@@ -463,9 +470,16 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
       // financeiro_lancamentos_v2 (cria/atualiza/cancela conforme estado).
       // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
       // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      // PR-K-bis: passa p_conta_bancaria_id explicito quando operador escolheu
+      // conta na baixa. Fallback (null) -> RPC pega financiamentos.conta_bancaria_id.
       const { error: motorError } = await (supabase as any).rpc(
         'fn_reconciliar_parcela_financiamento',
-        { p_parcela_id: parcela.id, p_dry_run: false, p_recalcula_vt: true },
+        {
+          p_parcela_id: parcela.id,
+          p_dry_run: false,
+          p_recalcula_vt: true,
+          p_conta_bancaria_id: contaBancariaId || null,
+        },
       );
       if (motorError) {
         toast.error(

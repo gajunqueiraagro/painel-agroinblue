@@ -337,9 +337,16 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       // reconcilia espelhos em financeiro_lancamentos_v2.
       // Cast em supabase: fn_reconciliar_parcela_financiamento criada no banco;
       // tipos gerados ainda nao incluem (regeneracao em frente separada).
+      // PR-K-bis: edicao inline na grid nao tem campo de conta — passa null
+      // explicitamente; RPC faz fallback em financiamentos.conta_bancaria_id.
       const { error: motorError } = await (supabase as any).rpc(
         'fn_reconciliar_parcela_financiamento',
-        { p_parcela_id: editingCell.parcelaId, p_dry_run: false, p_recalcula_vt: true },
+        {
+          p_parcela_id: editingCell.parcelaId,
+          p_dry_run: false,
+          p_recalcula_vt: true,
+          p_conta_bancaria_id: null,
+        },
       );
       if (motorError) {
         toast.error(
