@@ -115,10 +115,10 @@ export function useFinanciamentoCadastro() {
         .select('id, nome_conta, nome_exibicao, banco, tipo_conta')
         .eq('cliente_id', clienteId)
         .eq('ativa', true)
-        // PR-H1 — vocabulário oficial 'corrente'. Compat transitória de
-        // LEITURA: tolera 'cc' legado enquanto a migration não roda no
-        // Supabase remoto. Remover 'cc' após confirmar que o backfill rodou.
-        .in('tipo_conta', ['corrente', 'cc'])
+        // PR-H1 — captação de financiamento aceita conta corrente OU
+        // investimento (CDB/corretora). Cartão fica fora — não recebe
+        // captação. Filtro estrutural de tipos compatíveis.
+        .in('tipo_conta', ['cc', 'inv'])
         .order('ordem_exibicao');
       return data ?? [];
     },

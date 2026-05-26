@@ -273,8 +273,8 @@ export function FinV2SaldosTab({ onNavigateToConciliacao }: SaldosProps = {}) {
   };
 
   const contaTipo = (saldo: Pick<SaldoBancario, 'conta_bancaria_id' | 'tipo_conta'>): string => {
-    // PR-H1 — vocabulário oficial: default 'corrente'.
-    return saldo.tipo_conta || contaMap.get(saldo.conta_bancaria_id)?.tipo_conta || 'corrente';
+    // PR-H1 — vocabulário oficial CURTO: cc | inv | cartao. Default 'cc'.
+    return saldo.tipo_conta || contaMap.get(saldo.conta_bancaria_id)?.tipo_conta || 'cc';
   };
 
   const resolveContaPersistId = (saldo: SaldoBancario | null | undefined): string | null => {

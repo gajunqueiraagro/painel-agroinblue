@@ -71,11 +71,16 @@ export interface LancamentoV2Form {
 }
 
 /**
- * PR-H1 — classificação oficial da conta bancária. Schema enforce via
- * CHECK constraint em financeiro_contas_bancarias.tipo_conta. NULL é
- * tolerado apenas para registros legados.
+ * PR-H1 — classificação oficial da conta bancária (vocabulário CURTO).
+ * Schema enforce via CHECK constraint em
+ * financeiro_contas_bancarias.tipo_conta. NULL é tolerado apenas para
+ * registros legados (coluna permanece nullable até backfill 100%).
+ *
+ *   cc      = conta corrente, caixa físico, dinheiro
+ *   inv     = investimento, corretora, CDB, aplicação
+ *   cartao  = cartão de crédito/débito
  */
-export type TipoConta = 'corrente' | 'investimento' | 'cartao' | 'caixa' | 'outro';
+export type TipoConta = 'cc' | 'inv' | 'cartao';
 
 export interface ContaBancariaV2 {
   id: string;
