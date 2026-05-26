@@ -23,6 +23,7 @@ export type V2Section =
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
   | 'contas-bancarias' | 'fornecedores' | 'plano-contas' | 'dividendos'
+  | 'subcentro-aliases'
   // financeiro — análise
   | 'analise-trimestral' | 'financeiro-caixa' | 'fluxo-anual'
   // planejamento (IDs legados preservados)
@@ -194,11 +195,12 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Cadastros',
         itens: [
-          { id: 'config-fazendas',  label: 'Fazendas',         status: 'ready' },
-          { id: 'contas-bancarias', label: 'Contas Bancárias', status: 'needs-wrapper' },
-          { id: 'fornecedores',     label: 'Fornecedores',     status: 'needs-wrapper' },
-          { id: 'plano-contas',     label: 'Plano de Contas',  status: 'needs-wrapper' },
-          { id: 'dividendos',       label: 'Dividendos',       status: 'needs-wrapper' },
+          { id: 'config-fazendas',   label: 'Fazendas',            status: 'ready' },
+          { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper' },
+          { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
+          { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
+          { id: 'subcentro-aliases', label: 'Aliases de Subcentro', status: 'needs-wrapper' },
+          { id: 'dividendos',        label: 'Dividendos',          status: 'needs-wrapper' },
         ],
       },
     ],
@@ -252,11 +254,12 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'validacoes':        'auditoria',
 
   // ── cadastros ──
-  'config-fazendas':  'cadastros',
-  'contas-bancarias': 'cadastros',
-  'fornecedores':     'cadastros',
-  'plano-contas':     'cadastros',
-  'dividendos':       'cadastros',
+  'config-fazendas':   'cadastros',
+  'contas-bancarias':  'cadastros',
+  'fornecedores':      'cadastros',
+  'plano-contas':      'cadastros',
+  'subcentro-aliases': 'cadastros',
+  'dividendos':        'cadastros',
 
   // ── config (legado) ──
   'config-clientes':  'configuracoes',

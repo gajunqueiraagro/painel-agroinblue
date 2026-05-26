@@ -47,6 +47,7 @@ import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
+import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { ContratosTab } from '@/pages/ContratosTab';
 import FinanciamentosListaPage from '@/pages/FinanciamentosListaPage';
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
@@ -463,6 +464,9 @@ export default function V2Index() {
     );
     if (section === 'fornecedores') return (
       <FinV2FornecedoresTab />
+    );
+    if (section === 'subcentro-aliases') return (
+      <FinV2SubcentroAliasesTab />
     );
     if (section === 'contas-bancarias') return (
       <FinV2ContasTab />
