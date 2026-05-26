@@ -16,6 +16,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MesaClassificacaoTab } from '@/v2/components/mesa/MesaClassificacaoTab';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,7 +86,7 @@ interface SaldoMes {
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalProps) {
+function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps) {
   const { clienteAtual } = useCliente();
 
   // TODOS os states com tipo genérico explícito.
@@ -930,5 +932,36 @@ export function V2MesaOperacional({ initialAno, initialMes }: V2MesaOperacionalP
       </AlertDialog>
 
     </div>
+  );
+}
+
+/**
+ * V2MesaOperacional — wrapper de Tabs (PR-M2).
+ *
+ * Tab 1 "Conciliação OFX" mantém o componente original (renomeado
+ * para MesaConciliacaoView). Tab 2 "Classificação Excel" usa o
+ * fluxo PR-M (parser local → RPC populate → revisão → RPC apply).
+ *
+ * Default Radix: TabsContent inativo DESMONTA. Cache do React Query
+ * preserva dados entre trocas de tab.
+ */
+export function V2MesaOperacional(props: V2MesaOperacionalProps) {
+  return (
+    // Sem padding aqui — cada tab cuida do próprio padding interno
+    // (evita conflito com o `p-4` que MesaConciliacaoView já aplica).
+    <Tabs defaultValue="conciliacao">
+      <div className="px-4 pt-3">
+        <TabsList>
+          <TabsTrigger value="conciliacao">Conciliação OFX</TabsTrigger>
+          <TabsTrigger value="classificacao">Classificação Excel</TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="conciliacao" className="mt-0">
+        <MesaConciliacaoView {...props} />
+      </TabsContent>
+      <TabsContent value="classificacao" className="mt-0 p-4 max-w-[1400px] mx-auto">
+        <MesaClassificacaoTab />
+      </TabsContent>
+    </Tabs>
   );
 }
