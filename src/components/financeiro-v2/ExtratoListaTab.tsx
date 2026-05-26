@@ -42,6 +42,7 @@ import {
   enriquecerMovimentos,
   type MovimentoEnriquecido,
 } from '@/lib/financeiro/extratoEnriquecer';
+import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 
 interface Props {
   contaBancariaId: string | null;
@@ -418,14 +419,18 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       try {
         const valorAbs = Math.abs(Number(mov.valor) || 0);
         const ehEntrada = (Number(mov.valor) || 0) >= 0;
+        const tipoOperacao = ehEntrada ? '1-Entradas' : '2-Saídas';
+        // PR-K — conta_*_id via helper soberano: entrada → conta_destino_id,
+        // saída → conta_bancaria_id. Convenção oficial cravada.
+        const contas = montarPayloadConta(tipoOperacao, contaBancariaId);
         const form: LancamentoV2Form = {
           fazenda_id: fazendaId,
-          conta_bancaria_id: contaBancariaId,
-          conta_destino_id: null,
+          conta_bancaria_id: contas.conta_bancaria_id,
+          conta_destino_id: contas.conta_destino_id,
           data_competencia: mov.data_movimento,
           data_pagamento: mov.data_movimento,
           valor: valorAbs,
-          tipo_operacao: ehEntrada ? '1-Entradas' : '2-Saídas',
+          tipo_operacao: tipoOperacao,
           status_transacao: 'realizado',
           descricao: mov.descricao ?? undefined,
           numero_documento: mov.documento ?? undefined,

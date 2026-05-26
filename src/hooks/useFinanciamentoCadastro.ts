@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { addMonths, format } from 'date-fns';
+import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 
 /* ── Types ── */
 export interface ParcelaPreview {
@@ -295,13 +296,17 @@ export function useFinanciamentoCadastro() {
       // 3 – Lançamento de captação (opcional)
       if (form.gerar_lancamento_captacao && form.plano_conta_captacao_id) {
         const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
+        // PR-K — conta_*_id via helper soberano: captação é entrada,
+        // conta vai em conta_destino_id (não conta_bancaria_id).
+        const contasCap = montarPayloadConta('1-Entradas', form.conta_bancaria_id || null);
         const { data: lancCap, error: errLanc } = await supabase
           .from('financeiro_lancamentos_v2')
           .insert({
             cliente_id: clienteId,
             fazenda_id: fazendaId,
             financiamento_id: fin.id,
-            conta_bancaria_id: form.conta_bancaria_id || null,
+            conta_bancaria_id: contasCap.conta_bancaria_id,
+            conta_destino_id: contasCap.conta_destino_id,
             favorecido_id: form.credor_id || null,
             tipo_operacao: '1-Entradas',
             sinal: 1,
@@ -363,13 +368,19 @@ export function useFinanciamentoCadastro() {
             const sinal = isEntrada ? 1 : -1;
             const semCaixa = dest.tipo !== 'conta_propria';
             const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
+            // PR-K — conta_*_id via helper soberano (hardening preventivo:
+            // 0 registros existentes mas o caminho pode rodar). Entrada
+            // ('conta_propria') vai em conta_destino_id; saída vai em
+            // conta_bancaria_id.
+            const contasDest = montarPayloadConta(tipoOperacao, dest.conta_bancaria_id || null);
 
             const { data: lancDest, error: errLancDest } = await supabase
               .from('financeiro_lancamentos_v2')
               .insert({
                 cliente_id: clienteId,
                 fazenda_id: fazendaId,
-                conta_bancaria_id: dest.conta_bancaria_id || null,
+                conta_bancaria_id: contasDest.conta_bancaria_id,
+                conta_destino_id: contasDest.conta_destino_id,
                 tipo_operacao: tipoOperacao,
                 sinal: sinal,
                 valor: dest.valor,
