@@ -44,6 +44,9 @@ import {
   type MovimentoEnriquecido,
 } from '@/lib/financeiro/extratoEnriquecer';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
+import { ConciliacaoPendenciasPanel } from './ConciliacaoPendenciasPanel';
+import { useExtratoParesOfx } from '@/hooks/useExtratoParesOfx';
+import { classificarMovimento, DIAG_INFO } from '@/lib/financeiro/conciliacaoDiagnostico';
 
 interface Props {
   contaBancariaId: string | null;
@@ -92,6 +95,14 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   const { insert: insertVinculo, listarPorExtratos } = useConciliacaoBancariaItens();
   const { listarPorContaMes } = useExcelLinhasAux();
   const { clienteAtual } = useCliente();
+
+  // PR-Conciliacao-DiagnosticoOperacional — par OFX cross-account
+  // (mesmo cliente+mês, valor abs igual, sinal oposto, ±1 dia).
+  // Query única por mês, compartilhada entre contas. Read-only.
+  const { paresOfx } = useExtratoParesOfx({
+    clienteId: clienteAtual?.id ?? null,
+    anoMes: anoMes ?? null,
+  });
 
   // PR3 — IDs dos movimentos da página atual (estável por valor).
   const movIds = useMemo(() => movimentos.map((m) => m.id), [movimentos]);
@@ -761,6 +772,13 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         </div>
       )}
 
+      {/* PR-Conciliacao-DiagnosticoOperacional — banner agregado de
+          pendências. Renderiza só quando totalPendente > 0. */}
+      <ConciliacaoPendenciasPanel
+        movimentos={enriquecidos}
+        paresOfx={paresOfx}
+      />
+
       <div className="border rounded overflow-auto max-h-[60vh]">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
@@ -861,6 +879,27 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                           Sem pista
                         </Badge>
                       )}
+                      {/* PR-Conciliacao-DiagnosticoOperacional — badge de
+                          diagnóstico clicável. Aparece só em pendências
+                          (status nao_conciliado/parcial). Não toca CTA real
+                          ainda — toast placeholder até próximo PR. */}
+                      {!enriquecidoLoading &&
+                        (m.status === 'nao_conciliado' || m.status === 'parcial') &&
+                        (() => {
+                          const cls = classificarMovimento(m, paresOfx);
+                          if (cls === 'conciliado' || cls === 'ignorado') return null;
+                          const info = DIAG_INFO[cls];
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => toast.info(`${info.label}: ação em próximo PR`)}
+                              className={`text-[10px] h-5 px-1.5 rounded border font-medium ${info.badgeCls} hover:opacity-80`}
+                              title={`Diagnóstico automático — ${info.label}. CTA: ${info.ctaLabel}.`}
+                            >
+                              {info.short}
+                            </button>
+                          );
+                        })()}
                     </div>
                   </TableCell>
                   <TableCell className="text-[11px] font-mono text-muted-foreground">{m.documento || '-'}</TableCell>
