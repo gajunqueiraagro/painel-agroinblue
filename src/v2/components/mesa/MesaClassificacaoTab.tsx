@@ -16,7 +16,7 @@
  *   5. Operador revisa tabela 3-zonas + clica candidatos em ambíguos
  *   6. Marca checkbox "Revisei…" → Click "Aplicar exatos (N)" → apply RPC
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +45,7 @@ import {
 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { MesaClassificacaoCandidatosDrawer } from './MesaClassificacaoCandidatosDrawer';
+import { MesaRowCompact } from './MesaRowCompact';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
 // ─── PR-Mesa-CreateFromExcel-A: helpers de prefill ────────────────────
@@ -205,6 +206,17 @@ export function MesaClassificacaoTab() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogRow, setCreateDialogRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
 
+  // PR-UI-CompactMesa — expand/collapse por row (Set de staging_id)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   // PR-Mesa-A1: useFinanceiroV2 é lazy — disparar loads de
   // contas/fornecedores/classificacoes manualmente quando cliente
   // estiver resolvido. Sem isso, hookFin.contasBancarias = [] sempre
@@ -254,6 +266,29 @@ export function MesaClassificacaoTab() {
     if (filtroStatus === 'todos') return staging;
     return staging.filter((r) => r.match_status === filtroStatus);
   }, [staging, filtroStatus]);
+
+  // PR-UI-CompactMesa — contadores agregados pra header compacto
+  const mesaCounts = useMemo(() => {
+    return rowsFiltradas.reduce(
+      (acc, r) => {
+        acc.total += 1;
+        if (r.match_status === 'exato') acc.exatos += 1;
+        else if (r.match_status === 'sem_match') acc.semMatch += 1;
+        else if (r.match_status === 'ambiguo') acc.ambiguos += 1;
+        else if (r.match_status === 'divergente') acc.divergentes += 1;
+        else if (r.match_status === 'ja_classificado') acc.jaClassificados += 1;
+        return acc;
+      },
+      {
+        total: 0,
+        exatos: 0,
+        semMatch: 0,
+        ambiguos: 0,
+        divergentes: 0,
+        jaClassificados: 0,
+      },
+    );
+  }, [rowsFiltradas]);
 
   // PR-M4 — contagens do header (todas em 'exato' && !aplicado)
   const headerStats = useMemo(() => {
@@ -645,7 +680,40 @@ export function MesaClassificacaoTab() {
         </div>
       )}
 
-      {/* ─── PR-M5-A: Lista de Cards 4 colunas × 10 linhas ──── */}
+      {/* ─── PR-UI-CompactMesa: header com contadores ──────────────── */}
+      {sessaoId && (
+        <div className="flex items-center justify-between mb-4 p-4 bg-muted rounded-lg">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="text-2xl font-medium">{mesaCounts.total}</span>
+            <span className="text-sm text-muted-foreground">linhas</span>
+            <span className="text-sm text-muted-foreground">•</span>
+            <span className="text-sm">
+              <span className="text-emerald-700 font-medium">{mesaCounts.exatos}</span> exatos
+            </span>
+            <span className="text-sm">
+              <span className="text-red-700 font-medium">{mesaCounts.semMatch}</span> sem match
+            </span>
+            <span className="text-sm">
+              <span className="text-amber-700 font-medium">{mesaCounts.ambiguos}</span> ambíguos
+            </span>
+            {mesaCounts.divergentes > 0 && (
+              <span className="text-sm">
+                <span className="text-amber-700 font-medium">{mesaCounts.divergentes}</span> divergentes
+              </span>
+            )}
+            {mesaCounts.jaClassificados > 0 && (
+              <span className="text-sm">
+                <span className="text-blue-700 font-medium">{mesaCounts.jaClassificados}</span> já classificados
+              </span>
+            )}
+          </div>
+          <Button variant="outline" size="sm" disabled>
+            Filtros
+          </Button>
+        </div>
+      )}
+
+      {/* ─── PR-UI-CompactMesa: Lista compacta (rows expansíveis) ──── */}
       {sessaoId && (
         <div className="max-h-[65vh] overflow-auto pr-1">
           {rowsFiltradas.length === 0 ? (
@@ -656,12 +724,14 @@ export function MesaClassificacaoTab() {
             </div>
           ) : (
             rowsFiltradas.map((r) => (
-              <RowPreview
+              <MesaRowCompact
                 key={r.staging_id}
                 row={r}
+                expanded={expandedIds.has(r.staging_id)}
+                auxLoaded={auxLoaded}
+                onToggleExpand={() => toggleExpanded(r.staging_id)}
                 onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
                 onCreateLancamento={() => handleOpenCreate(r)}
-                auxLoaded={auxLoaded}
               />
             ))
           )}
