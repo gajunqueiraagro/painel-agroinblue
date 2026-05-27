@@ -313,10 +313,15 @@ export function FinV2ContasTab() {
         toast.success('Conta atualizada');
       } else {
         const { data: insertedContas, error } = await supabase
-          .from('financeiro_contas_bancarias').insert(payloadComSaldo).select('id,fazenda_id');
+          .from('financeiro_contas_bancarias').insert(payloadComSaldo).select('id,fazenda_id,codigo_conta');
         if (error) { toast.error('Erro ao criar conta'); return; }
         const novaContaId = insertedContas?.[0]?.id;
         const novaFazendaId = insertedContas?.[0]?.fazenda_id;
+        // PR-ContaCodigoAuto: trigger gera codigo_conta quando vazio no input.
+        // Mostrar no toast só quando o código foi gerado pelo banco (não
+        // quando operador digitou manualmente — codigoConta tem valor).
+        const novoCodigo = insertedContas?.[0]?.codigo_conta;
+        const codigoGeradoSuffix = (novoCodigo && !codigoConta.trim()) ? ` com código ${novoCodigo}` : '';
         if (novaContaId && payloadComSaldo.mes_inicio) {
           const saldo = payloadComSaldo.saldo_inicial_oficial ?? 0;
           const { error: sErr } = await supabase.from('financeiro_saldos_bancarios_v2').insert({
@@ -332,9 +337,9 @@ export function FinV2ContasTab() {
             fechado: false,
           });
           if (sErr) toast.error('Conta criada, mas erro ao salvar saldo inicial');
-          else toast.success('Conta criada com saldo inicial');
+          else toast.success(`Conta criada${codigoGeradoSuffix} com saldo inicial`);
         } else {
-          toast.success('Conta criada');
+          toast.success(`Conta criada${codigoGeradoSuffix}`);
         }
       }
       setDialogOpen(false);
@@ -590,7 +595,12 @@ export function FinV2ContasTab() {
               <CollapsibleContent className="space-y-3 pt-2">
                 <div>
                   <Label>Código curto</Label>
-                  <Input value={codigoConta} onChange={e => setCodigoConta(e.target.value)} placeholder="Ex: cc-001 (uso técnico/importação)" className="font-mono text-sm" />
+                  <Input
+                    value={codigoConta}
+                    onChange={e => setCodigoConta(e.target.value)}
+                    placeholder={editing ? 'Ex: cc-001 (uso técnico/importação)' : 'Auto (gerado pelo sistema)'}
+                    className="font-mono text-sm"
+                  />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
