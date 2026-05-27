@@ -43,18 +43,36 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     queryFn: async (): Promise<MovRef[]> => {
-      // Cast `(supabase as any)` é padrão do projeto quando os types
-      // gerados do Supabase não inferem corretamente uma query path
-      // (mesma estratégia usada em useClassificacaoStaging etc.).
-      const { data, error } = await (supabase as any)
-        .from('extrato_bancario_v2')
+      // anoMes vem como 'YYYY-MM' — converter para range em data_movimento.
+      // Schema extrato_bancario_v2 não tem coluna ano_mes; filtrar via data_movimento.
+      const partes = (anoMes as string).split('-');
+      const anoStr = partes[0];
+      const mesStr = partes[1];
+      if (!anoStr || !mesStr) return [];
+
+      const ano = Number(anoStr);
+      const mes = Number(mesStr);
+      if (!Number.isFinite(ano) || !Number.isFinite(mes) || mes < 1 || mes > 12) return [];
+
+      // Primeiro dia do mês seguinte — exclusivo no .lt — funciona p/ qualquer mês
+      const proxMes = mes === 12 ? 1 : mes + 1;
+      const proxAno = mes === 12 ? ano + 1 : ano;
+      const dataInicio = `${anoStr}-${mesStr}-01`;
+      const dataFimExc = `${proxAno}-${String(proxMes).padStart(2, '0')}-01`;
+
+      // Cast `'extrato_bancario_v2' as any` é o padrão do projeto para
+      // essa tabela (ver useExtratoBancario.ts:51, useImportacaoExtrato.ts).
+      // Tipos gerados do Supabase não desambiguam o path corretamente.
+      const { data, error } = await supabase
+        .from('extrato_bancario_v2' as any)
         .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id')
         .eq('cliente_id', clienteId as string)
-        .eq('ano_mes', anoMes as string)
+        .gte('data_movimento', dataInicio)
+        .lt('data_movimento', dataFimExc)
         .eq('status', 'nao_conciliado')
         .is('cancelado_em', null);
       if (error) throw error;
-      return (data || []) as MovRef[];
+      return (data as unknown as MovRef[]) ?? [];
     },
   });
 
