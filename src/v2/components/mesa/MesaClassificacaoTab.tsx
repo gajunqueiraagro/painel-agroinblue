@@ -380,12 +380,35 @@ export function MesaClassificacaoTab() {
     }
   }
 
-  // PR-Mesa-CreateFromExcel-A — abrir dialog de criação a partir de row
+  // PR-Mesa-CreateFromExcel-A — abrir dialog de criação a partir de row.
+  // PR-Mesa-OpenCreateGuard — guards anti-duplicação no handler (proteção
+  // independente do render condicional do botão, que pode estar fora de
+  // sincronia com o staging em race conditions).
   function handleOpenCreate(row: ClassificacaoStagingPreviewRow) {
+    // Guard #0 (PR-Mesa-A1): cadastros auxiliares carregados
     if (!hookFin.contasBancarias.length || !fazendas.length) {
       toast.error('Aguarde carregamento de contas e fazendas.');
       return;
     }
+
+    // Guard #1: já foi aplicado nesta sessão (criação prévia bem-sucedida)
+    if (row.aplicado) {
+      toast.error('Esta linha já tem lançamento criado — não é possível criar duplicata.');
+      return;
+    }
+
+    // Guard #2: row já vinculada a lançamento existente (matched pelo engine)
+    if (row.lanc_id) {
+      toast.error('Esta linha já está vinculada a um lançamento existente. Use Editar para alterá-lo.');
+      return;
+    }
+
+    // Guard #3: status não comporta criação manual (só sem_match e divergente)
+    if (row.match_status !== 'sem_match' && row.match_status !== 'divergente') {
+      toast.error(`Criação não disponível para status "${row.match_status}". Use Resolver ou Editar.`);
+      return;
+    }
+
     setCreateDialogRow(row);
     setCreateDialogOpen(true);
   }
