@@ -39,6 +39,7 @@ import {
 } from '@/v2/hooks/useClassificacaoStaging';
 import {
   useFinanceiroV2,
+  type LancamentoV2,
   type LancamentoV2Form,
   type ContaBancariaV2,
   type ClassificacaoItem,
@@ -208,6 +209,12 @@ export function MesaClassificacaoTab() {
   // PR-Mesa-CreateFromExcel-A — criar lançamento a partir de row Mesa
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogRow, setCreateDialogRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
+
+  // PR-Mesa-ButtonsByStatus — editar lançamento vinculado (1 instância do
+  // LancamentoV2Dialog alterna entre create/edit via state mutuamente
+  // exclusivo). editDialogLancamento é a fonte soberana do id no save.
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editDialogLancamento, setEditDialogLancamento] = useState<LancamentoV2 | null>(null);
 
   // PR-UI-MesaCleanup-A — accordion do bloco técnico de sessão/apply
   const [sessaoDetalhesOpen, setSessaoDetalhesOpen] = useState(false);
@@ -409,8 +416,55 @@ export function MesaClassificacaoTab() {
       return;
     }
 
+    // PR-Mesa-ButtonsByStatus: mutua-exclusão — fechar edit antes de abrir create
+    setEditDialogOpen(false);
+    setEditDialogLancamento(null);
+
     setCreateDialogRow(row);
     setCreateDialogOpen(true);
+  }
+
+  // PR-Mesa-ButtonsByStatus — abrir dialog em modo edit a partir de row.
+  // Busca lançamento direto do banco (Opção B aprovada na Fase 0) — não
+  // depende do cache paginado de hookFin.lancamentos.
+  async function handleOpenEdit(row: ClassificacaoStagingPreviewRow) {
+    // Guard #0: cadastros auxiliares carregados
+    if (!hookFin.contasBancarias.length || !fazendas.length) {
+      toast.error('Aguarde carregamento de contas e fazendas.');
+      return;
+    }
+
+    // Guard #1: precisa ter lanc_id resolvido
+    if (!row.lanc_id) {
+      toast.error('Esta linha não tem lançamento vinculado disponível para edição.');
+      return;
+    }
+
+    // Fetch direto (id + cancelado=false). Tipo gerado já cobre essa tabela —
+    // sem cast (supabase as any). Cast final para LancamentoV2 após maybeSingle.
+    const { data, error } = await supabase
+      .from('financeiro_lancamentos_v2')
+      .select('*')
+      .eq('id', row.lanc_id)
+      .eq('cancelado', false)
+      .maybeSingle();
+
+    if (error) {
+      toast.error('Erro ao carregar lançamento: ' + error.message);
+      return;
+    }
+
+    if (!data) {
+      toast.error('Lançamento não encontrado no banco ou está cancelado.');
+      return;
+    }
+
+    // Mutua-exclusão: fechar create antes de abrir edit
+    setCreateDialogOpen(false);
+    setCreateDialogRow(null);
+
+    setEditDialogLancamento(data as LancamentoV2);
+    setEditDialogOpen(true);
   }
 
   // PR-Mesa-CreateFromExcel-A — save handler do modal:
@@ -733,6 +787,7 @@ export function MesaClassificacaoTab() {
                 onToggleExpand={() => toggleExpanded(r.staging_id)}
                 onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
                 onCreateLancamento={() => handleOpenCreate(r)}
+                onEditLancamento={() => handleOpenEdit(r)}
               />
             ))
           )}
@@ -756,11 +811,37 @@ export function MesaClassificacaoTab() {
 
       {/* PR-Mesa-CreateFromExcel-A — modal oficial reusado, prefill estendido.
           Operador edita TUDO livremente; nenhum campo travado. */}
+      {/* PR-Mesa-ButtonsByStatus: 1 instância do Dialog alterna entre
+          modo create e edit via states mutuamente exclusivos. onSave
+          ramifica internamente — edit chama editarLancamento, create
+          preserva handleSaveFromMesa byte-a-byte. */}
       <LancamentoV2Dialog
-        open={createDialogOpen}
-        onClose={() => { setCreateDialogOpen(false); setCreateDialogRow(null); }}
-        onSave={handleSaveFromMesa}
-        lancamento={undefined}
+        open={createDialogOpen || editDialogOpen}
+        onClose={() => {
+          setCreateDialogOpen(false);
+          setCreateDialogRow(null);
+          setEditDialogOpen(false);
+          setEditDialogLancamento(null);
+        }}
+        onSave={async (form) => {
+          // Modo EDIT — fonte soberana do id é editDialogLancamento.id.
+          // Ignoramos o segundo arg do callback (currentEditId interno
+          // do Dialog) pra evitar drift caso o ref interno descincronize.
+          if (editDialogOpen && editDialogLancamento) {
+            const ok = await hookFin.editarLancamento(editDialogLancamento.id, form);
+            if (ok) {
+              setEditDialogOpen(false);
+              setEditDialogLancamento(null);
+              // Re-fetch da view de preview — JOIN com financeiro_lancamentos_v2
+              // pega valores atualizados do lançamento editado.
+              qc.invalidateQueries({ queryKey: ['classificacao-staging', sessaoId] });
+            }
+            return ok;
+          }
+          // Modo CREATE — branch preservado byte-a-byte.
+          return handleSaveFromMesa(form);
+        }}
+        lancamento={editDialogOpen ? editDialogLancamento : undefined}
         fazendas={fazendas.filter((f) => f.id !== '__global__')}
         contas={hookFin.contasBancarias}
         classificacoes={hookFin.classificacoes}
@@ -772,7 +853,7 @@ export function MesaClassificacaoTab() {
         }
         onCriarFornecedor={hookFin.criarFornecedor}
         prefill={
-          createDialogRow
+          createDialogOpen && createDialogRow
             ? buildPrefillFromRow(
                 createDialogRow,
                 fazendas,

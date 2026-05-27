@@ -52,6 +52,12 @@ interface MesaRowCompactProps {
   onToggleExpand: () => void;
   onOpenCandidatos: () => void;
   onCreateLancamento: () => void;
+  /**
+   * Abre LancamentoV2Dialog em modo edit a partir do lanc_id vinculado
+   * da row. Renderizado apenas quando row.lanc_id está preenchido
+   * (botão "Editar" ou "Validar" para divergente).
+   */
+  onEditLancamento: () => void;
 }
 
 const STATUS_LABEL: Record<MatchStatus, string> = {
@@ -107,6 +113,7 @@ export function MesaRowCompact({
   onToggleExpand,
   onOpenCandidatos,
   onCreateLancamento,
+  onEditLancamento,
 }: MesaRowCompactProps) {
   const status = row.match_status;
   const noLanc = !row.lanc_id;
@@ -173,54 +180,93 @@ export function MesaRowCompact({
             {compactDescricao}
           </div>
 
-          {/* Ações condicionais */}
+          {/* ── PR-Mesa-ButtonsByStatus: ações dinâmicas por status ── */}
           <div className="flex items-center gap-1">
-            {status === 'sem_match' && !row.aplicado && (
-              <>
+            {(() => {
+              const hasLancVinculado = !!row.lanc_id;
+              const aplicadoSemLanc = row.aplicado && !row.lanc_id;
+              const isSemMatchVirgem =
+                row.match_status === 'sem_match' && !row.aplicado && !row.lanc_id;
+              const isAmbiguo = row.match_status === 'ambiguo';
+
+              // Cenário 1: ambiguo → Resolver (abre drawer existente)
+              if (isAmbiguo) {
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-7 text-[11px] px-2"
+                    disabled={!auxLoaded}
+                    onClick={onOpenCandidatos}
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Resolver
+                  </Button>
+                );
+              }
+
+              // Cenário 2: sem_match virgem (sem lanc + não aplicado) → Criar
+              if (isSemMatchVirgem) {
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-7 text-[11px] px-2"
+                    disabled={!auxLoaded}
+                    onClick={onCreateLancamento}
+                    title={auxLoaded ? undefined : 'Aguarde carregamento de contas e fazendas...'}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Criar
+                  </Button>
+                );
+              }
+
+              // Cenário 3 (defensivo): aplicado=true mas !lanc_id —
+              // staging marcou aplicado mas a view não trouxe o vínculo.
+              // Sempre desabilitado; nunca abre Editar.
+              if (aplicadoSemLanc) {
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[11px] px-2 opacity-60"
+                    disabled
+                    title="Linha aplicada, mas lançamento não veio na view. Recarregue a sessão."
+                  >
+                    Vinculado
+                  </Button>
+                );
+              }
+
+              // Cenário 4: tem lanc_id → Editar (ou Validar para divergente)
+              if (hasLancVinculado) {
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] px-2"
+                    disabled={!auxLoaded}
+                    onClick={onEditLancamento}
+                  >
+                    {row.match_status === 'divergente' ? 'Validar' : 'Editar'}
+                  </Button>
+                );
+              }
+
+              // Cenário 5 (fallback raro): sem ação possível
+              return (
                 <Button
-                  variant="default"
+                  variant="ghost"
                   size="sm"
-                  className="h-7 text-[11px] px-2"
-                  disabled={!auxLoaded}
-                  onClick={onCreateLancamento}
-                  title={auxLoaded ? undefined : 'Aguarde carregamento de contas e fazendas...'}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Criar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] px-2"
+                  className="h-7 text-[11px] px-2 opacity-60"
                   disabled
-                  title="Em breve"
+                  title="Linha sem ação disponível."
                 >
-                  Ignorar
+                  —
                 </Button>
-              </>
-            )}
-            {(status === 'exato' || status === 'ja_classificado') && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-[11px] px-2"
-                disabled
-                title="Em breve"
-              >
-                Editar
-              </Button>
-            )}
-            {(status === 'ambiguo' || status === 'divergente') && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-[11px] px-2"
-                onClick={onOpenCandidatos}
-              >
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Resolver
-              </Button>
-            )}
+              );
+            })()}
             <Button
               variant="ghost"
               size="sm"
