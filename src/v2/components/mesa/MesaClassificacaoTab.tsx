@@ -106,11 +106,14 @@ function buildPrefillFromRow(
   }
 
   // Descrição útil concatenando contexto operacional do Excel.
-  // Operador edita livremente no modal antes de salvar.
+  // PR-Mesa-CreatePrefill-B: NUNCA incluir subcentro/macro/centro aqui
+  // — esses já viajam em campos classificatórios próprios do prefill
+  // (linhas abaixo). Concatenar gerava string duplicada visível em
+  // Produto/Descrição. Operador edita livremente no modal antes de
+  // salvar; se ambos forem null, descricao fica vazia.
   const descricao = [
     row.excel_fornecedor,
     row.excel_produto,
-    row.excel_subcentro,
   ].filter(Boolean).join(' · ');
 
   return {
