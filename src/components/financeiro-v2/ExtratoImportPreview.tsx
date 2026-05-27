@@ -336,7 +336,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   };
 
   const handleGerar = async () => {
-    if (!arquivo) { toast.error('Selecione um arquivo .ofx ou .csv'); return; }
+    if (!arquivo) { toast.error('Selecione um arquivo .ofx, .csv ou .pdf'); return; }
     if (!validarContaDoCliente()) return;
     try {
       setImportacaoConfirmada(false);
@@ -712,10 +712,10 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
         {/* Linha única: arquivo + conta + Gerar preview + step indicator + Ver divergência. */}
         <div className="shrink-0 flex items-end flex-wrap gap-3 px-6 py-3 border-b">
           <div className="min-w-[180px] max-w-[260px] flex-1">
-            <Label className="text-xs">Arquivo (.ofx ou .csv)</Label>
+            <Label className="text-xs">Arquivo (.ofx, .csv ou .pdf)</Label>
             <Input
               type="file"
-              accept=".ofx,.csv,.txt"
+              accept=".ofx,.csv,.txt,.pdf"
               onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
               className="h-9"
             />

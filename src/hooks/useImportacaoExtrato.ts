@@ -24,6 +24,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
 import { parseCSV } from '@/lib/financeiro/parser/parseCSV';
+import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
 
 /** Status operacional persistido em extrato_bancario_v2.status. */
@@ -203,8 +204,9 @@ export interface ConfirmarParams {
   formato: 'OFX' | 'CSV';
 }
 
-function detectarFormato(nomeArquivo: string, conteudo: string): 'OFX' | 'CSV' | null {
+function detectarFormato(nomeArquivo: string, conteudo: string): 'OFX' | 'CSV' | 'PDF' | null {
   const lower = nomeArquivo.toLowerCase();
+  if (lower.endsWith('.pdf')) return 'PDF';
   if (lower.endsWith('.ofx') || /<OFX>/i.test(conteudo)) return 'OFX';
   if (lower.endsWith('.csv') || lower.endsWith('.txt')) return 'CSV';
   return null;
@@ -481,9 +483,30 @@ export function useImportacaoExtrato() {
     setError(null);
     try {
       if (!clienteAtual?.id) throw new Error('Cliente não selecionado');
+
+      // Guard PDF: detectar pelo nome antes de ler como texto (arquivo PDF
+      // eh binario; arquivo.text() retornaria lixo UTF-8). Parser PDF
+      // definitivo fica para PR-B. Aqui apenas guard com mensagem clara.
+      const lowerName = params.arquivo.name.toLowerCase();
+      if (lowerName.endsWith('.pdf')) {
+        const { hasTextLayer } = await extractPdfText(params.arquivo);
+        if (!hasTextLayer) {
+          throw new Error(
+            'Este PDF parece ser escaneado/imagem. Envie OFX, CSV ou PDF digital baixado do banco. OCR sera tratado futuramente.'
+          );
+        }
+        throw new Error(
+          'PDF digital detectado, mas o parser PDF ainda esta em desenvolvimento. Use OFX/CSV por enquanto, ou aguarde a proxima versao.'
+        );
+      }
+
       const conteudo = await params.arquivo.text();
       const formato = detectarFormato(params.arquivo.name, conteudo);
-      if (!formato) throw new Error('Formato não reconhecido (espera-se .ofx ou .csv)');
+      if (!formato) throw new Error('Formato não reconhecido (espera-se .ofx, .csv ou .pdf)');
+      // Defensivo: o branch PDF acima sempre throwa antes de chegar aqui.
+      // Esse narrowing existe pra TS estreitar formato pra 'OFX' | 'CSV'
+      // (o tipo de retorno de detectarFormato inclui 'PDF').
+      if (formato === 'PDF') throw new Error('PDF deveria ter sido tratado pelo guard acima.');
 
       const movimentosBrutos = formato === 'OFX' ? parseOFX(conteudo) : parseCSV(conteudo);
       if (movimentosBrutos.length === 0) {
