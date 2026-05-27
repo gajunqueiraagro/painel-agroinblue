@@ -45,6 +45,7 @@ import {
 } from '@/lib/financeiro/extratoEnriquecer';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { ConciliacaoPendenciasPanel } from './ConciliacaoPendenciasPanel';
+import { RematchOnDemandPanel } from './RematchOnDemandPanel';
 import { useExtratoParesOfx } from '@/hooks/useExtratoParesOfx';
 import { classificarMovimento, DIAG_INFO } from '@/lib/financeiro/conciliacaoDiagnostico';
 
@@ -778,6 +779,21 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         movimentos={enriquecidos}
         paresOfx={paresOfx}
       />
+
+      {/* PR-RematchOnDemand — preview operacional de rematch. Read-only.
+          Renderiza só com cliente+conta+mês resolvidos. pendenciasCount
+          conta apenas movimentos OFX 'nao_conciliado' (status soberano),
+          que é exatamente o que rematchOfxOnDemand consome no banco. */}
+      {clienteAtual?.id && contaBancariaId && anoMes && (
+        <RematchOnDemandPanel
+          clienteId={clienteAtual.id}
+          contaBancariaId={contaBancariaId}
+          anoMes={anoMes}
+          pendenciasCount={
+            enriquecidos.filter((m) => m.status === 'nao_conciliado').length
+          }
+        />
+      )}
 
       <div className="border rounded overflow-auto max-h-[60vh]">
         <Table>
