@@ -757,6 +757,51 @@ export function LancamentoV2Dialog({
         return;
       }
     }
+
+    // ─── PR-Mesa-Submit-Validations ─────────────────────────────────
+    // Regras invioláveis #15/#18: campos classificatórios SÓ podem
+    // salvar se baterem com cadastros oficiais. Bloco A roda ANTES
+    // de setSaving — sem efeito colateral, retorno limpo no toast.
+    // Bloco B (validação 5 do favorecido) roda APÓS resolução inline
+    // de fornecedor (mais abaixo), por isso aparece em outro ponto.
+    const eq = (a?: string | null, b?: string | null) =>
+      (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+
+    // 1. Subcentro precisa casar com cadastro oficial (case-insensitive trim)
+    const subcentroTrim = (subcentro || '').trim();
+    const classifEncontrada = classificacoes.find(c => eq(c.subcentro, subcentroTrim));
+    if (subcentroTrim && !classifEncontrada) {
+      toast.error('Selecione um subcentro oficial do plano de contas antes de salvar.');
+      return;
+    }
+
+    // 2. Fazenda precisa existir em fazendas[]
+    if (fazendaIdEfetivo && !fazendas.some(f => f.id === fazendaIdEfetivo)) {
+      toast.error('Fazenda inválida — selecione uma fazenda cadastrada.');
+      return;
+    }
+
+    // 3. Conta de origem precisa existir em contas[] quando preenchida
+    if (contaOrigemId && contaOrigemId !== '__none__'
+        && !contas.some(c => c.id === contaOrigemId)) {
+      toast.error('Conta de origem inválida — selecione uma conta cadastrada.');
+      return;
+    }
+
+    // 4. Conta de destino precisa existir em contas[] quando preenchida
+    if (contaDestinoId && contaDestinoId !== '__none__'
+        && !contas.some(c => c.id === contaDestinoId)) {
+      toast.error('Conta de destino inválida — selecione uma conta cadastrada.');
+      return;
+    }
+
+    // 6. tipo_operacao enum válido (defesa em profundidade)
+    const TIPOS_VALIDOS: readonly string[] = ['1-Entradas', '2-Saídas', '3-Transferências'];
+    if (!TIPOS_VALIDOS.includes(tipoOperacao)) {
+      toast.error('Tipo de operação inválido.');
+      return;
+    }
+
     setSaving(true);
 
     // Capture the editing ID from the stable ref — prevents stale closure issues
@@ -782,6 +827,16 @@ export function LancamentoV2Dialog({
       setFornecedorSearch('');
     }
     const favorecidoForForm = (effectiveFavorecidoId && effectiveFavorecidoId !== '__none_forn__') ? effectiveFavorecidoId : null;
+
+    // PR-Mesa-Submit-Validations bloco B: favorecido precisa existir em
+    // fornecedores[]. Roda APÓS resolução inline porque favorecidoForForm
+    // pode ser id recém-criado por onCriarFornecedor. setSaving(false)
+    // antes do return — botão volta a "Salvar".
+    if (favorecidoForForm && !fornecedores.some(f => f.id === favorecidoForForm)) {
+      toast.error('Favorecido inválido — selecione um fornecedor cadastrado.');
+      setSaving(false);
+      return;
+    }
 
     let contaBancariaId: string | null = null;
     let contaDestinoFinal: string | null = null;
