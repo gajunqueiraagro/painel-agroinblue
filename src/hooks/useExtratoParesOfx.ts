@@ -1,17 +1,26 @@
 /**
- * useExtratoParesOfx — identifica movimentos OFX não-conciliados que têm
- * "par" em OUTRA conta do mesmo cliente no mesmo mês (transferência provável).
+ * useExtratoParesOfx — identifica movimentos OFX com "par" em OUTRA conta
+ * do mesmo cliente no mesmo mês (transferência provável).
  *
- * Critério de par:
+ * Critério de par OFX cross-account:
  *   - mesmo cliente
  *   - conta_bancaria_id diferente
  *   - valor abs igual (tol 0.01)
  *   - tipo_movimento oposto (credito/debito)
  *   - data ±1 dia
- *   - ambos status='nao_conciliado' e cancelado_em IS NULL
+ *   - cancelado_em IS NULL (em ambos)
  *
- * Não cria/altera dado. Retorna Set<extrato_id> dos IDs que têm par.
- * Escopo: cliente+mês — compartilhado entre todas as contas da tela.
+ * PR-A2 — Relaxamento de status:
+ *   Buscamos TODOS os status do mês (exceto cancelado). Detectamos par
+ *   normalmente, mas só adicionamos ao Set o(s) lado(s) com status
+ *   PENDENTE ('nao_conciliado' ou 'parcial'). Caso operacional comum:
+ *   uma ponta já foi conciliada manualmente, a outra continua órfã —
+ *   o lado órfão merece o badge "Transferência provável". A regra
+ *   antiga (exigia pendência em ambos) perdia 100% desses casos.
+ *
+ * Não cria/altera dado. Retorna Set<extrato_id> dos IDs PENDENTES que
+ * têm par. Escopo: cliente+mês — compartilhado entre todas as contas
+ * da tela.
  */
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -23,16 +32,24 @@ interface Params {
   enabled?: boolean;
 }
 
+type ExtratoStatusFull = 'nao_conciliado' | 'parcial' | 'conciliado' | 'ignorado';
+
 interface MovRef {
   id: string;
   data_movimento: string;
   valor: number;
   tipo_movimento: 'credito' | 'debito';
   conta_bancaria_id: string;
+  status: ExtratoStatusFull;
 }
 
 const TOL = 0.01;
 const UM_DIA_MS = 86_400_000;
+
+/** Status considerados pendência — únicos elegíveis para entrar no Set. */
+function isPendente(status: ExtratoStatusFull): boolean {
+  return status === 'nao_conciliado' || status === 'parcial';
+}
 
 export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params) {
   const queryKey = ['extrato-pares-ofx', clienteId, anoMes] as const;
@@ -60,16 +77,16 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
       const dataInicio = `${anoStr}-${mesStr}-01`;
       const dataFimExc = `${proxAno}-${String(proxMes).padStart(2, '0')}-01`;
 
+      // PR-A2 — buscar TODOS os status (exceto cancelado). Filtro por
+      // pendência acontece NO Set (após detectar par), não na query.
       // Cast `'extrato_bancario_v2' as any` é o padrão do projeto para
       // essa tabela (ver useExtratoBancario.ts:51, useImportacaoExtrato.ts).
-      // Tipos gerados do Supabase não desambiguam o path corretamente.
       const { data, error } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id')
+        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id, status')
         .eq('cliente_id', clienteId as string)
         .gte('data_movimento', dataInicio)
         .lt('data_movimento', dataFimExc)
-        .eq('status', 'nao_conciliado')
         .is('cancelado_em', null);
       if (error) throw error;
       return (data as unknown as MovRef[]) ?? [];
@@ -82,6 +99,10 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
     if (movs.length < 2) return set;
 
     // O(N²) é seguro: N ≤ algumas dezenas por mês.
+    // PR-A2: par é detectado em qualquer status (exceto cancelado).
+    // Só entram no Set os lados PENDENTES — avaliados independentemente.
+    // Caso operacional comum: ponta A já conciliada, ponta B órfã →
+    // só B vai pro Set, recebe badge "Transferência provável" na tela.
     for (let i = 0; i < movs.length; i++) {
       const a = movs[i];
       for (let j = i + 1; j < movs.length; j++) {
@@ -93,8 +114,8 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
           new Date(a.data_movimento).getTime() - new Date(b.data_movimento).getTime(),
         ) / UM_DIA_MS;
         if (diasDif > 1) continue;
-        set.add(a.id);
-        set.add(b.id);
+        if (isPendente(a.status)) set.add(a.id);
+        if (isPendente(b.status)) set.add(b.id);
       }
     }
     return set;
