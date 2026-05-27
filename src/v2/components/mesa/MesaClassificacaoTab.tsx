@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check, Plus } from 'lucide-react';
+import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check, Plus, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -209,6 +209,9 @@ export function MesaClassificacaoTab() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogRow, setCreateDialogRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
 
+  // PR-UI-MesaCleanup-A — accordion do bloco técnico de sessão/apply
+  const [sessaoDetalhesOpen, setSessaoDetalhesOpen] = useState(false);
+
   // PR-UI-CompactMesa — expand/collapse por row (Set de staging_id)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggleExpanded = useCallback((id: string) => {
@@ -269,29 +272,6 @@ export function MesaClassificacaoTab() {
     if (filtroStatus === 'todos') return staging;
     return staging.filter((r) => r.match_status === filtroStatus);
   }, [staging, filtroStatus]);
-
-  // PR-UI-CompactMesa — contadores agregados pra header compacto
-  const mesaCounts = useMemo(() => {
-    return rowsFiltradas.reduce(
-      (acc, r) => {
-        acc.total += 1;
-        if (r.match_status === 'exato') acc.exatos += 1;
-        else if (r.match_status === 'sem_match') acc.semMatch += 1;
-        else if (r.match_status === 'ambiguo') acc.ambiguos += 1;
-        else if (r.match_status === 'divergente') acc.divergentes += 1;
-        else if (r.match_status === 'ja_classificado') acc.jaClassificados += 1;
-        return acc;
-      },
-      {
-        total: 0,
-        exatos: 0,
-        semMatch: 0,
-        ambiguos: 0,
-        divergentes: 0,
-        jaClassificados: 0,
-      },
-    );
-  }, [rowsFiltradas]);
 
   // PR-M4 — contagens do header (todas em 'exato' && !aplicado)
   const headerStats = useMemo(() => {
@@ -541,106 +521,134 @@ export function MesaClassificacaoTab() {
         )}
       </div>
 
-      {/* ─── HEADER explicativo (A3) — visível só com sessão ───── */}
+      {/* ─── PR-UI-MesaCleanup-A: header sessão (sempre) + accordion ─ */}
       {sessaoId && !applyResult && (
-        <div className="border rounded-md p-3 bg-card space-y-2 text-[12px]">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-700">
-              Sessão {sessaoId.slice(0, 8).toUpperCase()} · {staging.length} linha(s)
-            </span>
-            {(isLoading || isFetching) && (
-              <span className="text-[10px] text-muted-foreground">atualizando…</span>
-            )}
+        <>
+          {/* Header sempre visível (resumo curto + toggle) */}
+          <div className="flex items-center justify-between py-3 px-4 bg-muted/40 rounded-lg mb-3">
+            <div className="text-sm text-muted-foreground">
+              Sessão <span className="font-mono">{sessaoId.slice(0, 8).toUpperCase()}</span> · {staging.length} linhas
+              {headerStats.total > 0 && (
+                <> · Apply: <span className="font-medium text-foreground">{headerStats.total} exatas</span></>
+              )}
+              {/* Badge discreto quando o Apply está bloqueado (warning fica
+                  dentro do accordion expandido — aqui só sinaliza estado). */}
+              {(headerStats.total === 0 || nOrfaosAplicaveis > 0) && headerStats.total > 0 && (
+                <> · <span className="text-red-700 font-medium">⚠ Apply bloqueado</span></>
+              )}
+              {(isLoading || isFetching) && (
+                <span className="ml-2 text-[10px]">atualizando…</span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSessaoDetalhesOpen((prev) => !prev)}
+              className="text-xs"
+            >
+              {sessaoDetalhesOpen ? 'Ocultar detalhes' : 'Ver detalhes'}
+              <ChevronDown
+                className={`ml-1 h-3 w-3 transition-transform ${sessaoDetalhesOpen ? 'rotate-180' : ''}`}
+              />
+            </Button>
           </div>
 
-          <div className="space-y-0.5">
-            <p>
-              Apply tocaria <strong>{headerStats.total}</strong> lançamento(s):
-            </p>
-            <ul className="text-[11px] text-muted-foreground space-y-0.5 ml-3">
-              <li>• Preencherá <strong>subcentro</strong> em {headerStats.n1_subcentro} caso(s) (campo vazio)</li>
-              <li>• Preencherá <strong>favorecido</strong> em {headerStats.n2_favorecido} caso(s) (campo vazio)</li>
-              <li>• {headerStats.n3_no_change} caso(s) com classificação já igual (<em>nada mudará</em>)</li>
-            </ul>
-          </div>
+          {/* Conteúdo expandido — bloco técnico completo. Warning de órfãs,
+              checkbox e botão Apply continuam DENTRO deste bloco condicional
+              (PR-M5-A2 + adendo PR-UI-MesaCleanup-A: lógica intacta, só
+              esconde visualmente por default). */}
+          {sessaoDetalhesOpen && (
+            <div className="border rounded-md p-3 bg-card space-y-2 text-[12px] mb-3">
+              <div className="space-y-0.5">
+                <p>
+                  Apply tocaria <strong>{headerStats.total}</strong> lançamento(s):
+                </p>
+                <ul className="text-[11px] text-muted-foreground space-y-0.5 ml-3">
+                  <li>• Preencherá <strong>subcentro</strong> em {headerStats.n1_subcentro} caso(s) (campo vazio)</li>
+                  <li>• Preencherá <strong>favorecido</strong> em {headerStats.n2_favorecido} caso(s) (campo vazio)</li>
+                  <li>• {headerStats.n3_no_change} caso(s) com classificação já igual (<em>nada mudará</em>)</li>
+                </ul>
+              </div>
 
-          <div className="text-[11px] text-muted-foreground border-t pt-2">
-            <strong className="text-foreground">O apply NÃO:</strong>
-            <ul className="ml-3 mt-0.5 space-y-0.5">
-              <li>• altera valor</li>
-              <li>• altera data</li>
-              <li>• altera conta bancária</li>
-              <li>• cria lançamentos</li>
-              <li>• remove classificações existentes</li>
-            </ul>
-          </div>
+              <div className="text-[11px] text-muted-foreground border-t pt-2">
+                <strong className="text-foreground">O apply NÃO:</strong>
+                <ul className="ml-3 mt-0.5 space-y-0.5">
+                  <li>• altera valor</li>
+                  <li>• altera data</li>
+                  <li>• altera conta bancária</li>
+                  <li>• cria lançamentos</li>
+                  <li>• remove classificações existentes</li>
+                </ul>
+              </div>
 
-          <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
-            <strong>Apply processa apenas linhas com status "Exato" e ainda não
-            aplicadas.</strong> Linhas em outros status (Divergente, Já classificado,
-            Ambíguo, Sem match) NÃO são alteradas, mesmo que tenham campos vazios
-            alinháveis.
-          </p>
-
-          {/* PR-M5-A2 ajuste: alerta usa 2 contadores (aplicáveis + total) e tom neutro */}
-          {nOrfaosTotal > 0 && (
-            <div className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5">
-              <p className="text-sm font-semibold text-red-900">
-                ⚠ {nOrfaosAplicaveis} {nOrfaosAplicaveis === 1 ? 'proposta exata' : 'propostas exatas'} com
-                subcentro fora do plano oficial
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                <strong>Apply processa apenas linhas com status "Exato" e ainda não
+                aplicadas.</strong> Linhas em outros status (Divergente, Já classificado,
+                Ambíguo, Sem match) NÃO são alteradas, mesmo que tenham campos vazios
+                alinháveis.
               </p>
-              <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                Há <strong>{nOrfaosTotal}</strong> {nOrfaosTotal === 1 ? 'proposta órfã' : 'propostas órfãs'} na sessão inteira
-                (todos os status).
-                {nOrfaosAplicaveis > 0 && (
-                  <>
-                    {' '}O Apply está <strong>bloqueado</strong> porque {nOrfaosAplicaveis}{' '}
-                    {nOrfaosAplicaveis === 1 ? 'delas seria aplicada' : 'delas seriam aplicadas'} agora.
-                    Corrija o Excel para usar exatamente as strings canônicas do{' '}
-                    <code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>
-                    antes de aplicar. Revise as linhas marcadas em vermelho.
-                  </>
-                )}
-                {nOrfaosAplicaveis === 0 && (
-                  <>
-                    {' '}Nenhuma das propostas exatas tem subcentro órfão — o bloqueio
-                    anti-órfão não impede o Apply. As demais propostas indicam que o
-                    Excel ainda contém strings fora do plano oficial
-                    (<code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>).
-                    Revise as linhas vermelhas antes de continuar.
-                  </>
-                )}
-              </p>
+
+              {/* PR-M5-A2 ajuste: alerta usa 2 contadores (aplicáveis + total) e tom neutro */}
+              {nOrfaosTotal > 0 && (
+                <div className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5">
+                  <p className="text-sm font-semibold text-red-900">
+                    ⚠ {nOrfaosAplicaveis} {nOrfaosAplicaveis === 1 ? 'proposta exata' : 'propostas exatas'} com
+                    subcentro fora do plano oficial
+                  </p>
+                  <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                    Há <strong>{nOrfaosTotal}</strong> {nOrfaosTotal === 1 ? 'proposta órfã' : 'propostas órfãs'} na sessão inteira
+                    (todos os status).
+                    {nOrfaosAplicaveis > 0 && (
+                      <>
+                        {' '}O Apply está <strong>bloqueado</strong> porque {nOrfaosAplicaveis}{' '}
+                        {nOrfaosAplicaveis === 1 ? 'delas seria aplicada' : 'delas seriam aplicadas'} agora.
+                        Corrija o Excel para usar exatamente as strings canônicas do{' '}
+                        <code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>
+                        antes de aplicar. Revise as linhas marcadas em vermelho.
+                      </>
+                    )}
+                    {nOrfaosAplicaveis === 0 && (
+                      <>
+                        {' '}Nenhuma das propostas exatas tem subcentro órfão — o bloqueio
+                        anti-órfão não impede o Apply. As demais propostas indicam que o
+                        Excel ainda contém strings fora do plano oficial
+                        (<code className="mx-1 px-1 bg-red-100 rounded">financeiro_plano_contas</code>).
+                        Revise as linhas vermelhas antes de continuar.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 cursor-pointer pt-1 border-t mt-2 select-none">
+                <Checkbox
+                  checked={confirmadoCheckbox}
+                  onCheckedChange={(v) => setConfirmadoCheckbox(v === true)}
+                  disabled={isApplying || headerStats.total === 0}
+                />
+                <span className="text-[11px]">
+                  Revisei o preview e autorizo aplicar nas{' '}
+                  <strong>{headerStats.total}</strong> linha(s) exata(s).
+                </span>
+              </label>
+
+              <Button
+                size="sm"
+                className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={
+                  !confirmadoCheckbox ||
+                  isApplying ||
+                  headerStats.total === 0 ||
+                  nOrfaosAplicaveis > 0
+                }
+                onClick={handleAplicar}
+              >
+                <Check className="h-3.5 w-3.5 mr-1.5" />
+                {isApplying ? 'Aplicando…' : `Aplicar classificações exatas (${headerStats.total})`}
+              </Button>
             </div>
           )}
-
-          <label className="flex items-center gap-2 cursor-pointer pt-1 border-t mt-2 select-none">
-            <Checkbox
-              checked={confirmadoCheckbox}
-              onCheckedChange={(v) => setConfirmadoCheckbox(v === true)}
-              disabled={isApplying || headerStats.total === 0}
-            />
-            <span className="text-[11px]">
-              Revisei o preview e autorizo aplicar nas{' '}
-              <strong>{headerStats.total}</strong> linha(s) exata(s).
-            </span>
-          </label>
-
-          <Button
-            size="sm"
-            className="h-8 bg-amber-600 hover:bg-amber-700 text-white"
-            disabled={
-              !confirmadoCheckbox ||
-              isApplying ||
-              headerStats.total === 0 ||
-              nOrfaosAplicaveis > 0
-            }
-            onClick={handleAplicar}
-          >
-            <Check className="h-3.5 w-3.5 mr-1.5" />
-            {isApplying ? 'Aplicando…' : `Aplicar classificações exatas (${headerStats.total})`}
-          </Button>
-        </div>
+        </>
       )}
 
       {/* ─── Resumo pós-apply ─────────────────────────────────── */}
@@ -680,39 +688,6 @@ export function MesaClassificacaoTab() {
               {STATUS_LABEL[st]} ({countsPorStatus[st] ?? 0})
             </Button>
           ))}
-        </div>
-      )}
-
-      {/* ─── PR-UI-CompactMesa: header com contadores ──────────────── */}
-      {sessaoId && (
-        <div className="flex items-center justify-between mb-4 p-4 bg-muted rounded-lg">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="text-2xl font-medium">{mesaCounts.total}</span>
-            <span className="text-sm text-muted-foreground">linhas</span>
-            <span className="text-sm text-muted-foreground">•</span>
-            <span className="text-sm">
-              <span className="text-emerald-700 font-medium">{mesaCounts.exatos}</span> exatos
-            </span>
-            <span className="text-sm">
-              <span className="text-red-700 font-medium">{mesaCounts.semMatch}</span> sem match
-            </span>
-            <span className="text-sm">
-              <span className="text-amber-700 font-medium">{mesaCounts.ambiguos}</span> ambíguos
-            </span>
-            {mesaCounts.divergentes > 0 && (
-              <span className="text-sm">
-                <span className="text-amber-700 font-medium">{mesaCounts.divergentes}</span> divergentes
-              </span>
-            )}
-            {mesaCounts.jaClassificados > 0 && (
-              <span className="text-sm">
-                <span className="text-blue-700 font-medium">{mesaCounts.jaClassificados}</span> já classificados
-              </span>
-            )}
-          </div>
-          <Button variant="outline" size="sm" disabled>
-            Filtros
-          </Button>
         </div>
       )}
 
