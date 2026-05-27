@@ -281,6 +281,10 @@ export function montarInserts(
         valor_total: l.valor_total,
         fazenda_destino_id: fazDestinoId,
         comprador_fornecedor: l.comprador_fornecedor || null,
+        // PR-Reclassificacao-FornecedorSnapshot-Fix: coluna é TEXT NOT NULL.
+        // Importação histórica reusa comprador_fornecedor quando disponível
+        // (compra, abate, venda); demais tipos caem no sentinel padrão.
+        fornecedor_nome_snapshot: l.comprador_fornecedor?.trim() || '[nao informado]',
         numero_documento: l.numero_documento || null,
         observacao: l.observacao || null,
         cenario: l.cenario || 'realizado',

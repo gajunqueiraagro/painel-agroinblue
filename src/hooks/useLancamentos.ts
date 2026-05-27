@@ -298,6 +298,9 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
             peso_medio_arrobas: l.pesoMedioArrobas || null,
             preco_medio_cabeca: l.precoMedioCabeca || null,
             observacao: l.observacao || null,
+            // PR-Reclassificacao-FornecedorSnapshot-Fix: migração legada
+            // do localStorage não captava fornecedor — sentinel direto.
+            fornecedor_nome_snapshot: '[nao informado]',
           }));
           await supabase.from('lancamentos').insert(inserts);
         }
@@ -371,7 +374,12 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
       // Z5b futuro obrigará no UI antes do submit).
       comprador_fornecedor: lancamento.compradorFornecedor || null,
       fornecedor_id: lancamento.fornecedorId || null,
-      fornecedor_nome_snapshot: lancamento.fornecedorNomeSnapshot || null,
+      // PR-Reclassificacao-FornecedorSnapshot-Fix: coluna é TEXT NOT NULL.
+      // Sentinel '[nao informado]' alinha com 5.539 lançamentos históricos.
+      // Callers que captam fornecedor (UI de venda, abate, compra) passam
+      // valor real; demais (morte, consumo, nascimento, transferência,
+      // reclassificação) caem no sentinel.
+      fornecedor_nome_snapshot: lancamento.fornecedorNomeSnapshot?.trim() || '[nao informado]',
     };
 
     if (!isOnline()) {
@@ -530,7 +538,11 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     // disponível caso futuras telas precisem editar via hook plural.
     if (dados.compradorFornecedor !== undefined) update.comprador_fornecedor = dados.compradorFornecedor;
     if (dados.fornecedorId !== undefined) update.fornecedor_id = dados.fornecedorId;
-    if (dados.fornecedorNomeSnapshot !== undefined) update.fornecedor_nome_snapshot = dados.fornecedorNomeSnapshot;
+    // PR-Reclassificacao-FornecedorSnapshot-Fix: ao atualizar, NUNCA gravar
+    // NULL. Se caller passou string vazia/whitespace, cai no sentinel.
+    if (dados.fornecedorNomeSnapshot !== undefined) {
+      update.fornecedor_nome_snapshot = dados.fornecedorNomeSnapshot?.trim() || '[nao informado]';
+    }
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
     if (!error) {

@@ -385,7 +385,13 @@ export default function CadernoImportTab() {
         if (registros.length === 0) throw new Error('Nenhuma linha válida (verifique data, categoria e quantidade)');
         const semCategoria = registros.filter((r) => !r.categoria).length;
         if (semCategoria > 0) throw new Error(`${semCategoria} linha(s) com categoria não reconhecida`);
-        const { error } = await supabase.from('lancamentos').insert(registros);
+        // PR-Reclassificacao-FornecedorSnapshot-Fix: Caderno IA não capta
+        // fornecedor explícito — sentinel direto. Coluna é TEXT NOT NULL.
+        const registrosComSnapshot = registros.map((r) => ({
+          ...r,
+          fornecedor_nome_snapshot: '[nao informado]',
+        }));
+        const { error } = await supabase.from('lancamentos').insert(registrosComSnapshot);
         if (error) throw error;
         toast.success(`${registros.length} lançamento(s) salvos`);
       }

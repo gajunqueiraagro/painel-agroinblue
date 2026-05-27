@@ -47,7 +47,17 @@ export function useOfflineSync(fazendaId: string | undefined, onSyncComplete: ()
             fazenda_id: item.fazendaId,
             ...item.data,
           };
-          const { error } = await supabase.from('lancamentos').insert(insertData as any);
+          // PR-Reclassificacao-FornecedorSnapshot-Fix: guard defensivo no
+          // replay. Itens antigos da fila podem não ter snapshot — coluna
+          // é TEXT NOT NULL. Sentinel '[nao informado]' alinha com padrão
+          // histórico do banco.
+          const snap = (insertData as { fornecedor_nome_snapshot?: unknown }).fornecedor_nome_snapshot;
+          const safeData = {
+            ...insertData,
+            fornecedor_nome_snapshot:
+              typeof snap === 'string' && snap.trim() ? snap : '[nao informado]',
+          };
+          const { error } = await supabase.from('lancamentos').insert(safeData as any);
           if (error) throw error;
         } else if (item.action === 'update') {
           const { error } = await supabase.from('lancamentos')
