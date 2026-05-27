@@ -7,17 +7,15 @@
  * Decisoes:
  *  - Lazy import de pdfjs-dist: nao entra no bundle inicial,
  *    so carrega quando operador clica em Importar Extrato com PDF.
- *  - Worker via CDN (cdnjs) usando pdfjs.version: garante sempre a
- *    mesma versao do package.json sem build hack do Vite.
+ *  - Worker servido pelo proprio bundle via Vite ?url (PR-A1).
+ *    Evita falha de import dinamico ESM e dependencia de CDN.
  *  - Tipos: local + type guard, sem depender de paths internos do
  *    pdfjs-dist que mudam entre versoes.
- *
- * NOTA — Worker CDN: se houver problema de CSP (Content Security
- * Policy) em producao ou bloqueio de cdnjs, trocar por worker local
- * via Vite em PR futuro:
- *   import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
- *   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
  */
+
+// Vite ?url copia o asset pro build e devolve URL absoluta no proprio
+// dominio. Tipos do `vite/client` (vite-env.d.ts) cobrem `*?url`.
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 export interface PdfExtractResult {
   /** Texto concatenado de todas as paginas, separado por \n. */
@@ -46,10 +44,7 @@ function hasStr(it: unknown): it is PdfTextItem {
 
 export async function extractPdfText(file: File): Promise<PdfExtractResult> {
   const pdfjs = await import('pdfjs-dist');
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' +
-    pdfjs.version +
-    '/pdf.worker.min.mjs';
+  pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data: buffer }).promise;
