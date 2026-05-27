@@ -17,13 +17,17 @@
  *   6. Marca checkbox "Revisei…" → Click "Aplicar exatos (N)" → apply RPC
  */
 import { useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check } from 'lucide-react';
+import { Upload, Play, AlertTriangle, FileX, Trash2, ExternalLink, Check, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import {
   parseExcelClassificacao,
   type ClassificacaoParseResult,
@@ -33,8 +37,98 @@ import {
   type MatchStatus,
   type ClassificacaoStagingPreviewRow,
 } from '@/v2/hooks/useClassificacaoStaging';
+import {
+  useFinanceiroV2,
+  type LancamentoV2Form,
+  type ContaBancariaV2,
+  type ClassificacaoItem,
+} from '@/hooks/useFinanceiroV2';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { MesaClassificacaoCandidatosDrawer } from './MesaClassificacaoCandidatosDrawer';
 import { formatMoeda } from '@/lib/calculos/formatters';
+
+// ─── PR-Mesa-CreateFromExcel-A: helpers de prefill ────────────────────
+//
+// Resolução de conta a partir do texto Excel ("cc-001 | banco do brasil
+// pecuária"): mesma regra determinística do fn_classificacao_resolver_conta
+// SQL — split por '|' → split por '-' → mapeia tipo + parseInt(codigo).
+// Zero fuzzy, zero LIKE.
+function resolverContaPorTexto(
+  texto: string | null,
+  contas: ContaBancariaV2[],
+): string | undefined {
+  if (!texto) return undefined;
+  const partePrimeira = texto.split('|')[0].trim().toLowerCase();
+  const parts = partePrimeira.split('-');
+  if (parts.length < 2) return undefined;
+  const tipoPrefix = parts[0];
+  const codigoStr = (parts[1] ?? '').replace(/^0+/, '');
+  const codigoN = parseInt(codigoStr || '0', 10);
+  if (Number.isNaN(codigoN)) return undefined;
+  const tipoMapped =
+    tipoPrefix === 'c.credito' ? 'cartao'
+      : tipoPrefix === 'terceiros' ? null
+        : tipoPrefix;
+  if (!tipoMapped) return undefined;
+  const match = contas.find((c) => {
+    if ((c.tipo_conta ?? '').toLowerCase() !== tipoMapped) return false;
+    const dbCodStr = (c.codigo_conta ?? '').replace(/^0+/, '');
+    const dbCodN = parseInt(dbCodStr || '0', 10);
+    return !Number.isNaN(dbCodN) && dbCodN === codigoN;
+  });
+  return match?.id;
+}
+
+function buildPrefillFromRow(
+  row: ClassificacaoStagingPreviewRow,
+  fazendas: Fazenda[],
+  contas: ContaBancariaV2[],
+  classificacoes: ClassificacaoItem[],
+) {
+  // Resolver fazenda via codigo_importacao (campo do briefing PR-M).
+  const fazenda = row.excel_fazenda_codigo
+    ? fazendas.find((f) => (f as any).codigo_importacao === row.excel_fazenda_codigo)
+    : undefined;
+
+  const contaOrigemId  = resolverContaPorTexto(row.excel_conta_origem,  contas);
+  const contaDestinoId = resolverContaPorTexto(row.excel_conta_destino, contas);
+
+  // Macro/centro vêm do plano local resolvido pelo subcentro canônico
+  // (a view não expõe proposto_macro/centro — resolve client-side via
+  // classificacoes já carregadas).
+  let macroProposto:  string | undefined;
+  let centroProposto: string | undefined;
+  if (row.proposto_subcentro) {
+    const cls = classificacoes.find((c) => c.subcentro === row.proposto_subcentro);
+    macroProposto  = cls?.macro_custo;
+    centroProposto = cls?.centro_custo;
+  }
+
+  // Descrição útil concatenando contexto operacional do Excel.
+  // Operador edita livremente no modal antes de salvar.
+  const descricao = [
+    row.excel_fornecedor,
+    row.excel_produto,
+    row.excel_subcentro,
+  ].filter(Boolean).join(' · ');
+
+  return {
+    fazenda_id: fazenda?.id,
+    data_pagamento:   row.excel_data ?? undefined,
+    data_competencia: row.excel_data ?? undefined,
+    valor:            row.excel_valor ?? undefined,
+    tipo_operacao:    row.excel_tipo_operacao ?? undefined,
+    conta_bancaria_id: contaOrigemId,
+    conta_destino_id:  contaDestinoId,
+    descricao:        descricao || undefined,
+    numero_documento: undefined,
+    status_transacao: undefined,
+    favorecido_id:    row.proposto_favorecido_id ?? undefined,
+    subcentro:        row.proposto_subcentro ?? undefined,
+    macro_custo:      macroProposto,
+    centro_custo:     centroProposto,
+  };
+}
 
 const STATUS_ORDER: MatchStatus[] = [
   'exato',
@@ -90,6 +184,10 @@ function fmtData(s: string | null): string {
 
 export function MesaClassificacaoTab() {
   const { clienteAtual } = useCliente();
+  const { user } = useAuth();
+  const { fazendas, fazendaAtual } = useFazenda();
+  const hookFin = useFinanceiroV2();
+  const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -102,6 +200,10 @@ export function MesaClassificacaoTab() {
 
   // PR-M4 — drawer de candidatos
   const [drawerStagingId, setDrawerStagingId] = useState<string | null>(null);
+
+  // PR-Mesa-CreateFromExcel-A — criar lançamento a partir de row Mesa
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogRow, setCreateDialogRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
 
   const {
     staging,
@@ -237,6 +339,55 @@ export function MesaClassificacaoTab() {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(`Erro no apply: ${msg}`);
     }
+  }
+
+  // PR-Mesa-CreateFromExcel-A — abrir dialog de criação a partir de row
+  function handleOpenCreate(row: ClassificacaoStagingPreviewRow) {
+    if (!hookFin.contasBancarias.length || !fazendas.length) {
+      toast.error('Aguarde carregamento de contas e fazendas.');
+      return;
+    }
+    setCreateDialogRow(row);
+    setCreateDialogOpen(true);
+  }
+
+  // PR-Mesa-CreateFromExcel-A — save handler do modal:
+  //   1. criarLancamentoComId via hook oficial (origem='mesa_excel')
+  //   2. UPDATE financeiro_classificacao_staging marcando aplicado + vínculo
+  //      Opção B: usa match_lancamento_id (já tem FK pra lancamentos_v2);
+  //      NÃO toca financeiro_lancamentos_v2.staging_id (FK aponta pra outra
+  //      staging table — PR6.2).
+  async function handleSaveFromMesa(form: LancamentoV2Form): Promise<boolean> {
+    if (!createDialogRow || !user?.id) return false;
+    const stagingId = createDialogRow.staging_id;
+
+    const novoId = await hookFin.criarLancamentoComId(form, { origem: 'mesa_excel' });
+    if (!novoId) return false; // toast de erro já mostrado pelo hook
+
+    // PR-M2: cast `any` enquanto types Supabase não regeneram após PR-M
+    // (financeiro_classificacao_staging não está no types gerado).
+    const { error } = await (supabase as any)
+      .from('financeiro_classificacao_staging')
+      .update({
+        aplicado: true,
+        aplicado_em: new Date().toISOString(),
+        aplicado_por: user.id,
+        match_lancamento_id: novoId,
+      })
+      .eq('staging_id', stagingId);
+
+    if (error) {
+      toast.error('Lançamento criado, mas falhou ao marcar staging: ' + error.message);
+      return false;
+    }
+
+    // Refetch staging (mesma queryKey usada pelo useClassificacaoStaging)
+    qc.invalidateQueries({ queryKey: ['classificacao-staging', sessaoId] });
+
+    toast.success('Lançamento criado e linha marcada como aplicada.');
+    setCreateDialogOpen(false);
+    setCreateDialogRow(null);
+    return true;
   }
 
   // Contexto do drawer (encontra a row do staging_id ativo)
@@ -488,6 +639,7 @@ export function MesaClassificacaoTab() {
                 key={r.staging_id}
                 row={r}
                 onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
+                onCreateLancamento={() => handleOpenCreate(r)}
               />
             ))
           )}
@@ -507,6 +659,35 @@ export function MesaClassificacaoTab() {
         open={!!drawerStagingId}
         onOpenChange={(o) => { if (!o) setDrawerStagingId(null); }}
         contextoExcel={drawerContexto}
+      />
+
+      {/* PR-Mesa-CreateFromExcel-A — modal oficial reusado, prefill estendido.
+          Operador edita TUDO livremente; nenhum campo travado. */}
+      <LancamentoV2Dialog
+        open={createDialogOpen}
+        onClose={() => { setCreateDialogOpen(false); setCreateDialogRow(null); }}
+        onSave={handleSaveFromMesa}
+        lancamento={undefined}
+        fazendas={fazendas.filter((f) => f.id !== '__global__')}
+        contas={hookFin.contasBancarias}
+        classificacoes={hookFin.classificacoes}
+        fornecedores={hookFin.fornecedores}
+        defaultFazendaId={
+          fazendaAtual && fazendaAtual.id !== '__global__'
+            ? fazendaAtual.id
+            : fazendas.find((f) => f.id !== '__global__')?.id
+        }
+        onCriarFornecedor={hookFin.criarFornecedor}
+        prefill={
+          createDialogRow
+            ? buildPrefillFromRow(
+                createDialogRow,
+                fazendas,
+                hookFin.contasBancarias,
+                hookFin.classificacoes,
+              )
+            : undefined
+        }
       />
     </div>
   );
@@ -575,9 +756,10 @@ function hierarquia(
 interface RowPreviewProps {
   row: ClassificacaoStagingPreviewRow;
   onOpenCandidatos: () => void;
+  onCreateLancamento: () => void;
 }
 
-function RowPreview({ row, onOpenCandidatos }: RowPreviewProps) {
+function RowPreview({ row, onOpenCandidatos, onCreateLancamento }: RowPreviewProps) {
   const status = row.match_status;
   const noLanc = !row.lanc_id;
 
@@ -749,7 +931,10 @@ function RowPreview({ row, onOpenCandidatos }: RowPreviewProps) {
           {STATUS_MESSAGE[status]}
         </span>
         {row.aplicado && (
-          <span className="text-[10px] text-emerald-700 font-semibold">✓ aplicado</span>
+          <Badge variant="default" className="h-5 px-2 text-[10px]">
+            <Check className="h-3 w-3 mr-1" />
+            Aplicado
+          </Badge>
         )}
         {row.erro_apply && (
           <AlertTriangle
@@ -766,6 +951,20 @@ function RowPreview({ row, onOpenCandidatos }: RowPreviewProps) {
           >
             <ExternalLink className="h-3 w-3 mr-1" />
             Ver candidatos
+          </Button>
+        )}
+        {/* PR-Mesa-CreateFromExcel-A: criar lançamento só em sem_match
+            e enquanto não aplicada. Após aplicar, condição vira false
+            (aplicado=true) e o botão some automaticamente. */}
+        {status === 'sem_match' && !row.aplicado && (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 text-[11px] px-2"
+            onClick={onCreateLancamento}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Criar lançamento
           </Button>
         )}
       </div>

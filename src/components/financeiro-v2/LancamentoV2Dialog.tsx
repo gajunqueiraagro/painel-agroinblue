@@ -45,6 +45,14 @@ interface Props {
     status_transacao?: string;
     descricao?: string;
     numero_documento?: string;
+    // PR-Mesa-CreateFromExcel-A: classificação canônica vinda da Mesa
+    // de Classificação Excel. Todos opcionais — modal continua funcionando
+    // idêntico nos usos atuais (OFX órfão etc.).
+    favorecido_id?: string;
+    subcentro?: string;
+    macro_custo?: string;
+    centro_custo?: string;
+    plano_conta_id?: string;
   };
   lockedFields?: Array<
     | 'valor'
@@ -351,10 +359,14 @@ export function LancamentoV2Dialog({
         setContaOrigemId(prefill.conta_bancaria_id ?? '');
         setContaDestinoId(prefill.conta_destino_id ?? '');
       }
-      setFavorecidoId('');
-      setSubcentro('');
-      setMacroCusto('');
-      setCentroCusto('');
+      // PR-Mesa-CreateFromExcel-A: prefill estendido pode trazer favorecido +
+      // hierarquia de classificação canônicos da Mesa de Classificação Excel.
+      // Operador edita livremente. Campos opcionais — fallback '' preserva
+      // comportamento atual quando vêm undefined (OFX órfão etc.).
+      setFavorecidoId(prefill.favorecido_id ?? '');
+      setSubcentro(prefill.subcentro ?? '');
+      setMacroCusto(prefill.macro_custo ?? '');
+      setCentroCusto(prefill.centro_custo ?? '');
       setEscopoNegocio('');
       setTipoDocumento('');
       setObservacao('');
