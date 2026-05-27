@@ -16,7 +16,7 @@
  *   5. Operador revisa tabela 3-zonas + clica candidatos em ambíguos
  *   6. Marca checkbox "Revisei…" → Click "Aplicar exatos (N)" → apply RPC
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -204,6 +204,27 @@ export function MesaClassificacaoTab() {
   // PR-Mesa-CreateFromExcel-A — criar lançamento a partir de row Mesa
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogRow, setCreateDialogRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
+
+  // PR-Mesa-A1: useFinanceiroV2 é lazy — disparar loads de
+  // contas/fornecedores/classificacoes manualmente quando cliente
+  // estiver resolvido. Sem isso, hookFin.contasBancarias = [] sempre
+  // e botão "Criar lançamento" trava no guard.
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    hookFin.loadContas();
+    hookFin.loadFornecedores();
+    hookFin.loadClassificacoes();
+  }, [
+    clienteAtual?.id,
+    hookFin.loadContas,
+    hookFin.loadFornecedores,
+    hookFin.loadClassificacoes,
+  ]);
+
+  // PR-Mesa-A1: flag derivada — true quando arrays auxiliares (contas
+  // + fazendas) chegaram. Usado pra desabilitar botão "Criar lançamento"
+  // visualmente em vez de só toast no clique.
+  const auxLoaded = hookFin.contasBancarias.length > 0 && fazendas.length > 0;
 
   const {
     staging,
@@ -640,6 +661,7 @@ export function MesaClassificacaoTab() {
                 row={r}
                 onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
                 onCreateLancamento={() => handleOpenCreate(r)}
+                auxLoaded={auxLoaded}
               />
             ))
           )}
@@ -757,9 +779,10 @@ interface RowPreviewProps {
   row: ClassificacaoStagingPreviewRow;
   onOpenCandidatos: () => void;
   onCreateLancamento: () => void;
+  auxLoaded: boolean;
 }
 
-function RowPreview({ row, onOpenCandidatos, onCreateLancamento }: RowPreviewProps) {
+function RowPreview({ row, onOpenCandidatos, onCreateLancamento, auxLoaded }: RowPreviewProps) {
   const status = row.match_status;
   const noLanc = !row.lanc_id;
 
@@ -961,7 +984,9 @@ function RowPreview({ row, onOpenCandidatos, onCreateLancamento }: RowPreviewPro
             variant="default"
             size="sm"
             className="h-7 text-[11px] px-2"
+            disabled={!auxLoaded}
             onClick={onCreateLancamento}
+            title={auxLoaded ? undefined : 'Aguarde carregamento de contas e fazendas...'}
           >
             <Plus className="h-3 w-3 mr-1" />
             Criar lançamento
