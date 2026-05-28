@@ -259,15 +259,28 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     // movimentos vem em ordem DESC (mais recente primeiro) — useExtratoBancario.
     const primeiroDoPeriodo = movimentos[movimentos.length - 1]; // mais antigo
     const ultimoDoPeriodo = movimentos[0]; // mais recente
-    const saldoFinalBanco =
-      ultimoDoPeriodo?.saldo_apos == null
-        ? null
-        : Number(ultimoDoPeriodo.saldo_apos);
-    const saldoInicialBanco =
-      primeiroDoPeriodo?.saldo_apos == null
-        ? null
-        : Number(primeiroDoPeriodo.saldo_apos) -
-          (Number(primeiroDoPeriodo.valor) || 0);
+
+    // BANCO — saldo inicial: saldo_apos (futuro) → saldo_inicial do sistema (mês atual) → indisponível
+    let fonteSaldoInicialBanco: 'saldo_apos' | 'saldo_inicial_sistema_mes_atual' | 'indisponivel' = 'indisponivel';
+    let saldoInicialBanco: number | null = null;
+    if (primeiroDoPeriodo?.saldo_apos != null) {
+      saldoInicialBanco = Number(primeiroDoPeriodo.saldo_apos) - (Number(primeiroDoPeriodo.valor) || 0);
+      fonteSaldoInicialBanco = 'saldo_apos';
+    } else if (saldoSistema?.saldo_inicial != null) {
+      saldoInicialBanco = Number(saldoSistema.saldo_inicial);
+      fonteSaldoInicialBanco = 'saldo_inicial_sistema_mes_atual';
+    }
+
+    // BANCO — saldo final: saldo_apos (futuro) → calculado (inicial + entradas − saídas) → indisponível
+    let fonteSaldoFinalBanco: 'saldo_apos' | 'calculado_ofx' | 'indisponivel' = 'indisponivel';
+    let saldoFinalBanco: number | null = null;
+    if (ultimoDoPeriodo?.saldo_apos != null) {
+      saldoFinalBanco = Number(ultimoDoPeriodo.saldo_apos);
+      fonteSaldoFinalBanco = 'saldo_apos';
+    } else if (saldoInicialBanco != null) {
+      saldoFinalBanco = saldoInicialBanco + entradasBanco - saidasBanco;
+      fonteSaldoFinalBanco = 'calculado_ofx';
+    }
 
     // SISTEMA
     let entradasSistema = 0;
@@ -295,6 +308,8 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         entradas: entradasBanco,
         saidas: saidasBanco,
         saldoFinal: saldoFinalBanco,
+        fonteSaldoInicial: fonteSaldoInicialBanco,
+        fonteSaldoFinal: fonteSaldoFinalBanco,
       },
       sistema: {
         saldoInicial: saldoInicialSistema,
@@ -618,6 +633,12 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   }
 
   const fmtSaldo = (v: number | null) => (v == null ? '—' : formatMoeda(v));
+  const LABEL_FONTE_SALDO: Record<string, string> = {
+    saldo_apos: 'informado pelo banco',
+    saldo_inicial_sistema_mes_atual: 'saldo inicial do sistema',
+    calculado_ofx: 'calculado pelo OFX',
+    indisponivel: 'indisponível',
+  };
   const diffCls = (() => {
     const d = resumoConciliacao.diferencaSaldoFinal;
     if (d == null) return 'text-muted-foreground';
@@ -637,7 +658,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                 Banco (OFX)
               </span>
               <span className="text-[10px] text-muted-foreground">
-                fonte: extrato_bancario_v2
+                fonte: {LABEL_FONTE_SALDO[resumoConciliacao.banco.fonteSaldoFinal]}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
