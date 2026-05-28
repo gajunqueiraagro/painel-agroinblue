@@ -184,8 +184,12 @@
 }
 
 @media print {
-  /* sidebar real é <aside>; .v2-sidebar/.header-filtro sao legados que nao existem mais no DOM */
+  /* sidebar real é <aside>; .v2-sidebar/.header-filtro sao legados que nao existem mais no DOM.
+     V5: + nav cobre a bottom-nav mobile (<nav class="fixed bottom-0 ... md:hidden">). O único
+     outro <nav> (do sidebar) já some com aside. NÃO usar [class*="bottom"] — casaria com
+     .recharts-tooltip-wrapper-bottom (×7) e utilitários. */
   aside,
+  nav,
   .v2-sidebar,
   .v2-mobile-nav,
   .header-filtro,
@@ -233,5 +237,24 @@
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
+  }
+
+  /* PR-FechamentoPeriodo-PrintCSS-V5 — capa executiva premium, SÓ no print,
+     SÓ na primeira página. Sem tocar Capa.tsx → tela normal idêntica.
+     Âncoras estáveis: .pagina-fechamento:first-child + img[alt="Agroinblue"]
+     (logo real h-8/32px). .capa-header/.capa-logo do CSS são órfãs — ignoradas. */
+  .pagina-fechamento:first-child {
+    padding: 24mm 18mm !important;
+  }
+  .pagina-fechamento:first-child img[alt="Agroinblue"] {
+    height: 64px !important;   /* ~2x o h-8 atual */
+    width: auto !important;
+  }
+  .pagina-fechamento:first-child > header {
+    margin-bottom: 12mm !important;
+    padding-bottom: 6mm !important;
+  }
+  .pagina-fechamento:first-child > header .font-semibold {
+    font-size: 15pt !important;
   }
 }
