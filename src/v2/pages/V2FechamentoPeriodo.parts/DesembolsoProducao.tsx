@@ -33,20 +33,20 @@ export default function DesembolsoProducao({ dto }: Props) {
     ? desembolso / (cabMed * qtdMeses) : null;
 
   return (
-    <section className="pagina-fechamento">
+    <section className="pagina-fechamento bloco-custos">
       <h2>Custos Pecuários Realizados</h2>
 
       <div className="cards-grid">
         <div className="card-mini">
-          <div className="card-mini-titulo">Desembolso médio cab/mês</div>
+          <div className="card-mini-titulo">Custeio médio cab./mês</div>
           <div className="card-mini-valor">R$ {fmt(cabMesValor, 2)}</div>
         </div>
         <div className="card-mini">
-          <div className="card-mini-titulo">Custo R$/@ produzida</div>
+          <div className="card-mini-titulo">Custo @ produzida</div>
           <div className="card-mini-valor">R$ {fmt(c.custoRsArroba.realizado, 2)}</div>
         </div>
         <div className="card-mini">
-          <div className="card-mini-titulo">Desembolso Total</div>
+          <div className="card-mini-titulo">Custeio Produção Pecuária acum.</div>
           <div className="card-mini-valor">R$ {fmt(desembolso)}</div>
         </div>
       </div>
@@ -64,9 +64,10 @@ function GrupoExpansivel({ grupo, denom }: { grupo: GrupoNode; denom: number | n
   // R$/cab/mês — denominador global (cabMed × qtdMeses), igual a todas as linhas.
   const rsCabMes = (v: number | null | undefined): number | null =>
     (v != null && denom != null && denom > 0) ? v / denom : null;
+  // Colunas /cab/mês sem "R$ " repetido (cabeçalho já indica a unidade).
   const fmtRsCabMes = (v: number | null | undefined): string => {
     const r = rsCabMes(v);
-    return r != null ? `R$ ${fmt(r, 2)}` : '—';
+    return r != null ? `${fmt(r, 2)}` : '—';
   };
   const difRsCabMes = (real: number | null | undefined, meta: number | null | undefined): number | null => {
     const r = rsCabMes(real);
@@ -75,7 +76,15 @@ function GrupoExpansivel({ grupo, denom }: { grupo: GrupoNode; denom: number | n
   };
   const fmtDifRsCabMes = (real: number | null | undefined, meta: number | null | undefined): string => {
     const d = difRsCabMes(real, meta);
-    return d != null ? `R$ ${fmt(d, 2)}` : '—';
+    return d != null ? `${fmt(d, 2)}` : '—';
+  };
+  // Cor de custo (sinal invertido vs. receita): custo acima da meta (>0) é
+  // ruim → vermelho; abaixo (<0) é economia → verde. NÃO usar classeDiferenca.
+  const classeCustoDelta = (v: number | null | undefined): string => {
+    if (v == null || !Number.isFinite(v)) return '';
+    if (v > 0.05) return 'dif-negativa';   // custo acima da meta → vermelho
+    if (v < -0.05) return 'dif-positiva';  // custo abaixo da meta → verde
+    return '';
   };
 
   return (
@@ -107,8 +116,8 @@ function GrupoExpansivel({ grupo, denom }: { grupo: GrupoNode; denom: number | n
                   <td className="num"><strong>R$ {fmt(centro.realizado)}</strong></td>
                   <td className="num">{fmtRsCabMes(centro.realizado)}</td>
                   <td className="num">{fmtRsCabMes(centro.meta)}</td>
-                  <td className="num">{fmtDifRsCabMes(centro.realizado, centro.meta)}</td>
-                  <td className={`num ${classeDiferenca(centro.desvioMetaPct)}`}>{pct(centro.desvioMetaPct)}</td>
+                  <td className={`num ${classeCustoDelta(centro.desvioMetaPct)}`}>{fmtDifRsCabMes(centro.realizado, centro.meta)}</td>
+                  <td className={`num ${classeCustoDelta(centro.desvioMetaPct)}`}>{pct(centro.desvioMetaPct)}</td>
                 </tr>
                 {centro.subcentros.map(sub => (
                   <tr key={`${centro.centro_custo}-${sub.subcentro}`} className="linha-sub">
@@ -116,8 +125,8 @@ function GrupoExpansivel({ grupo, denom }: { grupo: GrupoNode; denom: number | n
                     <td className="num">R$ {fmt(sub.realizado)}</td>
                     <td className="num">{fmtRsCabMes(sub.realizado)}</td>
                     <td className="num">{fmtRsCabMes(sub.meta)}</td>
-                    <td className="num">{fmtDifRsCabMes(sub.realizado, sub.meta)}</td>
-                    <td className={`num ${classeDiferenca(sub.desvioMetaPct)}`}>{pct(sub.desvioMetaPct)}</td>
+                    <td className={`num ${classeCustoDelta(sub.desvioMetaPct)}`}>{fmtDifRsCabMes(sub.realizado, sub.meta)}</td>
+                    <td className={`num ${classeCustoDelta(sub.desvioMetaPct)}`}>{pct(sub.desvioMetaPct)}</td>
                   </tr>
                 ))}
               </>

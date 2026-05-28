@@ -79,6 +79,14 @@
 .dif-positiva { color: #16a34a; font-weight: 600; }
 .dif-negativa { color: #dc2626; font-weight: 600; }
 
+/* Densidade compacta SÓ no bloco Custos Pecuários (.bloco-custos).
+   Não tocar .fechamento-table global — Análise Zootécnica reusa a mesma classe. */
+.bloco-custos .fechamento-table { font-size: 10px; }
+.bloco-custos .fechamento-table thead th { font-size: 11px; }
+.bloco-custos .fechamento-table .linha-sub td { font-size: 9px; }
+.bloco-custos .fechamento-table td,
+.bloco-custos .fechamento-table th { padding: 2px 6px; }
+
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -89,18 +97,18 @@
   background: #fafafa;
   border: 1px solid #e5e7eb;
   border-radius: 4px;
-  padding: 10px;
+  padding: 7px;
 }
 .card-mini-titulo {
-  font-size: 9pt;
+  font-size: 8pt;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #6b7280;
 }
 .card-mini-valor {
-  font-size: 14pt;
+  font-size: 11pt;
   font-weight: 700;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .tabelas-lado-a-lado {
