@@ -658,7 +658,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       {dto && (
         <div className="fechamento-print-area">
           <AnaliseZootecnica dto={dto} />
-          <DesembolsoProducao dto={dto} />
+          <DesembolsoProducao
+            dto={dto}
+            custoCab={painel.custoCabIndicador?.valor ?? null}
+            custoArr={painel.custoArrIndicador?.valor ?? null}
+            custeioAcum={painel.custeioPecIndicador?.valor ?? null}
+          />
         </div>
       )}
     </div>
