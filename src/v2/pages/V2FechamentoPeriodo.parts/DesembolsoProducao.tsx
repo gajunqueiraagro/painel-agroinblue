@@ -34,7 +34,7 @@ export default function DesembolsoProducao({ dto }: Props) {
 
   return (
     <section className="pagina-fechamento">
-      <h2>Desembolso da Produção Pecuária</h2>
+      <h2>Custos Pecuários Realizados</h2>
 
       <div className="cards-grid">
         <div className="card-mini">
@@ -52,14 +52,32 @@ export default function DesembolsoProducao({ dto }: Props) {
       </div>
 
       <div>
-        {gruposPec.map(g => <GrupoExpansivel key={g.grupo_custo} grupo={g} />)}
+        {gruposPec.map(g => <GrupoExpansivel key={g.grupo_custo} grupo={g} denom={cabMed != null && cabMed > 0 && qtdMeses > 0 ? cabMed * qtdMeses : null} />)}
       </div>
     </section>
   );
 }
 
-function GrupoExpansivel({ grupo }: { grupo: GrupoNode }) {
+function GrupoExpansivel({ grupo, denom }: { grupo: GrupoNode; denom: number | null }) {
   const [aberto, setAberto] = useState(true);
+
+  // R$/cab/mês — denominador global (cabMed × qtdMeses), igual a todas as linhas.
+  const rsCabMes = (v: number | null | undefined): number | null =>
+    (v != null && denom != null && denom > 0) ? v / denom : null;
+  const fmtRsCabMes = (v: number | null | undefined): string => {
+    const r = rsCabMes(v);
+    return r != null ? `R$ ${fmt(r, 2)}` : '—';
+  };
+  const difRsCabMes = (real: number | null | undefined, meta: number | null | undefined): number | null => {
+    const r = rsCabMes(real);
+    const m = rsCabMes(meta);
+    return (r != null && m != null) ? r - m : null;
+  };
+  const fmtDifRsCabMes = (real: number | null | undefined, meta: number | null | undefined): string => {
+    const d = difRsCabMes(real, meta);
+    return d != null ? `R$ ${fmt(d, 2)}` : '—';
+  };
+
   return (
     <div className="subgrupo-rank">
       <div className="subgrupo-rank-header" onClick={() => setAberto(v => !v)}>
@@ -74,9 +92,11 @@ function GrupoExpansivel({ grupo }: { grupo: GrupoNode }) {
           <thead>
             <tr>
               <th>Centro / Subcentro</th>
-              <th className="num">Realizado</th>
-              <th className="num">Meta</th>
-              <th className="num">Diferença %</th>
+              <th className="num">Realizado R$</th>
+              <th className="num">Real R$/cab/mês</th>
+              <th className="num">Meta R$/cab/mês</th>
+              <th className="num">Dif R$/cab/mês</th>
+              <th className="num">Dif %</th>
             </tr>
           </thead>
           <tbody>
@@ -85,14 +105,18 @@ function GrupoExpansivel({ grupo }: { grupo: GrupoNode }) {
                 <tr key={centro.centro_custo}>
                   <td><strong>{centro.centro_custo}</strong></td>
                   <td className="num"><strong>R$ {fmt(centro.realizado)}</strong></td>
-                  <td className="num">R$ {fmt(centro.meta)}</td>
+                  <td className="num">{fmtRsCabMes(centro.realizado)}</td>
+                  <td className="num">{fmtRsCabMes(centro.meta)}</td>
+                  <td className="num">{fmtDifRsCabMes(centro.realizado, centro.meta)}</td>
                   <td className={`num ${classeDiferenca(centro.desvioMetaPct)}`}>{pct(centro.desvioMetaPct)}</td>
                 </tr>
                 {centro.subcentros.map(sub => (
                   <tr key={`${centro.centro_custo}-${sub.subcentro}`} className="linha-sub">
                     <td>{sub.subcentro}</td>
                     <td className="num">R$ {fmt(sub.realizado)}</td>
-                    <td className="num">R$ {fmt(sub.meta)}</td>
+                    <td className="num">{fmtRsCabMes(sub.realizado)}</td>
+                    <td className="num">{fmtRsCabMes(sub.meta)}</td>
+                    <td className="num">{fmtDifRsCabMes(sub.realizado, sub.meta)}</td>
                     <td className={`num ${classeDiferenca(sub.desvioMetaPct)}`}>{pct(sub.desvioMetaPct)}</td>
                   </tr>
                 ))}
