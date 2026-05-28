@@ -54,6 +54,7 @@ import {
   type ClassificacaoItem,
 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
+import { buildExcelContext, type ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { MesaClassificacaoCandidatosDrawer } from './MesaClassificacaoCandidatosDrawer';
 import { MesaRowCompact } from './MesaRowCompact';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -233,6 +234,11 @@ export function MesaClassificacaoTab() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editDialogLancamento, setEditDialogLancamento] = useState<LancamentoV2 | null>(null);
 
+  // PR-Mesa-ExcelContext — contexto read-only "Contexto Excel / Sugestão"
+  // exibido no painel lateral do LancamentoV2Dialog (create e edit a partir
+  // da Mesa). Limpo em todo fechamento/reset do dialog.
+  const [excelContext, setExcelContext] = useState<ExcelContext | null>(null);
+
   // PR-UI-MesaCleanup-A — accordion do bloco técnico de sessão/apply
   const [sessaoDetalhesOpen, setSessaoDetalhesOpen] = useState(false);
 
@@ -370,6 +376,7 @@ export function MesaClassificacaoTab() {
     setContaMap({});
     setDeparaConfirmado(false);
     setDeparaModalOpen(false);
+    setExcelContext(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -486,6 +493,7 @@ export function MesaClassificacaoTab() {
     setEditDialogLancamento(null);
 
     setCreateDialogRow(row);
+    setExcelContext(buildExcelContext(row, hookFin.contasBancarias));
     setCreateDialogOpen(true);
   }
 
@@ -529,6 +537,7 @@ export function MesaClassificacaoTab() {
     setCreateDialogRow(null);
 
     setEditDialogLancamento(data as LancamentoV2);
+    setExcelContext(buildExcelContext(row, hookFin.contasBancarias));
     setEditDialogOpen(true);
   }
 
@@ -568,6 +577,7 @@ export function MesaClassificacaoTab() {
     toast.success('Lançamento criado e linha marcada como aplicada.');
     setCreateDialogOpen(false);
     setCreateDialogRow(null);
+    setExcelContext(null);
     return true;
   }
 
@@ -906,6 +916,7 @@ export function MesaClassificacaoTab() {
           setCreateDialogRow(null);
           setEditDialogOpen(false);
           setEditDialogLancamento(null);
+          setExcelContext(null);
         }}
         onSave={async (form) => {
           // Modo EDIT — fonte soberana do id é editDialogLancamento.id.
@@ -916,6 +927,7 @@ export function MesaClassificacaoTab() {
             if (ok) {
               setEditDialogOpen(false);
               setEditDialogLancamento(null);
+              setExcelContext(null);
               // Re-fetch da view de preview — JOIN com financeiro_lancamentos_v2
               // pega valores atualizados do lançamento editado.
               qc.invalidateQueries({ queryKey: ['classificacao-staging', sessaoId] });
@@ -946,6 +958,7 @@ export function MesaClassificacaoTab() {
               )
             : undefined
         }
+        excelContext={(editDialogOpen || createDialogOpen) ? excelContext : undefined}
       />
 
       {/* PR-DePara-Conta-Fase1 — modal obrigatório de mapeamento DE/PARA

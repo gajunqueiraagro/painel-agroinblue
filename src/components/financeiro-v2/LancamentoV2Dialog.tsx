@@ -21,6 +21,7 @@ import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { STATUS_LABEL } from '@/lib/statusOperacional';
 import { cn } from '@/lib/utils';
+import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 
 interface Props {
   open: boolean;
@@ -75,6 +76,10 @@ interface Props {
     valor?: number | null;
     data_referencia?: string | null;
   };
+  // PR-Mesa-ExcelContext — contexto read-only "Contexto Excel / Sugestão"
+  // exibido em painel lateral quando o dialog é aberto a partir da Mesa
+  // Classificação Excel. Ausente nos demais usos → layout idêntico ao atual.
+  excelContext?: ExcelContext | null;
 }
 
 const TIPOS_OPERACAO = [
@@ -115,6 +120,51 @@ function parseBRL(s: string): number {
   const cleaned = s.replace(/\./g, '').replace(',', '.');
   const n = parseFloat(cleaned);
   return isNaN(n) ? 0 : n;
+}
+
+// ─── PR-Mesa-ExcelContext: subcomponentes read-only do painel lateral ───
+function ExcelCtxRow({ label, value, block }: { label: string; value: string | null; block?: boolean }) {
+  if (block) {
+    return (
+      <div>
+        <div className="text-muted-foreground">{label}:</div>
+        <div className="font-medium break-words">{value ?? '—'}</div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-muted-foreground shrink-0">{label}:</span>
+      <span className="font-medium text-right break-words">{value ?? '—'}</span>
+    </div>
+  );
+}
+
+function ExcelCtxConta({
+  label,
+  conta,
+}: {
+  label: string;
+  conta: { sistemaNome: string | null; excelTexto: string | null };
+}) {
+  const vazio = !conta.sistemaNome && !conta.excelTexto;
+  return (
+    <div>
+      <div className="text-muted-foreground">{label}:</div>
+      {vazio ? (
+        <div className="font-medium">—</div>
+      ) : (
+        <>
+          <div className="font-medium break-words">{conta.sistemaNome ?? conta.excelTexto}</div>
+          {conta.sistemaNome && conta.excelTexto && (
+            <div className="text-[10px] text-muted-foreground break-words">
+              origem Excel: {conta.excelTexto}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Add N days to a date string (YYYY-MM-DD) */
@@ -195,7 +245,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
-  referenciaOperacionalInfo,
+  referenciaOperacionalInfo, excelContext,
 }: Props) {
   const { clienteAtual } = useCliente();
   const navigate = useNavigate();
@@ -999,12 +1049,26 @@ export function LancamentoV2Dialog({
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-        <DialogContent className="flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden max-w-3xl max-h-[92vh]">
+        <DialogContent className={cn(
+          "flex flex-col p-0 bg-card dark:bg-card rounded-xl shadow-2xl border border-border overflow-hidden max-h-[92vh]",
+          excelContext ? "max-w-5xl" : "max-w-3xl",
+        )}>
           {/* Header */}
           <DialogHeader className="px-5 pt-3 pb-2.5 border-b border-primary/20 bg-primary">
             <DialogTitle className="text-[13px] font-bold tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+            {excelContext && (
+              <div className="text-[10px] font-normal text-primary-foreground/80 mt-0.5">
+                {isEdit
+                  ? `Editando lançamento existente · ID ${lancamento?.id?.slice(0, 8)}`
+                  : 'Criando a partir do Excel'}
+              </div>
+            )}
           </DialogHeader>
 
+          {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
+              (form + painel). Sem contexto, wrapper usa `contents` (não gera
+              caixa) → body volta a ser filho direto, layout 100% idêntico. */}
+          <div className={excelContext ? "flex-1 flex min-h-0 overflow-hidden" : "contents"}>
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2 bg-background">
 
@@ -1556,6 +1620,44 @@ export function LancamentoV2Dialog({
                 <Textarea tabIndex={15} value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Observações adicionais" className={cn("text-xs min-h-[48px]", fieldBg)} />
               </div>
             </section>
+          </div>
+          {/* PR-Mesa-ExcelContext: painel lateral read-only "Contexto Excel /
+              Sugestão". Scroll próprio, não some ao rolar o formulário. */}
+          {excelContext && (
+            <aside className="w-[300px] shrink-0 border-l border-border bg-muted/30 overflow-y-auto p-3 space-y-2 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Contexto Excel / Sugestão
+                </span>
+                {excelContext.match_status && (
+                  <span className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium bg-card">
+                    {excelContext.match_status}
+                  </span>
+                )}
+              </div>
+
+              <ExcelCtxRow label="Data" value={excelContext.data} />
+              <ExcelCtxRow
+                label="Valor"
+                value={excelContext.valor != null ? toBRL(excelContext.valor) : null}
+              />
+              <ExcelCtxRow label="Tipo" value={excelContext.tipo_operacao} />
+              <ExcelCtxRow label="Fazenda" value={excelContext.fazenda_codigo} />
+
+              <ExcelCtxConta label="Conta origem" conta={excelContext.conta_origem} />
+              <ExcelCtxConta label="Conta destino" conta={excelContext.conta_destino} />
+
+              <ExcelCtxRow label="Subcentro" value={excelContext.subcentro} block />
+              <ExcelCtxRow label="Fornecedor" value={excelContext.fornecedor} block />
+              <ExcelCtxRow label="Produto" value={excelContext.produto} block />
+
+              {excelContext.mensagemDivergencia && (
+                <div className="rounded-md border border-red-300 bg-red-50 text-red-800 px-2 py-1.5 text-[10px] mt-1">
+                  {excelContext.mensagemDivergencia}
+                </div>
+              )}
+            </aside>
+          )}
           </div>
 
           {/* Sticky footer */}
