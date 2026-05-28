@@ -202,4 +202,36 @@
   }
   @page { size: A4 portrait; margin: 0; }
   .fechamento-print-area { font-size: 10pt; }
+
+  /* PR-FechamentoPeriodo-PrintCSS-V4 — destravar a cadeia de ancestrais
+     que prende o conteúdo (~7800px) num viewport scrollável no print:
+     .h-screen (overflow-hidden) + section.overflow-auto. Sem reset global
+     agressivo (nada de *{overflow} nem flex-direction:column). */
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .h-screen {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .overflow-auto,
+  .overflow-y-auto {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .fechamento-container,
+  .fechamento-print-area {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
 }
