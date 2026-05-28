@@ -6,7 +6,7 @@
 import type { FechamentoPeriodoDTO, IndicadorPecuaria } from '@/v2/types/fechamentoPeriodo';
 import { fmt, pct, classeDiferenca } from './fmt';
 
-interface Props { dto: FechamentoPeriodoDTO; }
+interface Props { dto: FechamentoPeriodoDTO; gmdSoberano?: number | null; }
 
 interface Linha {
   label: string;
@@ -15,13 +15,21 @@ interface Linha {
   dec?: number;
 }
 
-export default function AnaliseZootecnica({ dto }: Props) {
+export default function AnaliseZootecnica({ dto, gmdSoberano = null }: Props) {
   const a = dto.analisePecuaria;
 
   const linhas: Linha[] = [
     { label: 'Área Produtiva',              unidade: 'ha',     ind: a.areaProdutivaPec },
     { label: 'Cabeças Médias',              unidade: 'cab',    ind: a.cabecasMedias },
-    { label: 'GMD',                         unidade: 'kg/dia', ind: a.gmd, dec: 3 },
+    { label: 'GMD', unidade: 'kg/dia', dec: 3, ind: {
+        label: 'GMD', unidade: 'kg/dia', serie: a.gmd.serie,
+        comparativo: {
+          realizado: gmdSoberano,
+          meta: null, anoAnterior: null,
+          desvioMeta: null, desvioMetaPct: null,
+          desvioAnoAnt: null, desvioAnoAntPct: null,
+        },
+    } },
     { label: 'Arrobas Produzidas',          unidade: '@',      ind: a.arrobasProduzidas },
     { label: 'Arrobas Desfrutadas',         unidade: '@',      ind: a.arrobasDesfrutadas },
     { label: 'Peso Médio',                  unidade: 'kg',     ind: a.pesoMedioKg, dec: 1 },
