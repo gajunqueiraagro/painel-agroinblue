@@ -32,6 +32,7 @@ import {
   type IndicadorPecuaria,
   type MovCategoriaLinha,
 } from '@/v2/types/fechamentoPeriodo';
+import { computePeriodGmd } from '@/lib/calculos/painelConsultorIndicadores';
 
 // ─────────────────────────────────────────────────────────────
 // HELPERS BÁSICOS
@@ -355,6 +356,28 @@ function areaProdutivaMediaPeriodo(rows: RebanhoMensal[], meses: string[]): numb
   }
   if (vals.length === 0) return null;
   return vals.reduce((a, v) => a + v, 0) / vals.length;
+}
+
+/** GMD do período via fonte soberana (computePeriodGmd, igual PC-100).
+ *  Monta prodBio[], cabMedia[], dias[] na ordem de `meses` via agregaRebanhoMes.
+ *  computePeriodGmd acumula posicionalmente (Jan→mês i+1); como passamos só os
+ *  meses do período, o acumulado do período é a última posição (meses.length-1). */
+function gmdPeriodoSoberano(rows: RebanhoMensal[], meses: string[]): number | null {
+  if (!rows?.length || !meses?.length) return null;
+  const prodBio: number[] = [];
+  const cabMedia: number[] = [];
+  const dias: number[] = [];
+  for (const ym of meses) {
+    const ag = agregaRebanhoMes(rows, ym);
+    prodBio.push(ag?.producaoBiologicaKg != null && Number.isFinite(ag.producaoBiologicaKg) ? ag.producaoBiologicaKg : NaN);
+    cabMedia.push(ag?.cabecas != null && Number.isFinite(ag.cabecas) ? ag.cabecas : NaN);
+    const [a, m] = ym.split('-').map(Number);
+    dias.push((a && m) ? new Date(a, m, 0).getDate() : 0);
+  }
+  const serie = computePeriodGmd(prodBio, cabMedia, dias);
+  const idx = Math.min(meses.length, 12) - 1;
+  const val = idx >= 0 ? serie[idx] : NaN;
+  return Number.isFinite(val) ? val : null;
 }
 
 /** Preço médio @ no período — média ponderada por arrobas_total. */
@@ -898,8 +921,11 @@ function buildAnalisePecuaria(
   const areaA = areaProdutivaMediaPeriodo(rebanhoMensalAnoAnterior, mesesAnoAnt);
   const areaProdutivaPec = ind('Área Produtiva Pec', 'ha', mkComp(areaR, areaM, areaA), serieArea);
 
-  // GMD — null no Marco 2.2
-  const gmd = ind('GMD', 'kg/dia', mkComp(null, null, null), serieEmpty());
+  // GMD — fonte soberana (computePeriodGmd, igual PC-100). Realizado + ano anterior.
+  // Meta fora de escopo (null); série mensal fora de escopo (serieEmpty mantido).
+  const gmdR = gmdPeriodoSoberano(rebanhoMensal, meses);
+  const gmdA = gmdPeriodoSoberano(rebanhoMensalAnoAnterior, mesesAnoAnt);
+  const gmd = ind('GMD', 'kg/dia', mkComp(gmdR, null, gmdA), serieEmpty());
 
   return {
     receitaPecuaria: receitaPec,
