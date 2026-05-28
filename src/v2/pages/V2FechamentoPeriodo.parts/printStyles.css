@@ -184,11 +184,16 @@
 }
 
 @media print {
-  .v2-sidebar, .v2-mobile-nav, .header-filtro, .no-print {
+  /* sidebar real é <aside>; .v2-sidebar/.header-filtro sao legados que nao existem mais no DOM */
+  aside,
+  .v2-sidebar,
+  .v2-mobile-nav,
+  .header-filtro,
+  .no-print {
     display: none !important;
   }
-  body { background: white !important; }
-  .fechamento-container { padding: 0; }
+  body, #root { background: white !important; }
+  .fechamento-container { padding: 0 !important; }
   .pagina-fechamento {
     page-break-after: always;
     border: none;

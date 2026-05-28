@@ -835,7 +835,7 @@ export default function V2Index() {
       <div className="flex-1 min-w-0 flex flex-col relative">
 
         {/* HEADER MOBILE — Agroinblue + seletores (oculto em desktop) */}
-        <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm">
+        <div className="md:hidden flex items-center justify-between px-3 py-2 bg-primary text-primary-foreground shrink-0 shadow-sm no-print">
           <span className="text-sm font-bold">Agroinblue</span>
           <div className="flex items-center gap-1">
             {clientes.length > 1 && (
@@ -852,7 +852,7 @@ export default function V2Index() {
         </div>
 
         {/* FILTER BAR — comum a ambos os layouts */}
-        <div className="shrink-0">
+        <div className="shrink-0 no-print">
           <V2FilterBar
             ano={ano}
             mes={mes}
