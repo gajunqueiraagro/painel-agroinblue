@@ -19,11 +19,8 @@ import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
 import Capa from './V2FechamentoPeriodo.parts/Capa';
-import EvolucaoOperacao from './V2FechamentoPeriodo.parts/EvolucaoOperacao';
 import AnaliseZootecnica from './V2FechamentoPeriodo.parts/AnaliseZootecnica';
-import FluxoCaixa from './V2FechamentoPeriodo.parts/FluxoCaixa';
 import DesembolsoProducao from './V2FechamentoPeriodo.parts/DesembolsoProducao';
-import ResumoGlobal from './V2FechamentoPeriodo.parts/ResumoGlobal';
 import './V2FechamentoPeriodo.parts/printStyles.css';
 
 // Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado em
@@ -660,11 +657,8 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       {dto && (
         <div className="fechamento-print-area">
-          <EvolucaoOperacao dto={dto} />
           <AnaliseZootecnica dto={dto} />
-          <FluxoCaixa dto={dto} />
           <DesembolsoProducao dto={dto} />
-          <ResumoGlobal dto={dto} />
         </div>
       )}
     </div>
