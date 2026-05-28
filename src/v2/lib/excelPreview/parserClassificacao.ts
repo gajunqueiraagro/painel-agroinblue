@@ -34,6 +34,10 @@ export interface ClassificacaoExcelRow {
   valor: number | null;      // sempre absoluto (positivo)
   tipo_operacao: string | null;
   fazenda_codigo: string | null;
+  // PR-DePara-Conta-Fase1: UUID resolvido pelo DE/PARA do operador na Mesa.
+  // Preenchido só no enriquecimento pré-populate (não no parsing do Excel).
+  conta_origem_id?: string | null;
+  conta_destino_id?: string | null;
 }
 
 export interface ClassificacaoParseResult {

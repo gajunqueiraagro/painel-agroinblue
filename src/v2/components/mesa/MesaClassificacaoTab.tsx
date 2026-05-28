@@ -29,8 +29,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import {
   parseExcelClassificacao,
   type ClassificacaoParseResult,
+  type ClassificacaoExcelRow,
 } from '@/v2/lib/excelPreview/parserClassificacao';
 import {
   useClassificacaoStaging,
@@ -203,6 +212,14 @@ export function MesaClassificacaoTab() {
   const [parsing, setParsing] = useState(false);
   const [confirmadoCheckbox, setConfirmadoCheckbox] = useState(false);
 
+  // PR-DePara-Conta-Fase1 — DE/PARA obrigatório de conta antes do populate.
+  // contaMap: textoExcel → resolução. persistir é só estrutura (futura
+  // financeiro_conta_aliases) — NÃO grava nada nesta fase.
+  type ContaMapItem = { textoExcel: string; contaId: string | null; ignorar?: boolean; persistir?: boolean };
+  const [contaMap, setContaMap] = useState<Record<string, ContaMapItem>>({});
+  const [deparaConfirmado, setDeparaConfirmado] = useState(false);
+  const [deparaModalOpen, setDeparaModalOpen] = useState(false);
+
   // PR-M4 — drawer de candidatos
   const [drawerStagingId, setDrawerStagingId] = useState<string | null>(null);
 
@@ -310,6 +327,38 @@ export function MesaClassificacaoTab() {
     [staging],
   );
 
+  // PR-DePara-Conta-Fase1 — contas distintas do lote (ignora vazio e '-').
+  const contasDistintas = useMemo(() => {
+    if (!lote) return [] as Array<{ texto: string; qtd: number; exemplo: ClassificacaoExcelRow }>;
+    const acc = new Map<string, { qtd: number; exemplo: ClassificacaoExcelRow }>();
+    for (const r of lote.rows) {
+      for (const txt of [r.conta_origem, r.conta_destino]) {
+        const t = txt?.trim();
+        if (!t || t === '-') continue;
+        const cur = acc.get(t);
+        if (cur) cur.qtd++;
+        else acc.set(t, { qtd: 1, exemplo: r });
+      }
+    }
+    return [...acc.entries()].map(([texto, v]) => ({ texto, qtd: v.qtd, exemplo: v.exemplo }));
+  }, [lote]);
+
+  // Gate: toda conta distinta precisa ter contaId resolvido OU estar ignorada.
+  const todasResolvidasOuIgnoradas = contasDistintas.every((c) => {
+    const item = contaMap[c.texto];
+    return item?.ignorar || !!item?.contaId;
+  });
+
+  // Abre o modal DE/PARA automaticamente quando um novo lote é carregado
+  // e há contas distintas a resolver. contasDistintas é memoizado em [lote],
+  // então só dispara quando o lote muda.
+  useEffect(() => {
+    if (lote && contasDistintas.length > 0) {
+      setDeparaConfirmado(false);
+      setDeparaModalOpen(true);
+    }
+  }, [lote, contasDistintas]);
+
   function resetSessao() {
     setArquivo(null);
     setLote(null);
@@ -318,6 +367,9 @@ export function MesaClassificacaoTab() {
     setFiltroStatus('todos');
     setConfirmadoCheckbox(false);
     setDrawerStagingId(null);
+    setContaMap({});
+    setDeparaConfirmado(false);
+    setDeparaModalOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -352,7 +404,20 @@ export function MesaClassificacaoTab() {
       return;
     }
     const novaSessao = crypto.randomUUID();
-    const rows = lote.rows;
+    // PR-DePara-Conta-Fase1 — enriquece cada row com o UUID resolvido pelo
+    // operador no modal DE/PARA. Conta ignorada → null. populate usa
+    // COALESCE(conta_*_id, fn_classificacao_resolver_conta(...)).
+    const rows = lote.rows.map((r) => {
+      const o = r.conta_origem?.trim();
+      const d = r.conta_destino?.trim();
+      const io = o ? contaMap[o] : undefined;
+      const id = d ? contaMap[d] : undefined;
+      return {
+        ...r,
+        conta_origem_id: io && !io.ignorar ? io.contaId : null,
+        conta_destino_id: id && !id.ignorar ? id.contaId : null,
+      };
+    });
     try {
       setSessaoId(novaSessao);
       setConfirmadoCheckbox(false);
@@ -586,15 +651,34 @@ export function MesaClassificacaoTab() {
         )}
 
         {lote && !sessaoId && (
-          <Button
-            size="sm"
-            className="h-8"
-            disabled={!clienteAtual?.id || isPopulating || lote.linhasValidas === 0}
-            onClick={handlePopular}
-          >
-            <Play className="h-3.5 w-3.5 mr-1.5" />
-            {isPopulating ? 'Populando staging…' : `Popular staging (${lote.linhasValidas} linha(s))`}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={!clienteAtual?.id || isPopulating || lote.linhasValidas === 0 || !deparaConfirmado}
+              onClick={handlePopular}
+            >
+              <Play className="h-3.5 w-3.5 mr-1.5" />
+              {isPopulating ? 'Populando staging…' : `Popular staging (${lote.linhasValidas} linha(s))`}
+            </Button>
+            {/* PR-DePara-Conta-Fase1 — reabrir o modal de mapeamento de conta */}
+            {contasDistintas.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={isPopulating}
+                onClick={() => setDeparaModalOpen(true)}
+              >
+                {deparaConfirmado ? 'Revisar contas' : 'Mapear contas (obrigatório)'}
+              </Button>
+            )}
+            {!deparaConfirmado && contasDistintas.length > 0 && (
+              <span className="text-[10px] text-amber-700">
+                Mapeie as {contasDistintas.length} conta(s) do Excel antes de popular.
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -863,6 +947,111 @@ export function MesaClassificacaoTab() {
             : undefined
         }
       />
+
+      {/* PR-DePara-Conta-Fase1 — modal obrigatório de mapeamento DE/PARA
+          de conta. Operador resolve cada texto de conta do Excel para um
+          UUID de financeiro_contas_bancarias OU marca "ignorar". Sem isso,
+          "Popular staging" fica bloqueado. persistir é só visual nesta fase. */}
+      <Dialog open={deparaModalOpen} onOpenChange={setDeparaModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Mapear contas do Excel</DialogTitle>
+            <DialogDescription className="text-[11px]">
+              Cada texto de conta do Excel precisa apontar para uma conta
+              bancária cadastrada do cliente, ou ser ignorado nesta importação.
+              A resolução por DE/PARA prevalece sobre o parser automático.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {contasDistintas.length === 0 && (
+              <div className="text-xs text-muted-foreground py-4 text-center">
+                Nenhuma conta a mapear neste lote.
+              </div>
+            )}
+            {contasDistintas.map((c) => {
+              const item = contaMap[c.texto];
+              const ignorar = !!item?.ignorar;
+              const ex = c.exemplo;
+              return (
+                <div key={c.texto} className="border rounded-md p-2.5 space-y-1.5">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-semibold">{c.texto}</span>
+                    <span className="text-[10px] text-muted-foreground">({c.qtd} linha(s))</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      ex: {ex.data ?? '—'} · {ex.valor != null ? formatMoeda(ex.valor) : '—'} · {ex.tipo_operacao ?? '—'}
+                    </span>
+                  </div>
+                  <select
+                    className="w-full rounded-md border px-2 py-1.5 text-xs disabled:opacity-50"
+                    value={item?.contaId ?? ''}
+                    disabled={ignorar}
+                    onChange={(e) => {
+                      const uuid = e.target.value || null;
+                      setContaMap((prev) => ({
+                        ...prev,
+                        [c.texto]: { ...prev[c.texto], textoExcel: c.texto, contaId: uuid, ignorar: false },
+                      }));
+                    }}
+                  >
+                    <option value="">Selecione a conta bancária…</option>
+                    {hookFin.contasBancarias.map((cb) => (
+                      <option key={cb.id} value={cb.id}>
+                        {cb.nome_exibicao ?? cb.nome_conta}
+                        {cb.codigo_conta ? ` (${cb.codigo_conta})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <label className="flex items-center gap-1.5 text-[11px] cursor-pointer select-none">
+                      <Checkbox
+                        checked={ignorar}
+                        onCheckedChange={(v) =>
+                          setContaMap((prev) => ({
+                            ...prev,
+                            [c.texto]: {
+                              ...prev[c.texto],
+                              textoExcel: c.texto,
+                              ignorar: v === true,
+                              contaId: v === true ? null : (prev[c.texto]?.contaId ?? null),
+                            },
+                          }))
+                        }
+                      />
+                      Ignorar nesta importação
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[11px] cursor-pointer select-none text-muted-foreground">
+                      <Checkbox
+                        checked={!!item?.persistir}
+                        onCheckedChange={(v) =>
+                          setContaMap((prev) => ({
+                            ...prev,
+                            [c.texto]: { ...prev[c.texto], textoExcel: c.texto, persistir: v === true },
+                          }))
+                        }
+                      />
+                      Salvar como mapeamento padrão
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button
+              size="sm"
+              disabled={!todasResolvidasOuIgnoradas}
+              onClick={() => {
+                setDeparaConfirmado(true);
+                setDeparaModalOpen(false);
+              }}
+            >
+              Confirmar mapeamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
