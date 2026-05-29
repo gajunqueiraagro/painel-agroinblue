@@ -1,4 +1,4 @@
-import { Wand2 } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { ReactNode } from 'react';
 
 interface Props {
@@ -7,14 +7,14 @@ interface Props {
 
 export function BlocoAcoesFinanceiras({ children }: Props) {
   return (
-    <section className="rounded-lg border border-purple-200 dark:border-purple-900/60 overflow-hidden">
-      <header className="bg-purple-500/10 dark:bg-purple-950/40 border-b border-purple-200 dark:border-purple-900/60 px-4 py-2.5 flex items-center gap-2">
-        <Wand2 className="h-4 w-4 text-purple-700 dark:text-purple-300" />
-        <h3 className="text-xs font-semibold text-purple-900 dark:text-purple-100 uppercase tracking-wide">
+    <section className="rounded-lg border border-purple-300 bg-white overflow-hidden h-full">
+      <header className="bg-purple-100 border-b border-purple-300 px-3 py-1.5 flex items-center gap-2 text-purple-900">
+        <Settings className="w-3.5 h-3.5" />
+        <h3 className="text-[13px] font-bold uppercase tracking-wide">
           4. Ações Financeiras
         </h3>
       </header>
-      <div className="p-2.5 bg-card">
+      <div className="p-2">
         {children ?? (
           <p className="text-xs text-muted-foreground italic">
             Sem ações disponíveis no momento.

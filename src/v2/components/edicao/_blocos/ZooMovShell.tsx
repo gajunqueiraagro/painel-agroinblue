@@ -9,6 +9,8 @@ interface ZooMovShellProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   subtitle?: string;
+  /** Badge inline ao lado do título (ex.: "Mês fechado"). Opcional. */
+  badgeMesFechado?: ReactNode;
   /** Slot principal — vai dentro da tab "Dados" */
   children: ReactNode;
   /** Slot opcional — renderizado dentro da tab "Custos da Operação" */
@@ -20,21 +22,25 @@ interface ZooMovShellProps {
 }
 
 export function ZooMovShell({
-  open, onOpenChange, title, subtitle, children, custosOperacaoSlot, auditoriaSlot, footer
+  open, onOpenChange, title, subtitle, badgeMesFechado, children, custosOperacaoSlot, auditoriaSlot, footer
 }: ZooMovShellProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
-        <div className="px-5 py-3 border-b bg-card flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold leading-tight">{title}</h2>
+      <DialogContent className="max-w-[1280px] w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <div className="px-5 py-2.5 border-b bg-card flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-lg font-bold text-slate-900 whitespace-nowrap">{title}</h2>
             {subtitle && (
-              <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+              <>
+                <span className="text-slate-400">—</span>
+                <span className="text-sm font-medium text-slate-600 truncate">{subtitle}</span>
+              </>
             )}
+            {badgeMesFechado}
           </div>
           <Button
             variant="ghost" size="icon"
-            className="h-7 w-7 -mr-2"
+            className="h-7 w-7 -mr-2 shrink-0"
             onClick={() => onOpenChange(false)}
           >
             <X className="h-4 w-4" />

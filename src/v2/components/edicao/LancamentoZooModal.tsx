@@ -562,6 +562,24 @@ export function LancamentoZooModal({
     nomeFazenda: nomeFazendaDoRegistro,
   };
 
+  // Badge inline "Mês fechado" no header — só para blockReason === 'mes_fechado'.
+  // Outros reasons (cancelado, sem_permissao) seguem via BannerBloqueio no corpo.
+  const badgeMesFechado = permissions.blockReason === 'mes_fechado' ? (
+    <div className="ml-2 px-2.5 py-1 rounded-md bg-amber-50 border border-amber-300 flex items-center gap-1.5">
+      <Lock className="w-3 h-3 text-amber-700" />
+      <span className="text-[11px] font-semibold text-amber-900 leading-none">Mês fechado</span>
+      <span className="text-[10px] text-amber-800 leading-none">· edição bloqueada</span>
+    </div>
+  ) : undefined;
+
+  // FASE 1D — botão "Salvar e Gerar Financeiro" é VISUAL APENAS.
+  // EQUIVALENTE a "Salvar Alterações". NÃO chama generateFinanceiro, NÃO abre
+  // modal, NÃO regenera parcelas, NÃO afeta financeiro. Combinação real é
+  // decisão arquitetural pendente para fase futura.
+  const handleSalvarEGerar = async () => {
+    await handleSalvarCompraZoo();
+  };
+
   switch (lancamento.tipo) {
     case 'nascimento':
       return <EditNascimentoSheet {...sheetCommonProps} />;
@@ -603,6 +621,7 @@ export function LancamentoZooModal({
             onOpenChange={onOpenChange}
             title="Editar Compra"
             subtitle={nomeFazendaDoRegistro}
+            badgeMesFechado={badgeMesFechado}
             auditoriaSlot={
               <BlocoAuditoria
                 lancamentoId={lancamento.id}
@@ -620,102 +639,107 @@ export function LancamentoZooModal({
               />
             }
             footer={
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center justify-between">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    /* Cancelar Movimentação — hook futuro. Por ora, fecha modal. */
-                    onOpenChange(false);
-                  }}
+                  className="h-7 text-[11px] font-semibold text-red-700 border-red-300 hover:bg-red-50"
+                  onClick={() => onOpenChange(false)}
                 >
-                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  <Trash2 className="h-3 w-3 mr-1" />
                   Cancelar Movimentação
                 </Button>
-                <div className="flex items-center gap-2 ml-auto">
-                  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] font-medium"
+                    onClick={() => onOpenChange(false)}
+                  >
                     Cancelar
                   </Button>
                   <Button
                     size="sm"
+                    className="h-7 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700"
                     onClick={handleSalvarCompraZoo}
                     disabled={compraSaving || !compraZooDirty}
                   >
                     {compraSaving ? 'Salvando…' : 'Salvar Alterações'}
                   </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={handleSalvarEGerar}
+                    disabled={compraSaving || !compraZooDirty}
+                  >
+                    Salvar e Gerar Financeiro
+                  </Button>
                 </div>
               </div>
             }
           >
-            <BannerBloqueio reason={permissions.blockReason} />
+            {/* Banner de bloqueio (apenas para reasons != 'mes_fechado'). */}
+            {permissions.blockReason && permissions.blockReason !== 'mes_fechado' && (
+              <BannerBloqueio reason={permissions.blockReason} />
+            )}
 
-            {/* Z4.2: guard visual quando cliente do registro não resolveu. */}
             {!clienteIdLancamento && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-200 mt-2">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 border-red-200 text-red-800 mb-3">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-xs font-semibold">Cliente do lançamento não identificado</div>
-                  <div className="text-[11px] leading-snug mt-0.5">
-                    Reabra o lançamento ou contate o suporte. Seleção de fornecedor desabilitada e save bloqueado.
-                  </div>
-                </div>
+                <div className="text-xs">Cliente do lançamento não identificado.</div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mt-3">
-              {/* Coluna esquerda — bloco azul */}
-              <div className="lg:col-span-7">
-                <BlocoDadosMovimentacao>
-                  <CompraDadosZootecnicos
-                    lancamento={lancamento}
-                    form={compraForm}
-                    onFormChange={setCompraForm as React.Dispatch<React.SetStateAction<Lancamento>>}
-                    statusMode={compraStatusMode}
-                    onStatusModeChange={setCompraStatusMode}
-                    canEditMeta={canEditMeta}
-                    nomeFazendaDestino={nomeFazendaDoRegistro}
-                    fornecedorId={fornecedorIdEdit}
-                    onFornecedorChange={(id, nome) => {
-                      setFornecedorIdEdit(id);
-                      setFornecedorNomeEdit(nome);
-                    }}
-                    textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
-                    snapshotNome={snapshotNomeInicial ?? undefined}
-                    clienteId={clienteIdLancamento}
-                    observacao={compraForm.observacao ?? ''}
-                    onObservacaoChange={v => setCompraForm(f => f ? { ...f, observacao: v } : f)}
-                  />
-                </BlocoDadosMovimentacao>
-              </div>
+            {/* LINHA 1: AZUL + VERDE (50/50, alturas iguais) */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <BlocoDadosMovimentacao>
+                <CompraDadosZootecnicos
+                  lancamento={lancamento}
+                  form={compraForm}
+                  onFormChange={setCompraForm as React.Dispatch<React.SetStateAction<Lancamento>>}
+                  statusMode={compraStatusMode}
+                  onStatusModeChange={setCompraStatusMode}
+                  canEditMeta={canEditMeta}
+                  nomeFazendaDestino={nomeFazendaDoRegistro}
+                  fornecedorId={fornecedorIdEdit}
+                  onFornecedorChange={(id, nome) => {
+                    setFornecedorIdEdit(id);
+                    setFornecedorNomeEdit(nome);
+                  }}
+                  textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
+                  snapshotNome={snapshotNomeInicial ?? undefined}
+                  clienteId={clienteIdLancamento}
+                  observacao={compraForm.observacao ?? ''}
+                  onObservacaoChange={v => setCompraForm(f => f ? { ...f, observacao: v } : f)}
+                />
+              </BlocoDadosMovimentacao>
 
-              {/* Coluna direita — verde · laranja · roxo */}
-              <div className="lg:col-span-5 space-y-3">
-                <BlocoVinculoFinanceiro>
-                  <CompraVinculoFinanceiroDisplay
-                    records={finRecords}
-                    contasMap={finContasMap}
-                    loading={finLoading}
-                    error={finError}
-                    valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
-                    quantidade={Number(compraForm.quantidade) || 0}
-                    pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
-                  />
-                </BlocoVinculoFinanceiro>
+              <BlocoVinculoFinanceiro>
+                <CompraVinculoFinanceiroDisplay
+                  records={finRecords}
+                  contasMap={finContasMap}
+                  loading={finLoading}
+                  error={finError}
+                  valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
+                  quantidade={Number(compraForm.quantidade) || 0}
+                  pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
+                />
+              </BlocoVinculoFinanceiro>
+            </div>
 
-                <BlocoExplicacaoDiferenca />
-
-                <BlocoAcoesFinanceiras>
-                  <CompraAcoesFinanceiras
-                    onGerarAtualizar={() => {
-                      compraFinanceiroPanelRef.current?.generateFinanceiro(lancamento.id);
-                    }}
-                    onEditarFinanceiro={() => setEditFinSheetOpen(true)}
-                    existingCount={existingFinCount}
-                    disabled={!permissions.canEdit}
-                  />
-                </BlocoAcoesFinanceiras>
-              </div>
+            {/* LINHA 2: LARANJA + ROXO (50/50) */}
+            <div className="grid grid-cols-2 gap-3 mb-2">
+              <BlocoExplicacaoDiferenca />
+              <BlocoAcoesFinanceiras>
+                <CompraAcoesFinanceiras
+                  onGerarAtualizar={() => {
+                    compraFinanceiroPanelRef.current?.generateFinanceiro(lancamento.id);
+                  }}
+                  onEditarFinanceiro={() => setEditFinSheetOpen(true)}
+                  existingCount={existingFinCount}
+                  disabled={!permissions.canEdit}
+                />
+              </BlocoAcoesFinanceiras>
             </div>
 
             <RegrasEdicaoBar />

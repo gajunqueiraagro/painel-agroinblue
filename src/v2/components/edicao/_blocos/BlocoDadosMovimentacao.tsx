@@ -1,27 +1,22 @@
 import { ReactNode } from 'react';
-import { ClipboardCheck } from 'lucide-react';
+import { Beef } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
-  title?: string;
-  subtitle?: string;
 }
 
-export function BlocoDadosMovimentacao({
-  children,
-  title = '1. Dados da Movimentação (Zootécnico)',
-  subtitle,
-}: Props) {
+export function BlocoDadosMovimentacao({ children }: Props) {
   return (
-    <section className="rounded-lg border border-blue-200 dark:border-blue-900/60 overflow-hidden">
-      <header className="bg-blue-500/10 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-900/60 px-4 py-2.5 flex items-center gap-2">
-        <ClipboardCheck className="h-4 w-4 text-blue-700 dark:text-blue-300" />
-        <h3 className="text-xs font-semibold text-blue-900 dark:text-blue-100 uppercase tracking-wide">
-          {title}
+    <section className="rounded-lg border-2 border-blue-600 bg-white overflow-hidden flex flex-col h-full">
+      <header className="bg-blue-700 px-3 py-1.5 flex items-center gap-2 text-white">
+        <Beef className="w-3.5 h-3.5" />
+        <h3 className="text-[13px] font-bold uppercase tracking-wide">
+          1. Dados da Movimentação (Zootécnico)
         </h3>
-        {subtitle && <span className="text-[11px] text-blue-700/70 ml-auto">{subtitle}</span>}
       </header>
-      <div className="p-4 bg-card">{children}</div>
+      <div className="p-2.5 flex-1 flex flex-col">
+        {children}
+      </div>
     </section>
   );
 }
