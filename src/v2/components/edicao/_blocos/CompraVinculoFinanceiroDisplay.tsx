@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -7,94 +5,26 @@ import {
   AlertTriangle, Info,
   Calendar, Hash, Banknote, CheckCircle2, ExternalLink,
 } from 'lucide-react';
-
-interface FinRecord {
-  id: string;
-  valor: number;
-  data_competencia: string | null;
-  data_pagamento: string | null;
-  status_transacao: string | null;
-  conta_bancaria_id: string | null;
-  conciliado_em: string | null;
-}
+import type { FinRecord } from '../LancamentoZooModal';
 
 interface Props {
-  lancamentoId: string;
+  /** Dados resolvidos no modal (lift state — Opção A). */
+  records: FinRecord[];
+  contasMap: Map<string, string>;
+  loading: boolean;
+  error: string | null;
   /** Valor zootécnico (competência) — NUNCA derivado do financeiro. */
   valorZootecnico: number;
   /** Quantidade de cabeças — usado para R$/cab nas Camadas 1 e 2. */
   quantidade: number;
   /** Peso total em kg (qtd × pesoMedioKg) — usado para R$/kg. */
   pesoTotalKg: number;
-  /** Incrementar para forçar refetch após geração/edição financeira. */
-  refreshKey?: number;
-  /** Callback opcional para o caller acompanhar quantidade de parcelas. */
-  onCountChange?: (n: number) => void;
 }
 
 export function CompraVinculoFinanceiroDisplay({
-  lancamentoId, valorZootecnico, quantidade, pesoTotalKg,
-  refreshKey = 0, onCountChange,
+  records, contasMap, loading, error,
+  valorZootecnico, quantidade, pesoTotalKg,
 }: Props) {
-  const [records, setRecords] = useState<FinRecord[]>([]);
-  const [contasMap, setContasMap] = useState<Map<string, string>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    (async () => {
-      // Query 1 — parcelas (sem embed: não há FK física entre
-      // financeiro_lancamentos_v2 e financeiro_contas_bancarias).
-      const { data: parcelas, error: errP } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('id, valor, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
-        .eq('movimentacao_rebanho_id', lancamentoId)
-        .eq('cancelado', false)
-        .order('data_pagamento', { ascending: true });
-
-      if (cancelled) return;
-      if (errP) {
-        setRecords([]);
-        setContasMap(new Map());
-        setError('Falha ao carregar vínculo financeiro. Tente reabrir o modal.');
-        setLoading(false);
-        return;
-      }
-
-      const recs: FinRecord[] = parcelas ?? [];
-
-      // Query 2 — lookup de nomes de conta (só se houver alguma vinculada).
-      const contasIds = Array.from(
-        new Set(recs.map(r => r.conta_bancaria_id).filter((v): v is string => !!v))
-      );
-
-      let map = new Map<string, string>();
-      if (contasIds.length > 0) {
-        const { data: contas, error: errC } = await supabase
-          .from('financeiro_contas_bancarias')
-          .select('id, nome_exibicao')
-          .in('id', contasIds);
-        if (cancelled) return;
-        if (!errC && contas) {
-          map = new Map(contas.map(c => [c.id, c.nome_exibicao ?? '—']));
-        }
-        // errC silencioso aqui — display cai em '—' para a conta;
-        // o erro principal (parcelas) já tem alerta visível.
-      }
-
-      setRecords(recs);
-      setContasMap(map);
-      setLoading(false);
-      onCountChange?.(recs.length);
-    })();
-
-    return () => { cancelled = true; };
-  }, [lancamentoId, refreshKey, onCountChange]);
-
   // ── Derivações ─────────────────────────────────────────────────────
 
   // Camada 1 — Valor Zootécnico (competência)
@@ -124,6 +54,12 @@ export function CompraVinculoFinanceiroDisplay({
     return { label: 'PROGRAMADO', tone: 'amber' as const };
   })();
 
+  // Labels condicionais: realizado/conciliado mostra valores efetivos,
+  // programado/agendado mostra previstos.
+  const isRealizado = status.tone === 'red' || status.tone === 'blue';
+  const dataLabel = isRealizado ? 'Data de Pagamento' : 'Data Prevista';
+  const contaLabel = isRealizado ? 'Conta/Caixa' : 'Conta/Caixa Prevista';
+
   const dataPrevista = records[0]?.data_pagamento ?? records[0]?.data_competencia ?? null;
   const primeiraConta = records[0]?.conta_bancaria_id ?? null;
   const contaPrevista = primeiraConta ? (contasMap.get(primeiraConta) ?? '—') : '—';
@@ -134,7 +70,7 @@ export function CompraVinculoFinanceiroDisplay({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* Erro de query — alerta vermelho explícito (diferente de "não vinculado") */}
       {error && (
         <div className="flex items-start gap-2 p-2 rounded-md border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-200">
@@ -166,9 +102,9 @@ export function CompraVinculoFinanceiroDisplay({
         hideRatios={semVinculo}
       />
 
-      {/* KVs do vínculo — só quando houver vínculo */}
+      {/* KVs do vínculo — linha horizontal única, só quando houver vínculo */}
       {!semVinculo && (
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs pt-1.5 border-t">
           <KV
             label="Status Financeiro"
             icon={CheckCircle2}
@@ -189,11 +125,11 @@ export function CompraVinculoFinanceiroDisplay({
             value={`${records.length} parcela${records.length > 1 ? 's' : ''}`}
           />
           <KV
-            label="Data Prevista"
+            label={dataLabel}
             icon={Calendar}
             value={dataPrevista ? new Date(dataPrevista).toLocaleDateString('pt-BR') : '—'}
           />
-          <KV label="Conta/Caixa Prevista" icon={Banknote} value={contaPrevista} />
+          <KV label={contaLabel} icon={Banknote} value={contaPrevista} />
           <KV
             label="Realizado"
             icon={realizado ? CheckCircle2 : AlertTriangle}
@@ -204,12 +140,12 @@ export function CompraVinculoFinanceiroDisplay({
 
       {/* CAMADA 3 — Diferença Informativa */}
       {!semVinculo && (
-        <div className="border-t pt-3">
+        <div className="border-t pt-2.5">
           <div className="flex items-center gap-2 mb-1">
             <Scale className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Diferença Informativa</span>
           </div>
-          <div className={`text-xl font-bold tabular-nums ${
+          <div className={`text-lg font-bold tabular-nums ${
             diferencaSignificativa
               ? 'text-amber-700 dark:text-amber-400'
               : 'text-muted-foreground'
@@ -272,7 +208,7 @@ function Camada({
         <Icon className="h-4 w-4 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <div className={`text-xl font-bold tabular-nums mt-0.5 ${valorClass}`}>
+      <div className={`text-lg font-bold tabular-nums mt-0.5 ${valorClass}`}>
         {formatMoeda(valor)}
       </div>
       {subtitle && (

@@ -54,7 +54,7 @@ export function CompraDadosZootecnicos({
   return (
     <div className="space-y-4">
       {/* Linha 1: Data · Tipo · Categoria */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <Field icon={Calendar} label="Data da Compra">
           <Input
             type="date"
@@ -80,7 +80,7 @@ export function CompraDadosZootecnicos({
       </div>
 
       {/* Linha 2: Fornecedor (col-span-2) · Destino */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <div className="md:col-span-2">
           <Field icon={Home} label="Fornecedor">
             <FornecedorSelect
@@ -103,7 +103,7 @@ export function CompraDadosZootecnicos({
       </div>
 
       {/* Linha 3: Quantidade · Peso Médio · Peso Total */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <Field icon={Hash} label="Quantidade" suffix="cabeças">
           <Input
             type="number"
@@ -129,8 +129,8 @@ export function CompraDadosZootecnicos({
       </div>
 
       {/* Card destacado: Preço por Cabeça · Preço por Kg · Valor da Movimentação */}
-      <div className="rounded-lg border-2 border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 p-3">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="rounded-lg border-2 border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 p-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <Metric label="Preço por Cabeça" value={precoCabeca > 0 ? formatMoeda(precoCabeca) : '—'} />
           <Metric label="Preço por Kg" value={precoKg > 0 ? formatMoeda(precoKg) : '—'} />
           <Metric label="Valor da Movimentação" value={valorMovimentacao > 0 ? formatMoeda(valorMovimentacao) : '—'} highlight />
@@ -161,7 +161,7 @@ export function CompraDadosZootecnicos({
                   cenario: s === 'meta' ? 'meta' : 'realizado',
                 }));
               }}
-              className={`flex-1 px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
+              className={`flex-1 px-2.5 py-1.5 rounded-md border text-xs font-medium transition-colors ${
                 statusMode === s
                   ? s === 'meta'
                     ? 'bg-amber-500/10 border-amber-400 text-amber-900 dark:text-amber-100'
@@ -187,7 +187,7 @@ export function CompraDadosZootecnicos({
             value={observacao ?? ''}
             onChange={e => onObservacaoChange(e.target.value)}
             placeholder="Observações sobre a compra…"
-            className="mt-1 min-h-[60px]"
+            className="mt-1 min-h-[48px]"
           />
         </div>
       )}

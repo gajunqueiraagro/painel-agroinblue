@@ -1,7 +1,7 @@
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { X, ClipboardList, Boxes, History } from 'lucide-react';
+import { X, ClipboardList, Boxes, History, Calculator } from 'lucide-react';
 import { ReactNode } from 'react';
 
 interface ZooMovShellProps {
@@ -11,6 +11,8 @@ interface ZooMovShellProps {
   subtitle?: string;
   /** Slot principal — vai dentro da tab "Dados" */
   children: ReactNode;
+  /** Slot opcional — renderizado dentro da tab "Custos da Operação" */
+  custosOperacaoSlot?: ReactNode;
   /** Slot opcional — renderizado dentro da tab "Auditoria" */
   auditoriaSlot?: ReactNode;
   /** Slot do rodapé (botões de ação) */
@@ -18,7 +20,7 @@ interface ZooMovShellProps {
 }
 
 export function ZooMovShell({
-  open, onOpenChange, title, subtitle, children, auditoriaSlot, footer
+  open, onOpenChange, title, subtitle, children, custosOperacaoSlot, auditoriaSlot, footer
 }: ZooMovShellProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -49,6 +51,13 @@ export function ZooMovShell({
               Dados da Compra (Zootécnico)
             </TabsTrigger>
             <TabsTrigger
+              value="custos"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs"
+            >
+              <Calculator className="h-3.5 w-3.5 mr-1.5" />
+              Custos da Operação
+            </TabsTrigger>
+            <TabsTrigger
               value="itens"
               className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs text-muted-foreground"
             >
@@ -66,6 +75,14 @@ export function ZooMovShell({
 
           <TabsContent value="dados" className="flex-1 overflow-y-auto p-4 mt-0">
             {children}
+          </TabsContent>
+
+          <TabsContent value="custos" className="flex-1 overflow-y-auto p-4 mt-0">
+            {custosOperacaoSlot ?? (
+              <div className="text-xs text-muted-foreground italic">
+                Indisponível para este tipo de lançamento.
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="itens" className="flex-1 overflow-y-auto p-4 mt-0">

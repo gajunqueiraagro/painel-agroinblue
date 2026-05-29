@@ -14,7 +14,7 @@ export function BlocoAcoesFinanceiras({ children }: Props) {
           4. Ações Financeiras
         </h3>
       </header>
-      <div className="p-3 bg-card">
+      <div className="p-2.5 bg-card">
         {children ?? (
           <p className="text-xs text-muted-foreground italic">
             Sem ações disponíveis no momento.

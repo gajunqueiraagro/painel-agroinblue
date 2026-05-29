@@ -56,6 +56,20 @@ import { CompraDadosZootecnicos } from './_blocos/CompraDadosZootecnicos';
 import { CompraVinculoFinanceiroDisplay } from './_blocos/CompraVinculoFinanceiroDisplay';
 import { CompraAcoesFinanceiras } from './_blocos/CompraAcoesFinanceiras';
 import { EditarFinanceiroSheet } from './_blocos/EditarFinanceiroSheet';
+import { CompraCustosOperacao } from './_blocos/CompraCustosOperacao';
+
+/** Linha de financeiro_lancamentos_v2 vinculada à movimentação (compra).
+ *  Lift state (Opção A): resolvido no modal e compartilhado entre o
+ *  display verde e a aba "Custos da Operação". */
+export interface FinRecord {
+  id: string;
+  valor: number;
+  data_competencia: string | null;
+  data_pagamento: string | null;
+  status_transacao: string | null;
+  conta_bancaria_id: string | null;
+  conciliado_em: string | null;
+}
 
 interface LancamentoZooModalProps {
   open: boolean;
@@ -225,9 +239,62 @@ export function LancamentoZooModal({
   const [finRefreshKey, setFinRefreshKey] = useState(0);
   const [existingFinCount, setExistingFinCount] = useState(0);
   const compraFinanceiroPanelRef = useRef<CompraFinanceiroPanelRef>(null);
-  const handleVinculoChange = useCallback((count: number) => {
-    setExistingFinCount(count);
-  }, []);
+
+  // ── V2C lift state: query única do vínculo financeiro no modal alimenta
+  //    o bloco verde (display) E a aba "Custos da Operação". ───────────────
+  const [finRecords, setFinRecords] = useState<FinRecord[]>([]);
+  const [finContasMap, setFinContasMap] = useState<Map<string, string>>(new Map());
+  const [finLoading, setFinLoading] = useState(true);
+  const [finError, setFinError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !lancamento || lancamento.tipo !== 'compra') return;
+    let cancelled = false;
+    setFinLoading(true);
+    setFinError(null);
+
+    (async () => {
+      const { data: parcelas, error: errP } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id, valor, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
+        .eq('movimentacao_rebanho_id', lancamento.id)
+        .eq('cancelado', false)
+        .order('data_pagamento', { ascending: true });
+
+      if (cancelled) return;
+      if (errP) {
+        setFinRecords([]);
+        setFinContasMap(new Map());
+        setFinError('Falha ao carregar vínculo financeiro. Tente reabrir o modal.');
+        setFinLoading(false);
+        return;
+      }
+
+      const recs: FinRecord[] = parcelas ?? [];
+      const contasIds = Array.from(
+        new Set(recs.map(r => r.conta_bancaria_id).filter((v): v is string => !!v))
+      );
+
+      let map = new Map<string, string>();
+      if (contasIds.length > 0) {
+        const { data: contas, error: errC } = await supabase
+          .from('financeiro_contas_bancarias')
+          .select('id, nome_exibicao')
+          .in('id', contasIds);
+        if (cancelled) return;
+        if (!errC && contas) {
+          map = new Map(contas.map(c => [c.id, c.nome_exibicao ?? '—']));
+        }
+      }
+
+      setFinRecords(recs);
+      setFinContasMap(map);
+      setExistingFinCount(recs.length);
+      setFinLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [open, lancamento, finRefreshKey]);
 
   // Reinicializa state ao trocar de lançamento ou reabrir.
   // REGRA: side-effect (setState) precisa ser useEffect, não useMemo.
@@ -543,6 +610,15 @@ export function LancamentoZooModal({
                 updatedAt={raw?.updated_at}
               />
             }
+            custosOperacaoSlot={
+              <CompraCustosOperacao
+                lancamento={lancamento}
+                compraForm={compraForm}
+                records={finRecords}
+                loading={finLoading}
+                error={finError}
+              />
+            }
             footer={
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Button
@@ -617,12 +693,13 @@ export function LancamentoZooModal({
               <div className="lg:col-span-5 space-y-3">
                 <BlocoVinculoFinanceiro>
                   <CompraVinculoFinanceiroDisplay
-                    lancamentoId={lancamento.id}
+                    records={finRecords}
+                    contasMap={finContasMap}
+                    loading={finLoading}
+                    error={finError}
                     valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
                     quantidade={Number(compraForm.quantidade) || 0}
                     pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
-                    refreshKey={finRefreshKey}
-                    onCountChange={handleVinculoChange}
                   />
                 </BlocoVinculoFinanceiro>
 

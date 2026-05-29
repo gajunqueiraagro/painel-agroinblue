@@ -28,11 +28,11 @@ export function BlocoExplicacaoDiferenca() {
           3. Explicação da Diferença
         </h3>
       </header>
-      <div className="p-3 bg-card space-y-2">
+      <div className="p-2 bg-card space-y-1.5">
         <div>
           <Label className="text-[11px] text-muted-foreground">Motivo da Diferença</Label>
           <Select value={motivo} onValueChange={setMotivo}>
-            <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+            <SelectTrigger className="mt-1 h-7 text-[11px]"><SelectValue placeholder="Selecione…" /></SelectTrigger>
             <SelectContent>
               {MOTIVOS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
             </SelectContent>
@@ -44,7 +44,7 @@ export function BlocoExplicacaoDiferenca() {
             value={descricao}
             onChange={e => setDescricao(e.target.value)}
             placeholder="Explique o motivo da diferença entre valor da movimentação e o financeiro."
-            className="mt-1 min-h-[60px] text-xs"
+            className="mt-1 min-h-[40px] text-xs"
           />
         </div>
         <p className="text-[10px] text-muted-foreground italic">
