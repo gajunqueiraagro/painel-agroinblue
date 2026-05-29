@@ -395,6 +395,13 @@ export function LancamentoZooModal({
       pesoTotal: compraForm.pesoMedioKg && compraForm.quantidade
         ? Math.round(Number(compraForm.quantidade) * Number(compraForm.pesoMedioKg) * 100) / 100
         : undefined,
+      // PR-V2D.2-ETAPA1: persiste valor zootécnico editável no banco.
+      // R$/cab e R$/kg derivam em runtime no CompraDadosZootecnicos a partir
+      // de form.valorTotal (L40-41 daquele arquivo), portanto recalculam
+      // sozinhos. preco_unitario NÃO é alterado nesta etapa — frente paralela.
+      valorTotal: compraForm.valorTotal !== undefined && compraForm.valorTotal !== null
+        ? Number(compraForm.valorTotal)
+        : undefined,
       cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
       statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
       fornecedorId: fornecedorIdEdit ?? undefined,

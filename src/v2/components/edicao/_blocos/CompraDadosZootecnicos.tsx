@@ -118,7 +118,19 @@ export function CompraDadosZootecnicos({
         <div className="grid grid-cols-3 gap-1.5 items-end">
           <PriceMetric label="R$/Cabeça" value={precoCabeca > 0 ? formatMoeda(precoCabeca) : '—'} />
           <PriceMetric label="R$/Kg" value={precoKg > 0 ? formatMoeda(precoKg) : '—'} />
-          <PriceMetric label="Valor Total" value={valorMovimentacao > 0 ? formatMoeda(valorMovimentacao) : '—'} big />
+          <div>
+            <div className="text-[10px] uppercase text-blue-800/70 font-medium tracking-wide">Valor Total</div>
+            <Input
+              type="number"
+              value={form.valorTotal ?? ''}
+              onChange={e => onFormChange(f => ({
+                ...f,
+                valorTotal: e.target.value !== '' ? Number(e.target.value) : undefined,
+              }))}
+              placeholder="0,00"
+              className="h-7 text-[11px] mt-0.5"
+            />
+          </div>
         </div>
       </div>
 
