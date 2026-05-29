@@ -1,6 +1,6 @@
 export function RegrasEdicaoBar() {
   return (
-    <div className="rounded bg-slate-50 border border-slate-200 px-2.5 py-1.5">
+    <div className="rounded bg-slate-50 border border-slate-200 px-2.5 py-1">
       <div className="flex items-center gap-3 flex-wrap text-[10px]">
         <span className="font-bold text-slate-700 uppercase">Regras:</span>
         <span className="flex items-center gap-1">

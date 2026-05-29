@@ -44,8 +44,8 @@ export function CompraDadosZootecnicos({
 
   return (
     <div className="space-y-2 flex-1 flex flex-col">
-      {/* Linha 1: Data · Tipo · Categoria */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Linha única: Data · Tipo · Categoria · Fornecedor/Origem · Destino */}
+      <div className="grid grid-cols-5 gap-1.5">
         <Campo label="Data">
           <Input
             type="date"
@@ -68,10 +68,6 @@ export function CompraDadosZootecnicos({
             </SelectContent>
           </Select>
         </Campo>
-      </div>
-
-      {/* Linha 2: Origem (Fornecedor) · Destino */}
-      <div className="grid grid-cols-2 gap-2">
         <Campo label="Origem / Fornecedor">
           <FornecedorSelect
             fornecedorId={fornecedorId}
@@ -92,7 +88,7 @@ export function CompraDadosZootecnicos({
       </div>
 
       {/* Linha 3: Qtd · Peso Médio · Peso Total */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         <Campo label="Qtd" suffix="cab">
           <Input
             type="number"
@@ -119,7 +115,7 @@ export function CompraDadosZootecnicos({
 
       {/* CardPreço inline */}
       <div className="rounded border-2 border-blue-300 bg-blue-50/60 px-2.5 py-1.5">
-        <div className="grid grid-cols-3 gap-2 items-end">
+        <div className="grid grid-cols-3 gap-1.5 items-end">
           <PriceMetric label="R$/Cabeça" value={precoCabeca > 0 ? formatMoeda(precoCabeca) : '—'} />
           <PriceMetric label="R$/Kg" value={precoKg > 0 ? formatMoeda(precoKg) : '—'} />
           <PriceMetric label="Valor Total" value={valorMovimentacao > 0 ? formatMoeda(valorMovimentacao) : '—'} big />

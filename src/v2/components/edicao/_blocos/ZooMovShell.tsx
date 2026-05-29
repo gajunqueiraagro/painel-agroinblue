@@ -27,7 +27,7 @@ export function ZooMovShell({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[1280px] w-[95vw] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
-        <div className="px-5 py-2.5 border-b bg-card flex items-center justify-between gap-3">
+        <div className="px-5 py-1.5 border-b bg-card flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <h2 className="text-lg font-bold text-slate-900 whitespace-nowrap">{title}</h2>
             {subtitle && (
@@ -51,28 +51,28 @@ export function ZooMovShell({
           <TabsList className="rounded-none border-b bg-transparent h-auto p-0 px-5 justify-start gap-4">
             <TabsTrigger
               value="dados"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-1.5 text-xs"
             >
               <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
               Dados da Compra (Zootécnico)
             </TabsTrigger>
             <TabsTrigger
               value="custos"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-1.5 text-xs"
             >
               <Calculator className="h-3.5 w-3.5 mr-1.5" />
               Custos da Operação
             </TabsTrigger>
             <TabsTrigger
               value="itens"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs text-muted-foreground"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-1.5 text-xs text-muted-foreground"
             >
               <Boxes className="h-3.5 w-3.5 mr-1.5" />
               Itens
             </TabsTrigger>
             <TabsTrigger
               value="auditoria"
-              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2.5 text-xs"
+              className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-1.5 text-xs"
             >
               <History className="h-3.5 w-3.5 mr-1.5" />
               Auditoria
@@ -110,7 +110,7 @@ export function ZooMovShell({
         </Tabs>
 
         {footer && (
-          <div className="border-t bg-muted/30 px-4 py-3">{footer}</div>
+          <div className="border-t bg-muted/30 px-4 py-1.5">{footer}</div>
         )}
       </DialogContent>
     </Dialog>
