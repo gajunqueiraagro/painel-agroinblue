@@ -1,6 +1,11 @@
 import { Wand2 } from 'lucide-react';
+import { ReactNode } from 'react';
 
-export function BlocoAcoesFinanceiras() {
+interface Props {
+  children?: ReactNode;
+}
+
+export function BlocoAcoesFinanceiras({ children }: Props) {
   return (
     <section className="rounded-lg border border-purple-200 dark:border-purple-900/60 overflow-hidden">
       <header className="bg-purple-500/10 dark:bg-purple-950/40 border-b border-purple-200 dark:border-purple-900/60 px-4 py-2.5 flex items-center gap-2">
@@ -10,11 +15,11 @@ export function BlocoAcoesFinanceiras() {
         </h3>
       </header>
       <div className="p-3 bg-card">
-        <p className="text-xs text-muted-foreground italic">
-          Ações de Gerar/Atualizar/Editar Financeiro disponíveis no
-          painel "Vínculo Financeiro" acima. Reorganização visual em
-          fase futura.
-        </p>
+        {children ?? (
+          <p className="text-xs text-muted-foreground italic">
+            Sem ações disponíveis no momento.
+          </p>
+        )}
       </div>
     </section>
   );

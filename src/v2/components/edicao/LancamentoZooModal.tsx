@@ -22,10 +22,10 @@
  *  - Recálculo financeiro mantém regra "confirmação explícita do usuário"
  *    (CompraFinanceiroPanel preserva o comportamento atual).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Lock, Ban, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Lock, Ban, ExternalLink, Trash2 } from 'lucide-react';
 
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useLancamento } from '@/hooks/useLancamento';
@@ -40,8 +40,7 @@ import { EditMorteSheet } from '@/components/edit/EditMorteSheet';
 import { EditConsumoSheet } from '@/components/edit/EditConsumoSheet';
 import { EditTransferenciaSheet } from '@/components/edit/EditTransferenciaSheet';
 import { EditReclassificacaoSheet } from '@/components/edit/EditReclassificacaoSheet';
-import { EditCompraForm } from '@/components/edit/EditCompraForm';
-import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
+import type { CompraFinanceiroPanelRef } from '@/components/CompraFinanceiroPanel';
 import { SincronizacaoFornecedorDialog, type ParcelaInfo } from './SincronizacaoFornecedorDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,6 +52,10 @@ import { BlocoExplicacaoDiferenca } from './_blocos/BlocoExplicacaoDiferenca';
 import { BlocoAcoesFinanceiras } from './_blocos/BlocoAcoesFinanceiras';
 import { RegrasEdicaoBar } from './_blocos/RegrasEdicaoBar';
 import { BlocoAuditoria } from './_blocos/BlocoAuditoria';
+import { CompraDadosZootecnicos } from './_blocos/CompraDadosZootecnicos';
+import { CompraVinculoFinanceiroDisplay } from './_blocos/CompraVinculoFinanceiroDisplay';
+import { CompraAcoesFinanceiras } from './_blocos/CompraAcoesFinanceiras';
+import { EditarFinanceiroSheet } from './_blocos/EditarFinanceiroSheet';
 
 interface LancamentoZooModalProps {
   open: boolean;
@@ -166,10 +169,13 @@ export function LancamentoZooModal({
   // ── Nome da fazenda do registro (texto persistido > lookup por UUID > '')
   const nomeFazendaDoRegistro = useMemo(() => {
     if (!lancamento) return '';
+    // Lookup-first via UUID (estável). Corrige bug de display quando o campo
+    // TEXT fazenda_destino foi salvo como 'Global' ou outro lixo no writer.
+    const fz = fazendas.find(f => f.id === lancamento.fazendaId);
+    if (fz?.nome) return fz.nome;
     if (lancamento.fazendaDestino) return lancamento.fazendaDestino;
     if (lancamento.fazendaOrigem) return lancamento.fazendaOrigem;
-    const fz = fazendas.find(f => f.id === lancamento.fazendaId);
-    return fz?.nome || '';
+    return '';
   }, [lancamento, fazendas]);
 
   // ── Outras fazendas (Transferência): exclui a fazenda DO LANÇAMENTO,
@@ -213,6 +219,15 @@ export function LancamentoZooModal({
   }
   const [modalSyncAberto, setModalSyncAberto] = useState(false);
   const [syncData, setSyncData] = useState<SyncData | null>(null);
+
+  // ── V2B: edição financeira via drawer + refresh do display ──────────────
+  const [editFinSheetOpen, setEditFinSheetOpen] = useState(false);
+  const [finRefreshKey, setFinRefreshKey] = useState(0);
+  const [existingFinCount, setExistingFinCount] = useState(0);
+  const compraFinanceiroPanelRef = useRef<CompraFinanceiroPanelRef>(null);
+  const handleVinculoChange = useCallback((count: number) => {
+    setExistingFinCount(count);
+  }, []);
 
   // Reinicializa state ao trocar de lançamento ou reabrir.
   // REGRA: side-effect (setState) precisa ser useEffect, não useMemo.
@@ -528,6 +543,34 @@ export function LancamentoZooModal({
                 updatedAt={raw?.updated_at}
               />
             }
+            footer={
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    /* Cancelar Movimentação — hook futuro. Por ora, fecha modal. */
+                    onOpenChange(false);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Cancelar Movimentação
+                </Button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSalvarCompraZoo}
+                    disabled={compraSaving || !compraZooDirty}
+                  >
+                    {compraSaving ? 'Salvando…' : 'Salvar Alterações'}
+                  </Button>
+                </div>
+              </div>
+            }
           >
             <BannerBloqueio reason={permissions.blockReason} />
 
@@ -545,20 +588,16 @@ export function LancamentoZooModal({
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mt-3">
+              {/* Coluna esquerda — bloco azul */}
               <div className="lg:col-span-7">
                 <BlocoDadosMovimentacao>
-                  <EditCompraForm
+                  <CompraDadosZootecnicos
                     lancamento={lancamento}
                     form={compraForm}
                     onFormChange={setCompraForm as React.Dispatch<React.SetStateAction<Lancamento>>}
                     statusMode={compraStatusMode}
                     onStatusModeChange={setCompraStatusMode}
-                    saving={compraSaving}
-                    zooSaved={compraZooSaved}
-                    zooDirty={compraZooDirty}
-                    onSubmitZoo={handleSalvarCompraZoo}
                     canEditMeta={canEditMeta}
-                    finRecordsCount={0 /* lookup futuro — não bloqueante aqui */}
                     nomeFazendaDestino={nomeFazendaDoRegistro}
                     fornecedorId={fornecedorIdEdit}
                     onFornecedorChange={(id, nome) => {
@@ -568,52 +607,73 @@ export function LancamentoZooModal({
                     textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
                     snapshotNome={snapshotNomeInicial ?? undefined}
                     clienteId={clienteIdLancamento}
-                    readOnly={!permissions.canEdit}
-                    blockReason={permissions.blockReason}
+                    observacao={compraForm.observacao ?? ''}
+                    onObservacaoChange={v => setCompraForm(f => f ? { ...f, observacao: v } : f)}
                   />
                 </BlocoDadosMovimentacao>
               </div>
 
+              {/* Coluna direita — verde · laranja · roxo */}
               <div className="lg:col-span-5 space-y-3">
                 <BlocoVinculoFinanceiro>
-                  <CompraFinanceiroPanel
-                    quantidade={compraZooSaved ? Number(compraForm.quantidade) : lancamento.quantidade}
-                    pesoKg={compraZooSaved ? (compraForm.pesoMedioKg || 0) : (lancamento.pesoMedioKg || 0)}
-                    data={compraZooSaved ? compraForm.data : lancamento.data}
-                    categoria={(compraZooSaved ? compraForm.categoria : lancamento.categoria) as Categoria}
-                    statusOp={(() => {
-                      // FiltroVisual = 'programado' | 'agendado' | 'realizado' | 'meta'.
-                      // Lançamentos com 'previsto' (legado) caem em 'programado' para o
-                      // CompraFinanceiroPanel — equivalência visual aceita.
-                      const raw = compraZooSaved
-                        ? (compraForm.statusOperacional ?? 'realizado')
-                        : (lancamento.statusOperacional ?? 'realizado');
-                      if (compraStatusMode === 'meta') return 'meta' as FiltroVisual;
-                      if (raw === 'previsto') return 'programado' as FiltroVisual;
-                      return raw as FiltroVisual;
-                    })()}
-                    fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
-                    notaFiscal={notaFiscalEdit}
-                    onNotaFiscalChange={setNotaFiscalEdit}
-                    fornecedorId={fornecedorIdEdit ?? ''}
+                  <CompraVinculoFinanceiroDisplay
                     lancamentoId={lancamento.id}
-                    mode="update"
-                    fazendaIdLancamento={fazendaIdLancamento || undefined}
-                    clienteIdLancamento={clienteIdLancamento || undefined}
-                    onFinanceiroUpdated={() => {
-                      onOpenChange(false);
-                      onEditSuccess?.();
-                    }}
+                    valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
+                    quantidade={Number(compraForm.quantidade) || 0}
+                    pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
+                    refreshKey={finRefreshKey}
+                    onCountChange={handleVinculoChange}
                   />
                 </BlocoVinculoFinanceiro>
 
                 <BlocoExplicacaoDiferenca />
-                <BlocoAcoesFinanceiras />
+
+                <BlocoAcoesFinanceiras>
+                  <CompraAcoesFinanceiras
+                    onGerarAtualizar={() => {
+                      compraFinanceiroPanelRef.current?.generateFinanceiro(lancamento.id);
+                    }}
+                    onEditarFinanceiro={() => setEditFinSheetOpen(true)}
+                    existingCount={existingFinCount}
+                    disabled={!permissions.canEdit}
+                  />
+                </BlocoAcoesFinanceiras>
               </div>
             </div>
 
             <RegrasEdicaoBar />
           </ZooMovShell>
+
+          {/* Drawer de edição financeira — abre por cima sem fechar o modal zoo. */}
+          <EditarFinanceiroSheet
+            open={editFinSheetOpen}
+            onOpenChange={setEditFinSheetOpen}
+            panelRef={compraFinanceiroPanelRef}
+            quantidade={compraZooSaved ? Number(compraForm.quantidade) : lancamento.quantidade}
+            pesoKg={compraZooSaved ? (compraForm.pesoMedioKg || 0) : (lancamento.pesoMedioKg || 0)}
+            data={compraZooSaved ? compraForm.data : lancamento.data}
+            categoria={(compraZooSaved ? compraForm.categoria : lancamento.categoria) as Categoria}
+            statusOp={(() => {
+              const raw = compraZooSaved
+                ? (compraForm.statusOperacional ?? 'realizado')
+                : (lancamento.statusOperacional ?? 'realizado');
+              if (compraStatusMode === 'meta') return 'meta' as FiltroVisual;
+              if (raw === 'previsto') return 'programado' as FiltroVisual;
+              return raw as FiltroVisual;
+            })()}
+            fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
+            notaFiscal={notaFiscalEdit}
+            onNotaFiscalChange={setNotaFiscalEdit}
+            fornecedorId={fornecedorIdEdit ?? ''}
+            lancamentoId={lancamento.id}
+            fazendaIdLancamento={fazendaIdLancamento || undefined}
+            clienteIdLancamento={clienteIdLancamento || undefined}
+            onFinanceiroUpdated={() => {
+              setEditFinSheetOpen(false);
+              setFinRefreshKey(k => k + 1);
+              onEditSuccess?.();
+            }}
+          />
 
           {/* Z4: modal de sincronização — aparece ANTES do save zoo quando
               fornecedor muda em lançamento com parcelas vinculadas. */}
