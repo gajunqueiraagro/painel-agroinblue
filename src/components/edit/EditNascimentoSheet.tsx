@@ -91,6 +91,12 @@ export function EditNascimentoSheet({
       fazendaDestino: nomeFazenda,
       pesoMedioKg: pesoFinal,
       pesoMedioArrobas: kgToArrobas(pesoFinal),
+      // PR-EditZooSheets-PesoTotal-V2: peso_total derivado de qtd × peso_medio.
+      // Garante que UPDATE inclua peso_total (hook L513 só envia campos
+      // !== undefined). Mesma fórmula validada em compra V2 (commit 8729656a).
+      pesoTotal: pesoFinal && Number(form.quantidade) > 0
+        ? Math.round(Number(form.quantidade) * pesoFinal * 100) / 100
+        : undefined,
       observacao: form.observacao || undefined,
       cenario: isMeta ? 'meta' : 'realizado',
       statusOperacional: isMeta ? null : (form.statusOperacional || 'realizado'),

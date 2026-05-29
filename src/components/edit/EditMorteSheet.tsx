@@ -94,6 +94,9 @@ export function EditMorteSheet({
       fazendaDestino: motivoFinal || undefined,
       pesoMedioKg: pesoFinal,
       pesoMedioArrobas: pesoFinal !== undefined ? kgToArrobas(pesoFinal) : undefined,
+      pesoTotal: pesoFinal && Number(form.quantidade) > 0
+        ? Math.round(Number(form.quantidade) * pesoFinal * 100) / 100
+        : undefined,
       observacao: form.observacao || undefined,
       cenario: isMeta ? 'meta' : 'realizado',
       statusOperacional: isMeta ? null : (form.statusOperacional || 'realizado'),

@@ -90,6 +90,9 @@ export function EditReclassificacaoSheet({
       quantidade: Number(reclassState.quantidade),
       pesoMedioKg: pesoMedioKg ?? undefined,
       pesoMedioArrobas: pesoMedioKg !== undefined ? kgToArrobas(pesoMedioKg) : undefined,
+      pesoTotal: pesoMedioKg !== undefined && Number(reclassState.quantidade) > 0
+        ? Math.round(Number(reclassState.quantidade) * pesoMedioKg * 100) / 100
+        : undefined,
       cenario: isMeta ? 'meta' : 'realizado',
       statusOperacional: isMeta ? null : 'realizado',
     };
