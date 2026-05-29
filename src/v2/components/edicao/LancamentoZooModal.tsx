@@ -697,8 +697,8 @@ export function LancamentoZooModal({
               </div>
             )}
 
-            {/* LINHA 1: AZUL + VERDE (50/50, alturas iguais) */}
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            {/* LINHA ÚNICA: AZUL (70%) + COLUNA DIREITA empilhada (30%) */}
+            <div className="grid grid-cols-[7fr_3fr] gap-3 mb-3">
               <BlocoDadosMovimentacao>
                 <CompraDadosZootecnicos
                   lancamento={lancamento}
@@ -721,35 +721,38 @@ export function LancamentoZooModal({
                 />
               </BlocoDadosMovimentacao>
 
-              <BlocoVinculoFinanceiro>
-                <CompraVinculoFinanceiroDisplay
-                  records={finRecords}
-                  contasMap={finContasMap}
-                  loading={finLoading}
-                  error={finError}
-                  valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
-                  quantidade={Number(compraForm.quantidade) || 0}
-                  pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
-                />
-              </BlocoVinculoFinanceiro>
+              <div className="flex flex-col gap-3">
+                <BlocoVinculoFinanceiro>
+                  <CompraVinculoFinanceiroDisplay
+                    records={finRecords}
+                    contasMap={finContasMap}
+                    loading={finLoading}
+                    error={finError}
+                    valorZootecnico={Number(compraForm.valorTotal ?? lancamento.valorTotal) || 0}
+                    quantidade={Number(compraForm.quantidade) || 0}
+                    pesoTotalKg={(Number(compraForm.quantidade) || 0) * (Number(compraForm.pesoMedioKg) || 0)}
+                  />
+                </BlocoVinculoFinanceiro>
+
+                <BlocoAcoesFinanceiras>
+                  <CompraAcoesFinanceiras
+                    onGerarAtualizar={() => {
+                      compraFinanceiroPanelRef.current?.generateFinanceiro(lancamento.id);
+                    }}
+                    onEditarFinanceiro={() => setEditFinSheetOpen(true)}
+                    existingCount={existingFinCount}
+                    disabled={!permissions.canEdit}
+                  />
+                </BlocoAcoesFinanceiras>
+              </div>
             </div>
 
-            {/* LINHA 2: LARANJA + ROXO (50/50) */}
-            <div className="grid grid-cols-2 gap-3 mb-2">
-              <BlocoExplicacaoDiferenca />
-              <BlocoAcoesFinanceiras>
-                <CompraAcoesFinanceiras
-                  onGerarAtualizar={() => {
-                    compraFinanceiroPanelRef.current?.generateFinanceiro(lancamento.id);
-                  }}
-                  onEditarFinanceiro={() => setEditFinSheetOpen(true)}
-                  existingCount={existingFinCount}
-                  disabled={!permissions.canEdit}
-                />
-              </BlocoAcoesFinanceiras>
-            </div>
+            {/* PR-V2E.0: Bloco Explicação da Diferença escondido temporariamente.
+                Render condicional preserva import e permite reversão trivial. */}
+            {false && <BlocoExplicacaoDiferenca />}
 
-            <RegrasEdicaoBar />
+            {/* PR-V2E.0: RegrasEdicaoBar escondido temporariamente. */}
+            {false && <RegrasEdicaoBar />}
           </ZooMovShell>
 
           {/* Drawer de edição financeira — abre por cima sem fechar o modal zoo. */}

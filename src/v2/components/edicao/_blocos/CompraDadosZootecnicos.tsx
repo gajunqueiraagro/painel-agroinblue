@@ -44,8 +44,8 @@ export function CompraDadosZootecnicos({
 
   return (
     <div className="space-y-2 flex-1 flex flex-col">
-      {/* Linha única: Data · Tipo · Categoria · Fornecedor/Origem · Destino */}
-      <div className="grid grid-cols-5 gap-1.5">
+      {/* Linha 1: Data · Tipo · Categoria */}
+      <div className="grid grid-cols-[110px_90px_1fr] gap-1.5">
         <Campo label="Data">
           <Input
             type="date"
@@ -68,6 +68,10 @@ export function CompraDadosZootecnicos({
             </SelectContent>
           </Select>
         </Campo>
+      </div>
+
+      {/* Linha 2: Origem/Fornecedor · Destino */}
+      <div className="grid grid-cols-[7fr_3fr] gap-1.5">
         <Campo label="Origem / Fornecedor">
           <FornecedorSelect
             fornecedorId={fornecedorId}
@@ -88,7 +92,7 @@ export function CompraDadosZootecnicos({
       </div>
 
       {/* Linha 3: Qtd · Peso Médio · Peso Total */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-[1fr_1fr_1.3fr] gap-1.5">
         <Campo label="Qtd" suffix="cab">
           <Input
             type="number"
