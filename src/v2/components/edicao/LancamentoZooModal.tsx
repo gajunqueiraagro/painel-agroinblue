@@ -697,8 +697,9 @@ export function LancamentoZooModal({
               </div>
             )}
 
-            {/* LINHA ÚNICA: AZUL (70%) + COLUNA DIREITA empilhada (30%) */}
-            <div className="grid grid-cols-[7fr_3fr] gap-3 mb-3">
+            {/* PR-V2E.2: 55/45 — Verde ganha bastante espaço para acomodar valores R$ grandes */}
+            {/* LINHA ÚNICA: AZUL (55%) + COLUNA DIREITA empilhada (45%) */}
+            <div className="grid grid-cols-[11fr_9fr] gap-3 mb-3">
               <BlocoDadosMovimentacao>
                 <CompraDadosZootecnicos
                   lancamento={lancamento}

@@ -62,38 +62,42 @@ export function CompraVinculoFinanceiroDisplay({
   return (
     <div className="flex-1 flex flex-col">
 
-      {/* TRIO: 3 caixinhas horizontais no topo */}
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      {/* PR-V2E.2: trio mantido em 1 linha com Diferença mais estreita.
+          Fontes 15→12px + leading-none + whitespace-nowrap para valores R$
+          grandes (ex.: R$ 319.460,00) não quebrarem em coluna direita 45%.
+          Labels com truncate. Se ainda quebrar em runtime: REPORTAR,
+          não tentar 2 linhas neste PR. */}
+      <div className="grid grid-cols-[1fr_1fr_0.8fr] gap-2 mb-2">
         <div className="rounded bg-slate-50 border border-slate-200 px-2 py-1.5">
-          <div className="text-[9px] uppercase text-slate-500 font-semibold">Zootécnico</div>
-          <div className="text-[15px] font-bold text-slate-800 tabular-nums leading-tight">
+          <div className="text-[9px] uppercase text-slate-500 font-semibold truncate">Zootécnico</div>
+          <div className="text-[12px] font-bold text-slate-800 tabular-nums leading-none whitespace-nowrap mt-0.5">
             {formatMoeda(valorZootecnico)}
           </div>
-          <div className="text-[9px] text-slate-500">Competência</div>
+          <div className="text-[9px] text-slate-500 mt-0.5">Competência</div>
         </div>
         <div className="rounded bg-emerald-50 border border-emerald-300 px-2 py-1.5">
-          <div className="text-[9px] uppercase text-emerald-700 font-semibold">Vinculado</div>
-          <div className="text-[15px] font-bold text-emerald-700 tabular-nums leading-tight">
+          <div className="text-[9px] uppercase text-emerald-700 font-semibold truncate">Vinculado</div>
+          <div className="text-[12px] font-bold text-emerald-700 tabular-nums leading-none whitespace-nowrap mt-0.5">
             {formatMoeda(valorVinculado)}
           </div>
-          <div className="text-[9px] text-emerald-700/70">Caixa</div>
+          <div className="text-[9px] text-emerald-700/70 mt-0.5">Caixa</div>
         </div>
         <div className={`rounded border px-2 py-1.5 ${
           Math.abs(diferenca) < 0.01
             ? 'bg-slate-50 border-slate-200'
             : 'bg-amber-50 border-amber-300'
         }`}>
-          <div className={`text-[9px] uppercase font-semibold ${
+          <div className={`text-[9px] uppercase font-semibold truncate ${
             Math.abs(diferenca) < 0.01 ? 'text-slate-500' : 'text-amber-700'
           }`}>
             Diferença
           </div>
-          <div className={`text-[15px] font-bold tabular-nums leading-tight ${
+          <div className={`text-[12px] font-bold tabular-nums leading-none whitespace-nowrap mt-0.5 ${
             Math.abs(diferenca) < 0.01 ? 'text-slate-500' : 'text-amber-700'
           }`}>
             {Math.abs(diferenca) < 0.01 ? 'R$ 0,00' : formatMoeda(diferenca)}
           </div>
-          <div className={`text-[9px] ${
+          <div className={`text-[9px] mt-0.5 ${
             Math.abs(diferenca) < 0.01 ? 'text-slate-500' : 'text-amber-700/70'
           }`}>
             {valorZootecnico > 0 ? `${Math.abs(percentDiferenca).toFixed(2)}%` : '—'}

@@ -98,8 +98,8 @@ export function CompraDadosZootecnicos({
 
   return (
     <div className="space-y-2 flex-1 flex flex-col">
-      {/* Linha 1: Data · Tipo · Categoria */}
-      <div className="grid grid-cols-[110px_90px_1fr] gap-1.5">
+      {/* PR-V2E.2 Linha 1: Categoria limitada a 220px (não engole resto da linha) */}
+      <div className="grid grid-cols-[110px_90px_220px] gap-1.5">
         <Campo label="Data">
           <Input
             type="date"
