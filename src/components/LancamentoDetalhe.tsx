@@ -258,6 +258,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
       fazendaDestino: nomeFazendaResolvido,
       pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
       pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
+      // pesoTotal: derivação pura (qtd × pesoMedio). Sem decisão de fonte financeira.
+      // valorTotal e precoUnitario ficam fora deste PR — frente B-Sync (sincronização zoot↔financeiro) pendente.
+      pesoTotal: compraForm.pesoMedioKg && compraForm.quantidade
+        ? Math.round(Number(compraForm.quantidade) * Number(compraForm.pesoMedioKg) * 100) / 100
+        : undefined,
       cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
       statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
     };
