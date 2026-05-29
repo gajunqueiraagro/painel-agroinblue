@@ -300,12 +300,15 @@
   border: 1px solid hsl(220, 13%, 91%) !important;
 }
 
-/* Remove spinner arrows from number inputs */
+/* Remove spinner arrows from number inputs (PR-V2E.1: fix
+   especificidade — Tailwind preflight estava sobrepondo) */
 input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
 }
 input[type='number'] {
-  -moz-appearance: textfield;
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
 }

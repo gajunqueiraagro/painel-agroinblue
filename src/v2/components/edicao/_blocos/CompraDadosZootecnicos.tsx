@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Dispatch, SetStateAction } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useDecimalInput, parseDecimalInput } from '@/hooks/useFormattedNumber';
 
 type CompraStatusMode = 'realizado' | 'programado' | 'meta';
 
@@ -41,6 +43,58 @@ export function CompraDadosZootecnicos({
   const precoKg = pesoTotal > 0 ? valorMovimentacao / pesoTotal : 0;
 
   const statusOpcoes: CompraStatusMode[] = canEditMeta ? ['meta'] : ['programado', 'realizado'];
+
+  // ── PR-V2E.1: state local para inputs monetários formatados ─────
+  // Peso Médio kg
+  const [pesoMedioStr, setPesoMedioStr] = useState<string>(() =>
+    form.pesoMedioKg !== undefined && form.pesoMedioKg !== null
+      ? form.pesoMedioKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : ''
+  );
+  const lastSyncedPesoMedio = useRef<number | undefined>(form.pesoMedioKg);
+  useEffect(() => {
+    if (form.pesoMedioKg !== lastSyncedPesoMedio.current) {
+      lastSyncedPesoMedio.current = form.pesoMedioKg;
+      setPesoMedioStr(
+        form.pesoMedioKg !== undefined && form.pesoMedioKg !== null
+          ? form.pesoMedioKg.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : ''
+      );
+    }
+  }, [form.pesoMedioKg]);
+  const setPesoMedioFromInput = useCallback((v: string) => {
+    setPesoMedioStr(v);
+    const parsed = parseDecimalInput(v);
+    lastSyncedPesoMedio.current = parsed;
+    onFormChange(f => ({ ...f, pesoMedioKg: parsed }));
+  }, [onFormChange]);
+  const pesoMedioInput = useDecimalInput(pesoMedioStr, setPesoMedioFromInput, 2);
+
+  // Valor Total (R$)
+  const [valorTotalStr, setValorTotalStr] = useState<string>(() =>
+    form.valorTotal !== undefined && form.valorTotal !== null
+      ? form.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : ''
+  );
+  const lastSyncedValorTotal = useRef<number | undefined>(form.valorTotal);
+  useEffect(() => {
+    if (form.valorTotal !== lastSyncedValorTotal.current) {
+      lastSyncedValorTotal.current = form.valorTotal;
+      setValorTotalStr(
+        form.valorTotal !== undefined && form.valorTotal !== null
+          ? form.valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : ''
+      );
+    }
+  }, [form.valorTotal]);
+  const setValorTotalFromInput = useCallback((v: string) => {
+    setValorTotalStr(v);
+    const parsed = parseDecimalInput(v);
+    lastSyncedValorTotal.current = parsed;
+    onFormChange(f => ({ ...f, valorTotal: parsed }));
+  }, [onFormChange]);
+  const valorTotalInput = useDecimalInput(valorTotalStr, setValorTotalFromInput, 2);
+  // ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-2 flex-1 flex flex-col">
@@ -104,9 +158,13 @@ export function CompraDadosZootecnicos({
         </Campo>
         <Campo label="Peso Médio" suffix="kg">
           <Input
-            type="number"
-            value={form.pesoMedioKg || ''}
-            onChange={e => onFormChange(f => ({ ...f, pesoMedioKg: e.target.value ? Number(e.target.value) : undefined }))}
+            type="text"
+            inputMode="decimal"
+            value={pesoMedioInput.displayValue}
+            onChange={pesoMedioInput.onChange}
+            onBlur={pesoMedioInput.onBlur}
+            onFocus={pesoMedioInput.onFocus}
+            placeholder="0,00"
             className="h-6 text-[13px] px-1.5 tabular-nums"
           />
         </Campo>
@@ -124,16 +182,19 @@ export function CompraDadosZootecnicos({
           <PriceMetric label="R$/Kg" value={precoKg > 0 ? formatMoeda(precoKg) : '—'} />
           <div>
             <div className="text-[10px] uppercase text-blue-800/70 font-medium tracking-wide">Valor Total</div>
-            <Input
-              type="number"
-              value={form.valorTotal ?? ''}
-              onChange={e => onFormChange(f => ({
-                ...f,
-                valorTotal: e.target.value !== '' ? Number(e.target.value) : undefined,
-              }))}
-              placeholder="0,00"
-              className="h-7 text-[11px] mt-0.5"
-            />
+            <div className="relative mt-0.5">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[14px] font-bold text-blue-900 pointer-events-none select-none">R$</span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={valorTotalInput.displayValue}
+                onChange={valorTotalInput.onChange}
+                onBlur={valorTotalInput.onBlur}
+                onFocus={valorTotalInput.onFocus}
+                placeholder="0,00"
+                className="h-8 text-[14px] font-bold text-blue-900 tabular-nums pl-9"
+              />
+            </div>
           </div>
         </div>
       </div>
