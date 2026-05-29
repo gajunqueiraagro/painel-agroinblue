@@ -368,6 +368,12 @@ export function LancamentoZooModal({
     return () => { cancelado = true; };
   }, [lancamento, open]);
 
+  // PR-ZOO-FIN-LOCK-FIX-A: compraZooDirty completo. Adicionadas 3
+  // comparações para fornecedorIdEdit/observacao/valorTotal — sem
+  // elas o botão "Salvar Alterações" ficava disabled mesmo após
+  // alteração desses campos (Zoo puro, não depende do Financeiro).
+  // fornecedorIdEdit é state local do modal (não está em compraForm),
+  // por isso entra também como dependência do useMemo.
   const compraZooDirty = useMemo(() => {
     if (!lancamento || !compraForm || lancamento.tipo !== 'compra') return false;
     const cenarioForm = compraStatusMode === 'meta' ? 'meta' : 'realizado';
@@ -377,9 +383,12 @@ export function LancamentoZooModal({
       Number(compraForm.pesoMedioKg ?? 0) !== Number(lancamento.pesoMedioKg ?? 0) ||
       compraForm.categoria !== lancamento.categoria ||
       (compraForm.fazendaOrigem || '') !== (lancamento.fazendaOrigem || '') ||
-      cenarioForm !== (lancamento.cenario || 'realizado')
+      cenarioForm !== (lancamento.cenario || 'realizado') ||
+      (fornecedorIdEdit ?? null) !== (lancamento.fornecedorId ?? null) ||
+      (compraForm.observacao ?? '') !== (lancamento.observacao ?? '') ||
+      Number(compraForm.valorTotal ?? 0) !== Number(lancamento.valorTotal ?? 0)
     );
-  }, [compraForm, compraStatusMode, lancamento]);
+  }, [compraForm, compraStatusMode, lancamento, fornecedorIdEdit]);
 
   // Z4: extraído de handleSalvarCompraZoo para reuso pelo modal de sync.
   const doSaveZoo = useCallback(async () => {

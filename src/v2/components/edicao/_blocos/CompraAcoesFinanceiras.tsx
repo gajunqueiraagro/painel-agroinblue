@@ -46,9 +46,12 @@ export function CompraAcoesFinanceiras({
         <div className="col-span-2 text-[10px] text-red-800 bg-red-100 border border-red-400 rounded px-2 py-1.5 flex items-start gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <span>
-            <b>Existe lançamento financeiro realizado/conciliado vinculado.</b>{' '}
-            O Zoo não pode substituir esse financeiro. Acesse o módulo
-            Financeiro para alterar.
+            <b>Sincronização com Financeiro Oficial bloqueada.</b>{' '}
+            Há lançamento realizado/conciliado vinculado — o Zoo não pode
+            gerar/atualizar lançamentos no Financeiro Oficial. A edição da
+            proposta do Zoo continua liberada (use &quot;Editar Financeiro&quot;
+            para revisar a estrutura). Para alterar o caixa, use o módulo
+            Financeiro.
             {(realizedCount > 0 || conciliadoCount > 0) && (
               <span className="block text-[9px] mt-0.5 opacity-80">
                 {realizedCount > 0 && `${realizedCount} realizado(s)`}

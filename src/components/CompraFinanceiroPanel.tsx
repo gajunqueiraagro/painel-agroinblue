@@ -506,20 +506,6 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <h3 className="text-[14px] font-semibold text-foreground">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
-      {/* PR-ZOO-FIN-LOCK CAMADA1: banner vermelho soberano. */}
-      {recalculoLocked && (
-        <div className="flex items-start gap-1.5 text-[11px] p-2 rounded border-2 border-red-400 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-bold">Recálculo bloqueado</div>
-            <div className="text-[10px] mt-0.5">
-              Existe lançamento financeiro realizado/conciliado vinculado.
-              O Zoo não pode substituir esse financeiro. Acesse o módulo
-              Financeiro para alterar.
-            </div>
-          </div>
-        </div>
-      )}
       {mode === 'update' && existingCount > 0 && !recalculoLocked && (
         <div className="flex items-center gap-1 text-[10px] p-1.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
           <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -740,6 +726,24 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             </div>
           ) : (
             <>
+              {/* PR-ZOO-FIN-LOCK-FIX-B: alerta de sincronização junto ao botão
+                  de gerar (não mais no topo do drawer). A edição dos campos da
+                  proposta (Tipo de Compra, Preço Base, Frete, Comissão,
+                  Parcelas, NF) permanece liberada — só a sincronização Zoo →
+                  Financeiro Oficial está bloqueada. */}
+              {recalculoLocked && (
+                <div className="flex items-start gap-1.5 text-[10px] p-2 rounded border-2 border-red-400 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300">
+                  <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Sincronização com Financeiro Oficial bloqueada</div>
+                    <div className="mt-0.5">
+                      Há lançamento realizado/conciliado vinculado. Você pode
+                      continuar editando esta proposta financeira do Zoo. Para
+                      alterar o caixa, use o módulo Financeiro.
+                    </div>
+                  </div>
+                </div>
+              )}
               <Button
                 type="button"
                 variant={mode === 'update' ? 'default' : 'outline'}
