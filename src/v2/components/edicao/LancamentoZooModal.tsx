@@ -24,8 +24,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Lock, Ban, ExternalLink } from 'lucide-react';
 
@@ -47,6 +45,14 @@ import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { SincronizacaoFornecedorDialog, type ParcelaInfo } from './SincronizacaoFornecedorDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+
+import { ZooMovShell } from './_blocos/ZooMovShell';
+import { BlocoDadosMovimentacao } from './_blocos/BlocoDadosMovimentacao';
+import { BlocoVinculoFinanceiro } from './_blocos/BlocoVinculoFinanceiro';
+import { BlocoExplicacaoDiferenca } from './_blocos/BlocoExplicacaoDiferenca';
+import { BlocoAcoesFinanceiras } from './_blocos/BlocoAcoesFinanceiras';
+import { RegrasEdicaoBar } from './_blocos/RegrasEdicaoBar';
+import { BlocoAuditoria } from './_blocos/BlocoAuditoria';
 
 interface LancamentoZooModalProps {
   open: boolean;
@@ -509,88 +515,106 @@ export function LancamentoZooModal({
     case 'compra':
       if (!compraForm) return null; // aguardando init via useMemo
       return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-          <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
-            <SheetHeader className="pb-1">
-              <SheetTitle className="text-sm">Editar Compra</SheetTitle>
-              <p className="text-[10px] text-muted-foreground/70 italic">
-                Alterações em campos zootécnicos irão recalcular o financeiro da compra.
-              </p>
-            </SheetHeader>
-            <div className="mt-2 space-y-2.5">
-              <BannerBloqueio reason={permissions.blockReason} />
+        <>
+          <ZooMovShell
+            open={open}
+            onOpenChange={onOpenChange}
+            title="Editar Compra"
+            subtitle={nomeFazendaDoRegistro}
+            auditoriaSlot={
+              <BlocoAuditoria
+                lancamentoId={lancamento.id}
+                createdAt={raw?.created_at}
+                updatedAt={raw?.updated_at}
+              />
+            }
+          >
+            <BannerBloqueio reason={permissions.blockReason} />
 
-              {/* Z4.2: guard visual quando cliente do registro não resolveu. */}
-              {!clienteIdLancamento && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-200">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <div>
-                    <div className="text-xs font-semibold">Cliente do lançamento não identificado</div>
-                    <div className="text-[11px] leading-snug mt-0.5">
-                      Reabra o lançamento ou contate o suporte. Seleção de fornecedor desabilitada e save bloqueado.
-                    </div>
+            {/* Z4.2: guard visual quando cliente do registro não resolveu. */}
+            {!clienteIdLancamento && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/60 text-red-800 dark:text-red-200 mt-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-semibold">Cliente do lançamento não identificado</div>
+                  <div className="text-[11px] leading-snug mt-0.5">
+                    Reabra o lançamento ou contate o suporte. Seleção de fornecedor desabilitada e save bloqueado.
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              <EditCompraForm
-                lancamento={lancamento}
-                form={compraForm}
-                onFormChange={setCompraForm as React.Dispatch<React.SetStateAction<Lancamento>>}
-                statusMode={compraStatusMode}
-                onStatusModeChange={setCompraStatusMode}
-                saving={compraSaving}
-                zooSaved={compraZooSaved}
-                zooDirty={compraZooDirty}
-                onSubmitZoo={handleSalvarCompraZoo}
-                canEditMeta={canEditMeta}
-                finRecordsCount={0 /* lookup futuro — não bloqueante aqui */}
-                nomeFazendaDestino={nomeFazendaDoRegistro}
-                fornecedorId={fornecedorIdEdit}
-                onFornecedorChange={(id, nome) => {
-                  setFornecedorIdEdit(id);
-                  setFornecedorNomeEdit(nome);
-                }}
-                textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
-                snapshotNome={snapshotNomeInicial ?? undefined}
-                clienteId={clienteIdLancamento}
-                readOnly={!permissions.canEdit}
-                blockReason={permissions.blockReason}
-              />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mt-3">
+              <div className="lg:col-span-7">
+                <BlocoDadosMovimentacao>
+                  <EditCompraForm
+                    lancamento={lancamento}
+                    form={compraForm}
+                    onFormChange={setCompraForm as React.Dispatch<React.SetStateAction<Lancamento>>}
+                    statusMode={compraStatusMode}
+                    onStatusModeChange={setCompraStatusMode}
+                    saving={compraSaving}
+                    zooSaved={compraZooSaved}
+                    zooDirty={compraZooDirty}
+                    onSubmitZoo={handleSalvarCompraZoo}
+                    canEditMeta={canEditMeta}
+                    finRecordsCount={0 /* lookup futuro — não bloqueante aqui */}
+                    nomeFazendaDestino={nomeFazendaDoRegistro}
+                    fornecedorId={fornecedorIdEdit}
+                    onFornecedorChange={(id, nome) => {
+                      setFornecedorIdEdit(id);
+                      setFornecedorNomeEdit(nome);
+                    }}
+                    textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
+                    snapshotNome={snapshotNomeInicial ?? undefined}
+                    clienteId={clienteIdLancamento}
+                    readOnly={!permissions.canEdit}
+                    blockReason={permissions.blockReason}
+                  />
+                </BlocoDadosMovimentacao>
+              </div>
 
-              <Separator />
+              <div className="lg:col-span-5 space-y-3">
+                <BlocoVinculoFinanceiro>
+                  <CompraFinanceiroPanel
+                    quantidade={compraZooSaved ? Number(compraForm.quantidade) : lancamento.quantidade}
+                    pesoKg={compraZooSaved ? (compraForm.pesoMedioKg || 0) : (lancamento.pesoMedioKg || 0)}
+                    data={compraZooSaved ? compraForm.data : lancamento.data}
+                    categoria={(compraZooSaved ? compraForm.categoria : lancamento.categoria) as Categoria}
+                    statusOp={(() => {
+                      // FiltroVisual = 'programado' | 'agendado' | 'realizado' | 'meta'.
+                      // Lançamentos com 'previsto' (legado) caem em 'programado' para o
+                      // CompraFinanceiroPanel — equivalência visual aceita.
+                      const raw = compraZooSaved
+                        ? (compraForm.statusOperacional ?? 'realizado')
+                        : (lancamento.statusOperacional ?? 'realizado');
+                      if (compraStatusMode === 'meta') return 'meta' as FiltroVisual;
+                      if (raw === 'previsto') return 'programado' as FiltroVisual;
+                      return raw as FiltroVisual;
+                    })()}
+                    fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
+                    notaFiscal={notaFiscalEdit}
+                    onNotaFiscalChange={setNotaFiscalEdit}
+                    fornecedorId={fornecedorIdEdit ?? ''}
+                    lancamentoId={lancamento.id}
+                    mode="update"
+                    fazendaIdLancamento={fazendaIdLancamento || undefined}
+                    clienteIdLancamento={clienteIdLancamento || undefined}
+                    onFinanceiroUpdated={() => {
+                      onOpenChange(false);
+                      onEditSuccess?.();
+                    }}
+                  />
+                </BlocoVinculoFinanceiro>
 
-              <CompraFinanceiroPanel
-                quantidade={compraZooSaved ? Number(compraForm.quantidade) : lancamento.quantidade}
-                pesoKg={compraZooSaved ? (compraForm.pesoMedioKg || 0) : (lancamento.pesoMedioKg || 0)}
-                data={compraZooSaved ? compraForm.data : lancamento.data}
-                categoria={(compraZooSaved ? compraForm.categoria : lancamento.categoria) as Categoria}
-                statusOp={(() => {
-                  // FiltroVisual = 'programado' | 'agendado' | 'realizado' | 'meta'.
-                  // Lançamentos com 'previsto' (legado) caem em 'programado' para o
-                  // CompraFinanceiroPanel — equivalência visual aceita.
-                  const raw = compraZooSaved
-                    ? (compraForm.statusOperacional ?? 'realizado')
-                    : (lancamento.statusOperacional ?? 'realizado');
-                  if (compraStatusMode === 'meta') return 'meta' as FiltroVisual;
-                  if (raw === 'previsto') return 'programado' as FiltroVisual;
-                  return raw as FiltroVisual;
-                })()}
-                fazendaOrigem={compraZooSaved ? (compraForm.fazendaOrigem || '') : (lancamento.fazendaOrigem || '')}
-                notaFiscal={notaFiscalEdit}
-                onNotaFiscalChange={setNotaFiscalEdit}
-                fornecedorId={fornecedorIdEdit ?? ''}
-                lancamentoId={lancamento.id}
-                mode="update"
-                fazendaIdLancamento={fazendaIdLancamento || undefined}
-                clienteIdLancamento={clienteIdLancamento || undefined}
-                onFinanceiroUpdated={() => {
-                  onOpenChange(false);
-                  onEditSuccess?.();
-                }}
-              />
+                <BlocoExplicacaoDiferenca />
+                <BlocoAcoesFinanceiras />
+              </div>
             </div>
-          </SheetContent>
+
+            <RegrasEdicaoBar />
+          </ZooMovShell>
+
           {/* Z4: modal de sincronização — aparece ANTES do save zoo quando
               fornecedor muda em lançamento com parcelas vinculadas. */}
           {syncData && (
@@ -605,7 +629,7 @@ export function LancamentoZooModal({
               onCancelar={handleCancelarSync}
             />
           )}
-        </Sheet>
+        </>
       );
 
     // BACKLOG — extrair FormVenda/FormAbate completos para dentro deste modal
