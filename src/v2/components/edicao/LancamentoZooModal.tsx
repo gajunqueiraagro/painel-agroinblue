@@ -298,6 +298,15 @@ export function LancamentoZooModal({
       fazendaDestino: nomeFazendaDoRegistro,
       pesoMedioKg: compraForm.pesoMedioKg ? Number(compraForm.pesoMedioKg) : undefined,
       pesoMedioArrobas: compraForm.pesoMedioKg ? kgToArrobas(Number(compraForm.pesoMedioKg)) : undefined,
+      // PR-EditCompraZoo-PesoTotal-V2: peso_total derivado de qtd × peso_medio,
+      // garante que UPDATE inclua peso_total. Sem essa linha o hook
+      // editarLancamento L513 não envia o campo (guard `!== undefined`).
+      // Mesma fórmula do handleSalvarCompraZoo em LancamentoDetalhe.tsx
+      // (commit 17a1acb2). Aplicado também aqui porque V2 usa este modal,
+      // não o LancamentoDetalhe legado.
+      pesoTotal: compraForm.pesoMedioKg && compraForm.quantidade
+        ? Math.round(Number(compraForm.quantidade) * Number(compraForm.pesoMedioKg) * 100) / 100
+        : undefined,
       cenario: compraStatusMode === 'meta' ? 'meta' : 'realizado',
       statusOperacional: compraStatusMode === 'meta' ? null : (compraForm.statusOperacional || null),
       fornecedorId: fornecedorIdEdit ?? undefined,
