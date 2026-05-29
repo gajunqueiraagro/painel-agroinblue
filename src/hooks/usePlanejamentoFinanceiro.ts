@@ -248,6 +248,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
   }
   interface DetalhesSnapshotZootMeta {
     formaReceb?: string | null;
+    formaPag?: string | null;
     parcelas?: ParcelaZootMeta[];
     boitelSnapshot?: BoitelSnapshotZootMeta;
   }
@@ -336,7 +337,9 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string) {
           }
         }
 
-        const formaReceb = det?.formaReceb ?? null;
+        // Reconciliação semântica: Compra usa `formaPag`, Abate/Venda usam `formaReceb`.
+        // Ambos representam a mesma forma de liquidação (à vista vs prazo).
+        const formaReceb = det?.formaReceb ?? det?.formaPag ?? null;
         const parcelas: ParcelaZootMeta[] = Array.isArray(det?.parcelas) ? det!.parcelas! : [];
 
         // Regra 1: prazo + parcelas → iterar parcelas (data de RECEBIMENTO)
