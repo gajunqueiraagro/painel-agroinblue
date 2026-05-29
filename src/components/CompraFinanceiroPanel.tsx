@@ -48,6 +48,11 @@ interface Props {
   fazendaIdLancamento?: string;
   /** UUID soberano do cliente do lançamento. Mesma regra. */
   clienteIdLancamento?: string;
+  /** PR-ZOO-FIN-LOCK CAMADA1: quando true, recálculo financeiro é
+   * bloqueado pela UI (caso há lançamentos realizado/conciliado).
+   * Camada 2 SQL fechará bypass. Default undefined = comportamento
+   * legado (V1 LancamentoDetalhe segue idêntico). */
+  recalculoLocked?: boolean;
 }
 
 export interface CompraFinanceiroPanelRef {
@@ -91,6 +96,7 @@ function CollapsibleBlock({ title, open, onOpenChange, children, summary }: { ti
 export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>(function CompraFinanceiroPanel({
   quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, notaFiscal, onNotaFiscalChange, fornecedorId, lancamentoId, mode = 'create', onFinanceiroUpdated, onValidationChange, onRequestRegister, registerLabel, submitting: externalSubmitting,
   fazendaIdLancamento, clienteIdLancamento,
+  recalculoLocked,
 }, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
@@ -259,6 +265,12 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   }, [validationErrors, onValidationChange]);
 
   const handleClickGerar = () => {
+    // PR-ZOO-FIN-LOCK CAMADA1: early-return UI quando há
+    // realizado/conciliado vinculado. Toast de feedback.
+    if (recalculoLocked) {
+      toast.error('Recálculo bloqueado: há lançamento realizado ou conciliado vinculado. Acesse o módulo Financeiro para alterar.');
+      return;
+    }
     if (mode === 'update' && existingCount > 0) {
       setConfirmUpdateOpen(true);
     } else {
@@ -494,7 +506,21 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
       <h3 className="text-[14px] font-semibold text-foreground">
         {mode === 'update' ? 'Atualizar Financeiro da Compra' : 'Detalhes Financeiros'}
       </h3>
-      {mode === 'update' && existingCount > 0 && (
+      {/* PR-ZOO-FIN-LOCK CAMADA1: banner vermelho soberano. */}
+      {recalculoLocked && (
+        <div className="flex items-start gap-1.5 text-[11px] p-2 rounded border-2 border-red-400 bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-bold">Recálculo bloqueado</div>
+            <div className="text-[10px] mt-0.5">
+              Existe lançamento financeiro realizado/conciliado vinculado.
+              O Zoo não pode substituir esse financeiro. Acesse o módulo
+              Financeiro para alterar.
+            </div>
+          </div>
+        </div>
+      )}
+      {mode === 'update' && existingCount > 0 && !recalculoLocked && (
         <div className="flex items-center gap-1 text-[10px] p-1.5 rounded border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span>{existingCount} lançamento(s) existente(s) serão cancelados e substituídos.</span>
@@ -719,7 +745,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
                 variant={mode === 'update' ? 'default' : 'outline'}
                 size="sm"
                 className={`w-full h-8 text-[11px] font-bold ${mode === 'update' ? 'shadow-sm' : ''}`}
-                disabled={!canGenerate || gerando || (!lancamentoId && mode === 'create')}
+                disabled={!canGenerate || gerando || (!lancamentoId && mode === 'create') || !!recalculoLocked}
                 onClick={handleClickGerar}
               >
                 {gerando

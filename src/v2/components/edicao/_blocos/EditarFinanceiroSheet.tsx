@@ -25,6 +25,10 @@ interface Props {
   /** Disparado após salvar/atualizar financeiro. Caller decide o que fazer
    *  (fechar sheet, refetch display, etc). NÃO fecha modal zoo. */
   onFinanceiroUpdated: () => void;
+  // PR-ZOO-FIN-LOCK CAMADA1: trava interna espelhada do externo.
+  // Quando true, painel renderiza banner vermelho e desabilita
+  // "Atualizar lançamentos no financeiro".
+  recalculoLocked?: boolean;
 }
 
 export function EditarFinanceiroSheet({

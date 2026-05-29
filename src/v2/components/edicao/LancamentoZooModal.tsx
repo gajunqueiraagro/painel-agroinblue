@@ -296,6 +296,20 @@ export function LancamentoZooModal({
     return () => { cancelled = true; };
   }, [open, lancamento, finRefreshKey]);
 
+  // PR-ZOO-FIN-LOCK CAMADA1: derivações de proteção a partir do mesmo
+  // finRecords já consumido pelo display verde. Sem nova query.
+  // Pattern de classificação alinhado com handleSalvarCompraZoo:
+  // realizado E conciliado são tratados como "congelados".
+  const realizedCount = useMemo(
+    () => finRecords.filter(r => r.status_transacao === 'realizado').length,
+    [finRecords]
+  );
+  const conciliadoCount = useMemo(
+    () => finRecords.filter(r => r.conciliado_em !== null).length,
+    [finRecords]
+  );
+  const recalculoLocked = realizedCount > 0 || conciliadoCount > 0;
+
   // Reinicializa state ao trocar de lançamento ou reabrir.
   // REGRA: side-effect (setState) precisa ser useEffect, não useMemo.
   // useMemo com setState é anti-pattern grave em React 18 — pode causar
@@ -742,6 +756,8 @@ export function LancamentoZooModal({
                     }}
                     onEditarFinanceiro={() => setEditFinSheetOpen(true)}
                     existingCount={existingFinCount}
+                    realizedCount={realizedCount}
+                    conciliadoCount={conciliadoCount}
                     disabled={!permissions.canEdit}
                   />
                 </BlocoAcoesFinanceiras>
@@ -780,6 +796,7 @@ export function LancamentoZooModal({
             lancamentoId={lancamento.id}
             fazendaIdLancamento={fazendaIdLancamento || undefined}
             clienteIdLancamento={clienteIdLancamento || undefined}
+            recalculoLocked={recalculoLocked}
             onFinanceiroUpdated={() => {
               setEditFinSheetOpen(false);
               setFinRefreshKey(k => k + 1);
