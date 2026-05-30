@@ -360,7 +360,7 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {catDestinoInfo && <Row label="Cat. Destino" value={catDestinoInfo.label} />}
 
                 {lancamento.pesoMedioKg && (
-                  <Row label="Peso Médio" value={`${formatKg(lancamento.pesoMedioKg)} (${formatArroba(lancamento.pesoMedioKg / 30)})`} />
+                  <Row label="Peso Médio" value={`${formatKg(lancamento.pesoMedioKg)} (${formatArroba(ind.pesoArroba)})`} />
                 )}
 
                 {lancamento.fazendaOrigem && (
