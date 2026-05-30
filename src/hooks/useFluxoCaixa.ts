@@ -61,6 +61,7 @@ export interface FluxoMensal {
   deducaoReceitas: number;
   desembolsoProdutivo: number;
   desembolsoPec: number;
+  semClassificacao: number;
   desembolsoAgri: number;
   custeioPec: number;
   custoioAgri: number;
@@ -249,6 +250,7 @@ export function useFluxoCaixa(
       let aportes = 0;
       let deducaoReceitas = 0;
       let desembolso = 0, desembolsoPec = 0, desembolsoAgri = 0;
+      let semClassificacao = 0;
       let custeioPec = 0, custoioAgri = 0, investPec = 0, investAgri = 0;
       let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
@@ -292,7 +294,9 @@ export function useFluxoCaixa(
             if (isJurosPecuaria(l)) jurosPec += val;
             else if (isJurosAgricultura(l)) jurosAgri += val;
 
-            if (catFluxo === 'deducao') {
+            if (catFluxo === 'sem_classificacao') {
+              semClassificacao += val;
+            } else if (catFluxo === 'deducao') {
               deducaoReceitas += val;
             } else if (catFluxo === 'desembolso') {
               desembolso += val;
@@ -321,7 +325,7 @@ export function useFluxoCaixa(
       const outrasEntradas = captacao + aportes;
       const totalEntradas = receitas + outrasEntradas;
       const outrasSaidas = reposicao + deducaoReceitas + amortizacoes + dividendos;
-      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos + semClassificacao;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
@@ -346,6 +350,7 @@ export function useFluxoCaixa(
         deducaoReceitas,
         desembolsoProdutivo: desembolso,
         desembolsoPec,
+        semClassificacao,
         desembolsoAgri,
         custeioPec,
         custoioAgri,

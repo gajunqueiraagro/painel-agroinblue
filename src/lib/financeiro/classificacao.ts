@@ -31,6 +31,8 @@ export interface LancamentoClassificavel {
   status_transacao?: string | null;
   data_pagamento?: string | null;
   ano_mes?: string | null;
+  /** PR-FLUXO-SEM-CLASSIFICACAO: usado pelo helper isSemClassificacao. */
+  plano_conta_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +104,21 @@ export function getEscopo(l: LancamentoClassificavel): Escopo {
 // ---------------------------------------------------------------------------
 
 const normMacro = (l: LancamentoClassificavel) => norm(l.macro_custo);
+
+/**
+ * Saída genuinamente sem classificação: nenhum campo do plano preenchido.
+ * Separa o balde "Sem Classificação" no Fluxo em vez de cair em Pecuária.
+ */
+export function isSemClassificacao(l: LancamentoClassificavel): boolean {
+  const vazio = (v: unknown) => !v || String(v).trim() === '';
+  return (
+    vazio(l.macro_custo) &&
+    vazio(l.grupo_custo) &&
+    vazio(l.centro_custo) &&
+    vazio(l.subcentro) &&
+    (l.plano_conta_id === null || l.plano_conta_id === undefined)
+  );
+}
 
 /** Normalize macro_custo to canonical groups (handles both old and new plano de contas names) */
 function canonicalMacro(l: LancamentoClassificavel): string {
@@ -213,7 +230,8 @@ export type CategoriaSaida =
   | 'Dedução de Receitas'
   | 'Amortizações Fin. Pec.'
   | 'Amortizações Fin. Agri.'
-  | 'Dividendos';
+  | 'Dividendos'
+  | 'Sem Classificação';
 
 export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
   'Desemb. Produtivo Pec.',
@@ -223,6 +241,7 @@ export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
   'Amortizações Fin. Pec.',
   'Amortizações Fin. Agri.',
   'Dividendos',
+  'Sem Classificação',
 ];
 
 /**
@@ -249,6 +268,9 @@ export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
   const escopo = getEscopo(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
+
+  // Sem classificação — não mascarar em Pecuária
+  if (isSemClassificacao(l)) return 'Sem Classificação';
 
   // Dedução de Receitas
   if (macro === 'dedução de receitas') return 'Dedução de Receitas';
@@ -289,13 +311,15 @@ export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFl
   return 'captacao';
 }
 
-export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos';
+export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos' | 'sem_classificacao';
 
 /** Classifica saída para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFluxoSaida {
   const macro = canonicalMacro(l);
   const centro = norm(l.centro_custo);
   const sub = norm(l.subcentro);
+
+  if (isSemClassificacao(l)) return 'sem_classificacao';
 
   if (macro === 'dedução de receitas') return 'deducao';
   if (centro.includes('dedução') || centro.includes('deducao') || centro.includes('deduções')) return 'deducao';
