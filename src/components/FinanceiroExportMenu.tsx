@@ -45,6 +45,8 @@ interface Props {
   fazendaNome?: string;
   /** Quando true, PDF mostra coluna "Origem" e usa "Global" no escopo. */
   isGlobal?: boolean;
+  /** Map UUID→nome de fazenda para derivar Destino de compra (PR-FORNECEDOR). */
+  fazendaMap: Map<string, string>;
 }
 
 const SUB_ABA_LABELS: Record<SubAba, string> = {
@@ -54,7 +56,7 @@ const SUB_ABA_LABELS: Record<SubAba, string> = {
 };
 
 // ── Generate text summary for WhatsApp ──
-function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string): string {
+function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaMap: Map<string, string>, fazendaNome?: string): string {
   const titulo = SUB_ABA_LABELS[subAba];
   const totalQtd = lancamentos.reduce((s, l) => s + l.quantidade, 0);
 
@@ -79,7 +81,11 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       const c = calcIndicadoresLancamento(l);
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
-      const local = subAba === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
+      // PR-FORNECEDOR-FIX (Opção B): Fornecedor = snapshot || comprador.
+      // NUNCA fazendaOrigem (legacy contaminado).
+      const local = subAba === 'compra'
+        ? (l.fornecedorNomeSnapshot || l.compradorFornecedor)
+        : l.fazendaDestino;
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
       lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
@@ -89,7 +95,7 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
   return lines.join('\n');
 }
 
-function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
+function gerarTextoIndividual(l: Lancamento, fazendaNome?: string, fazendaMap: Map<string, string> = new Map()): string {
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const c = calcIndicadoresLancamento(l);
   let lines: string[] = [];
@@ -119,14 +125,25 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string): string {
   } else {
     const tipoLabel = l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
     const emoji = l.tipo === 'compra' ? '🛒' : '💰';
-    const local = l.tipo === 'compra' ? l.fazendaOrigem : l.fazendaDestino;
+    // PR-FORNECEDOR-FIX (Opção B): para compra, Fornecedor = snapshot || comprador
+    // (sem fazendaOrigem) e Destino via fazendaMap (UUID→nome). Para venda,
+    // mantém Destino legado.
+    const local = l.tipo === 'compra'
+      ? (l.fornecedorNomeSnapshot || l.compradorFornecedor)
+      : l.fazendaDestino;
+    const destinoCompra = l.tipo === 'compra'
+      ? (fazendaMap.get(l.fazendaId || '') || undefined)
+      : undefined;
     lines = [`${emoji} *Resumo de ${tipoLabel}*\n`];
     if (fazendaNome) lines.push(`🏠 Fazenda: ${fazendaNome}`);
     lines.push(
       `📅 Data: ${format(parseISO(l.data), 'dd/MM/yyyy')}`,
       `🐂 ${l.quantidade} ${cat}`,
-      `📍 ${l.tipo === 'compra' ? 'Origem' : 'Destino'}: ${local || '-'}`,
+      `📍 ${l.tipo === 'compra' ? 'Fornecedor' : 'Destino'}: ${local || '-'}`,
     );
+    if (destinoCompra) {
+      lines.push(`📍 Destino: ${destinoCompra}`);
+    }
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     lines.push(
       `⚖️ Peso vivo: ${formatKg(l.pesoMedioKg)}`,
@@ -195,7 +212,7 @@ function agregarLancs(lancs: Lancamento[]) {
   };
 }
 
-async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaNome?: string, isGlobal?: boolean) {
+async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: string, fazendaMap: Map<string, string>, fazendaNome?: string, isGlobal?: boolean) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -249,9 +266,18 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   // Ordem: Data | Qtd | Categoria | [Origem*] | Destino | P.Vivo | [RC%**] | P.@ | R$/@ | Total | Líq/Cab | Líq/kg | NF
   //   * Origem só em Global
   //   ** RC% só em abate
+  // PR-FORNECEDOR-FIX (Opção B):
+  // - Compra: coluna "Fornecedor" aparece SEMPRE (Global e filtrado).
+  //   Origem = snapshot || comprador (NUNCA fazendaOrigem).
+  //   Destino = fazendaMap.get(l.fazendaId) (derivado do UUID).
+  // - Abate/venda: comportamento legado intocado ("Origem" só em Global,
+  //   `l.fazendaOrigem` cru; Destino = `l.fazendaDestino`).
+  const isCompra = subAba === 'compra';
+  const showFornecedorCol = isCompra || isGlobal;
+  const fornecedorColLabel = isCompra ? 'Fornecedor' : 'Origem';
   const head = [[
     'Data', 'Qtd', 'Categoria',
-    ...(isGlobal ? ['Origem'] : []),
+    ...(showFornecedorCol ? [fornecedorColLabel] : []),
     'Destino', 'P.Vivo',
     ...(isAbate ? ['RC%'] : []),
     'P.@', 'R$/@', 'Total', 'Líq/Cab', 'Líq/kg', 'NF',
@@ -260,13 +286,17 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   const body = lancamentos.map(l => {
     const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
     const c = calcIndicadoresLancamento(l);
-    const destino = subAba === 'compra' ? '—' : (l.fazendaDestino || '—');
-    const origem = l.fazendaOrigem || '—';
+    const destino = isCompra
+      ? (fazendaMap.get(l.fazendaId || '') || '—')
+      : (l.fazendaDestino || '—');
+    const origem = isCompra
+      ? (l.fornecedorNomeSnapshot || l.compradorFornecedor || '—')
+      : (l.fazendaOrigem || '—');
     return [
       format(parseISO(l.data), 'dd/MM/yy'),
       String(l.quantidade),
       cat,
-      ...(isGlobal ? [origem] : []),
+      ...(showFornecedorCol ? [origem] : []),
       destino,
       fmtValor(l.pesoMedioKg),
       ...(isAbate ? [c.rendimento ? fmtValor(c.rendimento, 1) + '%' : '—'] : []),
@@ -283,7 +313,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     'TOTAL',
     String(agg.qtd),
     '',
-    ...(isGlobal ? [''] : []),
+    ...(showFornecedorCol ? [''] : []),
     '',
     fmtValor(agg.pesoVivoMedio),
     ...(isAbate ? [agg.rendMedio ? fmtValor(agg.rendMedio, 1) + '%' : '—'] : []),
@@ -535,7 +565,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
   doc.save(`movimentacoes_${subAba}_${ano}.pdf`);
 }
 
-async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
+async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string, fazendaMap: Map<string, string> = new Map()) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const cat = CATEGORIAS.find(c => c.value === l.categoria)?.label ?? l.categoria;
   const tipoLabel = l.tipo === 'abate' ? 'Abate' : l.tipo === 'compra' ? 'Compra' : 'Venda em Pé';
@@ -562,7 +592,14 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string) {
   if (l.tipo === 'abate' || l.tipo === 'venda') {
     info.push(['Destino', l.fazendaDestino || '-']);
   } else {
-    info.push(['Origem', l.fazendaOrigem || '-']);
+    // PR-FORNECEDOR-FIX (Opção B): compra usa rótulo "Fornecedor" e cascata
+    // snapshot || comprador (NUNCA fazendaOrigem). Destino derivado de
+    // fazenda_id via fazendaMap, exibido em linha adicional.
+    info.push(['Fornecedor', l.fornecedorNomeSnapshot || l.compradorFornecedor || '-']);
+    const destinoCompra = fazendaMap.get(l.fazendaId || '');
+    if (destinoCompra) {
+      info.push(['Destino', destinoCompra]);
+    }
   }
 
   if (l.tipo === 'abate' && l.tipoPeso) {
@@ -629,7 +666,7 @@ function shareWhatsApp(text: string) {
 }
 
 // ── Export for full table ──
-export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome, isGlobal }: Props) {
+export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome, isGlobal, fazendaMap }: Props) {
   const [open, setOpen] = useState(false);
 
   if (lancamentos.length === 0) return null;
@@ -646,11 +683,11 @@ export function FinanceiroExportMenu({ lancamentos, subAba, ano, fazendaNome, is
           <DialogTitle>Exportar {SUB_ABA_LABELS[subAba]}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaNome, isGlobal); setOpen(false); toast.success('PDF exportado!'); }}>
+          <Button className="w-full justify-start gap-2" variant="outline" onClick={async () => { await gerarPDFTabela(lancamentos, subAba, ano, fazendaMap, fazendaNome, isGlobal); setOpen(false); toast.success('PDF exportado!'); }}>
             <FileText className="h-5 w-5 text-destructive" />
             Exportar PDF
           </Button>
-          <Button className="w-full justify-start gap-2" variant="outline" onClick={() => { shareWhatsApp(gerarTextoResumo(lancamentos, subAba, ano, fazendaNome)); setOpen(false); }}>
+          <Button className="w-full justify-start gap-2" variant="outline" onClick={() => { shareWhatsApp(gerarTextoResumo(lancamentos, subAba, ano, fazendaMap, fazendaNome)); setOpen(false); }}>
             <MessageCircle className="h-5 w-5 text-green-600" />
             Compartilhar WhatsApp
           </Button>
