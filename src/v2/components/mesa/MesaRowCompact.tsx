@@ -38,6 +38,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { getSituacaoOperacional, type SituacaoOperacional } from '@/v2/lib/mesa/situacaoOperacional';
 
 interface MesaRowCompactProps {
   row: ClassificacaoStagingPreviewRow;
@@ -74,6 +75,17 @@ const STATUS_BADGE_CLS: Record<MatchStatus, string> = {
   ambiguo:         'bg-amber-100 text-amber-800 border-amber-300',
   divergente:      'bg-amber-100 text-amber-800 border-amber-300',
   sem_match:       'bg-red-100 text-red-800 border-red-300',
+};
+
+type SitKey = Exclude<SituacaoOperacional, 'todos'>;
+const SITUACAO_LABEL: Record<SitKey, string> = {
+  incompleto: 'Incompleto', pronto: 'Pronto', aplicado: 'Aplicado', sem_par: 'Sem par',
+};
+const SITUACAO_BADGE_CLS: Record<SitKey, string> = {
+  incompleto: 'bg-amber-100 text-amber-800 border-amber-300',
+  pronto:     'bg-emerald-100 text-emerald-800 border-emerald-300',
+  aplicado:   'bg-blue-100 text-blue-800 border-blue-300',
+  sem_par:    'bg-gray-100 text-gray-700 border-gray-300',
 };
 
 const STATUS_BORDER_LEFT: Record<MatchStatus, string> = {
@@ -116,6 +128,7 @@ export function MesaRowCompact({
   onEditLancamento,
 }: MesaRowCompactProps) {
   const status = row.match_status;
+  const situacao = getSituacaoOperacional(row);
   const noLanc = !row.lanc_id;
 
   // Briefing #4: órfão reforça alerta mesmo fora de sem_match
@@ -146,7 +159,7 @@ export function MesaRowCompact({
     >
       {/* ─── Camada 1 — Linha compacta ──────────────────────────────── */}
       <div className="px-3 py-2">
-        <div className="grid items-center gap-3" style={{ gridTemplateColumns: '92px 60px 90px 1fr auto' }}>
+        <div className="grid items-center gap-3" style={{ gridTemplateColumns: 'auto 60px 90px 1fr auto' }}>
           {/* Badge status */}
           <div className="flex items-center gap-1.5 min-w-0">
             <Badge
@@ -154,6 +167,12 @@ export function MesaRowCompact({
               className={`h-5 px-2 text-[10px] ${STATUS_BADGE_CLS[status]}`}
             >
               {STATUS_LABEL[status]}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`h-5 px-2 text-[10px] ${SITUACAO_BADGE_CLS[situacao]}`}
+            >
+              {SITUACAO_LABEL[situacao]}
             </Badge>
             {row.aplicado && (
               <Badge variant="default" className="h-5 px-1.5 text-[9px]">
