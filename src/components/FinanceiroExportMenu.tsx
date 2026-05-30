@@ -81,11 +81,13 @@ function gerarTextoResumo(lancamentos: Lancamento[], subAba: SubAba, ano: string
       const c = calcIndicadoresLancamento(l);
       const cat = CATEGORIAS.find(ct => ct.value === l.categoria)?.label ?? l.categoria;
       totalValor += c.valorFinal;
-      // PR-FORNECEDOR-FIX (Opção B): Fornecedor = snapshot || comprador.
-      // NUNCA fazendaOrigem (legacy contaminado).
+      // PR-FORNECEDOR-FIX (Opção B): Fornecedor = snapshot || comprador para
+      // compra. NUNCA fazendaOrigem (legacy contaminado).
+      // Nota: este branch só executa para compra/venda (abate tem early-return
+      // no `if (subAba === 'abate')` acima — TSC nem deixa comparar aqui).
       const local = subAba === 'compra'
         ? (l.fornecedorNomeSnapshot || l.compradorFornecedor)
-        : l.fazendaDestino;
+        : (l.compradorFornecedor || l.fornecedorNomeSnapshot);
       const nf = l.notaFiscal ? ` | NF: ${l.notaFiscal}` : '';
       lines.push(`${emoji} ${format(parseISO(l.data), 'dd/MM/yy')} | ${l.quantidade} ${cat} | ${local || '-'} | ${formatMoeda(c.valorFinal)}${nf}`);
     });
@@ -106,7 +108,7 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string, fazendaMap: M
     lines.push(
       `📅 Data: ${format(parseISO(l.data), 'dd/MM/yyyy')}`,
       `🐂 ${l.quantidade} ${cat}`,
-      `📍 Destino: ${l.fazendaDestino || '-'}`,
+      `📍 Destino: ${l.frigorifico || l.compradorFornecedor || l.fornecedorNomeSnapshot || '-'}`,
     );
     if (l.notaFiscal) lines.push(`📄 NF: ${l.notaFiscal}`);
     if (l.tipoPeso) lines.push(`📦 Tipo peso: ${l.tipoPeso === 'morto' ? 'Peso Morto' : 'Peso Vivo'}`);
@@ -130,7 +132,7 @@ function gerarTextoIndividual(l: Lancamento, fazendaNome?: string, fazendaMap: M
     // mantém Destino legado.
     const local = l.tipo === 'compra'
       ? (l.fornecedorNomeSnapshot || l.compradorFornecedor)
-      : l.fazendaDestino;
+      : (l.compradorFornecedor || l.fornecedorNomeSnapshot);
     const destinoCompra = l.tipo === 'compra'
       ? (fazendaMap.get(l.fazendaId || '') || undefined)
       : undefined;
@@ -288,7 +290,9 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     const c = calcIndicadoresLancamento(l);
     const destino = isCompra
       ? (fazendaMap.get(l.fazendaId || '') || '—')
-      : (l.fazendaDestino || '—');
+      : isAbate
+        ? (l.frigorifico || l.compradorFornecedor || l.fornecedorNomeSnapshot || '—')
+        : (l.compradorFornecedor || l.fornecedorNomeSnapshot || '—');
     const origem = isCompra
       ? (l.fornecedorNomeSnapshot || l.compradorFornecedor || '—')
       : (l.fazendaOrigem || '—');
@@ -383,6 +387,7 @@ async function gerarPDFTabela(lancamentos: Lancamento[], subAba: SubAba, ano: st
     { label: 'Peso Arroba Médio', value: formatArroba(agg.pesoArrobaMedio) },
     { label: 'Líq Médio/Cab', value: formatMoeda(agg.liqCabConsolidado) },
     { label: 'Valor Total', value: formatMoeda(agg.valorFinalSum) },
+    ...(!isAbate ? [{ label: 'Líq Médio/kg', value: formatMoeda(agg.liqKgConsolidado) }] : []),
     ...(isAbate
       ? [
           { label: 'Rendimento Médio', value: agg.rendMedio ? formatPercent(agg.rendMedio) : '—' },
@@ -590,7 +595,10 @@ async function gerarPDFIndividual(l: Lancamento, fazendaNome?: string, fazendaMa
   if (l.notaFiscal) info.push(['Nota Fiscal', l.notaFiscal]);
 
   if (l.tipo === 'abate' || l.tipo === 'venda') {
-    info.push(['Destino', l.fazendaDestino || '-']);
+    const destinoMov = l.tipo === 'abate'
+      ? (l.frigorifico || l.compradorFornecedor || l.fornecedorNomeSnapshot || '-')
+      : (l.compradorFornecedor || l.fornecedorNomeSnapshot || '-');
+    info.push(['Destino', destinoMov]);
   } else {
     // PR-FORNECEDOR-FIX (Opção B): compra usa rótulo "Fornecedor" e cascata
     // snapshot || comprador (NUNCA fazendaOrigem). Destino derivado de
