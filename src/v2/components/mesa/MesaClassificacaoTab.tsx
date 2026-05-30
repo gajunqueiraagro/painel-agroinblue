@@ -55,6 +55,7 @@ import {
 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { buildExcelContext, type ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
+import { getSituacaoOperacional, type SituacaoOperacional } from '@/v2/lib/mesa/situacaoOperacional';
 import { MesaClassificacaoCandidatosDrawer } from './MesaClassificacaoCandidatosDrawer';
 import { MesaRowCompact } from './MesaRowCompact';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -161,6 +162,15 @@ const STATUS_LABEL: Record<MatchStatus, string> = {
   sem_match: 'Sem match',
 };
 
+const SITUACAO_ORDER: Exclude<SituacaoOperacional, 'todos'>[] =
+  ['incompleto', 'pronto', 'aplicado', 'sem_par'];
+const SITUACAO_LABEL: Record<Exclude<SituacaoOperacional, 'todos'>, string> = {
+  incompleto: 'Incompletos',
+  pronto: 'Prontos',
+  aplicado: 'Aplicados',
+  sem_par: 'Sem par',
+};
+
 const STATUS_BADGE_CLS: Record<MatchStatus, string> = {
   exato: 'bg-emerald-100 text-emerald-800 border-emerald-300',
   divergente: 'bg-amber-100 text-amber-800 border-amber-300',
@@ -210,6 +220,7 @@ export function MesaClassificacaoTab() {
   const [errosParser, setErrosParser] = useState<Array<{ linha: number; motivo: string }>>([]);
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<MatchStatus | 'todos'>('todos');
+  const [filtroSituacao, setFiltroSituacao] = useState<SituacaoOperacional>('todos');
   const [parsing, setParsing] = useState(false);
   const [confirmadoCheckbox, setConfirmadoCheckbox] = useState(false);
 
@@ -298,10 +309,24 @@ export function MesaClassificacaoTab() {
     return c;
   }, [staging]);
 
+  const countsPorSituacao = useMemo(() => {
+    const c: Record<Exclude<SituacaoOperacional, 'todos'>, number> = {
+      incompleto: 0, pronto: 0, aplicado: 0, sem_par: 0,
+    };
+    for (const r of staging) c[getSituacaoOperacional(r)]++;
+    return c;
+  }, [staging]);
+
   const rowsFiltradas = useMemo(() => {
-    if (filtroStatus === 'todos') return staging;
-    return staging.filter((r) => r.match_status === filtroStatus);
-  }, [staging, filtroStatus]);
+    let rows = staging;
+    if (filtroStatus !== 'todos') {
+      rows = rows.filter((r) => r.match_status === filtroStatus);
+    }
+    if (filtroSituacao !== 'todos') {
+      rows = rows.filter((r) => getSituacaoOperacional(r) === filtroSituacao);
+    }
+    return rows;
+  }, [staging, filtroStatus, filtroSituacao]);
 
   // PR-M4 — contagens do header (todas em 'exato' && !aplicado)
   const headerStats = useMemo(() => {
@@ -857,6 +882,31 @@ export function MesaClassificacaoTab() {
               onClick={() => setFiltroStatus(st)}
             >
               {STATUS_LABEL[st]} ({countsPorStatus[st] ?? 0})
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {sessaoId && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button
+            size="sm"
+            variant={filtroSituacao === 'todos' ? 'default' : 'outline'}
+            className="h-6 text-[10px] px-2"
+            onClick={() => setFiltroSituacao('todos')}
+          >
+            Todos ({staging.length})
+          </Button>
+          {SITUACAO_ORDER.map((sit) => (
+            <Button
+              key={sit}
+              size="sm"
+              variant={filtroSituacao === sit ? 'default' : 'outline'}
+              className="h-6 text-[10px] px-2"
+              disabled={countsPorSituacao[sit] === 0}
+              onClick={() => setFiltroSituacao(sit)}
+            >
+              {SITUACAO_LABEL[sit]} ({countsPorSituacao[sit]})
             </Button>
           ))}
         </div>
