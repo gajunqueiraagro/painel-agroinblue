@@ -18,7 +18,7 @@ export type V2Section =
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
-  | 'conciliacao' | 'saldos-mensais' | 'mesa-operacional'
+  | 'conciliacao' | 'saldos-mensais' | 'mesa-operacional' | 'mesa-classificacao'
   // financeiro — financiamentos
   | 'financiamentos' | 'painel-financiamentos'
   // financeiro — cadastros
@@ -107,6 +107,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         itens: [
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready' },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready' },
+          { id: 'mesa-classificacao',  label: 'Mesa de Classificação',   status: 'ready' },
           ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
             ? [{ id: 'mesa-operacional' as const, label: 'Mesa Operacional ⚡', status: 'ready' as const }]
             : []),
@@ -223,6 +224,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'importacao-extratos': 'financeiro', 'financeiro-lanc': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro',
   'mesa-operacional': 'financeiro',
+  'mesa-classificacao': 'financeiro',
   'saldos-mensais': 'financeiro', 'financiamentos': 'financeiro',
   'painel-financiamentos': 'financeiro',
   'analise-trimestral': 'financeiro',
