@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -42,6 +42,8 @@ function similarity(a: string, b: string): number {
   return matches / Math.max(words.length, 1);
 }
 
+const PAGE_SIZE = 100;
+
 export function FinV2FornecedoresTab() {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -51,8 +53,11 @@ export function FinV2FornecedoresTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | 'ativos' | 'inativos'>('ativos');
   const [activeTab, setActiveTab] = useState('cadastro');
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Pending items
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
@@ -61,14 +66,32 @@ export function FinV2FornecedoresTab() {
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from('financeiro_fornecedores')
-      .select('*')
-      .eq('cliente_id', clienteAtual.id)
-      .order('nome');
+      .select('*', { count: 'exact' })
+      .eq('cliente_id', clienteAtual.id);
+
+    if (statusFilter === 'ativos') query = query.eq('ativo', true);
+    else if (statusFilter === 'inativos') query = query.eq('ativo', false);
+
+    const q = searchDebounced.trim();
+    if (q) {
+      const safe = q.replace(/[%,()]/g, ' ').trim();
+      if (safe) {
+        query = query.or(
+          `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%`
+        );
+      }
+    }
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = page * PAGE_SIZE - 1;
+    const { data, count } = await query.order('nome').range(from, to);
+
     setItems((data as Fornecedor[]) || []);
+    setTotalCount(count ?? 0);
     setLoading(false);
-  }, [clienteAtual?.id]);
+  }, [clienteAtual?.id, statusFilter, searchDebounced, page]);
 
   const loadPending = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -113,17 +136,21 @@ export function FinV2FornecedoresTab() {
     setLoadingPending(false);
   }, [clienteAtual?.id, items]);
 
+  // Debounce: searchText → searchDebounced (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(searchText), 300);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
+  // Reset para página 1 a cada nova busca/filtro
+  useEffect(() => { setPage(1); }, [searchDebounced, statusFilter]);
+
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (activeTab === 'pendentes') loadPending(); }, [activeTab, loadPending]);
 
-  const filteredItems = useMemo(() => {
-    let list = items;
-    if (statusFilter === 'ativos') list = list.filter(f => f.ativo);
-    else if (statusFilter === 'inativos') list = list.filter(f => !f.ativo);
-    if (!searchText.trim()) return list;
-    const q = searchText.toLowerCase();
-    return list.filter(f => f.nome.toLowerCase().includes(q) || f.cpf_cnpj?.toLowerCase().includes(q));
-  }, [items, searchText, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalCount);
 
   const openNew = () => {
     setEditing(null);
@@ -186,7 +213,7 @@ export function FinV2FornecedoresTab() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-8">
-          <TabsTrigger value="cadastro" className="text-xs h-7">Cadastro ({items.length})</TabsTrigger>
+          <TabsTrigger value="cadastro" className="text-xs h-7">Cadastro ({totalCount})</TabsTrigger>
           <TabsTrigger value="pendentes" className="text-xs h-7 gap-1">
             <AlertTriangle className="h-3 w-3" />
             Pendentes {pendingCount > 0 && <Badge variant="destructive" className="text-[9px] px-1 py-0 ml-0.5">{pendingCount}</Badge>}
@@ -228,8 +255,8 @@ export function FinV2FornecedoresTab() {
                 </TableHeader>
                 <TableBody>
                   {loading && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">Carregando...</TableCell></TableRow>}
-                  {!loading && filteredItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">Nenhum fornecedor</TableCell></TableRow>}
-                  {filteredItems.map(f => (
+                  {!loading && items.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">Nenhum fornecedor</TableCell></TableRow>}
+                  {items.map(f => (
                     <TableRow key={f.id} className="h-7 text-[11px]">
                       <TableCell className="py-0.5 font-medium">{f.nome}</TableCell>
                       <TableCell className="py-0.5 text-muted-foreground">{f.cpf_cnpj || '-'}</TableCell>
@@ -249,6 +276,35 @@ export function FinV2FornecedoresTab() {
               </Table>
             </CardContent>
           </Card>
+
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>
+              {totalCount === 0
+                ? 'Nenhum fornecedor'
+                : `Mostrando ${rangeStart}–${rangeEnd} de ${totalCount} fornecedores`}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] px-2"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                ← Anterior
+              </Button>
+              <span>Página {page} de {totalPages}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] px-2"
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                Próxima →
+              </Button>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="pendentes" className="space-y-2 mt-2">

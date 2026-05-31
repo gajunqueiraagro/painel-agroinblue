@@ -134,8 +134,15 @@ export function FornecedorSelect({
   const queryClient = useQueryClient();
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [criarDialogOpen, setCriarDialogOpen] = useState(false);
   const [pendingNewName, setPendingNewName] = useState<string | null>(null);
+
+  // Debounce do termo para busca server-side (300ms).
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // ── Defesa em profundidade contra sentinel ──
   const snapshotLimpo = snapshotNome && snapshotNome !== SENTINEL_NAO_INFORMADO
@@ -143,18 +150,33 @@ export function FornecedorSelect({
   const textoLegadoLimpo = textoLegado && textoLegado !== SENTINEL_NAO_INFORMADO
     ? textoLegado : undefined;
 
-  // ── Query interna: fornecedores ativos do cliente ──
+  // ── Query interna: fornecedores ativos do cliente (typeahead server-side) ──
+  // Busca por nome_normalizado / nome / cpf_cnpj quando há termo; sem termo,
+  // traz os 50 primeiros ordenados por nome. queryKey inclui termo para cache
+  // separado por busca. fornecedorAtualQuery (Z4.3) cobre o item selecionado
+  // quando ele fica fora dos 50 retornados.
   const fornecedoresQuery = useQuery({
-    queryKey: ['fornecedores-ativos', clienteId] as const,
+    queryKey: ['fornecedores-ativos', clienteId, searchDebounced] as const,
     enabled: !!clienteId,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<FornecedorRow[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('financeiro_fornecedores')
         .select('id, nome, nome_normalizado, aliases, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
         .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .order('nome', { ascending: true });
+        .eq('ativo', true);
+
+      const q = searchDebounced.trim();
+      if (q) {
+        const safe = q.replace(/[%,()]/g, ' ').trim();
+        if (safe) {
+          query = query.or(
+            `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%`
+          );
+        }
+      }
+
+      const { data, error } = await query.order('nome', { ascending: true }).limit(50);
       if (error) throw new Error(error.message);
       return (data as FornecedorRow[]) ?? [];
     },
