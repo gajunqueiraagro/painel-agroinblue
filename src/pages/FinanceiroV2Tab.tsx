@@ -448,7 +448,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     hook.loadContas();
     hook.loadClassificacoes();
     hook.loadFornecedores();
-  }, [hook.loadContas, hook.loadClassificacoes, hook.loadFornecedores]);
+    hook.loadSafras();
+  }, [hook.loadContas, hook.loadClassificacoes, hook.loadFornecedores, hook.loadSafras]);
 
   useEffect(() => {
     if (fazendaAtual && fazendaAtual.id !== '__global__') {
@@ -1530,6 +1531,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         contas={hook.contasBancarias}
         classificacoes={hook.classificacoes}
         fornecedores={hook.fornecedores}
+        safras={hook.safras}
         defaultFazendaId={fazendaId !== '__all__' ? fazendaId : fazOperacionais[0]?.id || ''}
         onCriarFornecedor={hook.criarFornecedor}
       />

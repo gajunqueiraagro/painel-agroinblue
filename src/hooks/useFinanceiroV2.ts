@@ -45,6 +45,14 @@ export interface LancamentoV2 {
    *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
    *  indicador visual e roteamento para LancamentoZooModal. */
   movimentacao_rebanho_id: string | null;
+  safra_id?: string | null;
+}
+
+export interface Safra {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ativa: boolean;
 }
 
 export interface LancamentoV2Form {
@@ -68,6 +76,7 @@ export interface LancamentoV2Form {
   favorecido_id?: string | null;
   forma_pagamento?: string | null;
   dados_pagamento?: string | null;
+  safra_id?: string | null;
 }
 
 /**
@@ -148,6 +157,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaV2[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorV2[]>([]);
   const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
+  const [safras, setSafras] = useState<Safra[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -241,6 +251,20 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     setClassificacoes(planoCls);
+  }, [clienteId]);
+
+  const loadSafras = useCallback(async () => {
+    if (!clienteId) return;
+    // types.ts ainda não conhece financeiro_safras (regen separado pós-PR-254).
+    // UM cast local no queryBuilder, mesmo padrão dos `insert(row as any)`
+    // já presentes neste hook para financeiro_lancamentos_v2.
+    const { data } = await (supabase as any).from('financeiro_safras')
+      .select('id, nome, descricao, ativa')
+      .eq('cliente_id', clienteId)
+      .eq('ativa', true)
+      .order('ordem_exibicao', { ascending: true })
+      .order('nome', { ascending: true });
+    setSafras((data as Safra[]) || []);
   }, [clienteId]);
 
   const buildLancamentosQuery = useCallback((filtros: FiltrosV2) => {
@@ -422,6 +446,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       origem_lancamento: origem,
       created_by: userId,
       sem_movimentacao_caixa: false,
+      safra_id: form.safra_id || null,
     };
   };
 
@@ -520,6 +545,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       ano_mes: anoMes,
       editado_manual: true,
       updated_by: user.id,
+      safra_id: form.safra_id || null,
     };
 
     console.log('[FinV2] editarLancamento PAYLOAD', {
@@ -747,7 +773,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
 
     const rows = forms.map(form => buildInsertRow(form, user.id));
 
-    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(rows);
+    const { error } = await supabase.from('financeiro_lancamentos_v2').insert(rows as any);
 
     if (error) {
       toast.error(`Erro ao salvar lote: ${error.message}`);
@@ -828,6 +854,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     contasBancarias,
     fornecedores,
     classificacoes,
+    safras,
     loading,
     total,
     page,
@@ -836,6 +863,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     loadContas,
     loadFornecedores,
     loadClassificacoes,
+    loadSafras,
     criarFornecedor,
     loadLancamentos,
     loadAllForExport,

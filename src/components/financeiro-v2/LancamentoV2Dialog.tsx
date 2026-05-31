@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Plus, Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
-import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -33,6 +33,7 @@ interface Props {
   contas: ContaBancariaV2[];
   classificacoes: ClassificacaoItem[];
   fornecedores: FornecedorV2[];
+  safras?: Safra[];
   defaultFazendaId?: string;
   onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
   prefill?: {
@@ -244,7 +245,7 @@ function generateRecorrencias(dataComp: string, dataPgto: string, valor: number)
 
 export function LancamentoV2Dialog({
   open, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
-  fornecedores, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
+  fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields,
   referenciaOperacionalInfo, excelContext,
 }: Props) {
   const { clienteAtual } = useCliente();
@@ -286,6 +287,7 @@ export function LancamentoV2Dialog({
   const [recorrenciaEditada, setRecorrenciaEditada] = useState(false);
 
   const [fazendaId, setFazendaId] = useState('');
+  const [safraId, setSafraId] = useState('');
   const [dataCompetencia, setDataCompetencia] = useState('');
   const [dataPagamento, setDataPagamento] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -350,6 +352,7 @@ export function LancamentoV2Dialog({
   useEffect(() => {
     if (lancamento) {
       setFazendaId(lancamento.fazenda_id);
+      setSafraId(lancamento.safra_id ?? '');
       setDataCompetencia(lancamento.data_competencia);
       setDataPagamento(lancamento.data_pagamento || '');
       setDescricao(lancamento.descricao || '');
@@ -395,6 +398,7 @@ export function LancamentoV2Dialog({
       // Entradas → destino; demais → origem.
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
+      setSafraId('');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
       setDataPagamento(prefill.data_pagamento ?? today);
       setStatusTransacao(prefill.status_transacao ?? 'realizado');
@@ -431,6 +435,7 @@ export function LancamentoV2Dialog({
     } else {
       const today = new Date().toISOString().slice(0, 10);
       setFazendaId(defaultFazendaId || '');
+      setSafraId('');
       setDataCompetencia(today);
       setDataPagamento(today);
       setStatusTransacao(deriveStatus(today));
@@ -928,6 +933,7 @@ export function LancamentoV2Dialog({
           favorecido_id: favorecidoForForm,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
+          safra_id: safraId || null,
         };
         const ok = await onSave(form);
         if (!ok) { allOk = false; break; }
@@ -964,6 +970,7 @@ export function LancamentoV2Dialog({
           favorecido_id: favorecidoForForm,
           forma_pagamento: formaPgto || null,
           dados_pagamento: dadosPagamento || null,
+          safra_id: safraId || null,
         };
 
         const ok = await onSave(form);
@@ -996,6 +1003,7 @@ export function LancamentoV2Dialog({
       favorecido_id: favorecidoForForm,
       forma_pagamento: formaPgto || null,
       dados_pagamento: dadosPagamento || null,
+      safra_id: safraId || null,
     };
 
       console.log('[FinV2] SUBMIT STATE', {
@@ -1312,6 +1320,21 @@ export function LancamentoV2Dialog({
                       Dividendos são salvos automaticamente em {fazendaAdm.nome}
                     </p>
                   )}
+                </div>
+
+                {/* Safra (opcional) */}
+                <div>
+                  <Label className="text-[10px]">Safra</Label>
+                  <Select
+                    value={safraId || '__none_safra__'}
+                    onValueChange={v => setSafraId(v === '__none_safra__' ? '' : v)}
+                  >
+                    <SelectTrigger className={cn("h-8", fieldBg)}><SelectValue placeholder="Sem safra" /></SelectTrigger>
+                    <SelectContent className={DARK_GLASS_CONTENT}>
+                      <SelectItem value="__none_safra__">Sem safra</SelectItem>
+                      {(safras ?? []).map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado
