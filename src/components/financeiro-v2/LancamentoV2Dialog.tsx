@@ -1042,7 +1042,7 @@ export function LancamentoV2Dialog({
     }
   }, [open]);
 
-  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3.5 py-2.5 space-y-2";
+  const sectionClass = "rounded-lg border border-[hsl(var(--border))] bg-[hsl(210_33%_97%)] dark:bg-muted/20 px-3.5 py-2 space-y-1.5";
   const sectionTitleClass = "flex items-center gap-1.5 text-[11px] font-bold text-primary uppercase tracking-[0.08em]";
   const fieldBg = "bg-background border-[hsl(210_20%_80%)] focus-visible:border-primary focus-visible:ring-primary/20 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]";
 
@@ -1204,7 +1204,7 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 2 — Identificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><User className="h-3.5 w-3.5" /> Identificação</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 {/* Produto */}
                 <div ref={produtoWrapperRef} className="relative col-span-2">
                   <Label className="text-[10px]">Produto / Descrição *</Label>
@@ -1252,7 +1252,7 @@ export function LancamentoV2Dialog({
                   <div className="flex gap-1">
                     <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
                       <PopoverTrigger asChild>
-                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 h-8 justify-between font-normal text-xs", fieldBg)}>
+                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-xs", fieldBg)}>
                           <span className="truncate">{selectedFornecedorNome || 'Selecione fornecedor...'}</span>
                           <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                         </Button>
@@ -1379,7 +1379,7 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 3 — Valor e Classificação ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><DollarSign className="h-3.5 w-3.5" /> Valor e Classificação</p>
-              <div className="grid grid-cols-[140px_1fr] gap-2">
+              <div className="grid grid-cols-[140px_1fr] gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Valor (R$) *</Label>
                   <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor')} />
@@ -1552,7 +1552,7 @@ export function LancamentoV2Dialog({
             {/* ── BLOCO 4 — Complementares ── */}
             <section className={sectionClass}>
               <p className={sectionTitleClass}><FileText className="h-3.5 w-3.5" /> Complementares</p>
-              <div className="grid grid-cols-[130px_120px_1fr_1fr] gap-2">
+              <div className="grid grid-cols-[130px_120px_1fr_1fr] gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Tipo Documento</Label>
                   <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
