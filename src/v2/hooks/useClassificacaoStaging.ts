@@ -123,6 +123,10 @@ export interface ClassificacaoStagingPreviewRow {
   // PR-M5-A2: proteção anti-órfão (cells em vermelho + bloqueio Apply)
   proposto_subcentro_existe_no_plano: boolean;
   will_create_subcentro_orfao: boolean;
+
+  // PR-B: conta canônica (via vw migration 253 — fonte soberana)
+  conta_filtro_id: string | null;
+  conta_filtro_nome: string | null;
 }
 
 export interface PopulateResult {

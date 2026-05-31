@@ -221,6 +221,7 @@ export function MesaClassificacaoTab() {
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<MatchStatus | 'todos'>('todos');
   const [filtroSituacao, setFiltroSituacao] = useState<SituacaoOperacional>('todos');
+  const [filtroConta, setFiltroConta] = useState<string>('todos'); // conta_filtro_id ou 'todos'
   const [parsing, setParsing] = useState(false);
   const [confirmadoCheckbox, setConfirmadoCheckbox] = useState(false);
 
@@ -317,8 +318,24 @@ export function MesaClassificacaoTab() {
     return c;
   }, [staging]);
 
+  const contasDisponiveis = useMemo(() => {
+    const m = new Map<string, { id: string; nome: string; n: number }>();
+    for (const r of staging) {
+      const id = r.conta_filtro_id ?? '__sem__';
+      const nome = r.conta_filtro_nome ?? 'Sem conta';
+      const cur = m.get(id) ?? { id, nome, n: 0 };
+      cur.n++; m.set(id, cur);
+    }
+    return [...m.values()].sort((a, b) =>
+      a.id === '__sem__' ? 1 : b.id === '__sem__' ? -1 : b.n - a.n
+    );
+  }, [staging]);
+
   const rowsFiltradas = useMemo(() => {
     let rows = staging;
+    if (filtroConta !== 'todos') {
+      rows = rows.filter((r) => (r.conta_filtro_id ?? '__sem__') === filtroConta);
+    }
     if (filtroStatus !== 'todos') {
       rows = rows.filter((r) => r.match_status === filtroStatus);
     }
@@ -326,7 +343,7 @@ export function MesaClassificacaoTab() {
       rows = rows.filter((r) => getSituacaoOperacional(r) === filtroSituacao);
     }
     return rows;
-  }, [staging, filtroStatus, filtroSituacao]);
+  }, [staging, filtroConta, filtroStatus, filtroSituacao]);
 
   // PR-M4 — contagens do header (todas em 'exato' && !aplicado)
   const headerStats = useMemo(() => {
@@ -866,22 +883,21 @@ export function MesaClassificacaoTab() {
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             size="sm"
-            variant={filtroStatus === 'todos' ? 'default' : 'outline'}
+            variant={filtroConta === 'todos' ? 'default' : 'outline'}
             className="h-6 text-[10px] px-2"
-            onClick={() => setFiltroStatus('todos')}
+            onClick={() => setFiltroConta('todos')}
           >
-            Todos ({staging.length})
+            Todas ({staging.length})
           </Button>
-          {STATUS_ORDER.map((st) => (
+          {contasDisponiveis.map((c) => (
             <Button
-              key={st}
+              key={c.id}
               size="sm"
-              variant={filtroStatus === st ? 'default' : 'outline'}
+              variant={filtroConta === c.id ? 'default' : 'outline'}
               className="h-6 text-[10px] px-2"
-              disabled={countsPorStatus[st] === 0}
-              onClick={() => setFiltroStatus(st)}
+              onClick={() => setFiltroConta(c.id)}
             >
-              {STATUS_LABEL[st]} ({countsPorStatus[st] ?? 0})
+              {c.nome} ({c.n})
             </Button>
           ))}
         </div>
@@ -907,6 +923,31 @@ export function MesaClassificacaoTab() {
               onClick={() => setFiltroSituacao(sit)}
             >
               {SITUACAO_LABEL[sit]} ({countsPorSituacao[sit]})
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {sessaoId && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Button
+            size="sm"
+            variant={filtroStatus === 'todos' ? 'default' : 'outline'}
+            className="h-6 text-[10px] px-2"
+            onClick={() => setFiltroStatus('todos')}
+          >
+            Todos ({staging.length})
+          </Button>
+          {STATUS_ORDER.map((st) => (
+            <Button
+              key={st}
+              size="sm"
+              variant={filtroStatus === st ? 'default' : 'outline'}
+              className="h-6 text-[10px] px-2"
+              disabled={countsPorStatus[st] === 0}
+              onClick={() => setFiltroStatus(st)}
+            >
+              {STATUS_LABEL[st]} ({countsPorStatus[st] ?? 0})
             </Button>
           ))}
         </div>
