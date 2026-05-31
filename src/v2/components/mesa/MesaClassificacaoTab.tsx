@@ -992,6 +992,11 @@ export function MesaClassificacaoTab() {
         open={!!drawerStagingId}
         onOpenChange={(o) => { if (!o) setDrawerStagingId(null); }}
         contextoExcel={drawerContexto}
+        onEditCandidato={(lancId) => {
+          const row = staging.find((r) => r.staging_id === drawerStagingId);
+          if (!row) return;
+          handleOpenEdit({ ...row, lanc_id: lancId });
+        }}
       />
 
       {/* PR-Mesa-CreateFromExcel-A — modal oficial reusado, prefill estendido.

@@ -27,6 +27,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contextoExcel: ContextoExcel | null;
+  onEditCandidato?: (lancId: string) => void;
 }
 
 function fmtData(s: string | null): string {
@@ -46,6 +47,7 @@ export function MesaClassificacaoCandidatosDrawer({
   open,
   onOpenChange,
   contextoExcel,
+  onEditCandidato,
 }: Props) {
   const { data: candidatos, isLoading, error } = useClassificacaoCandidatos(open ? stagingId : null);
 
@@ -150,7 +152,8 @@ export function MesaClassificacaoCandidatosDrawer({
               {candidatos.map((c) => (
                 <div
                   key={c.lanc_id}
-                  className="p-3 border rounded-md bg-card space-y-1 text-[11px]"
+                  className="p-3 border rounded-md bg-card space-y-1 text-[11px] cursor-pointer hover:bg-accent/40"
+                  onClick={() => onEditCandidato?.(c.lanc_id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
