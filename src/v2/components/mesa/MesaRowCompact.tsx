@@ -53,7 +53,6 @@ interface MesaRowCompactProps {
   onToggleExpand: () => void;
   onOpenCandidatos: () => void;
   onCreateLancamento: () => void;
-  onAplicarReclassificacao: () => void;
   /**
    * Abre LancamentoV2Dialog em modo edit a partir do lanc_id vinculado
    * da row. Renderizado apenas quando row.lanc_id está preenchido
@@ -127,7 +126,6 @@ export function MesaRowCompact({
   onOpenCandidatos,
   onCreateLancamento,
   onEditLancamento,
-  onAplicarReclassificacao,
 }: MesaRowCompactProps) {
   const status = row.match_status;
   const situacao = getSituacaoOperacional(row);
@@ -260,25 +258,7 @@ export function MesaRowCompact({
                 );
               }
 
-              // Cenário 4a: divergente não aplicado → Aplicar reclassificação
-              // (substitui o "Validar" antigo; "Editar manualmente" fica no
-              // expandido do OficialPanel para escape do operador).
-              if (hasLancVinculado && row.match_status === 'divergente' && !row.aplicado) {
-                return (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-[11px] px-2"
-                    onClick={onAplicarReclassificacao}
-                  >
-                    <Check className="h-3 w-3 mr-1" />
-                    Aplicar reclassificação
-                  </Button>
-                );
-              }
-
-              // Cenário 4b: demais com lanc_id (ja_classificado, divergente aplicado,
-              // exato aplicado) → Editar
+              // Cenário 4: tem lanc_id → Editar (ou Validar para divergente)
               if (hasLancVinculado) {
                 return (
                   <Button
@@ -288,7 +268,7 @@ export function MesaRowCompact({
                     disabled={!auxLoaded}
                     onClick={onEditLancamento}
                   >
-                    Editar
+                    {row.match_status === 'divergente' ? 'Validar' : 'Editar'}
                   </Button>
                 );
               }
@@ -357,15 +337,7 @@ export function MesaRowCompact({
             </div>
 
             {/* CLASSIFICAÇÃO OFICIAL (cor por status) */}
-            <OficialPanel
-              row={row}
-              isOficialErro={isOficialErro}
-              isOrfao={isOrfao}
-              noLanc={noLanc}
-              status={status}
-              auxLoaded={auxLoaded}
-              onEditManual={onEditLancamento}
-            />
+            <OficialPanel row={row} isOficialErro={isOficialErro} isOrfao={isOrfao} noLanc={noLanc} status={status} />
           </div>
 
           {/* Camada 3: detalhes técnicos */}
@@ -437,11 +409,9 @@ interface OficialPanelProps {
   isOrfao: boolean;
   noLanc: boolean;
   status: MatchStatus;
-  auxLoaded: boolean;
-  onEditManual: () => void;
 }
 
-function OficialPanel({ row, isOficialErro, isOrfao, noLanc, status, auxLoaded, onEditManual }: OficialPanelProps) {
+function OficialPanel({ row, isOficialErro, isOrfao, noLanc, status }: OficialPanelProps) {
   // Decisão de cor + ícone líder do painel.
   let panelCls = 'rounded-md border p-3 space-y-1.5';
   let titleCls = 'text-[10px] uppercase tracking-wide font-semibold';
@@ -526,24 +496,6 @@ function OficialPanel({ row, isOficialErro, isOrfao, noLanc, status, auxLoaded, 
             O subcentro proposto não existe em <code>financeiro_plano_contas</code>{' '}
             para este cliente — Apply NÃO gravaria mesmo sem o bloqueio anti-órfão.
           </span>
-        </div>
-      )}
-      {/* PR-MESA-DIVERGENTES: escape manual — operador pode abrir o
-          LancamentoV2Dialog para escolher um terceiro valor (diferente do
-          banco atual e diferente do Excel). Só para divergente não aplicado. */}
-      {status === 'divergente' && !row.aplicado && (
-        <div className="pt-1 mt-1 border-t border-amber-200">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 text-[10px] px-2 text-amber-900 hover:bg-amber-100"
-            disabled={!auxLoaded}
-            onClick={onEditManual}
-            title="Abrir o lançamento no modal oficial para escolher um valor diferente do banco e do Excel."
-          >
-            <ExternalLink className="h-2.5 w-2.5 mr-1" />
-            Editar manualmente
-          </Button>
         </div>
       )}
       {/* Briefing #5: erro_apply só no expandido, dentro do Oficial */}

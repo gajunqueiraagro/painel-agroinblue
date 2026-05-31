@@ -37,16 +37,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   parseExcelClassificacao,
   type ClassificacaoParseResult,
   type ClassificacaoExcelRow,
@@ -166,7 +156,7 @@ const STATUS_ORDER: MatchStatus[] = [
 
 const STATUS_LABEL: Record<MatchStatus, string> = {
   exato: 'Exato',
-  divergente: 'Reclassificação',
+  divergente: 'Divergente',
   ja_classificado: 'Já classificado',
   ambiguo: 'Ambíguo',
   sem_match: 'Sem match',
@@ -193,7 +183,7 @@ const STATUS_BADGE_CLS: Record<MatchStatus, string> = {
 const STATUS_MESSAGE: Record<MatchStatus, string> = {
   exato: '1 lançamento compatível encontrado.',
   ja_classificado: 'Lançamento já possui classificação.',
-  divergente: 'Excel propõe reclassificação diferente da atual.',
+  divergente: 'Sistema e Excel possuem classificações diferentes.',
   ambiguo: 'Mais de um lançamento compatível encontrado.',
   sem_match: 'Nenhum lançamento compatível encontrado.',
 };
@@ -245,10 +235,6 @@ export function MesaClassificacaoTab() {
 
   // PR-M4 — drawer de candidatos
   const [drawerStagingId, setDrawerStagingId] = useState<string | null>(null);
-
-  // PR-MESA-DIVERGENTES — confirmação explícita antes de aplicar reclassificação
-  const [aplicarDivergenteRow, setAplicarDivergenteRow] = useState<ClassificacaoStagingPreviewRow | null>(null);
-  const [aplicarDivergenteLoading, setAplicarDivergenteLoading] = useState(false);
 
   // PR-Mesa-CreateFromExcel-A — criar lançamento a partir de row Mesa
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -595,35 +581,6 @@ export function MesaClassificacaoTab() {
     setEditDialogLancamento(data as LancamentoV2);
     setExcelContext(buildExcelContext(row, hookFin.contasBancarias));
     setEditDialogOpen(true);
-  }
-
-  // PR-MESA-DIVERGENTES — abre confirmação para aplicar reclassificação proposta.
-  function handleOpenAplicarDivergente(row: ClassificacaoStagingPreviewRow) {
-    if (row.match_status !== 'divergente' || row.aplicado || !row.lanc_id) {
-      toast.error('Linha não elegível para aplicar reclassificação.');
-      return;
-    }
-    setAplicarDivergenteRow(row);
-  }
-
-  // PR-MESA-DIVERGENTES — confirma e chama fn_classificacao_apply_divergente.
-  async function handleConfirmAplicarDivergente() {
-    const row = aplicarDivergenteRow;
-    if (!row) return;
-    setAplicarDivergenteLoading(true);
-    // PR-M2: cast `any` enquanto types não regeneram pós-PR.
-    const { error } = await (supabase as any).rpc(
-      'fn_classificacao_apply_divergente',
-      { p_staging_id: row.staging_id },
-    );
-    setAplicarDivergenteLoading(false);
-    if (error) {
-      toast.error(`Erro ao aplicar reclassificação: ${error.message ?? error}`);
-      return;
-    }
-    toast.success('Reclassificação aplicada.');
-    setAplicarDivergenteRow(null);
-    qc.invalidateQueries({ queryKey: ['classificacao-staging', sessaoId] });
   }
 
   // PR-Mesa-CreateFromExcel-A — save handler do modal:
@@ -1016,7 +973,6 @@ export function MesaClassificacaoTab() {
                 onOpenCandidatos={() => setDrawerStagingId(r.staging_id)}
                 onCreateLancamento={() => handleOpenCreate(r)}
                 onEditLancamento={() => handleOpenEdit(r)}
-                onAplicarReclassificacao={() => handleOpenAplicarDivergente(r)}
               />
             ))
           )}
@@ -1037,34 +993,6 @@ export function MesaClassificacaoTab() {
         onOpenChange={(o) => { if (!o) setDrawerStagingId(null); }}
         contextoExcel={drawerContexto}
       />
-
-      {/* PR-MESA-DIVERGENTES — confirmação explícita pra sobrescrever subcentro. */}
-      <AlertDialog
-        open={!!aplicarDivergenteRow}
-        onOpenChange={(o) => { if (!o && !aplicarDivergenteLoading) setAplicarDivergenteRow(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Aplicar reclassificação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você vai substituir o subcentro atual do lançamento
-              {' '}(<span className="font-mono">{aplicarDivergenteRow?.lanc_subcentro_atual ?? '—'}</span>){' '}
-              pelo proposto pelo Excel
-              {' '}(<span className="font-mono">{aplicarDivergenteRow?.proposto_subcentro ?? '—'}</span>).
-              Esta ação altera um lançamento que já estava classificado. Confirmar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={aplicarDivergenteLoading}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={aplicarDivergenteLoading}
-              onClick={(e) => { e.preventDefault(); void handleConfirmAplicarDivergente(); }}
-            >
-              {aplicarDivergenteLoading ? 'Aplicando…' : 'Aplicar reclassificação'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* PR-Mesa-CreateFromExcel-A — modal oficial reusado, prefill estendido.
           Operador edita TUDO livremente; nenhum campo travado. */}
