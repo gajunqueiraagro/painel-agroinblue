@@ -246,6 +246,13 @@ export function MesaClassificacaoTab() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editDialogLancamento, setEditDialogLancamento] = useState<LancamentoV2 | null>(null);
 
+  // Frente A — marca a staging row resolvida quando o modal foi aberto
+  // pelo fluxo de candidato ambíguo. NÃO usado pelos Exatos (deixa o save
+  // edit normal idêntico). Limpado em close/cancel e após save OK.
+  const [editFromAmbiguousCandidate, setEditFromAmbiguousCandidate] = useState<
+    { stagingId: string; lancId: string } | null
+  >(null);
+
   // PR-Mesa-ExcelContext — contexto read-only "Contexto Excel / Sugestão"
   // exibido no painel lateral do LancamentoV2Dialog (create e edit a partir
   // da Mesa). Limpo em todo fechamento/reset do dialog.
@@ -995,6 +1002,7 @@ export function MesaClassificacaoTab() {
         onEditCandidato={(lancId) => {
           const row = staging.find((r) => r.staging_id === drawerStagingId);
           if (!row) return;
+          setEditFromAmbiguousCandidate({ stagingId: row.staging_id, lancId });
           handleOpenEdit({ ...row, lanc_id: lancId });
         }}
       />
@@ -1013,6 +1021,7 @@ export function MesaClassificacaoTab() {
           setEditDialogOpen(false);
           setEditDialogLancamento(null);
           setExcelContext(null);
+          setEditFromAmbiguousCandidate(null);
         }}
         onSave={async (form) => {
           // Modo EDIT — fonte soberana do id é editDialogLancamento.id.
@@ -1021,6 +1030,22 @@ export function MesaClassificacaoTab() {
           if (editDialogOpen && editDialogLancamento) {
             const ok = await hookFin.editarLancamento(editDialogLancamento.id, form);
             if (ok) {
+              // Frente A — staging só é marcada quando o edit veio do fluxo
+              // de candidato ambíguo. NÃO toca aplicado (do Apply automático).
+              // Erro no UPDATE não anula o save do lançamento (já feito).
+              if (editFromAmbiguousCandidate) {
+                const { error: stagingErr } = await (supabase as any)
+                  .from('financeiro_classificacao_staging')
+                  .update({
+                    match_lancamento_id: editFromAmbiguousCandidate.lancId,
+                    match_status: 'ja_classificado',
+                  })
+                  .eq('staging_id', editFromAmbiguousCandidate.stagingId);
+                if (stagingErr) {
+                  toast.error(`Lançamento salvo, mas marcação da Mesa falhou: ${stagingErr.message}`);
+                }
+                setEditFromAmbiguousCandidate(null);
+              }
               setEditDialogOpen(false);
               setEditDialogLancamento(null);
               setExcelContext(null);
