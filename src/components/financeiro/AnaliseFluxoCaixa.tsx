@@ -34,6 +34,7 @@ interface FluxoMes {
   saidasDesembolso: number;
   saidasReposicao: number;
   saidasAmortizacoes: number;
+  saidasTributos: number;
   saidasDividendos: number;
   totalSaidas: number;
   saldoMes: number;
@@ -61,6 +62,7 @@ export function FluxoCaixa({
       let saidasDesembolso = 0;
       let saidasReposicao = 0;
       let saidasAmortizacoes = 0;
+      let saidasTributos = 0;
       let saidasDividendos = 0;
 
       for (const l of saidasAll) {
@@ -71,11 +73,12 @@ export function FluxoCaixa({
           case 'desembolso': saidasDesembolso += valor; break;
           case 'reposicao': saidasReposicao += valor; break;
           case 'amortizacoes': saidasAmortizacoes += valor; break;
+          case 'tributos': saidasTributos += valor; break;
           case 'dividendos': saidasDividendos += valor; break;
         }
       }
 
-      const totalSaidas = saidasDeducao + saidasDesembolso + saidasReposicao + saidasAmortizacoes + saidasDividendos;
+      const totalSaidas = saidasDeducao + saidasDesembolso + saidasReposicao + saidasAmortizacoes + saidasTributos + saidasDividendos;
       const saldoMes = entradas - totalSaidas;
       saldoAcum += saldoMes;
 
@@ -87,6 +90,7 @@ export function FluxoCaixa({
         saidasDesembolso,
         saidasReposicao,
         saidasAmortizacoes,
+        saidasTributos,
         saidasDividendos,
         totalSaidas,
         saldoMes,
@@ -167,6 +171,7 @@ export function FluxoCaixa({
                 <SaidaRow label="  Desemb. Produtivo" dados={dados} field="saidasDesembolso" />
                 <SaidaRow label="  Reposição Bovinos" dados={dados} field="saidasReposicao" />
                 <SaidaRow label="  Amortizações" dados={dados} field="saidasAmortizacoes" />
+                <SaidaRow label="  Tributos" dados={dados} field="saidasTributos" />
                 <SaidaRow label="  Dividendos" dados={dados} field="saidasDividendos" />
 
                 {/* Total Saídas */}

@@ -134,6 +134,7 @@ function canonicalMacro(l: LancamentoClassificavel): string {
   if (m === 'distribuição' || m === 'dividendos') return 'dividendos';
   if (m === 'saída financeira' || m.includes('amortiza')) return 'amortizações financeiras';
   if (m === 'transferências' || m === 'entre contas') return 'transferencias';
+  if (m === 'tributos') return 'tributos';
   return m;
 }
 
@@ -230,6 +231,7 @@ export type CategoriaSaida =
   | 'Dedução de Receitas'
   | 'Amortizações Fin. Pec.'
   | 'Amortizações Fin. Agri.'
+  | 'Tributos'
   | 'Dividendos'
   | 'Sem Classificação';
 
@@ -240,6 +242,7 @@ export const CATEGORIAS_SAIDA: CategoriaSaida[] = [
   'Dedução de Receitas',
   'Amortizações Fin. Pec.',
   'Amortizações Fin. Agri.',
+  'Tributos',
   'Dividendos',
   'Sem Classificação',
 ];
@@ -292,6 +295,9 @@ export function classificarSaida(l: LancamentoClassificavel): CategoriaSaida {
     return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
   }
 
+  // Tributos — caminho próprio, NÃO reaproveita Desembolso/Dividendos/Amortizações.
+  if (macro === 'tributos') return 'Tributos';
+
   // Fallback: tudo que não é agricultura vai para pecuária
   return escopo === 'agri' ? 'Desemb. Produtivo Agri.' : 'Desemb. Produtivo Pec.';
 }
@@ -311,7 +317,7 @@ export function classificarEntradaFluxo(l: LancamentoClassificavel): CategoriaFl
   return 'captacao';
 }
 
-export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'dividendos' | 'sem_classificacao';
+export type CategoriaFluxoSaida = 'deducao' | 'desembolso' | 'reposicao' | 'amortizacoes' | 'tributos' | 'dividendos' | 'sem_classificacao';
 
 /** Classifica saída para o Fluxo de Caixa (agrupamento mais alto) */
 export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFluxoSaida {
@@ -329,6 +335,8 @@ export function classificarSaidaFluxo(l: LancamentoClassificavel): CategoriaFlux
   if (macro === 'investimento em bovinos' || centro.includes('reposição') || centro.includes('reposicao')) return 'reposicao';
 
   if (macro === 'amortizações financeiras') return 'amortizacoes';
+
+  if (macro === 'tributos') return 'tributos';
 
   return 'desembolso';
 }

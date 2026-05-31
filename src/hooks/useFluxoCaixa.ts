@@ -72,6 +72,7 @@ export interface FluxoMensal {
   amortizacoes: number;
   amortizacoesPec: number;
   amortizacoesAgri: number;
+  tributos: number;
   dividendos: number;
   outrasSaidas: number;
   totalSaidas: number;
@@ -254,6 +255,7 @@ export function useFluxoCaixa(
       let custeioPec = 0, custoioAgri = 0, investPec = 0, investAgri = 0;
       let reposicao = 0;
       let amortizacoes = 0, amortizacoesPec = 0, amortizacoesAgri = 0;
+      let tributos = 0;
       let dividendos = 0;
       // PC-100 oficial — agregados literais por grupo_custo
       let custeioPecSemJuros = 0, custeioAgriSemJuros = 0;
@@ -315,6 +317,8 @@ export function useFluxoCaixa(
               amortizacoes += val;
               if (catDash === 'Amortizações Fin. Agri.') amortizacoesAgri += val;
               else amortizacoesPec += val;
+            } else if (catFluxo === 'tributos') {
+              tributos += val;
             } else {
               dividendos += val;
             }
@@ -324,8 +328,11 @@ export function useFluxoCaixa(
 
       const outrasEntradas = captacao + aportes;
       const totalEntradas = receitas + outrasEntradas;
+      // outrasSaidas: NÃO incluo tributos aqui — semântica ambígua deste agregado
+      // (drill-down exposto à UI). Reportado ao Gabriel; pode ser ajustado em PR
+      // posterior se a UI passar a consumir tributos como "outra saída".
       const outrasSaidas = reposicao + deducaoReceitas + amortizacoes + dividendos;
-      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + dividendos + semClassificacao;
+      const totalSaidas = deducaoReceitas + desembolso + reposicao + amortizacoes + tributos + dividendos + semClassificacao;
       const saldoInicial = m === 1 ? saldoInicialAno : result[m - 2].saldoFinal;
       const saldoFinal = isAfterFilter ? saldoInicial : saldoInicial + totalEntradas - totalSaidas;
 
@@ -361,6 +368,7 @@ export function useFluxoCaixa(
         amortizacoes,
         amortizacoesPec,
         amortizacoesAgri,
+        tributos,
         dividendos,
         outrasSaidas,
         totalSaidas,

@@ -27,7 +27,7 @@ import {
 // Agrupamento por macro_custo oficial (plano de contas)
 // ---------------------------------------------------------------------------
 const MACROS_ENTRADA = ['Receita Operacional', 'Entrada Financeira'];
-const MACROS_SAIDA = ['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Dividendos'];
+const MACROS_SAIDA = ['Custeio Produção', 'Investimento na Fazenda', 'Investimento em Bovinos', 'Deduções de Receitas', 'Saída Financeira', 'Tributos', 'Dividendos'];
 
 const NOMES_OFICIAIS = new Set([
   ...MACROS_ENTRADA,
