@@ -630,6 +630,24 @@ export function MesaClassificacaoTab() {
     return true;
   }
 
+  // Frente A — set de lanc_id já vinculados a OUTRAS staging rows da sessão
+  // resolvidas (match_status='ja_classificado'). Usado pra ocultar candidatos
+  // já usados no Drawer. NÃO incluir divergentes/exatos pendentes — divergentes
+  // também têm match_lancamento_id mas não consomem o candidato.
+  // Nota: a view ClassificacaoStagingPreviewRow expõe lanc_id (do JOIN),
+  // não match_lancamento_id. No escopo 'ja_classificado' são equivalentes
+  // operacionalmente; lanc deletado/cancelado já não viria como candidato.
+  const lancIdsUsados = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of staging) {
+      if (r.staging_id === drawerStagingId) continue;
+      if (r.match_status !== 'ja_classificado') continue;
+      if (!r.lanc_id) continue;
+      s.add(r.lanc_id);
+    }
+    return s;
+  }, [staging, drawerStagingId]);
+
   // Contexto do drawer (encontra a row do staging_id ativo)
   const drawerContexto = useMemo(() => {
     if (!drawerStagingId) return null;
@@ -999,6 +1017,7 @@ export function MesaClassificacaoTab() {
         open={!!drawerStagingId}
         onOpenChange={(o) => { if (!o) setDrawerStagingId(null); }}
         contextoExcel={drawerContexto}
+        lancIdsUsados={lancIdsUsados}
         onEditCandidato={(lancId) => {
           const row = staging.find((r) => r.staging_id === drawerStagingId);
           if (!row) return;

@@ -5,6 +5,7 @@
  * decidir manualmente via tela Lançamentos Financeiros e re-rodar
  * populate.
  */
+import { useMemo } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -28,6 +29,13 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   contextoExcel: ContextoExcel | null;
   onEditCandidato?: (lancId: string) => void;
+  /**
+   * Frente A — IDs de lançamentos já vinculados a OUTRAS staging rows
+   * resolvidas (match_status='ja_classificado') na sessão atual. Candidatos
+   * cujo lanc_id está neste Set são ocultados para evitar resolução em
+   * duplicata. Opcional — Drawer mantém comportamento atual se omitido.
+   */
+  lancIdsUsados?: Set<string>;
 }
 
 function fmtData(s: string | null): string {
@@ -48,8 +56,18 @@ export function MesaClassificacaoCandidatosDrawer({
   onOpenChange,
   contextoExcel,
   onEditCandidato,
+  lancIdsUsados,
 }: Props) {
   const { data: candidatos, isLoading, error } = useClassificacaoCandidatos(open ? stagingId : null);
+
+  // Frente A — filtro client-side dos candidatos já vinculados a outras
+  // staging rows resolvidas. Memoizado pra evitar recriar a lista a cada render.
+  const candidatosVisiveis = useMemo(() => {
+    if (!candidatos) return candidatos;
+    if (!lancIdsUsados || lancIdsUsados.size === 0) return candidatos;
+    return candidatos.filter((c) => !lancIdsUsados.has(c.lanc_id));
+  }, [candidatos, lancIdsUsados]);
+  const ocultadosCount = (candidatos?.length ?? 0) - (candidatosVisiveis?.length ?? 0);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -147,9 +165,21 @@ export function MesaClassificacaoCandidatosDrawer({
             </div>
           )}
 
-          {!isLoading && !error && candidatos && candidatos.length > 0 && (
+          {!isLoading && !error && candidatos && candidatos.length > 0 && candidatosVisiveis && candidatosVisiveis.length === 0 && (
+            <div className="text-[11px] text-muted-foreground py-3 px-2 rounded-md bg-muted/40 border">
+              Todos os candidatos compatíveis já foram vinculados a outras linhas
+              desta sessão ({ocultadosCount} oculto{ocultadosCount === 1 ? '' : 's'}).
+            </div>
+          )}
+
+          {!isLoading && !error && candidatosVisiveis && candidatosVisiveis.length > 0 && (
             <div className="space-y-2">
-              {candidatos.map((c) => (
+              {ocultadosCount > 0 && (
+                <div className="text-[10px] text-muted-foreground italic pb-1">
+                  {ocultadosCount} candidato{ocultadosCount === 1 ? '' : 's'} oculto{ocultadosCount === 1 ? '' : 's'} (já vinculado{ocultadosCount === 1 ? '' : 's'} nesta sessão).
+                </div>
+              )}
+              {candidatosVisiveis.map((c) => (
                 <div
                   key={c.lanc_id}
                   className="p-3 border rounded-md bg-card space-y-1 text-[11px] cursor-pointer hover:bg-accent/40"
