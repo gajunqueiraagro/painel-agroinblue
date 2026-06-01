@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -116,6 +117,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
 }: Props, ref) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
+  const queryClient = useQueryClient();
   const isPrevisto = statusOp === 'meta';
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
@@ -748,6 +750,66 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         return false;
       }
       console.log('[VendaFinanceiro] SUCCESS', insertedData);
+
+      // ── PR-VENDA-COMP-01: backfill econômico no lançamento zoo ──
+      // Vendas geradas via Caderno IA podem nascer com valor_total=0 e
+      // peso_total=0; o financeiro nasce certo mas a competência (PC-100/DRE)
+      // fica errada. Fonte = props comerciais da venda (form), NUNCA o valor
+      // financeiro recebido. Guard atômico no próprio UPDATE
+      // (.or('valor_total.is.null,valor_total.eq.0')) elimina read-then-write
+      // e janela de corrida — só grava se a venda ainda não tiver valor manual.
+      // Idempotente. Erro no backfill NÃO desfaz/anula o financeiro recém-criado.
+      try {
+        const valorTotalCalc = valorBruto;
+        const pesoTotalCalc = quantidade * pesoKg;
+        if (
+          targetLancamentoId &&
+          quantidade > 0 &&
+          pesoKg > 0 &&
+          valorTotalCalc > 0
+        ) {
+          const precoUnit = valorTotalCalc / quantidade;
+          const precoArroba = valorTotalCalc / (pesoTotalCalc / 30);
+          const snapshot = {
+            type: 'venda',
+            tipo_preco: vendaTipoPreco,
+            preco_input: vendaPrecoInput,
+            breakdown: {
+              valor_bruto: valorTotalCalc,
+              quantidade,
+              peso_kg: pesoKg,
+            },
+          };
+          // types.ts não conhece peso_total/preco_unitario (campos presentes
+          // no banco — useLancamentos.editarLancamento já grava esses campos
+          // via `update: any`). Cast local no payload, mesmo padrão usado em
+          // useFinanceiroV2.ts. Removível após regenerar types.ts.
+          const backfillPayload: any = {
+            valor_total: valorTotalCalc,
+            peso_total: pesoTotalCalc,
+            preco_unitario: precoUnit,
+            preco_arroba: precoArroba,
+            detalhes_snapshot: snapshot,
+          };
+          const { error: backfillErr } = await supabase
+            .from('lancamentos')
+            .update(backfillPayload)
+            .eq('id', targetLancamentoId)
+            .or('valor_total.is.null,valor_total.eq.0');
+          if (backfillErr) {
+            console.warn('[VendaFinanceiro] backfill zoo falhou (financeiro permanece OK):', backfillErr);
+            toast.warning('Financeiro gerado, mas dados econômicos do lançamento zoo não foram preenchidos.');
+          } else {
+            // Invalidação cobre os 2 casos: (a) guard liberou e gravou — UI
+            // precisa do refetch; (b) guard bloqueou (venda manual já correta)
+            // — refetch é idempotente, sem efeito.
+            await queryClient.invalidateQueries({ queryKey: ['lancamento', targetLancamentoId] });
+            await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
+          }
+        }
+      } catch (backfillEx: any) {
+        console.warn('[VendaFinanceiro] exceção no backfill zoo (financeiro permanece OK):', backfillEx);
+      }
 
       // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
       // await mirrorMetaToPlanejamento(inserts);

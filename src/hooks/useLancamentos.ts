@@ -561,6 +561,7 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
         };
       });
       await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
+      await queryClient.invalidateQueries({ queryKey: ['lancamento', id] });
       await invalidateZootQueries();
     }
   };

@@ -1762,11 +1762,18 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           return Number(compraDetalhes.valorTotal) || 0;
         })()
       : 0;
+    // PR-VENDA-COMP-01: regra oficial de valor_total no zoo é VALOR BRUTO (venda
+     // = calc.valorBruto; abate = calc.valorBruto + calc.totalBonus). Deduções
+     // permanecem em colunas próprias. Fallback final preserva legado.
     const valorTotalFinal = isBoitelVenda
       ? (boitelLucroLiquido > 0 ? boitelLucroLiquido : undefined)
       : isCompra
         ? (compraValorTotal > 0 ? compraValorTotal : undefined)
-        : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
+        : isAbate
+          ? ((calc.valorBruto + calc.totalBonus) > 0 ? calc.valorBruto + calc.totalBonus : undefined)
+          : isVenda
+            ? (calc.valorBruto > 0 ? calc.valorBruto : undefined)
+            : (calc.valorLiquido > 0 ? calc.valorLiquido : undefined);
 
     const abateDataVenda = isAbate ? (abateDetalhes?.dataVenda || dataVenda || format(new Date(), 'yyyy-MM-dd')) : (dataVenda || undefined);
     const abateDataEmbarque = isAbate && data ? format(addDays(parseISO(data), -1), 'yyyy-MM-dd') : (dataEmbarque || undefined);
