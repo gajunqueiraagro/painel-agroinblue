@@ -54,6 +54,7 @@ import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2MesaOperacional } from './pages/V2MesaOperacional';
 import { V2MesaClassificacao } from './pages/V2MesaClassificacao';
 import { V2Configuracoes } from './pages/V2Configuracoes';
@@ -481,6 +482,7 @@ export default function V2Index() {
     if (section === 'importacao-extratos') return (
       <FinanceiroCaixaTab initialTab="importacao" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );
+    if (section === 'importacao-custeio-txt') return <CusteioTxtImportTab />;
     if (section === 'rateio-adm') return (
       <FinanceiroCaixaTab initialTab="rateio" hideInternalTabs filtroAnoInicial={ano} filtroMesInicial={mes === '0' ? undefined : Number(mes)} />
     );

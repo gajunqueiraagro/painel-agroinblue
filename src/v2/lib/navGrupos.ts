@@ -14,7 +14,7 @@ export type V2Section =
   | 'auditoria-zoot' | 'valor-rebanho' | 'indicadores-zoot'
   // financeiro — visão geral
   | 'financeiro-home' | 'financeiro-dashboard' | 'fluxo-caixa'
-  | 'rateio-adm' | 'importacao-extratos'
+  | 'rateio-adm' | 'importacao-extratos' | 'importacao-custeio-txt'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
   // financeiro — conciliação
@@ -114,6 +114,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
           { id: 'importacao-extratos', label: 'Importação Extratos',     status: 'needs-wrapper' },
+          { id: 'importacao-custeio-txt', label: 'Importação Custeio (TXT)', status: 'ready' },
         ],
       },
       {
@@ -221,7 +222,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   // ── financeiro ──
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro',
-  'importacao-extratos': 'financeiro', 'financeiro-lanc': 'financeiro',
+  'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
   'contratos': 'financeiro', 'conciliacao': 'financeiro',
   'mesa-operacional': 'financeiro',
   'mesa-classificacao': 'financeiro',
