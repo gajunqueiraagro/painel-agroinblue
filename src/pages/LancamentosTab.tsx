@@ -3722,6 +3722,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                      initialBoitelData={boitelDataForResumo}
                      initialFormaReceb={vendaDetalhes?.formaReceb}
                      initialParcelas={vendaDetalhes?.parcelas}
+                     fazendaIdLancamento={editingFazendaId ?? undefined}
+                     clienteIdLancamento={clienteAtual?.id}
                    />
                 </div>
               </>

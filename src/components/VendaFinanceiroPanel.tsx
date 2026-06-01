@@ -516,8 +516,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const ok = await gerarFinanceiroBoitel(
           loteId, plan, lote,
           targetLancamentoId,
-          clienteAtual.id,
-          fazendaAtual.id,
+          effectiveClienteId,
+          effectiveFazendaId,
           dataFinanceira,
           {
             fornecedorId: fornecedorId || undefined,
@@ -561,9 +561,15 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
         const oldIds = (old || []).map(r => r.id);
         if (oldIds.length > 0) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
-          await supabase.from('financeiro_lancamentos_v2')
+          const { error: cancelErr } = await supabase.from('financeiro_lancamentos_v2')
             .update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: userId || null })
             .in('id', oldIds);
+          if (cancelErr) {
+            console.error('[VendaFinanceiro] falha ao cancelar financeiros antigos — abort antes do INSERT', cancelErr);
+            toast.error('Não foi possível cancelar o financeiro vinculado para substituição. Operação abortada.');
+            setGerando(false);
+            return false;
+          }
           // DESATIVADO (Opção A — eliminar espelhos auto em planejamento_financeiro):
           // await deleteMetaPlanejamentoByMovimentacao(targetLancamentoId, clienteAtual.id);
           await supabase.from('audit_log_movimentacoes').insert({
