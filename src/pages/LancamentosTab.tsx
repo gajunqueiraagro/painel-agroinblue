@@ -1943,7 +1943,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       if (editingAbateId) {
         editOriginalRef.current = null;
         setP1BloqueioMsg(null);
-        onEditar(editingAbateId, lancamentoDados);
+        try {
+          await onEditar(editingAbateId, lancamentoDados);
+        } catch (e: any) {
+          console.error('[LancamentosTab] falha ao salvar venda (zoo) — abortando', e);
+          toast.error('Não foi possível salvar a venda. Nenhuma alteração foi aplicada.');
+          setSubmitting(false);
+          return;
+        }
         if (isAbate) {
           // Delegação total: o painel decide se gera (guards internos de formaReceb/parcelas).
           if (abateFinanceiroRef.current) {
@@ -1968,9 +1975,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setLancModalOpen(false);
           restoreEditOrigin();
         } else if (isVenda && (calc.valorLiquido > 0 || tipoPeso === 'boitel')) {
-          // Auto-generate/update financeiro for venda
-          if (vendaFinanceiroRef.current) {
-            await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
+          // Zoo já salvo (M1). Financeiro é processo SEPARADO e best-effort:
+          // nunca bloqueia o finalize do zoo. O VendaFinanceiroPanel emite os
+          // próprios erros/avisos (desde PR-STAB-01A) — não duplicar mensagem aqui.
+          try {
+            if (vendaFinanceiroRef.current) {
+              await vendaFinanceiroRef.current.generateFinanceiro(editingAbateId);
+            }
+          } catch (e: any) {
+            console.error('[LancamentosTab] financeiro da venda falhou (venda permanece salva)', e);
           }
           vendaFinanceiroRef.current?.resetForm();
           setEditingAbateId(null);
@@ -1980,7 +1993,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           setData(format(new Date(), 'yyyy-MM-dd'));
           setObservacao(''); setStatusOp(defaultCenario);
           resetFinancialFields();
-          toast.success('Venda atualizada com financeiro!');
+          toast.success('Venda salva com sucesso.');
           triggerZootCacheRefresh(data);
           setLancModalOpen(false);
           restoreEditOrigin();
@@ -2094,8 +2107,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           restoreEditOrigin();
         } else if (isVenda && returnedId) {
           const isBoitel = tipoPeso === 'boitel';
-          if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
-            await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+          try {
+            if (vendaFinanceiroRef.current && (calc.valorLiquido > 0 || isBoitel)) {
+              await vendaFinanceiroRef.current.generateFinanceiro(returnedId);
+            }
+          } catch (e: any) {
+            console.error('[LancamentosTab] financeiro da venda (create) falhou (venda permanece salva)', e);
           }
           vendaFinanceiroRef.current?.resetForm();
           setLastSavedLancamentoId(null);
