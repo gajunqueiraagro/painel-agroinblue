@@ -1,15 +1,20 @@
 // src/v2/pages/CusteioTxtImportTab.tsx
 // PR-RAUL-01 — Tela de preview do Importador de Custeio TXT (Raul / Faz. Monterrey).
+// PR-RAUL-02A — Cada linha do preview abre o LancamentoV2Dialog OFICIAL com prefill,
+//               para o usuário salvar manualmente. NADA grava sem clicar Salvar no modal.
 //
-// ESCOPO TRAVADO:
-//   - Upload de .txt + preview dos itens-folha. NADA é gravado.
-//   - SEM Supabase, SEM banco, SEM de-para, SEM plano de contas, SEM Mesa/OFX/conciliação.
-//   - Estado vive 100% em React state desta tela.
+// ESCOPO:
+//   - Reaproveita LancamentoV2Dialog + useFinanceiroV2 (sem formulário paralelo).
+//   - SEM tabela nova, SEM migration, SEM de-para, SEM importação em lote.
+//   - Preview continua client-side; gravação é via hookFin.criarLancamento (fluxo oficial).
+//   - Conta, fornecedor e subcentro/plano NÃO são pré-preenchidos — usuário escolhe no modal.
+//     macro/grupo/centro/subcentro continuam derivados pelo fluxo oficial.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   parseCusteioTxtFile,
   type CusteioParseResult,
+  type CusteioItem,
 } from '@/v2/lib/custeio/parseCusteioTxt';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,16 +29,104 @@ import {
 } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FilePlus2, FileText, Upload } from 'lucide-react';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
+import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 
 const brl = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** Normaliza nome para match exato (trim, lower, sem acento). */
+function normNome(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Último dia do mês de um 'YYYY-MM' → 'YYYY-MM-DD'. Ex.: '2026-04' → '2026-04-30'. */
+function ultimoDiaDoMes(anoMes: string | null | undefined): string | undefined {
+  if (!anoMes) return undefined;
+  const m = anoMes.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return undefined;
+  const last = new Date(Number(m[1]), Number(m[2]), 0).getDate();
+  return `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}`;
+}
 
 export default function CusteioTxtImportTab() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<CusteioParseResult | null>(null);
+
+  // PR-RAUL-02A — linha selecionada que abre o modal oficial.
+  const [dialogRow, setDialogRow] = useState<CusteioItem | null>(null);
+
+  const { clienteAtual } = useCliente();
+  const { fazendas } = useFazenda();
+  const hookFin = useFinanceiroV2();
+
+  // useFinanceiroV2 é lazy (PR-Mesa-A1): disparar loads de contas/fornecedores/
+  // classificações quando o cliente estiver resolvido. Sem isso o modal abre vazio.
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    hookFin.loadContas();
+    hookFin.loadFornecedores();
+    hookFin.loadClassificacoes();
+  }, [
+    clienteAtual?.id,
+    hookFin.loadContas,
+    hookFin.loadFornecedores,
+    hookFin.loadClassificacoes,
+  ]);
+
+  const fazendasReais = useMemo(
+    () => fazendas.filter((f) => f.id !== '__global__'),
+    [fazendas],
+  );
+
+  // Botão "Criar lançamento" só habilita quando os auxiliares chegaram.
+  const auxLoaded = hookFin.contasBancarias.length > 0 && fazendasReais.length > 0;
+
+  // Resolve FAZENDA MONTERREY por match exato de nome; se não achar, undefined
+  // (usuário escolhe no modal — não inventamos fazenda).
+  const fazendaResolvidaId = useMemo(() => {
+    if (!resultado?.fazenda_raw) return undefined;
+    const alvo = normNome(resultado.fazenda_raw);
+    return fazendasReais.find((f) => normNome(f.nome) === alvo)?.id;
+  }, [resultado?.fazenda_raw, fazendasReais]);
+
+  const dataMes = ultimoDiaDoMes(resultado?.ano_mes);
+
+  // Prefill ESTÁVEL por linha (memo) — evita re-init do form do modal a cada render do pai.
+  const prefill = useMemo(() => {
+    if (!dialogRow) return undefined;
+    return {
+      fazenda_id: fazendaResolvidaId,
+      data_competencia: dataMes,
+      data_pagamento: dataMes,
+      valor: dialogRow.valor,
+      tipo_operacao: '2-Saídas',
+      status_transacao: 'realizado',
+      descricao: dialogRow.produto_raw,
+      // conta_bancaria_id / favorecido_id / subcentro / plano_conta_id:
+      // NÃO pré-preenchidos — usuário escolhe no modal oficial.
+    };
+  }, [dialogRow, fazendaResolvidaId, dataMes]);
+
+  // Contexto operacional read-only (NÃO vira classificação).
+  const referencia = useMemo(() => {
+    if (!dialogRow) return undefined;
+    return {
+      fornecedor_texto: null,
+      fazenda_texto: resultado?.fazenda_raw ?? null,
+      plano_texto: null,
+      centro_texto: `${dialogRow.familia_raw} › ${dialogRow.subfamilia_raw}`,
+      produto_texto: dialogRow.produto_raw,
+      observacao: null,
+      valor: dialogRow.valor,
+      data_referencia: resultado?.ano_mes ?? null,
+    };
+  }, [dialogRow, resultado?.fazenda_raw, resultado?.ano_mes]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -73,8 +166,8 @@ export default function CusteioTxtImportTab() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Relatório de custeio/compras. Esta etapa apenas lê o arquivo e mostra os itens —
-            nada é gravado, nenhuma classificação é aplicada.
+            Relatório de custeio/compras. O preview apenas lê o arquivo. Cada item pode abrir o
+            formulário oficial de lançamento — nada é gravado até você confirmar no modal.
           </p>
 
           <label className="inline-flex">
@@ -190,6 +283,12 @@ export default function CusteioTxtImportTab() {
               <CardTitle className="text-sm">Itens ({resultado.total_itens})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              {!auxLoaded && (
+                <p className="px-4 pb-2 text-xs text-muted-foreground">
+                  Carregando contas e classificações do cliente… o botão de criar lançamento
+                  habilita quando terminar.
+                </p>
+              )}
               <div className="max-h-[60vh] overflow-auto">
                 <Table>
                   <TableHeader className="sticky top-0 bg-card">
@@ -199,6 +298,7 @@ export default function CusteioTxtImportTab() {
                       <TableHead>Subfamília</TableHead>
                       <TableHead>Produto / Descrição</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="w-44 text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -209,11 +309,23 @@ export default function CusteioTxtImportTab() {
                         <TableCell>{it.subfamilia_raw}</TableCell>
                         <TableCell>{it.produto_raw}</TableCell>
                         <TableCell className="text-right tabular-nums">{brl(it.valor)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!auxLoaded}
+                            title={auxLoaded ? 'Criar lançamento financeiro' : 'Carregando contas/classificações…'}
+                            onClick={() => setDialogRow(it)}
+                          >
+                            <FilePlus2 className="mr-1 h-3.5 w-3.5" />
+                            Criar lançamento
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {resultado.itens.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                           Nenhum item-folha reconhecido. Ajuste CUSTEIO_FORMAT no parser.
                         </TableCell>
                       </TableRow>
@@ -225,13 +337,33 @@ export default function CusteioTxtImportTab() {
           </Card>
 
           <div className="flex items-center gap-2">
-            <Badge variant="outline">PR-RAUL-01 · preview · não grava</Badge>
+            <Badge variant="outline">PR-RAUL-02A · cria via modal oficial · grava só ao Salvar</Badge>
             <span className="text-xs text-muted-foreground">
-              De-para e importação chegam nos PR-RAUL-02 / 03.
+              De-para automático e importação em lote ficam para PR-RAUL-02/03.
             </span>
           </div>
         </>
       )}
+
+      {/* Modal oficial de lançamento financeiro — reaproveitado, não alterado.
+          Conta e subcentro vêm vazios; usuário preenche e salva via fluxo oficial. */}
+      <LancamentoV2Dialog
+        open={!!dialogRow}
+        onClose={() => setDialogRow(null)}
+        onSave={async (form) => {
+          const ok = await hookFin.criarLancamento(form);
+          if (ok) setDialogRow(null);
+          return ok;
+        }}
+        fazendas={fazendasReais}
+        contas={hookFin.contasBancarias}
+        classificacoes={hookFin.classificacoes}
+        fornecedores={hookFin.fornecedores}
+        onCriarFornecedor={hookFin.criarFornecedor}
+        defaultFazendaId={fazendaResolvidaId}
+        prefill={prefill}
+        referenciaOperacionalInfo={referencia}
+      />
     </div>
   );
 }
