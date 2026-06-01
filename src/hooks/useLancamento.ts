@@ -77,6 +77,7 @@ function mapRowToLancamento(l: LancamentoRow): Lancamento {
     dataEmbarque: r.data_embarque ?? undefined,
     dataAbate: r.data_abate ?? undefined,
     tipoVenda: r.tipo_venda ?? undefined,
+    detalhesSnapshot: r.detalhes_snapshot ?? undefined,
     frigorifico: r.frigorifico ?? undefined,
     pedido: r.pedido ?? undefined,
     instrucao: r.instrucao ?? undefined,

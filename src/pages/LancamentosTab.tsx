@@ -1171,8 +1171,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       const vendaDet: VendaDetalhes = {
         tipoVenda: (tv === 'desmama' || tv === 'gado_adulto') ? tv as 'desmama' | 'gado_adulto' : 'gado_adulto',
-        tipoPreco: vendaSnap.tipoPreco || 'por_kg',
-        precoInput: vendaSnap.precoInput || '',
+        tipoPreco: vendaSnap.tipoPreco ?? vendaSnap.tipo_preco ?? 'por_kg',
+        precoInput: vendaSnap.precoInput ?? vendaSnap.preco_input ?? '',
         frete: vendaSnap.frete || '',
         comissaoPct: vendaSnap.comissaoPct || '',
         outrosCustos: vendaSnap.outrosCustos || '',
