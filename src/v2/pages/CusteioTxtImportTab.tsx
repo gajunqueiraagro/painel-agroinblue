@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, FilePlus2, FileText, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, FilePlus2, FileText, Upload } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
@@ -60,6 +60,10 @@ export default function CusteioTxtImportTab() {
 
   // PR-RAUL-02A — linha selecionada que abre o modal oficial.
   const [dialogRow, setDialogRow] = useState<CusteioItem | null>(null);
+
+  // PR-RAUL-02B — linhas já gravadas (id estável = linha_num do parser).
+  // Previne duplicidade: após sucesso, a linha vira "Lançado" e perde o botão.
+  const [linhasLancadas, setLinhasLancadas] = useState<Set<number>>(new Set());
 
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -134,6 +138,7 @@ export default function CusteioTxtImportTab() {
     setParsing(true);
     setErro(null);
     setResultado(null);
+    setLinhasLancadas(new Set());
     setFileName(file.name);
     try {
       const res = await parseCusteioTxtFile(file);
@@ -298,34 +303,53 @@ export default function CusteioTxtImportTab() {
                       <TableHead>Subfamília</TableHead>
                       <TableHead>Produto / Descrição</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="w-28">Status</TableHead>
                       <TableHead className="w-44 text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {resultado.itens.map((it) => (
-                      <TableRow key={`${it.linha_num}`}>
+                    {resultado.itens.map((it) => {
+                      const lancada = linhasLancadas.has(it.linha_num);
+                      return (
+                      <TableRow key={`${it.linha_num}`} className={lancada ? 'bg-emerald-50/40' : undefined}>
                         <TableCell className="text-muted-foreground">{it.linha_num}</TableCell>
                         <TableCell>{it.familia_raw}</TableCell>
                         <TableCell>{it.subfamilia_raw}</TableCell>
                         <TableCell>{it.produto_raw}</TableCell>
                         <TableCell className="text-right tabular-nums">{brl(it.valor)}</TableCell>
+                        <TableCell>
+                          {lancada ? (
+                            <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+                              <CheckCircle2 className="mr-1 h-3 w-3" /> Lançado
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground">
+                              <Circle className="mr-1 h-3 w-3" /> Pendente
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={!auxLoaded}
-                            title={auxLoaded ? 'Criar lançamento financeiro' : 'Carregando contas/classificações…'}
-                            onClick={() => setDialogRow(it)}
-                          >
-                            <FilePlus2 className="mr-1 h-3.5 w-3.5" />
-                            Criar lançamento
-                          </Button>
+                          {lancada ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!auxLoaded}
+                              title={auxLoaded ? 'Criar lançamento financeiro' : 'Carregando contas/classificações…'}
+                              onClick={() => setDialogRow(it)}
+                            >
+                              <FilePlus2 className="mr-1 h-3.5 w-3.5" />
+                              Criar lançamento
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                     {resultado.itens.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                        <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                           Nenhum item-folha reconhecido. Ajuste CUSTEIO_FORMAT no parser.
                         </TableCell>
                       </TableRow>
@@ -351,8 +375,20 @@ export default function CusteioTxtImportTab() {
         open={!!dialogRow}
         onClose={() => setDialogRow(null)}
         onSave={async (form) => {
+          const row = dialogRow;
           const ok = await hookFin.criarLancamento(form);
-          if (ok) setDialogRow(null);
+          if (ok) {
+            // marca a linha como lançada (id estável = linha_num do parser).
+            // O toast de sucesso é o do próprio hookFin.criarLancamento — não duplicar.
+            if (row) {
+              setLinhasLancadas((prev) => {
+                const next = new Set(prev);
+                next.add(row.linha_num);
+                return next;
+              });
+            }
+            setDialogRow(null);
+          }
           return ok;
         }}
         fazendas={fazendasReais}
