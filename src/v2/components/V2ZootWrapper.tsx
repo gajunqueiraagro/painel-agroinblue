@@ -15,7 +15,7 @@ interface WrapperProps {
     lancamentos: Lancamento[];
     saldosIniciais: SaldoInicial[];
     removerLancamento: (id: string) => Promise<boolean>;
-    editarLancamento: (id: string, dados: any) => Promise<void>;
+    editarLancamento: (id: string, dados: any) => Promise<boolean | void>;
     lancamentosTodosCenarios: Lancamento[];
   }) => React.ReactNode;
 }

@@ -226,9 +226,11 @@ const Index = () => {
   // Wrap editarLancamento to reload BOTH caches (realizado + meta) after any successful edit
   // This guarantees that META reclassifications reflect immediately in the list, regardless of which cache holds them.
   const wrappedEditar = canEditZoo ? (async (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => {
-    await editarLancamento(id, dados);
+    const ok = await editarLancamento(id, dados);
+    if (ok === false) return false;
     // Always reload both caches to avoid stale UI on cross-cenario edits
     await Promise.all([loadData(), metaLoadData()]);
+    return ok;
   }) : noOp;
 
   const wrappedRemover = canEditZoo ? removerLancamento : noOp;

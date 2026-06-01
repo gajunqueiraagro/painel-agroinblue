@@ -168,8 +168,10 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
 
   const wrappedEditar = canEditZoo
     ? (async (id: string, dados: any) => {
-        await editarLancamento(id, dados);
+        const ok = await editarLancamento(id, dados);
+        if (ok === false) return false;
         await Promise.all([loadData(), metaLoadData()]);
+        return ok;
       })
     : noOp;
 

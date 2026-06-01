@@ -545,25 +545,29 @@ export function useLancamentos(arg: UseLancamentosArg = 'realizado') {
     }
 
     const { error } = await supabase.from('lancamentos').update(update).eq('id', id);
-    if (!error) {
-      // Otimista: atualiza item no cache.
-      queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          lancamentos: old.lancamentos.map(l => l.id === id ? {
-            ...l,
-            ...dados,
-            cenario: dados.cenario ?? (dados.statusOperacional !== undefined
-              ? (dados.statusOperacional === null ? 'meta' : 'realizado')
-              : l.cenario),
-          } : l),
-        };
-      });
-      await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
-      await queryClient.invalidateQueries({ queryKey: ['lancamento', id] });
-      await invalidateZootQueries();
+    if (error) {
+      console.error('[useLancamentos] editarLancamento falhou', error);
+      toast.error('Não foi possível salvar o lançamento.');
+      return false;
     }
+    // Otimista: atualiza item no cache.
+    queryClient.setQueryData<LancamentosQueryData>(queryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        lancamentos: old.lancamentos.map(l => l.id === id ? {
+          ...l,
+          ...dados,
+          cenario: dados.cenario ?? (dados.statusOperacional !== undefined
+            ? (dados.statusOperacional === null ? 'meta' : 'realizado')
+            : l.cenario),
+        } : l),
+      };
+    });
+    await queryClient.invalidateQueries({ queryKey: ['lancamentos-zoo'] });
+    await queryClient.invalidateQueries({ queryKey: ['lancamento', id] });
+    await invalidateZootQueries();
+    return true;
   };
 
   /** Count linked financial records for a movimentação */

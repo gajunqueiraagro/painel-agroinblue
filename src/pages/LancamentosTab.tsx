@@ -61,7 +61,7 @@ import { MorteLoteMetaDialog } from '@/components/MorteLoteMetaDialog';
 interface Props {
   lancamentos: Lancamento[];
   onAdicionar: (l: Omit<Lancamento, 'id'>) => Promise<string | undefined> | void;
-  onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => Promise<void> | void;
+  onEditar: (id: string, dados: Partial<Omit<Lancamento, 'id'>>) => Promise<boolean | void> | boolean | void;
   onRemover: (id: string) => void;
   onCountFinanceiros?: (id: string) => Promise<number>;
   abaInicial?: Aba;
@@ -1944,7 +1944,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         editOriginalRef.current = null;
         setP1BloqueioMsg(null);
         try {
-          await onEditar(editingAbateId, lancamentoDados);
+          const editOk = await onEditar(editingAbateId, lancamentoDados);
+          if (editOk === false) { setSubmitting(false); return; }
         } catch (e: any) {
           console.error('[LancamentosTab] falha ao salvar venda (zoo) — abortando', e);
           toast.error('Não foi possível salvar a venda. Nenhuma alteração foi aplicada.');
