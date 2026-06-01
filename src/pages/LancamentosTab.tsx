@@ -1166,7 +1166,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
       console.log('[Venda Edit] Rehydrating Boitel from snapshot', vendaSnap);
     } else if (vendaSnap && vendaSnap.type === 'venda') {
-      const tv = vendaSnap.tipoVenda || 'gado_adulto';
+      const tv = vendaSnap.tipoVenda || l.tipoVenda || 'gado_adulto';
       setTipoPeso(tv);
 
       const vendaDet: VendaDetalhes = {
