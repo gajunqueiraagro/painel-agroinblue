@@ -60,6 +60,7 @@ import { CompraCustosOperacao } from './_blocos/CompraCustosOperacao';
 // PR-VENDA-V2-FASE-1: bloco zoo da Venda V2 (espelha CompraDadosZootecnicos)
 // + motor único de cálculo (buildVendaCalculation).
 import { VendaDadosZootecnicos, EMPTY_VENDA_COMERCIAL, type VendaComercialState } from './_blocos/VendaDadosZootecnicos';
+import { VendaCustosOperacao } from './_blocos/VendaCustosOperacao';
 import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda } from '@/lib/calculos/venda';
 
 /** Linha de financeiro_lancamentos_v2 vinculada à movimentação (compra).
@@ -1061,6 +1062,13 @@ export function LancamentoZooModal({
               lancamentoId={lancamento.id}
               createdAt={raw?.created_at}
               updatedAt={raw?.updated_at}
+            />
+          }
+          custosOperacaoSlot={
+            <VendaCustosOperacao
+              calc={vendaCalc}
+              comercial={vendaComercial}
+              onComercialChange={setVendaComercial}
             />
           }
           footer={
