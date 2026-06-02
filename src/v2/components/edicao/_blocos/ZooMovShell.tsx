@@ -19,10 +19,12 @@ interface ZooMovShellProps {
   auditoriaSlot?: ReactNode;
   /** Slot do rodapé (botões de ação) */
   footer?: ReactNode;
+  /** Aba aberta na montagem. Default 'dados'. Só lida no mount (uncontrolled). */
+  abaInicial?: 'dados' | 'custos' | 'itens' | 'auditoria';
 }
 
 export function ZooMovShell({
-  open, onOpenChange, title, subtitle, badgeMesFechado, children, custosOperacaoSlot, auditoriaSlot, footer
+  open, onOpenChange, title, subtitle, badgeMesFechado, children, custosOperacaoSlot, auditoriaSlot, footer, abaInicial
 }: ZooMovShellProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,7 +49,7 @@ export function ZooMovShell({
           </Button>
         </div>
 
-        <Tabs defaultValue="dados" className="flex-1 flex flex-col overflow-hidden">
+        <Tabs defaultValue={abaInicial ?? 'dados'} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="rounded-none border-b bg-transparent h-auto p-0 px-5 justify-start gap-4">
             <TabsTrigger
               value="dados"

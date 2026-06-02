@@ -122,6 +122,12 @@ interface LancamentoZooModalProps {
    * direto) ficam para o PR-B.2.
    */
   onAbrirLancamentoFin?: (id: string) => void;
+  /**
+   * PR-B1-R1 — aba aberta na montagem do modal (repassada ao ZooMovShell).
+   * Default 'dados'. Usada pelo PR-B1-R2 para retornar o usuário à aba
+   * "Custos" após o drill no financeiro. Sem efeito se ausente.
+   */
+  abaInicial?: 'dados' | 'custos' | 'itens' | 'auditoria';
 }
 
 // ─── Helpers locais ──────────────────────────────────────────────────────────
@@ -204,6 +210,7 @@ export function LancamentoZooModal({
   onAbrirNoFormPrincipal,
   onAbrirFinanceiroVinculado,
   onAbrirLancamentoFin,
+  abaInicial,
 }: LancamentoZooModalProps) {
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
@@ -884,6 +891,7 @@ export function LancamentoZooModal({
           <ZooMovShell
             open={open}
             onOpenChange={onOpenChange}
+            abaInicial={abaInicial}
             title="Editar Compra"
             subtitle={nomeFazendaDoRegistro}
             badgeMesFechado={badgeMesFechado}
@@ -1085,6 +1093,7 @@ export function LancamentoZooModal({
         <ZooMovShell
           open={open}
           onOpenChange={onOpenChange}
+          abaInicial={abaInicial}
           title="Editar Venda"
           subtitle={nomeFazendaDoRegistro}
           badgeMesFechado={badgeMesFechado}
