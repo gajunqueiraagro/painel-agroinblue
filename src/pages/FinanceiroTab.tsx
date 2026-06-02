@@ -225,6 +225,32 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
 
   const hp = { currentKey: sortKey, currentDir: sortDir, onSort: toggleSort };
 
+  // PR-CONTRAPARTE-ZOO — leitura unificada da contraparte. Fonte oficial:
+  // fornecedor_nome_snapshot (gravada pelo modal v2). Fallback legado por
+  // tipo, preservando registros antigos sem snapshot. Não exibe sentinel
+  // "[nao informado]" — filtrado por snapshotValido.
+  const snapshotValido = (nome?: string | null): string | null =>
+    nome && nome.trim() && nome.trim() !== '[nao informado]' ? nome.trim() : null;
+
+  const getContraparteZoo = (l: Lancamento, subTipo: string): string => {
+    if (subTipo === 'abate') {
+      return snapshotValido(l.fornecedorNomeSnapshot)
+        || (l as any).abateFrigorifico
+        || l.compradorFornecedor
+        || '—';
+    }
+    if (subTipo === 'venda') {
+      return snapshotValido(l.fornecedorNomeSnapshot)
+        || l.compradorFornecedor
+        || l.fazendaDestino
+        || '—';
+    }
+    // compra (e default)
+    return snapshotValido(l.fornecedorNomeSnapshot)
+      || l.compradorFornecedor
+      || '—';
+  };
+
   return (
     <table className="w-full min-w-[760px] table-auto border-collapse text-[10px]">
       <thead className="financeiro-table-head print:static">
@@ -259,8 +285,8 @@ function UnifiedTable({ lancamentos, onEdit, showTipo, subTipo, isGlobal, fazend
               {showTipo && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{tipoInfo?.icon} {tipoInfo?.label || l.tipo}</td>}
               <td className={`${TABLE_BODY_CELL} text-right font-bold text-[9px]`}>{l.quantidade}</td>
               <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{cat}</td>
-              {isCompra && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.fornecedorNomeSnapshot || l.compradorFornecedor || '—'}</td>}
-              {showFornecedorCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{l.compradorFornecedor || (l as any).abateFrigorifico || l.fazendaDestino || '—'}</td>}
+              {isCompra && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getContraparteZoo(l, 'compra')}</td>}
+              {showFornecedorCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getContraparteZoo(l, subTipo || '')}</td>}
               {showMotivoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{(l as any).motivo || l.observacao || '—'}</td>}
               {showOrigemDestinoCol && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{getFazendaCellValue(l, fMap)}</td>}
               {isGlobal && <td className={`${TABLE_BODY_CELL} truncate text-[9px]`}>{showTipo ? (fMap.get(l.fazendaId || '') || '-') : getFazendaCellValue(l, fMap)}</td>}
