@@ -32,6 +32,12 @@ interface Props {
   records: FinRecord[];
   contasMap: Map<string, string>;
   loading?: boolean;
+  /**
+   * PR-VENDA-V2-2C-NAVEGAR — quando passada e há vínculo, transforma o
+   * placeholder em ação ativa "Abrir financeiro vinculado". Read-only:
+   * apenas navega para a aba Financeiro filtrada por ano/mês.
+   */
+  onAbrirFinanceiro?: (ano: string, mes: number) => void;
 }
 
 const STATUS_TRAVADOS = new Set(['agendado', 'realizado']);
@@ -54,6 +60,7 @@ export function VendaCustosOperacao({
   records,
   contasMap,
   loading,
+  onAbrirFinanceiro,
 }: Props) {
   const fmt = (v: number) => (v > 0 ? formatMoeda(v) : 'R$ 0,00');
   const fmtSigned = (v: number) => (v < 0 ? `-${formatMoeda(Math.abs(v))}` : formatMoeda(v));
@@ -228,16 +235,36 @@ export function VendaCustosOperacao({
             <div className="text-slate-600 truncate" title={nomeConta}>
               Conta <span className="font-medium text-slate-800">{nomeConta}</span>
             </div>
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              tabIndex={-1}
-              className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
-              title="Detalhe das parcelas — em breve."
-            >
-              Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
-            </button>
+            {/* PR-VENDA-V2-2C-NAVEGAR: ação ativa quando há vínculo + callback.
+                Fallback (sem callback): placeholder desabilitado, sem onClick. */}
+            {onAbrirFinanceiro ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const ref = records.find(r => r.data_pagamento)
+                    ?? records.find(r => r.data_competencia)
+                    ?? records[0];
+                  const d = ref?.data_pagamento ?? ref?.data_competencia;
+                  if (!d) return;
+                  onAbrirFinanceiro(d.slice(0, 4), Number(d.slice(5, 7)));
+                }}
+                className="text-[10px] text-blue-700 hover:text-blue-900 underline-offset-2 underline cursor-pointer leading-tight bg-transparent border-0 p-0 text-left"
+                title="Abrir o lançamento no Financeiro (filtrado pelo mês)"
+              >
+                Abrir financeiro vinculado
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                tabIndex={-1}
+                className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
+                title="Detalhe das parcelas — em breve."
+              >
+                Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
+              </button>
+            )}
             {(travado || substituivel) && (
               <div
                 className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${

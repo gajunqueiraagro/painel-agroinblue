@@ -345,6 +345,16 @@ export default function V2Index() {
     setSection('lancamentos-zoot');
   };
 
+  // PR-VENDA-V2-2C-NAVEGAR — abre o Financeiro filtrado pelo ano/mês do
+  // lançamento vinculado à venda. Read-only: apenas navega. Mesmo mecanismo
+  // do redirecionarParaFormPrincipal (setZooEditId(null) + state + setSection).
+  const abrirFinanceiroVinculado = (anoAlvo: string, mesAlvo: number) => {
+    setZooEditId(null);
+    setAno(anoAlvo);
+    setMes(String(mesAlvo));
+    setSection('financeiro-lanc');
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
   // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
@@ -936,6 +946,7 @@ export default function V2Index() {
           lancamentoId={zooEditId}
           onEditSuccess={() => setZooEditId(null)}
           onAbrirNoFormPrincipal={redirecionarParaFormPrincipal}
+          onAbrirFinanceiroVinculado={abrirFinanceiroVinculado}
         />
       )}
 

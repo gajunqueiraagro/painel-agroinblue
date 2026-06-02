@@ -93,6 +93,12 @@ interface LancamentoZooModalProps {
    * Se ausente, o modal mantém o placeholder honesto (zero regressão).
    */
   onAbrirNoFormPrincipal?: (lancamento: Lancamento) => void;
+  /**
+   * PR-VENDA-V2-2C-NAVEGAR — navega para o Financeiro filtrado pelo
+   * ano/mês do lançamento vinculado. Read-only: apenas navega, sem
+   * escrita em financeiro_lancamentos_v2.
+   */
+  onAbrirFinanceiroVinculado?: (ano: string, mes: number) => void;
 }
 
 // ─── Helpers locais ──────────────────────────────────────────────────────────
@@ -173,6 +179,7 @@ export function LancamentoZooModal({
   lancamentoId,
   onEditSuccess,
   onAbrirNoFormPrincipal,
+  onAbrirFinanceiroVinculado,
 }: LancamentoZooModalProps) {
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
@@ -1072,6 +1079,7 @@ export function LancamentoZooModal({
               records={finRecords}
               contasMap={finContasMap}
               loading={finLoading}
+              onAbrirFinanceiro={onAbrirFinanceiroVinculado}
             />
           }
           footer={
