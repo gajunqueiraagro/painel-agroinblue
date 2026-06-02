@@ -5,6 +5,7 @@
  * Suporta drill-down: ao clicar numa categoria no dashboard, mostra lançamentos filtrados.
  */
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { V2PageContent } from '@/v2/components/V2PageShell';
 import { ImportacaoFinanceira } from '@/components/financeiro/ImportacaoFinanceira';
 import { DashboardFinanceiro, type DrillDownPayload } from '@/components/financeiro/DashboardFinanceiro';
@@ -115,6 +116,8 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   // zooModalIdFin para evitar confusão com zooEditId de V2Index.tsx
   // (mesmo padrão, escopos distintos).
   const [zooModalIdFin, setZooModalIdFin] = useState<string | null>(null);
+  // PR-VENDA-V2-2C-NAVEGAR-FIX-BUG1: navegação read-only ao financeiro filtrado.
+  const navigate = useNavigate();
 
   // Lifted audit modal state — persists across useFinanceiro reload cycles
   const [auditModalOpen, setAuditModalOpen] = useState(false);
@@ -570,6 +573,12 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
             setZooModalIdFin(null);
             reloadData();
             fluxoReloadRef.current?.();
+          }}
+          onAbrirFinanceiroVinculado={(ano: string, mes: number) => {
+            // PR-VENDA-V2-2C-NAVEGAR-FIX-BUG1: navega ao Financeiro filtrado por
+            // ano/mês do lançamento vinculado. Read-only. V2Index lê fano/fmes.
+            setZooModalIdFin(null);
+            navigate(`/v2?section=financeiro-lanc&fano=${ano}&fmes=${mes}`);
           }}
         />
       )}

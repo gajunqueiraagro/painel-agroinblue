@@ -373,6 +373,25 @@ export default function V2Index() {
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  // PR-VENDA-V2-2C-NAVEGAR-FIX-BUG1: useEffect IRMÃO para ?fano=&fmes=
+  // (navegação read-only ao Financeiro filtrado por ano/mês, vindo dos mounts
+  // alcançáveis do <LancamentoZooModal> fora do V2Index — LancamentoDetalhe,
+  // FinanceiroCaixaTab, LancamentoV2Dialog).
+  useEffect(() => {
+    const fano = searchParams.get('fano');
+    const fmes = searchParams.get('fmes');
+    if (fano && fmes) {
+      setAno(fano);
+      setMes(String(Number(fmes)));
+      setSection('financeiro-lanc');
+      const next = new URLSearchParams(searchParams);
+      next.delete('fano');
+      next.delete('fmes');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   const { lancamento: lancamentoFromUrl } = useLancamento(editFromUrlId);
   useEffect(() => {
     if (!lancamentoFromUrl || !editFromUrlTipo) return;

@@ -863,6 +863,12 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             setZooModalOpen(false);
             navigate(`/v2?section=lancamentos-zoot&edit=${lanc.id}&tipo=${lanc.tipo}`);
           }}
+          onAbrirFinanceiroVinculado={(ano: string, mes: number) => {
+            // PR-VENDA-V2-2C-NAVEGAR-FIX-BUG1: navega ao Financeiro filtrado por
+            // ano/mês do lançamento vinculado. Read-only. V2Index lê fano/fmes.
+            setZooModalOpen(false);
+            navigate(`/v2?section=financeiro-lanc&fano=${ano}&fmes=${mes}`);
+          }}
         />
       </>
     );
