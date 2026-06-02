@@ -365,7 +365,6 @@ export default function V2Index() {
   // soberano <LancamentoZooModal> reabre direto no mesmo lançamento de origem
   // e na aba "Custos" (ou outra que o caller tenha pedido).
   const retornarAoZoo = (ret: { zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria' }) => {
-    setSection('lancamentos-zoot');
     setZooAbaInicial(ret.tab);
     setZooEditId(ret.zooId);
   };
