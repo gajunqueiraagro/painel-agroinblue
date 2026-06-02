@@ -113,6 +113,15 @@ interface LancamentoZooModalProps {
    * escrita em financeiro_lancamentos_v2.
    */
   onAbrirFinanceiroVinculado?: (ano: string, mes: number) => void;
+  /**
+   * PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1 — abre O LANÇAMENTO ESPECÍFICO
+   * (por id) no Financeiro, dentro do LancamentoV2Dialog (modal de edição da
+   * linha financeira). Read-only do ponto de vista zoo: apenas navega.
+   * Atualmente cabeado só pelo LancamentoDetalhe (caminho principal); demais
+   * mounts (FinanceiroCaixaTab, LancamentoV2Dialog banner, V2Index mount
+   * direto) ficam para o PR-B.2.
+   */
+  onAbrirLancamentoFin?: (id: string) => void;
 }
 
 // ─── Helpers locais ──────────────────────────────────────────────────────────
@@ -194,6 +203,7 @@ export function LancamentoZooModal({
   onEditSuccess,
   onAbrirNoFormPrincipal,
   onAbrirFinanceiroVinculado,
+  onAbrirLancamentoFin,
 }: LancamentoZooModalProps) {
   const { lancamento, raw, loading, error } = useLancamento(open ? lancamentoId : null);
   const permissions = useEditPermissions(raw);
@@ -1094,6 +1104,7 @@ export function LancamentoZooModal({
               contasMap={finContasMap}
               loading={finLoading}
               onAbrirFinanceiro={onAbrirFinanceiroVinculado}
+              onAbrirLancamentoFin={onAbrirLancamentoFin}
             />
           }
           footer={

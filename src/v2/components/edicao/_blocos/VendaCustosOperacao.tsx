@@ -38,6 +38,12 @@ interface Props {
    * apenas navega para a aba Financeiro filtrada por ano/mês.
    */
   onAbrirFinanceiro?: (ano: string, mes: number) => void;
+  /**
+   * PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1 — quando passada, renderiza
+   * um link "Abrir" inline em cada item da lista auditável, navegando
+   * direto ao lançamento financeiro específico (por id).
+   */
+  onAbrirLancamentoFin?: (id: string) => void;
 }
 
 const STATUS_TRAVADOS = new Set(['agendado', 'realizado']);
@@ -61,6 +67,7 @@ export function VendaCustosOperacao({
   contasMap,
   loading,
   onAbrirFinanceiro,
+  onAbrirLancamentoFin,
 }: Props) {
   const fmt = (v: number) => (v > 0 ? formatMoeda(v) : 'R$ 0,00');
   const fmtSigned = (v: number) => (v < 0 ? `-${formatMoeda(Math.abs(v))}` : formatMoeda(v));
@@ -277,6 +284,16 @@ export function VendaCustosOperacao({
                     <span className="text-slate-600">
                       {fmt(Number(r.valor) || 0)} · {r.status_transacao || '—'}
                     </span>
+                    {onAbrirLancamentoFin && (
+                      <button
+                        type="button"
+                        onClick={() => onAbrirLancamentoFin(r.id)}
+                        className="text-[10px] text-blue-700 hover:text-blue-900 underline underline-offset-2 cursor-pointer bg-transparent border-0 p-0 self-start"
+                        title="Abrir este lançamento no Financeiro"
+                      >
+                        Abrir
+                      </button>
+                    )}
                   </div>
                 );
               })}

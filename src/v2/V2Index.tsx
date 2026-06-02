@@ -392,6 +392,21 @@ export default function V2Index() {
     }
   }, [searchParams, setSearchParams]);
 
+  // PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: alvo de lançamento a abrir
+  // no LancamentoV2Dialog ao chegar via ?flancId=. Consumido pelo callback
+  // onLancamentoAlvoConsumido (zera após openEdit; sem timeout).
+  const [flancIdAlvo, setFlancIdAlvo] = useState<string | null>(null);
+  useEffect(() => {
+    const fl = searchParams.get('flancId');
+    if (fl) {
+      setSection('financeiro-lanc');
+      setFlancIdAlvo(fl);
+      const next = new URLSearchParams(searchParams);
+      next.delete('flancId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   const { lancamento: lancamentoFromUrl } = useLancamento(editFromUrlId);
   useEffect(() => {
     if (!lancamentoFromUrl || !editFromUrlTipo) return;
@@ -674,6 +689,8 @@ export default function V2Index() {
           setVoltarParaConciliacao(false);
           setSection('conciliacao');
         } : undefined}
+        lancamentoIdAlvo={flancIdAlvo}
+        onLancamentoAlvoConsumido={() => setFlancIdAlvo(null)}
       />
     );
     // Fluxo Caixa META / Lançamentos META Fin — ambos abrem a tela existente do

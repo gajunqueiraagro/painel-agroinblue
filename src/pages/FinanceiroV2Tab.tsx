@@ -156,6 +156,13 @@ interface Props {
   onIntensiveToggle?: (active: boolean) => void;
   drillFilters?: FinV2DrillFilters | null;
   onAbrirFinanciamento?: (id: string) => void;
+  /** PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: id alvo a ser aberto no
+   *  LancamentoV2Dialog assim que a aba montar/receber o valor. Resolvido
+   *  por hook.buscarLancamentoPorId (sem depender da lista paginada). */
+  lancamentoIdAlvo?: string | null;
+  /** Disparado depois que o alvo foi consumido (aberto ou não-encontrado)
+   *  para o pai zerar o estado e evitar re-abertura. */
+  onLancamentoAlvoConsumido?: () => void;
 }
 
 function getInitialPageSize() {
@@ -166,7 +173,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -443,6 +450,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (drillFilters.subcentro) setSubcentroFiltro(drillFilters.subcentro);
     setFazendaId('__all__'); // Fluxo de Caixa is always global
   }, []); // Run once on mount
+
+  // PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: abre lançamento alvo recebido
+  // por prop assim que o componente recebe um id válido. Resolve direto por
+  // SELECT.eq(id) (sem depender de lista/paginação/filtros). null = silencioso,
+  // mas ainda chama onLancamentoAlvoConsumido pra não prender o alvo no pai.
+  useEffect(() => {
+    if (!lancamentoIdAlvo) return;
+    let cancelado = false;
+    (async () => {
+      const obj = await hook.buscarLancamentoPorId(lancamentoIdAlvo);
+      if (cancelado) return;
+      if (obj) openEdit(obj);
+      onLancamentoAlvoConsumido?.();
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lancamentoIdAlvo]);
 
   useEffect(() => {
     hook.loadContas();

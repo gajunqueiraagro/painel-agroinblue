@@ -869,6 +869,13 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
             setZooModalOpen(false);
             navigate(`/v2?section=financeiro-lanc&fano=${ano}&fmes=${mes}`);
           }}
+          onAbrirLancamentoFin={(id: string) => {
+            // PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: navega ao Financeiro
+            // e abre direto o LancamentoV2Dialog do lançamento clicado. V2Index
+            // lê flancId, troca de section, e busca o lançamento por id.
+            setZooModalOpen(false);
+            navigate(`/v2?section=financeiro-lanc&flancId=${id}`);
+          }}
         />
       </>
     );

@@ -849,6 +849,21 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
   }, [clienteId]);
 
+  // PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: busca direta por id, sem
+  // depender de filtros/paginação da lista. Read-only.
+  const buscarLancamentoPorId = useCallback(
+    async (id: string): Promise<LancamentoV2 | null> => {
+      const { data, error } = await supabase
+        .from('financeiro_lancamentos_v2')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data) return null;
+      return data as LancamentoV2;
+    },
+    [],
+  );
+
   return {
     lancamentos,
     contasBancarias,
@@ -863,6 +878,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     loadContas,
     loadFornecedores,
     loadClassificacoes,
+    buscarLancamentoPorId,
     loadSafras,
     criarFornecedor,
     loadLancamentos,
