@@ -88,7 +88,13 @@ export function VendaCustosOperacao({
   );
 
   // ─── Derivações (preservadas — sem renomear / sem recalcular) ──────────
-  const totalFin = records.reduce((s, r) => s + (Number(r.valor) || 0), 0);
+  // PR-VENDA-V2-FINVINC-SINAL: soma respeitando sinal (+1 entrada, -1 saída).
+  // Sem isso, comissão/funrural/dedução vinculadas inflam o total e geram
+  // diferença falsa contra o Líquido do Zoo. Fallback `|| 1` defensivo.
+  const totalFin = records.reduce(
+    (s, r) => s + (Number(r.valor) || 0) * (Number(r.sinal) || 1),
+    0,
+  );
   const qtd = calc.quantidade;
   const pesoTotal = calc.pesoTotalKg;
   const finRsCab = qtd > 0 ? totalFin / qtd : 0;

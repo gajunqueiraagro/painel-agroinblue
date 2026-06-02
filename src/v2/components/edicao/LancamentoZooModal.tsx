@@ -69,6 +69,10 @@ import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda } fro
 export interface FinRecord {
   id: string;
   valor: number;
+  /** +1 = entrada (receita), -1 = saída (despesa/dedução).
+   *  Necessário para SUM(valor * sinal) na conferência financeira da venda
+   *  (PR-VENDA-V2-FINVINC-SINAL). */
+  sinal: number;
   data_competencia: string | null;
   data_pagamento: string | null;
   status_transacao: string | null;
@@ -289,7 +293,7 @@ export function LancamentoZooModal({
     (async () => {
       const { data: parcelas, error: errP } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, valor, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
+        .select('id, valor, sinal, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
         .eq('movimentacao_rebanho_id', lancamento.id)
         .eq('cancelado', false)
         .order('data_pagamento', { ascending: true });
