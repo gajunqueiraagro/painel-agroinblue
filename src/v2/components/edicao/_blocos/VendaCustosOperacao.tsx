@@ -1,22 +1,22 @@
 /**
  * VendaCustosOperacao — aba "Custos da Operação" do modal de Venda V2.
  *
- * Layout MATRIZ (PR 2B.2):
- *   [1] MATRIZ comparativa Zoo × Financeiro × Diferença (linha-a-linha)
- *   [2+3] Fallback lado-a-lado (decidido por anti-scroll):
- *         Esquerda = bloco operacional (status / data / conta / selo / severidade)
- *         Direita  = bloco "Editar custos da venda" (mesmos inputs do 2A)
+ * Layout MATRIZ-5-COL (PR 2B.3): Item | Editar Custos | Zoo | Financeiro | Diferença.
+ * Inputs inline só nas linhas de dedução (Frete/Comissão/Funrural/Outros).
+ * Abaixo, bloco operacional compacto + severidade.
  *
  * - Leitura SEMPRE de `calc` + `records`/`contasMap` (load no modal pai).
  * - Edição (inputs) via `comercial` (VendaComercialState) — handlers idênticos
- *   ao 2A, só re-locados. Persistência inalterada (doSaveVendaZoo já lê
- *   `vendaComercial`).
+ *   ao 2A/2B, só re-locados como célula da matriz. Persistência inalterada
+ *   (doSaveVendaZoo já lê `vendaComercial`).
+ * - Inputs MEMOIZADOS (React.memo) + handlers estáveis (useCallback) para
+ *   evitar perda de foco no re-render da matriz a cada tecla.
  * - ZERO escrita em financeiro_lancamentos_v2 (2B = read-only).
  *   Botões de ação (gerar/atualizar) ficam para Fase 2C.
  */
+import { memo, useCallback } from 'react';
 import type { Dispatch, SetStateAction, ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { VendaCalculation } from '@/lib/calculos/venda';
 import type { VendaComercialState } from './VendaDadosZootecnicos';
@@ -56,7 +56,29 @@ export function VendaCustosOperacao({
   const fmt = (v: number) => (v > 0 ? formatMoeda(v) : 'R$ 0,00');
   const fmtSigned = (v: number) => (v < 0 ? `-${formatMoeda(Math.abs(v))}` : formatMoeda(v));
 
-  // ─── Derivações (preservadas do PR 2B.1; sem renomear / sem recalcular) ──
+  // ─── Handlers estáveis (useCallback) — proteção de foco dos inputs ──────
+  const setFrete = useCallback(
+    (v: string) => onComercialChange(c => ({ ...c, frete: v })),
+    [onComercialChange],
+  );
+  const setComissao = useCallback(
+    (v: string) => onComercialChange(c => ({ ...c, comissaoPct: v })),
+    [onComercialChange],
+  );
+  const setFunPct = useCallback(
+    (v: string) => onComercialChange(c => ({ ...c, funruralPct: v })),
+    [onComercialChange],
+  );
+  const setFunReais = useCallback(
+    (v: string) => onComercialChange(c => ({ ...c, funruralReais: v })),
+    [onComercialChange],
+  );
+  const setOutros = useCallback(
+    (v: string) => onComercialChange(c => ({ ...c, outrosCustos: v })),
+    [onComercialChange],
+  );
+
+  // ─── Derivações (preservadas — sem renomear / sem recalcular) ──────────
   const totalFin = records.reduce((s, r) => s + (Number(r.valor) || 0), 0);
   const qtd = calc.quantidade;
   const pesoTotal = calc.pesoTotalKg;
@@ -118,147 +140,146 @@ export function VendaCustosOperacao({
     vermelho: 'text-red-800 bg-red-50 border-red-300',
   };
 
-  // Helpers de célula da matriz
   const finCell = (v: number) => (temFin ? fmt(v) : DASH);
   const difCell = (v: number) => (temFin ? fmtSigned(v) : DASH);
 
   return (
-    <div className="space-y-3">
-      {/* ── [1] MATRIZ — Zoo × Financeiro × Diferença ──────────── */}
+    <div className="space-y-2">
+      {/* ── MATRIZ 5-COL: Item | Editar Custos | Zoo | Fin | Diferença ── */}
       <div className="rounded border border-slate-300 p-3 min-w-0">
-        <Matriz>
-          <MatrizHeader />
-          <MatrizLinha label="Valor Bruto" zoo={fmt(calc.valorBruto)} fin={DASH} dif={DASH} header />
-          <MatrizLinha label="(-) Frete" zoo={fmt(calc.freteVal)} fin={DASH} dif={DASH} muted />
-          <MatrizLinha label="(-) Comissão" zoo={fmt(calc.comissaoVal)} fin={DASH} dif={DASH} muted />
-          <MatrizLinha label="(-) Funrural" zoo={fmt(calc.funruralTotal)} fin={DASH} dif={DASH} muted />
-          <MatrizLinha label="(-) Outros Custos" zoo={fmt(calc.outrosCustosVal)} fin={DASH} dif={DASH} muted />
-          <div className="col-span-4 border-t border-slate-300 my-1" />
-          <MatrizLinha label="Valor Líquido" zoo={fmt(zooLiquido)} fin={finCell(totalFin)} dif={difCell(diferenca)} bold />
-          <MatrizLinha label="R$/cab líquido" zoo={fmt(calc.liqCabeca)} fin={finCell(finRsCab)} dif={difCell(difCab)} small />
-          <MatrizLinha label="R$/kg líquido" zoo={fmt(calc.liqKg)} fin={finCell(finRsKg)} dif={difCell(difKg)} small />
-        </Matriz>
+        <div className="grid grid-cols-[1.1fr_1.2fr_1fr_1fr_1fr] gap-x-2 gap-y-0.5 items-center">
+          {/* Header */}
+          <ColHeader>Item</ColHeader>
+          <ColHeader>Editar Custos</ColHeader>
+          <ColHeader>Zoo / Competência</ColHeader>
+          <ColHeader>Financeiro Vinculado</ColHeader>
+          <ColHeader>Diferença</ColHeader>
+
+          {/* Valor Bruto (sem input) */}
+          <LabelCell tone="header">Valor Bruto</LabelCell>
+          <div />
+          <ValueCell tone="header">{fmt(calc.valorBruto)}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+
+          {/* Frete */}
+          <LabelCell tone="muted">(-) Frete</LabelCell>
+          <InputCelula value={comercial.frete} onChange={setFrete} suffix="R$" />
+          <ValueCell tone="muted">{fmt(calc.freteVal)}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+
+          {/* Comissão */}
+          <LabelCell tone="muted">(-) Comissão</LabelCell>
+          <InputCelula value={comercial.comissaoPct} onChange={setComissao} suffix="%" />
+          <ValueCell tone="muted">{fmt(calc.comissaoVal)}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+
+          {/* Funrural — 2 inputs lado a lado na mesma célula */}
+          <LabelCell tone="muted">(-) Funrural</LabelCell>
+          <div className="grid grid-cols-2 gap-1 min-w-0">
+            <InputCelula value={comercial.funruralPct} onChange={setFunPct} suffix="%" />
+            <InputCelula value={comercial.funruralReais} onChange={setFunReais} suffix="R$" />
+          </div>
+          <ValueCell tone="muted">{fmt(calc.funruralTotal)}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+
+          {/* Outros Custos */}
+          <LabelCell tone="muted">(-) Outros Custos</LabelCell>
+          <InputCelula value={comercial.outrosCustos} onChange={setOutros} suffix="R$" />
+          <ValueCell tone="muted">{fmt(calc.outrosCustosVal)}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+          <ValueCell tone="muted">{DASH}</ValueCell>
+
+          {/* Divisória */}
+          <div className="col-span-5 border-t border-slate-300 my-1" />
+
+          {/* Valor Líquido */}
+          <LabelCell tone="bold">Valor Líquido</LabelCell>
+          <div />
+          <ValueCell tone="bold">{fmt(zooLiquido)}</ValueCell>
+          <ValueCell tone="bold">{finCell(totalFin)}</ValueCell>
+          <ValueCell tone="dif-bold">{difCell(diferenca)}</ValueCell>
+
+          {/* R$/cab líquido */}
+          <LabelCell tone="small">R$/cab líquido</LabelCell>
+          <div />
+          <ValueCell tone="small">{fmt(calc.liqCabeca)}</ValueCell>
+          <ValueCell tone="small">{finCell(finRsCab)}</ValueCell>
+          <ValueCell tone="small">{difCell(difCab)}</ValueCell>
+
+          {/* R$/kg líquido */}
+          <LabelCell tone="small">R$/kg líquido</LabelCell>
+          <div />
+          <ValueCell tone="small">{fmt(calc.liqKg)}</ValueCell>
+          <ValueCell tone="small">{finCell(finRsKg)}</ValueCell>
+          <ValueCell tone="small">{difCell(difKg)}</ValueCell>
+        </div>
+        <p className="text-[10px] text-slate-500 italic pt-2 leading-tight">
+          Se ambos os Funrural forem informados, o valor em R$ prevalece.
+        </p>
       </div>
 
-      {/* ── [2+3] Fallback lado-a-lado: operacional E inputs ──── */}
-      <div className="grid grid-cols-[3fr_2fr] gap-3">
-        {/* [2] Operacional + selo + severidade */}
-        <div className="rounded border border-slate-300 p-3 space-y-1 min-w-0">
-          <ColTitle>Financeiro Vinculado</ColTitle>
-          {loading && (
-            <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
-          )}
-          {!loading && !temFin && (
-            <p className="text-[11px] text-slate-500 italic leading-tight">
-              Aguardando geração do financeiro (Fase 2C).
-            </p>
-          )}
-          {!loading && temFin && (
-            <>
-              <Linha
-                label={`${records.length} lançamento${records.length === 1 ? '' : 's'}`}
-                value=""
-                header
-              />
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                {statusEntries.map(([status, n]) => {
-                  const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
-                  return (
-                    <span
-                      key={status}
-                      className="text-[10px] text-slate-600 whitespace-nowrap"
-                    >
-                      {meta.icon} {meta.label} <span className="tabular-nums font-semibold text-slate-800">{n}</span>
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="grid grid-cols-2 gap-x-3">
-                <Linha label="Data pgto" value={dataPgtoLabel} small />
-                <Linha label="Conta" value={nomeConta} small />
-              </div>
-              {(travado || substituivel) && (
-                <div
-                  className={`mt-1 px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
-                    travado
-                      ? 'text-amber-800 bg-amber-50 border-amber-300'
-                      : 'text-emerald-800 bg-emerald-50 border-emerald-300'
-                  }`}
-                >
-                  {travado
-                    ? '🔒 Financeiro travado — lançamento já realizado/agendado. Alterações devem ser feitas no Financeiro.'
-                    : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
-                </div>
-              )}
-              <div
-                className={`mt-1 px-1.5 py-1 rounded border text-[10px] leading-tight italic ${severidadeCls[severidade]}`}
-                title={`${(pctDif * 100).toFixed(2)}%`}
-              >
-                {mensagemDif}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* [3] Editar custos da venda */}
-        <div className="rounded border border-slate-300 p-3 space-y-1.5 min-w-0">
-          <ColTitle>Editar custos da venda</ColTitle>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-            <Campo label="Frete" suffix="R$">
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={comercial.frete}
-                onChange={e => onComercialChange(c => ({ ...c, frete: e.target.value }))}
-                placeholder="0,00"
-                className="h-6 text-[12px] px-1.5 tabular-nums"
-              />
-            </Campo>
-            <Campo label="Comissão" suffix="%">
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={comercial.comissaoPct}
-                onChange={e => onComercialChange(c => ({ ...c, comissaoPct: e.target.value }))}
-                placeholder="0,00"
-                className="h-6 text-[12px] px-1.5 tabular-nums"
-              />
-            </Campo>
-            <Campo label="Funrural" suffix="%">
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={comercial.funruralPct}
-                onChange={e => onComercialChange(c => ({ ...c, funruralPct: e.target.value }))}
-                placeholder="0,00"
-                className="h-6 text-[12px] px-1.5 tabular-nums"
-              />
-            </Campo>
-            <Campo label="Funrural" suffix="R$">
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={comercial.funruralReais}
-                onChange={e => onComercialChange(c => ({ ...c, funruralReais: e.target.value }))}
-                placeholder="0,00"
-                className="h-6 text-[12px] px-1.5 tabular-nums"
-              />
-            </Campo>
-            <Campo label="Outros Custos" suffix="R$">
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={comercial.outrosCustos}
-                onChange={e => onComercialChange(c => ({ ...c, outrosCustos: e.target.value }))}
-                placeholder="0,00"
-                className="h-6 text-[12px] px-1.5 tabular-nums"
-              />
-            </Campo>
-          </div>
-          <p className="text-[10px] text-slate-500 italic leading-tight pt-0.5">
-            Se ambos os Funrural forem informados, o valor em R$ prevalece.
+      {/* ── Bloco operacional compacto (status + selo + severidade) ── */}
+      <div className="rounded border border-slate-300 p-2 space-y-1 min-w-0">
+        {loading && (
+          <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
+        )}
+        {!loading && !temFin && (
+          <p className="text-[11px] text-slate-500 italic leading-tight">
+            Aguardando geração do financeiro (Fase 2C).
           </p>
-        </div>
+        )}
+        {!loading && temFin && (
+          <>
+            {/* Linha 1: N lançamentos + breakdown status + data + conta — tudo em flex wrap */}
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[10px] leading-tight">
+              <span className="font-semibold text-slate-800">
+                {records.length} lançamento{records.length === 1 ? '' : 's'}
+              </span>
+              {statusEntries.map(([status, n]) => {
+                const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
+                return (
+                  <span key={status} className="text-slate-600 whitespace-nowrap">
+                    {meta.icon} {meta.label}{' '}
+                    <span className="tabular-nums font-semibold text-slate-800">{n}</span>
+                  </span>
+                );
+              })}
+              <span className="text-slate-600 whitespace-nowrap">
+                · Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
+              </span>
+              <span className="text-slate-600 whitespace-nowrap truncate" title={nomeConta}>
+                · Conta <span className="font-medium text-slate-800">{nomeConta}</span>
+              </span>
+            </div>
+
+            {/* Linha 2 (condicional): selo travado/substituível */}
+            {(travado || substituivel) && (
+              <div
+                className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
+                  travado
+                    ? 'text-amber-800 bg-amber-50 border-amber-300'
+                    : 'text-emerald-800 bg-emerald-50 border-emerald-300'
+                }`}
+              >
+                {travado
+                  ? '🔒 Financeiro travado — lançamento já realizado/agendado. Alterações devem ser feitas no Financeiro.'
+                  : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+              </div>
+            )}
+
+            {/* Linha 3: severidade da diferença */}
+            <div
+              className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${severidadeCls[severidade]}`}
+              title={`${(pctDif * 100).toFixed(2)}%`}
+            >
+              {mensagemDif}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -266,122 +287,78 @@ export function VendaCustosOperacao({
 
 // ── helpers locais ────────────────────────────────────────────────────────
 
-function Matriz({ children }: { children: ReactNode }) {
+/**
+ * Célula de input MEMOIZADA — protege contra perda de foco no re-render da
+ * matriz a cada tecla. Combinada com handlers estáveis (useCallback no pai),
+ * o React mantém o nó DOM do input entre renders.
+ */
+interface InputCelulaProps {
+  value: string;
+  onChange: (v: string) => void;
+  suffix: 'R$' | '%';
+  placeholder?: string;
+}
+const InputCelula = memo(function InputCelula({
+  value,
+  onChange,
+  suffix,
+  placeholder = '0,00',
+}: InputCelulaProps) {
   return (
-    <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-x-2 gap-y-0.5 items-baseline">
-      {children}
+    <div className="relative min-w-0">
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-6 text-[12px] px-1.5 pr-6 tabular-nums"
+      />
+      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 pointer-events-none select-none">
+        {suffix}
+      </span>
     </div>
   );
-}
-
-function MatrizHeader() {
-  return (
-    <>
-      <div />
-      <ColHeader>Zoo / Competência</ColHeader>
-      <ColHeader>Financeiro Vinculado</ColHeader>
-      <ColHeader>Diferença</ColHeader>
-    </>
-  );
-}
+});
 
 function ColHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600 text-right truncate">
+    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600 pb-1 truncate text-right first:text-left">
       {children}
     </div>
   );
 }
 
-interface MatrizLinhaProps {
-  label: string;
-  zoo: string;
-  fin: string;
-  dif: string;
-  header?: boolean;
-  muted?: boolean;
-  bold?: boolean;
-  small?: boolean;
+type CellTone = 'header' | 'muted' | 'bold' | 'small' | 'dif-bold';
+
+function LabelCell({ tone = 'muted', children }: { tone?: CellTone; children: ReactNode }) {
+  const cls = [
+    'truncate leading-tight',
+    'text-[11px]',
+    tone === 'header' && 'font-semibold text-slate-900',
+    tone === 'muted' && 'text-slate-600',
+    tone === 'bold' && 'font-semibold text-slate-900',
+    tone === 'small' && 'text-[10px] text-slate-600',
+  ].filter(Boolean).join(' ');
+  return <span className={cls}>{children}</span>;
 }
 
-function MatrizLinha({ label, zoo, fin, dif, header, muted, bold, small }: MatrizLinhaProps) {
-  const labelCls = [
-    'text-[11px] truncate leading-tight',
-    header && 'font-semibold text-slate-900',
-    muted && 'text-slate-600',
-    bold && 'font-semibold text-slate-900',
-    small && 'text-[10px] text-slate-600',
-  ].filter(Boolean).join(' ');
-  const cellCls = (kind: 'zoo' | 'fin' | 'dif') => [
+function ValueCell({ tone = 'muted', children }: { tone?: CellTone; children: ReactNode }) {
+  const cls = [
     'tabular-nums text-right whitespace-nowrap overflow-hidden text-ellipsis leading-tight',
     'text-[11px]',
-    header && kind === 'zoo' && 'font-semibold text-slate-900',
-    muted && 'text-slate-700',
-    bold && kind === 'zoo' && 'font-semibold text-slate-900',
-    bold && kind === 'fin' && 'font-semibold text-slate-900',
-    bold && kind === 'dif' && 'font-bold text-blue-900',
-    small && 'text-[10px] text-slate-700',
+    tone === 'header' && 'font-semibold text-slate-900',
+    tone === 'muted' && 'text-slate-700',
+    tone === 'bold' && 'font-semibold text-slate-900',
+    tone === 'small' && 'text-[10px] text-slate-700',
+    tone === 'dif-bold' && 'font-bold text-blue-900',
   ].filter(Boolean).join(' ');
+  // title pro tooltip caso o valor seja truncado
+  const titleStr = typeof children === 'string' ? children : undefined;
   return (
-    <>
-      <span className={labelCls}>{label}</span>
-      <span className={cellCls('zoo')} title={zoo}>{zoo}</span>
-      <span className={cellCls('fin')} title={fin}>{fin}</span>
-      <span className={cellCls('dif')} title={dif}>{dif}</span>
-    </>
-  );
-}
-
-function ColTitle({ children }: { children: ReactNode }) {
-  return (
-    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600 pb-0.5 truncate">
+    <span className={cls} title={titleStr}>
       {children}
-    </div>
-  );
-}
-
-interface LinhaProps {
-  label: string;
-  value: string;
-  header?: boolean;
-  muted?: boolean;
-  bold?: boolean;
-  small?: boolean;
-}
-
-function Linha({ label, value, header, muted, bold, small }: LinhaProps) {
-  const baseCls = 'flex items-baseline justify-between gap-2 leading-tight py-0.5 min-w-0';
-  const labelCls = [
-    'text-[11px] truncate',
-    header && 'font-semibold text-slate-900',
-    muted && 'text-slate-600',
-    bold && 'font-semibold text-slate-900',
-    small && 'text-[10px] text-slate-600',
-  ].filter(Boolean).join(' ');
-  const valueCls = [
-    'tabular-nums text-[11px] whitespace-nowrap overflow-hidden text-ellipsis text-right',
-    header && 'font-semibold text-slate-900',
-    muted && 'text-slate-700',
-    bold && 'font-bold text-blue-900',
-    small && 'text-[10px] text-slate-700',
-  ].filter(Boolean).join(' ');
-  return (
-    <div className={baseCls}>
-      <span className={labelCls}>{label}</span>
-      <span className={valueCls} title={value}>{value}</span>
-    </div>
-  );
-}
-
-function Campo({ label, suffix, children }: { label: string; suffix?: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <Label className="text-[10px] uppercase text-slate-500 font-medium">{label}</Label>
-        {suffix && <span className="text-[9px] text-slate-400">{suffix}</span>}
-      </div>
-      <div className="mt-0.5">{children}</div>
-    </div>
+    </span>
   );
 }
 
