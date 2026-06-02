@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { LancamentosTab } from '@/pages/LancamentosTab';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { useLancamento } from '@/hooks/useLancamento';
@@ -281,6 +281,11 @@ export default function V2Index() {
     return 'home';
   })();
   const [section, setSection] = useState<V2Section>(sectionInicial);
+  // PR-B1-R5 — espelho da section ativa para captura sem closure stale.
+  // O useEffect do flancId lê sectionRef.current ANTES de setSection('financeiro-lanc')
+  // para preservar a section de ORIGEM do drill (Conferência, Visão Zoo etc.).
+  const sectionRef = useRef(section);
+  useEffect(() => { sectionRef.current = section; }, [section]);
   const mesAnterior = new Date().getMonth() === 0 ? 12 : new Date().getMonth();
   const anoMesAnterior = new Date().getMonth() === 0
     ? String(new Date().getFullYear() - 1)
@@ -364,7 +369,8 @@ export default function V2Index() {
   // navigate, sem URL. Section + abaInicial + setZooEditId(...) — o mount
   // soberano <LancamentoZooModal> reabre direto no mesmo lançamento de origem
   // e na aba "Custos" (ou outra que o caller tenha pedido).
-  const retornarAoZoo = (ret: { zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria' }) => {
+  const retornarAoZoo = (ret: { zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria'; section: V2Section }) => {
+    setSection(ret.section);
     setZooAbaInicial(ret.tab);
     setZooEditId(ret.zooId);
   };
@@ -414,10 +420,18 @@ export default function V2Index() {
   // junto do flancId (mesmo gesto de drill). Consumido por FinanceiroV2Tab
   // onCloseDialog: V2Index decide reabrir o Zoo no `zooId` informado e na
   // aba `tab` informada. Estado puro — sem segundo navigate.
-  const [drillReturn, setDrillReturn] = useState<{ zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria' } | null>(null);
+  const [drillReturn, setDrillReturn] = useState<{
+    zooId: string;
+    tab: 'dados' | 'custos' | 'itens' | 'auditoria';
+    section: V2Section;
+  } | null>(null);
   useEffect(() => {
     const fl = searchParams.get('flancId');
     if (fl) {
+      // PR-B1-R5 — captura ANTES de qualquer setSection. sectionRef sempre
+      // reflete a section ativa no instante do consumo do flancId (origem
+      // real do drill — Conferência, Visão Zoo, etc.).
+      const origemSection = sectionRef.current;
       setSection('financeiro-lanc');
       setFlancIdAlvo(fl);
       // PR-B1-R2 — captura do retorno (mesmo gesto de drill). Guard explícito
@@ -430,7 +444,7 @@ export default function V2Index() {
           ? rawTab
           : 'custos';
       if (rzId) {
-        setDrillReturn({ zooId: rzId, tab: rzTab });
+        setDrillReturn({ zooId: rzId, tab: rzTab, section: origemSection });
       }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
