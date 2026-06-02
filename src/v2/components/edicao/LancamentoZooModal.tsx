@@ -274,7 +274,7 @@ export function LancamentoZooModal({
   const [finError, setFinError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !lancamento || lancamento.tipo !== 'compra') return;
+    if (!open || !lancamento || !['compra', 'venda'].includes(lancamento.tipo)) return;
     let cancelled = false;
     setFinLoading(true);
     setFinError(null);
@@ -1069,6 +1069,9 @@ export function LancamentoZooModal({
               calc={vendaCalc}
               comercial={vendaComercial}
               onComercialChange={setVendaComercial}
+              records={finRecords}
+              contasMap={finContasMap}
+              loading={finLoading}
             />
           }
           footer={
