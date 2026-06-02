@@ -286,10 +286,11 @@ export function VendaDadosZootecnicos({
         </Campo>
       </div>
 
-      {/* Card Resumo (derivado do motor único — nenhum cálculo local) */}
-      <div className="rounded border-2 border-blue-300 bg-blue-50/60 px-2.5 py-1.5">
-        <div className="grid grid-cols-5 gap-1.5 items-end">
-          <PriceMetric label="R$/@" value={calc.rArroba > 0 ? formatMoeda(calc.rArroba) : '—'} />
+      {/* Card Resumo (derivado do motor único — nenhum cálculo local).
+          PR-VENDA-V2-UI-01: 4 cards (R$/@ removido). Layout com gap maior e
+          min-w-0 nos itens para evitar sobreposição com valores grandes. */}
+      <div className="rounded border-2 border-blue-300 bg-blue-50/60 px-2.5 py-2">
+        <div className="grid grid-cols-4 gap-x-3 gap-y-1 items-end">
           <PriceMetric label="R$/Kg" value={calc.rKg > 0 ? formatMoeda(calc.rKg) : '—'} />
           <PriceMetric label="R$/Cab" value={calc.rCab > 0 ? formatMoeda(calc.rCab) : '—'} />
           <PriceMetric label="Valor Bruto" value={calc.valorBruto > 0 ? formatMoeda(calc.valorBruto) : '—'} big />
@@ -297,32 +298,11 @@ export function VendaDadosZootecnicos({
         </div>
       </div>
 
-      {/* Pagamento (compacto) */}
-      <div className="grid grid-cols-[1fr_1fr] gap-1.5">
-        <Campo label="Forma Recebimento">
-          <Select
-            value={comercial.formaReceb}
-            onValueChange={v => onComercialChange(c => ({ ...c, formaReceb: v as 'avista' | 'prazo' }))}
-          >
-            <SelectTrigger className="h-6 text-[13px] px-1.5"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="avista">À vista</SelectItem>
-              <SelectItem value="prazo">A prazo</SelectItem>
-            </SelectContent>
-          </Select>
-        </Campo>
-        <Campo label="Qtd Parcelas">
-          <Input
-            type="number"
-            min="1"
-            max="24"
-            value={comercial.qtdParcelas}
-            onChange={e => onComercialChange(c => ({ ...c, qtdParcelas: e.target.value }))}
-            disabled={comercial.formaReceb !== 'prazo'}
-            className="h-6 text-[13px] px-1.5 tabular-nums"
-          />
-        </Campo>
-      </div>
+      {/* PR-VENDA-V2-UI-01: bloco Pagamento (formaReceb/qtdParcelas/parcelas)
+          NÃO renderizado nesta fase — o card esquerdo foca em competência/zoo.
+          Os campos PERMANECEM em VendaComercialState/EMPTY_VENDA_COMERCIAL e
+          continuam sendo gravados em detalhesSnapshot pelo doSaveVendaZoo.
+          Fase 2 trará pagamento no card direito (vínculo financeiro). */}
 
       {/* Status + Observações (rodapé) */}
       <div className="grid grid-cols-2 gap-3 mt-auto">
@@ -386,9 +366,14 @@ function Campo({ label, suffix, children }: { label: string; suffix?: string; ch
 
 function PriceMetric({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase text-blue-800/70 font-medium tracking-wide">{label}</div>
-      <div className={`tabular-nums font-bold text-blue-900 ${big ? 'text-[15px]' : 'text-[13px]'}`}>{value}</div>
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase text-blue-800/70 font-medium tracking-wide truncate">{label}</div>
+      <div
+        className={`tabular-nums font-bold text-blue-900 whitespace-nowrap overflow-hidden text-ellipsis ${big ? 'text-[15px]' : 'text-[13px]'}`}
+        title={value}
+      >
+        {value}
+      </div>
     </div>
   );
 }

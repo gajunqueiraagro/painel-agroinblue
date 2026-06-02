@@ -1135,7 +1135,8 @@ export function LancamentoZooModal({
 
             <BlocoVinculoFinanceiro>
               <div className="px-3 py-4 text-[11px] text-muted-foreground italic">
-                Vínculo financeiro será tratado na Fase 2.
+                Vínculo financeiro será tratado na Fase 2. Aqui ficarão forma de
+                recebimento, parcelas, conta bancária, datas e status financeiro.
               </div>
             </BlocoVinculoFinanceiro>
           </div>
