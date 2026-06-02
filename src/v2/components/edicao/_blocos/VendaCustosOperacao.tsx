@@ -95,16 +95,37 @@ export function VendaCustosOperacao({
     (s, r) => s + (Number(r.valor) || 0) * (Number(r.sinal) || 1),
     0,
   );
-  // PR-VENDA-V2-FINVINC-AUDITAVEL: agregados auditáveis (apenas estrutura
-  // do banco: sinal +1 = receita, -1 = dedução). NÃO classifica por
-  // componente (frete/comissão/funrural) — o banco não tem esse split.
-  // Valores POSITIVOS (o banco guarda valores positivos; só o sinal é -1).
-  const finReceitas = records
-    .filter(r => (Number(r.sinal) || 1) > 0)
-    .reduce((s, r) => s + (Number(r.valor) || 0), 0);
-  const finDeducoes = records
-    .filter(r => (Number(r.sinal) || 1) < 0)
-    .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+  // PR-VENDA-V2-FINVINC-ORIGEMTIPO: agregados POR COMPONENTE via origem_tipo
+  // (fonte estrutural correta). NUNCA inferir por descrição/regex/sinal.
+  // "Outros Custos" RESTRITO a venda:* com sinal -1, excluindo os 3 buckets
+  // nomeados (comissao/frete/funrural). Domínio nulo ou de outro namespace
+  // NÃO é absorvido aqui — eventual residual aparece em linha extra blindada.
+  // Valores POSITIVOS (banco guarda positivo; sinal -1 só marca o lado).
+  const isOrigem = (t: string) => (r: FinRecord) => r.origem_tipo === t;
+  const sumBy = (pred: (r: FinRecord) => boolean) =>
+    records.filter(pred).reduce((s, r) => s + (Number(r.valor) || 0), 0);
+  const isOutroVenda = (r: FinRecord) =>
+    (r.origem_tipo || '').startsWith('venda:')
+    && (Number(r.sinal) || 1) < 0
+    && !['venda:comissao', 'venda:frete', 'venda:funrural'].includes(r.origem_tipo || '');
+
+  const finBruto    = sumBy(isOrigem('venda:parcela'));
+  const finFrete    = sumBy(isOrigem('venda:frete'));
+  const finComissao = sumBy(isOrigem('venda:comissao'));
+  const finFunrural = sumBy(isOrigem('venda:funrural'));
+  const finOutros   = sumBy(isOutroVenda);
+
+  const hasBruto    = records.some(isOrigem('venda:parcela'));
+  const hasFrete    = records.some(isOrigem('venda:frete'));
+  const hasComissao = records.some(isOrigem('venda:comissao'));
+  const hasFunrural = records.some(isOrigem('venda:funrural'));
+  const hasOutros   = finOutros > 0 || records.some(isOutroVenda);
+
+  // Trava de consistência: garante que Bruto - (Frete+Comissão+Funrural+Outros)
+  // = totalFin. Residual ≠ 0 só apareceria com origem_tipo nulo ou fora de
+  // venda:* — caso futuro; hoje = 0.
+  const somaLinhas = finBruto - finFrete - finComissao - finFunrural - finOutros;
+  const residual = Math.round((totalFin - somaLinhas) * 100) / 100;
   const qtd = calc.quantidade;
   const pesoTotal = calc.pesoTotalKg;
   const finRsCab = qtd > 0 ? totalFin / qtd : 0;
@@ -225,10 +246,16 @@ export function VendaCustosOperacao({
         )}
         {!loading && temFin && (
           <>
-            <Linha label="Receitas vinculadas" value={fmt(finReceitas)} />
-            <Linha label="(-) Deduções vinculadas" value={fmt(finDeducoes)} />
+            <Linha label="Valor Bruto"       value={hasBruto    ? fmt(finBruto)    : DASH} header />
+            <Linha label="(-) Frete"          value={hasFrete    ? fmt(finFrete)    : DASH} />
+            <Linha label="(-) Comissão"       value={hasComissao ? fmt(finComissao) : DASH} />
+            <Linha label="(-) Funrural"       value={hasFunrural ? fmt(finFunrural) : DASH} />
+            <Linha label="(-) Outros Custos"  value={hasOutros   ? fmt(finOutros)   : DASH} />
+            {residual !== 0 && (
+              <Linha label="(-) Outros (não classificado)" value={fmt(Math.abs(residual))} />
+            )}
             <div className="border-t border-slate-300 my-1" />
-            <Linha label="Líquido Financeiro" value={fmt(totalFin)} bold />
+            <Linha label="Valor Líquido" value={fmt(totalFin)} bold />
             <Linha label="R$/cab líquido" value={fmt(finRsCab)} small />
             <Linha label="R$/kg líquido" value={fmt(finRsKg)} small />
 

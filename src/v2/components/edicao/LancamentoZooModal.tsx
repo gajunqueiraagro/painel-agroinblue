@@ -77,6 +77,12 @@ export interface FinRecord {
    *  Necessário para SUM(valor * sinal) na conferência financeira da venda
    *  (PR-VENDA-V2-FINVINC-SINAL). */
   sinal: number;
+  /** PR-VENDA-V2-FINVINC-ORIGEMTIPO: qualifica o COMPONENTE do lançamento
+   *  vinculado. Domínio validado: venda:parcela / venda:comissao /
+   *  venda:frete / venda:funrural (e equivalentes abate:/compra_rebanho:).
+   *  É a fonte estrutural correta para classificar por componente — NÃO
+   *  inferir por descrição/sinal. */
+  origem_tipo: string | null;
   data_competencia: string | null;
   data_pagamento: string | null;
   status_transacao: string | null;
@@ -297,7 +303,7 @@ export function LancamentoZooModal({
     (async () => {
       const { data: parcelas, error: errP } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, descricao, valor, sinal, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
+        .select('id, descricao, valor, sinal, origem_tipo, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
         .eq('movimentacao_rebanho_id', lancamento.id)
         .eq('cancelado', false)
         .order('data_pagamento', { ascending: true });
