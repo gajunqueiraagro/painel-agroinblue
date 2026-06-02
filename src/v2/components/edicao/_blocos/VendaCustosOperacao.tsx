@@ -147,7 +147,7 @@ export function VendaCustosOperacao({
     <div className="space-y-2">
       {/* ── MATRIZ 5-COL: Item | Editar Custos | Zoo | Fin | Diferença ── */}
       <div className="rounded border border-slate-300 p-3 min-w-0">
-        <div className="grid grid-cols-[1.1fr_1.2fr_1fr_1fr_1fr] gap-x-2 gap-y-0.5 items-center">
+        <div className="grid grid-cols-[1.1fr_0.9fr_1fr_1.1fr_0.9fr] gap-x-2 gap-y-0.5 items-center">
           {/* Header */}
           <ColHeader>Item</ColHeader>
           <ColHeader>Editar Custos</ColHeader>
@@ -178,7 +178,7 @@ export function VendaCustosOperacao({
 
           {/* Funrural — 2 inputs lado a lado na mesma célula */}
           <LabelCell tone="muted">(-) Funrural</LabelCell>
-          <div className="grid grid-cols-2 gap-1 min-w-0">
+          <div className="grid grid-cols-[0.6fr_1fr] gap-1 min-w-0">
             <InputCelula value={comercial.funruralPct} onChange={setFunPct} suffix="%" />
             <InputCelula value={comercial.funruralReais} onChange={setFunReais} suffix="R$" />
           </div>
@@ -222,64 +222,82 @@ export function VendaCustosOperacao({
         </p>
       </div>
 
-      {/* ── Bloco operacional compacto (status + selo + severidade) ── */}
-      <div className="rounded border border-slate-300 p-2 space-y-1 min-w-0">
-        {loading && (
-          <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
-        )}
-        {!loading && !temFin && (
-          <p className="text-[11px] text-slate-500 italic leading-tight">
-            Aguardando geração do financeiro (Fase 2C).
-          </p>
-        )}
-        {!loading && temFin && (
-          <>
-            {/* Linha 1: N lançamentos + breakdown status + data + conta — tudo em flex wrap */}
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[10px] leading-tight">
-              <span className="font-semibold text-slate-800">
+      {/* ── Bloco operacional ALINHADO sob a coluna Financeiro ──────
+          Sub-grid espelhando o template da matriz (mesma 5 colunas), com as
+          3 primeiras vazias. Operacional fica sob "Financeiro Vinculado";
+          mensagem de severidade fica sob "Diferença". NÃO ocupa a largura
+          inteira do card. */}
+      <div className="grid grid-cols-[1.1fr_0.9fr_1fr_1.1fr_0.9fr] gap-x-2 mt-2 items-start">
+        <div className="col-span-3" />
+        <div className="space-y-1 min-w-0">
+          {loading && (
+            <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
+          )}
+          {!loading && !temFin && (
+            <p className="text-[11px] text-slate-500 italic leading-tight">
+              Aguardando geração do financeiro (Fase 2C).
+            </p>
+          )}
+          {!loading && temFin && (
+            <div className="text-[10px] leading-tight space-y-0.5">
+              <div className="font-semibold text-slate-800">
                 {records.length} lançamento{records.length === 1 ? '' : 's'}
-              </span>
+              </div>
               {statusEntries.map(([status, n]) => {
                 const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
                 return (
-                  <span key={status} className="text-slate-600 whitespace-nowrap">
+                  <div key={status} className="text-slate-600 truncate">
                     {meta.icon} {meta.label}{' '}
                     <span className="tabular-nums font-semibold text-slate-800">{n}</span>
-                  </span>
+                  </div>
                 );
               })}
-              <span className="text-slate-600 whitespace-nowrap">
-                · Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
-              </span>
-              <span className="text-slate-600 whitespace-nowrap truncate" title={nomeConta}>
-                · Conta <span className="font-medium text-slate-800">{nomeConta}</span>
-              </span>
-            </div>
-
-            {/* Linha 2 (condicional): selo travado/substituível */}
-            {(travado || substituivel) && (
-              <div
-                className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
-                  travado
-                    ? 'text-amber-800 bg-amber-50 border-amber-300'
-                    : 'text-emerald-800 bg-emerald-50 border-emerald-300'
-                }`}
-              >
-                {travado
-                  ? '🔒 Financeiro travado — lançamento já realizado/agendado. Alterações devem ser feitas no Financeiro.'
-                  : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+              <div className="text-slate-600 truncate">
+                Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
               </div>
-            )}
-
-            {/* Linha 3: severidade da diferença */}
+              <div className="text-slate-600 truncate" title={nomeConta}>
+                Conta <span className="font-medium text-slate-800">{nomeConta}</span>
+              </div>
+              {/* Placeholder DESABILITADO (drill real é fase futura) */}
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                tabIndex={-1}
+                className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
+                title="Detalhe das parcelas — em breve."
+              >
+                Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
+              </button>
+              {(travado || substituivel) && (
+                <div
+                  className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
+                    travado
+                      ? 'text-amber-800 bg-amber-50 border-amber-300'
+                      : 'text-emerald-800 bg-emerald-50 border-emerald-300'
+                  }`}
+                >
+                  {travado
+                    ? '🔒 Financeiro travado — lançamento já realizado/agendado.'
+                    : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 italic pt-0.5 leading-tight">
+                Financeiro sem detalhamento por componente.
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          {!loading && temFin && (
             <div
               className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${severidadeCls[severidade]}`}
               title={`${(pctDif * 100).toFixed(2)}%`}
             >
               {mensagemDif}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
