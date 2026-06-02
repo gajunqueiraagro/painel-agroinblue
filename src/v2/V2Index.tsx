@@ -307,6 +307,10 @@ export default function V2Index() {
   // nos handlers de edição da Conferência. State legado preservado para
   // não quebrar V2LancamentosWrapper.
   const [zooEditId, setZooEditId] = useState<string | null>(null);
+  // PR-B1-R2 — aba a aplicar ao abrir o LancamentoZooModal soberano. Default
+  // 'dados'. Setada por `retornarAoZoo` no retorno do drill fin→zoo. Resetada
+  // no onOpenChange ao fechar (não vaza para próxima abertura normal).
+  const [zooAbaInicial, setZooAbaInicial] = useState<'dados' | 'custos' | 'itens' | 'auditoria'>('dados');
   // Drill filtrado vindo de EvolucaoCategoriaTab: navega para
   // 'conferencia-lancamentos' (FinanceiroTab) com subAba+ano+mês+categoria
   // +cenário pré-aplicados. Mesmo padrão do onNavigateToMovimentacao do
@@ -355,6 +359,17 @@ export default function V2Index() {
     setSection('financeiro-lanc');
   };
 
+  // PR-B1-R2 — retorno fin→zoo (Opção A, memória). Chamado pelo onCloseDialog
+  // de FinanceiroV2Tab quando há drillReturn pendente. Estado puro: sem
+  // navigate, sem URL. Section + abaInicial + setZooEditId(...) — o mount
+  // soberano <LancamentoZooModal> reabre direto no mesmo lançamento de origem
+  // e na aba "Custos" (ou outra que o caller tenha pedido).
+  const retornarAoZoo = (ret: { zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria' }) => {
+    setSection('lancamentos-zoot');
+    setZooAbaInicial(ret.tab);
+    setZooEditId(ret.zooId);
+  };
+
   const [searchParams, setSearchParams] = useSearchParams();
   // ID alvo lido da URL (?edit=...&tipo=...). Quando o lançamento carrega
   // pelo useLancamento, useEffect roteia. Limpa-se ao consumir.
@@ -396,13 +411,32 @@ export default function V2Index() {
   // no LancamentoV2Dialog ao chegar via ?flancId=. Consumido pelo callback
   // onLancamentoAlvoConsumido (zera após openEdit; sem timeout).
   const [flancIdAlvo, setFlancIdAlvo] = useState<string | null>(null);
+  // PR-B1-R2 — alvo de retorno fin→zoo (Opção A: memória, NÃO URL). Capturado
+  // junto do flancId (mesmo gesto de drill). Consumido por FinanceiroV2Tab
+  // onCloseDialog: V2Index decide reabrir o Zoo no `zooId` informado e na
+  // aba `tab` informada. Estado puro — sem segundo navigate.
+  const [drillReturn, setDrillReturn] = useState<{ zooId: string; tab: 'dados' | 'custos' | 'itens' | 'auditoria' } | null>(null);
   useEffect(() => {
     const fl = searchParams.get('flancId');
     if (fl) {
       setSection('financeiro-lanc');
       setFlancIdAlvo(fl);
+      // PR-B1-R2 — captura do retorno (mesmo gesto de drill). Guard explícito
+      // estreita rawTab para a union sem `as`. Default 'custos' se ausente
+      // ou inválido (caminho principal vem de "Custos da Operação").
+      const rzId = searchParams.get('returnZooId');
+      const rawTab = searchParams.get('returnZooTab');
+      const rzTab =
+        rawTab === 'dados' || rawTab === 'custos' || rawTab === 'itens' || rawTab === 'auditoria'
+          ? rawTab
+          : 'custos';
+      if (rzId) {
+        setDrillReturn({ zooId: rzId, tab: rzTab });
+      }
       const next = new URLSearchParams(searchParams);
       next.delete('flancId');
+      next.delete('returnZooId');
+      next.delete('returnZooTab');
       setSearchParams(next, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -691,6 +725,12 @@ export default function V2Index() {
         } : undefined}
         lancamentoIdAlvo={flancIdAlvo}
         onLancamentoAlvoConsumido={() => setFlancIdAlvo(null)}
+        onCloseDialog={() => {
+          if (drillReturn) {
+            retornarAoZoo(drillReturn);
+            setDrillReturn(null);
+          }
+        }}
       />
     );
     // Fluxo Caixa META / Lançamentos META Fin — ambos abrem a tela existente do
@@ -978,8 +1018,9 @@ export default function V2Index() {
       {zooEditId && (
         <LancamentoZooModal
           open
-          onOpenChange={(o) => { if (!o) setZooEditId(null); }}
+          onOpenChange={(o) => { if (!o) { setZooEditId(null); setZooAbaInicial('dados'); } }}
           lancamentoId={zooEditId}
+          abaInicial={zooAbaInicial}
           onEditSuccess={() => setZooEditId(null)}
           onAbrirNoFormPrincipal={redirecionarParaFormPrincipal}
           onAbrirFinanceiroVinculado={abrirFinanceiroVinculado}

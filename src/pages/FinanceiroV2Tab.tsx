@@ -163,6 +163,10 @@ interface Props {
   /** Disparado depois que o alvo foi consumido (aberto ou não-encontrado)
    *  para o pai zerar o estado e evitar re-abertura. */
   onLancamentoAlvoConsumido?: () => void;
+  /** PR-B1-R2 — notifica o pai (V2Index) que o LancamentoV2Dialog fechou
+   *  (salvar OU cancelar OU ESC/X — todos convergem em onClose). O pai decide
+   *  se há drill a retornar. FinanceiroV2Tab é agnóstico ao drill. */
+  onCloseDialog?: () => void;
 }
 
 function getInitialPageSize() {
@@ -173,7 +177,7 @@ function getInitialPageSize() {
   return 30;
 }
 
-export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido }: Props) {
+export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const [currentPage, setCurrentPage] = useState(0);
@@ -1547,7 +1551,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       <LancamentoV2Dialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingLanc(null); }}
+        onClose={() => { setDialogOpen(false); setEditingLanc(null); onCloseDialog?.(); }}
         onSave={handleSave}
         onDelete={handleDelete}
         lancamento={editingLanc}
