@@ -232,69 +232,24 @@ export function VendaDadosZootecnicos({
         </Campo>
       </div>
 
-      {/* Custos / Deduções (compactos) */}
-      <div className="grid grid-cols-5 gap-1.5">
-        <Campo label="Frete" suffix="R$">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={comercial.frete}
-            onChange={e => onComercialChange(c => ({ ...c, frete: e.target.value }))}
-            placeholder="0,00"
-            className="h-6 text-[12px] px-1.5 tabular-nums"
-          />
-        </Campo>
-        <Campo label="Comissão" suffix="%">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={comercial.comissaoPct}
-            onChange={e => onComercialChange(c => ({ ...c, comissaoPct: e.target.value }))}
-            placeholder="0,00"
-            className="h-6 text-[12px] px-1.5 tabular-nums"
-          />
-        </Campo>
-        <Campo label="Outros Custos" suffix="R$">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={comercial.outrosCustos}
-            onChange={e => onComercialChange(c => ({ ...c, outrosCustos: e.target.value }))}
-            placeholder="0,00"
-            className="h-6 text-[12px] px-1.5 tabular-nums"
-          />
-        </Campo>
-        <Campo label="Funrural" suffix="%">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={comercial.funruralPct}
-            onChange={e => onComercialChange(c => ({ ...c, funruralPct: e.target.value }))}
-            placeholder="0,00"
-            className="h-6 text-[12px] px-1.5 tabular-nums"
-          />
-        </Campo>
-        <Campo label="Funrural" suffix="R$">
-          <Input
-            type="text"
-            inputMode="decimal"
-            value={comercial.funruralReais}
-            onChange={e => onComercialChange(c => ({ ...c, funruralReais: e.target.value }))}
-            placeholder="0,00"
-            className="h-6 text-[12px] px-1.5 tabular-nums"
-          />
-        </Campo>
-      </div>
+      {/* PR-VENDA-V2-UI-01: Custos da Operação (frete, comissaoPct, outrosCustos,
+          funruralPct, funruralReais) NÃO renderizados nesta 1ª aba — virão na
+          aba "Custos da Operação" da Venda (Fase 2). Os campos PERMANECEM em
+          VendaComercialState/EMPTY_VENDA_COMERCIAL e continuam sendo gravados
+          em detalhesSnapshot pelo doSaveVendaZoo. O motor (buildVendaCalculation)
+          ainda recebe esses valores do estado — apenas não temos UI pra editá-los
+          aqui (efeito visível: valorLiquido fica ≈ valorBruto enquanto nada for
+          informado; é esperado nesta fase e o Valor Líquido foi removido do
+          resumo para evitar confusão). */}
 
       {/* Card Resumo (derivado do motor único — nenhum cálculo local).
-          PR-VENDA-V2-UI-01: 4 cards (R$/@ removido). Layout com gap maior e
-          min-w-0 nos itens para evitar sobreposição com valores grandes. */}
+          PR-VENDA-V2-UI-01: 3 cards (R$/@ e Valor Líquido removidos). Líquido
+          sairá quando a aba de Custos chegar (Fase 2). */}
       <div className="rounded border-2 border-blue-300 bg-blue-50/60 px-2.5 py-2">
-        <div className="grid grid-cols-4 gap-x-3 gap-y-1 items-end">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1 items-end">
           <PriceMetric label="R$/Kg" value={calc.rKg > 0 ? formatMoeda(calc.rKg) : '—'} />
           <PriceMetric label="R$/Cab" value={calc.rCab > 0 ? formatMoeda(calc.rCab) : '—'} />
           <PriceMetric label="Valor Bruto" value={calc.valorBruto > 0 ? formatMoeda(calc.valorBruto) : '—'} big />
-          <PriceMetric label="Valor Líquido" value={calc.valorLiquido !== 0 ? formatMoeda(calc.valorLiquido) : '—'} big />
         </div>
       </div>
 
