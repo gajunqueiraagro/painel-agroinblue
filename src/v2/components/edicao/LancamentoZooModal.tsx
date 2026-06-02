@@ -68,6 +68,10 @@ import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda } fro
  *  display verde e a aba "Custos da Operação". */
 export interface FinRecord {
   id: string;
+  /** PR-VENDA-V2-FINVINC-AUDITAVEL: usado na lista auditável do Card 3
+   *  Financeiro Vinculado da venda (texto, NÃO autoridade — não classifica
+   *  componente). */
+  descricao: string | null;
   valor: number;
   /** +1 = entrada (receita), -1 = saída (despesa/dedução).
    *  Necessário para SUM(valor * sinal) na conferência financeira da venda
@@ -293,7 +297,7 @@ export function LancamentoZooModal({
     (async () => {
       const { data: parcelas, error: errP } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, valor, sinal, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
+        .select('id, descricao, valor, sinal, data_competencia, data_pagamento, status_transacao, conta_bancaria_id, conciliado_em')
         .eq('movimentacao_rebanho_id', lancamento.id)
         .eq('cancelado', false)
         .order('data_pagamento', { ascending: true });

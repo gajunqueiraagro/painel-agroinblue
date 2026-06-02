@@ -95,6 +95,16 @@ export function VendaCustosOperacao({
     (s, r) => s + (Number(r.valor) || 0) * (Number(r.sinal) || 1),
     0,
   );
+  // PR-VENDA-V2-FINVINC-AUDITAVEL: agregados auditáveis (apenas estrutura
+  // do banco: sinal +1 = receita, -1 = dedução). NÃO classifica por
+  // componente (frete/comissão/funrural) — o banco não tem esse split.
+  // Valores POSITIVOS (o banco guarda valores positivos; só o sinal é -1).
+  const finReceitas = records
+    .filter(r => (Number(r.sinal) || 1) > 0)
+    .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+  const finDeducoes = records
+    .filter(r => (Number(r.sinal) || 1) < 0)
+    .reduce((s, r) => s + (Number(r.valor) || 0), 0);
   const qtd = calc.quantidade;
   const pesoTotal = calc.pesoTotalKg;
   const finRsCab = qtd > 0 ? totalFin / qtd : 0;
@@ -197,94 +207,98 @@ export function VendaCustosOperacao({
         <Linha label="R$/kg líquido" value={fmt(calc.liqKg)} small />
       </div>
 
-      {/* ── Card 3: Financeiro Vinculado ──────────────────────── */}
+      {/* ── Card 3: Financeiro Vinculado (auditável) ──────────────
+          PR-VENDA-V2-FINVINC-AUDITAVEL: mostra EXATAMENTE o que o banco
+          sabe — Receitas (+) / Deduções (-) / Líquido + lista auditável
+          dos lançamentos reais com descrição e status. NÃO inventa
+          componente (Comissão/Frete/Funrural/Outros): o banco não tem
+          esse split estrutural; a descrição é texto, não autoridade. */}
       <div className="rounded border border-slate-300 p-3 space-y-0.5 min-w-0">
         <ColTitle>Financeiro Vinculado</ColTitle>
-        <Linha label="Valor Bruto" value={DASH} muted />
-        <Linha label="(-) Frete" value={DASH} muted />
-        <Linha label="(-) Comissão" value={DASH} muted />
-        <Linha label="(-) Funrural" value={DASH} muted />
-        <Linha label="(-) Outros Custos" value={DASH} muted />
-        <div className="border-t border-slate-300 my-1" />
-        <Linha label="Valor Líquido" value={finCell(totalFin)} bold />
-        <Linha label="R$/cab líquido" value={finCell(finRsCab)} small />
-        <Linha label="R$/kg líquido" value={finCell(finRsKg)} small />
-        <p className="text-[10px] text-slate-500 italic pt-0.5 leading-tight">
-          Financeiro sem detalhamento por componente.
-        </p>
-
         {loading && (
-          <p className="text-[11px] text-slate-500 italic leading-tight pt-1">Carregando…</p>
+          <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
         )}
         {!loading && !temFin && (
-          <p className="text-[11px] text-slate-500 italic leading-tight pt-1">
+          <p className="text-[11px] text-slate-500 italic leading-tight">
             Aguardando geração do financeiro (Fase 2C).
           </p>
         )}
         {!loading && temFin && (
-          <div className="pt-1 mt-1 border-t border-slate-200 space-y-0.5 text-[10px] leading-tight">
-            <div className="font-semibold text-slate-800">
-              {records.length} lançamento{records.length === 1 ? '' : 's'}
-            </div>
-            {statusEntries.map(([status, n]) => {
-              const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
-              return (
-                <div key={status} className="text-slate-600 truncate">
-                  {meta.icon} {meta.label}{' '}
-                  <span className="tabular-nums font-semibold text-slate-800">{n}</span>
-                </div>
-              );
-            })}
-            <div className="text-slate-600 truncate">
-              Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
-            </div>
-            <div className="text-slate-600 truncate" title={nomeConta}>
-              Conta <span className="font-medium text-slate-800">{nomeConta}</span>
-            </div>
-            {/* PR-VENDA-V2-2C-NAVEGAR: ação ativa quando há vínculo + callback.
-                Fallback (sem callback): placeholder desabilitado, sem onClick. */}
-            {onAbrirFinanceiro ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const ref = records.find(r => r.data_pagamento)
-                    ?? records.find(r => r.data_competencia)
-                    ?? records[0];
-                  const d = ref?.data_pagamento ?? ref?.data_competencia;
-                  if (!d) return;
-                  onAbrirFinanceiro(d.slice(0, 4), Number(d.slice(5, 7)));
-                }}
-                className="text-[10px] text-blue-700 hover:text-blue-900 underline-offset-2 underline cursor-pointer leading-tight bg-transparent border-0 p-0 text-left"
-                title="Abrir o lançamento no Financeiro (filtrado pelo mês)"
-              >
-                Abrir financeiro vinculado
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                tabIndex={-1}
-                className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
-                title="Detalhe das parcelas — em breve."
-              >
-                Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
-              </button>
-            )}
-            {(travado || substituivel) && (
-              <div
-                className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
-                  travado
-                    ? 'text-amber-800 bg-amber-50 border-amber-300'
-                    : 'text-emerald-800 bg-emerald-50 border-emerald-300'
-                }`}
-              >
-                {travado
-                  ? '🔒 Financeiro travado — lançamento já realizado/agendado.'
-                  : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+          <>
+            <Linha label="Receitas vinculadas" value={fmt(finReceitas)} />
+            <Linha label="(-) Deduções vinculadas" value={fmt(finDeducoes)} />
+            <div className="border-t border-slate-300 my-1" />
+            <Linha label="Líquido Financeiro" value={fmt(totalFin)} bold />
+            <Linha label="R$/cab líquido" value={fmt(finRsCab)} small />
+            <Linha label="R$/kg líquido" value={fmt(finRsKg)} small />
+
+            {/* Lista auditável: cada lançamento com Entrada/Saída + descrição + valor + status */}
+            <div className="pt-1 mt-1 border-t border-slate-200 space-y-1 text-[10px] leading-tight">
+              <div className="font-semibold text-slate-800">
+                {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
               </div>
-            )}
-          </div>
+              {records.map((r) => {
+                const ent = (Number(r.sinal) || 1) >= 0;
+                return (
+                  <div key={r.id} className="flex flex-col">
+                    <span className={ent ? 'text-emerald-700' : 'text-red-700'}>
+                      {ent ? '✓ Entrada' : '✓ Saída'}
+                    </span>
+                    <span className="text-slate-700 truncate" title={r.descricao || ''}>
+                      {r.descricao || '—'}
+                    </span>
+                    <span className="text-slate-600">
+                      {fmt(Number(r.valor) || 0)} · {r.status_transacao || '—'}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* PR-VENDA-V2-2C-NAVEGAR: ação ativa preservada do PR anterior. */}
+              {onAbrirFinanceiro ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ref = records.find(r => r.data_pagamento)
+                      ?? records.find(r => r.data_competencia)
+                      ?? records[0];
+                    const d = ref?.data_pagamento ?? ref?.data_competencia;
+                    if (!d) return;
+                    onAbrirFinanceiro(d.slice(0, 4), Number(d.slice(5, 7)));
+                  }}
+                  className="text-[10px] text-blue-700 hover:text-blue-900 underline-offset-2 underline cursor-pointer leading-tight bg-transparent border-0 p-0 text-left"
+                  title="Abrir o lançamento no Financeiro (filtrado pelo mês)"
+                >
+                  Abrir financeiro vinculado
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  tabIndex={-1}
+                  className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
+                  title="Detalhe das parcelas — em breve."
+                >
+                  Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
+                </button>
+              )}
+
+              {(travado || substituivel) && (
+                <div
+                  className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
+                    travado
+                      ? 'text-amber-800 bg-amber-50 border-amber-300'
+                      : 'text-emerald-800 bg-emerald-50 border-emerald-300'
+                  }`}
+                >
+                  {travado
+                    ? '🔒 Financeiro travado — lançamento já realizado/agendado.'
+                    : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
