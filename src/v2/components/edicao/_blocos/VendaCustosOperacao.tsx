@@ -1,16 +1,18 @@
 /**
  * VendaCustosOperacao — aba "Custos da Operação" do modal de Venda V2.
  *
- * Layout MATRIZ-5-COL (PR 2B.3): Item | Editar Custos | Zoo | Financeiro | Diferença.
- * Inputs inline só nas linhas de dedução (Frete/Comissão/Funrural/Outros).
- * Abaixo, bloco operacional compacto + severidade.
+ * Layout 4 CARDS (PR 2B.5): Custos da Venda | Resumo Zoo | Financeiro Vinculado | Conferência.
+ * Cada card é um container independente; os Resumo/Financeiro/Conferência espelham
+ * a estrutura de linhas (Bruto → 4 deduções → Líquido + R$/cab + R$/kg) para leitura
+ * vertical natural lado-a-lado. Financeiro/Diferença só preenchem Líquido/R$/cab/R$/kg
+ * (financeiro sem detalhamento por componente — Bruto e deduções = "—").
  *
  * - Leitura SEMPRE de `calc` + `records`/`contasMap` (load no modal pai).
- * - Edição (inputs) via `comercial` (VendaComercialState) — handlers idênticos
- *   ao 2A/2B, só re-locados como célula da matriz. Persistência inalterada
- *   (doSaveVendaZoo já lê `vendaComercial`).
- * - Inputs MEMOIZADOS (React.memo) + handlers estáveis (useCallback) para
- *   evitar perda de foco no re-render da matriz a cada tecla.
+ * - Edição (Card 1) via `comercial` (VendaComercialState) — handlers idênticos
+ *   às fases anteriores. Persistência inalterada (doSaveVendaZoo já lê
+ *   `vendaComercial`).
+ * - Inputs MEMOIZADOS (React.memo) + handlers estáveis (useCallback) — proteção
+ *   de foco preservada das fases 2B.3/2B.4.
  * - ZERO escrita em financeiro_lancamentos_v2 (2B = read-only).
  *   Botões de ação (gerar/atualizar) ficam para Fase 2C.
  */
@@ -144,160 +146,141 @@ export function VendaCustosOperacao({
   const difCell = (v: number) => (temFin ? fmtSigned(v) : DASH);
 
   return (
-    <div className="space-y-2">
-      {/* ── MATRIZ 5-COL: Item | Editar Custos | Zoo | Fin | Diferença ── */}
-      <div className="rounded border border-slate-300 p-3 min-w-0">
-        <div className="grid grid-cols-[1.1fr_0.9fr_1fr_1.1fr_0.9fr] gap-x-2 gap-y-0.5 items-center">
-          {/* Header */}
-          <ColHeader>Item</ColHeader>
-          <ColHeader>Editar Custos</ColHeader>
-          <ColHeader>Zoo / Competência</ColHeader>
-          <ColHeader>Financeiro Vinculado</ColHeader>
-          <ColHeader>Diferença</ColHeader>
-
-          {/* Valor Bruto (sem input) */}
-          <LabelCell tone="header">Valor Bruto</LabelCell>
-          <div />
-          <ValueCell tone="header">{fmt(calc.valorBruto)}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-
-          {/* Frete */}
-          <LabelCell tone="muted">(-) Frete</LabelCell>
+    <div className="grid grid-cols-[0.95fr_1fr_1.15fr_0.9fr] gap-3">
+      {/* ── Card 1: Custos da Venda ───────────────────────────── */}
+      <div className="rounded border border-slate-300 p-3 space-y-1.5 min-w-0">
+        <ColTitle>Custos da Venda</ColTitle>
+        <CampoInput label="Frete" suffix="R$">
           <InputCelula value={comercial.frete} onChange={setFrete} suffix="R$" />
-          <ValueCell tone="muted">{fmt(calc.freteVal)}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-
-          {/* Comissão */}
-          <LabelCell tone="muted">(-) Comissão</LabelCell>
+        </CampoInput>
+        <CampoInput label="Comissão" suffix="%">
           <InputCelula value={comercial.comissaoPct} onChange={setComissao} suffix="%" />
-          <ValueCell tone="muted">{fmt(calc.comissaoVal)}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-
-          {/* Funrural — 2 inputs lado a lado na mesma célula */}
-          <LabelCell tone="muted">(-) Funrural</LabelCell>
+        </CampoInput>
+        <CampoInput label="Funrural" suffix="% / R$">
           <div className="grid grid-cols-[0.6fr_1fr] gap-1 min-w-0">
             <InputCelula value={comercial.funruralPct} onChange={setFunPct} suffix="%" />
             <InputCelula value={comercial.funruralReais} onChange={setFunReais} suffix="R$" />
           </div>
-          <ValueCell tone="muted">{fmt(calc.funruralTotal)}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-
-          {/* Outros Custos */}
-          <LabelCell tone="muted">(-) Outros Custos</LabelCell>
+        </CampoInput>
+        <CampoInput label="Outros Custos" suffix="R$">
           <InputCelula value={comercial.outrosCustos} onChange={setOutros} suffix="R$" />
-          <ValueCell tone="muted">{fmt(calc.outrosCustosVal)}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-          <ValueCell tone="muted">{DASH}</ValueCell>
-
-          {/* Divisória */}
-          <div className="col-span-5 border-t border-slate-300 my-1" />
-
-          {/* Valor Líquido */}
-          <LabelCell tone="bold">Valor Líquido</LabelCell>
-          <div />
-          <ValueCell tone="bold">{fmt(zooLiquido)}</ValueCell>
-          <ValueCell tone="bold">{finCell(totalFin)}</ValueCell>
-          <ValueCell tone="dif-bold">{difCell(diferenca)}</ValueCell>
-
-          {/* R$/cab líquido */}
-          <LabelCell tone="small">R$/cab líquido</LabelCell>
-          <div />
-          <ValueCell tone="small">{fmt(calc.liqCabeca)}</ValueCell>
-          <ValueCell tone="small">{finCell(finRsCab)}</ValueCell>
-          <ValueCell tone="small">{difCell(difCab)}</ValueCell>
-
-          {/* R$/kg líquido */}
-          <LabelCell tone="small">R$/kg líquido</LabelCell>
-          <div />
-          <ValueCell tone="small">{fmt(calc.liqKg)}</ValueCell>
-          <ValueCell tone="small">{finCell(finRsKg)}</ValueCell>
-          <ValueCell tone="small">{difCell(difKg)}</ValueCell>
-        </div>
-        <p className="text-[10px] text-slate-500 italic pt-2 leading-tight">
+        </CampoInput>
+        <p className="text-[10px] text-slate-500 italic pt-0.5 leading-tight">
           Se ambos os Funrural forem informados, o valor em R$ prevalece.
         </p>
       </div>
 
-      {/* ── Bloco operacional ALINHADO sob a coluna Financeiro ──────
-          Sub-grid espelhando o template da matriz (mesma 5 colunas), com as
-          3 primeiras vazias. Operacional fica sob "Financeiro Vinculado";
-          mensagem de severidade fica sob "Diferença". NÃO ocupa a largura
-          inteira do card. */}
-      <div className="grid grid-cols-[1.1fr_0.9fr_1fr_1.1fr_0.9fr] gap-x-2 mt-2 items-start">
-        <div className="col-span-3" />
-        <div className="space-y-1 min-w-0">
-          {loading && (
-            <p className="text-[11px] text-slate-500 italic leading-tight">Carregando…</p>
-          )}
-          {!loading && !temFin && (
-            <p className="text-[11px] text-slate-500 italic leading-tight">
-              Aguardando geração do financeiro (Fase 2C).
-            </p>
-          )}
-          {!loading && temFin && (
-            <div className="text-[10px] leading-tight space-y-0.5">
-              <div className="font-semibold text-slate-800">
-                {records.length} lançamento{records.length === 1 ? '' : 's'}
-              </div>
-              {statusEntries.map(([status, n]) => {
-                const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
-                return (
-                  <div key={status} className="text-slate-600 truncate">
-                    {meta.icon} {meta.label}{' '}
-                    <span className="tabular-nums font-semibold text-slate-800">{n}</span>
-                  </div>
-                );
-              })}
-              <div className="text-slate-600 truncate">
-                Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
-              </div>
-              <div className="text-slate-600 truncate" title={nomeConta}>
-                Conta <span className="font-medium text-slate-800">{nomeConta}</span>
-              </div>
-              {/* Placeholder DESABILITADO (drill real é fase futura) */}
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                tabIndex={-1}
-                className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
-                title="Detalhe das parcelas — em breve."
-              >
-                Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
-              </button>
-              {(travado || substituivel) && (
-                <div
-                  className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
-                    travado
-                      ? 'text-amber-800 bg-amber-50 border-amber-300'
-                      : 'text-emerald-800 bg-emerald-50 border-emerald-300'
-                  }`}
-                >
-                  {travado
-                    ? '🔒 Financeiro travado — lançamento já realizado/agendado.'
-                    : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+      {/* ── Card 2: Resumo Zoo ────────────────────────────────── */}
+      <div className="rounded border border-slate-300 p-3 space-y-0.5 min-w-0">
+        <ColTitle>Resumo Zoo</ColTitle>
+        <Linha label="Valor Bruto" value={fmt(calc.valorBruto)} header />
+        <Linha label="(-) Frete" value={fmt(calc.freteVal)} muted />
+        <Linha label="(-) Comissão" value={fmt(calc.comissaoVal)} muted />
+        <Linha label="(-) Funrural" value={fmt(calc.funruralTotal)} muted />
+        <Linha label="(-) Outros Custos" value={fmt(calc.outrosCustosVal)} muted />
+        <div className="border-t border-slate-300 my-1" />
+        <Linha label="Valor Líquido" value={fmt(zooLiquido)} bold />
+        <Linha label="R$/cab líquido" value={fmt(calc.liqCabeca)} small />
+        <Linha label="R$/kg líquido" value={fmt(calc.liqKg)} small />
+      </div>
+
+      {/* ── Card 3: Financeiro Vinculado ──────────────────────── */}
+      <div className="rounded border border-slate-300 p-3 space-y-0.5 min-w-0">
+        <ColTitle>Financeiro Vinculado</ColTitle>
+        <Linha label="Valor Bruto" value={DASH} muted />
+        <Linha label="(-) Frete" value={DASH} muted />
+        <Linha label="(-) Comissão" value={DASH} muted />
+        <Linha label="(-) Funrural" value={DASH} muted />
+        <Linha label="(-) Outros Custos" value={DASH} muted />
+        <div className="border-t border-slate-300 my-1" />
+        <Linha label="Valor Líquido" value={finCell(totalFin)} bold />
+        <Linha label="R$/cab líquido" value={finCell(finRsCab)} small />
+        <Linha label="R$/kg líquido" value={finCell(finRsKg)} small />
+        <p className="text-[10px] text-slate-500 italic pt-0.5 leading-tight">
+          Financeiro sem detalhamento por componente.
+        </p>
+
+        {loading && (
+          <p className="text-[11px] text-slate-500 italic leading-tight pt-1">Carregando…</p>
+        )}
+        {!loading && !temFin && (
+          <p className="text-[11px] text-slate-500 italic leading-tight pt-1">
+            Aguardando geração do financeiro (Fase 2C).
+          </p>
+        )}
+        {!loading && temFin && (
+          <div className="pt-1 mt-1 border-t border-slate-200 space-y-0.5 text-[10px] leading-tight">
+            <div className="font-semibold text-slate-800">
+              {records.length} lançamento{records.length === 1 ? '' : 's'}
+            </div>
+            {statusEntries.map(([status, n]) => {
+              const meta = STATUS_LABEL[status] ?? { label: status, icon: '•' };
+              return (
+                <div key={status} className="text-slate-600 truncate">
+                  {meta.icon} {meta.label}{' '}
+                  <span className="tabular-nums font-semibold text-slate-800">{n}</span>
                 </div>
-              )}
-              <p className="text-[10px] text-slate-500 italic pt-0.5 leading-tight">
-                Financeiro sem detalhamento por componente.
-              </p>
+              );
+            })}
+            <div className="text-slate-600 truncate">
+              Data pgto <span className="tabular-nums font-medium text-slate-800">{dataPgtoLabel}</span>
             </div>
-          )}
-        </div>
-        <div className="min-w-0">
-          {!loading && temFin && (
-            <div
-              className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${severidadeCls[severidade]}`}
-              title={`${(pctDif * 100).toFixed(2)}%`}
+            <div className="text-slate-600 truncate" title={nomeConta}>
+              Conta <span className="font-medium text-slate-800">{nomeConta}</span>
+            </div>
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              tabIndex={-1}
+              className="text-[10px] text-slate-400 underline-offset-2 underline cursor-default leading-tight bg-transparent border-0 p-0"
+              title="Detalhe das parcelas — em breve."
             >
-              {mensagemDif}
-            </div>
-          )}
-        </div>
+              Ver {records.length} lançamento{records.length === 1 ? '' : 's'} vinculado{records.length === 1 ? '' : 's'}
+            </button>
+            {(travado || substituivel) && (
+              <div
+                className={`px-1.5 py-1 rounded border text-[10px] leading-tight italic ${
+                  travado
+                    ? 'text-amber-800 bg-amber-50 border-amber-300'
+                    : 'text-emerald-800 bg-emerald-50 border-emerald-300'
+                }`}
+              >
+                {travado
+                  ? '🔒 Financeiro travado — lançamento já realizado/agendado.'
+                  : '✏️ Financeiro substituível — pode ser atualizado pelo Zoo.'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Card 4: Conferência ───────────────────────────────── */}
+      <div className="rounded border border-slate-300 p-3 space-y-0.5 min-w-0">
+        <ColTitle>Conferência</ColTitle>
+        <Linha label="Valor Bruto" value={DASH} muted />
+        <Linha label="(-) Frete" value={DASH} muted />
+        <Linha label="(-) Comissão" value={DASH} muted />
+        <Linha label="(-) Funrural" value={DASH} muted />
+        <Linha label="(-) Outros Custos" value={DASH} muted />
+        <div className="border-t border-slate-300 my-1" />
+        <Linha label="Valor Líquido" value={difCell(diferenca)} difBold />
+        <Linha label="R$/cab líquido" value={difCell(difCab)} small />
+        <Linha label="R$/kg líquido" value={difCell(difKg)} small />
+
+        {!loading && !temFin && (
+          <p className="text-[11px] text-slate-500 italic leading-tight pt-1">
+            Sem financeiro para comparar.
+          </p>
+        )}
+        {!loading && temFin && (
+          <div
+            className={`mt-1 px-1.5 py-1 rounded border text-[10px] leading-tight italic ${severidadeCls[severidade]}`}
+            title={`${(pctDif * 100).toFixed(2)}%`}
+          >
+            {mensagemDif}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -306,9 +289,9 @@ export function VendaCustosOperacao({
 // ── helpers locais ────────────────────────────────────────────────────────
 
 /**
- * Célula de input MEMOIZADA — protege contra perda de foco no re-render da
- * matriz a cada tecla. Combinada com handlers estáveis (useCallback no pai),
- * o React mantém o nó DOM do input entre renders.
+ * Célula de input MEMOIZADA — protege contra perda de foco no re-render do
+ * componente a cada tecla. Combinada com handlers estáveis (useCallback no
+ * pai), o React mantém o nó DOM do input entre renders.
  */
 interface InputCelulaProps {
   value: string;
@@ -339,44 +322,64 @@ const InputCelula = memo(function InputCelula({
   );
 });
 
-function ColHeader({ children }: { children: ReactNode }) {
+function ColTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600 pb-1 truncate text-right first:text-left">
+    <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-600 pb-0.5 truncate">
       {children}
     </div>
   );
 }
 
-type CellTone = 'header' | 'muted' | 'bold' | 'small' | 'dif-bold';
-
-function LabelCell({ tone = 'muted', children }: { tone?: CellTone; children: ReactNode }) {
-  const cls = [
-    'truncate leading-tight',
-    'text-[11px]',
-    tone === 'header' && 'font-semibold text-slate-900',
-    tone === 'muted' && 'text-slate-600',
-    tone === 'bold' && 'font-semibold text-slate-900',
-    tone === 'small' && 'text-[10px] text-slate-600',
-  ].filter(Boolean).join(' ');
-  return <span className={cls}>{children}</span>;
+function CampoInput({ label, suffix, children }: { label: string; suffix?: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] uppercase text-slate-500 font-medium">{label}</span>
+        {suffix && <span className="text-[9px] text-slate-400">{suffix}</span>}
+      </div>
+      <div className="mt-0.5">{children}</div>
+    </div>
+  );
 }
 
-function ValueCell({ tone = 'muted', children }: { tone?: CellTone; children: ReactNode }) {
-  const cls = [
-    'tabular-nums text-right whitespace-nowrap overflow-hidden text-ellipsis leading-tight',
-    'text-[11px]',
-    tone === 'header' && 'font-semibold text-slate-900',
-    tone === 'muted' && 'text-slate-700',
-    tone === 'bold' && 'font-semibold text-slate-900',
-    tone === 'small' && 'text-[10px] text-slate-700',
-    tone === 'dif-bold' && 'font-bold text-blue-900',
+interface LinhaProps {
+  label: string;
+  value: string;
+  /** linha topo (Valor Bruto / Total) — fonte semibold */
+  header?: boolean;
+  /** deduções — texto suave */
+  muted?: boolean;
+  /** destaque (Líquido / Total) — bold sem oversize */
+  bold?: boolean;
+  /** destaque azul (Diferença Líquido) */
+  difBold?: boolean;
+  /** R$/cab e R$/kg — menores */
+  small?: boolean;
+}
+
+function Linha({ label, value, header, muted, bold, difBold, small }: LinhaProps) {
+  const baseCls = 'flex items-baseline justify-between gap-2 leading-tight py-0.5 min-w-0';
+  const labelCls = [
+    'text-[11px] truncate',
+    header && 'font-semibold text-slate-900',
+    muted && 'text-slate-600',
+    bold && 'font-semibold text-slate-900',
+    difBold && 'font-semibold text-slate-900',
+    small && 'text-[10px] text-slate-600',
   ].filter(Boolean).join(' ');
-  // title pro tooltip caso o valor seja truncado
-  const titleStr = typeof children === 'string' ? children : undefined;
+  const valueCls = [
+    'tabular-nums text-[11px] whitespace-nowrap overflow-hidden text-ellipsis text-right',
+    header && 'font-semibold text-slate-900',
+    muted && 'text-slate-700',
+    bold && 'font-bold text-blue-900',
+    difBold && 'font-bold text-blue-900',
+    small && 'text-[10px] text-slate-700',
+  ].filter(Boolean).join(' ');
   return (
-    <span className={cls} title={titleStr}>
-      {children}
-    </span>
+    <div className={baseCls}>
+      <span className={labelCls}>{label}</span>
+      <span className={valueCls} title={value}>{value}</span>
+    </div>
   );
 }
 
