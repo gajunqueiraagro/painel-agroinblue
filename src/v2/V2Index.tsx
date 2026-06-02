@@ -1024,6 +1024,20 @@ export default function V2Index() {
           onEditSuccess={() => setZooEditId(null)}
           onAbrirNoFormPrincipal={redirecionarParaFormPrincipal}
           onAbrirFinanceiroVinculado={abrirFinanceiroVinculado}
+          onAbrirLancamentoFin={(id: string) => {
+            // PR-B1-R3-FIX — cabear o caminho do mount soberano via
+            // setSearchParams (já no escopo do V2Index, L358). Mesma forma
+            // de entrada do drill que o LancamentoDetalhe usa (3 params),
+            // consumida pelo useEffect L399 com replace:true.
+            //   - NÃO usa navigate (não existe useNavigate no V2Index).
+            //   - NÃO seta 'section' na URL (section é state, não searchParam).
+            //   - replace:true preserva coerência com o useEffect que limpa.
+            const next = new URLSearchParams(searchParams);
+            next.set('flancId', id);
+            next.set('returnZooId', zooEditId);
+            next.set('returnZooTab', 'custos');
+            setSearchParams(next, { replace: true });
+          }}
         />
       )}
 
