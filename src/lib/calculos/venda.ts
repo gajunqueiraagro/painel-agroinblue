@@ -19,7 +19,7 @@ function roundValue(value: number, decimals = 2): number {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type TipoPrecoVenda = 'por_arroba' | 'por_kg' | 'por_cab';
+export type TipoPrecoVenda = 'por_arroba' | 'por_kg' | 'por_cab' | 'por_total';
 
 export interface VendaParcela {
   data: string;
@@ -133,6 +133,8 @@ export function buildVendaCalculation(
     valorBaseRaw = pesoTotalKgRaw * precoInputRaw;
   } else if (input.tipoPreco === 'por_cab') {
     valorBaseRaw = quantidade * precoInputRaw;
+  } else if (input.tipoPreco === 'por_total') {
+    valorBaseRaw = precoInputRaw;
   }
 
   // R$/kg, R$/cab, R$/@ derivados

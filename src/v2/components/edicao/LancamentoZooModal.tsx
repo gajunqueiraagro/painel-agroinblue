@@ -57,6 +57,10 @@ import { CompraVinculoFinanceiroDisplay } from './_blocos/CompraVinculoFinanceir
 import { CompraAcoesFinanceiras } from './_blocos/CompraAcoesFinanceiras';
 import { EditarFinanceiroSheet } from './_blocos/EditarFinanceiroSheet';
 import { CompraCustosOperacao } from './_blocos/CompraCustosOperacao';
+// PR-VENDA-V2-FASE-1: bloco zoo da Venda V2 (espelha CompraDadosZootecnicos)
+// + motor único de cálculo (buildVendaCalculation).
+import { VendaDadosZootecnicos, EMPTY_VENDA_COMERCIAL, type VendaComercialState } from './_blocos/VendaDadosZootecnicos';
+import { buildVendaCalculation, type VendaCalculation, type TipoPrecoVenda } from '@/lib/calculos/venda';
 
 /** Linha de financeiro_lancamentos_v2 vinculada à movimentação (compra).
  *  Lift state (Opção A): resolvido no modal e compartilhado entre o
@@ -97,10 +101,24 @@ const CAMPOS_ESTRUTURAIS: (keyof Lancamento)[] = [
   'fazendaOrigem', 'fazendaDestino',
 ];
 
+// PR-VENDA-V2-FASE-1: lista canônica usada APENAS pelo guard da Venda V2
+// (inclui categoriaDestino e pesoMedioKg). NÃO substitui CAMPOS_ESTRUTURAIS —
+// Compra mantém comportamento atual; venda usa esta via parâmetro de
+// temAlteracaoEstrutural. Unificação completa fica para PR posterior.
+const CAMPOS_ESTRUTURAIS_VENDA: (keyof Lancamento)[] = [
+  'data', 'tipo', 'quantidade', 'categoria', 'categoriaDestino',
+  'fazendaOrigem', 'fazendaDestino', 'pesoMedioKg',
+];
+
 /** Helper compartilhado com LancamentoDetalhe: detecta mudanças em campos
- *  estruturais que P1 oficial bloqueia. */
-function temAlteracaoEstrutural(original: Lancamento, editado: Partial<Lancamento>): boolean {
-  return CAMPOS_ESTRUTURAIS.some(campo => {
+ *  estruturais que P1 oficial bloqueia. Aceita lista opcional (default =
+ *  CAMPOS_ESTRUTURAIS, comportamento idêntico ao original). */
+function temAlteracaoEstrutural(
+  original: Lancamento,
+  editado: Partial<Lancamento>,
+  campos: (keyof Lancamento)[] = CAMPOS_ESTRUTURAIS,
+): boolean {
+  return campos.some(campo => {
     if (!(campo in editado)) return false;
     const valOrig = (original as unknown as Record<string, unknown>)[campo as string] ?? '';
     const valEdit = (editado as unknown as Record<string, unknown>)[campo as string] ?? '';
@@ -220,6 +238,13 @@ export function LancamentoZooModal({
   const [compraZooSaved, setCompraZooSaved] = useState(false);
   const [notaFiscalEdit, setNotaFiscalEdit] = useState('');
 
+  // ── PR-VENDA-V2-FASE-1: Estado local da edição de venda ─────────────────
+  const [vendaForm, setVendaForm] = useState<Lancamento | null>(null);
+  const [vendaStatusMode, setVendaStatusMode] = useState<'realizado' | 'programado' | 'meta'>('realizado');
+  const [vendaSaving, setVendaSaving] = useState(false);
+  const [vendaZooSaved, setVendaZooSaved] = useState(false);
+  const [vendaComercial, setVendaComercial] = useState<VendaComercialState>(EMPTY_VENDA_COMERCIAL);
+
   // ── Z4: fornecedor soberano do zoo (edição) ────────────────────────────
   const [fornecedorIdEdit, setFornecedorIdEdit] = useState<string | null>(null);
   const [fornecedorNomeEdit, setFornecedorNomeEdit] = useState<string | null>(null);
@@ -323,10 +348,47 @@ export function LancamentoZooModal({
     }
   }, [lancamento, open]);
 
+  // PR-VENDA-V2-FASE-1: init de venda (espelha compra L317+). Hidrata o
+  // estado comercial a partir de lancamento.detalhesSnapshot, tolerando
+  // camelCase (canônico V2) E snake_case (snapshot do backfill PR-VENDA-COMP-01).
+  useEffect(() => {
+    if (lancamento && lancamento.tipo === 'venda' && open) {
+      setVendaForm({ ...lancamento });
+      setVendaStatusMode(isMeta(lancamento) ? 'meta' : ((lancamento.statusOperacional as 'realizado' | 'programado') || 'realizado'));
+      setVendaZooSaved(false);
+
+      const snap = lancamento.detalhesSnapshot as Record<string, unknown> | undefined;
+      const isVendaSnap = !!snap && (snap.type === 'venda' || snap._tipo === 'venda');
+      const get = (k1: string, k2: string): string => {
+        if (!isVendaSnap || !snap) return '';
+        const v = snap[k1] ?? snap[k2];
+        return v == null ? '' : String(v);
+      };
+      const tipoPrecoSnap = (isVendaSnap && snap
+        ? (snap.tipoPreco ?? (snap as Record<string, unknown>).tipo_preco)
+        : undefined) as TipoPrecoVenda | undefined;
+      setVendaComercial({
+        tipoVenda: lancamento.tipoVenda === 'desmama' ? 'desmama' : 'gado_adulto',
+        tipoPreco: tipoPrecoSnap ?? 'por_kg',
+        precoInput: get('precoInput', 'preco_input'),
+        frete: get('frete', 'frete'),
+        comissaoPct: get('comissaoPct', 'comissao_pct'),
+        outrosCustos: get('outrosCustos', 'outros_custos'),
+        funruralPct: get('funruralPct', 'funrural_pct'),
+        funruralReais: get('funruralReais', 'funrural_reais'),
+        formaReceb: isVendaSnap && snap && snap.formaReceb === 'prazo' ? 'prazo' : 'avista',
+        qtdParcelas: get('qtdParcelas', 'qtd_parcelas') || '1',
+        parcelas: (isVendaSnap && snap && Array.isArray(snap.parcelas) ? snap.parcelas : []) as VendaComercialState['parcelas'],
+      });
+    }
+  }, [lancamento, open]);
+
   // Z4: Carrega fornecedor com fallback em cascata.
   // Prioridade: zoo.fornecedorId → primeiro favorecido_id de fv2 vinculado → null.
+  // PR-VENDA-V2-FASE-1: estendido para 'venda' — mesma lógica de cascata.
   useEffect(() => {
-    if (!lancamento || lancamento.tipo !== 'compra' || !open) return;
+    if (!lancamento || !open) return;
+    if (lancamento.tipo !== 'compra' && lancamento.tipo !== 'venda') return;
 
     let cancelado = false;
 
@@ -390,6 +452,79 @@ export function LancamentoZooModal({
     );
   }, [compraForm, compraStatusMode, lancamento, fornecedorIdEdit]);
 
+  // ── PR-VENDA-V2-FASE-1: motor único ────────────────────────────────────
+  // Toda saída derivada (R$/@, R$/kg, R$/cab, valorBruto, valorLiquido) vem
+  // daqui. NUNCA recalcular em outro lugar (proibido por contrato).
+  const vendaCalc = useMemo<VendaCalculation>(() => {
+    return buildVendaCalculation({
+      quantidade: vendaForm?.quantidade ?? 0,
+      pesoKg: vendaForm?.pesoMedioKg ?? 0,
+      categoria: vendaForm?.categoria ?? '',
+      fazendaOrigem: vendaForm?.fazendaOrigem ?? '',
+      compradorNome: fornecedorNomeEdit ?? '',
+      data: vendaForm?.data ?? '',
+      statusOperacional: (vendaForm?.statusOperacional as 'programado' | 'agendado' | 'realizado') ?? 'realizado',
+      observacao: vendaForm?.observacao ?? '',
+      tipoVenda: vendaComercial.tipoVenda,
+      tipoPreco: vendaComercial.tipoPreco,
+      precoInput: vendaComercial.precoInput,
+      frete: vendaComercial.frete,
+      comissaoPct: vendaComercial.comissaoPct,
+      outrosCustos: vendaComercial.outrosCustos,
+      funruralPct: vendaComercial.funruralPct,
+      funruralReais: vendaComercial.funruralReais,
+      formaReceb: vendaComercial.formaReceb,
+      qtdParcelas: vendaComercial.qtdParcelas,
+      parcelas: vendaComercial.parcelas,
+    });
+  }, [vendaForm, vendaComercial, fornecedorNomeEdit]);
+
+  // vendaZooDirty: comparação manual dos campos do form + JSON do estado
+  // comercial vs snapshot inicial. Suficiente como gate de botão.
+  const vendaZooDirty = useMemo(() => {
+    if (!lancamento || !vendaForm || lancamento.tipo !== 'venda') return false;
+    const cenarioForm = vendaStatusMode === 'meta' ? 'meta' : 'realizado';
+
+    // Estado comercial inicial reconstruído a partir do snapshot (mesma lógica
+    // do useEffect de init, mantida inline pra ficar transparente no diff).
+    const snap = lancamento.detalhesSnapshot as Record<string, unknown> | undefined;
+    const isVendaSnap = !!snap && (snap.type === 'venda' || snap._tipo === 'venda');
+    const getInit = (k1: string, k2: string): string => {
+      if (!isVendaSnap || !snap) return '';
+      const v = snap[k1] ?? snap[k2];
+      return v == null ? '' : String(v);
+    };
+    const tipoPrecoInicial = (isVendaSnap && snap
+      ? (snap.tipoPreco ?? (snap as Record<string, unknown>).tipo_preco)
+      : undefined) as TipoPrecoVenda | undefined;
+    const inicial: VendaComercialState = {
+      tipoVenda: lancamento.tipoVenda === 'desmama' ? 'desmama' : 'gado_adulto',
+      tipoPreco: tipoPrecoInicial ?? 'por_kg',
+      precoInput: getInit('precoInput', 'preco_input'),
+      frete: getInit('frete', 'frete'),
+      comissaoPct: getInit('comissaoPct', 'comissao_pct'),
+      outrosCustos: getInit('outrosCustos', 'outros_custos'),
+      funruralPct: getInit('funruralPct', 'funrural_pct'),
+      funruralReais: getInit('funruralReais', 'funrural_reais'),
+      formaReceb: isVendaSnap && snap && snap.formaReceb === 'prazo' ? 'prazo' : 'avista',
+      qtdParcelas: getInit('qtdParcelas', 'qtd_parcelas') || '1',
+      parcelas: (isVendaSnap && snap && Array.isArray(snap.parcelas) ? snap.parcelas : []) as VendaComercialState['parcelas'],
+    };
+
+    return (
+      vendaForm.data !== lancamento.data ||
+      Number(vendaForm.quantidade) !== Number(lancamento.quantidade) ||
+      Number(vendaForm.pesoMedioKg ?? 0) !== Number(lancamento.pesoMedioKg ?? 0) ||
+      vendaForm.categoria !== lancamento.categoria ||
+      (vendaForm.fazendaOrigem || '') !== (lancamento.fazendaOrigem || '') ||
+      (vendaForm.fazendaDestino || '') !== (lancamento.fazendaDestino || '') ||
+      cenarioForm !== (lancamento.cenario || 'realizado') ||
+      (fornecedorIdEdit ?? null) !== (lancamento.fornecedorId ?? null) ||
+      (vendaForm.observacao ?? '') !== (lancamento.observacao ?? '') ||
+      JSON.stringify(vendaComercial) !== JSON.stringify(inicial)
+    );
+  }, [vendaForm, vendaComercial, vendaStatusMode, lancamento, fornecedorIdEdit]);
+
   // Z4: extraído de handleSalvarCompraZoo para reuso pelo modal de sync.
   const doSaveZoo = useCallback(async () => {
     if (!lancamento || !compraForm) return;
@@ -441,6 +576,74 @@ export function LancamentoZooModal({
       setCompraSaving(false);
     }
   }, [lancamento, compraForm, compraStatusMode, nomeFazendaDoRegistro, permissions.canEditEstrutural, onSalvar, fornecedorIdEdit, fornecedorNomeEdit, snapshotNomeInicial]);
+
+  // ── PR-VENDA-V2-FASE-1: doSaveVendaZoo (espelha doSaveZoo da Compra) ───
+  // Snapshot canônico SOMENTE com inputs (camelCase). Derivados (rArroba,
+  // rCab, valorBruto, etc.) saem do motor único `vendaCalc` e são gravados
+  // em colunas dedicadas (precoArroba, precoUnitario, valorTotal, pesoTotal).
+  // NÃO escreve em financeiro_lancamentos_v2 (Fase 2).
+  const doSaveVendaZoo = useCallback(async () => {
+    if (!lancamento || !vendaForm) return;
+    const fornecedorMudou = (fornecedorIdEdit ?? null) !== (lancamento.fornecedorId ?? null);
+    const snapshotFinal = fornecedorMudou
+      ? (fornecedorNomeEdit ?? '[nao informado]')
+      : (snapshotNomeInicial ?? lancamento.fornecedorNomeSnapshot ?? '[nao informado]');
+
+    const detalhesSnapshotCanonico = {
+      type: 'venda' as const,
+      tipoVenda: vendaComercial.tipoVenda,
+      tipoPreco: vendaComercial.tipoPreco,
+      precoInput: vendaComercial.precoInput,
+      frete: vendaComercial.frete,
+      comissaoPct: vendaComercial.comissaoPct,
+      outrosCustos: vendaComercial.outrosCustos,
+      funruralPct: vendaComercial.funruralPct,
+      funruralReais: vendaComercial.funruralReais,
+      formaReceb: vendaComercial.formaReceb,
+      qtdParcelas: vendaComercial.qtdParcelas,
+      parcelas: vendaComercial.parcelas,
+    };
+
+    const dados: Partial<Lancamento> = {
+      data: vendaForm.data,
+      tipo: vendaForm.tipo,
+      quantidade: Number(vendaForm.quantidade),
+      categoria: vendaForm.categoria,
+      fazendaOrigem: vendaForm.fazendaOrigem || undefined,
+      fazendaDestino: vendaForm.fazendaDestino || undefined,
+      pesoMedioKg: vendaForm.pesoMedioKg ? Number(vendaForm.pesoMedioKg) : undefined,
+      pesoMedioArrobas: vendaForm.pesoMedioKg ? kgToArrobas(Number(vendaForm.pesoMedioKg)) : undefined,
+      pesoTotal: vendaCalc.pesoTotalKg,
+      // Decisão 1+3 do briefing: competência (valor_total) = saída do motor.
+      valorTotal: vendaCalc.valorBruto,
+      // Desnormalização de leitura — derivados ficam fáceis em listagens/relatórios.
+      precoArroba: vendaCalc.rArroba,
+      precoUnitario: vendaCalc.rCab,
+      tipoVenda: vendaComercial.tipoVenda,
+      cenario: vendaStatusMode === 'meta' ? 'meta' : 'realizado',
+      statusOperacional: vendaStatusMode === 'meta' ? null : (vendaForm.statusOperacional || null),
+      fornecedorId: fornecedorIdEdit ?? undefined,
+      fornecedorNomeSnapshot: snapshotFinal,
+      detalhesSnapshot: detalhesSnapshotCanonico,
+    };
+    if (
+      permissions.canEditEstrutural === false &&
+      temAlteracaoEstrutural(lancamento, dados, CAMPOS_ESTRUTURAIS_VENDA)
+    ) {
+      return;
+    }
+    setVendaSaving(true);
+    try {
+      await onSalvar(lancamento.id, dados);
+      setVendaZooSaved(true);
+    } finally {
+      setVendaSaving(false);
+    }
+  }, [lancamento, vendaForm, vendaComercial, vendaStatusMode, vendaCalc, permissions.canEditEstrutural, onSalvar, fornecedorIdEdit, fornecedorNomeEdit, snapshotNomeInicial]);
+
+  const handleSalvarVendaZoo = useCallback(async () => {
+    await doSaveVendaZoo();
+  }, [doSaveVendaZoo]);
 
   const handleSalvarCompraZoo = useCallback(async () => {
     if (!lancamento || !compraForm) return;
@@ -841,9 +1044,107 @@ export function LancamentoZooModal({
     // substituímos o placeholder por um botão que redireciona ao form principal
     // da aba "Lançamentos" (que já edita venda/abate corretamente). Caller é
     // responsável pela navegação (set state no V2Index ou navigate por URL).
-    case 'venda':
+    // PR-VENDA-V2-FASE-1: case 'venda' agora renderiza in-modal (espelha
+    // case 'compra'). case 'abate' permanece com o redirect tático original
+    // — SEM alteração de comportamento do abate neste PR.
+    case 'venda': {
+      if (!vendaForm) return null;
+      return (
+        <ZooMovShell
+          open={open}
+          onOpenChange={onOpenChange}
+          title="Editar Venda"
+          subtitle={nomeFazendaDoRegistro}
+          badgeMesFechado={badgeMesFechado}
+          auditoriaSlot={
+            <BlocoAuditoria
+              lancamentoId={lancamento.id}
+              createdAt={raw?.created_at}
+              updatedAt={raw?.updated_at}
+            />
+          }
+          footer={
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[11px] font-semibold text-red-700 border-red-300 hover:bg-red-50"
+                onClick={() => onOpenChange(false)}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Cancelar Movimentação
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] font-medium"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700"
+                  onClick={handleSalvarVendaZoo}
+                  disabled={vendaSaving || !vendaZooDirty}
+                >
+                  {vendaSaving ? 'Salvando…' : 'Salvar Alterações'}
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          {/* Banner de bloqueio (apenas para reasons != 'mes_fechado'). */}
+          {permissions.blockReason && permissions.blockReason !== 'mes_fechado' && (
+            <BannerBloqueio reason={permissions.blockReason} />
+          )}
+
+          {!clienteIdLancamento && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-md border bg-red-50 border-red-200 text-red-800 mb-3">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="text-xs">Cliente do lançamento não identificado.</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-[11fr_9fr] gap-3 mb-3">
+            <BlocoDadosMovimentacao>
+              <VendaDadosZootecnicos
+                lancamento={lancamento}
+                form={vendaForm}
+                onFormChange={setVendaForm as React.Dispatch<React.SetStateAction<Lancamento>>}
+                comercial={vendaComercial}
+                onComercialChange={setVendaComercial}
+                statusMode={vendaStatusMode}
+                onStatusModeChange={setVendaStatusMode}
+                canEditMeta={canEditMeta}
+                nomeFazendaOrigem={nomeFazendaDoRegistro}
+                fornecedorId={fornecedorIdEdit}
+                onFornecedorChange={(id, nome) => {
+                  setFornecedorIdEdit(id);
+                  setFornecedorNomeEdit(nome);
+                }}
+                textoLegado={!fornecedorIdEdit ? (textoLegadoInicial ?? undefined) : undefined}
+                snapshotNome={snapshotNomeInicial ?? undefined}
+                clienteId={clienteIdLancamento ?? ''}
+                observacao={vendaForm.observacao ?? ''}
+                onObservacaoChange={v => setVendaForm(f => f ? { ...f, observacao: v } : f)}
+                calc={vendaCalc}
+              />
+            </BlocoDadosMovimentacao>
+
+            <BlocoVinculoFinanceiro>
+              <div className="px-3 py-4 text-[11px] text-muted-foreground italic">
+                Vínculo financeiro será tratado na Fase 2.
+              </div>
+            </BlocoVinculoFinanceiro>
+          </div>
+        </ZooMovShell>
+      );
+    }
+
     case 'abate': {
-      const tipoLabel = lancamento.tipo === 'venda' ? 'Venda' : 'Abate';
+      const tipoLabel = 'Abate';
       if (onAbrirNoFormPrincipal) {
         return (
           <Dialog open={open} onOpenChange={onOpenChange}>
