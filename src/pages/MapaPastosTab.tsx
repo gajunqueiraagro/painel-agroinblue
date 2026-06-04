@@ -16,17 +16,20 @@ import { calcUA, calcUAHa, calcPesoMedioPonderado } from '@/lib/calculos/zootecn
 import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export interface PastoMapaRow {
   pasto: Pasto;
+  fechamentoId: string | null;
   lote: string | null;
   tipoUso: string | null;
   qualidade: number | null;
-  categorias: Map<string, { quantidade: number; peso_medio_kg: number | null }>;
+  categorias: Map<string, { quantidade: number; peso_medio_kg: number | null; peso_atualizado: boolean }>;
   totalCabecas: number;
   pesoMedio: number | null;
   uaTotal: number;
   uaHa: number | null;
+  pesoAtualizado: boolean;
 }
 
 export interface MapaTotais {
@@ -83,7 +86,7 @@ interface MapaPastosTabProps {
 export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
-  const { fechamentos, loadFechamentos, loadItens } = useFechamento();
+  const { fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto } = useFechamento();
 
   const curYear = new Date().getFullYear();
   const [anosDisp, setAnosDisp] = useState<string[]>(() => {
@@ -166,12 +169,12 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
 
       const result: PastoMapaRow[] = pastosAtivos.map(pasto => {
         const fech = fechMap.get(pasto.id);
-        const catMap = new Map<string, { quantidade: number; peso_medio_kg: number | null }>();
+        const catMap = new Map<string, { quantidade: number; peso_medio_kg: number | null; peso_atualizado: boolean }>();
 
         if (fech) {
           const items = itemsByFechId.get(fech.id) || [];
           items.forEach(item => {
-            catMap.set(item.categoria_id, { quantidade: item.quantidade, peso_medio_kg: item.peso_medio_kg });
+            catMap.set(item.categoria_id, { quantidade: item.quantidade, peso_medio_kg: item.peso_medio_kg, peso_atualizado: item.peso_atualizado });
           });
         }
 
@@ -189,7 +192,10 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
         catMap.forEach(v => { uaTotal += calcUA(v.quantidade, v.peso_medio_kg); });
         const uaHa = calcUAHa(uaTotal, pasto.area_produtiva_ha);
 
-        return { pasto, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa };
+        const itensComQtd = Array.from(catMap.values()).filter(v => v.quantidade > 0);
+        const pesoAtualizado = itensComQtd.length > 0 && itensComQtd.every(v => v.peso_atualizado);
+
+        return { pasto, fechamentoId: fech?.id ?? null, lote, tipoUso, qualidade, categorias: catMap, totalCabecas: totalCab, pesoMedio, uaTotal, uaHa, pesoAtualizado };
       });
 
       setRows(result);
@@ -258,6 +264,30 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
       qtdPastos: d.qtdPastos,
     })).sort((a, b) => b.cabecas - a.cabecas);
   }, [rows]);
+
+  const handleTogglePesoAtualizado = useCallback(async (row: PastoMapaRow, value: boolean) => {
+    if (!row.fechamentoId) return;
+    const fechamentoId = row.fechamentoId;
+    const prev = row.pesoAtualizado;
+    // Otimista: alterna pesoAtualizado da linha e propaga para cada categoria do catMap.
+    setRows(curr => curr.map(r => {
+      if (r.fechamentoId !== fechamentoId) return r;
+      const novoCat = new Map(r.categorias);
+      novoCat.forEach((v, k) => novoCat.set(k, { ...v, peso_atualizado: value }));
+      return { ...r, pesoAtualizado: value, categorias: novoCat };
+    }));
+    const { ok, error } = await setPesoAtualizadoPasto(fechamentoId, value);
+    if (!ok) {
+      // Reverte e mostra a mensagem do banco (guard de P2 vem como RAISE).
+      setRows(curr => curr.map(r => {
+        if (r.fechamentoId !== fechamentoId) return r;
+        const novoCat = new Map(r.categorias);
+        novoCat.forEach((v, k) => novoCat.set(k, { ...v, peso_atualizado: prev }));
+        return { ...r, pesoAtualizado: prev, categorias: novoCat };
+      }));
+      toast.error(error?.message || 'Erro ao atualizar marca de peso');
+    }
+  }, [setPesoAtualizadoPasto]);
 
   const getUaHaColor = (uaHa: number | null) => {
     if (!uaHa) return '';
@@ -350,6 +380,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
             totais={totais}
             getUaHaColor={getUaHaColor}
             getQualidadeColor={getQualidadeColor}
+            onTogglePesoAtualizado={handleTogglePesoAtualizado}
           />
         )}
       </div>
@@ -385,17 +416,19 @@ function isBlockSeparator(catIdx: number, categorias: CategoriaRebanho[]) {
   return false;
 }
 
-function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }: {
+function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, onTogglePesoAtualizado }: {
   rows: PastoMapaRow[];
   categorias: CategoriaRebanho[];
   totais: MapaTotais;
   getUaHaColor: (v: number | null) => string;
   getQualidadeColor: (v: number | null) => string;
+  onTogglePesoAtualizado: (row: PastoMapaRow, value: boolean) => void;
 }) {
   const colWidths = useMemo(() => {
     const base = [95, 80, 120];
     const cats = categorias.map(() => 44);
-    const tail = [50, 50, 45, 42, 34];
+    // tail: Total, Peso, ✓Peso (nova), Área, UA/ha, Qual
+    const tail = [50, 50, 32, 45, 42, 34];
     return [...base, ...cats, ...tail];
   }, [categorias]);
 
@@ -479,6 +512,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                   })}
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-semibold border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Total</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>Peso</th>
+                  <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[10px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }} title="Peso atualizado/conferido pelo operador">✓ Peso</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Área</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
@@ -530,6 +564,16 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 tabular-nums text-muted-foreground" style={{ borderLeft: pesoLeftBorder }}>
                         {row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
+                      <td className="px-0.5 py-0.5 text-center border-r border-border/30">
+                        <input
+                          type="checkbox"
+                          checked={row.pesoAtualizado}
+                          disabled={!row.fechamentoId}
+                          onChange={(e) => onTogglePesoAtualizado(row, e.target.checked)}
+                          className="h-3.5 w-3.5 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
+                          aria-label={`Peso atualizado em ${row.pasto.nome}`}
+                        />
+                      </td>
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 text-muted-foreground">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
                       <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
                       <td className="px-0.5 py-0.5 text-center text-[11px]">
@@ -571,6 +615,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                   })}
                   <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                  <td className="px-0.5 py-0.5 text-center border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }} />
                   <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
                   <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>
                     {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
@@ -602,6 +647,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor }
                     {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
                   </td>
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
+                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
                   <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
                   <td />

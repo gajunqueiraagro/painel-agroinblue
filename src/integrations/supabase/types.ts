@@ -1243,6 +1243,7 @@ export type Database = {
           lote: string | null
           observacoes: string | null
           origem_dado: string
+          peso_atualizado: boolean
           peso_medio_kg: number | null
           quantidade: number
         }
@@ -1254,6 +1255,7 @@ export type Database = {
           lote?: string | null
           observacoes?: string | null
           origem_dado?: string
+          peso_atualizado?: boolean
           peso_medio_kg?: number | null
           quantidade?: number
         }
@@ -1265,6 +1267,7 @@ export type Database = {
           lote?: string | null
           observacoes?: string | null
           origem_dado?: string
+          peso_atualizado?: boolean
           peso_medio_kg?: number | null
           quantidade?: number
         }

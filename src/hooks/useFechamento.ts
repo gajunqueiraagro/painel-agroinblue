@@ -28,6 +28,7 @@ export interface FechamentoItem {
   lote: string | null;
   observacoes: string | null;
   origem_dado: string;
+  peso_atualizado: boolean;
 }
 
 export function useFechamento() {
@@ -81,11 +82,24 @@ export function useFechamento() {
 
   const salvarItens = useCallback(async (
     fechamentoId: string,
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado?: boolean }[]
   ) => {
-    // Delete existing then insert
+    // Preservação: ler peso_atualizado atual por categoria antes do DELETE+INSERT
+    // para que salvar o fechamento nunca zere a marca já feita pelo operador.
+    const { data: existentes } = await supabase
+      .from('fechamento_pasto_itens')
+      .select('categoria_id, peso_atualizado')
+      .eq('fechamento_id', fechamentoId);
+    const pesoAtualizadoMap = new Map<string, boolean>(
+      (existentes || []).map(e => [e.categoria_id, e.peso_atualizado])
+    );
+
     await supabase.from('fechamento_pasto_itens').delete().eq('fechamento_id', fechamentoId);
-    const toInsert = itens.filter(i => i.quantidade > 0).map(i => ({ ...i, fechamento_id: fechamentoId }));
+    const toInsert = itens.filter(i => i.quantidade > 0).map(i => ({
+      ...i,
+      fechamento_id: fechamentoId,
+      peso_atualizado: i.peso_atualizado ?? pesoAtualizadoMap.get(i.categoria_id) ?? false,
+    }));
     if (toInsert.length > 0) {
       const { error } = await supabase.from('fechamento_pasto_itens').insert(toInsert);
       if (error) { toast.error('Erro ao salvar itens'); console.error(error); return false; }
@@ -117,11 +131,19 @@ export function useFechamento() {
     return true;
   }, []);
 
+  const setPesoAtualizadoPasto = useCallback(async (fechamentoId: string, value: boolean) => {
+    const { error } = await supabase
+      .from('fechamento_pasto_itens')
+      .update({ peso_atualizado: value })
+      .eq('fechamento_id', fechamentoId);
+    return { ok: !error, error };
+  }, []);
+
   const copiarMesAnterior = useCallback(async (
     pastoId: string,
     anoMesAtual: string,
     categorias: CategoriaRebanho[]
-  ): Promise<{ itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }> => {
+  ): Promise<{ itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado: boolean }[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }> => {
     const [y, m] = anoMesAtual.split('-').map(Number);
     const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
 
@@ -135,7 +157,7 @@ export function useFechamento() {
     if (!fechAnterior) {
       toast.info('Sem dados do mês anterior');
       return {
-        itens: categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' })),
+        itens: categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual', peso_atualizado: false })),
         dadosMes: { lote_mes: null, tipo_uso_mes: null, qualidade_mes: null, observacao_mes: null },
       };
     }
@@ -151,6 +173,7 @@ export function useFechamento() {
           lote: found?.lote || null,
           observacoes: null,
           origem_dado: found ? 'copiado_mes_anterior' : 'manual',
+          peso_atualizado: false,
         };
       }),
       dadosMes: {
@@ -162,5 +185,5 @@ export function useFechamento() {
     };
   }, [loadItens]);
 
-  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior };
+  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior, setPesoAtualizadoPasto };
 }
