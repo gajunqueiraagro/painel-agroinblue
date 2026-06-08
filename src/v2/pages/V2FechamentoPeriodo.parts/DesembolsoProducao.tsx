@@ -8,7 +8,7 @@
  * (estruturaCustos). Cores do design system. Sem mock, sem "fazer número bater".
  */
 
-import { useState } from 'react';
+import { Fragment, useState, type CSSProperties } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Bar,
@@ -431,64 +431,85 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
     const d = difRsCabMes(real, meta);
     return d != null ? `${fmt(d, 2)}` : '—';
   };
+  const fmtMedioPeriodo = (v: number | null | undefined): string => {
+    const r = rsMedioPeriodo(v);
+    return r != null ? `R$ ${fmt(r)}` : '—';
+  };
+
+  // ── Estilos locais (inline) — refinamento visual sem tocar printStyles.css ──
+  const cell: CSSProperties = { padding: '6px 10px', borderBottom: '1px solid #eef0f3' };
+  const cellNum: CSSProperties = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+  const COR_REAL_COL = '#dc2626'; // coluna Real sempre vermelho
+  const COR_META_COL = '#f97316'; // coluna Meta sempre laranja
+  const bordaGrupo = '1px solid #cbd5e1';
+
+  // Nível 1 — agregado do próprio nó grupo (NÃO somar centros).
+  const metaGrupoAusente = grupo.meta == null || grupo.meta === 0;
 
   return (
-    <div className="subgrupo-rank">
-      <div className="subgrupo-rank-header" onClick={() => setAberto(v => !v)}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          {grupo.grupo_custo}
-        </span>
-        <span>R$ {fmt(grupo.realizado)} <span className={classeCustoDelta(grupo.desvioMetaPct)}>({pct(grupo.desvioMetaPct)})</span></span>
-      </div>
-      {aberto && (
-        <table className="fechamento-table" style={{ marginTop: 8 }}>
-          <thead>
-            <tr>
-              <th>Centro / Subcentro</th>
-              <th className="num">Realizado R$</th>
-              <th className="num">R$ médio Período</th>
-              <th className="num">Real R$/cab/mês</th>
-              <th className="num">Meta R$/cab/mês</th>
-              <th className="num">Dif R$/cab/mês</th>
-              <th className="num">Dif %</th>
+    <div style={{ margin: '10px 0', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, color: '#111' }}>
+        <tbody>
+          {/* ── NÍVEL 1 — Grupo macro: faixa forte, clicável, linha completa ── */}
+          <tr onClick={() => setAberto(v => !v)} style={{ cursor: 'pointer', background: '#e2e8f0' }}>
+            <td style={{ ...cell, fontWeight: 700, fontSize: 12, borderBottom: bordaGrupo }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                {grupo.grupo_custo}
+              </span>
+            </td>
+            <td style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{fmtMedioPeriodo(grupo.realizado)}</td>
+            <td style={{ ...cellNum, fontWeight: 700, color: COR_REAL_COL, borderBottom: bordaGrupo }}>{fmtRsCabMes(grupo.realizado)}</td>
+            <td style={{ ...cellNum, fontWeight: 700, color: COR_META_COL, borderBottom: bordaGrupo }}>{metaGrupoAusente ? '—' : fmtRsCabMes(grupo.meta)}</td>
+            <td className={metaGrupoAusente ? '' : classeCustoDelta(grupo.desvioMetaPct)} style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{metaGrupoAusente ? '—' : fmtDifRsCabMes(grupo.realizado, grupo.meta)}</td>
+            <td className={metaGrupoAusente ? '' : classeCustoDelta(grupo.desvioMetaPct)} style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{metaGrupoAusente ? '—' : pct(grupo.desvioMetaPct)}</td>
+          </tr>
+
+          {/* Rótulos das colunas (sutis) — só quando aberto */}
+          {aberto && (
+            <tr style={{ background: '#f8fafc', color: '#6b7280', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+              <td style={{ ...cell, fontWeight: 600 }}>Centro / Subcentro</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>R$ médio Período</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Real R$/cab/mês</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Meta R$/cab/mês</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Dif R$/cab/mês</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Dif %</td>
             </tr>
-          </thead>
-          <tbody>
-            {grupo.centros.map(centro => {
-              // Meta ausente (null ou 0): não exibir Meta/Dif/% — não calcular contra zero.
-              const metaCentroAusente = centro.meta == null || centro.meta === 0;
-              return (
-                <>
-                  <tr key={centro.centro_custo}>
-                    <td><strong>{centro.centro_custo}</strong></td>
-                    <td className="num"><strong>R$ {fmt(centro.realizado)}</strong></td>
-                    <td className="num">{rsMedioPeriodo(centro.realizado) != null ? `R$ ${fmt(rsMedioPeriodo(centro.realizado))}` : '—'}</td>
-                    <td className="num">{fmtRsCabMes(centro.realizado)}</td>
-                    <td className="num">{metaCentroAusente ? '—' : fmtRsCabMes(centro.meta)}</td>
-                    <td className={`num ${metaCentroAusente ? '' : classeCustoDelta(centro.desvioMetaPct)}`}>{metaCentroAusente ? '—' : fmtDifRsCabMes(centro.realizado, centro.meta)}</td>
-                    <td className={`num ${metaCentroAusente ? '' : classeCustoDelta(centro.desvioMetaPct)}`}>{metaCentroAusente ? '—' : pct(centro.desvioMetaPct)}</td>
-                  </tr>
-                  {centro.subcentros.map(sub => {
-                    const metaSubAusente = sub.meta == null || sub.meta === 0;
-                    return (
-                      <tr key={`${centro.centro_custo}-${sub.subcentro}`} className="linha-sub">
-                        <td>{sub.subcentro}</td>
-                        <td className="num">R$ {fmt(sub.realizado)}</td>
-                        <td className="num">{rsMedioPeriodo(sub.realizado) != null ? `R$ ${fmt(rsMedioPeriodo(sub.realizado))}` : '—'}</td>
-                        <td className="num">{fmtRsCabMes(sub.realizado)}</td>
-                        <td className="num">{metaSubAusente ? '—' : fmtRsCabMes(sub.meta)}</td>
-                        <td className={`num ${metaSubAusente ? '' : classeCustoDelta(sub.desvioMetaPct)}`}>{metaSubAusente ? '—' : fmtDifRsCabMes(sub.realizado, sub.meta)}</td>
-                        <td className={`num ${metaSubAusente ? '' : classeCustoDelta(sub.desvioMetaPct)}`}>{metaSubAusente ? '—' : pct(sub.desvioMetaPct)}</td>
-                      </tr>
-                    );
-                  })}
-                </>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+          )}
+
+          {aberto && grupo.centros.map(centro => {
+            // Meta ausente (null ou 0): não exibir Meta/Dif/% — não calcular contra zero.
+            const metaCentroAusente = centro.meta == null || centro.meta === 0;
+            return (
+              <Fragment key={centro.centro_custo}>
+                {/* ── NÍVEL 2 — Centro: fundo evidente, bold ── */}
+                <tr style={{ background: '#f1f5f9' }}>
+                  <td style={{ ...cell, fontWeight: 600 }}>{centro.centro_custo}</td>
+                  <td style={{ ...cellNum, fontWeight: 600 }}>{fmtMedioPeriodo(centro.realizado)}</td>
+                  <td style={{ ...cellNum, fontWeight: 600, color: COR_REAL_COL }}>{fmtRsCabMes(centro.realizado)}</td>
+                  <td style={{ ...cellNum, fontWeight: 600, color: COR_META_COL }}>{metaCentroAusente ? '—' : fmtRsCabMes(centro.meta)}</td>
+                  <td className={metaCentroAusente ? '' : classeCustoDelta(centro.desvioMetaPct)} style={{ ...cellNum, fontWeight: 600 }}>{metaCentroAusente ? '—' : fmtDifRsCabMes(centro.realizado, centro.meta)}</td>
+                  <td className={metaCentroAusente ? '' : classeCustoDelta(centro.desvioMetaPct)} style={{ ...cellNum, fontWeight: 600 }}>{metaCentroAusente ? '—' : pct(centro.desvioMetaPct)}</td>
+                </tr>
+                {/* ── NÍVEL 3 — Subcentro: recuado, menor, fundo branco ── */}
+                {centro.subcentros.map(sub => {
+                  const metaSubAusente = sub.meta == null || sub.meta === 0;
+                  return (
+                    <tr key={`${centro.centro_custo}-${sub.subcentro}`} style={{ background: '#fff' }}>
+                      <td style={{ ...cell, paddingLeft: 28, color: '#4b5563', fontSize: 9 }}>{sub.subcentro}</td>
+                      <td style={{ ...cellNum, fontSize: 9 }}>{fmtMedioPeriodo(sub.realizado)}</td>
+                      <td style={{ ...cellNum, fontSize: 9, color: COR_REAL_COL }}>{fmtRsCabMes(sub.realizado)}</td>
+                      <td style={{ ...cellNum, fontSize: 9, color: COR_META_COL }}>{metaSubAusente ? '—' : fmtRsCabMes(sub.meta)}</td>
+                      <td className={metaSubAusente ? '' : classeCustoDelta(sub.desvioMetaPct)} style={{ ...cellNum, fontSize: 9 }}>{metaSubAusente ? '—' : fmtDifRsCabMes(sub.realizado, sub.meta)}</td>
+                      <td className={metaSubAusente ? '' : classeCustoDelta(sub.desvioMetaPct)} style={{ ...cellNum, fontSize: 9 }}>{metaSubAusente ? '—' : pct(sub.desvioMetaPct)}</td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
