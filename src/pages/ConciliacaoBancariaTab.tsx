@@ -172,13 +172,14 @@ function buildMonthCards(
     const anoMes = `${ano}-${mesStr}`;
     const isAll = targetContaId === '__all__';
     const saldoRows = saldos.filter(s => s.ano_mes === anoMes);
-    const mesLancs = lancamentos.filter(l => l.ano_mes === anoMes && belongsToConta(l, targetContaId));
+    const mesLancs = lancamentos.filter(l => (l.data_pagamento || '').slice(0, 7) === anoMes && belongsToConta(l, targetContaId));
 
     if (!isAll) {
       const official = calcConciliacaoMensal({
         contaId: targetContaId, anoMes, saldoRows,
         lancamentos: lancamentos as ConciliacaoLancamentoBase[],
         fallbackSaldoInicial: prevFinal.get(targetContaId) || 0,
+        monthBy: 'data_pagamento',
       });
       cards.push({
         mes: mesStr, label: MESES_LABELS[m-1], anoMes,
@@ -210,6 +211,7 @@ function buildMonthCards(
       contaId: c.id, anoMes, saldoRows,
       lancamentos: lancamentos as ConciliacaoLancamentoBase[],
       fallbackSaldoInicial: prevFinal.get(c.id) || 0,
+      monthBy: 'data_pagamento',
     }));
 
     const entradasTerceiros = r2(perAcct.reduce((s,r) => s + r.entradasTerceiros, 0));
@@ -257,6 +259,7 @@ function buildMonthCards(
         contaId: c.id, anoMes, saldoRows,
         lancamentos: lancamentos as ConciliacaoLancamentoBase[],
         fallbackSaldoInicial: prevFinal.get(c.id) || 0,
+        monthBy: 'data_pagamento',
       }).status);
       const allOk  = perStatuses.every(s => s === 'realizado');
       const anyBad = perStatuses.some(s => s === 'nao_conciliado');
@@ -416,7 +419,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .eq('sem_movimentacao_caixa', false)
         .eq('status_transacao', 'realizado')
         .eq('cenario', 'realizado')
-        .gte('ano_mes',anoMesMin).lte('ano_mes',anoMesMax)
+        .gte('data_pagamento',`${ano}-01-01`).lte('data_pagamento',`${ano}-12-31`)
         .order('ano_mes').order('data_pagamento').order('id')
         .range(from, from+batchSize-1);
       if (!lData || lData.length === 0) break;
@@ -454,6 +457,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         contaId:c.id, anoMes, saldoRows:saldos,
         lancamentos: lancamentos as ConciliacaoLancamentoBase[],
         fallbackSaldoInicial: saldoRow?.saldo_inicial ?? 0,
+        monthBy: 'data_pagamento',
       });
       return {
         conta:c, sis:official.saldoCalculado,

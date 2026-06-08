@@ -35,9 +35,16 @@ export interface ConciliacaoLancamentoBase {
   conta_bancaria_id: string | null;
   conta_destino_id: string | null;
   ano_mes: string;
+  data_pagamento: string | null;
   valor: number;
   tipo_operacao: string | null;
 }
+
+/**
+ * Mês de caixa soberano da conciliação: deriva de data_pagamento (YYYY-MM),
+ * nunca de ano_mes. Lançamento sem data_pagamento → '' → fora do mês.
+ */
+const cashMonth = (l: { data_pagamento: string | null }) => (l.data_pagamento || '').slice(0, 7);
 
 /** Status de conciliação único no sistema */
 export type ConciliacaoStatus = 'realizado' | 'nao_conciliado' | 'pendente';
@@ -154,15 +161,24 @@ export function calcConciliacaoMensal({
   saldoRows,
   lancamentos,
   fallbackSaldoInicial = 0,
+  monthBy = 'ano_mes',
 }: {
   contaId: string;
   anoMes: string;
   saldoRows: ConciliacaoSaldoBase[];
   lancamentos: ConciliacaoLancamentoBase[];
   fallbackSaldoInicial?: number;
+  /**
+   * Mês de escopo dos lançamentos:
+   *   'ano_mes'        → competência (default; Saldos permanece como hoje)
+   *   'data_pagamento' → caixa (Conciliação; sem fallback, NULL fica fora)
+   */
+  monthBy?: 'ano_mes' | 'data_pagamento';
 }): ConciliacaoMensalResult {
   const relevantSaldoRows = saldoRows.filter((row) => row.ano_mes === anoMes && row.conta_bancaria_id === contaId);
-  const relevantLancamentos = lancamentos.filter((row) => row.ano_mes === anoMes && belongsToConta(row, contaId));
+  const relevantLancamentos = lancamentos.filter((row) =>
+    (monthBy === 'data_pagamento' ? cashMonth(row) === anoMes : row.ano_mes === anoMes)
+    && belongsToConta(row, contaId));
 
   let entradasTerceiros = 0;
   let transferenciasRecebidas = 0;
