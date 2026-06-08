@@ -120,7 +120,10 @@ function montarLinhaSaldoFinal(
       real: 0,
       delta: 0,
       realAnoCorrente: real,
-      deltaAnoCorrente: calcDeltaLocal(meta, real),
+      // Fechamento: Saldo Caixa Final é resultado (não custo) → delta direto
+      // (real-meta)/meta. Real>Meta = positivo = verde no DeltaBadge (sem
+      // inverterSemantica). NÃO usar calcDeltaLocal (semântica de custo).
+      deltaAnoCorrente: meta > 0 ? (real - meta) / meta : 0,
     };
   }
   const meta = data.saldoCaixaFinalMeta;
@@ -242,6 +245,8 @@ function DeltaBadge({ delta, inverterSemantica = false }: { delta: number; inver
 // Classe utilitária para a coluna REAL 2026 no modo Fechamento — azul
 // (espelha variant 'sky' dos cards). Aplicada no header e nos valores.
 const REAL_ANO_CORRENTE_COLUNA = 'text-sky-700 dark:text-sky-300';
+// Coluna Real da tabela de SAÍDAS no Fechamento: vermelho (saída de caixa).
+const REAL_SAIDA_COLUNA = 'text-red-600 dark:text-red-400';
 
 function LinhaRow({
   linha,
@@ -249,12 +254,15 @@ function LinhaRow({
   onClick,
   modo = 'planejamento',
   inverterSemantica = false,
+  realSaida = false,
 }: {
   linha: LinhaExecutiva;
   destaque?: boolean;
   onClick?: () => void;
   modo?: 'planejamento' | 'fechamento';
   inverterSemantica?: boolean;
+  /** Tabela de Saídas no Fechamento: coluna Real em vermelho (saída de caixa). */
+  realSaida?: boolean;
 }) {
   const isFechamento = modo === 'fechamento';
   const realAC = linha.realAnoCorrente ?? 0;
@@ -279,11 +287,11 @@ function LinhaRow({
       </div>
       {isFechamento ? (
         <>
+          <div className={cn('text-[11px] tabular-nums text-right font-semibold', realSaida ? REAL_SAIDA_COLUNA : REAL_ANO_CORRENTE_COLUNA)}>
+            {fmtBRL(realAC)}
+          </div>
           <div className={cn('text-[11px] tabular-nums text-right font-semibold', META_COLUNA)}>
             {fmtBRL(linha.meta)}
-          </div>
-          <div className={cn('text-[11px] tabular-nums text-right font-semibold', REAL_ANO_CORRENTE_COLUNA)}>
-            {fmtBRL(realAC)}
           </div>
           <div className="text-right">
             <DeltaBadge delta={deltaAC} inverterSemantica={inverterSemantica} />
@@ -578,8 +586,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           <div></div>
           {isFechamento ? (
             <>
-              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
               <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
+              <div className={cn('text-right', META_COLUNA)}>META 2026</div>
             </>
           ) : (
             <>
@@ -608,8 +616,8 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           <div></div>
           {isFechamento ? (
             <>
+              <div className={cn('text-right', REAL_SAIDA_COLUNA)}>REAL 2026</div>
               <div className={cn('text-right', META_COLUNA)}>META 2026</div>
-              <div className={cn('text-right', REAL_ANO_CORRENTE_COLUNA)}>REAL 2026</div>
             </>
           ) : (
             <>
@@ -619,7 +627,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           )}
           <div className="text-right">Δ%</div>
         </div>
-        <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={isFechamento} />
+        <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={isFechamento} realSaida={isFechamento} />
         {linhasSaida.map(([l, key]) => (
           <LinhaRow
             key={key}
@@ -627,6 +635,7 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
             onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
             modo={modo}
             inverterSemantica={isFechamento}
+            realSaida={isFechamento}
           />
         ))}
       </div>

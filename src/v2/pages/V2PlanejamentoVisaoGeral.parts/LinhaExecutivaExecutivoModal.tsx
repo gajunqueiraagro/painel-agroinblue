@@ -417,8 +417,8 @@ export function LinhaExecutivaExecutivoModal({
             <div></div>
             {isFechamento ? (
               <>
-                <div className="text-center" style={{ color: cfg.corMeta }}>{cfg.labelMetaLong}</div>
                 <div className="text-center" style={{ color: corRealNatureza }}>{cfg.labelRealLong}</div>
+                <div className="text-center" style={{ color: cfg.corMeta }}>{cfg.labelMetaLong}</div>
               </>
             ) : (
               <>
@@ -437,8 +437,8 @@ export function LinhaExecutivaExecutivoModal({
             <div className="truncate text-foreground">{tituloLinhaTotalizadora}</div>
             {isFechamento ? (
               <>
-                <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</div>
                 <div className="text-right tabular-nums" style={{ color: corRealNatureza }}>{fmtBRL(realTotalizadora)}</div>
+                <div className="text-right tabular-nums" style={{ color: cfg.corMeta }}>{fmtBRL(data.linha.meta)}</div>
               </>
             ) : (
               <>
@@ -475,8 +475,8 @@ export function LinhaExecutivaExecutivoModal({
                   <div className="truncate text-foreground">{centro.centro_custo}</div>
                   {isFechamento ? (
                     <>
-                      {colMeta}
                       {colReal}
+                      {colMeta}
                     </>
                   ) : (
                     <>
@@ -503,8 +503,8 @@ export function LinhaExecutivaExecutivoModal({
                       <div className="truncate text-muted-foreground">{sub.subcentro}</div>
                       {isFechamento ? (
                         <>
-                          {subMeta}
                           {subReal}
+                          {subMeta}
                         </>
                       ) : (
                         <>

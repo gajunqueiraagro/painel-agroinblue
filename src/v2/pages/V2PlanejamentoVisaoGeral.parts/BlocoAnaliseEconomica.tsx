@@ -265,18 +265,18 @@ function LinhaRow({
       <div className={labelClass}>{linha.label}</div>
       {mostrarAnoCorrente ? (
         <>
-          <div className={realAnoAntClass}>{fmt(linha.valorAnoAnt)}</div>
-          <div className={metaClass}>{fmt(linha.valor)}</div>
           <div className={realAnoCorrClass}>{fmt(linha.valorAnoCorrente)}</div>
+          <div className={metaClass}>{fmt(linha.valor)}</div>
+          <div className={realAnoAntClass}>{fmt(linha.valorAnoAnt)}</div>
           {destaqueFinal ? (
             <>
-              <div className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</div>
               <div className={deltaPctClassMeta}>{formatPct(deltaMetaPct)}</div>
+              <div className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</div>
             </>
           ) : (
             <>
-              <div className="flex justify-end"><span className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</span></div>
               <div className="flex justify-end"><span className={deltaPctClassMeta}>{formatPct(deltaMetaPct)}</span></div>
+              <div className="flex justify-end"><span className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</span></div>
             </>
           )}
         </>
@@ -415,16 +415,18 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
         m ? GRID_5_COLS : GRID_4_COLS,
       )}>
         <div>{m ? 'Descrição' : ''}</div>
-        <div className="text-center">Real {ano - 1}</div>
-        <div className={cn('text-center', m ? 'text-orange-200' : 'text-orange-500')}>Meta {ano}</div>
-        {m && <div className="text-center">Real {ano}</div>}
         {m ? (
           <>
-            <div className="text-center">Δ Ano Ant</div>
+            <div className="text-center">Real {ano}</div>
+            <div className="text-center text-orange-200">Meta {ano}</div>
+            <div className="text-center">Real {ano - 1}</div>
             <div className="text-center">Δ Meta</div>
+            <div className="text-center">Δ Ano Ant</div>
           </>
         ) : (
           <>
+            <div className="text-center">Real {ano - 1}</div>
+            <div className="text-center text-orange-500">Meta {ano}</div>
             <div className="text-center">Δ R$</div>
             <div className="text-center">Δ%</div>
           </>
