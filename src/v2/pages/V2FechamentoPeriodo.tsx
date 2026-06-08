@@ -663,6 +663,28 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             custoCab={painel.custoCabIndicador?.valor ?? null}
             custoArr={painel.custoArrIndicador?.valor ?? null}
             custeioAcum={painel.custeioPecIndicador?.valor ?? null}
+            custoCabSerieMes={painel.custoCabIndicador?.serieMensal ?? []}
+            custoCabSerieAcum={painel.custoCabIndicador?.serieAno ?? []}
+            custoCabSerieMeta={painel.custoCabIndicador?.serieMeta}
+            custoCabSerieAnoAnt={painel.custoCabIndicador?.serieAnoAnt}
+            custoCabDeltaMeta={painel.custoCabIndicador?.deltaMeta ?? null}
+            custoCabDeltaAno={painel.custoCabIndicador?.deltaAno ?? null}
+            custoArrSerieMes={painel.custoArrIndicador?.serieMensal ?? []}
+            custoArrSerieAcum={painel.custoArrIndicador?.serieAno ?? []}
+            custoArrSerieMeta={painel.custoArrIndicador?.serieMeta}
+            custoArrSerieAnoAnt={painel.custoArrIndicador?.serieAnoAnt}
+            custoArrDeltaMeta={painel.custoArrIndicador?.deltaMeta ?? null}
+            custoArrDeltaAno={painel.custoArrIndicador?.deltaAno ?? null}
+            custeioSerieAcum={painel.custeioPecIndicador?.serieAno ?? []}
+            custeioSerieMeta={painel.custeioPecIndicador?.serieMeta}
+            custeioSerieAnoAnt={painel.custeioPecIndicador?.serieAnoAnt}
+            custeioDeltaMeta={painel.custeioPecIndicador?.deltaMeta ?? null}
+            custeioDeltaAno={painel.custeioPecIndicador?.deltaAno ?? null}
+            mesAlvoIdx={mesAlvo}
+            labelsMeses={dto.meses}
+            numMeses={dto.meses.length}
+            rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
+            rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
           />
         </div>
       )}
