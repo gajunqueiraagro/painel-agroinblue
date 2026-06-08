@@ -17,6 +17,7 @@ import { formatNum } from '@/lib/calculos/formatters';
 import { tipoUsoLabel } from '@/lib/calculos/labels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isOperacionalPecuaria, grupoDoTipoUso } from '@/lib/pastos/tiposUso';
 
 export interface PastoMapaRow {
   pasto: Pasto;
@@ -57,24 +58,59 @@ const CAT_SIGLAS: Record<string, string> = {
 };
 
 /**
- * Estilo de badge da coluna Atividade — agrupado por uso semântico:
- *   pecuaria  : cria, recria, engorda, reforma_pecuaria  (verde)
- *   agricultura: agricultura                              (azul)
- *   vedado    : app, reserva_legal, benfeitorias          (verde-claro/cinza)
- *   default   : sem tipo definido                         (neutro)
+ * Estilo de badge da coluna Atividade — 6 cores distintas por tipo_uso:
+ *   cria, reforma_pecuaria → emerald (verde claro)
+ *   recria                 → green   (verde escuro)
+ *   engorda                → sky     (azul claro)
+ *   agricultura            → blue    (azul escuro)
+ *   vedado                 → slate   (cinza)
+ *   divergencia (legado)   → amber   (âmbar/laranja)
+ *   default                → neutro  (sem tipo definido, reserva, app, benfeitorias)
  */
 function getAtividadeBadgeClasses(tipo: string | null): string {
   if (!tipo) return 'bg-muted/40 text-muted-foreground border-border/50';
-  if (tipo === 'cria' || tipo === 'recria' || tipo === 'engorda' || tipo === 'reforma_pecuaria') {
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  switch (tipo) {
+    case 'cria':
+    case 'reforma_pecuaria':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    case 'recria':
+      return 'bg-green-100 text-green-800 border-green-300';
+    case 'engorda':
+      return 'bg-sky-50 text-sky-700 border-sky-200';
+    case 'agricultura':
+      return 'bg-blue-100 text-blue-800 border-blue-300';
+    case 'vedado':
+      return 'bg-slate-100 text-slate-600 border-slate-300';
+    case 'divergencia':
+      return 'bg-amber-100 text-amber-800 border-amber-300';
+    default:
+      return 'bg-muted/40 text-muted-foreground border-border/50';
   }
-  if (tipo === 'agricultura') {
-    return 'bg-sky-50 text-sky-700 border-sky-200';
+}
+
+/**
+ * Tint suave de linha por atividade — substitui a zebra.
+ * Mesma família de cor do badge, bem diluído. Ordem das linhas preservada.
+ */
+function getRowTintBg(tipo: string | null): string {
+  if (!tipo) return 'transparent';
+  switch (tipo) {
+    case 'cria':
+    case 'reforma_pecuaria':
+      return 'rgba(236, 253, 245, 0.4)'; // emerald-50/40
+    case 'recria':
+      return 'rgba(220, 252, 231, 0.3)'; // green-100/30
+    case 'engorda':
+      return 'rgba(240, 249, 255, 0.4)'; // sky-50/40
+    case 'agricultura':
+      return 'rgba(219, 234, 254, 0.3)'; // blue-100/30
+    case 'vedado':
+      return 'rgba(241, 245, 249, 0.4)'; // slate-100/40
+    case 'divergencia':
+      return 'rgba(254, 243, 199, 0.3)'; // amber-100/30
+    default:
+      return 'transparent';
   }
-  if (tipo === 'app' || tipo === 'reserva_legal' || tipo === 'benfeitorias') {
-    return 'bg-lime-50 text-lime-700 border-lime-200';
-  }
-  return 'bg-muted/40 text-muted-foreground border-border/50';
 }
 
 interface MapaPastosTabProps {
@@ -222,7 +258,10 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
     });
 
     const totalCab = rows.reduce((s, r) => s + r.totalCabecas, 0);
-    const areaTotal = rows.reduce((s, r) => s + (r.pasto.area_produtiva_ha || 0), 0);
+    // areaTotal pecuária-only: exclui agricultura/ambiental/infra. Corrige uaHaGeral automaticamente.
+    const areaTotal = rows
+      .filter(r => isOperacionalPecuaria(r.tipoUso))
+      .reduce((s, r) => s + (r.pasto.area_produtiva_ha || 0), 0);
 
     const pesoMedioGeral = calcPesoMedioPonderado(
       rows.filter(r => r.totalCabecas > 0).map(r => ({ quantidade: r.totalCabecas, pesoKg: r.pesoMedio }))
@@ -231,7 +270,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
     const uaTotal = rows.reduce((s, r) => s + r.uaTotal, 0);
     const uaHaGeral = calcUAHa(uaTotal, areaTotal);
 
-    const comQualidade = rows.filter(r => r.qualidade !== null && r.qualidade > 0);
+    const comQualidade = rows.filter(r => isOperacionalPecuaria(r.tipoUso) && r.qualidade !== null && r.qualidade > 0);
     const qualidadeMedia = comQualidade.length > 0
       ? comQualidade.reduce((s, r) => s + (r.qualidade || 0), 0) / comQualidade.length
       : null;
@@ -517,10 +556,76 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b border-r whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>UA/ha</th>
                   <th className="sticky top-0 z-40 px-0.5 py-0.5 text-center text-[11px] font-medium border-b whitespace-nowrap" style={{ backgroundColor: hdrBg, borderColor: 'hsl(220 13% 75%)' }}>Qual.</th>
                 </tr>
+                {/* ── BANDA STICKY TOTAL / MÉDIA (top:28, abaixo do header) ── */}
+                <tr className="font-bold h-7">
+                  <td colSpan={3} className="px-1.5 py-0.5 text-[11px] border-r" style={{ position: 'sticky', top: 28, left: 0, zIndex: 45, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>TOTAL / MÉDIA</td>
+                  {categorias.map((cat, catIdx) => {
+                    const t = totais.catTotals.get(cat.id);
+                    const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
+                    const bg = isMacho(cat) ? ftBgMacho : isFemea(cat) ? ftBgFemea : ftBg;
+                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
+                    const leftBdr = getCatBorderLeft(catIdx);
+                    return (
+                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                        {t && t.quantidade > 0 ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-default font-bold" style={color ? { color } : undefined}>{formatNum(t.quantidade, 0)}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{cat.nome}: {formatNum(t.quantidade, 0)} cab</p>
+                              {pesoMed && <p>Peso médio: {formatNum(pesoMed, 2)} kg</p>}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : '—'}
+                      </td>
+                    );
+                  })}
+                  <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
+                  <td className="px-0.5 py-0.5 text-center border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }} />
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
+                  <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderTop: '2px solid hsl(220 13% 75%)' }}>
+                    {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
+                  </td>
+                  <td className="px-0.5 py-0.5 text-center text-[11px]" style={{ position: 'sticky', top: 28, zIndex: 35, backgroundColor: ftBg, borderTop: '2px solid hsl(220 13% 75%)' }}>
+                    {totais.qualidadeMedia ? (
+                      <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
+                        {formatNum(totais.qualidadeMedia, 1)}
+                      </span>
+                    ) : '—'}
+                  </td>
+                </tr>
+                {/* ── BANDA STICKY PESO KG (top:56, abaixo da TOTAL/MÉDIA) ── */}
+                <tr className="h-6">
+                  <td colSpan={3} className="px-1.5 py-0.5 text-[10px] font-semibold border-r italic text-muted-foreground" style={{ position: 'sticky', top: 56, left: 0, zIndex: 25, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }}>Peso Kg</td>
+                  {categorias.map((cat, catIdx) => {
+                    const pesoMed = pesosPorCategoria.get(cat.id);
+                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
+                    const leftBdr = getCatBorderLeft(catIdx);
+                    return (
+                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
+                        {pesoMed ? (
+                          <span style={color ? { color } : undefined}>{formatNum(pesoMed, 2)}</span>
+                        ) : <span className="opacity-20">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
+                    {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
+                  </td>
+                  <td className="border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
+                  <td className="border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }} />
+                  <td className="border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }} />
+                  <td className="border-r" style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }} />
+                  <td style={{ position: 'sticky', top: 56, zIndex: 20, backgroundColor: 'hsl(220 14% 92%)' }} />
+                </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => {
-                  const bgStyle = { backgroundColor: idx % 2 === 0 ? 'hsl(var(--background))' : 'hsl(var(--muted) / 0.45)' };
+                {rows.map((row) => {
+                  // Tint suave por atividade (substitui zebra). Mesmo bgStyle vai para o td sticky de Pasto.
+                  const bgStyle = { backgroundColor: getRowTintBg(row.tipoUso) };
+                  const isAgri = grupoDoTipoUso(row.tipoUso) === 'agricultura';
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
                       <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
@@ -542,7 +647,7 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
                         return (
                           <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r border-border/30" style={leftBdr ? { borderLeft: leftBdr } : undefined}>
-                            {qty > 0 ? (
+                            {isAgri ? null : qty > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <span className="font-semibold cursor-default" style={color ? { color } : undefined}>{formatNum(qty, 0)}</span>
@@ -559,23 +664,25 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                         );
                       })}
                       <td className="px-0.5 py-0.5 text-center text-[11px] font-bold border-r border-border/30 bg-primary/5" style={{ borderLeft: totalLeftBorder }}>
-                        {row.totalCabecas ? formatNum(row.totalCabecas, 0) : <span className="opacity-15">—</span>}
+                        {isAgri ? null : row.totalCabecas ? formatNum(row.totalCabecas, 0) : <span className="opacity-15">—</span>}
                       </td>
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 tabular-nums text-muted-foreground" style={{ borderLeft: pesoLeftBorder }}>
-                        {row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
+                        {isAgri ? null : row.pesoMedio ? formatNum(row.pesoMedio, 2) : <span className="opacity-15">—</span>}
                       </td>
                       <td className="px-0.5 py-0.5 text-center border-r border-border/30">
-                        <input
-                          type="checkbox"
-                          checked={row.pesoAtualizado}
-                          disabled={!row.fechamentoId}
-                          onChange={(e) => onTogglePesoAtualizado(row, e.target.checked)}
-                          className="h-3.5 w-3.5 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
-                          aria-label={`Peso atualizado em ${row.pasto.nome}`}
-                        />
+                        {isAgri ? null : (
+                          <input
+                            type="checkbox"
+                            checked={row.pesoAtualizado}
+                            disabled={!row.fechamentoId}
+                            onChange={(e) => onTogglePesoAtualizado(row, e.target.checked)}
+                            className="h-3.5 w-3.5 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label={`Peso atualizado em ${row.pasto.nome}`}
+                          />
+                        )}
                       </td>
                       <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 text-muted-foreground">{row.pasto.area_produtiva_ha ? formatNum(row.pasto.area_produtiva_ha, 1) : <span className="opacity-15">—</span>}</td>
-                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
+                      <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r border-border/30 ${getUaHaColor(row.uaHa)}`}>{isAgri ? null : row.uaHa ? formatNum(row.uaHa, 1) : <span className="opacity-15">—</span>}</td>
                       <td className="px-0.5 py-0.5 text-center text-[11px]">
                         {row.qualidade ? (
                           <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(row.qualidade)}`}>
@@ -587,72 +694,6 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   );
                 })}
               </tbody>
-              <tfoot>
-                {/* ── TOTAL / MÉDIA ── */}
-                <tr className="font-bold h-7" style={{ borderTop: '2px solid hsl(220 13% 75%)' }}>
-                  <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }} colSpan={3}>TOTAL / MÉDIA</td>
-                  {categorias.map((cat, catIdx) => {
-                    const t = totais.catTotals.get(cat.id);
-                    const pesoMed = t && t.qtdComPeso > 0 ? t.pesoTotal / t.qtdComPeso : null;
-                    const bg = isMacho(cat) ? ftBgMacho : isFemea(cat) ? ftBgFemea : ftBg;
-                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
-                    const leftBdr = getCatBorderLeft(catIdx);
-                    return (
-                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[11px] border-r" style={{ backgroundColor: bg, borderColor: 'hsl(220 13% 75%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
-                        {t && t.quantidade > 0 ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-default font-bold" style={color ? { color } : undefined}>{formatNum(t.quantidade, 0)}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>{cat.nome}: {formatNum(t.quantidade, 0)} cab</p>
-                              {pesoMed && <p>Peso médio: {formatNum(pesoMed, 2)} kg</p>}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : '—'}
-                      </td>
-                    );
-                  })}
-                  <td className="px-0.5 py-0.5 text-center text-[11px] font-extrabold border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.totalCab, 0)}</td>
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r tabular-nums" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>{totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}</td>
-                  <td className="px-0.5 py-0.5 text-center border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }} />
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic border-r" style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>{formatNum(totais.areaTotal, 1)}</td>
-                  <td className={`px-0.5 py-0.5 text-center text-[10px] italic border-r ${getUaHaColor(totais.uaHaGeral)}`} style={{ backgroundColor: ftBg, borderColor: 'hsl(220 13% 75%)' }}>
-                    {totais.uaHaGeral ? formatNum(totais.uaHaGeral, 2) : '—'}
-                  </td>
-                  <td className="px-0.5 py-0.5 text-center text-[11px]" style={{ backgroundColor: ftBg }}>
-                    {totais.qualidadeMedia ? (
-                      <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${getQualidadeColor(totais.qualidadeMedia)}`}>
-                        {formatNum(totais.qualidadeMedia, 1)}
-                      </span>
-                    ) : '—'}
-                  </td>
-                </tr>
-                {/* ── PESO KG (nova linha) ── */}
-                <tr className="h-6" style={{ backgroundColor: 'hsl(220 14% 92%)' }}>
-                  <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[10px] font-semibold border-r italic text-muted-foreground" style={{ backgroundColor: 'hsl(220 14% 92%)', borderColor: 'hsl(220 13% 80%)' }} colSpan={3}>Peso Kg</td>
-                  {categorias.map((cat, catIdx) => {
-                    const pesoMed = pesosPorCategoria.get(cat.id);
-                    const color = isMacho(cat) ? txtMacho : isFemea(cat) ? txtFemea : undefined;
-                    const leftBdr = getCatBorderLeft(catIdx);
-                    return (
-                      <td key={cat.id} className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', ...(leftBdr ? { borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' } : {}) }}>
-                        {pesoMed ? (
-                          <span style={color ? { color } : undefined}>{formatNum(pesoMed, 2)}</span>
-                        ) : <span className="opacity-20">—</span>}
-                      </td>
-                    );
-                  })}
-                  <td className="px-0.5 py-0.5 text-center text-[10px] italic tabular-nums border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }}>
-                    {totais.pesoMedioGeral ? formatNum(totais.pesoMedioGeral, 2) : '—'}
-                  </td>
-                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)', borderLeftWidth: 2, borderLeftColor: 'hsl(220 13% 75%)' }} />
-                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
-                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
-                  <td className="border-r" style={{ borderColor: 'hsl(220 13% 80%)' }} />
-                  <td />
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
