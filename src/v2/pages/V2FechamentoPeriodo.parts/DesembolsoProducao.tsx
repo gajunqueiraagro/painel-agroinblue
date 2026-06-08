@@ -437,8 +437,12 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
   };
 
   // ── Estilos locais (inline) — refinamento visual sem tocar printStyles.css ──
-  const cell: CSSProperties = { padding: '6px 10px', borderBottom: '1px solid #eef0f3' };
+  const cell: CSSProperties = { padding: '3px 8px', borderBottom: '1px solid #eef0f3' };
   const cellNum: CSSProperties = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+  // Nome (Centro/Subcentro): uma linha, ellipsis quando longo. maxWidth:0 faz o
+  // ellipsis respeitar a largura do <col> sob table-layout:fixed.
+  const cellNome: CSSProperties = { ...cell, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 0 };
+  const cellSubNome: CSSProperties = { ...cellNome, paddingTop: 1, paddingBottom: 1 };
   const COR_REAL_COL = '#dc2626'; // coluna Real sempre vermelho
   const COR_META_COL = '#f97316'; // coluna Meta sempre laranja
   const bordaGrupo = '1px solid #cbd5e1';
@@ -448,14 +452,22 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
 
   return (
     <div style={{ margin: '10px 0', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, color: '#111' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 10, color: '#111' }}>
+        <colgroup>
+          <col style={{ width: '40%' }} />
+          <col style={{ width: '16%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '11%' }} />
+        </colgroup>
         <tbody>
           {/* ── NÍVEL 1 — Grupo macro: faixa forte, clicável, linha completa ── */}
           <tr onClick={() => setAberto(v => !v)} style={{ cursor: 'pointer', background: '#e2e8f0' }}>
-            <td style={{ ...cell, fontWeight: 700, fontSize: 12, borderBottom: bordaGrupo }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {aberto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                {grupo.grupo_custo}
+            <td title={grupo.grupo_custo} style={{ ...cellNome, fontWeight: 700, fontSize: 12, borderBottom: bordaGrupo }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                {aberto ? <ChevronDown size={14} style={{ flexShrink: 0 }} /> : <ChevronRight size={14} style={{ flexShrink: 0 }} />}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{grupo.grupo_custo}</span>
               </span>
             </td>
             <td style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{fmtMedioPeriodo(grupo.realizado)}</td>
@@ -469,11 +481,11 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
           {aberto && (
             <tr style={{ background: '#f8fafc', color: '#6b7280', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3 }}>
               <td style={{ ...cell, fontWeight: 600 }}>Centro / Subcentro</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>R$ médio Período</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Real R$/cab/mês</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Meta R$/cab/mês</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Dif R$/cab/mês</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Dif %</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Média Período</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Real</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Meta</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Δ R$</td>
+              <td style={{ ...cellNum, fontWeight: 600 }}>Δ %</td>
             </tr>
           )}
 
@@ -484,7 +496,7 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
               <Fragment key={centro.centro_custo}>
                 {/* ── NÍVEL 2 — Centro: fundo evidente, bold ── */}
                 <tr style={{ background: '#f1f5f9' }}>
-                  <td style={{ ...cell, fontWeight: 600 }}>{centro.centro_custo}</td>
+                  <td title={centro.centro_custo} style={{ ...cellNome, fontWeight: 600 }}>{centro.centro_custo}</td>
                   <td style={{ ...cellNum, fontWeight: 600 }}>{fmtMedioPeriodo(centro.realizado)}</td>
                   <td style={{ ...cellNum, fontWeight: 600, color: COR_REAL_COL }}>{fmtRsCabMes(centro.realizado)}</td>
                   <td style={{ ...cellNum, fontWeight: 600, color: COR_META_COL }}>{metaCentroAusente ? '—' : fmtRsCabMes(centro.meta)}</td>
@@ -496,7 +508,7 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
                   const metaSubAusente = sub.meta == null || sub.meta === 0;
                   return (
                     <tr key={`${centro.centro_custo}-${sub.subcentro}`} style={{ background: '#fff' }}>
-                      <td style={{ ...cell, paddingLeft: 28, color: '#4b5563', fontSize: 9 }}>{sub.subcentro}</td>
+                      <td title={sub.subcentro} style={{ ...cellSubNome, paddingLeft: 28, color: '#4b5563', fontSize: 9 }}>{sub.subcentro}</td>
                       <td style={{ ...cellNum, fontSize: 9 }}>{fmtMedioPeriodo(sub.realizado)}</td>
                       <td style={{ ...cellNum, fontSize: 9, color: COR_REAL_COL }}>{fmtRsCabMes(sub.realizado)}</td>
                       <td style={{ ...cellNum, fontSize: 9, color: COR_META_COL }}>{metaSubAusente ? '—' : fmtRsCabMes(sub.meta)}</td>
