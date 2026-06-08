@@ -373,6 +373,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** Valor do mês (1=Jan…12=Dez, 0=NaN): custeioPec[m]/arrobasProd[m]. Sempre mensal, independe de viewMode. */
+    serieMensal: number[];
   } | null;
   /**
    * Preço de Venda R$/@ — derivado: recPecComp / desfrute_arr.
@@ -407,6 +409,8 @@ export interface PainelConsultorDataResult {
     serieAno:   number[];
     serieAnoAnt?: number[];
     serieMeta?:  number[];
+    /** Valor do mês (1=Jan…12=Dez, 0=NaN): custeioPec[m]/cabMediaMes[m]. Sempre mensal, independe de viewMode. */
+    serieMensal: number[];
   } | null;
   /**
    * Margem por @ — derivado: precoArr − custoArr.
@@ -3092,6 +3096,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    custoArrSerie,
       serieAnoAnt: custoArrSerieAnoAnt ?? undefined,
       serieMeta:   custoArrSerieMeta ?? undefined,
+      serieMensal: custoArrMesSerie13,
     } : null,
     precoArrIndicador: monthlyData ? {
       label:     'PREÇO DE VENDA R$/@',
@@ -3120,6 +3125,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       serieAno:    custoCabSerie,
       serieAnoAnt: custoCabSerieAnoAnt ?? undefined,
       serieMeta:   custoCabSerieMeta ?? undefined,
+      serieMensal: custoCabMesSerie13,
     } : null,
     margemArrIndicador: monthlyData ? {
       label:     'MARGEM POR @',
