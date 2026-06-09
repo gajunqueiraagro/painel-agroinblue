@@ -549,29 +549,34 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       {/* Marco 2.5: Capa Executiva no topo — Resumo Executivo via PC-100
           soberano. Precede os 3 blocos operacionais (Produção → DRE → Caixa). */}
       {dto && (
-        <Capa
-          dto={dto}
-          nomeCliente={clienteAtual?.nome}
-          nomeFazenda={nomeFazenda}
-          painel={painel}
-        />
+        <div className="print-section">
+          <Capa
+            dto={dto}
+            nomeCliente={clienteAtual?.nome}
+            nomeFazenda={nomeFazenda}
+            painel={painel}
+          />
+        </div>
       )}
 
       {/* Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado
           em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
           ativa as 7 colunas (Real ano-1 / Real ano / Meta + 2 deltas). */}
-      <BlocoAnaliseEconomica
-        data={dtoPlanejamento.bloco3_analiseEconomica}
-        desfocar={false}
-        ano={ano}
-        mostrarAnoCorrente={true}
-      />
+      <div className="print-section print-page-break">
+        <BlocoAnaliseEconomica
+          data={dtoPlanejamento.bloco3_analiseEconomica}
+          desfocar={false}
+          ano={ano}
+          mostrarAnoCorrente={true}
+        />
+      </div>
 
       {/* Marco 2.5 Fase 1: BlocoResumoExecutivo renderizado em paralelo a
           FluxoCaixa (legado). Validação cruzada de entradas/saídas/caixa
           pendente — FluxoCaixa continua sendo a fonte soberana até confirmar
           paridade. */}
       {blocoResumoData && (
+        <div className="print-section print-page-break">
         <BlocoResumoExecutivo
           data={blocoResumoData}
           saldoInicialMeta={planFin.saldoInicial}
@@ -599,26 +604,33 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
               : undefined
           }
         />
+        </div>
       )}
 
       {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
-      <BlocoMovimentacoesRebanhoFechamento
-        ano={ano}
-        mes={mesAlvo}
-        viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
-        isGlobal={isGlobal}
-      />
-      <BlocoConferenciaMensalRebanhoFechamento
-        ano={ano}
-        mes={mesAlvo}
-        viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
-        isGlobal={isGlobal}
-      />
+      <div className="print-section print-page-break">
+        <BlocoMovimentacoesRebanhoFechamento
+          ano={ano}
+          mes={mesAlvo}
+          viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+          isGlobal={isGlobal}
+        />
+      </div>
+      <div className="print-section">
+        <BlocoConferenciaMensalRebanhoFechamento
+          ano={ano}
+          mes={mesAlvo}
+          viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+          isGlobal={isGlobal}
+        />
+      </div>
 
       {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — movido para
           após Movimentações conforme decisão FASE 3 (Capa → DRE → Fluxo →
           Movimentações → Produção). */}
-      <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
+      <div className="print-section print-page-break">
+        <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
+      </div>
 
       {isGlobal && clienteId && (
         <FluxoCaixaModal
@@ -657,7 +669,10 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       {dto && (
         <div className="fechamento-print-area">
-          <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
+          <div className="print-section">
+            <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
+          </div>
+          <div className="print-section print-page-break print-allow-break">
           <DesembolsoProducao
             dto={dto}
             custoCab={painel.custoCabIndicador?.valor ?? null}
@@ -686,6 +701,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
             rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
           />
+          </div>
         </div>
       )}
     </div>

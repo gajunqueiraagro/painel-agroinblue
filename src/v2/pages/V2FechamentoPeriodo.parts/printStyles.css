@@ -191,6 +191,11 @@
   font-weight: 600;
 }
 
+/* PR-Print-2: wrapper de bloco. Na TELA fica transparente (display:contents)
+   → layout idêntico, preserva o margin-bottom dos blocos. Vira block + regras
+   de paginação só dentro do @media print abaixo. */
+.print-section { display: contents; }
+
 @media print {
   /* sidebar real é <aside>; .v2-sidebar/.header-filtro sao legados que nao existem mais no DOM.
      V5: + nav cobre a bottom-nav mobile (<nav class="fixed bottom-0 ... md:hidden">). O único
@@ -281,4 +286,11 @@
     margin: 0 auto;
     padding: 0;
   }
+
+  /* PR-Print-2: paginação seletiva (faixa B). Wrapper vira block; evita corte
+     no meio de blocos médios/pequenos. print-allow-break libera quebra interna
+     em blocos longos (Custos). */
+  .print-section { display: block; width: 100%; break-inside: avoid; }
+  .print-page-break { break-before: page; }
+  .print-allow-break { break-inside: auto; }
 }
