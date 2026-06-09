@@ -212,7 +212,9 @@
     margin: 0;
     padding: 15mm;
   }
-  @page { size: A4 portrait; margin: 0; }
+  /* PR-Print-1: margens reservam o cabeçalho fixo (top 24mm) e o rodapé fixo
+     (bottom 18mm). Ajustar mm na validação se houver corte/sobreposição. */
+  @page { size: A4; margin: 24mm 14mm 18mm 14mm; }
   .fechamento-print-area { font-size: 10pt; }
 
   /* PR-FechamentoPeriodo-PrintCSS-V4 — destravar a cadeia de ancestrais
@@ -264,5 +266,56 @@
   }
   .pagina-fechamento:first-child > header .font-semibold {
     font-size: 15pt !important;
+  }
+
+  /* ── PR-Print-1: template base de impressão (frame executivo A4) ──
+     Header/rodapé ancorados em .fechamento-container (NÃO body) via
+     pseudo-elementos position:fixed → repetem em todas as páginas no print.
+     Sem tocar DOM/tela. Se o preview NÃO repetir em todas as páginas,
+     PARAR e REPORTAR (não inventar workaround). */
+
+  /* 4) Containers padronizados — largura/centralização das DUAS áreas. */
+  .fechamento-container,
+  .fechamento-print-area {
+    width: 100%;
+    max-width: 182mm;   /* = 210mm A4 − 14mm×2 de margem lateral do @page */
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  /* 2) Cabeçalho fixo (logo à esquerda via background, título à direita). */
+  .fechamento-container::before {
+    content: "Fechamento do Período";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 18mm;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 4mm 14mm 0;
+    background: url("../../../assets/logo.png") no-repeat left center;
+    background-size: auto 12mm;
+    font: 600 11pt/1 system-ui, sans-serif;
+    color: #0f172a;
+    border-bottom: 0.3mm solid #cbd5e1;
+  }
+
+  /* 3) Rodapé fixo (texto estático, sem número de página). */
+  .fechamento-container::after {
+    content: "AGROinBLUE — Fechamento do Período";
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 10mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14mm 3mm;
+    font: 400 8pt/1 system-ui, sans-serif;
+    color: #64748b;
+    border-top: 0.3mm solid #e2e8f0;
   }
 }
