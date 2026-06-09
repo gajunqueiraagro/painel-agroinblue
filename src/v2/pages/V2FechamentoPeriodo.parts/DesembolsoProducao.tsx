@@ -19,6 +19,7 @@ import {
   YAxis,
   Tooltip,
   Legend,
+  LabelList,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -31,7 +32,7 @@ import { fmt, pct } from './fmt';
 const COR_REAL = '#dc2626';    // vermelho — Realizado
 const COR_META = '#f97316';    // laranja — Meta (linha pontilhada)
 const COR_ANOANT = '#9ca3af';  // cinza — Ano anterior
-const COR_BARRA = '#cbd5e1';   // cinza claro — barras (valor do mês)
+const COR_BARRA = '#e5e7eb';   // cinza claro discreto — barras (valor do mês)
 const CORES_DONUT = ['#dc2626', '#f97316', '#0ea5e9', '#8b5cf6', '#10b981', '#eab308', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e'];
 
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -231,6 +232,15 @@ export default function DesembolsoProducao({
 
   const tipR$cab = (v: number | number[]) => `R$ ${fmt(Array.isArray(v) ? v[0] : v, 2)}`;
   const tipR$ = (v: number | number[]) => `R$ ${fmt(Array.isArray(v) ? v[0] : v, 0)}`;
+  // Labels nos pontos da linha Realizado — vazio quando ponto ausente.
+  const labelR$cab = (v: number | number[]) => {
+    const n = Array.isArray(v) ? v[0] : v;
+    return n == null || !Number.isFinite(n) ? '' : fmt(n, 2);
+  };
+  const labelR$ = (v: number | number[]) => {
+    const n = Array.isArray(v) ? v[0] : v;
+    return n == null || !Number.isFinite(n) ? '' : fmt(n, 0);
+  };
 
   return (
     <section className="pagina-fechamento bloco-custos">
@@ -266,20 +276,22 @@ export default function DesembolsoProducao({
           <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
             Custeio Médio Cab./Mês (R$/cab.)
           </div>
-          <div style={{ width: '100%', height: 200 }}>
+          <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dataG1} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={36} />
+              <ComposedChart data={dataG1} margin={{ top: 16, right: 10, left: 0, bottom: 0 }}>
+                <XAxis dataKey="mes" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={34} domain={[0, (max: number) => Math.ceil(max * 1.15)]} />
                 <Tooltip formatter={tipR$cab} contentStyle={{ fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
                 <Bar dataKey="barra" name="Mês" fill={COR_BARRA} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false}>
+                  <LabelList dataKey="real" position="top" formatter={labelR$cab} style={{ fontSize: 8, fontWeight: 600, fill: COR_REAL }} />
+                </Line>
                 {g1HasMeta && (
                   <Line dataKey="meta" name="Meta" stroke={COR_META} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
                 {g1HasAnoAnt && (
-                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
@@ -291,20 +303,22 @@ export default function DesembolsoProducao({
           <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
             Custo Produtivo (R$/@)
           </div>
-          <div style={{ width: '100%', height: 200 }}>
+          <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dataG2} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={36} />
+              <ComposedChart data={dataG2} margin={{ top: 16, right: 10, left: 0, bottom: 0 }}>
+                <XAxis dataKey="mes" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={34} domain={[0, (max: number) => Math.ceil(max * 1.15)]} />
                 <Tooltip formatter={tipR$cab} contentStyle={{ fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
                 <Bar dataKey="barra" name="Mês" fill={COR_BARRA} radius={[3, 3, 0, 0]} isAnimationActive={false} />
-                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false}>
+                  <LabelList dataKey="real" position="top" formatter={labelR$cab} style={{ fontSize: 8, fontWeight: 600, fill: COR_REAL }} />
+                </Line>
                 {g2HasMeta && (
                   <Line dataKey="meta" name="Meta" stroke={COR_META} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
                 {g2HasAnoAnt && (
-                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
               </ComposedChart>
             </ResponsiveContainer>
@@ -316,19 +330,21 @@ export default function DesembolsoProducao({
           <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
             Custeio Produção Pecuária Acumulado (R$)
           </div>
-          <div style={{ width: '100%', height: 200 }}>
+          <div style={{ width: '100%', height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dataG3} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="mes" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={44} />
+              <LineChart data={dataG3} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
+                <XAxis dataKey="mes" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} width={44} domain={['auto', 'auto']} />
                 <Tooltip formatter={tipR$} contentStyle={{ fontSize: 11 }} />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+                <Line dataKey="real" name="Realizado" stroke={COR_REAL} strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false}>
+                  <LabelList dataKey="real" position="top" formatter={labelR$} style={{ fontSize: 8, fontWeight: 600, fill: COR_REAL }} />
+                </Line>
                 {g3HasMeta && (
                   <Line dataKey="meta" name="Meta" stroke={COR_META} strokeWidth={2} strokeDasharray="4 3" dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
                 {g3HasAnoAnt && (
-                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls={false} />
+                  <Line dataKey="anoAnt" name="Ano ant." stroke={COR_ANOANT} strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
@@ -348,9 +364,32 @@ export default function DesembolsoProducao({
               )}
             </div>
           </div>
-          {gruposPec.map(g => (
-            <GrupoExpansivel key={g.grupo_custo} grupo={g} denom={denom} numMeses={numMeses} />
-          ))}
+          {/* UMA tabela: colgroup + thead global, grupos = múltiplos <tbody>. */}
+          <div style={{ margin: '10px 0', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 10, color: '#111' }}>
+              <colgroup>
+                <col style={{ width: '40%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '11%' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ background: '#cbd5e1', color: '#1f2937', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                  <th style={{ padding: '5px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Centro / Subcentro</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Média Período</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Real</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Meta</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Δ R$</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Δ %</th>
+                </tr>
+              </thead>
+              {gruposPec.map(g => (
+                <GrupoExpansivel key={g.grupo_custo} grupo={g} denom={denom} numMeses={numMeses} />
+              ))}
+            </table>
+          </div>
         </div>
 
         {/* Donut Composição do Custeio */}
@@ -451,17 +490,7 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
   const metaGrupoAusente = grupo.meta == null || grupo.meta === 0;
 
   return (
-    <div style={{ margin: '10px 0', border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 10, color: '#111' }}>
-        <colgroup>
-          <col style={{ width: '40%' }} />
-          <col style={{ width: '16%' }} />
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '11%' }} />
-        </colgroup>
-        <tbody>
+    <tbody>
           {/* ── NÍVEL 1 — Grupo macro: faixa forte, clicável, linha completa ── */}
           <tr onClick={() => setAberto(v => !v)} style={{ cursor: 'pointer', background: '#e2e8f0' }}>
             <td title={grupo.grupo_custo} style={{ ...cellNome, fontWeight: 700, fontSize: 12, borderBottom: bordaGrupo }}>
@@ -476,18 +505,6 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
             <td className={metaGrupoAusente ? '' : classeCustoDelta(grupo.desvioMetaPct)} style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{metaGrupoAusente ? '—' : fmtDifRsCabMes(grupo.realizado, grupo.meta)}</td>
             <td className={metaGrupoAusente ? '' : classeCustoDelta(grupo.desvioMetaPct)} style={{ ...cellNum, fontWeight: 700, borderBottom: bordaGrupo }}>{metaGrupoAusente ? '—' : pct(grupo.desvioMetaPct)}</td>
           </tr>
-
-          {/* Rótulos das colunas (sutis) — só quando aberto */}
-          {aberto && (
-            <tr style={{ background: '#f8fafc', color: '#6b7280', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-              <td style={{ ...cell, fontWeight: 600 }}>Centro / Subcentro</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Média Período</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Real</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Meta</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Δ R$</td>
-              <td style={{ ...cellNum, fontWeight: 600 }}>Δ %</td>
-            </tr>
-          )}
 
           {aberto && grupo.centros.map(centro => {
             // Meta ausente (null ou 0): não exibir Meta/Dif/% — não calcular contra zero.
@@ -520,8 +537,6 @@ function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: 
               </Fragment>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+    </tbody>
   );
 }
