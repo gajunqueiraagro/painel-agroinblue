@@ -578,11 +578,15 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
         </div>
       </div>
 
-      <ComposicaoFinanceira
-        data={data}
-        modo={isFechamento ? 'fechamento' : 'planejamento'}
-        onLinhaClick={onLinhaClick}
-      />
+      {/* No boletim (Fechamento), Entradas e Saídas vira bloco próprio
+          (BlocoEntradasSaidas, PR-2.1B). Aqui renderiza só no Planejamento. */}
+      {!isFechamento && (
+        <ComposicaoFinanceira
+          data={data}
+          modo="planejamento"
+          onLinhaClick={onLinhaClick}
+        />
+      )}
     </>
   );
 

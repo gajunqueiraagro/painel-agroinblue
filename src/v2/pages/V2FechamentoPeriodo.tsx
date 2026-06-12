@@ -19,6 +19,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { exportFechamentoPeriodoPdf } from '@/lib/pdf/exportFechamentoPeriodoPdf';
 import { montarSubtituloBoletim } from './V2FechamentoPeriodo.parts/fmt';
 import { BoletimPlaceholder } from './V2FechamentoPeriodo.parts/boletim/BoletimPlaceholder';
+import { BlocoEntradasSaidas } from './V2FechamentoPeriodo.parts/BlocoEntradasSaidas';
 import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
@@ -602,6 +603,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
     ? montarSubtituloBoletim({ dto, nomeCliente: clienteAtual?.nome, nomeFazenda, painel })
     : '';
 
+  // Handler de clique nas linhas (Fluxo + Entradas e Saídas) — abre o mesmo
+  // modal no parent. Nomeado p/ ser reutilizado pelos dois blocos sem duplicar.
+  const onLinhaClickFechamento = isGlobal
+    ? (key: LinhaModalKey) => { if (CONFIG_MODAIS_LINHA_FECHAMENTO[key]) setModalLinha(key); }
+    : undefined;
+
   // fmtBRL — cópia fiel do formatador da tela (BlocoResumoExecutivo) p/ paridade.
   const fmtBRL = (v: number): string =>
     new Intl.NumberFormat('pt-BR', {
@@ -735,20 +742,18 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
                   ? 'Análise indisponível nesta visão. O caixa é consolidado por cliente. Selecione "Global" para analisar.'
                   : undefined
               }
-              onLinhaClick={
-                isGlobal
-                  ? (key) => {
-                      if (CONFIG_MODAIS_LINHA_FECHAMENTO[key]) {
-                        setModalLinha(key);
-                      }
-                    }
-                  : undefined
-              }
+              onLinhaClick={onLinhaClickFechamento}
             />
           </div>
         )}
         <div className="print-section">
-          <BoletimPlaceholder titulo="Entradas e Saídas (pizza)" subtitulo={subtituloPadrao} badge="CAIXA" tone="financeiro" />
+          {blocoResumoData && (
+            <BlocoEntradasSaidas
+              data={blocoResumoData}
+              subtitulo={subtituloPadrao}
+              onLinhaClick={onLinhaClickFechamento}
+            />
+          )}
         </div>
       </PaginaBoletim>
 
