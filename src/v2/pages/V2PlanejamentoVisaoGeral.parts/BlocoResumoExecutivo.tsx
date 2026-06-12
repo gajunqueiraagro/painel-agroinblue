@@ -23,6 +23,7 @@ import {
   YAxis,
 } from 'recharts';
 import { Info } from 'lucide-react';
+import { BoletimContainer } from '@/v2/pages/V2FechamentoPeriodo.parts/boletim/BoletimContainer';
 // Aliases para evitar shadowing do `Tooltip` do recharts.
 import {
   Tooltip as ShTooltip,
@@ -65,6 +66,10 @@ interface Props {
    *  com a mensagem do motivo. Mutuamente exclusivo com onAnalisarFluxo
    *  (no fluxo normal apenas um vem definido por vez). */
   motivoFluxoBloqueado?: string;
+  /** 'boletim' → chrome do BoletimContainer (só no Fechamento). Default preserva o Planejamento. */
+  variant?: 'planejamento' | 'boletim';
+  /** Subtítulo de identificação único do boletim (modo 'boletim'). */
+  subtitulo?: string;
 }
 
 // Mantido sincronizado com V2PlanejamentoVisaoGeral.tsx (não importa para
@@ -463,7 +468,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
 
 // ─── Componente principal ─────────────────────────────────────────────
 
-export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo, motivoFluxoBloqueado }: Props) {
+export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal, desfocarDashboard = false, onLinhaClick, modo = 'planejamento', mesAlvo, onAnalisarFluxo, motivoFluxoBloqueado, variant = 'planejamento', subtitulo }: Props) {
   if (!data) {
     return (
       <section className="bg-card border border-border rounded-lg p-4 mb-4">
@@ -642,58 +647,93 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
     </div>
   );
 
-  return (
-    <>
-    <section className={cn(
-      'bg-card border border-border rounded-lg',
-      isFechamento ? 'p-3 mb-3' : 'p-4 mb-4',
-    )}>
-      <div
-        className={cn(
-          'flex items-center gap-2 flex-wrap mb-1',
-          onAnalisarFluxo && 'cursor-pointer hover:opacity-80 transition-opacity',
-        )}
-        onClick={onAnalisarFluxo}
-        role={onAnalisarFluxo ? 'button' : undefined}
-        tabIndex={onAnalisarFluxo ? 0 : undefined}
-      >
-        <h2 className="text-base font-bold text-foreground">
-          {modo === 'fechamento' ? 'Fluxo de Caixa Realizado' : 'Fluxo de Caixa Previsto'}
-        </h2>
-        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-900/60">
-          Caixa
+  // Faixa de ação do Fluxo no modo boletim (Opção 2): trata os 2 estados
+  // mutuamente exclusivos (clicável vs bloqueado-com-motivo), já que o header
+  // clicável antigo não existe dentro do BoletimContainer.
+  const acaoFluxoBoletim = (onAnalisarFluxo || motivoFluxoBloqueado) ? (
+    <div className="mb-3">
+      {onAnalisarFluxo ? (
+        <button
+          type="button"
+          onClick={onAnalisarFluxo}
+          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:underline"
+        >
+          Analisar fluxo de caixa ↗
+        </button>
+      ) : (
+        <ShTooltipProvider delayDuration={150}>
+          <ShTooltip>
+            <ShTooltipTrigger asChild>
+              <span
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground cursor-help"
+                tabIndex={0}
+                aria-label="Informação sobre análise indisponível"
+              >
+                Analisar fluxo de caixa
+                <Info className="h-3.5 w-3.5" />
+              </span>
+            </ShTooltipTrigger>
+            <ShTooltipContent side="bottom" className="max-w-xs text-xs">
+              {motivoFluxoBloqueado}
+            </ShTooltipContent>
+          </ShTooltip>
+        </ShTooltipProvider>
+      )}
+    </div>
+  ) : null;
+
+  // HEADER clicável original (default 'planejamento') — inalterado.
+  const header = (
+    <div
+      className={cn(
+        'flex items-center gap-2 flex-wrap mb-1',
+        onAnalisarFluxo && 'cursor-pointer hover:opacity-80 transition-opacity',
+      )}
+      onClick={onAnalisarFluxo}
+      role={onAnalisarFluxo ? 'button' : undefined}
+      tabIndex={onAnalisarFluxo ? 0 : undefined}
+    >
+      <h2 className="text-base font-bold text-foreground">
+        {modo === 'fechamento' ? 'Fluxo de Caixa Realizado' : 'Fluxo de Caixa Previsto'}
+      </h2>
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 border border-sky-200 dark:border-sky-900/60">
+        Caixa
+      </span>
+      {/* Estado 1: clicável — header abre o Modal Fluxo (Global no Fechamento). */}
+      {onAnalisarFluxo && (
+        <span
+          className="text-[10px] font-medium text-sky-700 dark:text-sky-300 underline-offset-2 hover:underline"
+          aria-label="Analisar fluxo de caixa"
+        >
+          Analisar ↗
         </span>
-        {/* Estado 1: clicável — header abre o Modal Fluxo (Global no Fechamento). */}
-        {onAnalisarFluxo && (
-          <span
-            className="text-[10px] font-medium text-sky-700 dark:text-sky-300 underline-offset-2 hover:underline"
-            aria-label="Analisar fluxo de caixa"
-          >
-            Analisar ↗
-          </span>
-        )}
-        {/* Estado 2: bloqueado com motivo — Info + Tooltip (Individual no Fechamento). */}
-        {motivoFluxoBloqueado && !onAnalisarFluxo && (
-          <ShTooltipProvider delayDuration={150}>
-            <ShTooltip>
-              <ShTooltipTrigger asChild>
-                <span
-                  className="inline-flex items-center text-muted-foreground cursor-help"
-                  tabIndex={0}
-                  aria-label="Informação sobre análise indisponível"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </span>
-              </ShTooltipTrigger>
-              <ShTooltipContent side="bottom" className="max-w-xs text-xs">
-                {motivoFluxoBloqueado}
-              </ShTooltipContent>
-            </ShTooltip>
-          </ShTooltipProvider>
-        )}
-        {/* Estado 3: nenhum — Planejamento (header inerte como hoje). */}
-      </div>
+      )}
+      {/* Estado 2: bloqueado com motivo — Info + Tooltip (Individual no Fechamento). */}
+      {motivoFluxoBloqueado && !onAnalisarFluxo && (
+        <ShTooltipProvider delayDuration={150}>
+          <ShTooltip>
+            <ShTooltipTrigger asChild>
+              <span
+                className="inline-flex items-center text-muted-foreground cursor-help"
+                tabIndex={0}
+                aria-label="Informação sobre análise indisponível"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Info className="h-3.5 w-3.5" />
+              </span>
+            </ShTooltipTrigger>
+            <ShTooltipContent side="bottom" className="max-w-xs text-xs">
+              {motivoFluxoBloqueado}
+            </ShTooltipContent>
+          </ShTooltip>
+        </ShTooltipProvider>
+      )}
+      {/* Estado 3: nenhum — Planejamento (header inerte como hoje). */}
+    </div>
+  );
+
+  const corpo = (
+    <>
       <p className="text-xs text-muted-foreground mb-3">
         {modo === 'fechamento'
           ? 'Regime de caixa • Fluxo financeiro acumulado'
@@ -843,16 +883,42 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
       </div>
 
       {!isFechamento && tabelasJsx}
+    </>
+  );
+
+  // Sub-card de tabelas (pizzas Entradas/Saídas + tabelasJsx) — só no Fechamento.
+  // Idêntico nos dois variants; no boletim fica como sub-card dentro do Container.
+  const subCard = isFechamento ? (
+    <section className="bg-card border border-border rounded-lg p-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+        <PizzaCompacta titulo="Entradas" data={pizzaEntradas} total={totalEntradasReal} />
+        <PizzaCompacta titulo="Saídas" data={pizzaSaidas} total={totalSaidasReal} />
+      </div>
+      {tabelasJsx}
     </section>
-    {isFechamento && (
-      <section className="bg-card border border-border rounded-lg p-3 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-          <PizzaCompacta titulo="Entradas" data={pizzaEntradas} total={totalEntradasReal} />
-          <PizzaCompacta titulo="Saídas" data={pizzaSaidas} total={totalSaidasReal} />
-        </div>
-        {tabelasJsx}
-      </section>
-    )}
+  ) : null;
+
+  if (variant === 'boletim') {
+    return (
+      <BoletimContainer titulo="Fluxo de Caixa" subtitulo={subtitulo} badge="CAIXA" tone="financeiro">
+        {acaoFluxoBoletim}
+        {corpo}
+        {subCard}
+      </BoletimContainer>
+    );
+  }
+
+  // Default 'planejamento' — byte-equivalente ao retorno original.
+  return (
+    <>
+    <section className={cn(
+      'bg-card border border-border rounded-lg',
+      isFechamento ? 'p-3 mb-3' : 'p-4 mb-4',
+    )}>
+      {header}
+      {corpo}
+    </section>
+    {subCard}
     </>
   );
 }

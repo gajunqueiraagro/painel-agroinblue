@@ -718,9 +718,11 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       <PaginaBoletim n={6}>
         {blocoResumoData && (
-          <div className="print-section print-page-break"><BlocoPadrao nome="Fluxo de Caixa">
+          <div className="print-section print-page-break">
             <BlocoResumoExecutivo
               data={blocoResumoData}
+              variant="boletim"
+              subtitulo={subtituloPadrao}
               saldoInicialMeta={planFin.saldoInicial}
               saldoInicialReal={saldoInicialReal}
               desfocarDashboard={false}
@@ -742,7 +744,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
                   : undefined
               }
             />
-          </BlocoPadrao></div>
+          </div>
         )}
         <div className="print-section"><BlocoPadrao nome="Entradas e Saídas (gráfico de pizza)">
           <BlocoEmConstrucao titulo="Entradas e Saídas (pizza)" descricao="Conteúdo já existe embutido no bloco Fluxo de Caixa; extração para bloco próprio fica para a fase de conteúdo." />
