@@ -663,14 +663,15 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         <div className="print-section print-page-break">
           <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} subtitulo={subtituloPadrao} />
         </div>
-        <div className="print-section"><BlocoPadrao nome="Conferência Mensal">
+        <div className="print-section">
           <BlocoConferenciaMensalRebanhoFechamento
             ano={ano}
             mes={mesAlvo}
             viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
             isGlobal={isGlobal}
+            subtitulo={subtituloPadrao}
           />
-        </BlocoPadrao></div>
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={3}>

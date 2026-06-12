@@ -17,7 +17,7 @@
 import { useMemo } from 'react';
 import { Baby, Beef, DollarSign, ShoppingCart, Skull, Utensils } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { BoletimContainer } from './boletim/BoletimContainer';
 import {
   useMovimentacoesAgregadas,
   type TipoMov,
@@ -38,6 +38,8 @@ interface Props {
   mes: number;
   viewMode: 'mes' | 'periodo';
   isGlobal: boolean;
+  /** Subtítulo de identificação único do boletim — calculado 1x no parent. */
+  subtitulo: string;
 }
 
 // ─── Faixa Executiva Resumida ────────────────────────────────────────
@@ -208,6 +210,7 @@ export function BlocoConferenciaMensalRebanhoFechamento({
   mes,
   viewMode,
   isGlobal,
+  subtitulo,
 }: Props) {
   const { loading, porTipo, saldoInicialAnual } = useMovimentacoesAgregadas({
     ano,
@@ -246,27 +249,8 @@ export function BlocoConferenciaMensalRebanhoFechamento({
   // NATURAL — sem h-[560px] fixo nem overflow interno. Pagina externa scrolla.
   // Visual identico ao ExecutiveSlide (header/body/footer + tokens shadcn).
   return (
-    <section
-      className={cn(
-        'w-full max-w-[1280px] mx-auto my-6',
-        'bg-card border border-border rounded-lg shadow-sm',
-        'flex flex-col',
-        'print:break-inside-avoid print:shadow-none print:max-w-full',
-      )}
-    >
-      {/* Header */}
-      <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-2.5 border-b border-border">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-foreground leading-tight truncate">
-            Conferência Mensal — Movimentação do Rebanho
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5 leading-snug">
-            {`Jan a ${String(mes).padStart(2, '0')}/${ano} · Auditoria operacional + Resumo executivo`}
-          </p>
-        </div>
-      </header>
-
-      {/* Conteudo — sem overflow interno. Tabela e Faixa empilhadas em altura natural. */}
+    <BoletimContainer titulo="Conferência Mensal" subtitulo={subtitulo} badge="AUDITORIA" tone="auditoria">
+      {/* Conteudo — corpo INTOCADO (tabela Jan→Dez + faixa executiva). */}
       <div className="px-5 py-3 flex flex-col gap-2">
         {/* Tabela mensal — sem container scrollavel; pagina scrolla se exceder viewport. */}
         <div>
@@ -360,6 +344,6 @@ export function BlocoConferenciaMensalRebanhoFechamento({
       <footer className="shrink-0 px-5 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground">
         Saldos encadeados mês a mês · Meses futuros em cinza · Fonte: lançamentos realizados
       </footer>
-    </section>
+    </BoletimContainer>
   );
 }
