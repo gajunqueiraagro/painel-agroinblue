@@ -642,14 +642,14 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           <BlocoEmConstrucao titulo="Capa" descricao="Capa institucional do boletim — a construir." />
         </BlocoPadrao></div>
         {dto && (
-          <div className="print-section"><BlocoPadrao nome="Resumo Executivo">
+          <div className="print-section">
             <Capa
               dto={dto}
               nomeCliente={clienteAtual?.nome}
               nomeFazenda={nomeFazenda}
               painel={painel}
             />
-          </BlocoPadrao></div>
+          </div>
         )}
       </PaginaBoletim>
 

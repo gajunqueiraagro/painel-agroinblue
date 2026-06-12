@@ -15,7 +15,7 @@
  * renderiza como "100% Pec" via modo soPec do helper de breakdown.
  */
 
-import logo from '@/assets/logo.png';
+import { BoletimContainer } from './boletim/BoletimContainer';
 import type { FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
 import { fmt, formatarPeriodo } from './fmt';
@@ -156,27 +156,24 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   const fazendasAtivas = painel?.rebanho?.composicaoFazenda ?? null;
   const temFazendasAtivas = !!fazendasAtivas && fazendasAtivas.length > 0;
 
-  return (
-    <section className="pagina-fechamento bg-card border border-border rounded-lg p-5 mb-4">
-      {/* LINHA 1 — Metadata + logo */}
-      <header className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-border">
-        <div className="text-xs text-muted-foreground truncate">
-          <span className="font-semibold text-foreground">{nomeCliente ?? '—'}</span>
-          {nomeFazenda && <> • <span className="font-semibold text-foreground">{nomeFazenda}</span></>}
-          {' • '}{formatarPeriodo(dto.periodoInicio, dto.periodoFim)}
-          {' • '}{escopoTexto}
-        </div>
-        <img src={logo} alt="Agroinblue" className="h-8 shrink-0" />
-      </header>
+  // Subtítulo do cabeçalho oficial = a mesma metadata de antes (cliente •
+  // fazenda • período • escopo). String, conforme contrato do BoletimHeader.
+  const subtitulo = [
+    nomeCliente ?? '—',
+    ...(nomeFazenda ? [nomeFazenda] : []),
+    formatarPeriodo(dto.periodoInicio, dto.periodoFim),
+    escopoTexto,
+  ].join(' • ');
 
-      {/* LINHA 2 — Resumo Executivo (9 bullets, sem % vs META).
-          TODO: reativar Entradas/Saídas Financeiras totais quando DTO ganhar
-          gridMetaConsolidado (hoje useFechamentoPeriodoData usa
-          planFin.buildGrid() base, sem extras). */}
-      <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-2">
-          Resumo Executivo
-        </h3>
+  return (
+    // pagina-fechamento mantido como marcador, neutralizado (display:contents)
+    // para NÃO duplicar chrome — o card/header oficial vem do BoletimContainer.
+    <div className="pagina-fechamento" style={{ display: 'contents' }}>
+      <BoletimContainer titulo="Resumo Executivo" subtitulo={subtitulo}>
+        {/* CORPO ATUAL — 9 bullets, sem alteração.
+            TODO: reativar Entradas/Saídas Financeiras totais quando DTO ganhar
+            gridMetaConsolidado (hoje useFechamentoPeriodoData usa
+            planFin.buildGrid() base, sem extras). */}
         <ul className="text-sm text-foreground space-y-1.5 leading-relaxed">
           {/* 1. Área Produtiva (+ sub-linha fazendas ativas/hectares) */}
           <li>
@@ -239,7 +236,7 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
             GMD médio: <strong className="font-semibold">{gmd != null ? `${fmt(gmd, 3)} kg/dia` : '—'}</strong>
           </li>
         </ul>
-      </div>
-    </section>
+      </BoletimContainer>
+    </div>
   );
 }
