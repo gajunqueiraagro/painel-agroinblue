@@ -9,10 +9,11 @@ export const BOLETIM_TOKENS = {
   // chrome do container
   container: 'h-full bg-card border border-border rounded-lg shadow-sm overflow-hidden flex flex-col',
   padding: 'p-4',
-  // header
-  headerWrap: 'flex items-start justify-between gap-3 pb-2 mb-3 border-b border-border',
+  // header — altura fixa reservando 2 linhas de subtítulo → divisória sempre no mesmo Y
+  headerWrap: 'flex items-start justify-between gap-3 min-h-[96px] pb-2 mb-3 border-b border-border',
+  logo: 'h-12 w-auto shrink-0 object-contain',                          // logo maior (48px)
   titulo: 'text-base font-semibold text-foreground leading-tight',
-  subtitulo: 'text-xs text-muted-foreground leading-snug',
+  subtitulo: 'text-xs text-muted-foreground leading-snug line-clamp-2', // até 2 linhas, sem corte agressivo
   // badge = SÓ formato/tipografia; a cor vem 100% do `tone` (TONE_CORES no Header).
   badge: 'text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap',
   // corpo

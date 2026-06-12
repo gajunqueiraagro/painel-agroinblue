@@ -24,14 +24,14 @@ export function BoletimHeader({
   const src = logoUrl ?? logo;
   return (
     <header className={T.headerWrap}>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h2 className={T.titulo}>{titulo}</h2>
           {badge && <span className={`${T.badge} ${TONE_CORES[tone]}`}>{badge}</span>}
         </div>
         {subtitulo && <p className={T.subtitulo}>{subtitulo}</p>}
       </div>
-      {!hideLogo && <img src={src} alt="" className="h-7 w-auto shrink-0 object-contain" />}
+      {!hideLogo && <img src={src} alt="" className={T.logo} />}
     </header>
   );
 }
