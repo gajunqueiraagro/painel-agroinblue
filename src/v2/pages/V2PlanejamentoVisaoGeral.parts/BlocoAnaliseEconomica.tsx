@@ -5,6 +5,7 @@
  * pointer-events-none e mostra placeholder de indisponibilidade.
  */
 import { cn } from '@/lib/utils';
+import { BoletimContainer } from '../V2FechamentoPeriodo.parts/boletim/BoletimContainer';
 import type {
   Bloco3AnaliseEconomica,
   AnaliseEconomicaLinha,
@@ -23,6 +24,10 @@ interface Props {
    * Fechamento de Período passará `mostrarAnoCorrente=true`.
    */
   mostrarAnoCorrente?: boolean;
+  /** 'boletim' → chrome do BoletimContainer (só no Fechamento). Default preserva o Planejamento. */
+  variant?: 'planejamento' | 'boletim';
+  /** Subtítulo de identificação único do boletim (modo 'boletim'). */
+  subtitulo?: string;
 }
 
 // Templates de grid:
@@ -361,34 +366,13 @@ function LinhaPlaceholder({ label, mostrarAnoCorrente = false }: { label: string
   );
 }
 
-export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente = false }: Props) {
+export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente = false, variant = 'planejamento', subtitulo }: Props) {
   const m = mostrarAnoCorrente;
-  return (
-    <section
-      className={cn(
-        'bg-card border border-border rounded-lg mb-4',
-        // Container externo na largura padrao dos demais blocos.
-        // A tabela interna continua compacta/centralizada via w-fit mx-auto.
-        mostrarAnoCorrente ? 'p-4' : 'p-4',
-        desfocar && 'opacity-40 pointer-events-none',
-      )}
-    >
-      <div className={cn('flex items-baseline justify-between flex-wrap gap-2', mostrarAnoCorrente ? 'mb-0.5' : 'mb-1')}>
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className={cn('font-semibold text-foreground', mostrarAnoCorrente ? 'text-[13px] leading-none' : 'text-sm')}>
-            {mostrarAnoCorrente ? 'Análise Econômica Realizada — DRE' : 'Análise Econômica META'}
-          </h2>
-          {mostrarAnoCorrente && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border leading-none">
-              Competência
-            </span>
-          )}
-        </div>
-        <span className="text-[10px] text-muted-foreground">
-          {mostrarAnoCorrente ? 'Regime de competência • Realizado vs Meta' : 'Pecuária · regime de competência'}
-        </span>
-      </div>
 
+  // Corpo = disclaimer + tabela DRE + legenda. Idêntico nos dois variants;
+  // só o chrome externo (section+h2+pill no default vs BoletimContainer) muda.
+  const corpo = (
+    <>
       {desfocar ? (
         <p className={cn('text-[10px] text-muted-foreground', mostrarAnoCorrente ? 'mb-1' : 'mb-2')}>
           Disponível apenas em modo Global.
@@ -475,6 +459,44 @@ export function BlocoAnaliseEconomica({ data, desfocar, ano, mostrarAnoCorrente 
         </div>
       )}
       </div>
+    </>
+  );
+
+  if (variant === 'boletim') {
+    return (
+      <BoletimContainer titulo="DRE — Análise Econômica" subtitulo={subtitulo} badge="COMPETÊNCIA" tone="competencia">
+        {corpo}
+      </BoletimContainer>
+    );
+  }
+
+  // Default 'planejamento' — byte-equivalente ao retorno original.
+  return (
+    <section
+      className={cn(
+        'bg-card border border-border rounded-lg mb-4',
+        // Container externo na largura padrao dos demais blocos.
+        // A tabela interna continua compacta/centralizada via w-fit mx-auto.
+        mostrarAnoCorrente ? 'p-4' : 'p-4',
+        desfocar && 'opacity-40 pointer-events-none',
+      )}
+    >
+      <div className={cn('flex items-baseline justify-between flex-wrap gap-2', mostrarAnoCorrente ? 'mb-0.5' : 'mb-1')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className={cn('font-semibold text-foreground', mostrarAnoCorrente ? 'text-[13px] leading-none' : 'text-sm')}>
+            {mostrarAnoCorrente ? 'Análise Econômica Realizada — DRE' : 'Análise Econômica META'}
+          </h2>
+          {mostrarAnoCorrente && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border leading-none">
+              Competência
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          {mostrarAnoCorrente ? 'Regime de competência • Realizado vs Meta' : 'Pecuária · regime de competência'}
+        </span>
+      </div>
+      {corpo}
     </section>
   );
 }

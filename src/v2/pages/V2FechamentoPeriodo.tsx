@@ -701,14 +701,16 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       </PaginaBoletim>
 
       <PaginaBoletim n={5}>
-        <div className="print-section print-page-break"><BlocoPadrao nome="DRE">
+        <div className="print-section print-page-break">
           <BlocoAnaliseEconomica
             data={dtoPlanejamento.bloco3_analiseEconomica}
             desfocar={false}
             ano={ano}
             mostrarAnoCorrente={true}
+            variant="boletim"
+            subtitulo={subtituloPadrao}
           />
-        </BlocoPadrao></div>
+        </div>
         <div className="print-section"><BlocoPadrao nome="Gráficos operação / comparação histórica">
           <BlocoEmConstrucao titulo="Gráficos de operação / histórico" descricao="A construir." />
         </BlocoPadrao></div>
