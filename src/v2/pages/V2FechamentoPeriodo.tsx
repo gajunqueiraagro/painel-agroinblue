@@ -654,9 +654,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       </PaginaBoletim>
 
       <PaginaBoletim n={2}>
-        <div className="print-section print-page-break"><BlocoPadrao nome="Produção Pecuária Realizada">
+        <div className="print-section print-page-break">
           <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
-        </BlocoPadrao></div>
+        </div>
         <div className="print-section"><BlocoPadrao nome="Conferência Mensal">
           <BlocoConferenciaMensalRebanhoFechamento
             ano={ano}
