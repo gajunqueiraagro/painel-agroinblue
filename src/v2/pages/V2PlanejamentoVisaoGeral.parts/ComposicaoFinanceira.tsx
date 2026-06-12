@@ -71,7 +71,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
                 nameKey="nome"
                 cx="50%"
                 cy="50%"
-                outerRadius={72}
+                outerRadius={54}
                 stroke="none"
                 isAnimationActive={false}
               >
@@ -239,12 +239,43 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
   const totalEntradasReal = Math.max(0, data.totalEntradas.realAnoCorrente ?? 0);
   const totalSaidasReal = Math.max(0, data.totalSaidas.realAnoCorrente ?? 0);
 
+  // Top-N nas Saídas (só Fechamento, NJ pesado): 7 maiores na ordem original +
+  // linha "Outros" (soma das cortadas), não-clicável. Deltas contra a meta —
+  // mesma semântica do resto da tabela.
+  const SAIDA_TOP_N = 7;
+  const linhasSaidaExibidas: Array<[LinhaExecutiva, LinhaModalKey | null]> =
+    isFechamento && linhasSaida.length > SAIDA_TOP_N
+      ? (() => {
+          const valor = ([l]: [LinhaExecutiva, LinhaModalKey]) =>
+            Math.abs(l.realAnoCorrente ?? l.meta);
+          const topIdx = new Set(
+            linhasSaida.map((_, i) => i).sort((a, b) => valor(linhasSaida[b]) - valor(linhasSaida[a])).slice(0, SAIDA_TOP_N)
+          );
+          const top = linhasSaida.filter((_, i) => topIdx.has(i));
+          const resto = linhasSaida.filter((_, i) => !topIdx.has(i));
+          const meta = resto.reduce((s, [l]) => s + (l.meta ?? 0), 0);
+          const real = resto.reduce((s, [l]) => s + (l.real ?? 0), 0);
+          const realAnoCorrente = resto.reduce((s, [l]) => s + (l.realAnoCorrente ?? 0), 0);
+          const outros: LinhaExecutiva = {
+            label: 'Outros',
+            meta,
+            real,
+            delta: meta > 0 ? (real - meta) / meta : 0,
+            realAnoCorrente,
+            deltaAnoCorrente: meta > 0 ? (realAnoCorrente - meta) / meta : 0,
+          };
+          return [...top, [outros, null]];
+        })()
+      : linhasSaida;
+
   const tabelas = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
-          Entradas
-        </h3>
+        {!isFechamento && (
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
+            Entradas
+          </h3>
+        )}
         <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
           <div></div>
           {isFechamento ? (
@@ -272,9 +303,11 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
       </div>
 
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
-          Saídas
-        </h3>
+        {!isFechamento && (
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
+            Saídas
+          </h3>
+        )}
         <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_70px] gap-1 items-center pb-1 border-b border-border text-[10px] font-semibold uppercase text-muted-foreground">
           <div></div>
           {isFechamento ? (
@@ -291,11 +324,11 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
           <div className="text-right">Δ%</div>
         </div>
         <LinhaRow linha={data.totalSaidas} destaque modo={modo} inverterSemantica={isFechamento} realSaida={isFechamento} />
-        {linhasSaida.map(([l, key]) => (
+        {linhasSaidaExibidas.map(([l, key]) => (
           <LinhaRow
-            key={key}
+            key={key ?? 'saida-outros'}
             linha={l}
-            onClick={onLinhaClick ? () => onLinhaClick(key) : undefined}
+            onClick={onLinhaClick && key ? () => onLinhaClick(key) : undefined}
             modo={modo}
             inverterSemantica={isFechamento}
             realSaida={isFechamento}
