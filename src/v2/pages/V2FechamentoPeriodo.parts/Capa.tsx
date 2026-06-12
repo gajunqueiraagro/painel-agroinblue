@@ -18,12 +18,12 @@
 import { BoletimContainer } from './boletim/BoletimContainer';
 import type { FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
 import type { PainelConsultorDataResult } from '@/hooks/usePainelConsultorData';
-import { fmt, formatarPeriodo } from './fmt';
+import { fmt } from './fmt';
 
 interface Props {
   dto: FechamentoPeriodoDTO;
-  nomeCliente?: string;
-  nomeFazenda?: string;
+  /** Subtítulo de identificação único do boletim — calculado 1x no parent. */
+  subtitulo: string;
   /** PC-100 — fonte soberana dos bullets financeiros/zoot/áreas. */
   painel: PainelConsultorDataResult | null;
 }
@@ -37,17 +37,6 @@ function fmtMoedaCurto(v: number | null | undefined): string {
   if (abs >= 1e6) return `R$ ${(v / 1e6).toFixed(1).replace('.', ',')}M`;
   if (abs >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
   return `R$ ${fmt(v)}`;
-}
-
-// ─── Escopo Pec/Agri (texto da metadata) ─────────────────────────────
-
-function derivarEscopo(painel: PainelConsultorDataResult | null): string {
-  const pec = painel?.areaPecuariaRealMes ?? 0;
-  const agri = painel?.areaAgriculturaRealMes ?? 0;
-  return (
-    [pec > 0 && 'Pecuária', agri > 0 && 'Agricultura'].filter(Boolean).join(' + ') ||
-    'Pecuária'
-  );
 }
 
 // ─── Área Produtiva + breakdown ─────────────────────────────────────
@@ -123,9 +112,8 @@ function derivarRebanho(
 
 // ─── Componente principal ───────────────────────────────────────────
 
-export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
+export default function Capa({ dto, painel, subtitulo }: Props) {
   const c = dto.cabecalho;
-  const escopoTexto = derivarEscopo(painel);
   const area = derivarAreaProdutiva(painel);
   const rebanho = derivarRebanho(painel, dto);
 
@@ -155,15 +143,6 @@ export default function Capa({ dto, nomeCliente, nomeFazenda, painel }: Props) {
   // (campo documentado em ItemComposicaoFazenda). Render "—" sem inventar.
   const fazendasAtivas = painel?.rebanho?.composicaoFazenda ?? null;
   const temFazendasAtivas = !!fazendasAtivas && fazendasAtivas.length > 0;
-
-  // Subtítulo do cabeçalho oficial = a mesma metadata de antes (cliente •
-  // fazenda • período • escopo). String, conforme contrato do BoletimHeader.
-  const subtitulo = [
-    nomeCliente ?? '—',
-    ...(nomeFazenda ? [nomeFazenda] : []),
-    formatarPeriodo(dto.periodoInicio, dto.periodoFim),
-    escopoTexto,
-  ].join(' • ');
 
   return (
     // pagina-fechamento mantido como marcador, neutralizado (display:contents)

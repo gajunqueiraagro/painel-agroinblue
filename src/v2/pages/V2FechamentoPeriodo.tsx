@@ -17,6 +17,7 @@ import { Download } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { exportFechamentoPeriodoPdf } from '@/lib/pdf/exportFechamentoPeriodoPdf';
+import { montarSubtituloBoletim } from './V2FechamentoPeriodo.parts/fmt';
 import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
@@ -594,6 +595,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
   const nomeFazenda = isGlobal ? 'Global' : (fazendaAtual?.nome ?? '—');
 
+  // Subtítulo de identificação ÚNICO do boletim — calculado 1x e distribuído
+  // aos blocos (Capa, Produção, …). Fonte única; nenhum bloco monta texto próprio.
+  const subtituloPadrao = dto
+    ? montarSubtituloBoletim({ dto, nomeCliente: clienteAtual?.nome, nomeFazenda, painel })
+    : '';
+
   // fmtBRL — cópia fiel do formatador da tela (BlocoResumoExecutivo) p/ paridade.
   const fmtBRL = (v: number): string =>
     new Intl.NumberFormat('pt-BR', {
@@ -645,9 +652,8 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           <div className="print-section">
             <Capa
               dto={dto}
-              nomeCliente={clienteAtual?.nome}
-              nomeFazenda={nomeFazenda}
               painel={painel}
+              subtitulo={subtituloPadrao}
             />
           </div>
         )}
@@ -655,7 +661,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       <PaginaBoletim n={2}>
         <div className="print-section print-page-break">
-          <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
+          <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} subtitulo={subtituloPadrao} />
         </div>
         <div className="print-section"><BlocoPadrao nome="Conferência Mensal">
           <BlocoConferenciaMensalRebanhoFechamento

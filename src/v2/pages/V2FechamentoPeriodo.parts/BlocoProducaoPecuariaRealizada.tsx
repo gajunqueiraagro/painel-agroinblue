@@ -15,6 +15,8 @@ import { BoletimContainer } from './boletim/BoletimContainer';
 
 interface Props {
   data: Bloco2ProducaoRealizada;
+  /** Subtítulo de identificação único do boletim — calculado 1x no parent. */
+  subtitulo: string;
 }
 
 // ─── Paletas de fundo (contexto econômico) ────────────────────────────
@@ -37,11 +39,11 @@ const BORDA_PRODUCAO  = 'border-l-[3px] border-l-amber-400 dark:border-l-amber-5
 const BORDA_MEDIAS    = 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500';
 const BORDA_ECONOMICO = 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500';
 
-export function BlocoProducaoPecuariaRealizada({ data }: Props) {
+export function BlocoProducaoPecuariaRealizada({ data, subtitulo }: Props) {
   return (
     <BoletimContainer
       titulo="Produção Pecuária Realizada"
-      subtitulo="Realizado Jan→mês selecionado • vs Meta período"
+      subtitulo={subtitulo}
       badge="OPERACIONAL"
       tone="operacional"
     >
