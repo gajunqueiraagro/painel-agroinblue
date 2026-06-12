@@ -675,14 +675,15 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       </PaginaBoletim>
 
       <PaginaBoletim n={3}>
-        <div className="print-section print-page-break"><BlocoPadrao nome="Movimentações do Rebanho">
+        <div className="print-section print-page-break">
           <BlocoMovimentacoesRebanhoFechamento
             ano={ano}
             mes={mesAlvo}
             viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
             isGlobal={isGlobal}
+            subtitulo={subtituloPadrao}
           />
-        </BlocoPadrao></div>
+        </div>
         <div className="print-section"><BlocoPadrao nome="Gráficos de Movimentações">
           <BlocoEmConstrucao titulo="Gráficos de Movimentações" descricao="Futuro: preço de venda, custo de produção e GMD explicado." />
         </BlocoPadrao></div>

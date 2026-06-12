@@ -21,7 +21,7 @@ import {
   Tooltip,
   XAxis,
 } from 'recharts';
-import { ExecutiveSlide } from '@/v2/components/executive/ExecutiveSlide';
+import { BoletimContainer } from './boletim/BoletimContainer';
 import { cn } from '@/lib/utils';
 import {
   useMovimentacoesAgregadas,
@@ -33,6 +33,8 @@ interface Props {
   mes: number;
   viewMode: 'mes' | 'periodo';
   isGlobal: boolean;
+  /** Subtítulo de identificação único do boletim — calculado 1x no parent. */
+  subtitulo: string;
 }
 
 interface CardDef {
@@ -321,7 +323,7 @@ function PainelComposicaoHistorico({
   );
 }
 
-export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlobal }: Props) {
+export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlobal, subtitulo }: Props) {
   const { loading, porTipo, saldoInicialAnual } = useMovimentacoesAgregadas({
     ano,
     mes,
@@ -366,12 +368,7 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
   );
 
   return (
-    <ExecutiveSlide
-      title="Movimentações do Rebanho"
-      subtitle={`Jan a ${String(mes).padStart(2, '0')}/${ano} · Narrativa executiva`}
-      className="my-6"
-      footer={`Fonte: lançamentos realizados · ${viewMode === 'periodo' ? 'Período acumulado' : 'Mês selecionado'} · Detalhe mês a mês na próxima prancha`}
-    >
+    <BoletimContainer titulo="Movimentações do Rebanho" subtitulo={subtitulo} badge="OPERACIONAL" tone="operacional">
       <div className="flex flex-col gap-3 h-full">
 
         {/* ── FRASE EXECUTIVA ── */}
@@ -580,7 +577,9 @@ export function BlocoMovimentacoesRebanhoFechamento({ ano, mes, viewMode, isGlob
           );
         })()}
 
+        {/* Footer preservado (antes era a prop footer do ExecutiveSlide). */}
+        <div className="text-[11px] text-muted-foreground mt-2">{`Fonte: lançamentos realizados · ${viewMode === 'periodo' ? 'Período acumulado' : 'Mês selecionado'} · Detalhe mês a mês na próxima prancha`}</div>
       </div>
-    </ExecutiveSlide>
+    </BoletimContainer>
   );
 }
