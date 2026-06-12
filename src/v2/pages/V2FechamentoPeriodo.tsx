@@ -13,8 +13,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Download } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { exportFechamentoPeriodoPdf } from '@/lib/pdf/exportFechamentoPeriodoPdf';
 import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
@@ -544,8 +546,46 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
   const nomeFazenda = isGlobal ? 'Global' : (fazendaAtual?.nome ?? '—');
 
+  // fmtBRL — cópia fiel do formatador da tela (BlocoResumoExecutivo) p/ paridade.
+  const fmtBRL = (v: number): string =>
+    new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      maximumFractionDigits: 0,
+    }).format(v);
+
+  // Export programático (PR-PDF-2) — coexiste com window.print. Cards = REAL
+  // do período (realAnoCorrente), iguais à coluna REAL <ano> da tela.
+  const handleExportarPdf = async () => {
+    if (!blocoResumoData) return;
+    const kpis = [
+      { label: 'Total Entradas',    valor: fmtBRL(blocoResumoData.totalEntradas.realAnoCorrente ?? 0) },
+      { label: 'Total Saídas',      valor: fmtBRL(blocoResumoData.totalSaidas.realAnoCorrente ?? 0) },
+      { label: 'Saldo Caixa Final', valor: fmtBRL(blocoResumoData.saldoCaixaFinalReal ?? 0) },
+    ];
+    await exportFechamentoPeriodoPdf({
+      clienteNome: clienteAtual?.nome ?? '',
+      fazendaNome: isGlobal ? 'Global' : nomeFazenda,
+      periodoLabel: String(ano),
+      cenarioLabel: isGlobal ? 'Global • Realizado' : `${nomeFazenda} • Realizado`,
+      kpis,
+    });
+  };
+
   return (
     <div className="fechamento-container px-4 py-4">
+      {/* PR-PDF-2: export programático — fora do print (.no-print). */}
+      <div className="no-print mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={handleExportarPdf}
+          disabled={!blocoResumoData}
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download size={16} />
+          Exportar PDF
+        </button>
+      </div>
       {/* Marco 2.5: Capa Executiva no topo — Resumo Executivo via PC-100
           soberano. Precede os 3 blocos operacionais (Produção → DRE → Caixa). */}
       {dto && (
