@@ -288,6 +288,28 @@ function BlocoPadrao({ nome, children }: { nome: string; children: ReactNode }) 
   );
 }
 
+// PR-BOLETIM-1B — página editorial: agrupa 2 BlocoPadrao (grade 10×2).
+function PaginaBoletim({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <div className="pagina-boletim flex flex-col gap-4" data-pagina={n}>
+      {children}
+    </div>
+  );
+}
+
+// PR-BOLETIM-1B — placeholder "Em construção" que preenche os 499px do BlocoPadrao.
+function BlocoEmConstrucao({ titulo, descricao }: { titulo: string; descricao?: string }) {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-2 text-center
+                    rounded-lg border border-dashed border-border bg-muted/30
+                    text-muted-foreground p-6">
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted">🚧 Em construção</span>
+      <h3 className="text-sm font-semibold text-foreground/70">{titulo}</h3>
+      {descricao && <p className="text-xs max-w-[80%] leading-snug">{descricao}</p>}
+    </div>
+  );
+}
+
 export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props) {
   const { clienteAtual } = useCliente();
   const { fazendaAtual, isGlobal, fazendasComPecuaria } = useFazenda();
@@ -612,103 +634,175 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           Exportar PDF
         </button>
       </div>
-      {/* Marco 2.5: Capa Executiva no topo — Resumo Executivo via PC-100
-          soberano. Precede os 3 blocos operacionais (Produção → DRE → Caixa). */}
-      {dto && (
-        <div className="print-section">
-          <BlocoPadrao nome="Resumo Executivo">
-          <Capa
-            dto={dto}
-            nomeCliente={clienteAtual?.nome}
-            nomeFazenda={nomeFazenda}
-            painel={painel}
+      {/* ── PR-BOLETIM-1B: grade editorial oficial — 10 páginas × 2 blocos.
+          Reais reordenados (guards e className print-* preservados) + 12
+          placeholders "Em construção". .fechamento-print-area descartado. ── */}
+      <PaginaBoletim n={1}>
+        <div className="print-section"><BlocoPadrao nome="Capa">
+          <BlocoEmConstrucao titulo="Capa" descricao="Capa institucional do boletim — a construir." />
+        </BlocoPadrao></div>
+        {dto && (
+          <div className="print-section"><BlocoPadrao nome="Resumo Executivo">
+            <Capa
+              dto={dto}
+              nomeCliente={clienteAtual?.nome}
+              nomeFazenda={nomeFazenda}
+              painel={painel}
+            />
+          </BlocoPadrao></div>
+        )}
+      </PaginaBoletim>
+
+      <PaginaBoletim n={2}>
+        <div className="print-section print-page-break"><BlocoPadrao nome="Produção Pecuária Realizada">
+          <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Conferência Mensal">
+          <BlocoConferenciaMensalRebanhoFechamento
+            ano={ano}
+            mes={mesAlvo}
+            viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+            isGlobal={isGlobal}
           />
-          </BlocoPadrao>
-        </div>
-      )}
+        </BlocoPadrao></div>
+      </PaginaBoletim>
 
-      {/* Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado
-          em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
-          ativa as 7 colunas (Real ano-1 / Real ano / Meta + 2 deltas). */}
-      <div className="print-section print-page-break">
-        <BlocoPadrao nome="DRE">
-        <BlocoAnaliseEconomica
-          data={dtoPlanejamento.bloco3_analiseEconomica}
-          desfocar={false}
-          ano={ano}
-          mostrarAnoCorrente={true}
-        />
-        </BlocoPadrao>
-      </div>
+      <PaginaBoletim n={3}>
+        <div className="print-section print-page-break"><BlocoPadrao nome="Movimentações do Rebanho">
+          <BlocoMovimentacoesRebanhoFechamento
+            ano={ano}
+            mes={mesAlvo}
+            viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
+            isGlobal={isGlobal}
+          />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Gráficos de Movimentações">
+          <BlocoEmConstrucao titulo="Gráficos de Movimentações" descricao="Futuro: preço de venda, custo de produção e GMD explicado." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
 
-      {/* Marco 2.5 Fase 1: BlocoResumoExecutivo renderizado em paralelo a
-          FluxoCaixa (legado). Validação cruzada de entradas/saídas/caixa
-          pendente — FluxoCaixa continua sendo a fonte soberana até confirmar
-          paridade. */}
-      {blocoResumoData && (
-        <div className="print-section print-page-break">
-        <BlocoPadrao nome="Fluxo de Caixa">
-        <BlocoResumoExecutivo
-          data={blocoResumoData}
-          saldoInicialMeta={planFin.saldoInicial}
-          saldoInicialReal={saldoInicialReal}
-          desfocarDashboard={false}
-          modo="fechamento"
-          mesAlvo={mesAlvo}
-          onAnalisarFluxo={isGlobal ? () => setFluxoModalOpen(true) : undefined}
-          motivoFluxoBloqueado={
-            !isGlobal
-              ? 'Análise indisponível nesta visão. O caixa é consolidado por cliente. Selecione "Global" para analisar.'
-              : undefined
-          }
-          // FASE 2 / PR1: drill em linhas configuradas. Hoje só Receita Pec
-          // ativa. Outras linhas (custeio, juros, etc) NÃO disparam modal
-          // nesta PR — clique sem config é no-op. Apenas em modo Global
-          // (mesmo motivo da trava do FluxoCaixaModal: caixa cliente-wide).
-          onLinhaClick={
-            isGlobal
-              ? (key) => {
-                  if (CONFIG_MODAIS_LINHA_FECHAMENTO[key]) {
-                    setModalLinha(key);
-                  }
-                }
-              : undefined
-          }
-        />
-        </BlocoPadrao>
-        </div>
-      )}
+      <PaginaBoletim n={4}>
+        {dto && (
+          <div className="print-section"><BlocoPadrao nome="Análise Zootécnica">
+            <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
+          </BlocoPadrao></div>
+        )}
+        <div className="print-section"><BlocoPadrao nome="Bloco complementar zootécnico">
+          <BlocoEmConstrucao titulo="Complementar zootécnico" descricao="A definir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
 
-      {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
-      <div className="print-section print-page-break">
-        <BlocoPadrao nome="Movimentações">
-        <BlocoMovimentacoesRebanhoFechamento
-          ano={ano}
-          mes={mesAlvo}
-          viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
-          isGlobal={isGlobal}
-        />
-        </BlocoPadrao>
-      </div>
-      <div className="print-section">
-        <BlocoPadrao nome="Conferência">
-        <BlocoConferenciaMensalRebanhoFechamento
-          ano={ano}
-          mes={mesAlvo}
-          viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
-          isGlobal={isGlobal}
-        />
-        </BlocoPadrao>
-      </div>
+      <PaginaBoletim n={5}>
+        <div className="print-section print-page-break"><BlocoPadrao nome="DRE">
+          <BlocoAnaliseEconomica
+            data={dtoPlanejamento.bloco3_analiseEconomica}
+            desfocar={false}
+            ano={ano}
+            mostrarAnoCorrente={true}
+          />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Gráficos operação / comparação histórica">
+          <BlocoEmConstrucao titulo="Gráficos de operação / histórico" descricao="A construir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
 
-      {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — movido para
-          após Movimentações conforme decisão FASE 3 (Capa → DRE → Fluxo →
-          Movimentações → Produção). */}
-      <div className="print-section print-page-break">
-        <BlocoPadrao nome="Produção">
-        <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
-        </BlocoPadrao>
-      </div>
+      <PaginaBoletim n={6}>
+        {blocoResumoData && (
+          <div className="print-section print-page-break"><BlocoPadrao nome="Fluxo de Caixa">
+            <BlocoResumoExecutivo
+              data={blocoResumoData}
+              saldoInicialMeta={planFin.saldoInicial}
+              saldoInicialReal={saldoInicialReal}
+              desfocarDashboard={false}
+              modo="fechamento"
+              mesAlvo={mesAlvo}
+              onAnalisarFluxo={isGlobal ? () => setFluxoModalOpen(true) : undefined}
+              motivoFluxoBloqueado={
+                !isGlobal
+                  ? 'Análise indisponível nesta visão. O caixa é consolidado por cliente. Selecione "Global" para analisar.'
+                  : undefined
+              }
+              onLinhaClick={
+                isGlobal
+                  ? (key) => {
+                      if (CONFIG_MODAIS_LINHA_FECHAMENTO[key]) {
+                        setModalLinha(key);
+                      }
+                    }
+                  : undefined
+              }
+            />
+          </BlocoPadrao></div>
+        )}
+        <div className="print-section"><BlocoPadrao nome="Entradas e Saídas (gráfico de pizza)">
+          <BlocoEmConstrucao titulo="Entradas e Saídas (pizza)" descricao="Conteúdo já existe embutido no bloco Fluxo de Caixa; extração para bloco próprio fica para a fase de conteúdo." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
+
+      <PaginaBoletim n={7}>
+        {dto && (
+          <div className="print-section print-page-break print-allow-break"><BlocoPadrao nome="Custos Pecuários Realizados">
+            <DesembolsoProducao
+              dto={dto}
+              custoCab={painel.custoCabIndicador?.valor ?? null}
+              custoArr={painel.custoArrIndicador?.valor ?? null}
+              custeioAcum={painel.custeioPecIndicador?.valor ?? null}
+              custoCabSerieMes={painel.custoCabIndicador?.serieMensal ?? []}
+              custoCabSerieAcum={painel.custoCabIndicador?.serieAno ?? []}
+              custoCabSerieMeta={painel.custoCabIndicador?.serieMeta}
+              custoCabSerieAnoAnt={painel.custoCabIndicador?.serieAnoAnt}
+              custoCabDeltaMeta={painel.custoCabIndicador?.deltaMeta ?? null}
+              custoCabDeltaAno={painel.custoCabIndicador?.deltaAno ?? null}
+              custoArrSerieMes={painel.custoArrIndicador?.serieMensal ?? []}
+              custoArrSerieAcum={painel.custoArrIndicador?.serieAno ?? []}
+              custoArrSerieMeta={painel.custoArrIndicador?.serieMeta}
+              custoArrSerieAnoAnt={painel.custoArrIndicador?.serieAnoAnt}
+              custoArrDeltaMeta={painel.custoArrIndicador?.deltaMeta ?? null}
+              custoArrDeltaAno={painel.custoArrIndicador?.deltaAno ?? null}
+              custeioSerieAcum={painel.custeioPecIndicador?.serieAno ?? []}
+              custeioSerieMeta={painel.custeioPecIndicador?.serieMeta}
+              custeioSerieAnoAnt={painel.custeioPecIndicador?.serieAnoAnt}
+              custeioDeltaMeta={painel.custeioPecIndicador?.deltaMeta ?? null}
+              custeioDeltaAno={painel.custeioPecIndicador?.deltaAno ?? null}
+              mesAlvoIdx={mesAlvo}
+              labelsMeses={dto.meses}
+              numMeses={dto.meses.length}
+              rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
+              rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
+            />
+          </BlocoPadrao></div>
+        )}
+        <div className="print-section"><BlocoPadrao nome="Gráficos e históricos de custos">
+          <BlocoEmConstrucao titulo="Gráficos e históricos de custos" descricao="A construir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
+
+      <PaginaBoletim n={8}>
+        <div className="print-section"><BlocoPadrao nome="Custos Fixos R$/cab/mês (benchmark)">
+          <BlocoEmConstrucao titulo="Custos Fixos R$/cab/mês" descricao="Com benchmark — a construir." />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Custos Variáveis R$/cab/mês (benchmark)">
+          <BlocoEmConstrucao titulo="Custos Variáveis R$/cab/mês" descricao="Com benchmark — a construir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
+
+      <PaginaBoletim n={9}>
+        <div className="print-section"><BlocoPadrao nome="Financiamentos e Aportes Pessoais">
+          <BlocoEmConstrucao titulo="Financiamentos e Aportes Pessoais" descricao="A construir." />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Gráficos financeiros">
+          <BlocoEmConstrucao titulo="Gráficos financeiros" descricao="A construir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
+
+      <PaginaBoletim n={10}>
+        <div className="print-section"><BlocoPadrao nome="Evolução Patrimonial">
+          <BlocoEmConstrucao titulo="Evolução Patrimonial" descricao="Caixa, rebanho e endividamento — a construir." />
+        </BlocoPadrao></div>
+        <div className="print-section"><BlocoPadrao nome="Gráficos patrimoniais">
+          <BlocoEmConstrucao titulo="Gráficos patrimoniais" descricao="A construir." />
+        </BlocoPadrao></div>
+      </PaginaBoletim>
 
       {isGlobal && clienteId && (
         <FluxoCaixaModal
@@ -743,48 +837,6 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       )}
       {error && (
         <div className="p-4 text-sm text-red-600">Erro: {String((error as Error)?.message ?? error)}</div>
-      )}
-
-      {dto && (
-        <div className="fechamento-print-area">
-          <div className="print-section">
-            <BlocoPadrao nome="Análise Zootécnica">
-            <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
-            </BlocoPadrao>
-          </div>
-          <div className="print-section print-page-break print-allow-break">
-          <BlocoPadrao nome="Custos">
-          <DesembolsoProducao
-            dto={dto}
-            custoCab={painel.custoCabIndicador?.valor ?? null}
-            custoArr={painel.custoArrIndicador?.valor ?? null}
-            custeioAcum={painel.custeioPecIndicador?.valor ?? null}
-            custoCabSerieMes={painel.custoCabIndicador?.serieMensal ?? []}
-            custoCabSerieAcum={painel.custoCabIndicador?.serieAno ?? []}
-            custoCabSerieMeta={painel.custoCabIndicador?.serieMeta}
-            custoCabSerieAnoAnt={painel.custoCabIndicador?.serieAnoAnt}
-            custoCabDeltaMeta={painel.custoCabIndicador?.deltaMeta ?? null}
-            custoCabDeltaAno={painel.custoCabIndicador?.deltaAno ?? null}
-            custoArrSerieMes={painel.custoArrIndicador?.serieMensal ?? []}
-            custoArrSerieAcum={painel.custoArrIndicador?.serieAno ?? []}
-            custoArrSerieMeta={painel.custoArrIndicador?.serieMeta}
-            custoArrSerieAnoAnt={painel.custoArrIndicador?.serieAnoAnt}
-            custoArrDeltaMeta={painel.custoArrIndicador?.deltaMeta ?? null}
-            custoArrDeltaAno={painel.custoArrIndicador?.deltaAno ?? null}
-            custeioSerieAcum={painel.custeioPecIndicador?.serieAno ?? []}
-            custeioSerieMeta={painel.custeioPecIndicador?.serieMeta}
-            custeioSerieAnoAnt={painel.custeioPecIndicador?.serieAnoAnt}
-            custeioDeltaMeta={painel.custeioPecIndicador?.deltaMeta ?? null}
-            custeioDeltaAno={painel.custeioPecIndicador?.deltaAno ?? null}
-            mesAlvoIdx={mesAlvo}
-            labelsMeses={dto.meses}
-            numMeses={dto.meses.length}
-            rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
-            rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
-          />
-          </BlocoPadrao>
-          </div>
-        </div>
       )}
     </div>
   );
