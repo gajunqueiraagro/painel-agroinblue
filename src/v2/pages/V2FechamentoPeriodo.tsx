@@ -18,6 +18,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { exportFechamentoPeriodoPdf } from '@/lib/pdf/exportFechamentoPeriodoPdf';
 import { montarSubtituloBoletim } from './V2FechamentoPeriodo.parts/fmt';
+import { BoletimPlaceholder } from './V2FechamentoPeriodo.parts/boletim/BoletimPlaceholder';
 import { useFechamentoPeriodoData } from '@/v2/hooks/useFechamentoPeriodoData';
 import { calcularDefaultPeriodo } from '@/v2/lib/calcularDefaultPeriodo';
 import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
@@ -645,9 +646,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           Reais reordenados (guards e className print-* preservados) + 12
           placeholders "Em construção". .fechamento-print-area descartado. ── */}
       <PaginaBoletim n={1}>
-        <div className="print-section"><BlocoPadrao nome="Capa">
-          <BlocoEmConstrucao titulo="Capa" descricao="Capa institucional do boletim — a construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Capa" subtitulo={subtituloPadrao} />
+        </div>
         {dto && (
           <div className="print-section">
             <Capa
@@ -684,9 +685,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             subtitulo={subtituloPadrao}
           />
         </div>
-        <div className="print-section"><BlocoPadrao nome="Gráficos de Movimentações">
-          <BlocoEmConstrucao titulo="Gráficos de Movimentações" descricao="Futuro: preço de venda, custo de produção e GMD explicado." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Gráficos de Movimentações" subtitulo={subtituloPadrao} badge="OPERACIONAL" tone="operacional" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={4}>
@@ -695,9 +696,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} subtitulo={subtituloPadrao} />
           </div>
         )}
-        <div className="print-section"><BlocoPadrao nome="Bloco complementar zootécnico">
-          <BlocoEmConstrucao titulo="Complementar zootécnico" descricao="A definir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Complementar zootécnico" subtitulo={subtituloPadrao} badge="OPERACIONAL" tone="operacional" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={5}>
@@ -711,9 +712,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             subtitulo={subtituloPadrao}
           />
         </div>
-        <div className="print-section"><BlocoPadrao nome="Gráficos operação / comparação histórica">
-          <BlocoEmConstrucao titulo="Gráficos de operação / histórico" descricao="A construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Gráficos de operação / histórico" subtitulo={subtituloPadrao} badge="COMPETÊNCIA" tone="competencia" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={6}>
@@ -746,9 +747,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             />
           </div>
         )}
-        <div className="print-section"><BlocoPadrao nome="Entradas e Saídas (gráfico de pizza)">
-          <BlocoEmConstrucao titulo="Entradas e Saídas (pizza)" descricao="Conteúdo já existe embutido no bloco Fluxo de Caixa; extração para bloco próprio fica para a fase de conteúdo." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Entradas e Saídas (pizza)" subtitulo={subtituloPadrao} badge="CAIXA" tone="financeiro" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={7}>
@@ -785,36 +786,36 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             />
           </div>
         )}
-        <div className="print-section"><BlocoPadrao nome="Gráficos e históricos de custos">
-          <BlocoEmConstrucao titulo="Gráficos e históricos de custos" descricao="A construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Gráficos e históricos de custos" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={8}>
-        <div className="print-section"><BlocoPadrao nome="Custos Fixos R$/cab/mês (benchmark)">
-          <BlocoEmConstrucao titulo="Custos Fixos R$/cab/mês" descricao="Com benchmark — a construir." />
-        </BlocoPadrao></div>
-        <div className="print-section"><BlocoPadrao nome="Custos Variáveis R$/cab/mês (benchmark)">
-          <BlocoEmConstrucao titulo="Custos Variáveis R$/cab/mês" descricao="Com benchmark — a construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Custos Fixos R$/cab/mês" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Custos Variáveis R$/cab/mês" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={9}>
-        <div className="print-section"><BlocoPadrao nome="Financiamentos e Aportes Pessoais">
-          <BlocoEmConstrucao titulo="Financiamentos e Aportes Pessoais" descricao="A construir." />
-        </BlocoPadrao></div>
-        <div className="print-section"><BlocoPadrao nome="Gráficos financeiros">
-          <BlocoEmConstrucao titulo="Gráficos financeiros" descricao="A construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Financiamentos e Aportes Pessoais" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Gráficos financeiros" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
       </PaginaBoletim>
 
       <PaginaBoletim n={10}>
-        <div className="print-section"><BlocoPadrao nome="Evolução Patrimonial">
-          <BlocoEmConstrucao titulo="Evolução Patrimonial" descricao="Caixa, rebanho e endividamento — a construir." />
-        </BlocoPadrao></div>
-        <div className="print-section"><BlocoPadrao nome="Gráficos patrimoniais">
-          <BlocoEmConstrucao titulo="Gráficos patrimoniais" descricao="A construir." />
-        </BlocoPadrao></div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Evolução Patrimonial" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
+        <div className="print-section">
+          <BoletimPlaceholder titulo="Gráficos patrimoniais" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
+        </div>
       </PaginaBoletim>
 
       {isGlobal && clienteId && (
