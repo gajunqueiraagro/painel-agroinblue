@@ -749,7 +749,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       <PaginaBoletim n={7}>
         {dto && (
-          <div className="print-section print-page-break print-allow-break"><BlocoPadrao nome="Custos Pecuários Realizados">
+          <div className="print-section print-page-break print-allow-break">
             <DesembolsoProducao
               dto={dto}
               custoCab={painel.custoCabIndicador?.valor ?? null}
@@ -777,8 +777,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
               numMeses={dto.meses.length}
               rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
               rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
+              subtitulo={subtituloPadrao}
             />
-          </BlocoPadrao></div>
+          </div>
         )}
         <div className="print-section"><BlocoPadrao nome="Gráficos e históricos de custos">
           <BlocoEmConstrucao titulo="Gráficos e históricos de custos" descricao="A construir." />

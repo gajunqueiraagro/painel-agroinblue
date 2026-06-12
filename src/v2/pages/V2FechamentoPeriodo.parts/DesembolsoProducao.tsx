@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import type { FechamentoPeriodoDTO, GrupoNode } from '@/v2/types/fechamentoPeriodo';
 import { fmt, pct } from './fmt';
+import { BoletimContainer } from './boletim/BoletimContainer';
 
 // ── Cores (design system — espelhadas de BlocoMovimentacoesRebanhoFechamento) ──
 const COR_REAL = '#dc2626';    // vermelho — Realizado
@@ -103,6 +104,8 @@ interface Props {
   // ── Rebanho médio (header da tabela) — período, viewMode='periodo' ──
   rebanhoMedioReal: number | null;   // cabecasIndicador.valor
   rebanhoMedioMeta: number | null;   // cabecasIndicador.serieMetaIndicador?.[mesAlvo]
+  /** Subtítulo de identificação único do boletim — calculado 1x no parent. */
+  subtitulo: string;
 }
 
 export default function DesembolsoProducao({
@@ -132,6 +135,7 @@ export default function DesembolsoProducao({
   numMeses,
   rebanhoMedioReal,
   rebanhoMedioMeta,
+  subtitulo,
 }: Props) {
   const gruposPec = dto.estruturaCustos.grupos
     .filter(g => GRUPOS_PEC.has(g.grupo_custo))
@@ -243,8 +247,11 @@ export default function DesembolsoProducao({
   };
 
   return (
-    <section className="pagina-fechamento bloco-custos">
-      <h2>Custos Pecuários Realizados</h2>
+    // pagina-fechamento + bloco-custos preservados como marcador, neutralizados
+    // (display:contents) p/ não duplicar card — chrome vem do BoletimContainer.
+    // Seletores descendentes (.bloco-custos .fechamento-table) seguem válidos.
+    <div className="pagina-fechamento bloco-custos" style={{ display: 'contents' }}>
+      <BoletimContainer titulo="Custos Pecuários Realizados" subtitulo={subtitulo} badge="FINANCEIRO" tone="financeiro">
 
       {/* ── CARDS enriquecidos = totais soberanos do PC-100 (Visão Geral) ── */}
       <div className="cards-grid">
@@ -443,7 +450,8 @@ export default function DesembolsoProducao({
           )}
         </div>
       </div>
-    </section>
+      </BoletimContainer>
+    </div>
   );
 }
 
