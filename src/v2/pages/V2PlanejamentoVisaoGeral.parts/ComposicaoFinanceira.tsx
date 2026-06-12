@@ -41,16 +41,6 @@ interface PizzaItem { nome: string; valor: number; cor: string }
 const CORES_PIZZA_ENTRADAS = ['#60a5fa', '#4ade80', '#fbbf24', '#a78bfa'];
 const CORES_PIZZA_SAIDAS = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#22d3ee', '#a78bfa', '#f472b6', '#9ca3af'];
 
-// Abreviações SÓ na legenda do donut (a pizza e a tabela mantêm o nome completo).
-const ABREV_LEGENDA: Record<string, string> = {
-  'Investimento Pecuária': 'Inv. Pecuária',
-  'Investimento Agricultura': 'Inv. Agricultura',
-  'Deduções de Receita': 'Deduções',
-  'Custeio Agricultura': 'Custeio Agric.',
-  'Custeio Pecuária': 'Custeio Pec.',
-};
-const abreviarLegenda = (nome: string) => ABREV_LEGENDA[nome] ?? nome;
-
 function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaItem[]; total: number }) {
   // Container leve: sem border/shadow. Apenas layout flex+grid.
   // total === 0 → sem dados, placeholder discreto.
@@ -71,7 +61,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
       <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {titulo}
       </h4>
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
         <div className="w-28 h-28 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -104,7 +94,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className={`flex-1 grid ${data.length > 4 ? 'grid-cols-2' : 'grid-cols-1'} gap-x-2 gap-y-0.5 text-[9px] leading-tight min-w-0`}>
+        <div className="flex-1 flex flex-col gap-y-0.5 text-[10px] leading-tight min-w-0">
           {data.map((d) => {
             const pct = (d.valor / total) * 100;
             return (
@@ -113,7 +103,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
                   className="inline-block w-2 h-2 rounded-sm shrink-0"
                   style={{ background: d.cor }}
                 />
-                <span className="truncate min-w-0">{abreviarLegenda(d.nome)}</span>
+                <span className="truncate min-w-0">{d.nome}</span>
                 <span className="tabular-nums text-muted-foreground shrink-0">
                   {pct.toFixed(0)}%
                 </span>
@@ -279,7 +269,7 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
       : linhasSaida;
 
   const tabelas = (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className={`grid grid-cols-1 ${isFechamento ? 'lg:grid-cols-[0.9fr_1.1fr]' : 'lg:grid-cols-2'} gap-4`}>
       <div>
         {!isFechamento && (
           <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/70 mb-1">
@@ -351,7 +341,7 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
   if (isFechamento) {
     return (
       <section className="bg-card border border-border rounded-lg p-3 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-[0.9fr_1.1fr] gap-3 mb-2">
           <PizzaCompacta titulo="Entradas" data={pizzaEntradas} total={totalEntradasReal} />
           <PizzaCompacta titulo="Saídas" data={pizzaSaidas} total={totalSaidasReal} />
         </div>
