@@ -41,6 +41,16 @@ interface PizzaItem { nome: string; valor: number; cor: string }
 const CORES_PIZZA_ENTRADAS = ['#60a5fa', '#4ade80', '#fbbf24', '#a78bfa'];
 const CORES_PIZZA_SAIDAS = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#22d3ee', '#a78bfa', '#f472b6', '#9ca3af'];
 
+// Abreviações SÓ na legenda do donut (a pizza e a tabela mantêm o nome completo).
+const ABREV_LEGENDA: Record<string, string> = {
+  'Investimento Pecuária': 'Inv. Pecuária',
+  'Investimento Agricultura': 'Inv. Agricultura',
+  'Deduções de Receita': 'Deduções',
+  'Custeio Agricultura': 'Custeio Agric.',
+  'Custeio Pecuária': 'Custeio Pec.',
+};
+const abreviarLegenda = (nome: string) => ABREV_LEGENDA[nome] ?? nome;
+
 function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaItem[]; total: number }) {
   // Container leve: sem border/shadow. Apenas layout flex+grid.
   // total === 0 → sem dados, placeholder discreto.
@@ -61,8 +71,8 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
       <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {titulo}
       </h4>
-      <div className="flex items-center gap-2">
-        <div className="w-40 h-40 shrink-0">
+      <div className="flex items-start gap-2">
+        <div className="w-28 h-28 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -94,7 +104,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex-1 flex flex-col gap-0.5 text-[11px] leading-tight min-w-0">
+        <div className={`flex-1 grid ${data.length > 4 ? 'grid-cols-2' : 'grid-cols-1'} gap-x-2 gap-y-0.5 text-[9px] leading-tight min-w-0`}>
           {data.map((d) => {
             const pct = (d.valor / total) * 100;
             return (
@@ -103,7 +113,7 @@ function PizzaCompacta({ titulo, data, total }: { titulo: string; data: PizzaIte
                   className="inline-block w-2 h-2 rounded-sm shrink-0"
                   style={{ background: d.cor }}
                 />
-                <span className="truncate min-w-0">{d.nome}</span>
+                <span className="truncate min-w-0">{abreviarLegenda(d.nome)}</span>
                 <span className="tabular-nums text-muted-foreground shrink-0">
                   {pct.toFixed(0)}%
                 </span>
