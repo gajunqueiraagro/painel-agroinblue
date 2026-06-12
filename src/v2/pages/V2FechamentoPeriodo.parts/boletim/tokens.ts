@@ -10,7 +10,7 @@ export const BOLETIM_TOKENS = {
   container: 'h-full bg-card border border-border rounded-lg shadow-sm overflow-hidden flex flex-col',
   padding: 'p-4',
   // header — altura fixa reservando 2 linhas de subtítulo → divisória sempre no mesmo Y
-  headerWrap: 'flex items-start justify-between gap-3 min-h-[96px] pb-2 mb-3 border-b border-border',
+  headerWrap: 'flex items-start justify-between gap-3 min-h-[64px] pb-1 mb-2 border-b border-border',
   logo: 'h-12 w-auto shrink-0 object-contain',                          // logo maior (48px)
   titulo: 'text-base font-semibold text-foreground leading-tight',
   subtitulo: 'text-xs text-muted-foreground leading-snug line-clamp-2', // até 2 linhas, sem corte agressivo
