@@ -312,3 +312,30 @@ input[type='number'] {
   -moz-appearance: textfield !important;
   appearance: textfield !important;
 }
+
+/* PR-BOLETIM-1 FASE 1A — container padrão do Fechamento.
+   Escopo @media screen: NÃO afeta impressão/PDF.
+   outline + badge = DIAGNÓSTICO TEMPORÁRIO (removidos após a FASE 1B). */
+@media screen {
+  .bloco-padrao-fechamento {
+    height: 499px;
+    box-sizing: border-box;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  /* TEMPORÁRIO (diagnóstico) — sai na limpeza pós-1B */
+  .bloco-padrao-fechamento[data-overflow="true"] {
+    outline: 2px solid #ef4444;
+    outline-offset: -2px;
+  }
+  /* TEMPORÁRIO (diagnóstico) — sai na limpeza pós-1B */
+  .bloco-padrao-overflow-badge {
+    position: absolute;
+    bottom: 0; right: 0;
+    background: #ef4444; color: #fff;
+    font-size: 11px; line-height: 1.4;
+    padding: 1px 6px; border-top-left-radius: 4px;
+    z-index: 5; pointer-events: none;
+  }
+}

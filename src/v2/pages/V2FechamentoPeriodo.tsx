@@ -10,7 +10,7 @@
  *  - Botão "Gerar PDF" chama window.print()
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useLayoutEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Download } from 'lucide-react';
@@ -261,6 +261,32 @@ const CONFIG_MODAIS_LINHA_FECHAMENTO: Partial<Record<LinhaModalKey, ConfigModalL
     agregaMeta: agregaDeducoesPorSubcentroMeta,
   },
 };
+
+// PR-BOLETIM-1 FASE 1A — wrapper de altura padrão (499px) para os blocos do
+// Fechamento. A medição de overflow (ResizeObserver + badge) é DIAGNÓSTICO
+// TEMPORÁRIO da 1A. A 1B fará cada bloco caber em 499px; depois disso este
+// scaffolding é removido. CSS em @media screen → impressão/PDF intocados.
+function BlocoPadrao({ nome, children }: { nome: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [excesso, setExcesso] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const medir = () => setExcesso(Math.max(0, el.scrollHeight - 499));
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []); // deps vazias — medição via ResizeObserver
+  return (
+    <div ref={ref} className="bloco-padrao-fechamento" data-overflow={excesso > 0}>
+      {children}
+      {excesso > 0 && (
+        <div className="bloco-padrao-overflow-badge">▼ {nome}: +{excesso}px</div>
+      )}
+    </div>
+  );
+}
 
 export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props) {
   const { clienteAtual } = useCliente();
@@ -590,12 +616,14 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           soberano. Precede os 3 blocos operacionais (Produção → DRE → Caixa). */}
       {dto && (
         <div className="print-section">
+          <BlocoPadrao nome="Resumo Executivo">
           <Capa
             dto={dto}
             nomeCliente={clienteAtual?.nome}
             nomeFazenda={nomeFazenda}
             painel={painel}
           />
+          </BlocoPadrao>
         </div>
       )}
 
@@ -603,12 +631,14 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           em paralelo a EvolucaoOperacao para comparação visual. mostrarAnoCorrente=true
           ativa as 7 colunas (Real ano-1 / Real ano / Meta + 2 deltas). */}
       <div className="print-section print-page-break">
+        <BlocoPadrao nome="DRE">
         <BlocoAnaliseEconomica
           data={dtoPlanejamento.bloco3_analiseEconomica}
           desfocar={false}
           ano={ano}
           mostrarAnoCorrente={true}
         />
+        </BlocoPadrao>
       </div>
 
       {/* Marco 2.5 Fase 1: BlocoResumoExecutivo renderizado em paralelo a
@@ -617,6 +647,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
           paridade. */}
       {blocoResumoData && (
         <div className="print-section print-page-break">
+        <BlocoPadrao nome="Fluxo de Caixa">
         <BlocoResumoExecutivo
           data={blocoResumoData}
           saldoInicialMeta={planFin.saldoInicial}
@@ -644,32 +675,39 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
               : undefined
           }
         />
+        </BlocoPadrao>
         </div>
       )}
 
       {/* FASE 3 / PR3.1 — Movimentações do Rebanho */}
       <div className="print-section print-page-break">
+        <BlocoPadrao nome="Movimentações">
         <BlocoMovimentacoesRebanhoFechamento
           ano={ano}
           mes={mesAlvo}
           viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
           isGlobal={isGlobal}
         />
+        </BlocoPadrao>
       </div>
       <div className="print-section">
+        <BlocoPadrao nome="Conferência">
         <BlocoConferenciaMensalRebanhoFechamento
           ano={ano}
           mes={mesAlvo}
           viewMode={modo === 'no-mes' ? 'mes' : 'periodo'}
           isGlobal={isGlobal}
         />
+        </BlocoPadrao>
       </div>
 
       {/* Marco 2.5 Fase 1: Bloco Produção Pecuária Realizada — movido para
           após Movimentações conforme decisão FASE 3 (Capa → DRE → Fluxo →
           Movimentações → Produção). */}
       <div className="print-section print-page-break">
+        <BlocoPadrao nome="Produção">
         <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} />
+        </BlocoPadrao>
       </div>
 
       {isGlobal && clienteId && (
@@ -710,9 +748,12 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
       {dto && (
         <div className="fechamento-print-area">
           <div className="print-section">
+            <BlocoPadrao nome="Análise Zootécnica">
             <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
+            </BlocoPadrao>
           </div>
           <div className="print-section print-page-break print-allow-break">
+          <BlocoPadrao nome="Custos">
           <DesembolsoProducao
             dto={dto}
             custoCab={painel.custoCabIndicador?.valor ?? null}
@@ -741,6 +782,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
             rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
             rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
           />
+          </BlocoPadrao>
           </div>
         </div>
       )}
