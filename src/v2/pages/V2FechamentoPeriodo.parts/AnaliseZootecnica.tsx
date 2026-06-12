@@ -5,8 +5,9 @@
 
 import type { FechamentoPeriodoDTO, IndicadorPecuaria } from '@/v2/types/fechamentoPeriodo';
 import { fmt, pct, classeDiferenca } from './fmt';
+import { BoletimContainer } from './boletim/BoletimContainer';
 
-interface Props { dto: FechamentoPeriodoDTO; gmdSoberano?: number | null; }
+interface Props { dto: FechamentoPeriodoDTO; gmdSoberano?: number | null; subtitulo: string; }
 
 interface Linha {
   label: string;
@@ -15,7 +16,7 @@ interface Linha {
   dec?: number;
 }
 
-export default function AnaliseZootecnica({ dto, gmdSoberano = null }: Props) {
+export default function AnaliseZootecnica({ dto, gmdSoberano = null, subtitulo }: Props) {
   const a = dto.analisePecuaria;
 
   const linhas: Linha[] = [
@@ -44,8 +45,11 @@ export default function AnaliseZootecnica({ dto, gmdSoberano = null }: Props) {
   ];
 
   return (
-    <section className="pagina-fechamento">
-      <h2>Análise Zootécnica</h2>
+    // pagina-fechamento preservado como marcador, neutralizado (display:contents)
+    // p/ não duplicar card — chrome oficial vem do BoletimContainer. Os seletores
+    // descendentes (.pagina-fechamento table) seguem válidos com display:contents.
+    <div className="pagina-fechamento" style={{ display: 'contents' }}>
+      <BoletimContainer titulo="Análise Zootécnica" subtitulo={subtitulo} badge="OPERACIONAL" tone="operacional">
       <table className="fechamento-table">
         <thead>
           <tr>
@@ -70,6 +74,7 @@ export default function AnaliseZootecnica({ dto, gmdSoberano = null }: Props) {
           ))}
         </tbody>
       </table>
-    </section>
+      </BoletimContainer>
+    </div>
   );
 }

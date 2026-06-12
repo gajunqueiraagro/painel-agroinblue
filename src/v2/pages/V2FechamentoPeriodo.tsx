@@ -691,9 +691,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
       <PaginaBoletim n={4}>
         {dto && (
-          <div className="print-section"><BlocoPadrao nome="Análise Zootécnica">
-            <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} />
-          </BlocoPadrao></div>
+          <div className="print-section">
+            <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} subtitulo={subtituloPadrao} />
+          </div>
         )}
         <div className="print-section"><BlocoPadrao nome="Bloco complementar zootécnico">
           <BlocoEmConstrucao titulo="Complementar zootécnico" descricao="A definir." />
