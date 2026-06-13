@@ -26,6 +26,7 @@ import type { StatusPilarMensal } from '@/v2/types/fechamentoPeriodo';
 import Capa from './V2FechamentoPeriodo.parts/Capa';
 import AnaliseZootecnica from './V2FechamentoPeriodo.parts/AnaliseZootecnica';
 import DesembolsoProducao from './V2FechamentoPeriodo.parts/DesembolsoProducao';
+import { DetalheCustosCentroSubcentro } from './V2FechamentoPeriodo.parts/DetalheCustosCentroSubcentro';
 import './V2FechamentoPeriodo.parts/printStyles.css';
 
 // Marco 2.5 Fase 1: BlocoAnaliseEconomica do Planejamento renderizado em
@@ -788,6 +789,28 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
               rebanhoMedioReal={painel.cabecasIndicador?.valor ?? null}
               rebanhoMedioMeta={painel.cabecasIndicador?.serieMetaIndicador?.[mesAlvo] ?? null}
               subtitulo={subtituloPadrao}
+            />
+          </div>
+        )}
+        {dto && (
+          <div className="print-section print-page-break print-allow-break">
+            <DetalheCustosCentroSubcentro
+              dto={dto}
+              custeioAcum={painel.custeioPecIndicador?.valor ?? null}
+              custoCab={painel.custoCabIndicador?.valor ?? null}
+              subtitulo={subtituloPadrao}
+              grupoAlvo="Custo Variável Pecuária"
+            />
+          </div>
+        )}
+        {dto && (
+          <div className="print-section print-page-break print-allow-break">
+            <DetalheCustosCentroSubcentro
+              dto={dto}
+              custeioAcum={painel.custeioPecIndicador?.valor ?? null}
+              custoCab={painel.custoCabIndicador?.valor ?? null}
+              subtitulo={subtituloPadrao}
+              grupoAlvo="Custo Fixo Pecuária"
             />
           </div>
         )}

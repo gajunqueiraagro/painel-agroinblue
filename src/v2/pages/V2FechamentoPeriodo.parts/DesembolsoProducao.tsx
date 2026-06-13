@@ -543,7 +543,7 @@ export default function DesembolsoProducao({
   );
 }
 
-function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: number | null; numMeses: number }) {
+export function GrupoExpansivel({ grupo, denom, numMeses }: { grupo: GrupoNode; denom: number | null; numMeses: number }) {
   const [aberto, setAberto] = useState(true);
 
   // R$/cab/mês — denominador global (cabMed × qtdMeses), igual a todas as linhas.
