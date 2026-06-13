@@ -455,7 +455,7 @@ export default function DesembolsoProducao({
               <tbody>
                 {linhasCentro.map((c) => {
                   const metaAusente = c.meta == null || c.meta === 0;
-                  const desvioMetaPct = metaAusente ? null : (c.realizado - c.meta) / c.meta;
+                  const desvioMetaPct = metaAusente ? null : ((c.realizado - c.meta) / c.meta) * 100;
                   return (
                     <tr key={c.centro_custo}>
                       <td style={{ ...cell, textAlign: 'left' }}>{c.centro_custo}</td>
@@ -469,7 +469,7 @@ export default function DesembolsoProducao({
                 })}
                 {(() => {
                   const metaAusente = totalCentro.meta == null || totalCentro.meta === 0;
-                  const desvioMetaPct = metaAusente ? null : (totalCentro.realizado - totalCentro.meta) / totalCentro.meta;
+                  const desvioMetaPct = metaAusente ? null : ((totalCentro.realizado - totalCentro.meta) / totalCentro.meta) * 100;
                   const tdT: CSSProperties = { fontWeight: 700, borderTop: '2px solid #cbd5e1' };
                   return (
                     <tr>
