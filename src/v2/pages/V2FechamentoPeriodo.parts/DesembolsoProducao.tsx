@@ -141,6 +141,66 @@ export default function DesembolsoProducao({
     .filter(g => GRUPOS_PEC.has(g.grupo_custo))
     .sort((a, b) => (b.realizado ?? 0) - (a.realizado ?? 0));
 
+  // ── PR-2.2A — helpers copiados VERBATIM do GrupoExpansivel (dependem só de
+  //   denom/numMeses/fmt, em escopo aqui). DRY fica para o 2.2B. ──
+  const rsCabMes = (v: number | null | undefined): number | null =>
+    (v != null && denom != null && denom > 0) ? v / denom : null;
+  const rsMedioPeriodo = (v: number | null | undefined): number | null =>
+    (v != null && numMeses > 0) ? v / numMeses : null;
+  const fmtRsCabMes = (v: number | null | undefined): string => {
+    const r = rsCabMes(v);
+    return r != null ? `${fmt(r, 2)}` : '—';
+  };
+  const difRsCabMes = (real: number | null | undefined, meta: number | null | undefined): number | null => {
+    const r = rsCabMes(real);
+    const m = rsCabMes(meta);
+    return (r != null && m != null) ? r - m : null;
+  };
+  const fmtDifRsCabMes = (real: number | null | undefined, meta: number | null | undefined): string => {
+    const d = difRsCabMes(real, meta);
+    return d != null ? `${fmt(d, 2)}` : '—';
+  };
+  const fmtMedioPeriodo = (v: number | null | undefined): string => {
+    const r = rsMedioPeriodo(v);
+    return r != null ? `R$ ${fmt(r)}` : '—';
+  };
+  const cell: CSSProperties = { padding: '3px 8px', borderBottom: '1px solid #eef0f3' };
+  const cellNum: CSSProperties = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
+  const COR_REAL_COL = '#dc2626'; // coluna Real sempre vermelho
+  const COR_META_COL = '#f97316'; // coluna Meta sempre laranja
+
+  // Agregação por CENTRO (Fixo+Variável combinados). Fonte read-only; sem cálculo-fonte alterado.
+  const resumoCentros = Object.values(
+    gruposPec
+      .flatMap(g => g.centros)
+      .reduce<Record<string, { centro_custo: string; realizado: number; meta: number }>>(
+        (acc, c) => {
+          const k = c.centro_custo;
+          if (!acc[k]) acc[k] = { centro_custo: k, realizado: 0, meta: 0 };
+          acc[k].realizado += c.realizado ?? 0;
+          acc[k].meta += c.meta ?? 0;
+          return acc;
+        },
+        {},
+      ),
+  ).sort((a, b) => b.realizado - a.realizado);
+
+  const TOP_CENTROS = 6;
+  const centrosTopN = resumoCentros.slice(0, TOP_CENTROS);
+  const centrosResto = resumoCentros.slice(TOP_CENTROS);
+  const linhaOutros = centrosResto.length
+    ? {
+        centro_custo: 'Outros',
+        realizado: centrosResto.reduce((s, c) => s + c.realizado, 0),
+        meta: centrosResto.reduce((s, c) => s + c.meta, 0),
+      }
+    : null;
+  const linhasCentro = linhaOutros ? [...centrosTopN, linhaOutros] : centrosTopN;
+  const totalCentro = {
+    realizado: resumoCentros.reduce((s, c) => s + c.realizado, 0),
+    meta: resumoCentros.reduce((s, c) => s + c.meta, 0),
+  };
+
   // Denominador cab×mês back-derivado do PC-100: custeioPec ÷ Custo Cab. período.
   // Mantém o R$/cab/mês das linhas na MESMA base cab×mês dos cards soberanos.
   const denom =
@@ -363,7 +423,7 @@ export default function DesembolsoProducao({
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, alignItems: 'start' }}>
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <h3 style={{ margin: 0 }}>Resumo por Centro / Subcentro</h3>
+            <h3 style={{ margin: 0 }}>Resumo por Centro de Custo</h3>
             <div style={{ fontSize: 10, color: '#374151', textAlign: 'right' }}>
               <span>Rebanho Médio Real: <strong>{fmt(rebanhoMedioReal, 0)}</strong></span>
               {rebanhoMedioMeta != null && (
@@ -384,7 +444,7 @@ export default function DesembolsoProducao({
               </colgroup>
               <thead>
                 <tr style={{ background: '#cbd5e1', color: '#1f2937', fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                  <th style={{ padding: '5px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Centro / Subcentro</th>
+                  <th style={{ padding: '5px 8px', textAlign: 'left', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Centro de Custo</th>
                   <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Média Período</th>
                   <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Real</th>
                   <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Meta</th>
@@ -392,9 +452,37 @@ export default function DesembolsoProducao({
                   <th style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 700, borderBottom: '2px solid #94a3b8' }}>Δ %</th>
                 </tr>
               </thead>
-              {gruposPec.map(g => (
-                <GrupoExpansivel key={g.grupo_custo} grupo={g} denom={denom} numMeses={numMeses} />
-              ))}
+              <tbody>
+                {linhasCentro.map((c) => {
+                  const metaAusente = c.meta == null || c.meta === 0;
+                  const desvioMetaPct = metaAusente ? null : (c.realizado - c.meta) / c.meta;
+                  return (
+                    <tr key={c.centro_custo}>
+                      <td style={{ ...cell, textAlign: 'left' }}>{c.centro_custo}</td>
+                      <td style={cellNum}>{fmtMedioPeriodo(c.realizado)}</td>
+                      <td style={{ ...cellNum, color: COR_REAL_COL }}>{fmtRsCabMes(c.realizado)}</td>
+                      <td style={{ ...cellNum, color: COR_META_COL }}>{metaAusente ? '—' : fmtRsCabMes(c.meta)}</td>
+                      <td className={metaAusente ? '' : classeCustoDelta(desvioMetaPct)} style={cellNum}>{metaAusente ? '—' : fmtDifRsCabMes(c.realizado, c.meta)}</td>
+                      <td className={metaAusente ? '' : classeCustoDelta(desvioMetaPct)} style={cellNum}>{metaAusente ? '—' : pct(desvioMetaPct)}</td>
+                    </tr>
+                  );
+                })}
+                {(() => {
+                  const metaAusente = totalCentro.meta == null || totalCentro.meta === 0;
+                  const desvioMetaPct = metaAusente ? null : (totalCentro.realizado - totalCentro.meta) / totalCentro.meta;
+                  const tdT: CSSProperties = { fontWeight: 700, borderTop: '2px solid #cbd5e1' };
+                  return (
+                    <tr>
+                      <td style={{ ...cell, ...tdT, textAlign: 'left' }}>TOTAL</td>
+                      <td style={{ ...cellNum, ...tdT }}>{fmtMedioPeriodo(totalCentro.realizado)}</td>
+                      <td style={{ ...cellNum, ...tdT, color: COR_REAL_COL }}>{fmtRsCabMes(totalCentro.realizado)}</td>
+                      <td style={{ ...cellNum, ...tdT, color: COR_META_COL }}>{metaAusente ? '—' : fmtRsCabMes(totalCentro.meta)}</td>
+                      <td className={metaAusente ? '' : classeCustoDelta(desvioMetaPct)} style={{ ...cellNum, ...tdT }}>{metaAusente ? '—' : fmtDifRsCabMes(totalCentro.realizado, totalCentro.meta)}</td>
+                      <td className={metaAusente ? '' : classeCustoDelta(desvioMetaPct)} style={{ ...cellNum, ...tdT }}>{metaAusente ? '—' : pct(desvioMetaPct)}</td>
+                    </tr>
+                  );
+                })()}
+              </tbody>
             </table>
           </div>
         </div>
