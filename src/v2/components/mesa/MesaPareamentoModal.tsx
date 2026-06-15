@@ -1861,25 +1861,81 @@ export function MesaPareamentoModal({
               const candidatos = candidatosPorOfx.get(ofx.id) ?? [];
               const validacao = ofxValidacoes.get(ofx.id) ?? 'pendente';
 
+              // PR-MesaGlobal-Ergonomia-1B — candidato top p/ field-view (reusa helpers do loop)
+              const top = candidatos[0] ?? null;
+              const linhaTop = top?.linha ?? null;
+              const sugTop = top ? sugestoes.get(top.excelKey) : undefined;
+              const parTop = top ? pares.get(top.excelKey) : undefined;
+              const finalTop = top
+                ? consolidarFotografia(sugTop, parTop?.correcao ?? null, ofx.id,
+                    buildFallbacks(top.excelKey, ofx.id, linhasExcel, extratos))
+                : null;
+
               return (
                 <div className="flex-1 overflow-y-auto space-y-3">
-                  <div className="border rounded p-2.5 space-y-1 bg-muted/30">
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">OFX</div>
-                    <div className="text-xs flex items-center gap-3">
-                      <span className="tabular-nums text-muted-foreground">
-                        {format(new Date(ofx.data_movimento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
-                      </span>
-                      <span className={cn('tabular-nums font-bold',
-                        ofx.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
-                      )}>{fmtBRL(ofx.valor)}</span>
-                    </div>
-                    <div className="text-xs">{ofx.descricao}</div>
+                  {/* BLOCO 1 — CONFERÊNCIA (OFX × candidato top) */}
+                  <div className="border rounded p-2.5 space-y-0.5 bg-muted/30">
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Conferência</div>
+                    {(() => {
+                      const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+                      const exData = linhaTop ? (linhaTop.dataPagamento ?? linhaTop.dataCompetencia ?? null) : null;
+                      const exValor = linhaTop ? (linhaTop.sinal === 'entrada' ? 1 : -1) * (linhaTop.valorCentavos / 100) : null;
+                      let dias: number | null = null;
+                      if (linhaTop && exData) {
+                        dias = Math.round((new Date(ofx.data_movimento + 'T12:00:00').getTime()
+                          - new Date(exData + 'T12:00:00').getTime()) / 86400000);
+                      }
+                      const valorIgual = linhaTop && exValor != null ? Math.abs(Math.abs(ofx.valor) - Math.abs(exValor)) < 0.01 : false;
+                      const colExcel = (v: ReactNode) => linhaTop ? [{ head: 'Excel', valor: v }] : [];
+                      return (
+                        <>
+                          <CampoLinha label="Data"
+                            cols={[{ head: 'OFX', valor: fmtData(ofx.data_movimento) }, ...colExcel(fmtData(exData))]}
+                            status={!linhaTop ? null : (dias === 0 ? { tone: 'ok', texto: '✓ igual' } : dias != null ? { tone: 'warn', texto: `⚠ ${Math.abs(dias)} dia(s)` } : null)} />
+                          <CampoLinha label="Valor"
+                            cols={[{ head: 'OFX', valor: fmtBRL(ofx.valor) }, ...colExcel(exValor != null ? fmtBRL(exValor) : '—')]}
+                            status={!linhaTop ? null : (valorIgual ? { tone: 'ok', texto: '✓ idêntico' } : { tone: 'bad', texto: '✗ diverge' })} />
+                          <CampoLinha label="Banco"
+                            cols={[{ head: 'OFX', valor: contaNome ?? '—' }, ...colExcel(linhaTop?.contaTexto || '—')]} />
+                          <CampoLinha label="Texto"
+                            cols={[{ head: 'OFX', valor: ofx.descricao || '—' }, ...colExcel(linhaTop?.fornecedor || linhaTop?.observacao || '—')]}
+                            status={!top ? null : (top.faixa === 'forte' ? { tone: 'ok', texto: '✓ semelhante' } : top.faixa === 'fraco' ? { tone: 'warn', texto: `~ score ${top.score}` } : null)} />
+                        </>
+                      );
+                    })()}
                     {validacao === 'ofx_orfao_validado' && (
                       <div className="text-[10px] font-semibold px-2 py-1 mt-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                         ⊘ OFX órfão validado — operador marcou como sem Excel correspondente
                       </div>
                     )}
                   </div>
+
+                  {/* BLOCO 2 — CLASSIFICAÇÃO (candidato top) */}
+                  {top && linhaTop && (
+                    <div className="border rounded p-2.5 space-y-1">
+                      <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Classificação (candidato top)</div>
+                      <CampoLinha label="Forn." cols={[
+                        { head: 'Excel', valor: linhaTop.fornecedor || '—' },
+                        { head: 'Sug.', valor: sugTop?.fornecedorOficial?.nome ?? '—' },
+                        { head: 'Final', valor: finalTop?.fornecedorNome ?? '—' }]} />
+                      <CampoLinha label="Fazenda" cols={[
+                        { head: 'Excel', valor: linhaTop.fazendaTexto || '—' },
+                        { head: 'Sug.', valor: sugTop?.fazendaSugerida?.nome ?? '—' },
+                        { head: 'Final', valor: finalTop?.fazendaNome ?? '—' }]} />
+                      <CampoLinha label="Subc." cols={[
+                        { head: 'Excel', valor: linhaTop.subcentro || '—' },
+                        { head: 'Sug.', valor: sugTop?.subcentroSugerido?.subcentro ?? '—' },
+                        { head: 'Final', valor: finalTop?.subcentro ?? '—' }]} />
+                      <CampoLinha label="Produto" cols={[
+                        { head: 'Excel', valor: linhaTop.produto || '—' },
+                        { head: 'Sug.', valor: '—' },
+                        { head: 'Final', valor: finalTop?.produto ?? '—' }]} />
+                      <CampoLinha label="Compl." cols={[
+                        { head: 'Excel', valor: linhaTop.observacao || '—' },
+                        { head: 'Sug.', valor: '—' },
+                        { head: 'Final', valor: finalTop?.descricao ?? '—' }]} />
+                    </div>
+                  )}
 
                   <div className="border rounded p-2.5">
                     <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1.5">
