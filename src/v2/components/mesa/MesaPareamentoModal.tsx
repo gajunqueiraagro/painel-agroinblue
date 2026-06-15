@@ -1520,10 +1520,13 @@ export function MesaPareamentoModal({
                     </div>
                   )}
 
-                  {/* MATRIZ OPERACIONAL — ordem mental do operador */}
+                  {/* MATRIZ OPERACIONAL — grade horizontal: CAMPO | OFX | EXCEL | SUG | FINAL | ST */}
                   <div className="space-y-0">
+                    <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_22px] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                      <span>Campo</span><span>OFX</span><span>Excel</span><span>Sug.</span><span>Final</span><span></span>
+                    </div>
                     {(() => {
-                      const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+                      const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
                       const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
                       const dias = matchAtivo?.detalheScore?.diasDistancia ?? null;
                       const valorIgual = ofxAtivo ? Math.abs(Math.abs(ofxAtivo.valor) - Math.abs(exValor)) < 0.01 : false;
@@ -1535,24 +1538,17 @@ export function MesaPareamentoModal({
                       const finalProd = cor?.produto ?? linhaAtiva.produto ?? null;
                       return (
                         <>
-                          <MatrizBloco titulo="Data Competência" linhas={[{ fonte: 'Excel', valor: fmtData(linhaAtiva.dataCompetencia) }]} />
-                          <MatrizBloco titulo="Data Referência"
-                            linhas={[{ fonte: 'OFX', valor: ofxAtivo ? fmtData(ofxAtivo.data_movimento) : 'Sem OFX' }, { fonte: 'Excel', valor: fmtData(linhaAtiva.dataPagamento) }]}
-                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', texto: '✓ Igual' } : dias != null ? { tone: 'warn', texto: `⚠ ${Math.abs(dias)} dia(s)` } : null)} />
-                          <MatrizBloco titulo="Fazenda"
-                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.fazendaTexto || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.fazendaSugerida?.nome ?? '—' }, { fonte: 'Final', valor: finalFaz ?? '—' }]} />
-                          <MatrizBloco titulo="Valor"
-                            linhas={[{ fonte: 'OFX', valor: ofxAtivo ? fmtBRL(ofxAtivo.valor) : 'Sem OFX' }, { fonte: 'Excel', valor: fmtBRL(exValor) }]}
-                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', texto: '✓ Idêntico' } : { tone: 'bad', texto: '✗ Diverge' })} />
-                          <MatrizBloco titulo="Banco"
-                            linhas={[{ fonte: 'OFX', valor: contaNome ?? '—' }, { fonte: 'Excel', valor: linhaAtiva.contaTexto || '—' }]}
-                            status={bancoDiv ? { tone: 'warn', texto: '⚠ Diferente' } : { tone: 'ok', texto: '✓ Igual' }} />
-                          <MatrizBloco titulo="Produto"
-                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.produto || '—' }, { fonte: 'Final', valor: finalProd ?? '—' }]} />
-                          <MatrizBloco titulo="Fornecedor"
-                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.fornecedor || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.fornecedorOficial?.nome ?? '—' }, { fonte: 'Final', valor: finalForn ?? '—' }]} />
-                          <MatrizBloco titulo="Subcentro"
-                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.subcentro || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.subcentroSugerido?.subcentro ?? '—' }, { fonte: 'Final', valor: finalSub ?? '—' }]} />
+                          <MatrizLinha campo="Data Comp." excel={fmtData(linhaAtiva.dataCompetencia)} fin={fmtData(cor?.dataCompetencia ?? linhaAtiva.dataCompetencia)} />
+                          <MatrizLinha campo="Data Ref." ofx={ofxAtivo ? fmtData(ofxAtivo.data_movimento) : null} excel={fmtData(linhaAtiva.dataPagamento)} fin={fmtData(linhaAtiva.dataPagamento)}
+                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', icone: '✓', titulo: 'Igual' } : dias != null ? { tone: 'warn', icone: '⚠', titulo: `${Math.abs(dias)} dia(s)` } : null)} />
+                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} sug={sugAtiva?.fazendaSugerida?.nome} fin={finalFaz} />
+                          <MatrizLinha campo="Valor" ofx={ofxAtivo ? fmtBRL(ofxAtivo.valor) : null} excel={fmtBRL(exValor)} fin={fmtBRL(exValor)}
+                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', icone: '✓', titulo: 'Idêntico' } : { tone: 'bad', icone: '✗', titulo: 'Diverge' })} />
+                          <MatrizLinha campo="Banco" ofx={contaNome} excel={linhaAtiva.contaTexto} fin={contaNome}
+                            status={bancoDiv ? { tone: 'warn', icone: '⚠', titulo: 'Diferente' } : { tone: 'ok', icone: '✓', titulo: 'Igual' }} />
+                          <MatrizLinha campo="Produto" excel={linhaAtiva.produto} fin={finalProd} />
+                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} sug={sugAtiva?.fornecedorOficial?.nome} fin={finalForn} />
+                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} sug={sugAtiva?.subcentroSugerido?.subcentro} fin={finalSub} />
                         </>
                       );
                     })()}
@@ -2132,25 +2128,23 @@ function SugLinha({ label, valor, conf, title }: {
   );
 }
 
-// PR-MesaGlobal-Ergonomia-2 — bloco vertical da matriz de decisão (fontes empilhadas por campo)
-function MatrizBloco({ titulo, linhas, status }: {
-  titulo: string;
-  linhas: { fonte: string; valor: ReactNode }[];
-  status?: { tone: 'ok' | 'warn' | 'bad'; texto: string } | null;
+// PR-MesaGlobal-Ergonomia-3 — linha da grade horizontal: CAMPO | OFX | EXCEL | SUG | FINAL | STATUS
+function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
+  campo: string;
+  ofx?: ReactNode; excel?: ReactNode; sug?: ReactNode; fin?: ReactNode;
+  status?: { tone: 'ok' | 'warn' | 'bad'; icone: string; titulo: string } | null;
 }) {
   const tcls = status?.tone === 'ok' ? 'text-emerald-700'
     : status?.tone === 'warn' ? 'text-amber-700'
     : status?.tone === 'bad' ? 'text-rose-700' : '';
+  const cell = (v?: ReactNode) => (
+    <span className="truncate" title={typeof v === 'string' ? v : undefined}>{v == null || v === '' ? '—' : v}</span>
+  );
   return (
-    <div className="py-1.5 border-b border-border/30 last:border-0">
-      <div className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground mb-0.5">{titulo}</div>
-      {linhas.map((l, i) => (
-        <div key={i} className="flex items-baseline gap-2 text-[11px] leading-tight">
-          <span className="text-[9px] uppercase text-muted-foreground/70 w-16 shrink-0">{l.fonte}</span>
-          <span className="tabular-nums flex-1 min-w-0 break-words">{l.valor ?? '—'}</span>
-        </div>
-      ))}
-      {status && status.texto && <div className={`text-[10px] mt-0.5 ${tcls}`}>{status.texto}</div>}
+    <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_22px] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
+      <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
+      {cell(ofx)}{cell(excel)}{cell(sug)}{cell(fin)}
+      <span className={`text-right ${tcls}`} title={status?.titulo}>{status?.icone ?? ''}</span>
     </div>
   );
 }
