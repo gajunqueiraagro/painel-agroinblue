@@ -1520,35 +1520,53 @@ export function MesaPareamentoModal({
                     </div>
                   )}
 
-                  {/* BLOCO 1 — CONFERÊNCIA (fato bancário OFX × Excel) */}
-                  <div className="space-y-0.5 py-1">
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Conferência</div>
+                  {/* MATRIZ OPERACIONAL — ordem mental do operador */}
+                  <div className="space-y-0">
                     {(() => {
                       const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
-                      const exData = linhaAtiva.dataPagamento ?? linhaAtiva.dataCompetencia ?? null;
                       const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
                       const dias = matchAtivo?.detalheScore?.diasDistancia ?? null;
-                      const sim = matchAtivo?.detalheScore?.similaridadeNome ?? null;
                       const valorIgual = ofxAtivo ? Math.abs(Math.abs(ofxAtivo.valor) - Math.abs(exValor)) < 0.01 : false;
                       const bancoDiv = !!(parAtivoKey && escopoPorPar.get(parAtivoKey)?.isDivergente);
+                      const cor = parAtivo.correcao;
+                      const finalFaz = cor?.fazendaNome ?? sugAtiva?.fazendaSugerida?.nome ?? null;
+                      const finalSub = cor?.subcentro ?? sugAtiva?.subcentroSugerido?.subcentro ?? null;
+                      const finalForn = cor?.fornecedorNome ?? sugAtiva?.fornecedorOficial?.nome ?? null;
+                      const finalProd = cor?.produto ?? linhaAtiva.produto ?? null;
                       return (
                         <>
-                          <CampoLinha label="Data"
-                            cols={[{ head: 'OFX', valor: ofxAtivo ? fmtData(ofxAtivo.data_movimento) : 'Sem OFX' }, { head: 'Excel', valor: fmtData(exData) }]}
-                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', texto: '✓ igual' } : dias != null ? { tone: 'warn', texto: `⚠ ${Math.abs(dias)} dia(s)` } : null)} />
-                          <CampoLinha label="Valor"
-                            cols={[{ head: 'OFX', valor: ofxAtivo ? fmtBRL(ofxAtivo.valor) : 'Sem OFX' }, { head: 'Excel', valor: fmtBRL(exValor) }]}
-                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', texto: '✓ idêntico' } : { tone: 'bad', texto: '✗ diverge' })} />
-                          <CampoLinha label="Banco"
-                            cols={[{ head: 'OFX', valor: contaNome ?? '—' }, { head: 'Excel', valor: linhaAtiva.contaTexto || '—' }]}
-                            status={bancoDiv ? { tone: 'warn', texto: '⚠ diferente' } : { tone: 'ok', texto: '✓ igual' }} />
-                          <CampoLinha label="Texto"
-                            cols={[{ head: 'OFX', valor: ofxAtivo?.descricao || '—' }, { head: 'Excel', valor: linhaAtiva.fornecedor || linhaAtiva.observacao || '—' }]}
-                            status={sim != null ? (sim >= 0.8 ? { tone: 'ok', texto: '✓ semelhante' } : { tone: 'warn', texto: `~ ${(sim * 100).toFixed(0)}%` }) : null} />
+                          <MatrizBloco titulo="Data Competência" linhas={[{ fonte: 'Excel', valor: fmtData(linhaAtiva.dataCompetencia) }]} />
+                          <MatrizBloco titulo="Data Referência"
+                            linhas={[{ fonte: 'OFX', valor: ofxAtivo ? fmtData(ofxAtivo.data_movimento) : 'Sem OFX' }, { fonte: 'Excel', valor: fmtData(linhaAtiva.dataPagamento) }]}
+                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', texto: '✓ Igual' } : dias != null ? { tone: 'warn', texto: `⚠ ${Math.abs(dias)} dia(s)` } : null)} />
+                          <MatrizBloco titulo="Fazenda"
+                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.fazendaTexto || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.fazendaSugerida?.nome ?? '—' }, { fonte: 'Final', valor: finalFaz ?? '—' }]} />
+                          <MatrizBloco titulo="Valor"
+                            linhas={[{ fonte: 'OFX', valor: ofxAtivo ? fmtBRL(ofxAtivo.valor) : 'Sem OFX' }, { fonte: 'Excel', valor: fmtBRL(exValor) }]}
+                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', texto: '✓ Idêntico' } : { tone: 'bad', texto: '✗ Diverge' })} />
+                          <MatrizBloco titulo="Banco"
+                            linhas={[{ fonte: 'OFX', valor: contaNome ?? '—' }, { fonte: 'Excel', valor: linhaAtiva.contaTexto || '—' }]}
+                            status={bancoDiv ? { tone: 'warn', texto: '⚠ Diferente' } : { tone: 'ok', texto: '✓ Igual' }} />
+                          <MatrizBloco titulo="Produto"
+                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.produto || '—' }, { fonte: 'Final', valor: finalProd ?? '—' }]} />
+                          <MatrizBloco titulo="Fornecedor"
+                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.fornecedor || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.fornecedorOficial?.nome ?? '—' }, { fonte: 'Final', valor: finalForn ?? '—' }]} />
+                          <MatrizBloco titulo="Subcentro"
+                            linhas={[{ fonte: 'Excel', valor: linhaAtiva.subcentro || '—' }, { fonte: 'Sugestão', valor: sugAtiva?.subcentroSugerido?.subcentro ?? '—' }, { fonte: 'Final', valor: finalSub ?? '—' }]} />
                         </>
                       );
                     })()}
                   </div>
+
+                  {/* CONTEXTO — textos auxiliares (confirmam, não decidem) */}
+                  {(ofxAtivo?.descricao || linhaAtiva.documento || linhaAtiva.observacao) && (
+                    <div className="border-t pt-2 mt-1 space-y-0.5">
+                      <div className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground mb-0.5">Contexto</div>
+                      {ofxAtivo?.descricao && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Texto OFX</span>{ofxAtivo.descricao}</div>}
+                      {linhaAtiva.documento && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Doc Excel</span>{linhaAtiva.documento}</div>}
+                      {linhaAtiva.observacao && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Histórico</span><span className="italic">{linhaAtiva.observacao}</span></div>}
+                    </div>
+                  )}
 
                   {/* Alertas */}
                   {(alertasExtras.length > 0 || (sugAtiva && sugAtiva.alertas.length > 0)) && (
@@ -1625,67 +1643,9 @@ export function MesaPareamentoModal({
                     </div>
                   ) : (
                     <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">
-                      IA sugere
+                      Ações
                     </div>
                   )}
-
-                  {/* Valores: correção (se houver) prevalece sobre sugestão field-a-field */}
-                  {(() => {
-                    const cor = parAtivo.correcao;
-                    const exibir = {
-                      conta: cor?.contaRotulo ?? sugAtiva.contaSugerida?.rotulo ?? null,
-                      fazenda: cor?.fazendaNome ?? sugAtiva.fazendaSugerida?.nome ?? null,
-                      subc: cor?.subcentro ?? sugAtiva.subcentroSugerido?.subcentro ?? null,
-                      macro: cor?.macro_custo ?? sugAtiva.subcentroSugerido?.macro_custo ?? null,
-                      grupo: cor?.grupo_custo ?? sugAtiva.subcentroSugerido?.grupo_custo ?? null,
-                      centro: cor?.centro_custo ?? sugAtiva.subcentroSugerido?.centro_custo ?? null,
-                      forn: cor?.fornecedorNome ?? sugAtiva.fornecedorOficial?.nome ?? null,
-                      fornecedorMarcadoNovo: cor?.fornecedorMarcadoNovo ?? false,
-                      // PR4.1 — produto vem da correção ou do Excel original
-                      produto: cor?.produto ?? linhaAtiva?.produto ?? null,
-                      dataComp: cor?.dataCompetencia ?? null,
-                      desc: cor?.descricao ?? null,
-                    };
-                    // Quando corrigido, confiança não se aplica (operador validou).
-                    const confConta = cor ? undefined : sugAtiva.contaSugerida?.confianca;
-                    const confFaz = cor ? undefined : sugAtiva.fazendaSugerida?.confianca;
-                    const confSub = cor ? undefined : sugAtiva.subcentroSugerido?.confianca;
-                    const confFor = cor ? undefined : sugAtiva.fornecedorOficial?.confianca;
-                    // PR6.1F-2 — grid responsivo 2 colunas. Hierarquia do Subc.
-                    // preservada via title (tooltip). Ordem JSX em flow:
-                    //   esq col: Conta / Fazenda / Subc.   dir col: Forn. / Produto / Comp.
-                    const subcHierarquia = exibir.subc
-                      ? `${exibir.macro ?? '—'} / ${exibir.grupo ?? '—'} / ${exibir.centro ?? '—'}`
-                      : undefined;
-                    return (
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Classificação</div>
-                        <CampoLinha label="Forn." cols={[
-                          { head: 'Excel', valor: linhaAtiva?.fornecedor || '—' },
-                          { head: 'Sug.', valor: sugAtiva.fornecedorOficial?.nome ?? '—' },
-                          { head: 'Final', valor: exibir.forn ?? '—' }]} />
-                        <CampoLinha label="Fazenda" cols={[
-                          { head: 'Excel', valor: linhaAtiva?.fazendaTexto || '—' },
-                          { head: 'Sug.', valor: sugAtiva.fazendaSugerida?.nome ?? '—' },
-                          { head: 'Final', valor: exibir.fazenda ?? '—' }]} />
-                        <CampoLinha label="Subc." cols={[
-                          { head: 'Excel', valor: linhaAtiva?.subcentro || '—' },
-                          { head: 'Sug.', valor: sugAtiva.subcentroSugerido?.subcentro ?? '—' },
-                          { head: 'Final', valor: exibir.subc ?? '—' }]} status={subcHierarquia ? { tone: 'ok', texto: '' } : null} />
-                        <CampoLinha label="Produto" cols={[
-                          { head: 'Excel', valor: linhaAtiva?.produto || '—' },
-                          { head: 'Sug.', valor: '—' },
-                          { head: 'Final', valor: exibir.produto ?? '—' }]} />
-                        <CampoLinha label="Compl." cols={[
-                          { head: 'Excel', valor: linhaAtiva?.observacao || '—' },
-                          { head: 'Sug.', valor: '—' },
-                          { head: 'Final', valor: exibir.desc ?? '—' }]} />
-                        {exibir.fornecedorMarcadoNovo && (
-                          <div className="text-[10px] text-amber-700">⚑ Fornecedor marcado como novo (criar no PR6+)</div>
-                        )}
-                      </div>
-                    );
-                  })()}
 
                   {/* Botões de decisão */}
                   <div className="border-t pt-2 space-y-1.5">
@@ -2168,6 +2128,29 @@ function SugLinha({ label, valor, conf, title }: {
       {pct != null && valor && (
         <span className={cn('text-[10px] tabular-nums shrink-0', corPct)}>{pct}%</span>
       )}
+    </div>
+  );
+}
+
+// PR-MesaGlobal-Ergonomia-2 — bloco vertical da matriz de decisão (fontes empilhadas por campo)
+function MatrizBloco({ titulo, linhas, status }: {
+  titulo: string;
+  linhas: { fonte: string; valor: ReactNode }[];
+  status?: { tone: 'ok' | 'warn' | 'bad'; texto: string } | null;
+}) {
+  const tcls = status?.tone === 'ok' ? 'text-emerald-700'
+    : status?.tone === 'warn' ? 'text-amber-700'
+    : status?.tone === 'bad' ? 'text-rose-700' : '';
+  return (
+    <div className="py-1.5 border-b border-border/30 last:border-0">
+      <div className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground mb-0.5">{titulo}</div>
+      {linhas.map((l, i) => (
+        <div key={i} className="flex items-baseline gap-2 text-[11px] leading-tight">
+          <span className="text-[9px] uppercase text-muted-foreground/70 w-16 shrink-0">{l.fonte}</span>
+          <span className="tabular-nums flex-1 min-w-0 break-words">{l.valor ?? '—'}</span>
+        </div>
+      ))}
+      {status && status.texto && <div className={`text-[10px] mt-0.5 ${tcls}`}>{status.texto}</div>}
     </div>
   );
 }
