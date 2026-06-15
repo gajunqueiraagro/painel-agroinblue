@@ -477,6 +477,34 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   ): Promise<string | null> => {
     if (!clienteId || !user) return null;
 
+    // PR-B — trava de intake: vias secundárias deferem a um OFX equivalente já existente
+    // (mesma movimentação: cliente, conta, data, |valor|, sinal). Não cria duplicata;
+    // retorna o id do OFX p/ o caller parear. NÃO afeta ofx/manual/movimentacao_rebanho/etc.
+    const ORIGENS_DEFEREM_A_OFX = new Set(['mesa_excel', 'referencia_operacional', 'excel']);
+
+    const origemAtual = opts?.origem ?? 'manual';
+    if (ORIGENS_DEFEREM_A_OFX.has(origemAtual)) {
+      const sinalChk = (form.tipo_operacao || '').startsWith('1') ? 1 : -1;
+      const vChk = Math.abs(Number(form.valor) || 0);
+      let q = supabase
+        .from('financeiro_lancamentos_v2')
+        .select('id')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .eq('origem_lancamento', 'ofx')
+        .eq('sinal', sinalChk)
+        .eq('data_pagamento', form.data_pagamento)
+        .gte('valor', vChk - 0.01).lte('valor', vChk + 0.01);
+      q = form.conta_bancaria_id
+        ? q.eq('conta_bancaria_id', form.conta_bancaria_id)
+        : q.eq('conta_destino_id', form.conta_destino_id ?? '');
+      const { data: jaExisteOfx } = await q.limit(1).maybeSingle();
+      if (jaExisteOfx?.id) {
+        if (!opts?.silent) toast.info('Movimento já lançado via OFX — pareado, não duplicado.');
+        return jaExisteOfx.id as string;
+      }
+    }
+
     const row = buildInsertRow(form, user.id, opts?.origem ?? 'manual');
     const { data, error } = await supabase
       .from('financeiro_lancamentos_v2')
