@@ -1,10 +1,12 @@
 /**
  * DetalheCustosCentroSubcentro — box de detalhamento CENTRO-ONLY de Custos
- * (PR-BOLETIM-2.2E-Layout), um por grupo (Variável / Fixo). Mini-dashboard:
- * topo = tabela centro-only compacta (~57%) + bloco Composição (donut + legenda
- * em mini-tabela AO LADO, ~43%); abaixo = ranking "Maiores desvios vs meta"
- * em formato DIVERGING (economia esq./verde, estouro dir./vermelho, eixo zero).
- * Sem histórico, sem placeholder, sem DTO/builder novo. DRY no fim.
+ * (PR-BOLETIM-2.2E.1), um por grupo (Variável / Fixo). Mini-dashboard:
+ * topo = tabela centro-only (~57%) + Composição (donut + legenda mini-tabela
+ * AO LADO, ~43%); abaixo = linha 50/50 de cards: ESQ ranking "Maiores desvios
+ * vs meta" DIVERGING (economia esq./verde, estouro dir./vermelho, eixo zero);
+ * DIR card de histórico em ESTADO INDISPONÍVEL HONESTO (sem série soberana no
+ * DTO ainda — sem mock, sem números inventados, sem cálculo a partir do atual).
+ * DRY no fim.
  *
  * NOTE: nome do arquivo/componente mantém "...CentroSubcentro" de propósito
  * (sem cleanup agora); hoje é centro-only.
@@ -60,6 +62,10 @@ export function DetalheCustosCentroSubcentro({
     grupoAlvo === 'Custo Variável Pecuária'
       ? 'Detalhamento — Custo Variável (Centro de Custo)'
       : 'Detalhamento — Custo Fixo (Centro de Custo)';
+  const tituloHistorico =
+    grupoAlvo === 'Custo Variável Pecuária'
+      ? 'Evolução do custo realizado — Custo Variável (R$/cab/mês)'
+      : 'Evolução do custo realizado — Custo Fixo (R$/cab/mês)';
 
   // ── Helpers (duplicados do nível centro do GrupoExpansivel; fecham sobre denom/numMeses) ──
   const rsCabMes = (v: number | null | undefined): number | null =>
@@ -121,6 +127,17 @@ export function DetalheCustosCentroSubcentro({
     letterSpacing: 0.3,
     color: '#475569',
     marginBottom: 4,
+  };
+  // Card branco (ranking / histórico) — linha 50/50 abaixo.
+  const card: CSSProperties = {
+    flex: '1 1 50%',
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    border: '1px solid #e5e7eb',
+    borderRadius: 8,
+    padding: 10,
+    background: '#ffffff',
   };
 
   const grupo = grupos[0] ?? null;
@@ -184,7 +201,7 @@ export function DetalheCustosCentroSubcentro({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* ── TOPO: tabela (~57%) + composição donut+legenda (~43%) ── */}
+          {/* ── TOPO: tabela (~57%) + composição donut+legenda (~43%) — inalterado ── */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             {/* ESQUERDA: tabela centro-only */}
             <div style={{ flex: '0 0 57%', maxWidth: '57%' }}>
@@ -415,103 +432,142 @@ export function DetalheCustosCentroSubcentro({
             </div>
           </div>
 
-          {/* ── ABAIXO: ranking DIVERGING "Maiores desvios vs meta" (full width) ── */}
-          <div>
-            <div style={tituloBloco}>Maiores desvios vs meta (R$/cab/mês)</div>
-            {ranking.length === 0 ? (
-              <div style={{ fontSize: 9, color: '#9ca3af', fontStyle: 'italic' }}>
-                Sem centros com meta para ranquear.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {ranking.map((r, i) => {
-                  const w = (Math.abs(r.delta) / maxAbs) * 50; // metade da pista por lado
-                  const estouro = r.delta > 0;
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
-                      <span
-                        title={r.nome}
-                        style={{
-                          flex: '0 0 22%',
-                          maxWidth: '22%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: '#374151',
-                        }}
-                      >
-                        {r.nome}
-                      </span>
-                      {/* pista diverging: eixo zero central */}
-                      <span style={{ flex: 1, position: 'relative', height: 10, background: '#f8fafc', borderRadius: 2 }}>
+          {/* ── ABAIXO: linha 50/50 — card ranking DIVERGING + card histórico (placeholder honesto) ── */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+            {/* CARD ESQ: ranking diverging */}
+            <div style={card}>
+              <div style={tituloBloco}>Maiores desvios vs meta (R$/cab/mês)</div>
+              {ranking.length === 0 ? (
+                <div style={{ fontSize: 9, color: '#9ca3af', fontStyle: 'italic' }}>
+                  Sem centros com meta para ranquear.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {ranking.map((r, i) => {
+                    const w = (Math.abs(r.delta) / maxAbs) * 50; // metade da pista por lado
+                    const estouro = r.delta > 0;
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9 }}>
                         <span
-                          style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: '#cbd5e1' }}
-                        />
-                        {estouro ? (
+                          title={r.nome}
+                          style={{
+                            flex: '0 0 30%',
+                            maxWidth: '30%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            color: '#374151',
+                          }}
+                        >
+                          {r.nome}
+                        </span>
+                        {/* pista diverging: eixo zero central */}
+                        <span style={{ flex: 1, position: 'relative', height: 10, background: '#f8fafc', borderRadius: 2 }}>
                           <span
-                            style={{
-                              position: 'absolute',
-                              left: '50%',
-                              top: 0,
-                              height: '100%',
-                              width: `${w}%`,
-                              background: COR_ESTOURO,
-                              borderRadius: '0 2px 2px 0',
-                            }}
+                            style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: '#cbd5e1' }}
                           />
-                        ) : (
-                          <span
-                            style={{
-                              position: 'absolute',
-                              right: '50%',
-                              top: 0,
-                              height: '100%',
-                              width: `${w}%`,
-                              background: COR_ECONOMIA,
-                              borderRadius: '2px 0 0 2px',
-                            }}
-                          />
-                        )}
-                      </span>
-                      <span
-                        className={classeCustoDelta(r.pctv)}
-                        style={{
-                          flex: '0 0 auto',
-                          minWidth: 52,
-                          textAlign: 'right',
-                          fontVariantNumeric: 'tabular-nums',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {(r.delta > 0 ? '+' : '') + fmt(r.delta, 2)}
-                      </span>
-                      <span
-                        className={classeCustoDelta(r.pctv)}
-                        style={{
-                          flex: '0 0 auto',
-                          minWidth: 46,
-                          textAlign: 'right',
-                          fontVariantNumeric: 'tabular-nums',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {pct(r.pctv)}
-                      </span>
-                    </div>
-                  );
-                })}
+                          {estouro ? (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                left: '50%',
+                                top: 0,
+                                height: '100%',
+                                width: `${w}%`,
+                                background: COR_ESTOURO,
+                                borderRadius: '0 2px 2px 0',
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                right: '50%',
+                                top: 0,
+                                height: '100%',
+                                width: `${w}%`,
+                                background: COR_ECONOMIA,
+                                borderRadius: '2px 0 0 2px',
+                              }}
+                            />
+                          )}
+                        </span>
+                        <span
+                          className={classeCustoDelta(r.pctv)}
+                          style={{
+                            flex: '0 0 auto',
+                            minWidth: 44,
+                            textAlign: 'right',
+                            fontVariantNumeric: 'tabular-nums',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {(r.delta > 0 ? '+' : '') + fmt(r.delta, 2)}
+                        </span>
+                        <span
+                          className={classeCustoDelta(r.pctv)}
+                          style={{
+                            flex: '0 0 auto',
+                            minWidth: 40,
+                            textAlign: 'right',
+                            fontVariantNumeric: 'tabular-nums',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {pct(r.pctv)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* eixo: economia ← 0 → estouro */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 8, color: '#9ca3af', marginTop: 3 }}>
+                <span style={{ flex: '0 0 30%', maxWidth: '30%' }} />
+                <span style={{ flex: 1, display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: COR_ECONOMIA }}>◄ economia</span>
+                  <span>0</span>
+                  <span style={{ color: COR_ESTOURO }}>estouro ►</span>
+                </span>
+                <span style={{ flex: '0 0 auto', minWidth: 44 }} />
+                <span style={{ flex: '0 0 auto', minWidth: 40 }} />
               </div>
-            )}
-            {/* eixo: economia ← 0 → estouro */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 8, color: '#9ca3af', marginTop: 3 }}>
-              <span style={{ flex: '0 0 22%', maxWidth: '22%' }} />
-              <span style={{ flex: 1, display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COR_ECONOMIA }}>◄ economia</span>
-                <span>0</span>
-                <span style={{ color: COR_ESTOURO }}>estouro ►</span>
-              </span>
-              <span style={{ flex: '0 0 auto', minWidth: 52 }} />
-              <span style={{ flex: '0 0 auto', minWidth: 46 }} />
+            </div>
+
+            {/* CARD DIR: histórico — ESTADO INDISPONÍVEL HONESTO (sem série soberana no DTO) */}
+            <div style={card}>
+              <div style={tituloBloco}>{tituloHistorico}</div>
+              <div
+                style={{
+                  flex: 1,
+                  position: 'relative',
+                  minHeight: 96,
+                  border: '1px dashed #e5e7eb',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {/* grade leve (cosmética) — baseline + eixo Y */}
+                <span style={{ position: 'absolute', left: 8, right: 8, bottom: 8, height: 1, background: '#f1f5f9' }} />
+                <span style={{ position: 'absolute', left: 8, top: 8, bottom: 8, width: 1, background: '#f1f5f9' }} />
+                <span
+                  style={{
+                    position: 'relative',
+                    fontSize: 9,
+                    color: '#9ca3af',
+                    fontStyle: 'italic',
+                    textAlign: 'center',
+                    padding: '0 12px',
+                  }}
+                >
+                  Histórico anual aguardando série soberana por ano-janela.
+                </span>
+              </div>
+              <div style={{ fontSize: 8, color: '#9ca3af', marginTop: 5 }}>
+                Comparação deve usar o mesmo recorte temporal do filtro.
+              </div>
             </div>
           </div>
         </div>
