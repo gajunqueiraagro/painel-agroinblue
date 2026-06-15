@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -1520,65 +1520,34 @@ export function MesaPareamentoModal({
                     </div>
                   )}
 
-                  {/* PR6.1F-1 — OFX (denso, sem card duplo) */}
+                  {/* BLOCO 1 — CONFERÊNCIA (fato bancário OFX × Excel) */}
                   <div className="space-y-0.5 py-1">
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">
-                      OFX
-                    </div>
-                    {!ofxAtivo ? (
-                      <div className="text-[11px] italic text-muted-foreground">Sem OFX</div>
-                    ) : (
-                      <>
-                        <div className="text-[11px] flex items-center gap-2">
-                          <span className="tabular-nums text-muted-foreground">
-                            {format(new Date(ofxAtivo.data_movimento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
-                          </span>
-                          <span className="text-muted-foreground">·</span>
-                          <span className={cn('tabular-nums font-bold',
-                            ofxAtivo.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
-                          )}>{fmtBRL(ofxAtivo.valor)}</span>
-                        </div>
-                        <div className="text-[11px] truncate" title={ofxAtivo.descricao}>
-                          {ofxAtivo.descricao}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* PR6.1F-1 — Excel (denso, sem card duplo) */}
-                  <div className="space-y-0.5 py-1">
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">
-                      Excel
-                    </div>
-                    <div className="text-[11px] flex items-center gap-2">
-                      <span className="tabular-nums text-muted-foreground">
-                        {linhaAtiva.dataPagamento
-                          ? format(new Date(linhaAtiva.dataPagamento + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })
-                          : (linhaAtiva.dataCompetencia
-                              ? `comp. ${format(new Date(linhaAtiva.dataCompetencia + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}`
-                              : '—')}
-                      </span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className={cn('tabular-nums font-bold',
-                        linhaAtiva.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
-                      )}>{fmtBRL((linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100))}</span>
-                    </div>
-                    <div className="text-[11px]"><strong>Forn.:</strong> {linhaAtiva.fornecedor || '—'}</div>
-                    <div className="text-[11px]"><strong>Conta:</strong> {linhaAtiva.contaTexto || '—'}</div>
-                    <div className="text-[11px]"><strong>Fazenda:</strong> {linhaAtiva.fazendaTexto || '—'}</div>
-                    <div className="text-[11px]"><strong>Subc.:</strong> {linhaAtiva.subcentro || '—'}</div>
-                    {/* PR4.1 — Produto/Doc/Histórico Excel como blocos read-only */}
-                    {linhaAtiva.produto && (
-                      <div className="text-[11px]"><strong>Produto (Excel):</strong> {linhaAtiva.produto}</div>
-                    )}
-                    {linhaAtiva.documento && (
-                      <div className="text-[11px]"><strong>Doc (Excel):</strong> {linhaAtiva.documento}</div>
-                    )}
-                    {linhaAtiva.observacao && (
-                      <div className="text-[11px]"><strong>Histórico Excel:</strong>{' '}
-                        <span className="italic">{linhaAtiva.observacao}</span>
-                      </div>
-                    )}
+                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Conferência</div>
+                    {(() => {
+                      const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—';
+                      const exData = linhaAtiva.dataPagamento ?? linhaAtiva.dataCompetencia ?? null;
+                      const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
+                      const dias = matchAtivo?.detalheScore?.diasDistancia ?? null;
+                      const sim = matchAtivo?.detalheScore?.similaridadeNome ?? null;
+                      const valorIgual = ofxAtivo ? Math.abs(Math.abs(ofxAtivo.valor) - Math.abs(exValor)) < 0.01 : false;
+                      const bancoDiv = !!(parAtivoKey && escopoPorPar.get(parAtivoKey)?.isDivergente);
+                      return (
+                        <>
+                          <CampoLinha label="Data"
+                            cols={[{ head: 'OFX', valor: ofxAtivo ? fmtData(ofxAtivo.data_movimento) : 'Sem OFX' }, { head: 'Excel', valor: fmtData(exData) }]}
+                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', texto: '✓ igual' } : dias != null ? { tone: 'warn', texto: `⚠ ${Math.abs(dias)} dia(s)` } : null)} />
+                          <CampoLinha label="Valor"
+                            cols={[{ head: 'OFX', valor: ofxAtivo ? fmtBRL(ofxAtivo.valor) : 'Sem OFX' }, { head: 'Excel', valor: fmtBRL(exValor) }]}
+                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', texto: '✓ idêntico' } : { tone: 'bad', texto: '✗ diverge' })} />
+                          <CampoLinha label="Banco"
+                            cols={[{ head: 'OFX', valor: contaNome ?? '—' }, { head: 'Excel', valor: linhaAtiva.contaTexto || '—' }]}
+                            status={bancoDiv ? { tone: 'warn', texto: '⚠ diferente' } : { tone: 'ok', texto: '✓ igual' }} />
+                          <CampoLinha label="Texto"
+                            cols={[{ head: 'OFX', valor: ofxAtivo?.descricao || '—' }, { head: 'Excel', valor: linhaAtiva.fornecedor || linhaAtiva.observacao || '—' }]}
+                            status={sim != null ? (sim >= 0.8 ? { tone: 'ok', texto: '✓ semelhante' } : { tone: 'warn', texto: `~ ${(sim * 100).toFixed(0)}%` }) : null} />
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Alertas */}
@@ -1690,26 +1659,29 @@ export function MesaPareamentoModal({
                       : undefined;
                     return (
                       <div className="space-y-1">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-3 gap-y-1">
-                          <SugLinha label="Conta" valor={exibir.conta} conf={confConta} />
-                          <SugLinha label="Forn." valor={exibir.forn} conf={confFor} />
-                          <SugLinha label="Fazenda" valor={exibir.fazenda} conf={confFaz} />
-                          <SugLinha label="Produto" valor={exibir.produto ?? null} />
-                          <SugLinha label="Subc." valor={exibir.subc} conf={confSub} title={subcHierarquia} />
-                          <SugLinha label="Comp." valor={exibir.dataComp ?? null} />
-                        </div>
+                        <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">Classificação</div>
+                        <CampoLinha label="Forn." cols={[
+                          { head: 'Excel', valor: linhaAtiva?.fornecedor || '—' },
+                          { head: 'Sug.', valor: sugAtiva.fornecedorOficial?.nome ?? '—' },
+                          { head: 'Final', valor: exibir.forn ?? '—' }]} />
+                        <CampoLinha label="Fazenda" cols={[
+                          { head: 'Excel', valor: linhaAtiva?.fazendaTexto || '—' },
+                          { head: 'Sug.', valor: sugAtiva.fazendaSugerida?.nome ?? '—' },
+                          { head: 'Final', valor: exibir.fazenda ?? '—' }]} />
+                        <CampoLinha label="Subc." cols={[
+                          { head: 'Excel', valor: linhaAtiva?.subcentro || '—' },
+                          { head: 'Sug.', valor: sugAtiva.subcentroSugerido?.subcentro ?? '—' },
+                          { head: 'Final', valor: exibir.subc ?? '—' }]} status={subcHierarquia ? { tone: 'ok', texto: '' } : null} />
+                        <CampoLinha label="Produto" cols={[
+                          { head: 'Excel', valor: linhaAtiva?.produto || '—' },
+                          { head: 'Sug.', valor: '—' },
+                          { head: 'Final', valor: exibir.produto ?? '—' }]} />
+                        <CampoLinha label="Compl." cols={[
+                          { head: 'Excel', valor: linhaAtiva?.observacao || '—' },
+                          { head: 'Sug.', valor: '—' },
+                          { head: 'Final', valor: exibir.desc ?? '—' }]} />
                         {exibir.fornecedorMarcadoNovo && (
-                          <div className="text-[10px] text-amber-700">
-                            ⚑ Fornecedor marcado como novo (criar no PR6+)
-                          </div>
-                        )}
-                        {exibir.desc && (
-                          <div className="text-[11px] flex items-baseline gap-1.5">
-                            <span className="text-[10px] uppercase font-medium text-muted-foreground shrink-0">
-                              Obs
-                            </span>
-                            <span className="italic flex-1">{exibir.desc}</span>
-                          </div>
+                          <div className="text-[10px] text-amber-700">⚑ Fornecedor marcado como novo (criar no PR6+)</div>
                         )}
                       </div>
                     );
@@ -2140,6 +2112,31 @@ function SugLinha({ label, valor, conf, title }: {
       {pct != null && valor && (
         <span className={cn('text-[10px] tabular-nums shrink-0', corPct)}>{pct}%</span>
       )}
+    </div>
+  );
+}
+
+// PR-MesaGlobal-Ergonomia-1 — linha campo-a-campo: rótulo + 2/3 células alinhadas + status opcional
+function CampoLinha({ label, cols, status }: {
+  label: string;
+  cols: { head: string; valor: ReactNode }[];
+  status?: { tone: 'ok' | 'warn' | 'bad'; texto: string } | null;
+}) {
+  const toneCls = status?.tone === 'ok' ? 'text-emerald-700'
+    : status?.tone === 'warn' ? 'text-amber-700'
+    : status?.tone === 'bad' ? 'text-rose-700' : '';
+  return (
+    <div className="grid grid-cols-[64px_1fr] gap-x-2 items-baseline py-0.5 border-b border-border/30 last:border-0">
+      <span className="text-[10px] uppercase font-medium text-muted-foreground">{label}</span>
+      <div className="flex items-baseline gap-3 flex-wrap">
+        {cols.map((c, i) => (
+          <span key={i} className="text-[11px] min-w-0">
+            <span className="text-[9px] uppercase text-muted-foreground/70 mr-1">{c.head}</span>
+            <span className="tabular-nums">{c.valor ?? '—'}</span>
+          </span>
+        ))}
+        {status && <span className={`text-[10px] ml-auto ${toneCls}`}>{status.texto}</span>}
+      </div>
     </div>
   );
 }
