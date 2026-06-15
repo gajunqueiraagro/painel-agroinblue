@@ -1,9 +1,10 @@
 /**
  * DetalheCustosCentroSubcentro — box de detalhamento CENTRO-ONLY de Custos
- * (PR-BOLETIM-2.2D), um por grupo (Variável / Fixo). Mini-dashboard executivo:
- * topo = tabela centro-only compacta (~65%) + donut de composição menor (~35%);
- * abaixo = ranking "Maiores desvios vs meta" (barras CSS, Top 6 por |Δ R$/cab/mês|).
- * Helpers/cores duplicados do nível centro do GrupoExpansivel (DRY no fim).
+ * (PR-BOLETIM-2.2E-Layout), um por grupo (Variável / Fixo). Mini-dashboard:
+ * topo = tabela centro-only compacta (~57%) + bloco Composição (donut + legenda
+ * em mini-tabela AO LADO, ~43%); abaixo = ranking "Maiores desvios vs meta"
+ * em formato DIVERGING (economia esq./verde, estouro dir./vermelho, eixo zero).
+ * Sem histórico, sem placeholder, sem DTO/builder novo. DRY no fim.
  *
  * NOTE: nome do arquivo/componente mantém "...CentroSubcentro" de propósito
  * (sem cleanup agora); hoje é centro-only.
@@ -19,6 +20,8 @@ const CORES_DONUT = ['#dc2626', '#f97316', '#0ea5e9', '#8b5cf6', '#10b981', '#ea
 const COR_OUTROS = '#cbd5e1';
 const TOP_DONUT = 6;
 const TOP_RANK = 6;
+const COR_ESTOURO = '#dc2626'; // custo acima da meta
+const COR_ECONOMIA = '#16a34a'; // custo abaixo da meta
 
 // Cor de custo (sinal invertido vs. receita): custo acima da meta (>0) é ruim →
 // vermelho; abaixo (<0) é economia → verde. Duplicado de DesembolsoProducao.
@@ -27,13 +30,6 @@ function classeCustoDelta(v: number | null | undefined): string {
   if (v > 0.05) return 'dif-negativa';
   if (v < -0.05) return 'dif-positiva';
   return '';
-}
-// Cor da barra do ranking, mesmo gate semântico da classeCustoDelta.
-function corBarra(v: number | null | undefined): string {
-  const cls = classeCustoDelta(v);
-  if (cls === 'dif-negativa') return '#dc2626'; // estouro
-  if (cls === 'dif-positiva') return '#16a34a'; // economia
-  return '#94a3b8'; // neutro
 }
 
 export function DetalheCustosCentroSubcentro({
@@ -118,6 +114,14 @@ export function DetalheCustosCentroSubcentro({
     fontWeight: 700,
     borderBottom: '2px solid #94a3b8',
   };
+  const tituloBloco: CSSProperties = {
+    fontSize: 9,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    color: '#475569',
+    marginBottom: 4,
+  };
 
   const grupo = grupos[0] ?? null;
   const totalReal = grupo?.realizado ?? 0;
@@ -146,9 +150,9 @@ export function DetalheCustosCentroSubcentro({
       : [];
   const partPct = (real: number) => pct((real / (totalReal || 1)) * 100);
 
-  // ── Ranking de desvios vs meta (centro-only). Δ R$/cab/mês = (real−meta)/denom.
-  //    Meta ausente (null ou 0) → fora do ranking. Ordena por |Δ| desc. Top 6.
-  //    Cor/sinal: desvioMetaPct soberano do DTO (NÃO recalcular pct aqui). ──
+  // ── Ranking diverging (centro-only). Δ R$/cab/mês = (real−meta)/denom.
+  //    Meta ausente (null ou 0) → fora. Ordena por |Δ| desc. Top 6.
+  //    Cor/sinal e Δ%: desvioMetaPct soberano do DTO (NÃO recalcular pct aqui). ──
   const ranking =
     denom != null
       ? (grupo?.centros ?? [])
@@ -180,10 +184,10 @@ export function DetalheCustosCentroSubcentro({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* ── TOPO: tabela (~65%) + donut (~35%) ── */}
+          {/* ── TOPO: tabela (~57%) + composição donut+legenda (~43%) ── */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             {/* ESQUERDA: tabela centro-only */}
-            <div style={{ flex: '0 0 65%', maxWidth: '65%' }}>
+            <div style={{ flex: '0 0 57%', maxWidth: '57%' }}>
               <div
                 style={{
                   margin: '6px 0',
@@ -202,12 +206,12 @@ export function DetalheCustosCentroSubcentro({
                   }}
                 >
                   <colgroup>
-                    <col style={{ width: '40%' }} />
-                    <col style={{ width: '16%' }} />
-                    <col style={{ width: '11%' }} />
-                    <col style={{ width: '11%' }} />
-                    <col style={{ width: '11%' }} />
-                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '13%' }} />
                   </colgroup>
                   <thead>
                     <tr
@@ -299,158 +303,216 @@ export function DetalheCustosCentroSubcentro({
               </div>
             </div>
 
-            {/* DIREITA: donut menor (~35%) */}
-            <div style={{ flex: '1 1 35%', minWidth: 0, paddingTop: 6 }}>
-              <div style={{ position: 'relative', width: '100%', height: 120 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={slices}
-                      dataKey="valor"
-                      nameKey="nome"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={32}
-                      outerRadius={50}
-                      stroke="none"
-                      isAnimationActive={false}
-                    >
-                      {slices.map((d, i) => (
-                        <Cell key={i} fill={d.cor} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(_v: number, name: string, entry: { payload?: { valor?: number; real?: number } }) => {
-                        const p = entry?.payload ?? {};
-                        return [`${fmt(p.valor ?? 0, 2)} R$/cab/mês (${partPct(p.real ?? 0)})`, name];
-                      }}
-                      contentStyle={{ fontSize: 11 }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <div style={{ fontSize: 8, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                    Total
+            {/* DIREITA: Composição — donut + legenda em mini-tabela AO LADO */}
+            <div style={{ flex: '1 1 43%', minWidth: 0, paddingTop: 6 }}>
+              <div style={tituloBloco}>Composição por centro</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* donut */}
+                <div style={{ position: 'relative', flex: '0 0 120px', width: 120, height: 120 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={slices}
+                        dataKey="valor"
+                        nameKey="nome"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={32}
+                        outerRadius={50}
+                        stroke="none"
+                        isAnimationActive={false}
+                      >
+                        {slices.map((d, i) => (
+                          <Cell key={i} fill={d.cor} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(_v: number, name: string, entry: { payload?: { valor?: number; real?: number } }) => {
+                          const p = entry?.payload ?? {};
+                          return [`${fmt(p.valor ?? 0, 2)} R$/cab/mês (${partPct(p.real ?? 0)})`, name];
+                        }}
+                        contentStyle={{ fontSize: 11 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: 8, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                      Total
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>
+                      {totalRealRsCabMes != null ? fmt(totalRealRsCabMes, 2) : '—'}
+                    </div>
+                    <div style={{ fontSize: 8, color: '#6b7280' }}>R$/cab/mês</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>
-                    {totalRealRsCabMes != null ? fmt(totalRealRsCabMes, 2) : '—'}
-                  </div>
-                  <div style={{ fontSize: 8, color: '#6b7280' }}>R$/cab/mês</div>
                 </div>
-              </div>
-              {/* legenda: centro + participação */}
-              <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {slices.map((d, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: d.cor, flexShrink: 0 }} />
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {d.nome}
-                    </span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums', color: '#374151' }}>{partPct(d.real)}</span>
-                  </div>
-                ))}
+                {/* legenda em mini-tabela: Centro | R$/cab/mês | % */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      tableLayout: 'fixed',
+                      fontSize: 9,
+                      color: '#374151',
+                    }}
+                  >
+                    <colgroup>
+                      <col style={{ width: '54%' }} />
+                      <col style={{ width: '26%' }} />
+                      <col style={{ width: '20%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr style={{ color: '#6b7280', fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                        <th style={{ textAlign: 'left', padding: '0 4px 2px 0' }}>Centro</th>
+                        <th style={{ textAlign: 'right', padding: '0 4px 2px 0' }}>R$/cab/mês</th>
+                        <th style={{ textAlign: 'right', padding: '0 0 2px 0' }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {slices.map((d, i) => (
+                        <tr key={i}>
+                          <td
+                            style={{
+                              padding: '1px 4px 1px 0',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: 0,
+                            }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                              <span style={{ width: 8, height: 8, borderRadius: 2, background: d.cor, flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {d.nome}
+                              </span>
+                            </span>
+                          </td>
+                          <td style={{ padding: '1px 4px 1px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmt(d.valor, 2)}
+                          </td>
+                          <td style={{ padding: '1px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            {partPct(d.real)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ── ABAIXO: ranking "Maiores desvios vs meta" (barras CSS, full width) ── */}
+          {/* ── ABAIXO: ranking DIVERGING "Maiores desvios vs meta" (full width) ── */}
           <div>
-            <div
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: 0.3,
-                color: '#475569',
-                marginBottom: 4,
-              }}
-            >
-              Maiores desvios vs meta (R$/cab/mês)
-            </div>
+            <div style={tituloBloco}>Maiores desvios vs meta (R$/cab/mês)</div>
             {ranking.length === 0 ? (
               <div style={{ fontSize: 9, color: '#9ca3af', fontStyle: 'italic' }}>
                 Sem centros com meta para ranquear.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {ranking.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
-                    <span
-                      title={r.nome}
-                      style={{
-                        flex: '0 0 26%',
-                        maxWidth: '26%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        color: '#374151',
-                      }}
-                    >
-                      {r.nome}
-                    </span>
-                    <span
-                      style={{
-                        flex: 1,
-                        height: 10,
-                        background: '#f1f5f9',
-                        borderRadius: 2,
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
+                {ranking.map((r, i) => {
+                  const w = (Math.abs(r.delta) / maxAbs) * 50; // metade da pista por lado
+                  const estouro = r.delta > 0;
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
                       <span
+                        title={r.nome}
                         style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          height: '100%',
-                          width: `${(Math.abs(r.delta) / maxAbs) * 100}%`,
-                          background: corBarra(r.pctv),
-                          borderRadius: 2,
+                          flex: '0 0 22%',
+                          maxWidth: '22%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: '#374151',
                         }}
-                      />
-                    </span>
-                    <span
-                      className={classeCustoDelta(r.pctv)}
-                      style={{
-                        flex: '0 0 auto',
-                        minWidth: 52,
-                        textAlign: 'right',
-                        fontVariantNumeric: 'tabular-nums',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {(r.delta > 0 ? '+' : '') + fmt(r.delta, 2)}
-                    </span>
-                    <span
-                      className={classeCustoDelta(r.pctv)}
-                      style={{
-                        flex: '0 0 auto',
-                        minWidth: 46,
-                        textAlign: 'right',
-                        fontVariantNumeric: 'tabular-nums',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {pct(r.pctv)}
-                    </span>
-                  </div>
-                ))}
+                      >
+                        {r.nome}
+                      </span>
+                      {/* pista diverging: eixo zero central */}
+                      <span style={{ flex: 1, position: 'relative', height: 10, background: '#f8fafc', borderRadius: 2 }}>
+                        <span
+                          style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: '#cbd5e1' }}
+                        />
+                        {estouro ? (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              top: 0,
+                              height: '100%',
+                              width: `${w}%`,
+                              background: COR_ESTOURO,
+                              borderRadius: '0 2px 2px 0',
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              right: '50%',
+                              top: 0,
+                              height: '100%',
+                              width: `${w}%`,
+                              background: COR_ECONOMIA,
+                              borderRadius: '2px 0 0 2px',
+                            }}
+                          />
+                        )}
+                      </span>
+                      <span
+                        className={classeCustoDelta(r.pctv)}
+                        style={{
+                          flex: '0 0 auto',
+                          minWidth: 52,
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {(r.delta > 0 ? '+' : '') + fmt(r.delta, 2)}
+                      </span>
+                      <span
+                        className={classeCustoDelta(r.pctv)}
+                        style={{
+                          flex: '0 0 auto',
+                          minWidth: 46,
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {pct(r.pctv)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
+            {/* eixo: economia ← 0 → estouro */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 8, color: '#9ca3af', marginTop: 3 }}>
+              <span style={{ flex: '0 0 22%', maxWidth: '22%' }} />
+              <span style={{ flex: 1, display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: COR_ECONOMIA }}>◄ economia</span>
+                <span>0</span>
+                <span style={{ color: COR_ESTOURO }}>estouro ►</span>
+              </span>
+              <span style={{ flex: '0 0 auto', minWidth: 52 }} />
+              <span style={{ flex: '0 0 auto', minWidth: 46 }} />
+            </div>
           </div>
         </div>
       )}
