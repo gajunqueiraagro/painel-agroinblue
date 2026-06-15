@@ -20,6 +20,8 @@ import {
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
+import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento } from '@/lib/financeiro/fechamentoPendencias';
+import { SituacaoFechamentoPanel } from '@/components/financeiro-v2/SituacaoFechamentoPanel';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
@@ -64,6 +66,7 @@ interface LancamentoResumo {
   conta_destino_id: string | null;
   ano_mes: string;
   subcentro: string | null;
+  origem_lancamento: string | null;
 }
 
 interface FornecedorRef { id: string; nome: string; }
@@ -414,7 +417,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       const {data:lData} = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro')
+        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro,origem_lancamento')
         .eq('cliente_id',clienteId).eq('cancelado',false)
         .eq('sem_movimentacao_caixa', false)
         .eq('status_transacao', 'realizado')
@@ -472,6 +475,19 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     ext: perContaSaldos.every(c=>c.ext===null) ? null : r2(perContaSaldos.reduce((s,c)=>s+(c.ext||0),0)),
     dif: r2(perContaSaldos.reduce((s,c)=>s+c.dif,0)),
   }), [perContaSaldos]);
+
+  // PR-FechamentoFinanceiro-Pendencias-A1 — verdict read-time (saldo + duplicados).
+  const situacao = useMemo(() => {
+    const anoMes = `${ano}-${selectedMes}`;
+    const lancMes = lancamentos.filter(l =>
+      (l.data_pagamento || '').slice(0, 7) === anoMes &&
+      (selectedConta === '__all__' || belongsToConta(l, selectedConta)));
+    const dup = detectarDuplicatasCrossOrigin(lancMes);
+    const difSaldo = selectedConta === '__all__'
+      ? ((totalSaldos.ext ?? 0) - totalSaldos.sis)
+      : (selectedCard?.diferenca ?? 0);
+    return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup });
+  }, [ano, selectedMes, selectedConta, lancamentos, selectedCard, totalSaldos]);
 
   /* ── Lançamentos for modal ── */
   const fornecedorMap = useMemo(() => new Map(fornecedores.map(f=>[f.id,f.nome])), [fornecedores]);
@@ -737,6 +753,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             )}
           </div>
         )}
+
+        {/* PR-FechamentoFinanceiro-Pendencias-A1 — Situação do Fechamento */}
+        {!loading && selectedCard && <SituacaoFechamentoPanel situacao={situacao} />}
 
         {/* Aba interna: Conciliação (atual) | Extrato importado (novo) */}
         {!loading && selectedCard && (
