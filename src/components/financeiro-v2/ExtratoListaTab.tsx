@@ -47,7 +47,7 @@ import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { ConciliacaoPendenciasPanel } from './ConciliacaoPendenciasPanel';
 import { RematchOnDemandPanel } from './RematchOnDemandPanel';
 import { useExtratoParesOfx } from '@/hooks/useExtratoParesOfx';
-import { classificarMovimento, DIAG_INFO } from '@/lib/financeiro/conciliacaoDiagnostico';
+import { classificarMovimento, DIAG_INFO, agregarPorClasse, derivarResumoOperacional } from '@/lib/financeiro/conciliacaoDiagnostico';
 
 interface Props {
   contaBancariaId: string | null;
@@ -342,6 +342,11 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     const apontamentoOrfao = lancamentosOrfaosDoMes?.length ?? 0;
     return { conciliado, parcial, bancoOrfao, apontamentoOrfao };
   }, [enriquecidos, lancamentosOrfaosDoMes]);
+
+  const resumoOperacional = useMemo(
+    () => derivarResumoOperacional(agregarPorClasse(enriquecidos, paresOfx), enriquecidos.length),
+    [enriquecidos, paresOfx],
+  );
 
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
@@ -648,6 +653,25 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
 
   return (
     <div className="space-y-2">
+      {/* PR-Conciliacao-FilaOperacional-1 — headline operacional por conta.
+          `!contaBancariaId` já tratado por early-return acima; aqui a conta
+          é sempre selecionada → só empty-state (sem OFX) vs headline. */}
+      {resumoOperacional.totalLinhas === 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          Nenhum OFX importado para esta conta neste mês — não há linhas para apontar.
+          A diferença de <b>saldo</b> é avaliada na aba <b>Conciliação</b>.
+        </div>
+      ) : (
+        <div className="rounded-md border bg-card px-3 py-2 flex items-baseline justify-between">
+          <span className="text-xs font-semibold text-foreground">
+            Você não precisa revisar {resumoOperacional.totalLinhas} linha{resumoOperacional.totalLinhas !== 1 ? 's' : ''}.
+            Precisa resolver <span className={resumoOperacional.totalPendencias > 0 ? 'text-red-700' : 'text-emerald-700'}>{resumoOperacional.totalPendencias}</span> pendência{resumoOperacional.totalPendencias !== 1 ? 's' : ''}.
+          </span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            {resumoOperacional.acionaveis} com sugestão · {resumoOperacional.semPista} sem pista
+          </span>
+        </div>
+      )}
       {/* PR-C — Resumo Banco OFX vs Sistema (apontamento) */}
       <div className="border rounded-md bg-card">
         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">

@@ -843,7 +843,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 </div>
                 {/* NEW: Diferença */}
                 <div className="px-3 py-1 bg-muted/20 flex justify-between mb-1">
-                  <span className="text-[10px] text-muted-foreground">Diferença</span>
+                  <span className="text-[10px] text-muted-foreground">Diferença de saldo <span className="opacity-60">(o mês fecha?)</span></span>
                   <span className={`text-[11px] font-bold tabular-nums ${Math.round((selectedConta==='__all__'?(totalSaldos.ext??0)-totalSaldos.sis:selectedCard.diferenca)*100)===0?'text-green-600':'text-red-600'}`}>
                     {formatMoeda(selectedConta === '__all__' ? (totalSaldos.ext !== null ? r2((totalSaldos.ext??0) - totalSaldos.sis) : 0) : selectedCard.diferenca)}
                   </span>

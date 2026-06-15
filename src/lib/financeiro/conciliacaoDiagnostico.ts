@@ -125,3 +125,28 @@ export function agregarPorClasse(
   }
   return out;
 }
+
+export interface ResumoOperacional {
+  totalLinhas: number;
+  totalPendencias: number;
+  acionaveis: number;   // têm pista: candidato_unico + multiplos_candidatos + transferencia_provavel
+  semPista: number;     // banco_orfao
+}
+
+/**
+ * Deriva o resumo operacional do agregado por classe.
+ * Puro, sem I/O. `totalLinhas` é informado pelo caller (qt de movimentos OFX).
+ */
+export function derivarResumoOperacional(
+  agg: Record<DiagClasse, number>,
+  totalLinhas: number,
+): ResumoOperacional {
+  const totalPendencias = CLASSES_PENDENTES.reduce((s, k) => s + agg[k], 0);
+  const semPista = agg.banco_orfao;
+  return {
+    totalLinhas,
+    totalPendencias,
+    acionaveis: totalPendencias - semPista,
+    semPista,
+  };
+}
