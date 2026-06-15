@@ -1402,6 +1402,16 @@ export function MesaPareamentoModal({
                 const faixa = m?.faixa ?? 'nenhum';
                 const data = linha.dataPagamento ?? linha.dataCompetencia;
                 const valorSinalizado = (linha.sinal === 'entrada' ? 1 : -1) * (linha.valorCentavos / 100);
+                const sug = sugestoes.get(key);
+                const classifVals = [
+                  sug?.contaSugerida?.confianca,
+                  sug?.fazendaSugerida?.confianca,
+                  sug?.subcentroSugerido?.confianca,
+                  sug?.fornecedorOficial?.confianca,
+                ].filter((v): v is number => typeof v === 'number');
+                const classifPct = classifVals.length
+                  ? Math.round(Math.min(...classifVals) * 100)
+                  : null;
                 const ativo = parAtivoKey === key;
                 const decisao = p?.decisao ?? 'pendente';
 
@@ -1483,17 +1493,24 @@ export function MesaPareamentoModal({
                     <span className={cn('tabular-nums shrink-0 font-medium',
                       linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
                     )}>{fmtBRL(valorSinalizado)}</span>
-                    {/* PR6.1F-3 — score sem badge, com cor semântica por faixa */}
+                    {/* Pareamento × classificação — rotulados, nunca número solo. C = confiança mínima */}
                     <span
-                      className={cn(
-                        'shrink-0 text-[10px] tabular-nums w-7 text-right',
-                        faixa === 'forte' && 'text-emerald-700 font-semibold',
-                        faixa === 'fraco' && 'text-amber-700',
-                        faixa === 'nenhum' && 'text-rose-700',
-                      )}
-                      title={`Score: ${m?.score ?? 0} (${faixa})`}
+                      className="shrink-0 flex flex-col items-end leading-none gap-0.5 w-12"
+                      title={faixa === 'nenhum'
+                        ? `Sem OFX${classifPct != null ? ` · Classif. mín. ${classifPct}` : ''}`
+                        : `Pareado · Match ${m?.score ?? 0}${classifPct != null ? ` · Classif. mín. ${classifPct}` : ''}`}
                     >
-                      {m?.score ?? 0}
+                      {faixa === 'nenhum' ? (
+                        <span className="text-[9px] uppercase tracking-tight text-muted-foreground/70 font-medium">s/OFX</span>
+                      ) : (
+                        <span className={cn('text-[10px] tabular-nums font-semibold',
+                          faixa === 'forte' ? 'text-emerald-700' : 'text-amber-700')}>
+                          M {m?.score ?? 0}
+                        </span>
+                      )}
+                      {classifPct != null && (
+                        <span className="text-[9px] tabular-nums text-muted-foreground/70">C {classifPct}</span>
+                      )}
                     </span>
                   </button>
                 );
