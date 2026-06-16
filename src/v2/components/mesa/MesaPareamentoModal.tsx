@@ -658,6 +658,17 @@ export function MesaPareamentoModal({
     ? extratos.find((e) => e.id === parAtivo.ofxIdAtivo) ?? null
     : null;
 
+  // PR-A — OFX de EXIBIÇÃO: vínculo, senão sugestão/candidato. NÃO é o vínculo (ofxIdAtivo).
+  const ofxExibirId =
+    parAtivo?.ofxIdAtivo
+    ?? parAtivo?.ofxIdSugeridoOriginal
+    ?? matchAtivo?.ofxIdMatched
+    ?? null;
+  const ofxExibir = ofxExibirId
+    ? extratos.find((e) => e.id === ofxExibirId) ?? null
+    : null;
+  const ofxEhSugestao = !parAtivo?.ofxIdAtivo && ofxExibir != null;
+
   // Alertas adicionais
   const alertasExtras = useMemo<string[]>(() => {
     if (!linhaAtiva) return [];
@@ -1628,24 +1639,28 @@ export function MesaPareamentoModal({
                         {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
                         <div className="space-y-0">
                           <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
-                            <span>Campo</span><span>OFX</span><span>Excel</span><span>Resultado</span>
+                            <span>Campo</span>
+                            <span title={ofxEhSugestao ? 'OFX sugerido, ainda não vinculado' : undefined}>
+                              OFX{ofxEhSugestao && <span className="ml-1 normal-case text-amber-600 font-normal">• sugerido</span>}
+                            </span>
+                            <span>Excel</span><span>Resultado</span>
                           </div>
-                          {/* Data/Valor/Banco — leitura (não editável) */}
+                          {/* Data/Valor/Banco — leitura (não editável). OFX = ofxExibir (vínculo ou sugestão) */}
                           <MatrizLinha campo="Data"
-                            ofx={ofxAtivo ? fmtData(ofxAtivo.data_movimento) : null}
+                            ofx={ofxExibir ? fmtData(ofxExibir.data_movimento) : null}
                             excel={fmtData(linhaAtiva.dataPagamento)}
                             fin={fmtData(linhaAtiva.dataPagamento)} />
                           <MatrizLinha campo="Valor"
-                            ofx={ofxAtivo ? fmtBRL(ofxAtivo.valor) : null}
+                            ofx={ofxExibir ? fmtBRL(ofxExibir.valor) : null}
                             excel={fmtBRL(exValor)}
                             fin={fmtBRL(exValor)} />
                           <MatrizLinha campo="Banco"
-                            ofx={ofxAtivo ? (contaNome ?? '—') : null}
+                            ofx={ofxExibir ? (contaNome ?? '—') : null}
                             excel={linhaAtiva.contaTexto}
                             fin={contaNome} />
                           {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Command oficial */}
                           <MatrizLinha campo="Fornecedor"
-                            ofx={ofxAtivo?.descricao ?? null}
+                            ofx={ofxExibir?.descricao ?? null}
                             excel={linhaAtiva.fornecedor}
                             fin={
                               <FornecedorInline
@@ -1726,10 +1741,19 @@ export function MesaPareamentoModal({
                               // PR-4A — REUSA o payloadAtivo computado acima (mesma referência do display).
                               const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
                               return validacaoAtivo.valido ? (
-                                <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
-                                        onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
-                                  <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
-                                </Button>
+                                <div className="space-y-1">
+                                  <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
+                                          onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
+                                    <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                                  </Button>
+                                  {!parAtivo.ofxIdAtivo && (
+                                    <p className="text-[9px] text-amber-700 text-center leading-tight">
+                                      {ofxEhSugestao
+                                        ? 'OFX exibido como sugestão. Vincule o OFX antes de aprovar.'
+                                        : 'Vincule o OFX antes de aprovar.'}
+                                    </p>
+                                  )}
+                                </div>
                               ) : (
                                 <Badge variant="outline"
                                        className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
