@@ -1467,7 +1467,7 @@ export function MesaPareamentoModal({
             forceMount
           >
         <div className={cn("h-full overflow-hidden grid gap-2 p-2",
-          modoVisualizacao === 'excel' ? "grid-cols-[1.15fr_2.35fr]" : "grid-cols-[1.15fr_1.35fr_1fr]")}>
+          modoVisualizacao === 'excel' ? "grid-cols-[0.85fr_2.65fr]" : "grid-cols-[1.15fr_1.35fr_1fr]")}>
 
           {modoVisualizacao === 'excel' && <>
 
@@ -1570,12 +1570,8 @@ export function MesaPareamentoModal({
                         <span className="tracking-tight">Transferência</span>
                       </span>
                     )}
-                    <span
-                      className="flex-1 truncate font-normal"
-                      title={linha.fornecedor || linha.subcentro || ''}
-                    >
-                      {linha.fornecedor || <span className="italic text-muted-foreground">{linha.subcentro}</span>}
-                    </span>
+                    {/* PR-4A.fix item 3 — lista é navegação: sem texto longo de fornecedor/subcentro */}
+                    <span className="flex-1 min-w-0" />
                     <span className={cn('tabular-nums shrink-0 font-medium',
                       linha.sinal === 'entrada' ? 'text-emerald-600' : 'text-rose-600',
                     )}>{fmtBRL(valorSinalizado)}</span>
@@ -1705,6 +1701,13 @@ export function MesaPareamentoModal({
                                      disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" />
                             } />
+                          {/* item 7 — Documento e Obs/Histórico (read-only) na MESMA tabela. OFX = — (régua) */}
+                          <MatrizLinha campo="Documento"
+                            excel={linhaAtiva.documento}
+                            fin="—" />
+                          <MatrizLinha campo="Obs / Histórico"
+                            excel={linhaAtiva.observacao}
+                            fin={payloadAtivo.descricao ?? '—'} />
                         </div>
 
                         {/* RODAPÉ — só o CTA primário; secundários (exceção) migraram pra barra de tabs */}
@@ -2167,7 +2170,7 @@ function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
     <span className="truncate" title={typeof v === 'string' ? v : undefined}>{v == null || v === '' ? '—' : v}</span>
   );
   return (
-    <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 py-0.5 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
+    <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 py-0.5 border-b border-border/30 last:border-0 items-center text-[10px] tabular-nums">
       <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
       {cell(ofx)}{cell(excel)}{typeof fin === 'string' ? cell(fin) : fin}
     </div>
