@@ -41,6 +41,19 @@ interface MovRef {
   tipo_movimento: 'credito' | 'debito';
   conta_bancaria_id: string;
   status: ExtratoStatusFull;
+  orfao_definitivo: boolean | null;
+}
+
+/** Detector V2 — aresta OFX↔OFX (transferência provável) com lados explícitos. */
+export interface ParOfx {
+  saidaId: string;
+  entradaId: string;
+  contaOrigemId: string;
+  contaDestinoId: string;
+  valor: number;
+  dataSaida: string;
+  dataEntrada: string;
+  confianca: 'forte' | 'ambigua';
 }
 
 const TOL = 0.01;
@@ -83,7 +96,7 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
       // essa tabela (ver useExtratoBancario.ts:51, useImportacaoExtrato.ts).
       const { data, error } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id, status')
+        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id, status, orfao_definitivo')
         .eq('cliente_id', clienteId as string)
         .gte('data_movimento', dataInicio)
         .lt('data_movimento', dataFimExc)
@@ -93,16 +106,17 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
     },
   });
 
-  const paresOfx = useMemo<Set<string>>(() => {
+  const { pares, paresOfx } = useMemo<{ pares: ParOfx[]; paresOfx: Set<string> }>(() => {
     const set = new Set<string>();
     const movs = data || [];
-    if (movs.length < 2) return set;
+    if (movs.length < 2) return { pares: [], paresOfx: set };
+
+    // Arestas brutas (guardam refs aos movs p/ derivar pendência e confiança).
+    const arestas: { saida: MovRef; entrada: MovRef }[] = [];
 
     // O(N²) é seguro: N ≤ algumas dezenas por mês.
-    // PR-A2: par é detectado em qualquer status (exceto cancelado).
-    // Só entram no Set os lados PENDENTES — avaliados independentemente.
-    // Caso operacional comum: ponta A já conciliada, ponta B órfã →
-    // só B vai pro Set, recebe badge "Transferência provável" na tela.
+    // Critério (inalterado): conta diferente, tipo oposto, |valor| igual (tol),
+    // data ±1 dia. Detector V2 adiciona: órfão definitivo não gera aresta.
     for (let i = 0; i < movs.length; i++) {
       const a = movs[i];
       for (let j = i + 1; j < movs.length; j++) {
@@ -114,12 +128,49 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
           new Date(a.data_movimento).getTime() - new Date(b.data_movimento).getTime(),
         ) / UM_DIA_MS;
         if (diasDif > 1) continue;
-        if (isPendente(a.status)) set.add(a.id);
-        if (isPendente(b.status)) set.add(b.id);
+        // Detector V2 — movimento marcado órfão definitivo não é transferência.
+        if (a.orfao_definitivo === true || b.orfao_definitivo === true) continue;
+
+        // saída = débito (sai da origem); entrada = crédito (entra no destino).
+        const saida = a.tipo_movimento === 'debito' ? a : b;
+        const entrada = a.tipo_movimento === 'debito' ? b : a;
+        arestas.push({ saida, entrada });
       }
     }
-    return set;
+
+    // Confiança: ofx_id que participa de >1 aresta vira 'ambigua'.
+    const participacao = new Map<string, number>();
+    for (const ar of arestas) {
+      participacao.set(ar.saida.id, (participacao.get(ar.saida.id) ?? 0) + 1);
+      participacao.set(ar.entrada.id, (participacao.get(ar.entrada.id) ?? 0) + 1);
+    }
+
+    const pares: ParOfx[] = arestas.map((ar) => {
+      const ambigua =
+        (participacao.get(ar.saida.id) ?? 0) > 1 ||
+        (participacao.get(ar.entrada.id) ?? 0) > 1;
+      return {
+        saidaId: ar.saida.id,
+        entradaId: ar.entrada.id,
+        contaOrigemId: ar.saida.conta_bancaria_id,
+        contaDestinoId: ar.entrada.conta_bancaria_id,
+        valor: Math.abs(ar.saida.valor),
+        dataSaida: ar.saida.data_movimento,
+        dataEntrada: ar.entrada.data_movimento,
+        confianca: ambigua ? 'ambigua' : 'forte',
+      };
+    });
+
+    // paresOfx — comportamento PRESERVADO: só os lados PENDENTES entram no Set
+    // (avaliados independentemente; Set deduplica). Caso comum: ponta A já
+    // conciliada, ponta B órfã → só B recebe o badge "Transferência provável".
+    for (const ar of arestas) {
+      if (isPendente(ar.saida.status)) set.add(ar.saida.id);
+      if (isPendente(ar.entrada.status)) set.add(ar.entrada.id);
+    }
+
+    return { pares, paresOfx: set };
   }, [data]);
 
-  return { paresOfx, loading: isLoading, error: error as Error | null };
+  return { paresOfx, pares, loading: isLoading, error: error as Error | null };
 }
