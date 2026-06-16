@@ -1405,20 +1405,42 @@ export function MesaPareamentoModal({
           onValueChange={(v) => setAbaAtiva(v as 'pareamento' | 'staging')}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="shrink-0 mx-2 mt-0.5 h-6 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
-            <TabsTrigger value="pareamento" className="text-[11px] py-0">
-              Pareamento
-            </TabsTrigger>
-            <TabsTrigger value="staging" className="text-[11px] py-0 relative">
-              Revisão Staging
-              {stagingTemRegistros && (
-                <span
-                  className="ml-2 inline-block w-2 h-2 rounded-full bg-blue-500"
-                  aria-label="Há registros em staging"
+          <div className="shrink-0 mx-2 mt-0.5 flex items-center gap-2">
+            <TabsList className="h-6 grid grid-cols-2 max-w-md flex-1">
+              <TabsTrigger value="pareamento" className="text-[11px] py-0">
+                Pareamento
+              </TabsTrigger>
+              <TabsTrigger value="staging" className="text-[11px] py-0 relative">
+                Revisão Staging
+                {stagingTemRegistros && (
+                  <span
+                    className="ml-2 inline-block w-2 h-2 rounded-full bg-blue-500"
+                    aria-label="Há registros em staging"
+                  />
+                )}
+              </TabsTrigger>
+            </TabsList>
+            {/* Ações secundárias (exceção) inline na barra — só par pendente no Modo Excel */}
+            {modoVisualizacao === 'excel' && parAtivo && parAtivo.decisao === 'pendente' && (
+              <div className="ml-auto flex items-center gap-1">
+                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 text-rose-700 border-rose-200 hover:bg-rose-50"
+                        onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
+                  <X className="h-3 w-3 mr-1" /> Rejeitar
+                </Button>
+                <PopoverOutroOfx
+                  compact
+                  extratos={extratos}
+                  ofxConsumidos={ofxConsumidos}
+                  ofxAtualId={parAtivo.ofxIdAtivo}
+                  onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
                 />
-              )}
-            </TabsTrigger>
-          </TabsList>
+                <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
+                        onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
+                  <ArrowRight className="h-3 w-3 mr-1" /> Marcar órfão
+                </Button>
+              </div>
+            )}
+          </div>
 
           <TabsContent
             value="pareamento"
@@ -1433,7 +1455,7 @@ export function MesaPareamentoModal({
           {/* COL 1 — LISTA DE PARES */}
           <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
             {/* PR6.1F-3 — header densidade extrato: sem font-bold, com tracking-wide */}
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-1 pb-1 shrink-0">
+            <div className="text-[9px] uppercase tracking-wide text-muted-foreground px-1 pb-0.5 shrink-0">
               Pares ({linhasFiltradas.length} de {linhasExcel.length})
             </div>
             {/* PR6.1F-3 — divide-y substitui space-y-0.5: linhas finas
@@ -1500,8 +1522,8 @@ export function MesaPareamentoModal({
                     onClick={() => setParAtivoKey(key)}
                     title={esc?.rotuloConta ? `Conta sugerida: ${esc.rotuloConta}` : undefined}
                     className={cn(
-                      // PR6.1F-3 — densidade extrato: px-1.5 py-1, gap-1.5
-                      'w-full flex items-center gap-1.5 px-1.5 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
+                      // PR6.1F-3 / DensidadePainel — densidade extrato: px-1.5 py-0.5, fonte menor
+                      'w-full flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
                       linhaEhTransferencia && 'bg-blue-500/5',
                       corBorda,
                       ativo && 'ring-2 ring-primary ring-inset bg-muted',
@@ -1564,11 +1586,11 @@ export function MesaPareamentoModal({
           </Card>
 
           {/* COL 2 — DETALHE DO PAR ATIVO */}
-          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
+          <Card className="p-2 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
+            <div className="text-[9px] font-bold uppercase text-muted-foreground pb-1 shrink-0">
               Detalhe do par
             </div>
-            <div className="flex-1 overflow-y-auto space-y-1.5">
+            <div className="flex-1 overflow-y-auto space-y-1">
               {!parAtivo || !linhaAtiva ? (
                 <div className="text-center text-muted-foreground italic py-12">
                   Selecione um par na lista à esquerda
@@ -1651,9 +1673,9 @@ export function MesaPareamentoModal({
                             } />
                         </div>
 
-                        {/* FOOTER — Ações (realocado da COL3; handlers intactos) */}
-                        <div className="border-t pt-2 space-y-1.5">
-                          {parAtivo.correcao ? (
+                        {/* RODAPÉ — só o CTA primário; secundários (exceção) migraram pra barra de tabs */}
+                        <div className="border-t pt-1.5 space-y-1">
+                          {parAtivo.correcao && (
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">✎ Corrigido</span>
                               <Button size="sm" variant="ghost" className="h-5 text-[10px]"
@@ -1661,46 +1683,28 @@ export function MesaPareamentoModal({
                                 Limpar correção
                               </Button>
                             </div>
-                          ) : (
-                            <div className="text-[10px] font-bold uppercase text-muted-foreground">Ações</div>
                           )}
                           {parAtivo.decisao === 'pendente' ? (
-                            <>
-                              {(() => {
-                                if (!parAtivoKey) return null;
-                                const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
-                                const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
-                                const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
-                                return validacaoAtivo.valido ? (
-                                  <Button size="sm" variant="default" className="w-full justify-start text-[11px] h-7"
-                                          onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
-                                    <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
-                                  </Button>
-                                ) : (
-                                  <Badge variant="outline"
-                                         className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
-                                         title={validacaoAtivo.mensagem}>
-                                    Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
-                                  </Badge>
-                                );
-                              })()}
-                              <Button size="sm" variant="destructive" className="w-full justify-start text-[11px] h-7"
-                                      onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
-                                <X className="h-3.5 w-3.5 mr-2" /> Rejeitar (sugestão errada)
-                              </Button>
-                              <PopoverOutroOfx
-                                extratos={extratos}
-                                ofxConsumidos={ofxConsumidos}
-                                ofxAtualId={parAtivo.ofxIdAtivo}
-                                onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
-                              />
-                              <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
-                                      onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
-                                <ArrowRight className="h-3.5 w-3.5 mr-2" /> Marcar Excel órfão
-                              </Button>
-                            </>
+                            (() => {
+                              if (!parAtivoKey) return null;
+                              const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
+                              const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
+                              const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
+                              return validacaoAtivo.valido ? (
+                                <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
+                                        onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
+                                  <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                                </Button>
+                              ) : (
+                                <Badge variant="outline"
+                                       className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
+                                       title={validacaoAtivo.mensagem}>
+                                  Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
+                                </Badge>
+                              );
+                            })()
                           ) : (
-                            <Button size="sm" variant="ghost" className="w-full justify-start text-[11px] h-7"
+                            <Button size="sm" variant="ghost" className="w-full justify-center text-[11px] h-7"
                                     onClick={() => parAtivoKey && desfazer(parAtivoKey)}>
                               <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
                             </Button>
@@ -2131,7 +2135,7 @@ function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
     <span className="truncate" title={typeof v === 'string' ? v : undefined}>{v == null || v === '' ? '—' : v}</span>
   );
   return (
-    <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
+    <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 py-0.5 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
       <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
       {cell(ofx)}{cell(excel)}{typeof fin === 'string' ? cell(fin) : fin}
     </div>
@@ -2163,11 +2167,12 @@ function CampoLinha({ label, cols, status }: {
   );
 }
 
-function PopoverOutroOfx({ extratos, ofxConsumidos, ofxAtualId, onEscolher }: {
+function PopoverOutroOfx({ extratos, ofxConsumidos, ofxAtualId, onEscolher, compact }: {
   extratos: OfxItem[];
   ofxConsumidos: Set<string>;
   ofxAtualId: string | null;
   onEscolher: (id: string) => void;
+  compact?: boolean;
 }) {
   const [busca, setBusca] = useState<string>('');
   const filtrados = useMemo<OfxItem[]>(() => {
@@ -2182,9 +2187,15 @@ function PopoverOutroOfx({ extratos, ofxConsumidos, ofxAtualId, onEscolher }: {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8">
-          <ArrowLeftRight className="h-3.5 w-3.5 mr-2" /> Outro OFX…
-        </Button>
+        {compact ? (
+          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2">
+            <ArrowLeftRight className="h-3 w-3 mr-1" /> Outro OFX…
+          </Button>
+        ) : (
+          <Button size="sm" variant="outline" className="w-full justify-start text-xs h-8">
+            <ArrowLeftRight className="h-3.5 w-3.5 mr-2" /> Outro OFX…
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-[420px] p-2" align="start">
         <div className="flex items-center gap-1 pb-2">
