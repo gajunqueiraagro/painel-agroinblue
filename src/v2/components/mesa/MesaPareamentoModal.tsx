@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import { useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -415,28 +415,47 @@ export function MesaPareamentoModal({
   const [fornecedorBusca, setFornecedorBusca] = useState<string>('');
   const [subcentroBusca, setSubcentroBusca] = useState<string>('');
 
-  // PROTO PASSO 2 (throwaway) — Resultado editável na mesma linha; só proto-state, não persiste.
-  const [protoFaz, setProtoFaz] = useState<string | null>(null);
-  const [protoForn, setProtoForn] = useState<string | null>(null);
-  const [protoSub, setProtoSub] = useState<string | null>(null);
-  const [protoProd, setProtoProd] = useState<string | null>(null);
-  const [protoDataComp, setProtoDataComp] = useState<string | null>(null);
   // PR-MesaGlobal-HeaderCompacto — collapse de métricas secundárias do header.
   const [detalhesSessao, setDetalhesSessao] = useState<boolean>(false);
   // PR-MesaGlobal-HeaderCompacto-2 — collapse dos pills de escopo (default fechado).
   const [filtrosEscopo, setFiltrosEscopo] = useState<boolean>(false);
-  useEffect(() => {
-    if (!parAtivoKey) return;
-    const s = sugestoes.get(parAtivoKey);
-    const c = pares.get(parAtivoKey)?.correcao;
-    setProtoFaz(c?.fazendaNome ?? s?.fazendaSugerida?.nome ?? null);
-    setProtoForn(c?.fornecedorNome ?? s?.fornecedorOficial?.nome ?? null);
-    setProtoSub(c?.subcentro ?? s?.subcentroSugerido?.subcentro ?? null);
-    const linha = linhasExcel.find((l) => l.chaveLinha === parAtivoKey);
-    setProtoProd(c?.produto ?? linha?.produto ?? null);
-    setProtoDataComp(c?.dataCompetencia ?? linha?.dataPagamento ?? linha?.dataCompetencia ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parAtivoKey]);
+
+  // PR-4A — edição inline do Resultado escreve DIRETO em pares[key].correcao (fonte única).
+  // Sem proto-state, sem "Aplicar": editar já vira correção do par. O seed da base
+  // (quando correcao é null) é o MESMO de iniciarCorrecao (sugestão + Excel + chain de data).
+  function editarCorrecaoAtiva(patch: Partial<ParCorrecao>) {
+    if (edicaoBloqueada || !parAtivoKey) return;
+    const key = parAtivoKey;
+    setPares((prev) => {
+      const next = new Map<string, ParEstado>(prev);
+      const cur = next.get(key);
+      if (!cur) return prev;
+      const sug = sugestoes.get(key);
+      const linha = linhasExcel.find((l) => l.chaveLinha === key);
+      const ofx = cur.ofxIdAtivo ? extratos.find((e) => e.id === cur.ofxIdAtivo) : null;
+      const dataCompetenciaInicial =
+        linha?.dataCompetencia ?? linha?.dataPagamento ?? ofx?.data_movimento ?? null;
+      const base: ParCorrecao = cur.correcao ?? {
+        contaId: sug?.contaSugerida?.id ?? null,
+        contaRotulo: sug?.contaSugerida?.rotulo ?? null,
+        fazendaId: sug?.fazendaSugerida?.id ?? null,
+        fazendaNome: sug?.fazendaSugerida?.nome ?? null,
+        fornecedorId: sug?.fornecedorOficial?.id ?? null,
+        fornecedorNome: sug?.fornecedorOficial?.nome ?? null,
+        fornecedorMarcadoNovo: false,
+        dataCompetencia: dataCompetenciaInicial,
+        subcentro: sug?.subcentroSugerido?.subcentro ?? null,
+        macro_custo: sug?.subcentroSugerido?.macro_custo ?? null,
+        grupo_custo: sug?.subcentroSugerido?.grupo_custo ?? null,
+        centro_custo: sug?.subcentroSugerido?.centro_custo ?? null,
+        produto: linha?.produto ?? null,
+        descricao: null,
+        corrigidoEm: new Date().toISOString(),
+      };
+      next.set(key, { ...cur, correcao: { ...base, ...patch, corrigidoEm: new Date().toISOString() } });
+      return next;
+    });
+  }
 
   // ---------- ações de decisão ----------
 
@@ -1601,6 +1620,13 @@ export function MesaPareamentoModal({
                   {(() => {
                     const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
                     const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
+                    if (!parAtivoKey) return null;
+                    // PR-4A — payload UMA vez: o que aparece = o que valida = o que persiste.
+                    const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
+                    const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
+                    // Natureza derivada do sinal (editável = PR-4B). Filtra opções de Subcentro.
+                    const naturezaAlvoAtiva: NaturezaSubcentro | null =
+                      linhaAtiva.sinal === 'entrada' ? 'entrada' : linhaAtiva.sinal === 'saida' ? 'saida' : null;
                     return (
                       <>
                         {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
@@ -1621,24 +1647,29 @@ export function MesaPareamentoModal({
                             ofx={ofxAtivo ? (contaNome ?? '—') : null}
                             excel={linhaAtiva.contaTexto}
                             fin={contaNome} />
-                          {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Select oficial */}
+                          {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Command oficial */}
                           <MatrizLinha campo="Fornecedor"
                             ofx={ofxAtivo?.descricao ?? null}
                             excel={linhaAtiva.fornecedor}
                             fin={
-                              <Select value={protoForn ?? undefined} onValueChange={setProtoForn}>
-                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                                <SelectContent>
-                                  {(catalogo?.fornecedores ?? []).slice(0, 30).map((fo) => (
-                                    <SelectItem key={fo.id} value={fo.nome} className="text-[11px]">{fo.nome}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <FornecedorInline
+                                catalogo={catalogo}
+                                valor={payloadAtivo.fornecedorNome}
+                                excelOriginal={linhaAtiva.fornecedor}
+                                marcadoNovo={payloadAtivo.fornecedorMarcadoNovo}
+                                vinculadoId={payloadAtivo.fornecedorId}
+                                disabled={edicaoBloqueada}
+                                onPick={(patch) => editarCorrecaoAtiva(patch)}
+                              />
                             } />
                           <MatrizLinha campo="Fazenda"
                             excel={linhaAtiva.fazendaTexto}
                             fin={
-                              <Select value={protoFaz ?? undefined} onValueChange={setProtoFaz}>
+                              <Select value={payloadAtivo.fazendaNome ?? undefined}
+                                      onValueChange={(nome) => {
+                                        const f = (catalogo?.fazendas ?? []).find((x) => x.nome === nome);
+                                        editarCorrecaoAtiva({ fazendaId: f?.id ?? null, fazendaNome: nome });
+                                      }}>
                                 <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                                 <SelectContent>
                                   {(catalogo?.fazendas ?? []).map((f) => (
@@ -1650,25 +1681,28 @@ export function MesaPareamentoModal({
                           <MatrizLinha campo="Subcentro"
                             excel={linhaAtiva.subcentro}
                             fin={
-                              <Select value={protoSub ?? undefined} onValueChange={setProtoSub}>
-                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                                <SelectContent>
-                                  {(catalogo?.subcentros ?? []).slice(0, 30).map((sc) => (
-                                    <SelectItem key={sc.subcentro} value={sc.subcentro} className="text-[11px]">{sc.subcentro}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <SubcentroInline
+                                catalogo={catalogo}
+                                valor={payloadAtivo.subcentro}
+                                naturezaAlvo={naturezaAlvoAtiva}
+                                disabled={edicaoBloqueada}
+                                onPick={(patch) => editarCorrecaoAtiva(patch)}
+                              />
                             } />
                           <MatrizLinha campo="Produto"
                             excel={linhaAtiva.produto}
                             fin={
-                              <Input value={protoProd ?? ''} onChange={(e) => setProtoProd(e.target.value || null)}
+                              <Input value={payloadAtivo.produto ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ produto: e.target.value || null })}
+                                     disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" placeholder="—" />
                             } />
                           <MatrizLinha campo="Data Comp."
                             excel={fmtData(linhaAtiva.dataCompetencia)}
                             fin={
-                              <Input type="date" value={protoDataComp ?? ''} onChange={(e) => setProtoDataComp(e.target.value || null)}
+                              <Input type="date" value={payloadAtivo.dataCompetencia ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ dataCompetencia: e.target.value || null })}
+                                     disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" />
                             } />
                         </div>
@@ -1686,9 +1720,7 @@ export function MesaPareamentoModal({
                           )}
                           {parAtivo.decisao === 'pendente' ? (
                             (() => {
-                              if (!parAtivoKey) return null;
-                              const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
-                              const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
+                              // PR-4A — REUSA o payloadAtivo computado acima (mesma referência do display).
                               const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
                               return validacaoAtivo.valido ? (
                                 <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
@@ -1705,7 +1737,7 @@ export function MesaPareamentoModal({
                             })()
                           ) : (
                             <Button size="sm" variant="ghost" className="w-full justify-center text-[11px] h-7"
-                                    onClick={() => parAtivoKey && desfazer(parAtivoKey)}>
+                                    onClick={() => desfazer(parAtivoKey)}>
                               <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
                             </Button>
                           )}
@@ -2164,6 +2196,161 @@ function CampoLinha({ label, cols, status }: {
         {status && <span className={`text-[10px] ml-auto ${toneCls}`}>{status.texto}</span>}
       </div>
     </div>
+  );
+}
+
+// PR-4A — Resultado Fornecedor inline: Command compacto em popover (não cresce a linha).
+// Escreve direto no correcao do par via onPick. Lógica relocada do FormularioCorrecao.
+function FornecedorInline({ catalogo, valor, excelOriginal, marcadoNovo, vinculadoId, disabled, onPick }: {
+  catalogo: CatalogoCliente | undefined;
+  valor: string | null;
+  excelOriginal: string | null;
+  marcadoNovo: boolean;
+  vinculadoId: string | null;
+  disabled?: boolean;
+  onPick: (patch: Partial<ParCorrecao>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState('');
+  const filtrados = useMemo(() => {
+    const q = busca.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    return (catalogo?.fornecedores ?? [])
+      .filter((f) =>
+        f.nome.toLowerCase().includes(q)
+        || (f.nome_normalizado ?? '').includes(q)
+        || (f.aliases ?? []).some((a) => a.toLowerCase().includes(q)),
+      )
+      .slice(0, 5);
+  }, [busca, catalogo]);
+  const mostrarExcel = !!excelOriginal && !filtrados.some((f) => f.nome.toLowerCase() === excelOriginal.toLowerCase());
+  const mostrarNovo = busca.trim().length >= 2
+    && !filtrados.some((f) => f.nome.toLowerCase() === busca.trim().toLowerCase())
+    && busca.trim().toLowerCase() !== (excelOriginal ?? '').toLowerCase();
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setBusca(''); }}>
+      <PopoverTrigger asChild>
+        <Button type="button" size="sm" variant="outline" disabled={disabled}
+                className="h-7 w-full justify-between text-[11px] px-2 font-normal">
+          <span className="truncate">{valor || '—'}</span>
+          <span className="ml-1 shrink-0 text-[9px] text-muted-foreground">
+            {vinculadoId ? '✓ ' : marcadoNovo ? '⚑ ' : ''}▾
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar fornecedor…" className="text-[11px] h-7" />
+          <CommandList className="max-h-44">
+            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">Digite ao menos 2 caracteres</CommandEmpty>
+            {mostrarExcel && excelOriginal && (
+              <CommandGroup heading="Do Excel">
+                <CommandItem value={`excel|${excelOriginal}`} className="text-[11px]"
+                  onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: excelOriginal, fornecedorMarcadoNovo: false }); setOpen(false); }}>
+                  <span className="text-blue-700 mr-2">📄</span><span className="flex-1 truncate">{excelOriginal}</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+            {filtrados.length > 0 && (
+              <CommandGroup heading="Catálogo oficial">
+                {filtrados.map((f) => (
+                  <CommandItem key={f.id} value={f.nome} className="text-[11px]"
+                    onSelect={() => { onPick({ fornecedorId: f.id, fornecedorNome: f.nome, fornecedorMarcadoNovo: false }); setOpen(false); }}>
+                    <span className="text-emerald-700 mr-2">✓</span><span className="flex-1 truncate">{f.nome}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {mostrarNovo && (
+              <CommandGroup heading="Novo fornecedor">
+                <CommandItem value={`novo|${busca}`} className="text-[11px]"
+                  onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: busca.trim(), fornecedorMarcadoNovo: true }); setOpen(false); }}>
+                  <span className="text-amber-700 mr-2">+</span><span className="flex-1 truncate">Marcar como novo: "{busca.trim()}"</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// PR-4A — Resultado Subcentro inline: Command compacto particionado por natureza.
+function SubcentroInline({ catalogo, valor, naturezaAlvo, disabled, onPick }: {
+  catalogo: CatalogoCliente | undefined;
+  valor: string | null;
+  naturezaAlvo: NaturezaSubcentro | null;
+  disabled?: boolean;
+  onPick: (patch: Partial<ParCorrecao>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState('');
+  const part = useMemo<{ primarios: SubcentroUsado[]; secundarios: SubcentroUsado[] }>(() => {
+    const q = busca.toLowerCase().trim();
+    const todos = (catalogo?.subcentros ?? []).filter((s) => !q || s.subcentro.toLowerCase().includes(q));
+    if (!naturezaAlvo) return { primarios: todos.slice(0, 15), secundarios: [] };
+    const primariosRaw = todos.filter((s) => s.naturezas.has(naturezaAlvo));
+    const secundariosRaw = todos.filter((s) => !s.naturezas.has(naturezaAlvo));
+    primariosRaw.sort((a, b) => {
+      const qa = naturezaAlvo === 'entrada' ? a.qt_uso_entrada : naturezaAlvo === 'saida' ? a.qt_uso_saida : a.qt_uso_transferencia;
+      const qb = naturezaAlvo === 'entrada' ? b.qt_uso_entrada : naturezaAlvo === 'saida' ? b.qt_uso_saida : b.qt_uso_transferencia;
+      return qb - qa;
+    });
+    return { primarios: primariosRaw.slice(0, 12), secundarios: secundariosRaw.slice(0, 6) };
+  }, [busca, catalogo, naturezaAlvo]);
+  const pick = (s: SubcentroUsado) => {
+    onPick({ subcentro: s.subcentro, macro_custo: s.macro_custo, grupo_custo: s.grupo_custo, centro_custo: s.centro_custo });
+    setOpen(false);
+  };
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setBusca(''); }}>
+      <PopoverTrigger asChild>
+        <Button type="button" size="sm" variant="outline" disabled={disabled}
+                className="h-7 w-full justify-between text-[11px] px-2 font-normal">
+          <span className="truncate">{valor || '—'}</span>
+          <span className="ml-1 shrink-0 text-[9px] text-muted-foreground">▾</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar subcentro…" className="text-[11px] h-7" />
+          <CommandList className="max-h-52">
+            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">Nenhum subcentro encontrado</CommandEmpty>
+            {part.primarios.length > 0 && (
+              <CommandGroup heading={naturezaAlvo ? `Da natureza ${labelNatureza(naturezaAlvo)}` : 'Subcentros'}>
+                {part.primarios.map((s) => {
+                  const qt = !naturezaAlvo ? s.qt_uso : naturezaAlvo === 'entrada' ? s.qt_uso_entrada : naturezaAlvo === 'saida' ? s.qt_uso_saida : s.qt_uso_transferencia;
+                  return (
+                    <CommandItem key={`prim|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
+                      value={s.subcentro} className="text-[11px]" onSelect={() => pick(s)}>
+                      <span className="flex-1 truncate">{s.subcentro}</span>
+                      {s.origem === 'historico' && <span className="text-[9px] text-amber-700 mr-2" title="Subcentro legado">⚠ legado</span>}
+                      <span className="text-[9px] text-muted-foreground ml-2">({qt}x)</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
+            {part.secundarios.length > 0 && (
+              <CommandGroup heading="Outras naturezas (não recomendado)">
+                {part.secundarios.map((s) => {
+                  const naturezasLabel = Array.from(s.naturezas).map((n) => labelNatureza(n)).join('/');
+                  return (
+                    <CommandItem key={`sec|${s.subcentro}|${s.macro_custo ?? ''}|${s.grupo_custo ?? ''}|${s.centro_custo ?? ''}`}
+                      value={`outras-${s.subcentro}`} className="text-[11px] opacity-60" onSelect={() => pick(s)}>
+                      <span className="text-amber-700 mr-1">⚠</span>
+                      <span className="flex-1 truncate text-muted-foreground">{s.subcentro}</span>
+                      <span className="text-[9px] text-muted-foreground ml-2">({naturezasLabel || 's/ natureza'})</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
