@@ -1539,8 +1539,8 @@ export function MesaPareamentoModal({
 
                   {/* MATRIZ OPERACIONAL — grade horizontal: CAMPO | OFX | EXCEL | SUG | FINAL | ST */}
                   <div className="space-y-0">
-                    <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_22px] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
-                      <span>Campo</span><span>OFX</span><span>Excel</span><span>Sug.</span><span>Final</span><span></span>
+                    <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                      <span>Campo</span><span>Origem</span><span>Resultado</span>
                     </div>
                     {(() => {
                       const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
@@ -2158,10 +2158,9 @@ function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
     <span className="truncate" title={typeof v === 'string' ? v : undefined}>{v == null || v === '' ? '—' : v}</span>
   );
   return (
-    <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_22px] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
+    <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
       <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
-      {cell(ofx)}{cell(excel)}{cell(sug)}{cell(fin)}
-      <span className={`text-right ${tcls}`} title={status?.titulo}>{status?.icone ?? ''}</span>
+      {cell(excel)}{cell(fin)}
     </div>
   );
 }
