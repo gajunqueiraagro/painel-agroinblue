@@ -31,6 +31,7 @@ import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matc
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
 import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
 import { useMesaSessao } from '@/v2/lib/mesaSessao/useMesaSessao';
+import { useTransferenciasDecididas } from '@/hooks/useTransferenciasDecididas';
 import { criarOuRecuperarSessao, descartarSessao } from '@/v2/lib/mesaSessao/mutations';
 import type { MesaSessaoRow } from '@/v2/lib/mesaSessao/types';
 import {
@@ -101,6 +102,20 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
   const [saldos, setSaldos] = useState<SaldoMes[]>([]);
   const [extratosConciliados, setExtratosConciliados] = useState<Set<string>>(new Set<string>());
   const [lancsConciliados, setLancsConciliados] = useState<Set<string>>(new Set<string>());
+
+  // PR-Det-5b — transferências OFX confirmadas (por cliente+mês).
+  const { confirmadosOfx } = useTransferenciasDecididas({
+    clienteId: clienteAtual?.id ?? null,
+    anoMes: `${ano}-${String(mes).padStart(2, '0')}`,
+  });
+
+  // Pareáveis = extrato bruto MENOS as transferências já confirmadas.
+  // Alimenta matching, órfãos e a prop do filho. O `extratos` cru continua
+  // visível na lista (fato bruto) e na sessão (hash).
+  const extratosPareaveis = useMemo(
+    () => extratos.filter((e) => !confirmadosOfx.has(e.id)),
+    [extratos, confirmadosOfx],
+  );
 
   // PR2 — Preview Excel × OFX (zero persistência, vive em memória)
   const [previewAtivo, setPreviewAtivo] = useState<boolean>(false);
@@ -266,7 +281,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
       .reduce((s, l) => s + Number(l.valor), 0);
 
     // Órfãos
-    const extOrfaos = extratos.filter((e) => !extratosConciliados.has(e.id));
+    const extOrfaos = extratosPareaveis.filter((e) => !extratosConciliados.has(e.id));
     const lanOrfaos = lancamentos.filter((l) => !lancsConciliados.has(l.id));
 
     const liquidoOfxOrfao = extOrfaos.reduce((s, e) => s + Number(e.valor), 0);
@@ -289,10 +304,11 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
       liquidoOfxOrfao,
       liquidoSistemaOrfao,
       countConciliado: extratosConciliados.size,
+      countTransfConfirmada: extratos.length - extratosPareaveis.length,
       countBancoOrfao: extOrfaos.length,
       countApontamentoOrfao: lanOrfaos.length,
     };
-  }, [extratos, lancamentos, saldos, extratosConciliados, lancsConciliados, ano, mes]);
+  }, [extratos, extratosPareaveis, lancamentos, saldos, extratosConciliados, lancsConciliados, ano, mes]);
 
   type StatusOverall = 'explicado' | 'parcial' | 'nao_explicado';
   const statusOverall: StatusOverall =
@@ -323,7 +339,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
         novosLotes.push(lote);
       }
       const todasLinhas = novosLotes.flatMap((l) => l.linhas);
-      const ofxMatcher: ExtratoMatcher[] = extratos.map((e) => ({
+      const ofxMatcher: ExtratoMatcher[] = extratosPareaveis.map((e) => ({
         id: e.id, data_movimento: e.data_movimento,
         valor: Number(e.valor), descricao: e.descricao,
       }));
@@ -350,13 +366,13 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
   useEffect(() => {
     if (!previewAtivo || lotes.length === 0) return;
     const todasLinhas = lotes.flatMap((l) => l.linhas);
-    const ofxMatcher: ExtratoMatcher[] = extratos.map((e) => ({
+    const ofxMatcher: ExtratoMatcher[] = extratosPareaveis.map((e) => ({
       id: e.id, data_movimento: e.data_movimento,
       valor: Number(e.valor), descricao: e.descricao,
     }));
     setMatches(matchTodosLotes(todasLinhas, ofxMatcher));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extratos, previewAtivo, lotes]);
+  }, [extratosPareaveis, previewAtivo, lotes]);
 
   const previewStats = useMemo(() => {
     if (!previewAtivo) {
@@ -602,6 +618,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
           </span>
           <span className="text-[10px] tabular-nums">
             {calc.countConciliado} conciliado
+            {' · '}<span className="text-violet-600">⇄ {calc.countTransfConfirmada} transferência{calc.countTransfConfirmada === 1 ? '' : 's'}</span>
             {' · '}{calc.countBancoOrfao} banco órfão
             {' · '}{calc.countApontamentoOrfao} apontamento órfão
           </span>
@@ -707,13 +724,16 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
             )}
             {!loading && extratos.map((e) => {
               const conciliado = extratosConciliados.has(e.id);
+              const transfConfirmada = confirmadosOfx.has(e.id);
               const valorNum = Number(e.valor);
               return (
                 <div
                   key={e.id}
                   className={cn(
                     'flex items-center gap-2 px-2 py-1.5 text-xs border-l-[3px] rounded-r hover:bg-muted/30',
-                    conciliado ? 'border-l-emerald-500' : 'border-l-rose-500',
+                    transfConfirmada
+                      ? 'border-l-violet-500'
+                      : conciliado ? 'border-l-emerald-500' : 'border-l-rose-500',
                   )}
                 >
                   <span className="text-[10px] text-muted-foreground tabular-nums w-12 shrink-0">
@@ -731,10 +751,13 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
                     {fmtBRL(valorNum)}
                   </span>
                   <Badge
-                    variant={conciliado ? 'default' : 'destructive'}
-                    className="text-[9px] h-4 px-1.5 shrink-0"
+                    variant={transfConfirmada ? 'secondary' : conciliado ? 'default' : 'destructive'}
+                    className={cn(
+                      'text-[9px] h-4 px-1.5 shrink-0',
+                      transfConfirmada && 'bg-violet-100 text-violet-700 border-violet-300',
+                    )}
                   >
-                    {conciliado ? 'Conciliado' : 'Banco órfão'}
+                    {transfConfirmada ? '⇄ Transferência' : conciliado ? 'Conciliado' : 'Banco órfão'}
                   </Badge>
                 </div>
               );
@@ -870,7 +893,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
           naoExplicado={fmtBRL(calc.naoExplicado)}
           lotes={lotes}
           matches={matches}
-          extratos={extratos.map((e) => ({
+          extratos={extratosPareaveis.map((e) => ({
             id: e.id,
             data_movimento: e.data_movimento,
             descricao: e.descricao,
