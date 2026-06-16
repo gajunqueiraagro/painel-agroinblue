@@ -30,6 +30,7 @@ export interface ParCorrecao {
   centro_custo: string | null;
   produto: string | null;
   descricao: string | null;
+  documento?: string | null;
   corrigidoEm: string;
 }
 

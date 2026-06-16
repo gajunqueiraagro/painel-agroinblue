@@ -1716,13 +1716,25 @@ export function MesaPareamentoModal({
                                      disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" />
                             } />
-                          {/* item 7 — Documento e Obs/Histórico (read-only) na MESMA tabela. OFX = — (régua) */}
+                          {/* PR-DocObsEditavel — Documento fica salvo na sessão (correcao_json). NÃO vai para
+                              financeiro_lancamentos_v2 ainda: o mapeamento documento→lançamento final nasce
+                              no PR6.2-M1 (promoção real via RPC). */}
                           <MatrizLinha campo="Documento"
                             excel={linhaAtiva.documento}
-                            fin="—" />
+                            fin={
+                              <Input value={parAtivo.correcao?.documento ?? linhaAtiva.documento ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ documento: e.target.value })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
                           <MatrizLinha campo="Obs / Histórico"
                             excel={linhaAtiva.observacao}
-                            fin={payloadAtivo.descricao ?? '—'} />
+                            fin={
+                              <Input value={parAtivo.correcao?.descricao ?? linhaAtiva.observacao ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ descricao: e.target.value })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
                         </div>
 
                         {/* RODAPÉ — só o CTA primário; secundários (exceção) migraram pra barra de tabs */}
