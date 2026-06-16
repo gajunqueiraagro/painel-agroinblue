@@ -423,6 +423,8 @@ export function MesaPareamentoModal({
   const [protoDataComp, setProtoDataComp] = useState<string | null>(null);
   // PR-MesaGlobal-HeaderCompacto — collapse de métricas secundárias do header.
   const [detalhesSessao, setDetalhesSessao] = useState<boolean>(false);
+  // PR-MesaGlobal-HeaderCompacto-2 — collapse dos pills de escopo (default fechado).
+  const [filtrosEscopo, setFiltrosEscopo] = useState<boolean>(false);
   useEffect(() => {
     if (!parAtivoKey) return;
     const s = sugestoes.get(parAtivoKey);
@@ -1232,44 +1234,56 @@ export function MesaPareamentoModal({
           <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               size="sm"
-              variant={escopoFiltro === 'todas' ? 'default' : 'outline'}
+              variant={escopoFiltro !== 'todas' ? 'default' : 'outline'}
               className="h-6 text-[10px] rounded-full px-2.5"
-              onClick={() => setEscopoFiltro('todas')}
+              onClick={() => setFiltrosEscopo((v) => !v)}
             >
-              <Globe2 className="h-3 w-3 mr-1" aria-hidden="true" />
-              Todas
+              Escopo: {escopoFiltro === 'todas' ? 'Todas' : escopoFiltro === 'sessao' ? `Apenas ${contaNome}` : escopoFiltro === 'transferencias' ? 'Transferências' : 'Externos'} {filtrosEscopo ? '▴' : '▾'}
             </Button>
-            <Button
-              size="sm"
-              variant={escopoFiltro === 'sessao' ? 'default' : 'outline'}
-              className="h-6 text-[10px] rounded-full px-2.5"
-              onClick={() => setEscopoFiltro('sessao')}
-            >
-              <Building2 className="h-3 w-3 mr-1" aria-hidden="true" />
-              Apenas {contaNome}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={cn(
-                'h-6 text-[10px] rounded-full px-2.5',
-                escopoFiltro === 'transferencias' &&
-                  'bg-blue-500/15 text-blue-700 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-700',
-              )}
-              onClick={() => setEscopoFiltro('transferencias')}
-            >
-              <ArrowLeftRight className="h-3 w-3 mr-1" aria-hidden="true" />
-              Transferências
-            </Button>
-            <Button
-              size="sm"
-              variant={escopoFiltro === 'externos' ? 'default' : 'outline'}
-              className="h-6 text-[10px] rounded-full px-2.5"
-              onClick={() => setEscopoFiltro('externos')}
-            >
-              <Coins className="h-3 w-3 mr-1" aria-hidden="true" />
-              Externos
-            </Button>
+            {filtrosEscopo && (
+              <>
+                <Button
+                  size="sm"
+                  variant={escopoFiltro === 'todas' ? 'default' : 'outline'}
+                  className="h-6 text-[10px] rounded-full px-2.5"
+                  onClick={() => setEscopoFiltro('todas')}
+                >
+                  <Globe2 className="h-3 w-3 mr-1" aria-hidden="true" />
+                  Todas
+                </Button>
+                <Button
+                  size="sm"
+                  variant={escopoFiltro === 'sessao' ? 'default' : 'outline'}
+                  className="h-6 text-[10px] rounded-full px-2.5"
+                  onClick={() => setEscopoFiltro('sessao')}
+                >
+                  <Building2 className="h-3 w-3 mr-1" aria-hidden="true" />
+                  Apenas {contaNome}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={cn(
+                    'h-6 text-[10px] rounded-full px-2.5',
+                    escopoFiltro === 'transferencias' &&
+                      'bg-blue-500/15 text-blue-700 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-700',
+                  )}
+                  onClick={() => setEscopoFiltro('transferencias')}
+                >
+                  <ArrowLeftRight className="h-3 w-3 mr-1" aria-hidden="true" />
+                  Transferências
+                </Button>
+                <Button
+                  size="sm"
+                  variant={escopoFiltro === 'externos' ? 'default' : 'outline'}
+                  className="h-6 text-[10px] rounded-full px-2.5"
+                  onClick={() => setEscopoFiltro('externos')}
+                >
+                  <Coins className="h-3 w-3 mr-1" aria-hidden="true" />
+                  Externos
+                </Button>
+              </>
+            )}
             {detalhesSessao && escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
               <span className="text-[10px] text-muted-foreground italic">
                 Mostrando {linhasFiltradas.length} de {linhasExcel.length}
@@ -1297,7 +1311,7 @@ export function MesaPareamentoModal({
           {/* PR6.1E-2 — Toolbar densa de filtros internos da lista.
               Compactacao pura: labels encurtados (Ver/Origem/Ord.), triggers
               h-6 text-[10px], gap-1.5. Logica e opcoes 100% preservadas. */}
-          <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+          <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
             {modoVisualizacao === 'excel' ? (
               <>
                 <span className="text-[10px] text-muted-foreground">Ver:</span>
@@ -1391,11 +1405,11 @@ export function MesaPareamentoModal({
           onValueChange={(v) => setAbaAtiva(v as 'pareamento' | 'staging')}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="shrink-0 mx-2 mt-1 h-7 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
-            <TabsTrigger value="pareamento" className="text-[11px] py-0.5">
+          <TabsList className="shrink-0 mx-2 mt-0.5 h-6 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
+            <TabsTrigger value="pareamento" className="text-[11px] py-0">
               Pareamento
             </TabsTrigger>
-            <TabsTrigger value="staging" className="text-[11px] py-0.5 relative">
+            <TabsTrigger value="staging" className="text-[11px] py-0 relative">
               Revisão Staging
               {stagingTemRegistros && (
                 <span
