@@ -91,10 +91,15 @@ export const CLASSES_PENDENTES: ReadonlyArray<DiagClasse> = [
 export function classificarMovimento(
   mov: MovimentoEnriquecido,
   paresOfx: ReadonlySet<string>,
+  confirmadosOfx?: ReadonlySet<string>,
 ): DiagClasse {
   // Status soberano — não inferimos conciliação por valor aplicado.
   if (mov.status === 'conciliado') return 'conciliado';
   if (mov.status === 'ignorado') return 'ignorado';
+
+  // PR-Det-5a — transferência confirmada deixa de ser pendência.
+  // Reusa 'conciliado' (estado resolvido); o selo na linha comunica o detalhe.
+  if (confirmadosOfx?.has(mov.id)) return 'conciliado';
 
   // Demais status ('nao_conciliado' e 'parcial') são pendências — diagnosticar.
   // 1. Par OFX cross-account vence candidato financeiro.
@@ -111,6 +116,7 @@ export function classificarMovimento(
 export function agregarPorClasse(
   movs: ReadonlyArray<MovimentoEnriquecido>,
   paresOfx: ReadonlySet<string>,
+  confirmadosOfx?: ReadonlySet<string>,
 ): Record<DiagClasse, number> {
   const out: Record<DiagClasse, number> = {
     conciliado: 0,
@@ -121,7 +127,7 @@ export function agregarPorClasse(
     transferencia_provavel: 0,
   };
   for (const m of movs) {
-    out[classificarMovimento(m, paresOfx)]++;
+    out[classificarMovimento(m, paresOfx, confirmadosOfx)]++;
   }
   return out;
 }

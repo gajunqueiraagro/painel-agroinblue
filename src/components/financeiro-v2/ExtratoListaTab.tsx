@@ -356,8 +356,8 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   }, [enriquecidos, lancamentosOrfaosDoMes]);
 
   const resumoOperacional = useMemo(
-    () => derivarResumoOperacional(agregarPorClasse(enriquecidos, paresOfx), enriquecidos.length),
-    [enriquecidos, paresOfx],
+    () => derivarResumoOperacional(agregarPorClasse(enriquecidos, paresOfx, confirmadosOfx), enriquecidos.length),
+    [enriquecidos, paresOfx, confirmadosOfx],
   );
 
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
@@ -878,6 +878,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       <ConciliacaoPendenciasPanel
         movimentos={enriquecidos}
         paresOfx={paresOfx}
+        confirmadosOfx={confirmadosOfx}
       />
 
       {/* PR-RematchOnDemand — preview operacional de rematch. Read-only.

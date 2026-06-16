@@ -15,10 +15,11 @@ import {
 interface Props {
   movimentos: ReadonlyArray<MovimentoEnriquecido>;
   paresOfx: ReadonlySet<string>;
+  confirmadosOfx?: ReadonlySet<string>;
 }
 
-export function ConciliacaoPendenciasPanel({ movimentos, paresOfx }: Props) {
-  const agg = agregarPorClasse(movimentos, paresOfx);
+export function ConciliacaoPendenciasPanel({ movimentos, paresOfx, confirmadosOfx }: Props) {
+  const agg = agregarPorClasse(movimentos, paresOfx, confirmadosOfx);
   const totalPendente = CLASSES_PENDENTES.reduce((s, k) => s + agg[k], 0);
 
   if (totalPendente === 0) return null;
