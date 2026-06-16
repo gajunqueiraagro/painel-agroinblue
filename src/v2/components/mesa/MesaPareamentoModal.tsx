@@ -367,7 +367,13 @@ export function MesaPareamentoModal({
         if (exist) {
           m.set(row.excel_key, {
             ...exist,
-            ofxIdAtivo: row.ofx_id_ativo,
+            // PR-MesaGlobal-OfxAtivoFallbackReload — reload salvo com ofx_id_ativo null
+            // recupera o match calculado (exist.ofxIdAtivo) SÓ em pendente; órfão/rejeitado/aprovado mantêm null.
+            ofxIdAtivo: row.ofx_id_ativo ?? (
+              row.decisao === 'pendente'
+                ? exist.ofxIdAtivo
+                : null
+            ),
             ofxIdSugeridoOriginal: row.ofx_id_sugerido_original ?? exist.ofxIdSugeridoOriginal,
             decisao: row.decisao,
             correcao: row.correcao_json,
