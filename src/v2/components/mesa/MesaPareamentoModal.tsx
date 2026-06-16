@@ -421,6 +421,8 @@ export function MesaPareamentoModal({
   const [protoSub, setProtoSub] = useState<string | null>(null);
   const [protoProd, setProtoProd] = useState<string | null>(null);
   const [protoDataComp, setProtoDataComp] = useState<string | null>(null);
+  // PR-MesaGlobal-HeaderCompacto — collapse de métricas secundárias do header.
+  const [detalhesSessao, setDetalhesSessao] = useState<boolean>(false);
   useEffect(() => {
     if (!parAtivoKey) return;
     const s = sugestoes.get(parAtivoKey);
@@ -1043,7 +1045,7 @@ export function MesaPareamentoModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
-        <DialogHeader className="px-3 py-2 border-b shrink-0 space-y-1">
+        <DialogHeader className="px-3 py-1.5 border-b shrink-0 space-y-0.5">
           {/* PR6.1E-1 — Linha A: identidade + contexto + métricas + status + ações.
               Density refactor: todo o conteúdo do header (antes em 4 linhas
               verticais) agora flui horizontal com flex-wrap. Preserva 100% da
@@ -1084,13 +1086,22 @@ export function MesaPareamentoModal({
             <span className="text-muted-foreground text-[10px]">
               {clienteAtual?.nome ?? '—'} · {periodoLabel}
             </span>
-            <span className="text-muted-foreground text-[10px]">
-              OFX entr./saí.: {saldoOfxResumo}
-            </span>
             <span className="text-rose-700 font-medium text-[10px]">
               Não explicado: {naoExplicado}
             </span>
-            {modoVisualizacao === 'excel' ? (
+            <button
+              type="button"
+              onClick={() => setDetalhesSessao((v) => !v)}
+              className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted underline-offset-2 shrink-0"
+            >
+              {detalhesSessao ? 'Detalhes da sessão ▴' : 'Detalhes da sessão ▾'}
+            </button>
+            {detalhesSessao && (
+              <span className="text-muted-foreground text-[10px]">
+                OFX entr./saí.: {saldoOfxResumo}
+              </span>
+            )}
+            {detalhesSessao && (modoVisualizacao === 'excel' ? (
               <span className="flex items-center gap-1.5 text-[10px]">
                 <span className="text-emerald-700">✓{contadores.aprovados}</span>
                 <span className="text-rose-700">✗{contadores.rejeitados}</span>
@@ -1106,7 +1117,7 @@ export function MesaPareamentoModal({
                 <span className="text-amber-700">⊘{contadoresOfx.orfaoValidado}</span>
                 <span className="text-muted-foreground">| sem sug.: {contadoresOfx.semSugestao}</span>
               </span>
-            )}
+            ))}
             {sessaoCompleta && (
               <div className="ml-auto flex items-center gap-1.5 flex-wrap">
                 {statusSalvamento === 'salvo' && ultimoSalvamento && (
@@ -1114,7 +1125,7 @@ export function MesaPareamentoModal({
                     ✓ {ultimoSalvamento.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
-                {statusSalvamento === 'salvo' && !ultimoSalvamento && (
+                {detalhesSessao && statusSalvamento === 'salvo' && !ultimoSalvamento && (
                   <span className="text-muted-foreground text-[10px]">Sessão pronta</span>
                 )}
                 {statusSalvamento === 'salvando' && (
@@ -1259,7 +1270,7 @@ export function MesaPareamentoModal({
               <Coins className="h-3 w-3 mr-1" aria-hidden="true" />
               Externos
             </Button>
-            {escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
+            {detalhesSessao && escopoFiltro !== 'todas' && modoVisualizacao === 'excel' && (
               <span className="text-[10px] text-muted-foreground italic">
                 Mostrando {linhasFiltradas.length} de {linhasExcel.length}
               </span>
@@ -1363,7 +1374,7 @@ export function MesaPareamentoModal({
             {catalogoErro && (
               <span className="text-[10px] text-rose-600">Cat.: erro</span>
             )}
-            {catalogo && (
+            {detalhesSessao && catalogo && (
               <span
                 className="text-[10px] text-muted-foreground"
                 title={`Catálogo: ${catalogo.contas.length} contas · ${catalogo.fazendas.length} fazendas · ${catalogo.subcentros.length} subcentros · ${catalogo.fornecedores.length} fornecedores`}
@@ -1380,11 +1391,11 @@ export function MesaPareamentoModal({
           onValueChange={(v) => setAbaAtiva(v as 'pareamento' | 'staging')}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="shrink-0 mx-2 mt-2 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
-            <TabsTrigger value="pareamento" className="text-xs">
+          <TabsList className="shrink-0 mx-2 mt-1 h-7 grid w-[calc(100%-1rem)] grid-cols-2 max-w-md">
+            <TabsTrigger value="pareamento" className="text-[11px] py-0.5">
               Pareamento
             </TabsTrigger>
-            <TabsTrigger value="staging" className="text-xs relative">
+            <TabsTrigger value="staging" className="text-[11px] py-0.5 relative">
               Revisão Staging
               {stagingTemRegistros && (
                 <span
