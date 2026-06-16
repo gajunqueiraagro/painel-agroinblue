@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -414,6 +414,20 @@ export function MesaPareamentoModal({
   const [rascunhoCorrecao, setRascunhoCorrecao] = useState<ParCorrecao | null>(null);
   const [fornecedorBusca, setFornecedorBusca] = useState<string>('');
   const [subcentroBusca, setSubcentroBusca] = useState<string>('');
+
+  // PROTO PASSO 2 (throwaway) — Resultado editável na mesma linha; só proto-state, não persiste.
+  const [protoFaz, setProtoFaz] = useState<string | null>(null);
+  const [protoForn, setProtoForn] = useState<string | null>(null);
+  const [protoSub, setProtoSub] = useState<string | null>(null);
+  useEffect(() => {
+    if (!parAtivoKey) return;
+    const s = sugestoes.get(parAtivoKey);
+    const c = pares.get(parAtivoKey)?.correcao;
+    setProtoFaz(c?.fazendaNome ?? s?.fazendaSugerida?.nome ?? null);
+    setProtoForn(c?.fornecedorNome ?? s?.fornecedorOficial?.nome ?? null);
+    setProtoSub(c?.subcentro ?? s?.subcentroSugerido?.subcentro ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parAtivoKey]);
 
   // ---------- ações de decisão ----------
 
@@ -1558,14 +1572,41 @@ export function MesaPareamentoModal({
                           <MatrizLinha campo="Data Comp." excel={fmtData(linhaAtiva.dataCompetencia)} fin={fmtData(cor?.dataCompetencia ?? linhaAtiva.dataCompetencia)} />
                           <MatrizLinha campo="Data Ref." ofx={ofxAtivo ? fmtData(ofxAtivo.data_movimento) : null} excel={fmtData(linhaAtiva.dataPagamento)} fin={fmtData(linhaAtiva.dataPagamento)}
                             status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', icone: '✓', titulo: 'Igual' } : dias != null ? { tone: 'warn', icone: '⚠', titulo: `${Math.abs(dias)} dia(s)` } : null)} />
-                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} sug={sugAtiva?.fazendaSugerida?.nome} fin={finalFaz} />
+                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} sug={sugAtiva?.fazendaSugerida?.nome} fin={
+                            <Select value={protoFaz ?? undefined} onValueChange={setProtoFaz}>
+                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>
+                                {(catalogo?.fazendas ?? []).map((f) => (
+                                  <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          } />
                           <MatrizLinha campo="Valor" ofx={ofxAtivo ? fmtBRL(ofxAtivo.valor) : null} excel={fmtBRL(exValor)} fin={fmtBRL(exValor)}
                             status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', icone: '✓', titulo: 'Idêntico' } : { tone: 'bad', icone: '✗', titulo: 'Diverge' })} />
                           <MatrizLinha campo="Banco" ofx={contaNome} excel={linhaAtiva.contaTexto} fin={contaNome}
                             status={bancoDiv ? { tone: 'warn', icone: '⚠', titulo: 'Diferente' } : { tone: 'ok', icone: '✓', titulo: 'Igual' }} />
                           <MatrizLinha campo="Produto" excel={linhaAtiva.produto} fin={finalProd} />
-                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} sug={sugAtiva?.fornecedorOficial?.nome} fin={finalForn} />
-                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} sug={sugAtiva?.subcentroSugerido?.subcentro} fin={finalSub} />
+                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} sug={sugAtiva?.fornecedorOficial?.nome} fin={
+                            <Select value={protoForn ?? undefined} onValueChange={setProtoForn}>
+                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>
+                                {(catalogo?.fornecedores ?? []).slice(0, 30).map((fo) => (
+                                  <SelectItem key={fo.id} value={fo.nome} className="text-[11px]">{fo.nome}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          } />
+                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} sug={sugAtiva?.subcentroSugerido?.subcentro} fin={
+                            <Select value={protoSub ?? undefined} onValueChange={setProtoSub}>
+                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>
+                                {(catalogo?.subcentros ?? []).slice(0, 30).map((sc) => (
+                                  <SelectItem key={sc.subcentro} value={sc.subcentro} className="text-[11px]">{sc.subcentro}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          } />
                         </>
                       );
                     })()}
@@ -2160,7 +2201,7 @@ function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
   return (
     <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
       <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
-      {cell(excel)}{cell(fin)}
+      {cell(excel)}{typeof fin === 'string' ? cell(fin) : fin}
     </div>
   );
 }
