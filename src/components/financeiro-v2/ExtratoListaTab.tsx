@@ -46,7 +46,9 @@ import {
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { ConciliacaoPendenciasPanel } from './ConciliacaoPendenciasPanel';
 import { RematchOnDemandPanel } from './RematchOnDemandPanel';
-import { useExtratoParesOfx } from '@/hooks/useExtratoParesOfx';
+import { useExtratoParesOfx, type ParOfx } from '@/hooks/useExtratoParesOfx';
+import { useTransferenciasDecididas, chaveParOfx } from '@/hooks/useTransferenciasDecididas';
+import { useTransferenciaDecidir } from '@/hooks/useTransferenciaDecidir';
 import { classificarMovimento, DIAG_INFO, agregarPorClasse, derivarResumoOperacional } from '@/lib/financeiro/conciliacaoDiagnostico';
 
 interface Props {
@@ -100,7 +102,17 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   // PR-Conciliacao-DiagnosticoOperacional — par OFX cross-account
   // (mesmo cliente+mês, valor abs igual, sinal oposto, ±1 dia).
   // Query única por mês, compartilhada entre contas. Read-only.
-  const { paresOfx } = useExtratoParesOfx({
+  const { paresOfx, pares } = useExtratoParesOfx({
+    clienteId: clienteAtual?.id ?? null,
+    anoMes: anoMes ?? null,
+  });
+
+  // PR-Det-4b — decisões de transferência (leitura de estado + gravação).
+  const { confirmadosOfx, rejeitados } = useTransferenciasDecididas({
+    clienteId: clienteAtual?.id ?? null,
+    anoMes: anoMes ?? null,
+  });
+  const { confirmar, rejeitar, salvando: salvandoTransf } = useTransferenciaDecidir({
     clienteId: clienteAtual?.id ?? null,
     anoMes: anoMes ?? null,
   });
@@ -362,6 +374,49 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [mostrarConfirmacaoLote, setMostrarConfirmacaoLote] = useState(false);
   const [processandoLote, setProcessandoLote] = useState(false);
+
+  // ── PR-Det-4b — modal de transferência ────────────────────────────
+  // Guarda só o ofx_id do movimento clicado (as pernas vêm de `pares`).
+  const [movDetectorId, setMovDetectorId] = useState<string | null>(null);
+
+  // Candidatos VIVOS = pares deste ofx que ainda não foram rejeitados.
+  // Layout (forte/ambíguo) decide por COUNT disto, não por par.confianca.
+  const candidatosVivos = useMemo<ParOfx[]>(() => {
+    if (!movDetectorId) return [];
+    return pares.filter(
+      (p) =>
+        (p.saidaId === movDetectorId || p.entradaId === movDetectorId) &&
+        !rejeitados.has(chaveParOfx(p.saidaId, p.entradaId)),
+    );
+  }, [movDetectorId, pares, rejeitados]);
+
+  const nomeConta = (id: string): string => {
+    const c = contasBancarias.find((cc) => cc.id === id);
+    return c?.nome_exibicao || c?.nome_conta || id;
+  };
+
+  const handleConfirmarTransf = async (par: ParOfx) => {
+    const chaveAtual = chaveParOfx(par.saidaId, par.entradaId);
+    const concorrentes = candidatosVivos.filter(
+      (c) => chaveParOfx(c.saidaId, c.entradaId) !== chaveAtual,
+    );
+    try {
+      await confirmar(par, concorrentes);
+      toast.success('Transferência confirmada');
+      setMovDetectorId(null);
+    } catch {
+      toast.error('Erro ao confirmar transferência');
+    }
+  };
+
+  const handleRejeitarTransf = async (par: ParOfx) => {
+    try {
+      await rejeitar(par, null); // motivo manual opcional — null por ora
+      toast.info('Candidato rejeitado');
+    } catch {
+      toast.error('Erro ao rejeitar candidato');
+    }
+  };
   const queryClient = useQueryClient();
 
   const idsElegiveis = useMemo(() => {
@@ -947,13 +1002,28 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                       {!enriquecidoLoading &&
                         (m.status === 'nao_conciliado' || m.status === 'parcial') &&
                         (() => {
+                          // PR-Det-4b — transferência já confirmada: selo estático (sem botão).
+                          if (confirmadosOfx.has(m.id)) {
+                            return (
+                              <span
+                                className="text-[10px] h-5 px-1.5 rounded border font-medium bg-violet-100 text-violet-700 border-violet-300 inline-flex items-center"
+                                title="Transferência confirmada entre contas."
+                              >
+                                ⇄ Transferência confirmada
+                              </span>
+                            );
+                          }
                           const cls = classificarMovimento(m, paresOfx);
                           if (cls === 'conciliado' || cls === 'ignorado') return null;
                           const info = DIAG_INFO[cls];
                           return (
                             <button
                               type="button"
-                              onClick={() => toast.info(`${info.label}: ação em próximo PR`)}
+                              onClick={() =>
+                                cls === 'transferencia_provavel'
+                                  ? setMovDetectorId(m.id)
+                                  : toast.info(`${info.label}: ação em próximo PR`)
+                              }
                               className={`text-[10px] h-5 px-1.5 rounded border font-medium ${info.badgeCls} hover:opacity-80`}
                               title={`Diagnóstico automático — ${info.label}. CTA: ${info.ctaLabel}.`}
                             >
@@ -1168,6 +1238,82 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
               {processandoLote
                 ? 'Processando...'
                 : `Confirmar criação (${resumoSelecao.qt})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PR-Det-4b — modal de confirmação de transferência provável. */}
+      <Dialog
+        open={!!movDetectorId}
+        onOpenChange={(o) => { if (!o) setMovDetectorId(null); }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base">Transferência entre contas</DialogTitle>
+            <DialogDescription className="text-[12px]">
+              {candidatosVivos.length > 1
+                ? 'Múltiplos candidatos para este movimento. Escolha o par correto — os demais serão rejeitados automaticamente.'
+                : 'Confirme se este movimento é uma transferência entre contas do mesmo cliente.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {candidatosVivos.length === 0 ? (
+            <div className="py-6 text-center text-[13px] text-muted-foreground">
+              <p className="font-medium">Nenhum candidato ativo para esta transferência.</p>
+              <p className="mt-1">Todos os candidatos anteriormente sugeridos foram rejeitados.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {candidatosVivos.map((par) => (
+                <div
+                  key={chaveParOfx(par.saidaId, par.entradaId)}
+                  className="rounded-lg border p-3 space-y-2"
+                >
+                  <div className="text-[12px]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-red-700">Saída — {nomeConta(par.contaOrigemId)}</span>
+                      <span className="text-muted-foreground">{fmtData(par.dataSaida)}</span>
+                    </div>
+                    <div className="text-muted-foreground truncate">{par.descricaoSaida || '—'}</div>
+                  </div>
+                  <div className="text-center text-[13px] font-semibold tabular-nums">
+                    ↓ {formatMoeda(par.valor)}
+                  </div>
+                  <div className="text-[12px]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-emerald-700">Entrada — {nomeConta(par.contaDestinoId)}</span>
+                      <span className="text-muted-foreground">{fmtData(par.dataEntrada)}</span>
+                    </div>
+                    <div className="text-muted-foreground truncate">{par.descricaoEntrada || '—'}</div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px]"
+                      disabled={salvandoTransf}
+                      onClick={() => handleConfirmarTransf(par)}
+                    >
+                      Confirmar transferência
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[11px]"
+                      disabled={salvandoTransf}
+                      onClick={() => handleRejeitarTransf(par)}
+                    >
+                      Rejeitar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setMovDetectorId(null)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
