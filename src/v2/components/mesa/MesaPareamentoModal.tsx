@@ -1553,70 +1553,77 @@ export function MesaPareamentoModal({
                   {/* PASSO 3 — painel único: BLOCO A (OFX soberano) + BLOCO C (Campo|Excel|Resultado) */}
                   {(() => {
                     const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
+                    const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
                     return (
                       <>
-                        {/* BLOCO A — OFX soberano (banco) */}
-                        <div className="border rounded p-2 bg-muted/30 space-y-0.5">
-                          <div className="text-[10px] font-bold uppercase text-muted-foreground pb-0.5">OFX (banco)</div>
-                          {!ofxAtivo ? (
-                            <div className="text-[11px] italic text-muted-foreground">Sem OFX casado</div>
-                          ) : (
-                            <div className="grid grid-cols-[64px_1fr] gap-x-2 gap-y-0.5 text-[11px] items-baseline">
-                              <span className="text-[9px] uppercase text-muted-foreground/70">Data</span>
-                              <span className="tabular-nums">{fmtData(ofxAtivo.data_movimento) ?? '—'}</span>
-                              <span className="text-[9px] uppercase text-muted-foreground/70">Valor</span>
-                              <span className="tabular-nums">{fmtBRL(ofxAtivo.valor)}</span>
-                              <span className="text-[9px] uppercase text-muted-foreground/70">Banco</span>
-                              <span className="truncate" title={contaNome ?? undefined}>{contaNome ?? '—'}</span>
-                              <span className="text-[9px] uppercase text-muted-foreground/70">Descrição</span>
-                              <span className="truncate" title={ofxAtivo.descricao}>{ofxAtivo.descricao || '—'}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* BLOCO C — Campo | Excel | Resultado */}
+                        {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
                         <div className="space-y-0">
-                          <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
-                            <span>Campo</span><span>Excel</span><span>Resultado</span>
+                          <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                            <span>Campo</span><span>OFX</span><span>Excel</span><span>Resultado</span>
                           </div>
-                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} fin={
-                            <Select value={protoFaz ?? undefined} onValueChange={setProtoFaz}>
-                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>
-                                {(catalogo?.fazendas ?? []).map((f) => (
-                                  <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          } />
-                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} fin={
-                            <Select value={protoForn ?? undefined} onValueChange={setProtoForn}>
-                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>
-                                {(catalogo?.fornecedores ?? []).slice(0, 30).map((fo) => (
-                                  <SelectItem key={fo.id} value={fo.nome} className="text-[11px]">{fo.nome}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          } />
-                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} fin={
-                            <Select value={protoSub ?? undefined} onValueChange={setProtoSub}>
-                              <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>
-                                {(catalogo?.subcentros ?? []).slice(0, 30).map((sc) => (
-                                  <SelectItem key={sc.subcentro} value={sc.subcentro} className="text-[11px]">{sc.subcentro}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          } />
-                          <MatrizLinha campo="Produto" excel={linhaAtiva.produto} fin={
-                            <Input value={protoProd ?? ''} onChange={(e) => setProtoProd(e.target.value || null)}
-                                   className="h-7 text-[11px]" placeholder="—" />
-                          } />
-                          <MatrizLinha campo="Data Comp." excel={fmtData(linhaAtiva.dataCompetencia)} fin={
-                            <Input type="date" value={protoDataComp ?? ''} onChange={(e) => setProtoDataComp(e.target.value || null)}
-                                   className="h-7 text-[11px]" />
-                          } />
+                          {/* Data/Valor/Banco — leitura (não editável) */}
+                          <MatrizLinha campo="Data"
+                            ofx={ofxAtivo ? fmtData(ofxAtivo.data_movimento) : null}
+                            excel={fmtData(linhaAtiva.dataPagamento)}
+                            fin={fmtData(linhaAtiva.dataPagamento)} />
+                          <MatrizLinha campo="Valor"
+                            ofx={ofxAtivo ? fmtBRL(ofxAtivo.valor) : null}
+                            excel={fmtBRL(exValor)}
+                            fin={fmtBRL(exValor)} />
+                          <MatrizLinha campo="Banco"
+                            ofx={ofxAtivo ? (contaNome ?? '—') : null}
+                            excel={linhaAtiva.contaTexto}
+                            fin={contaNome} />
+                          {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Select oficial */}
+                          <MatrizLinha campo="Fornecedor"
+                            ofx={ofxAtivo?.descricao ?? null}
+                            excel={linhaAtiva.fornecedor}
+                            fin={
+                              <Select value={protoForn ?? undefined} onValueChange={setProtoForn}>
+                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>
+                                  {(catalogo?.fornecedores ?? []).slice(0, 30).map((fo) => (
+                                    <SelectItem key={fo.id} value={fo.nome} className="text-[11px]">{fo.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            } />
+                          <MatrizLinha campo="Fazenda"
+                            excel={linhaAtiva.fazendaTexto}
+                            fin={
+                              <Select value={protoFaz ?? undefined} onValueChange={setProtoFaz}>
+                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>
+                                  {(catalogo?.fazendas ?? []).map((f) => (
+                                    <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            } />
+                          <MatrizLinha campo="Subcentro"
+                            excel={linhaAtiva.subcentro}
+                            fin={
+                              <Select value={protoSub ?? undefined} onValueChange={setProtoSub}>
+                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>
+                                  {(catalogo?.subcentros ?? []).slice(0, 30).map((sc) => (
+                                    <SelectItem key={sc.subcentro} value={sc.subcentro} className="text-[11px]">{sc.subcentro}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            } />
+                          <MatrizLinha campo="Produto"
+                            excel={linhaAtiva.produto}
+                            fin={
+                              <Input value={protoProd ?? ''} onChange={(e) => setProtoProd(e.target.value || null)}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
+                          <MatrizLinha campo="Data Comp."
+                            excel={fmtData(linhaAtiva.dataCompetencia)}
+                            fin={
+                              <Input type="date" value={protoDataComp ?? ''} onChange={(e) => setProtoDataComp(e.target.value || null)}
+                                     className="h-7 text-[11px]" />
+                            } />
                         </div>
 
                         {/* FOOTER — Ações (realocado da COL3; handlers intactos) */}
@@ -2099,9 +2106,9 @@ function MatrizLinha({ campo, ofx, excel, sug, fin, status }: {
     <span className="truncate" title={typeof v === 'string' ? v : undefined}>{v == null || v === '' ? '—' : v}</span>
   );
   return (
-    <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
+    <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 py-1 border-b border-border/30 last:border-0 items-baseline text-[11px] tabular-nums">
       <span className="text-[9px] uppercase font-medium text-muted-foreground truncate" title={campo}>{campo}</span>
-      {cell(excel)}{typeof fin === 'string' ? cell(fin) : fin}
+      {cell(ofx)}{cell(excel)}{typeof fin === 'string' ? cell(fin) : fin}
     </div>
   );
 }
