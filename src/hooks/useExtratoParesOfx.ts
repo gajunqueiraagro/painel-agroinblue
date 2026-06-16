@@ -42,6 +42,7 @@ interface MovRef {
   conta_bancaria_id: string;
   status: ExtratoStatusFull;
   orfao_definitivo: boolean | null;
+  descricao: string | null;
 }
 
 /** Detector V2 — aresta OFX↔OFX (transferência provável) com lados explícitos. */
@@ -54,6 +55,8 @@ export interface ParOfx {
   dataSaida: string;
   dataEntrada: string;
   confianca: 'forte' | 'ambigua';
+  descricaoSaida?: string | null;
+  descricaoEntrada?: string | null;
 }
 
 const TOL = 0.01;
@@ -96,7 +99,7 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
       // essa tabela (ver useExtratoBancario.ts:51, useImportacaoExtrato.ts).
       const { data, error } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id, status, orfao_definitivo')
+        .select('id, data_movimento, valor, tipo_movimento, conta_bancaria_id, status, orfao_definitivo, descricao')
         .eq('cliente_id', clienteId as string)
         .gte('data_movimento', dataInicio)
         .lt('data_movimento', dataFimExc)
@@ -158,6 +161,8 @@ export function useExtratoParesOfx({ clienteId, anoMes, enabled = true }: Params
         dataSaida: ar.saida.data_movimento,
         dataEntrada: ar.entrada.data_movimento,
         confianca: ambigua ? 'ambigua' : 'forte',
+        descricaoSaida: ar.saida.descricao,
+        descricaoEntrada: ar.entrada.descricao,
       };
     });
 
