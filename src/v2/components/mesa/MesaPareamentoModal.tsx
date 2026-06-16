@@ -419,6 +419,8 @@ export function MesaPareamentoModal({
   const [protoFaz, setProtoFaz] = useState<string | null>(null);
   const [protoForn, setProtoForn] = useState<string | null>(null);
   const [protoSub, setProtoSub] = useState<string | null>(null);
+  const [protoProd, setProtoProd] = useState<string | null>(null);
+  const [protoDataComp, setProtoDataComp] = useState<string | null>(null);
   useEffect(() => {
     if (!parAtivoKey) return;
     const s = sugestoes.get(parAtivoKey);
@@ -426,6 +428,9 @@ export function MesaPareamentoModal({
     setProtoFaz(c?.fazendaNome ?? s?.fazendaSugerida?.nome ?? null);
     setProtoForn(c?.fornecedorNome ?? s?.fornecedorOficial?.nome ?? null);
     setProtoSub(c?.subcentro ?? s?.subcentroSugerido?.subcentro ?? null);
+    const linha = linhasExcel.find((l) => l.chaveLinha === parAtivoKey);
+    setProtoProd(c?.produto ?? linha?.produto ?? null);
+    setProtoDataComp(c?.dataCompetencia ?? linha?.dataPagamento ?? linha?.dataCompetencia ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parAtivoKey]);
 
@@ -1395,7 +1400,8 @@ export function MesaPareamentoModal({
             className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
             forceMount
           >
-        <div className="h-full overflow-hidden grid grid-cols-[1.15fr_1.35fr_1fr] gap-2 p-2">
+        <div className={cn("h-full overflow-hidden grid gap-2 p-2",
+          modoVisualizacao === 'excel' ? "grid-cols-[1.15fr_2.35fr]" : "grid-cols-[1.15fr_1.35fr_1fr]")}>
 
           {modoVisualizacao === 'excel' && <>
 
@@ -1544,35 +1550,36 @@ export function MesaPareamentoModal({
                 </div>
               ) : (
                 <>
-                  {/* PR3.2 — faixa roxa de divergência de conta */}
-                  {parAtivoKey && escopoPorPar.get(parAtivoKey)?.isDivergente && (
-                    <div className="text-[10px] font-semibold px-2 py-1 rounded bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300">
-                      ⚠ Divergência de conta — Excel classificado em "{escopoPorPar.get(parAtivoKey)?.rotuloConta}", visualizando "{contaNome}"
-                    </div>
-                  )}
+                  {/* PASSO 3 — painel único: BLOCO A (OFX soberano) + BLOCO C (Campo|Excel|Resultado) */}
+                  {(() => {
+                    const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
+                    return (
+                      <>
+                        {/* BLOCO A — OFX soberano (banco) */}
+                        <div className="border rounded p-2 bg-muted/30 space-y-0.5">
+                          <div className="text-[10px] font-bold uppercase text-muted-foreground pb-0.5">OFX (banco)</div>
+                          {!ofxAtivo ? (
+                            <div className="text-[11px] italic text-muted-foreground">Sem OFX casado</div>
+                          ) : (
+                            <div className="grid grid-cols-[64px_1fr] gap-x-2 gap-y-0.5 text-[11px] items-baseline">
+                              <span className="text-[9px] uppercase text-muted-foreground/70">Data</span>
+                              <span className="tabular-nums">{fmtData(ofxAtivo.data_movimento) ?? '—'}</span>
+                              <span className="text-[9px] uppercase text-muted-foreground/70">Valor</span>
+                              <span className="tabular-nums">{fmtBRL(ofxAtivo.valor)}</span>
+                              <span className="text-[9px] uppercase text-muted-foreground/70">Banco</span>
+                              <span className="truncate" title={contaNome ?? undefined}>{contaNome ?? '—'}</span>
+                              <span className="text-[9px] uppercase text-muted-foreground/70">Descrição</span>
+                              <span className="truncate" title={ofxAtivo.descricao}>{ofxAtivo.descricao || '—'}</span>
+                            </div>
+                          )}
+                        </div>
 
-                  {/* MATRIZ OPERACIONAL — grade horizontal: CAMPO | OFX | EXCEL | SUG | FINAL | ST */}
-                  <div className="space-y-0">
-                    <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
-                      <span>Campo</span><span>Origem</span><span>Resultado</span>
-                    </div>
-                    {(() => {
-                      const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
-                      const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
-                      const dias = matchAtivo?.detalheScore?.diasDistancia ?? null;
-                      const valorIgual = ofxAtivo ? Math.abs(Math.abs(ofxAtivo.valor) - Math.abs(exValor)) < 0.01 : false;
-                      const bancoDiv = !!(parAtivoKey && escopoPorPar.get(parAtivoKey)?.isDivergente);
-                      const cor = parAtivo.correcao;
-                      const finalFaz = cor?.fazendaNome ?? sugAtiva?.fazendaSugerida?.nome ?? null;
-                      const finalSub = cor?.subcentro ?? sugAtiva?.subcentroSugerido?.subcentro ?? null;
-                      const finalForn = cor?.fornecedorNome ?? sugAtiva?.fornecedorOficial?.nome ?? null;
-                      const finalProd = cor?.produto ?? linhaAtiva.produto ?? null;
-                      return (
-                        <>
-                          <MatrizLinha campo="Data Comp." excel={fmtData(linhaAtiva.dataCompetencia)} fin={fmtData(cor?.dataCompetencia ?? linhaAtiva.dataCompetencia)} />
-                          <MatrizLinha campo="Data Ref." ofx={ofxAtivo ? fmtData(ofxAtivo.data_movimento) : null} excel={fmtData(linhaAtiva.dataPagamento)} fin={fmtData(linhaAtiva.dataPagamento)}
-                            status={!ofxAtivo ? null : (dias === 0 ? { tone: 'ok', icone: '✓', titulo: 'Igual' } : dias != null ? { tone: 'warn', icone: '⚠', titulo: `${Math.abs(dias)} dia(s)` } : null)} />
-                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} sug={sugAtiva?.fazendaSugerida?.nome} fin={
+                        {/* BLOCO C — Campo | Excel | Resultado */}
+                        <div className="space-y-0">
+                          <div className="grid grid-cols-[72px_1fr_1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                            <span>Campo</span><span>Excel</span><span>Resultado</span>
+                          </div>
+                          <MatrizLinha campo="Fazenda" excel={linhaAtiva.fazendaTexto} fin={
                             <Select value={protoFaz ?? undefined} onValueChange={setProtoFaz}>
                               <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
@@ -1582,12 +1589,7 @@ export function MesaPareamentoModal({
                               </SelectContent>
                             </Select>
                           } />
-                          <MatrizLinha campo="Valor" ofx={ofxAtivo ? fmtBRL(ofxAtivo.valor) : null} excel={fmtBRL(exValor)} fin={fmtBRL(exValor)}
-                            status={!ofxAtivo ? null : (valorIgual ? { tone: 'ok', icone: '✓', titulo: 'Idêntico' } : { tone: 'bad', icone: '✗', titulo: 'Diverge' })} />
-                          <MatrizLinha campo="Banco" ofx={contaNome} excel={linhaAtiva.contaTexto} fin={contaNome}
-                            status={bancoDiv ? { tone: 'warn', icone: '⚠', titulo: 'Diferente' } : { tone: 'ok', icone: '✓', titulo: 'Igual' }} />
-                          <MatrizLinha campo="Produto" excel={linhaAtiva.produto} fin={finalProd} />
-                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} sug={sugAtiva?.fornecedorOficial?.nome} fin={
+                          <MatrizLinha campo="Fornecedor" excel={linhaAtiva.fornecedor} fin={
                             <Select value={protoForn ?? undefined} onValueChange={setProtoForn}>
                               <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
@@ -1597,7 +1599,7 @@ export function MesaPareamentoModal({
                               </SelectContent>
                             </Select>
                           } />
-                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} sug={sugAtiva?.subcentroSugerido?.subcentro} fin={
+                          <MatrizLinha campo="Subcentro" excel={linhaAtiva.subcentro} fin={
                             <Select value={protoSub ?? undefined} onValueChange={setProtoSub}>
                               <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
                               <SelectContent>
@@ -1607,176 +1609,74 @@ export function MesaPareamentoModal({
                               </SelectContent>
                             </Select>
                           } />
-                        </>
-                      );
-                    })()}
-                  </div>
+                          <MatrizLinha campo="Produto" excel={linhaAtiva.produto} fin={
+                            <Input value={protoProd ?? ''} onChange={(e) => setProtoProd(e.target.value || null)}
+                                   className="h-7 text-[11px]" placeholder="—" />
+                          } />
+                          <MatrizLinha campo="Data Comp." excel={fmtData(linhaAtiva.dataCompetencia)} fin={
+                            <Input type="date" value={protoDataComp ?? ''} onChange={(e) => setProtoDataComp(e.target.value || null)}
+                                   className="h-7 text-[11px]" />
+                          } />
+                        </div>
 
-                  {/* CONTEXTO — textos auxiliares (confirmam, não decidem) */}
-                  {(ofxAtivo?.descricao || linhaAtiva.documento || linhaAtiva.observacao) && (
-                    <div className="border-t pt-2 mt-1 space-y-0.5">
-                      <div className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground mb-0.5">Contexto</div>
-                      {ofxAtivo?.descricao && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Texto OFX</span>{ofxAtivo.descricao}</div>}
-                      {linhaAtiva.documento && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Doc Excel</span>{linhaAtiva.documento}</div>}
-                      {linhaAtiva.observacao && <div className="text-[11px]"><span className="text-[9px] uppercase text-muted-foreground/70 mr-1">Histórico</span><span className="italic">{linhaAtiva.observacao}</span></div>}
-                    </div>
-                  )}
-
-                  {/* Alertas */}
-                  {(alertasExtras.length > 0 || (sugAtiva && sugAtiva.alertas.length > 0)) && (
-                    <div className="border border-amber-300 rounded p-2 space-y-1 bg-amber-50/30 dark:bg-amber-950/10">
-                      <div className="text-[10px] font-bold uppercase text-amber-700 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" /> Alertas
-                      </div>
-                      {alertasExtras.map((a, i) => (
-                        <div key={`ae-${i}`} className="text-[11px] text-amber-800">⚠ {a}</div>
-                      ))}
-                      {sugAtiva?.alertas.map((a, i) => (
-                        <div key={`as-${i}`} className="text-[11px] text-amber-800">⚠ {a}</div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Score */}
-                  {matchAtivo && matchAtivo.faixa !== 'nenhum' && (
-                    <div className="text-[10px] text-muted-foreground border-t pt-2">
-                      Score: <strong>{matchAtivo.score}</strong> ({matchAtivo.faixa})
-                      {matchAtivo.detalheScore.diasDistancia != null && (
-                        <span> · {Math.abs(matchAtivo.detalheScore.diasDistancia)} dia(s) de distância</span>
-                      )}
-                      <span> · similaridade nome {(matchAtivo.detalheScore.similaridadeNome * 100).toFixed(0)}%</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </Card>
-
-          {/* COL 3 — SUGESTÃO/CORRIGIDO + DECISÃO (PR4: switch para FormularioCorrecao) */}
-          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="flex-1 overflow-y-auto space-y-1.5">
-              {!parAtivo || !sugAtiva ? (
-                <>
-                  <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2">
-                    IA sugere + Decisão
-                  </div>
-                  <div className="text-center text-muted-foreground italic py-12">
-                    Selecione um par para ver a sugestão e decidir
-                  </div>
-                </>
-              ) : corrigindoExcelKey === parAtivoKey && rascunhoCorrecao && catalogo ? (
-                // PR4 — modo edição: formulário inline substitui card + botões
-                <FormularioCorrecao
-                  rascunho={rascunhoCorrecao}
-                  setRascunho={setRascunhoCorrecao}
-                  catalogo={catalogo}
-                  fornecedorBusca={fornecedorBusca}
-                  setFornecedorBusca={setFornecedorBusca}
-                  subcentroBusca={subcentroBusca}
-                  setSubcentroBusca={setSubcentroBusca}
-                  fornecedorExcelOriginal={linhaAtiva?.fornecedor || null}
-                  naturezaAlvo={naturezaAlvoCorrecao}
-                  ofxAtivo={ofxAtivo ?? null}
-                  linhaAtiva={linhaAtiva ?? null}
-                  onAplicar={aplicarCorrecao}
-                  onAplicarEAprovar={aplicarEAprovar}
-                  onCancelar={cancelarCorrecao}
-                />
-              ) : (
-                <>
-                  {/* Header: IA sugere | ✎ Corrigido (com Limpar correção) */}
-                  {parAtivo.correcao ? (
-                    <div className="flex items-center justify-between pb-1">
-                      <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">
-                        ✎ Corrigido
-                      </span>
-                      <Button size="sm" variant="ghost" className="h-5 text-[10px]"
-                              onClick={() => parAtivoKey && limparCorrecao(parAtivoKey)}>
-                        Limpar correção
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground pb-1">
-                      Ações
-                    </div>
-                  )}
-
-                  {/* Botões de decisão */}
-                  <div className="border-t pt-2 space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase text-muted-foreground">Decisão</div>
-                    {parAtivo.decisao === 'pendente' ? (
-                      <>
-                        {(() => {
-                          // PR6.1C-3 — valida payload da aprovação ANTES de oferecer o botão.
-                          // Mesmo padrão do Modo OFX (PR6.1C-2): consolidarFotografia +
-                          // buildFallbacks (helpers ja usados por aprovarPar). Reuso direto
-                          // do helper soberano validarAprovacao — zero regra inline aqui.
-                          if (!parAtivoKey) return null;
-                          const fallbacksAtivo = buildFallbacks(
-                            parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos,
-                          );
-                          const payloadAtivo = consolidarFotografia(
-                            sugAtiva ?? undefined,
-                            parAtivo.correcao,
-                            parAtivo.ofxIdAtivo,
-                            fallbacksAtivo,
-                          );
-                          const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
-                          if (validacaoAtivo.valido) {
-                            return (
-                              <Button size="sm" variant="default" className="w-full justify-start text-[11px] h-7"
-                                      onClick={() => aprovarPar(parAtivoKey)}
-                                      disabled={!parAtivo.ofxIdAtivo}>
-                                <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                        {/* FOOTER — Ações (realocado da COL3; handlers intactos) */}
+                        <div className="border-t pt-2 space-y-1.5">
+                          {parAtivo.correcao ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">✎ Corrigido</span>
+                              <Button size="sm" variant="ghost" className="h-5 text-[10px]"
+                                      onClick={() => parAtivoKey && limparCorrecao(parAtivoKey)}>
+                                Limpar correção
                               </Button>
-                            );
-                          }
-                          return (
+                            </div>
+                          ) : (
+                            <div className="text-[10px] font-bold uppercase text-muted-foreground">Ações</div>
+                          )}
+                          {parAtivo.decisao === 'pendente' ? (
                             <>
-                              <Button
-                                size="sm" variant="outline"
-                                className="w-full justify-start text-[11px] h-7 border-amber-300 text-amber-800 hover:bg-amber-50"
-                                disabled={!parAtivo.ofxIdAtivo}
-                                title={validacaoAtivo.mensagem}
-                                onClick={() => iniciarCorrecao(parAtivoKey)}
-                              >
-                                <Pencil className="h-3.5 w-3.5 mr-2" /> Corrigir antes
+                              {(() => {
+                                if (!parAtivoKey) return null;
+                                const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
+                                const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
+                                const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
+                                return validacaoAtivo.valido ? (
+                                  <Button size="sm" variant="default" className="w-full justify-start text-[11px] h-7"
+                                          onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
+                                    <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                                  </Button>
+                                ) : (
+                                  <Badge variant="outline"
+                                         className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
+                                         title={validacaoAtivo.mensagem}>
+                                    Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
+                                  </Badge>
+                                );
+                              })()}
+                              <Button size="sm" variant="destructive" className="w-full justify-start text-[11px] h-7"
+                                      onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
+                                <X className="h-3.5 w-3.5 mr-2" /> Rejeitar (sugestão errada)
                               </Button>
-                              <Badge
-                                variant="outline"
-                                className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
-                              >
-                                Faltam: {validacaoAtivo.camposFaltantes.join(', ')}
-                              </Badge>
+                              <PopoverOutroOfx
+                                extratos={extratos}
+                                ofxConsumidos={ofxConsumidos}
+                                ofxAtualId={parAtivo.ofxIdAtivo}
+                                onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
+                              />
+                              <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
+                                      onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
+                                <ArrowRight className="h-3.5 w-3.5 mr-2" /> Marcar Excel órfão
+                              </Button>
                             </>
-                          );
-                        })()}
-                        <Button size="sm" variant="destructive" className="w-full justify-start text-[11px] h-7"
-                                onClick={() => parAtivoKey && rejeitarPar(parAtivoKey)}>
-                          <X className="h-3.5 w-3.5 mr-2" /> Rejeitar (sugestão errada)
-                        </Button>
-                        <PopoverOutroOfx
-                          extratos={extratos}
-                          ofxConsumidos={ofxConsumidos}
-                          ofxAtualId={parAtivo.ofxIdAtivo}
-                          onEscolher={(novoId) => parAtivoKey && trocarOfx(parAtivoKey, novoId)}
-                        />
-                        <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
-                                onClick={() => parAtivoKey && iniciarCorrecao(parAtivoKey)}>
-                          <Pencil className="h-3.5 w-3.5 mr-2" /> Corrigir manualmente
-                        </Button>
-                        <Button size="sm" variant="outline" className="w-full justify-start text-[11px] h-7"
-                                onClick={() => parAtivoKey && marcarExcelOrfao(parAtivoKey)}>
-                          <ArrowRight className="h-3.5 w-3.5 mr-2" /> Marcar Excel órfão
-                        </Button>
+                          ) : (
+                            <Button size="sm" variant="ghost" className="w-full justify-start text-[11px] h-7"
+                                    onClick={() => parAtivoKey && desfazer(parAtivoKey)}>
+                              <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
+                            </Button>
+                          )}
+                        </div>
                       </>
-                    ) : (
-                      <Button size="sm" variant="ghost" className="w-full justify-start text-[11px] h-7"
-                              onClick={() => parAtivoKey && desfazer(parAtivoKey)}>
-                        <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
-                      </Button>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
