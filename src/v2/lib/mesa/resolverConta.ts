@@ -21,6 +21,14 @@ import type { Database } from '@/integrations/supabase/types';
 export type ContaBancariaRow =
   Database['public']['Tables']['financeiro_contas_bancarias']['Row'];
 
+// Tipo estrutural mínimo — apenas os 6 campos que o resolvedor lê.
+// Aceita ContaBancariaRow (schema, usado pela mutation) e a ContaBancaria do
+// catálogo (sugestaoEngine); ambos satisfazem este Pick.
+export type ContaResolvivel = Pick<
+  ContaBancariaRow,
+  'id' | 'nome_conta' | 'nome_exibicao' | 'banco' | 'agencia' | 'numero_conta'
+>;
+
 export type EstrategiaResolucao =
   | 'agencia_numero'
   | 'substring_exibicao'
@@ -77,7 +85,7 @@ const TAMANHO_MINIMO_TERMO_SUBSTRING = 3;
  */
 export function resolverContaPorTexto(
   contaTexto: string | null | undefined,
-  contas: readonly ContaBancariaRow[],
+  contas: readonly ContaResolvivel[],
 ): ContaResolvida | null {
   if (!contaTexto || typeof contaTexto !== 'string') return null;
   const texto = contaTexto.trim();

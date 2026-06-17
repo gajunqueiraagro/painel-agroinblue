@@ -6,6 +6,7 @@ import type {
   FornecedorOficial,
   SubcentroUsado,
 } from './catalogoCliente';
+import { resolverContaPorTexto } from '@/v2/lib/mesa/resolverConta';
 
 export interface Sugestao {
   excelKey: string;
@@ -36,7 +37,10 @@ export function sugerirParaLinha(
 
   return {
     excelKey: linha.chaveLinha,
-    contaSugerida: sugerirConta(linha.contaTexto, cat.contas),
+    contaSugerida: (() => {
+      const r = resolverContaPorTexto(linha.contaTexto, cat.contas);
+      return r ? { id: r.id, rotulo: r.nome_exibicao, confianca: r.score / 100 } : null;
+    })(),
     fazendaSugerida: sugerirFazenda(linha.fazendaTexto, cat.fazendas),
     fornecedorOficial: sugerirFornecedor(linha.fornecedor, cat.fornecedores),
     subcentroSugerido: sugerirSubcentro(linha, cat),
