@@ -2289,10 +2289,10 @@ function FornecedorInline({ catalogo, valor, excelOriginal, marcadoNovo, vincula
           <CommandList className="max-h-44">
             <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">Digite ao menos 2 caracteres</CommandEmpty>
             {mostrarExcel && excelOriginal && (
-              <CommandGroup heading="Do Excel">
+              <CommandGroup heading="Criar do Excel">
                 <CommandItem value={`excel|${excelOriginal}`} className="text-[11px]"
-                  onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: excelOriginal, fornecedorMarcadoNovo: false }); setOpen(false); }}>
-                  <span className="text-blue-700 mr-2">📄</span><span className="flex-1 truncate">{excelOriginal}</span>
+                  onSelect={() => { onPick({ fornecedorId: null, fornecedorNome: excelOriginal, fornecedorMarcadoNovo: true }); setOpen(false); }}>
+                  <span className="text-amber-700 mr-2">+</span><span className="flex-1 truncate">Criar fornecedor: "{excelOriginal}"</span>
                 </CommandItem>
               </CommandGroup>
             )}
