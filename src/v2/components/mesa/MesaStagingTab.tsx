@@ -4,8 +4,11 @@
 // Preview humano: colunas e nomes que o operador entende.
 // Tipos de domínio NUNCA importam de componentes React (regra travada PR5).
 // ============================================================================
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useStaging } from '@/v2/lib/staging/useStaging';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { StagingRow } from '@/v2/lib/staging/types';
@@ -90,6 +93,24 @@ function Categoria({ row }: { row: StagingRow }) {
 
 export function MesaStagingTab({ sessaoId }: Props) {
   const { data: staging = [], isLoading, error } = useStaging(sessaoId);
+  const queryClient = useQueryClient();
+  const [promovendo, setPromovendo] = useState(false);
+
+  // PR6.2-F1 — promoção transacional da sessão inteira via RPC fn_promover_staging.
+  async function handlePromover() {
+    setPromovendo(true);
+    try {
+      const sb = supabase as any; // mesmo padrão do useStaging (tabelas/RPC v2 não tipadas)
+      const { data, error } = await sb.rpc('fn_promover_staging', { p_sessao_id: sessaoId });
+      if (error) throw error;
+      toast.success(`${data?.promovidos ?? 0} lançamento(s) promovido(s) ao caixa real.`);
+      await queryClient.invalidateQueries({ queryKey: ['mesa-staging', sessaoId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Falha ao promover.');
+    } finally {
+      setPromovendo(false);
+    }
+  }
 
   const stats = useMemo(() => {
     let total = 0;
@@ -163,11 +184,17 @@ export function MesaStagingTab({ sessaoId }: Props) {
       {/* Aviso PR6.2 + botões disabled */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs flex-wrap">
         <span className="text-amber-900">
-          ⓘ Promoção real será habilitada em PR6.2. Reversão em PR6.3.
+          ⓘ Reversão será habilitada em PR6.3.
         </span>
         <div className="flex gap-2">
-          <Button disabled size="sm" variant="default" className="h-7 text-xs">
-            Promover ao banco real
+          <Button
+            size="sm"
+            variant="default"
+            className="h-7 text-xs"
+            disabled={promovendo}
+            onClick={handlePromover}
+          >
+            {promovendo ? 'Promovendo…' : 'Promover ao banco real'}
           </Button>
           <Button disabled size="sm" variant="outline" className="h-7 text-xs">
             Reverter promovido
