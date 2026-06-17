@@ -239,8 +239,9 @@ export async function gerarStagingDaSessao(
       escopo_negocio: null, // PR6.2 resolve via lookup no plano se necessário
       descricao: aprov.descricao ?? linha.observacao ?? null,
       observacao: null,
-      favorecido_id: aprov.fornecedorMarcadoNovo ? null : aprov.fornecedorId,
-      favorecido_nome_marcado_novo: aprov.fornecedorMarcadoNovo ? aprov.fornecedorNome : null,
+      // BUGFIX favorecido — destino exige UUID; texto aprovado sem UUID = fornecedor a criar.
+      favorecido_id: aprov.fornecedorId ?? null,
+      favorecido_nome_marcado_novo: aprov.fornecedorId ? null : (aprov.fornecedorNome?.trim() || null),
       ofx_extrato_id: ehOrfao ? null : aprov.ofxIdVinculado,
       produto: aprov.produto,
       origem_aprovacao: (ehOrfao ? 'excel_orfao' : aprov.origem_aprovacao) as OrigemAprovacaoStaging,
