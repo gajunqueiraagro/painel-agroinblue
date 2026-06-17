@@ -1,5 +1,5 @@
-import { useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1670,7 +1670,7 @@ export function MesaPareamentoModal({
                             excel={linhaAtiva.fornecedor}
                             fin={
                               <FornecedorInline
-                                catalogo={catalogo}
+                                clienteId={clienteId}
                                 valor={payloadAtivo.fornecedorNome}
                                 excelOriginal={linhaAtiva.fornecedor}
                                 marcadoNovo={payloadAtivo.fornecedorMarcadoNovo}
@@ -2258,8 +2258,8 @@ function CampoLinha({ label, cols, status }: {
 
 // PR-4A — Resultado Fornecedor inline: Command compacto em popover (não cresce a linha).
 // Escreve direto no correcao do par via onPick. Lógica relocada do FormularioCorrecao.
-function FornecedorInline({ catalogo, valor, excelOriginal, marcadoNovo, vinculadoId, disabled, onPick }: {
-  catalogo: CatalogoCliente | undefined;
+function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vinculadoId, disabled, onPick }: {
+  clienteId: string;
   valor: string | null;
   excelOriginal: string | null;
   marcadoNovo: boolean;
@@ -2269,17 +2269,32 @@ function FornecedorInline({ catalogo, valor, excelOriginal, marcadoNovo, vincula
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
-  const filtrados = useMemo(() => {
-    const q = busca.toLowerCase().trim();
-    if (!q || q.length < 2) return [];
-    return (catalogo?.fornecedores ?? [])
-      .filter((f) =>
-        f.nome.toLowerCase().includes(q)
-        || (f.nome_normalizado ?? '').includes(q)
-        || (f.aliases ?? []).some((a) => a.toLowerCase().includes(q)),
-      )
-      .slice(0, 5);
-  }, [busca, catalogo]);
+  // PR-P2 — typeahead server-side: não depende do catálogo client-side (1000).
+  // Mesmo padrão do FornecedorSelect shared: debounce 300ms + ilike + limit 50.
+  const [buscaDebounced, setBuscaDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setBuscaDebounced(busca), 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+  const { data: filtrados = [], isFetching } = useQuery({
+    queryKey: ['mesa-fornecedores-busca', clienteId, buscaDebounced] as const,
+    enabled: !!clienteId && buscaDebounced.trim().length >= 2,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const safe = buscaDebounced.trim().replace(/[%,()]/g, ' ').trim();
+      if (!safe) return [];
+      const { data, error } = await supabase
+        .from('financeiro_fornecedores')
+        .select('id, nome')
+        .eq('cliente_id', clienteId)
+        .eq('ativo', true)
+        .or(`nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%`)
+        .order('nome', { ascending: true })
+        .limit(50);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
   const mostrarExcel = !!excelOriginal && !filtrados.some((f) => f.nome.toLowerCase() === excelOriginal.toLowerCase());
   const mostrarNovo = busca.trim().length >= 2
     && !filtrados.some((f) => f.nome.toLowerCase() === busca.trim().toLowerCase())
@@ -2299,7 +2314,9 @@ function FornecedorInline({ catalogo, valor, excelOriginal, marcadoNovo, vincula
         <Command shouldFilter={false}>
           <CommandInput value={busca} onValueChange={setBusca} placeholder="Buscar fornecedor…" className="text-[11px] h-7" />
           <CommandList className="max-h-44">
-            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">Digite ao menos 2 caracteres</CommandEmpty>
+            <CommandEmpty className="py-2 text-[10px] text-center text-muted-foreground">
+              {busca.trim().length < 2 ? 'Digite ao menos 2 caracteres' : isFetching ? 'Buscando…' : 'Nenhum fornecedor encontrado'}
+            </CommandEmpty>
             {mostrarExcel && excelOriginal && (
               <CommandGroup heading="Criar do Excel">
                 <CommandItem value={`excel|${excelOriginal}`} className="text-[11px]"
