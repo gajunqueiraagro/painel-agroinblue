@@ -202,75 +202,103 @@ export function MesaStagingTab({ sessaoId }: Props) {
         </div>
       </div>
 
-      {/* Tabela preview financeiro */}
-      <Card className="p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/40 text-[10px] uppercase tracking-wide">
-              <tr>
-                <th className="text-left p-2 w-14">Data</th>
-                <th className="text-center p-2 w-10">Tipo</th>
-                <th className="text-left p-2">Conta</th>
-                <th className="text-left p-2">Favorecido</th>
-                <th className="text-left p-2">Categoria</th>
-                <th className="text-right p-2 w-32">Valor</th>
-                <th className="text-center p-2 w-20">Origem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staging.map((row) => (
-                <LinhaPreview key={row.staging_id} row={row} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* PR-Staging-UX — cards (1 card = 1 lançamento staging) */}
+      <div className="space-y-2">
+        {staging.map((row) => (
+          <CardLinha key={row.staging_id} row={row} />
+        ))}
+      </div>
     </div>
   );
 }
 
-function LinhaPreview({ row }: { row: StagingRow }) {
+function BadgeStatus({ status }: { status: string }) {
+  const map: Record<string, { txt: string; cls: string }> = {
+    pendente:   { txt: 'Pendente',   cls: 'bg-gray-100 text-gray-600' },
+    promovido:  { txt: 'Promovido',  cls: 'bg-emerald-100 text-emerald-700' },
+    descartado: { txt: 'Descartado', cls: 'bg-gray-100 text-gray-500' },
+    erro:       { txt: 'Erro',       cls: 'bg-rose-100 text-rose-700' },
+  };
+  const m = map[status] ?? { txt: status, cls: 'bg-gray-100 text-gray-600' };
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.cls}`}>{m.txt}</span>;
+}
+
+function BadgeConta({ row }: { row: StagingRow }) {
+  const ambasPresentes = !!row.conta_bancaria_id && !!row.conta_resolvida_id;
+  if (!ambasPresentes) {
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">—</span>;
+  }
+  const divergente = row.conta_bancaria_id !== row.conta_resolvida_id;
+  return divergente ? (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-medium">
+      Conta divergente
+    </span>
+  ) : (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+      Conta OK
+    </span>
+  );
+}
+
+function Favorecido({ row }: { row: StagingRow }) {
+  if (row.favorecido_nome_marcado_novo)
+    return (
+      <span className="text-blue-700" title="Fornecedor a criar na promoção">
+        + {row.favorecido_nome_marcado_novo}
+      </span>
+    );
+  if (row.favorecido_nome) return <span>{row.favorecido_nome}</span>;
+  return <span className="text-gray-400">—</span>;
+}
+
+function CardLinha({ row }: { row: StagingRow }) {
   const ehOrfao = row.origem_aprovacao === 'excel_orfao';
   const corValor =
     row.sinal === '-1' ? 'text-rose-700' : row.sinal === '1' ? 'text-emerald-700' : '';
 
   return (
-    <tr
-      className={`border-t hover:bg-muted/20 ${ehOrfao ? 'border-l-2 border-l-amber-400' : ''}`}
-    >
-      <td className="p-2 whitespace-nowrap tabular-nums">{fmtData(row.data_pagamento)}</td>
-      <td className="p-2 text-center">
-        <IconeSinal sinal={row.sinal} />
-      </td>
-      <td className="p-2 truncate max-w-[140px]" title={row.conta_nome ?? ''}>
-        {row.conta_nome ? (
-          row.conta_nome
-        ) : ehOrfao ? (
-          <span className="text-amber-700 text-[10px]">— sem OFX</span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        )}
-      </td>
-      <td className="p-2 truncate max-w-[160px]">
-        {row.favorecido_nome_marcado_novo ? (
-          <span className="text-blue-700" title="Fornecedor a criar na promoção">
-            + {row.favorecido_nome_marcado_novo}
+    <Card className={`p-3 text-xs space-y-2 ${ehOrfao ? 'border-l-2 border-l-amber-400' : ''}`}>
+      {/* Topo: Data | Competência | Valor | Status */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <span className="tabular-nums">
+            <IconeSinal sinal={row.sinal} /> {fmtData(row.data_pagamento)}
           </span>
-        ) : row.favorecido_nome ? (
-          <span title={row.favorecido_nome}>{row.favorecido_nome}</span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        )}
-      </td>
-      <td className="p-2">
-        <Categoria row={row} />
-      </td>
-      <td className={`p-2 text-right whitespace-nowrap font-medium tabular-nums ${corValor}`}>
-        R$ {fmtValor(Number(row.valor))}
-      </td>
-      <td className="p-2 text-center">
-        <BadgeOrigem origem={row.origem_aprovacao} />
-      </td>
-    </tr>
+          <span className="tabular-nums">Comp: {fmtData(row.data_competencia)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`font-semibold tabular-nums ${corValor}`}>R$ {fmtValor(Number(row.valor))}</span>
+          <BadgeStatus status={row.status_promocao} />
+        </div>
+      </div>
+
+      {/* Auditoria de conta */}
+      <div className="flex items-center gap-3 flex-wrap bg-muted/30 rounded px-2 py-1">
+        <span><span className="text-muted-foreground">Escolhida: </span>{row.conta_nome ?? '—'}</span>
+        <span><span className="text-muted-foreground">Resolvida: </span>{row.conta_resolvida_nome ?? '—'}</span>
+        <BadgeConta row={row} />
+      </div>
+
+      {/* Dados principais */}
+      <div className="space-y-0.5">
+        <div><span className="text-muted-foreground">Favorecido: </span><Favorecido row={row} /></div>
+        <div><span className="text-muted-foreground">Produto: </span>{row.produto ?? '—'}</div>
+        <div><span className="text-muted-foreground">Descrição: </span>{row.descricao ?? '—'}</div>
+      </div>
+
+      {/* Classificação */}
+      <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
+        <span>Fazenda: {row.fazenda_nome ?? '—'}</span>
+        <span>·</span>
+        <span><Categoria row={row} /></span>
+      </div>
+
+      {/* Erro de promoção (só se houver) */}
+      {row.erro_promocao && (
+        <div className="text-rose-700 bg-rose-50 rounded px-2 py-1">
+          {row.erro_promocao}
+        </div>
+      )}
+    </Card>
   );
 }

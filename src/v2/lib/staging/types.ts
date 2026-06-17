@@ -47,8 +47,10 @@ export interface StagingRow {
 
   // PR6.1A — campos resolvidos via JOIN no useStaging (opcionais para preservar
   // compatibilidade com código existente que itera StagingRow)
-  conta_nome?: string | null;       // financeiro_contas_bancarias.nome_exibicao
-  favorecido_nome?: string | null;  // financeiro_fornecedores.nome
+  conta_nome?: string | null;            // financeiro_contas_bancarias.nome_exibicao (conta_bancaria_id)
+  conta_resolvida_nome?: string | null;  // financeiro_contas_bancarias.nome_exibicao (conta_resolvida_id)
+  favorecido_nome?: string | null;       // financeiro_fornecedores.nome
+  fazenda_nome?: string | null;          // fazendas.nome
 
   // PR6.2-M0 — auditoria soberana da resolução de conta (Cenário 2).
   // Populado por gerarStagingDaSessao a partir do PR6.2-M0.5.

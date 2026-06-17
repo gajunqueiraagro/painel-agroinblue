@@ -30,13 +30,20 @@ export function useStaging(sessaoId: string | null) {
       if (rows.length === 0) return rows;
 
       const contaIds = Array.from(
-        new Set(rows.map((r) => r.conta_bancaria_id).filter((v): v is string => !!v)),
+        new Set(
+          rows
+            .flatMap((r) => [r.conta_bancaria_id, r.conta_resolvida_id])
+            .filter((v): v is string => !!v),
+        ),
       );
       const favIds = Array.from(
         new Set(rows.map((r) => r.favorecido_id).filter((v): v is string => !!v)),
       );
+      const fazendaIds = Array.from(
+        new Set(rows.map((r) => r.fazenda_id).filter((v): v is string => !!v)),
+      );
 
-      const [contasRes, favsRes] = await Promise.all([
+      const [contasRes, favsRes, fazendasRes] = await Promise.all([
         contaIds.length > 0
           ? sb
               .from('financeiro_contas_bancarias')
@@ -46,9 +53,13 @@ export function useStaging(sessaoId: string | null) {
         favIds.length > 0
           ? sb.from('financeiro_fornecedores').select('id, nome').in('id', favIds)
           : Promise.resolve({ data: [], error: null }),
+        fazendaIds.length > 0
+          ? sb.from('fazendas').select('id, nome').in('id', fazendaIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (contasRes.error) throw contasRes.error;
       if (favsRes.error) throw favsRes.error;
+      if (fazendasRes.error) throw fazendasRes.error;
 
       const contaMap = new Map<string, string>();
       ((contasRes.data ?? []) as Array<{ id: string; nome_exibicao: string | null; nome_conta: string | null }>)
@@ -61,10 +72,17 @@ export function useStaging(sessaoId: string | null) {
         favMap.set(f.id, f.nome ?? '');
       });
 
+      const fazendaMap = new Map<string, string>();
+      ((fazendasRes.data ?? []) as Array<{ id: string; nome: string | null }>).forEach((f) => {
+        fazendaMap.set(f.id, f.nome ?? '');
+      });
+
       return rows.map((r) => ({
         ...r,
         conta_nome: r.conta_bancaria_id ? contaMap.get(r.conta_bancaria_id) ?? null : null,
+        conta_resolvida_nome: r.conta_resolvida_id ? contaMap.get(r.conta_resolvida_id) ?? null : null,
         favorecido_nome: r.favorecido_id ? favMap.get(r.favorecido_id) ?? null : null,
+        fazenda_nome: r.fazenda_id ? fazendaMap.get(r.fazenda_id) ?? null : null,
       }));
     },
   });
