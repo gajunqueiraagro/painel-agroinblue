@@ -27,9 +27,10 @@ export type ContaBancariaRow =
 export type ContaResolvivel = Pick<
   ContaBancariaRow,
   'id' | 'nome_conta' | 'nome_exibicao' | 'banco' | 'agencia' | 'numero_conta'
->;
+> & { aliases?: string[] | null };
 
 export type EstrategiaResolucao =
+  | 'alias'
   | 'agencia_numero'
   | 'substring_exibicao'
   | 'substring_banco';
@@ -42,6 +43,7 @@ export interface ContaResolvida {
 }
 
 const SCORE_POR_ESTRATEGIA: Record<EstrategiaResolucao, number> = {
+  alias: 100, // explícito (cadastro do usuário — match exato normalizado)
   agencia_numero: 100, // canônico (regex Ag+CC)
   substring_exibicao: 70, // semântico (nome do cadastro)
   substring_banco: 40, // residual (banco do cadastro)
@@ -92,6 +94,34 @@ export function resolverContaPorTexto(
   if (texto.length < TAMANHO_MINIMO_TEXTO) return null;
   if (contas.length === 0) return null;
 
+  // Normalização reusada pelas camadas 0, 2 e 3.
+  const normalizar = (s: string): string =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const textoNorm = normalizar(texto);
+
+  // === Camada 0: alias explícito (match exato normalizado) ===
+  // Cadastro do usuário em financeiro_contas_bancarias.aliases (jsonb).
+  // Prioridade máxima e match EXATO (não substring) → sem falso positivo.
+  const hitAlias = contas.find(
+    (c) =>
+      Array.isArray(c.aliases) &&
+      c.aliases.some((a) => normalizar(String(a)) === textoNorm),
+  );
+  if (hitAlias) {
+    return {
+      id: hitAlias.id,
+      nome_exibicao: hitAlias.nome_exibicao ?? hitAlias.nome_conta,
+      estrategia: 'alias',
+      score: SCORE_POR_ESTRATEGIA.alias,
+    };
+  }
+
   // === Camada 1: agencia + numero_conta via regex ===
   // Aceita: "Ag. 8541 C/C 50189 9", "Ag 8541 CC 50189-9", "AG. 8974 C/C 25367"
   const matchAgNum = texto.match(/Ag\.?\s*(\d+)[\s-]*C\/?C\s*(\d+)/i);
@@ -113,17 +143,6 @@ export function resolverContaPorTexto(
       };
     }
   }
-
-  // Normalização reusada nas camadas 2 e 3.
-  const normalizar = (s: string): string =>
-    s
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  const textoNorm = normalizar(texto);
 
   // === Camada 2: nome_exibicao por substring normalizada ===
   const hitExib = contas.find((c) => {

@@ -11,6 +11,7 @@ export interface ContaBancaria {
   conta_digito: string | null;
   fazenda_id: string | null;
   tipo_conta: string | null;
+  aliases: string[] | null;
 }
 
 export interface Fazenda {
@@ -113,7 +114,7 @@ export function useCatalogoCliente(clienteId: string | null) {
         sb
           .from('financeiro_contas_bancarias')
           // PR-H2 — tipo_conta para agrupamento no ContaBancariaSelect.
-          .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, conta_digito, fazenda_id, tipo_conta')
+          .select('id, nome_conta, nome_exibicao, banco, agencia, numero_conta, conta_digito, fazenda_id, tipo_conta, aliases')
           .eq('cliente_id', clienteId)
           .eq('ativa', true)
           .order('ordem_exibicao', { ascending: true })
