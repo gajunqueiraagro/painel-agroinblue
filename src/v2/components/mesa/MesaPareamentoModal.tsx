@@ -1758,26 +1758,38 @@ export function MesaPareamentoModal({
                             (() => {
                               // PR-4A — REUSA o payloadAtivo computado acima (mesma referência do display).
                               const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
-                              return validacaoAtivo.valido ? (
+                              return (
                                 <div className="space-y-1">
-                                  <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
-                                          onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
-                                    <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
-                                  </Button>
-                                  {!parAtivo.ofxIdAtivo && (
-                                    <p className="text-[9px] text-amber-700 text-center leading-tight">
-                                      {ofxEhSugestao
-                                        ? 'OFX exibido como sugestão. Vincule o OFX antes de aprovar.'
-                                        : 'Vincule o OFX antes de aprovar.'}
-                                    </p>
+                                  {/* PR-P1 — vincular OFX sugerido ao par. ANTES da validação:
+                                      vincular independe dos campos classificatórios estarem completos. */}
+                                  {!parAtivo.ofxIdAtivo && ofxEhSugestao && ofxExibir && (
+                                    <Button size="sm" variant="outline" className="w-full justify-center text-[11px] h-7"
+                                            onClick={() => parAtivoKey && trocarOfx(parAtivoKey, ofxExibir.id)}>
+                                      Vincular este OFX ao par
+                                    </Button>
+                                  )}
+                                  {validacaoAtivo.valido ? (
+                                    <>
+                                      <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
+                                              onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
+                                        <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                                      </Button>
+                                      {!parAtivo.ofxIdAtivo && (
+                                        <p className="text-[9px] text-amber-700 text-center leading-tight">
+                                          {ofxEhSugestao
+                                            ? 'OFX exibido como sugestão. Vincule o OFX antes de aprovar.'
+                                            : 'Vincule o OFX antes de aprovar.'}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Badge variant="outline"
+                                           className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
+                                           title={validacaoAtivo.mensagem}>
+                                      Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
+                                    </Badge>
                                   )}
                                 </div>
-                              ) : (
-                                <Badge variant="outline"
-                                       className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
-                                       title={validacaoAtivo.mensagem}>
-                                  Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
-                                </Badge>
                               );
                             })()
                           ) : (
