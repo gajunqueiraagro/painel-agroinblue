@@ -2010,16 +2010,20 @@ export function MesaPareamentoModal({
                     buildFallbacks(top.excelKey, ofx.id, linhasExcel, extratos))
                 : null;
 
-              // PR-OFX-Espelho Passo 2 — mesmo critério (resolveParKeyDoOfx). topValido exige que
-              // parAtivoKey JÁ esteja sincronizado (ponte/toggle) → painelDetalhe() nunca renderiza par stale.
+              // keyResolvida — só alimenta o warn do Ramo 3 (gate P0-B). O render do painel
+              // é por IDENTIDADE (mostrarPainelOfx, abaixo), não por este critério.
               const keyResolvida = resolveParKeyDoOfx(ofx.id);
-              const topValido = keyResolvida !== null && parAtivoKey === keyResolvida;
               if (top && keyResolvida === null) {
                 // Ramo 3 — top existe mas não resolve par válido (data/banco/sinal não batem,
                 // conflito de vínculo, ou par ausente): NUNCA renderiza painel; fallback Conferência.
                 console.warn('[P0-B] OFX sem par válido p/ painel (data/banco/sinal não batem, conflito de vínculo, ou par ausente) → Conferência:', ofx.id, top?.excelKey);
               }
-              return topValido ? (
+              // P0-D — render por IDENTIDADE: mostra o painel se o par ativo aponta de volta
+              // p/ ESTE OFX. Cobre AUTO (sincronizarParaOfx já vinculou o top válido no P0-B)
+              // e MANUAL (botão "Editar" vincula via trocarOfx).
+              const mostrarPainelOfx =
+                parAtivoKey != null && pares.get(parAtivoKey)?.ofxIdAtivo === ofx.id;
+              return mostrarPainelOfx ? (
                 <div className="flex-1 overflow-y-auto space-y-1">
                   {painelDetalhe()}
                 </div>
@@ -2161,17 +2165,15 @@ export function MesaPareamentoModal({
                                     disabled={acaoDesabilitada}
                                     title={validacaoCand.mensagem}
                                     onClick={() => {
-                                      // PR6.2-M0.7 — vincular OFX sugerido ao par ANTES de navegar pro Modo Excel.
-                                      // Sem isso, o par chegava no Excel com ofxIdAtivo=null, exibindo "Sem OFX"
-                                      // e perdendo o contexto da sugestão que motivou o "Corrigir antes".
-                                      // trocarOfx mantém decisao='pendente' — NÃO aprova automaticamente.
+                                      // P0-D — abre o painel editável NO Modo OFX (não navega mais pro Excel).
+                                      // trocarOfx vincula o OFX selecionado ao candidato (ofxIdAtivo = ofx.id — fonte
+                                      // única; mantém decisao='pendente'). iniciarCorrecao abre o modo edição.
                                       trocarOfx(cand.excelKey, ofx.id);
                                       setParAtivoKey(cand.excelKey);
-                                      setModoVisualizacao('excel');
                                       iniciarCorrecao(cand.excelKey);
                                     }}
                                   >
-                                    Corrigir antes
+                                    Editar
                                   </Button>
                                 )}
                               </div>
