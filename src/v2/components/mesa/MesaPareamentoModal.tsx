@@ -737,15 +737,36 @@ export function MesaPareamentoModal({
     return out;
   }, [extratos, linhasExcel, matches]);
 
-  // PR-OFX-Espelho Passo 2 — critério ÚNICO de resolução do par a partir de um OFX:
-  // candidato top → excelKey que resolve par válido (em pares + linhasExcel). null = órfão/inválido.
-  // Fonte única usada pela ponte (seleção), pelo toggle (2.1) e pelo guard do render. Sem useEffect.
+  // Guard do render (Modo OFX). Sem useEffect.
+  // Regra P0-B — só resolve par válido p/ painelDetalhe se TODAS valem:
+  //   (1) candidato top  (2) faixa !== 'nenhum'  (3) par + linha existem
+  //   (4) par.ofxIdAtivo null OU === ofxId (anti-clobber: nunca rouba vínculo de outro OFX).
+  //   (5) sincronização (ofxIdAtivo = ofxId) fica em sincronizarParaOfx.
   const resolveParKeyDoOfx = (ofxId: string | null): string | null => {
     if (!ofxId) return null;
     const t = (candidatosPorOfx.get(ofxId) ?? [])[0] ?? null;
-    return t && t.excelKey && pares.get(t.excelKey)
-      && linhasExcel.some((l) => l.chaveLinha === t.excelKey)
-      ? t.excelKey : null;
+    if (!t || !t.excelKey || t.faixa === 'nenhum') return null;                      // (1)+(2)
+    const par = pares.get(t.excelKey);
+    if (!par || !linhasExcel.some((l) => l.chaveLinha === t.excelKey)) return null;  // (3)
+    if (par.ofxIdAtivo != null && par.ofxIdAtivo !== ofxId) return null;             // (4)
+    return t.excelKey;
+  };
+
+  // Condição (5) da regra P0-B. FONTE ÚNICA: alinhar parK.ofxIdAtivo = ofxId faz
+  // tela, payloadAtivo, consolidarFotografia, aprovação, salvarPares e staging
+  // lerem todos o mesmo vínculo. Só vincula quando ofxIdAtivo == null; nunca
+  // sobrescreve vínculo existente (o gate em resolveParKeyDoOfx já barra conflito).
+  const sincronizarParaOfx = (ofxId: string | null): void => {
+    const key = resolveParKeyDoOfx(ofxId);
+    if (!key || !ofxId) { setParAtivoKey(key); return; }
+    const par = pares.get(key);
+    if (par && par.ofxIdAtivo === ofxId) { setParAtivoKey(key); return; }   // já sincronizado
+    if (par && par.ofxIdAtivo == null && !edicaoBloqueada) {
+      trocarOfx(key, ofxId);                                                // vincula (decisao→'pendente')
+      setParAtivoKey(key);
+      return;
+    }
+    setParAtivoKey(null);   // não pôde sincronizar (sessão bloqueada / estado inesperado) → Conferência
   };
 
   // Contadores específicos do Modo OFX
@@ -1526,8 +1547,8 @@ export function MesaPareamentoModal({
                 onClick={() => {
                   setModoVisualizacao('ofx');
                   // PR-OFX-Espelho Passo 2.1 — sincroniza parAtivoKey com o OFX já pré-selecionado
-                  // ao entrar no Modo OFX (sem reclicar; mesmo critério resolveParKeyDoOfx; sem useEffect).
-                  setParAtivoKey(resolveParKeyDoOfx(ofxAtivoId));
+                  // ao entrar no Modo OFX (sem reclicar; sincroniza o vínculo — P0-B; sem useEffect).
+                  sincronizarParaOfx(ofxAtivoId);
                 }}
                 className="text-[10px] h-6 px-2"
               >
@@ -1913,7 +1934,7 @@ export function MesaPareamentoModal({
                     onClick={() => {
                       setOfxAtivoId(e.id);
                       // PR-OFX-Espelho Passo 2 — ponte: sincroniza parAtivoKey NA SELEÇÃO (não no render).
-                      setParAtivoKey(resolveParKeyDoOfx(e.id));
+                      sincronizarParaOfx(e.id);
                     }}
                     className={cn(
                       // PR6.1F-3 — densidade extrato (mesmo padrão da Lista Excel)
@@ -1983,8 +2004,9 @@ export function MesaPareamentoModal({
               const keyResolvida = resolveParKeyDoOfx(ofx.id);
               const topValido = keyResolvida !== null && parAtivoKey === keyResolvida;
               if (top && keyResolvida === null) {
-                // Ramo 3 — top existe mas não resolve par válido: NUNCA renderiza painel; fallback Conferência.
-                console.warn('[PR-OFX-Espelho Passo 2] OFX com candidato top sem par valido:', ofx.id, top?.excelKey);
+                // Ramo 3 — top existe mas não resolve par válido (faixa fraca, conflito de vínculo,
+                // ou par ausente): NUNCA renderiza painel; fallback Conferência.
+                console.warn('[P0-B] OFX sem par válido p/ painel (faixa fraca, conflito de vínculo, ou par ausente) → Conferência:', ofx.id, top?.excelKey, top?.faixa);
               }
               return topValido ? (
                 <div className="flex-1 overflow-y-auto space-y-1">
