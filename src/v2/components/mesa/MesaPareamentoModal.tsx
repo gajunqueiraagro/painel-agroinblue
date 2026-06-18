@@ -1667,6 +1667,50 @@ export function MesaPareamentoModal({
                 </Button>
               </div>
             )}
+            {/* PR-OFX-Espelho Passo 2.5 — ações EXCLUSIVAS da antiga COL3 DECISÃO, agora no topo
+                (padrão visual do Excel; handlers verbatim; OFX-cêntrico). Approve via candidato e
+                "Faltam" permanecem onde estão (painel/COL2). */}
+            {modoVisualizacao === 'ofx' && ofxAtivoId && (() => {
+              const validacao = ofxValidacoes.get(ofxAtivoId) ?? 'pendente';
+              const consumido = ofxConsumidos.has(ofxAtivoId);
+              if (consumido) {
+                let parKey: string | null = null;
+                pares.forEach((p, k) => {
+                  if (p.decisao === 'aprovado' && p.ofxIdAtivo === ofxAtivoId) parKey = k;
+                });
+                return (
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <span className="text-[10px] text-emerald-700 font-medium">✓ Aprovado via par Excel</span>
+                    {parKey && (
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2"
+                              onClick={() => { if (parKey) desfazer(parKey); }}>
+                        <Undo2 className="h-3 w-3 mr-1" /> Desfazer aprovação
+                      </Button>
+                    )}
+                  </div>
+                );
+              }
+              if (validacao === 'ofx_orfao_validado') {
+                return (
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <span className="text-[10px] text-amber-700 font-medium">⊘ OFX órfão validado</span>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2"
+                            onClick={() => desfazerOfxOrfaoValidado(ofxAtivoId)}>
+                      <Undo2 className="h-3 w-3 mr-1" /> Desfazer
+                    </Button>
+                  </div>
+                );
+              }
+              return (
+                <div className="ml-auto flex items-center gap-1">
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
+                          onClick={() => marcarOfxOrfaoValidado(ofxAtivoId)}
+                          title="Use para rendimentos automáticos, IOF, tarifas, estornos internos — qualquer OFX que nunca terá Excel correspondente.">
+                    ⊘ Marcar OFX órfão validado
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
 
           <TabsContent
@@ -1675,7 +1719,7 @@ export function MesaPareamentoModal({
             forceMount
           >
         <div className={cn("h-full overflow-hidden grid gap-2 p-2",
-          modoVisualizacao === 'excel' ? "grid-cols-[0.85fr_2.65fr]" : "grid-cols-[1.15fr_1.35fr_1fr]")}>
+          modoVisualizacao === 'excel' ? "grid-cols-[0.85fr_2.65fr]" : "grid-cols-[0.85fr_2.65fr]")}>
 
           {modoVisualizacao === 'excel' && <>
 
@@ -2117,78 +2161,6 @@ export function MesaPareamentoModal({
                 </div>
               );
             })()}
-          </Card>
-
-          {/* COL 3 — DECISÃO OFX */}
-          <Card className="p-3 flex flex-col overflow-hidden min-h-[260px] xl:min-h-[320px]">
-            <div className="text-[10px] font-bold uppercase text-muted-foreground pb-2 shrink-0">
-              Decisão
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {!ofxAtivoId ? (
-                <div className="text-center text-muted-foreground italic py-12">
-                  Selecione um OFX
-                </div>
-              ) : (() => {
-                const validacao = ofxValidacoes.get(ofxAtivoId) ?? 'pendente';
-                const consumido = ofxConsumidos.has(ofxAtivoId);
-
-                if (consumido) {
-                  // Encontrar qual par consumiu
-                  let parKey: string | null = null;
-                  pares.forEach((p, k) => {
-                    if (p.decisao === 'aprovado' && p.ofxIdAtivo === ofxAtivoId) parKey = k;
-                  });
-                  return (
-                    <>
-                      <div className="text-[11px] text-emerald-700 px-1">
-                        ✓ Aprovado via par Excel
-                      </div>
-                      {parKey && (
-                        <Button
-                          size="sm" variant="ghost"
-                          className="w-full justify-start text-xs h-8"
-                          onClick={() => { if (parKey) desfazer(parKey); }}
-                        >
-                          <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer aprovação
-                        </Button>
-                      )}
-                    </>
-                  );
-                }
-
-                if (validacao === 'ofx_orfao_validado') {
-                  return (
-                    <Button
-                      size="sm" variant="ghost"
-                      className="w-full justify-start text-xs h-8"
-                      onClick={() => desfazerOfxOrfaoValidado(ofxAtivoId)}
-                    >
-                      <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer (ofx órfão validado)
-                    </Button>
-                  );
-                }
-
-                return (
-                  <>
-                    <div className="text-[11px] text-muted-foreground px-1 pb-1">
-                      OFX pendente. Aprove via candidato Excel (col. 2) ou marque como órfão validado:
-                    </div>
-                    <Button
-                      size="sm" variant="outline"
-                      className="w-full justify-start text-xs h-8"
-                      onClick={() => marcarOfxOrfaoValidado(ofxAtivoId)}
-                    >
-                      ⊘ Marcar como OFX órfão validado
-                    </Button>
-                    <div className="text-[10px] text-muted-foreground px-1 pt-1">
-                      Use para: rendimentos automáticos, IOF, tarifas, estornos internos —
-                      qualquer OFX que nunca terá Excel correspondente.
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
           </Card>
 
           </>}
