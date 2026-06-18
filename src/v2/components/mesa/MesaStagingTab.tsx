@@ -95,6 +95,28 @@ export function MesaStagingTab({ sessaoId }: Props) {
   const { data: staging = [], isLoading, error } = useStaging(sessaoId);
   const queryClient = useQueryClient();
   const [promovendo, setPromovendo] = useState(false);
+  const [descartandoId, setDescartandoId] = useState<string | null>(null);
+
+  // P0-C — descarte de linha pendente (somente 'pendente'; promovido fica para a RPC de reversão PR6.3).
+  async function handleDescartar(stagingId: string) {
+    if (!window.confirm('Descartar esta linha? Ela não será promovida e segue visível para auditoria.')) return;
+    setDescartandoId(stagingId);
+    try {
+      const sb = supabase as any; // mesmo padrão do useStaging (tabelas v2 não tipadas)
+      const { error } = await sb
+        .from('mesa_lancamento_staging')
+        .update({ status_promocao: 'descartado' })
+        .eq('staging_id', stagingId)
+        .eq('status_promocao', 'pendente');
+      if (error) throw error;
+      toast.success('Linha descartada.');
+      await queryClient.invalidateQueries({ queryKey: ['mesa-staging', sessaoId] });
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Falha ao descartar.');
+    } finally {
+      setDescartandoId(null);
+    }
+  }
 
   // PR6.2-F1 — promoção transacional da sessão inteira via RPC fn_promover_staging.
   async function handlePromover() {
@@ -202,10 +224,15 @@ export function MesaStagingTab({ sessaoId }: Props) {
         </div>
       </div>
 
-      {/* PR-Staging-UX — cards (1 card = 1 lançamento staging) */}
-      <div className="space-y-2">
+      {/* PR-Staging-UX / P0-C — linhas compactas. Descartados ficam visíveis (auditoria). */}
+      <div className="space-y-1">
         {staging.map((row) => (
-          <CardLinha key={row.staging_id} row={row} />
+          <CardLinha
+            key={row.staging_id}
+            row={row}
+            onDescartar={handleDescartar}
+            descartando={descartandoId === row.staging_id}
+          />
         ))}
       </div>
     </div>
@@ -251,53 +278,66 @@ function Favorecido({ row }: { row: StagingRow }) {
   return <span className="text-gray-400">—</span>;
 }
 
-function CardLinha({ row }: { row: StagingRow }) {
+function CardLinha({
+  row,
+  onDescartar,
+  descartando,
+}: {
+  row: StagingRow;
+  onDescartar: (id: string) => void;
+  descartando: boolean;
+}) {
   const ehOrfao = row.origem_aprovacao === 'excel_orfao';
   const corValor =
     row.sinal === '-1' ? 'text-rose-700' : row.sinal === '1' ? 'text-emerald-700' : '';
+  const descartado = row.status_promocao === 'descartado';
+  const podeDescartar = row.status_promocao === 'pendente';
 
   return (
-    <Card className={`p-3 text-xs space-y-2 ${ehOrfao ? 'border-l-2 border-l-amber-400' : ''}`}>
-      {/* Topo: Data | Competência | Valor | Status */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <span className="tabular-nums">
-            <IconeSinal sinal={row.sinal} /> {fmtData(row.data_pagamento)}
-          </span>
-          <span className="tabular-nums">Comp: {fmtData(row.data_competencia)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`font-semibold tabular-nums ${corValor}`}>R$ {fmtValor(Number(row.valor))}</span>
-          <BadgeStatus status={row.status_promocao} />
-        </div>
-      </div>
-
-      {/* Auditoria de conta */}
-      <div className="flex items-center gap-3 flex-wrap bg-muted/30 rounded px-2 py-1">
-        <span><span className="text-muted-foreground">Escolhida: </span>{row.conta_nome ?? '—'}</span>
-        <span><span className="text-muted-foreground">Resolvida: </span>{row.conta_resolvida_nome ?? '—'}</span>
+    <Card
+      className={`px-2 py-1 text-xs ${ehOrfao ? 'border-l-2 border-l-amber-400' : ''} ${descartado ? 'opacity-60' : ''}`}
+    >
+      {/* Linha principal: sinal+data · valor · categoria · conta · divergência · status · descartar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="tabular-nums shrink-0">
+          <IconeSinal sinal={row.sinal} /> {fmtData(row.data_pagamento)}
+        </span>
+        <span className={`font-semibold tabular-nums shrink-0 ${corValor}`}>R$ {fmtValor(Number(row.valor))}</span>
+        <span className="min-w-0 truncate"><Categoria row={row} /></span>
+        <span className="text-muted-foreground min-w-0 truncate" title={row.conta_nome ?? ''}>
+          {row.conta_nome ?? '—'}
+        </span>
         <BadgeConta row={row} />
+        <span className="ml-auto flex items-center gap-1.5 shrink-0">
+          <BadgeStatus status={row.status_promocao} />
+          {podeDescartar && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 px-1.5 text-[10px] text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              disabled={descartando}
+              onClick={() => onDescartar(row.staging_id)}
+            >
+              {descartando ? '…' : 'Descartar'}
+            </Button>
+          )}
+        </span>
       </div>
 
-      {/* Dados principais */}
-      <div className="space-y-0.5">
-        <div><span className="text-muted-foreground">Favorecido: </span><Favorecido row={row} /></div>
-        <div><span className="text-muted-foreground">Produto: </span>{row.produto ?? '—'}</div>
-        <div><span className="text-muted-foreground">Descrição: </span>{row.descricao ?? '—'}</div>
-      </div>
-
-      {/* Classificação */}
-      <div className="flex items-center gap-3 flex-wrap text-muted-foreground">
-        <span>Fazenda: {row.fazenda_nome ?? '—'}</span>
-        <span>·</span>
-        <span><Categoria row={row} /></span>
+      {/* Linha secundária: favorecido · origem · produto · descrição · fazenda · competência · conta resolvida */}
+      <div className="flex items-center gap-x-2 flex-wrap text-[11px] leading-tight text-muted-foreground">
+        <span className="text-foreground"><Favorecido row={row} /></span>
+        <BadgeOrigem origem={row.origem_aprovacao} />
+        <span>· Prod: {row.produto ?? '—'}</span>
+        <span className="min-w-0 truncate" title={row.descricao ?? ''}>· {row.descricao ?? '—'}</span>
+        <span>· Faz: {row.fazenda_nome ?? '—'}</span>
+        <span>· Comp: {fmtData(row.data_competencia)}</span>
+        <span>· Resolv: {row.conta_resolvida_nome ?? '—'}</span>
       </div>
 
       {/* Erro de promoção (só se houver) */}
       {row.erro_promocao && (
-        <div className="text-rose-700 bg-rose-50 rounded px-2 py-1">
-          {row.erro_promocao}
-        </div>
+        <div className="text-rose-700 text-[11px] leading-tight">{row.erro_promocao}</div>
       )}
     </Card>
   );
