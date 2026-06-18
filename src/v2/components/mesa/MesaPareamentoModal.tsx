@@ -1080,6 +1080,181 @@ export function MesaPareamentoModal({
     return `${meses[idx]}/${ano}`;
   })();
 
+  // PR-OFX-Espelho Passo 1 — painel de detalhe extraído VERBATIM do IIFE inline
+  // do branch 'excel' (refactor puro; fecha sobre o estado/derivados do componente).
+  const painelDetalhe = () => {
+                    const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
+                    const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
+                    if (!parAtivoKey) return null;
+                    // PR-4A — payload UMA vez: o que aparece = o que valida = o que persiste.
+                    const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
+                    const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
+                    // Natureza derivada do sinal (editável = PR-4B). Filtra opções de Subcentro.
+                    const naturezaAlvoAtiva: NaturezaSubcentro | null =
+                      linhaAtiva.sinal === 'entrada' ? 'entrada' : linhaAtiva.sinal === 'saida' ? 'saida' : null;
+                    return (
+                      <>
+                        {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
+                        <div className="space-y-0">
+                          <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
+                            <span>Campo</span>
+                            <span title={ofxEhSugestao ? 'OFX sugerido, ainda não vinculado' : undefined}>
+                              OFX{ofxEhSugestao && <span className="ml-1 normal-case text-amber-600 font-normal">• sugerido</span>}
+                            </span>
+                            <span>Excel</span><span>Resultado</span>
+                          </div>
+                          {/* Data/Valor/Banco — leitura (não editável). OFX = ofxExibir (vínculo ou sugestão) */}
+                          <MatrizLinha campo="Data"
+                            ofx={ofxExibir ? fmtData(ofxExibir.data_movimento) : null}
+                            excel={fmtData(linhaAtiva.dataPagamento)}
+                            fin={fmtData(linhaAtiva.dataPagamento)} />
+                          <MatrizLinha campo="Valor"
+                            ofx={ofxExibir ? fmtBRL(ofxExibir.valor) : null}
+                            excel={fmtBRL(exValor)}
+                            fin={fmtBRL(exValor)} />
+                          <MatrizLinha campo="Banco"
+                            ofx={ofxExibir ? (contaNome ?? '—') : null}
+                            excel={linhaAtiva.contaTexto}
+                            fin={contaNome} />
+                          {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Command oficial */}
+                          <MatrizLinha campo="Fornecedor"
+                            ofx={ofxExibir?.descricao ?? null}
+                            excel={linhaAtiva.fornecedor}
+                            fin={
+                              <FornecedorInline
+                                clienteId={clienteId}
+                                valor={payloadAtivo.fornecedorNome}
+                                excelOriginal={linhaAtiva.fornecedor}
+                                marcadoNovo={payloadAtivo.fornecedorMarcadoNovo}
+                                vinculadoId={payloadAtivo.fornecedorId}
+                                disabled={edicaoBloqueada}
+                                onPick={(patch) => editarCorrecaoAtiva(patch)}
+                              />
+                            } />
+                          <MatrizLinha campo="Fazenda"
+                            excel={linhaAtiva.fazendaTexto}
+                            fin={
+                              <Select value={payloadAtivo.fazendaNome ?? undefined}
+                                      onValueChange={(nome) => {
+                                        const f = (catalogo?.fazendas ?? []).find((x) => x.nome === nome);
+                                        editarCorrecaoAtiva({ fazendaId: f?.id ?? null, fazendaNome: nome });
+                                      }}>
+                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                                <SelectContent>
+                                  {(catalogo?.fazendas ?? []).map((f) => (
+                                    <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            } />
+                          <MatrizLinha campo="Subcentro"
+                            excel={linhaAtiva.subcentro}
+                            fin={
+                              <SubcentroInline
+                                catalogo={catalogo}
+                                valor={payloadAtivo.subcentro}
+                                naturezaAlvo={naturezaAlvoAtiva}
+                                disabled={edicaoBloqueada}
+                                onPick={(patch) => editarCorrecaoAtiva(patch)}
+                              />
+                            } />
+                          <MatrizLinha campo="Produto"
+                            excel={linhaAtiva.produto}
+                            fin={
+                              <Input value={payloadAtivo.produto ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ produto: e.target.value || null })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
+                          <MatrizLinha campo="Data Comp."
+                            excel={fmtData(linhaAtiva.dataCompetencia)}
+                            fin={
+                              <Input type="date" value={payloadAtivo.dataCompetencia ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ dataCompetencia: e.target.value || null })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" />
+                            } />
+                          {/* PR-DocObsEditavel — Documento fica salvo na sessão (correcao_json). NÃO vai para
+                              financeiro_lancamentos_v2 ainda: o mapeamento documento→lançamento final nasce
+                              no PR6.2-M1 (promoção real via RPC). */}
+                          <MatrizLinha campo="Documento"
+                            excel={linhaAtiva.documento}
+                            fin={
+                              <Input value={parAtivo.correcao?.documento ?? linhaAtiva.documento ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ documento: e.target.value })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
+                          <MatrizLinha campo="Obs / Histórico"
+                            excel={linhaAtiva.observacao}
+                            fin={
+                              <Input value={parAtivo.correcao?.descricao ?? linhaAtiva.observacao ?? ''}
+                                     onChange={(e) => editarCorrecaoAtiva({ descricao: e.target.value })}
+                                     disabled={edicaoBloqueada}
+                                     className="h-7 text-[11px]" placeholder="—" />
+                            } />
+                        </div>
+
+                        {/* RODAPÉ — só o CTA primário; secundários (exceção) migraram pra barra de tabs */}
+                        <div className="border-t pt-1.5 space-y-1">
+                          {parAtivo.correcao && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">✎ Corrigido</span>
+                              <Button size="sm" variant="ghost" className="h-5 text-[10px]"
+                                      onClick={() => parAtivoKey && limparCorrecao(parAtivoKey)}>
+                                Limpar correção
+                              </Button>
+                            </div>
+                          )}
+                          {parAtivo.decisao === 'pendente' ? (
+                            (() => {
+                              // PR-4A — REUSA o payloadAtivo computado acima (mesma referência do display).
+                              const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
+                              return (
+                                <div className="space-y-1">
+                                  {/* PR-P1 — vincular OFX sugerido ao par. ANTES da validação:
+                                      vincular independe dos campos classificatórios estarem completos. */}
+                                  {!parAtivo.ofxIdAtivo && ofxEhSugestao && ofxExibir && (
+                                    <Button size="sm" variant="outline" className="w-full justify-center text-[11px] h-7"
+                                            onClick={() => parAtivoKey && trocarOfx(parAtivoKey, ofxExibir.id)}>
+                                      Vincular este OFX ao par
+                                    </Button>
+                                  )}
+                                  {validacaoAtivo.valido ? (
+                                    <>
+                                      <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
+                                              onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
+                                        <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
+                                      </Button>
+                                      {!parAtivo.ofxIdAtivo && (
+                                        <p className="text-[9px] text-amber-700 text-center leading-tight">
+                                          {ofxEhSugestao
+                                            ? 'OFX exibido como sugestão. Vincule o OFX antes de aprovar.'
+                                            : 'Vincule o OFX antes de aprovar.'}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Badge variant="outline"
+                                           className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
+                                           title={validacaoAtivo.mensagem}>
+                                      Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <Button size="sm" variant="ghost" className="w-full justify-center text-[11px] h-7"
+                                    onClick={() => desfazer(parAtivoKey)}>
+                              <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1800px] h-[92vh] max-h-[92vh] p-0 flex flex-col">
@@ -1630,178 +1805,7 @@ export function MesaPareamentoModal({
               ) : (
                 <>
                   {/* PASSO 3 — painel único: BLOCO A (OFX soberano) + BLOCO C (Campo|Excel|Resultado) */}
-                  {(() => {
-                    const fmtData = (d?: string | null) => d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
-                    const exValor = (linhaAtiva.sinal === 'entrada' ? 1 : -1) * (linhaAtiva.valorCentavos / 100);
-                    if (!parAtivoKey) return null;
-                    // PR-4A — payload UMA vez: o que aparece = o que valida = o que persiste.
-                    const fallbacksAtivo = buildFallbacks(parAtivoKey, parAtivo.ofxIdAtivo, linhasExcel, extratos);
-                    const payloadAtivo = consolidarFotografia(sugAtiva ?? undefined, parAtivo.correcao, parAtivo.ofxIdAtivo, fallbacksAtivo);
-                    // Natureza derivada do sinal (editável = PR-4B). Filtra opções de Subcentro.
-                    const naturezaAlvoAtiva: NaturezaSubcentro | null =
-                      linhaAtiva.sinal === 'entrada' ? 'entrada' : linhaAtiva.sinal === 'saida' ? 'saida' : null;
-                    return (
-                      <>
-                        {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
-                        <div className="space-y-0">
-                          <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
-                            <span>Campo</span>
-                            <span title={ofxEhSugestao ? 'OFX sugerido, ainda não vinculado' : undefined}>
-                              OFX{ofxEhSugestao && <span className="ml-1 normal-case text-amber-600 font-normal">• sugerido</span>}
-                            </span>
-                            <span>Excel</span><span>Resultado</span>
-                          </div>
-                          {/* Data/Valor/Banco — leitura (não editável). OFX = ofxExibir (vínculo ou sugestão) */}
-                          <MatrizLinha campo="Data"
-                            ofx={ofxExibir ? fmtData(ofxExibir.data_movimento) : null}
-                            excel={fmtData(linhaAtiva.dataPagamento)}
-                            fin={fmtData(linhaAtiva.dataPagamento)} />
-                          <MatrizLinha campo="Valor"
-                            ofx={ofxExibir ? fmtBRL(ofxExibir.valor) : null}
-                            excel={fmtBRL(exValor)}
-                            fin={fmtBRL(exValor)} />
-                          <MatrizLinha campo="Banco"
-                            ofx={ofxExibir ? (contaNome ?? '—') : null}
-                            excel={linhaAtiva.contaTexto}
-                            fin={contaNome} />
-                          {/* Fornecedor — OFX = descrição bancária (evidência); Resultado = Command oficial */}
-                          <MatrizLinha campo="Fornecedor"
-                            ofx={ofxExibir?.descricao ?? null}
-                            excel={linhaAtiva.fornecedor}
-                            fin={
-                              <FornecedorInline
-                                clienteId={clienteId}
-                                valor={payloadAtivo.fornecedorNome}
-                                excelOriginal={linhaAtiva.fornecedor}
-                                marcadoNovo={payloadAtivo.fornecedorMarcadoNovo}
-                                vinculadoId={payloadAtivo.fornecedorId}
-                                disabled={edicaoBloqueada}
-                                onPick={(patch) => editarCorrecaoAtiva(patch)}
-                              />
-                            } />
-                          <MatrizLinha campo="Fazenda"
-                            excel={linhaAtiva.fazendaTexto}
-                            fin={
-                              <Select value={payloadAtivo.fazendaNome ?? undefined}
-                                      onValueChange={(nome) => {
-                                        const f = (catalogo?.fazendas ?? []).find((x) => x.nome === nome);
-                                        editarCorrecaoAtiva({ fazendaId: f?.id ?? null, fazendaNome: nome });
-                                      }}>
-                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                                <SelectContent>
-                                  {(catalogo?.fazendas ?? []).map((f) => (
-                                    <SelectItem key={f.id} value={f.nome} className="text-[11px]">{f.nome}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            } />
-                          <MatrizLinha campo="Subcentro"
-                            excel={linhaAtiva.subcentro}
-                            fin={
-                              <SubcentroInline
-                                catalogo={catalogo}
-                                valor={payloadAtivo.subcentro}
-                                naturezaAlvo={naturezaAlvoAtiva}
-                                disabled={edicaoBloqueada}
-                                onPick={(patch) => editarCorrecaoAtiva(patch)}
-                              />
-                            } />
-                          <MatrizLinha campo="Produto"
-                            excel={linhaAtiva.produto}
-                            fin={
-                              <Input value={payloadAtivo.produto ?? ''}
-                                     onChange={(e) => editarCorrecaoAtiva({ produto: e.target.value || null })}
-                                     disabled={edicaoBloqueada}
-                                     className="h-7 text-[11px]" placeholder="—" />
-                            } />
-                          <MatrizLinha campo="Data Comp."
-                            excel={fmtData(linhaAtiva.dataCompetencia)}
-                            fin={
-                              <Input type="date" value={payloadAtivo.dataCompetencia ?? ''}
-                                     onChange={(e) => editarCorrecaoAtiva({ dataCompetencia: e.target.value || null })}
-                                     disabled={edicaoBloqueada}
-                                     className="h-7 text-[11px]" />
-                            } />
-                          {/* PR-DocObsEditavel — Documento fica salvo na sessão (correcao_json). NÃO vai para
-                              financeiro_lancamentos_v2 ainda: o mapeamento documento→lançamento final nasce
-                              no PR6.2-M1 (promoção real via RPC). */}
-                          <MatrizLinha campo="Documento"
-                            excel={linhaAtiva.documento}
-                            fin={
-                              <Input value={parAtivo.correcao?.documento ?? linhaAtiva.documento ?? ''}
-                                     onChange={(e) => editarCorrecaoAtiva({ documento: e.target.value })}
-                                     disabled={edicaoBloqueada}
-                                     className="h-7 text-[11px]" placeholder="—" />
-                            } />
-                          <MatrizLinha campo="Obs / Histórico"
-                            excel={linhaAtiva.observacao}
-                            fin={
-                              <Input value={parAtivo.correcao?.descricao ?? linhaAtiva.observacao ?? ''}
-                                     onChange={(e) => editarCorrecaoAtiva({ descricao: e.target.value })}
-                                     disabled={edicaoBloqueada}
-                                     className="h-7 text-[11px]" placeholder="—" />
-                            } />
-                        </div>
-
-                        {/* RODAPÉ — só o CTA primário; secundários (exceção) migraram pra barra de tabs */}
-                        <div className="border-t pt-1.5 space-y-1">
-                          {parAtivo.correcao && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase text-blue-700 dark:text-blue-300">✎ Corrigido</span>
-                              <Button size="sm" variant="ghost" className="h-5 text-[10px]"
-                                      onClick={() => parAtivoKey && limparCorrecao(parAtivoKey)}>
-                                Limpar correção
-                              </Button>
-                            </div>
-                          )}
-                          {parAtivo.decisao === 'pendente' ? (
-                            (() => {
-                              // PR-4A — REUSA o payloadAtivo computado acima (mesma referência do display).
-                              const validacaoAtivo = validarAprovacao(payloadAtivo, linhaAtiva);
-                              return (
-                                <div className="space-y-1">
-                                  {/* PR-P1 — vincular OFX sugerido ao par. ANTES da validação:
-                                      vincular independe dos campos classificatórios estarem completos. */}
-                                  {!parAtivo.ofxIdAtivo && ofxEhSugestao && ofxExibir && (
-                                    <Button size="sm" variant="outline" className="w-full justify-center text-[11px] h-7"
-                                            onClick={() => parAtivoKey && trocarOfx(parAtivoKey, ofxExibir.id)}>
-                                      Vincular este OFX ao par
-                                    </Button>
-                                  )}
-                                  {validacaoAtivo.valido ? (
-                                    <>
-                                      <Button size="sm" variant="default" className="w-full justify-center text-[11px] h-7"
-                                              onClick={() => aprovarPar(parAtivoKey)} disabled={!parAtivo.ofxIdAtivo}>
-                                        <Check className="h-3.5 w-3.5 mr-2" /> Aprovar par
-                                      </Button>
-                                      {!parAtivo.ofxIdAtivo && (
-                                        <p className="text-[9px] text-amber-700 text-center leading-tight">
-                                          {ofxEhSugestao
-                                            ? 'OFX exibido como sugestão. Vincule o OFX antes de aprovar.'
-                                            : 'Vincule o OFX antes de aprovar.'}
-                                        </p>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <Badge variant="outline"
-                                           className="text-amber-700 bg-amber-50 border-amber-200 text-[9px] h-4 leading-none font-normal whitespace-normal text-left"
-                                           title={validacaoAtivo.mensagem}>
-                                      Faltam p/ aprovar: {validacaoAtivo.camposFaltantes.join(', ')}
-                                    </Badge>
-                                  )}
-                                </div>
-                              );
-                            })()
-                          ) : (
-                            <Button size="sm" variant="ghost" className="w-full justify-center text-[11px] h-7"
-                                    onClick={() => desfazer(parAtivoKey)}>
-                              <Undo2 className="h-3.5 w-3.5 mr-2" /> Desfazer ({parAtivo.decisao})
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
+                  {painelDetalhe()}
                 </>
               )}
             </div>
