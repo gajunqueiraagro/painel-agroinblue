@@ -737,18 +737,29 @@ export function MesaPareamentoModal({
     return out;
   }, [extratos, linhasExcel, matches]);
 
-  // Guard do render (Modo OFX). Sem useEffect.
-  // Regra P0-B — só resolve par válido p/ painelDetalhe se TODAS valem:
-  //   (1) candidato top  (2) faixa !== 'nenhum'  (3) par + linha existem
-  //   (4) par.ofxIdAtivo null OU === ofxId (anti-clobber: nunca rouba vínculo de outro OFX).
-  //   (5) sincronização (ofxIdAtivo = ofxId) fica em sincronizarParaOfx.
+  // Guard do render (Modo OFX). Sem useEffect. Gate OPERACIONAL (sem score/faixa):
+  // candidato existe (valor já casado) + DATA igual + BANCO igual + SINAL coerente
+  // + par resolve + par disponível (anti-clobber). A sincronização (7) é em sincronizarParaOfx.
   const resolveParKeyDoOfx = (ofxId: string | null): string | null => {
     if (!ofxId) return null;
+    const ofx = extratos.find((e) => e.id === ofxId) ?? null;
+    if (!ofx) return null;
     const t = (candidatosPorOfx.get(ofxId) ?? [])[0] ?? null;
-    if (!t || !t.excelKey || t.faixa === 'nenhum') return null;                      // (1)+(2)
+    if (!t || !t.excelKey || !t.linha) return null;                                   // (1)
     const par = pares.get(t.excelKey);
-    if (!par || !linhasExcel.some((l) => l.chaveLinha === t.excelKey)) return null;  // (3)
-    if (par.ofxIdAtivo != null && par.ofxIdAtivo !== ofxId) return null;             // (4)
+    if (!par || !linhasExcel.some((l) => l.chaveLinha === t.excelKey)) return null;    // (5)
+    // (2) DATA igual (exata)
+    const dataExcel = t.linha.dataPagamento ?? t.linha.dataCompetencia;
+    if (!dataExcel || dataExcel !== ofx.data_movimento) return null;
+    // (3) BANCO igual — reusa o mapa de resolução que já existe no modal
+    const contaExcelId = resolucaoPorContaTexto.get(t.linha.contaTexto ?? '')?.id ?? null;
+    if (!contaExcelId || contaExcelId !== (sessaoCompleta?.sessao.conta_bancaria_id ?? null)) return null;
+    // (4) SINAL coerente
+    const sinalCoerente =
+      (t.linha.sinal === 'entrada' && ofx.valor > 0) || (t.linha.sinal === 'saida' && ofx.valor < 0);
+    if (!sinalCoerente) return null;
+    // (6) anti-clobber
+    if (par.ofxIdAtivo != null && par.ofxIdAtivo !== ofxId) return null;
     return t.excelKey;
   };
 
@@ -2004,9 +2015,9 @@ export function MesaPareamentoModal({
               const keyResolvida = resolveParKeyDoOfx(ofx.id);
               const topValido = keyResolvida !== null && parAtivoKey === keyResolvida;
               if (top && keyResolvida === null) {
-                // Ramo 3 — top existe mas não resolve par válido (faixa fraca, conflito de vínculo,
-                // ou par ausente): NUNCA renderiza painel; fallback Conferência.
-                console.warn('[P0-B] OFX sem par válido p/ painel (faixa fraca, conflito de vínculo, ou par ausente) → Conferência:', ofx.id, top?.excelKey, top?.faixa);
+                // Ramo 3 — top existe mas não resolve par válido (data/banco/sinal não batem,
+                // conflito de vínculo, ou par ausente): NUNCA renderiza painel; fallback Conferência.
+                console.warn('[P0-B] OFX sem par válido p/ painel (data/banco/sinal não batem, conflito de vínculo, ou par ausente) → Conferência:', ofx.id, top?.excelKey);
               }
               return topValido ? (
                 <div className="flex-1 overflow-y-auto space-y-1">
