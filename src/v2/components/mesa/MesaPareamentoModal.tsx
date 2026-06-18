@@ -737,6 +737,17 @@ export function MesaPareamentoModal({
     return out;
   }, [extratos, linhasExcel, matches]);
 
+  // PR-OFX-Espelho Passo 2 — critério ÚNICO de resolução do par a partir de um OFX:
+  // candidato top → excelKey que resolve par válido (em pares + linhasExcel). null = órfão/inválido.
+  // Fonte única usada pela ponte (seleção), pelo toggle (2.1) e pelo guard do render. Sem useEffect.
+  const resolveParKeyDoOfx = (ofxId: string | null): string | null => {
+    if (!ofxId) return null;
+    const t = (candidatosPorOfx.get(ofxId) ?? [])[0] ?? null;
+    return t && t.excelKey && pares.get(t.excelKey)
+      && linhasExcel.some((l) => l.chaveLinha === t.excelKey)
+      ? t.excelKey : null;
+  };
+
   // Contadores específicos do Modo OFX
   const contadoresOfx = useMemo(() => {
     let pendentes = 0;
@@ -1512,7 +1523,12 @@ export function MesaPareamentoModal({
               <Button
                 variant={modoVisualizacao === 'ofx' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setModoVisualizacao('ofx')}
+                onClick={() => {
+                  setModoVisualizacao('ofx');
+                  // PR-OFX-Espelho Passo 2.1 — sincroniza parAtivoKey com o OFX já pré-selecionado
+                  // ao entrar no Modo OFX (sem reclicar; mesmo critério resolveParKeyDoOfx; sem useEffect).
+                  setParAtivoKey(resolveParKeyDoOfx(ofxAtivoId));
+                }}
                 className="text-[10px] h-6 px-2"
               >
                 Modo OFX
@@ -1850,7 +1866,11 @@ export function MesaPareamentoModal({
                 return (
                   <button
                     key={e.id}
-                    onClick={() => setOfxAtivoId(e.id)}
+                    onClick={() => {
+                      setOfxAtivoId(e.id);
+                      // PR-OFX-Espelho Passo 2 — ponte: sincroniza parAtivoKey NA SELEÇÃO (não no render).
+                      setParAtivoKey(resolveParKeyDoOfx(e.id));
+                    }}
                     className={cn(
                       // PR6.1F-3 — densidade extrato (mesmo padrão da Lista Excel)
                       'w-full flex items-center gap-1.5 px-1.5 py-1 text-[11px] leading-tight border-l-[3px] rounded-r text-left tabular-nums',
@@ -1914,7 +1934,19 @@ export function MesaPareamentoModal({
                     buildFallbacks(top.excelKey, ofx.id, linhasExcel, extratos))
                 : null;
 
-              return (
+              // PR-OFX-Espelho Passo 2 — mesmo critério (resolveParKeyDoOfx). topValido exige que
+              // parAtivoKey JÁ esteja sincronizado (ponte/toggle) → painelDetalhe() nunca renderiza par stale.
+              const keyResolvida = resolveParKeyDoOfx(ofx.id);
+              const topValido = keyResolvida !== null && parAtivoKey === keyResolvida;
+              if (top && keyResolvida === null) {
+                // Ramo 3 — top existe mas não resolve par válido: NUNCA renderiza painel; fallback Conferência.
+                console.warn('[PR-OFX-Espelho Passo 2] OFX com candidato top sem par valido:', ofx.id, top?.excelKey);
+              }
+              return topValido ? (
+                <div className="flex-1 overflow-y-auto space-y-1">
+                  {painelDetalhe()}
+                </div>
+              ) : (
                 <div className="flex-1 overflow-y-auto space-y-3">
                   {/* BLOCO 1 — CONFERÊNCIA (OFX × candidato top) */}
                   <div className="border rounded p-2.5 space-y-0.5 bg-muted/30">
