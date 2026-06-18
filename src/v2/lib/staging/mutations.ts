@@ -190,18 +190,6 @@ export async function gerarStagingDaSessao(
       ? resolverContaPorTexto(contaTexto, contasBancarias)
       : null;
 
-    if (contaTexto && !contaResolvida) {
-      console.log('[staging-debug] descartado por conta não reconhecida:', {
-        excel_key: p.excel_key,
-        contaTexto,
-      });
-      erros.push({
-        excel_key: p.excel_key,
-        motivo: 'Conta Excel não reconhecida',
-        conta_texto_excel: contaTexto,
-      });
-      return;
-    }
     if (!ehOrfao && !contaTexto) {
       console.log('[staging-debug] descartado por sem coluna Conta:', {
         excel_key: p.excel_key,
