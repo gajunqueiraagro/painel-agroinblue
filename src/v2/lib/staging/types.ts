@@ -37,6 +37,7 @@ export interface StagingRow {
   origem_aprovacao: OrigemAprovacaoStaging;
 
   status_promocao: StatusPromocao;
+  motivo_pendencia: string | null;
   lancamento_v2_id: string | null;
   promovido_em: string | null;
   promovido_por: string | null;

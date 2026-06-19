@@ -20,6 +20,13 @@ import {
 } from '@/components/ui/select';
 import type { StagingRow } from '@/v2/lib/staging/types';
 
+const LABEL_MOTIVO: Record<string, string> = {
+  ofx_duplicado: 'OFX duplicado',
+  ambiguo: 'Ambíguo',
+  correcao_manual: 'Correção manual',
+  divergencia: 'Divergência valor/data',
+};
+
 interface Props {
   sessaoId: string;
 }
@@ -443,6 +450,11 @@ function CardLinha({
         <BadgeConta row={row} />
         <span className="ml-auto flex items-center gap-1.5 shrink-0">
           <BadgeStatus status={row.status_promocao} />
+          {row.status_promocao === 'pendente' && row.motivo_pendencia && (
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              • {LABEL_MOTIVO[row.motivo_pendencia] ?? row.motivo_pendencia}
+            </span>
+          )}
           {podeDescartar && (
             <Button
               size="sm"
