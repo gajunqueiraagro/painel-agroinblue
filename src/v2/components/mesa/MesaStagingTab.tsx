@@ -11,6 +11,13 @@ import { useStaging } from '@/v2/lib/staging/useStaging';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { StagingRow } from '@/v2/lib/staging/types';
 
 interface Props {
@@ -96,6 +103,8 @@ export function MesaStagingTab({ sessaoId }: Props) {
   const queryClient = useQueryClient();
   const [promovendo, setPromovendo] = useState(false);
   const [descartandoId, setDescartandoId] = useState<string | null>(null);
+  // STAGING-01 — filtro de leitura por conta resolvida (client-side; não toca useStaging).
+  const [filtroContaResolvida, setFiltroContaResolvida] = useState<string>('todas');
 
   // P0-C — descarte de linha pendente (somente 'pendente'; promovido fica para a RPC de reversão PR6.3).
   async function handleDescartar(stagingId: string) {
@@ -134,19 +143,46 @@ export function MesaStagingTab({ sessaoId }: Props) {
     }
   }
 
+  // STAGING-01 — contas resolvidas presentes na sessão (id → nome) + flag sem-conta.
+  const contasResolvidas = useMemo(() => {
+    const m = new Map<string, string>();
+    let temSemConta = false;
+    staging.forEach((s) => {
+      if (s.conta_resolvida_id) {
+        m.set(s.conta_resolvida_id, s.conta_resolvida_nome ?? s.conta_resolvida_id);
+      } else {
+        temSemConta = true;
+      }
+    });
+    return {
+      opcoes: Array.from(m, ([id, nome]) => ({ id, nome })).sort((a, b) =>
+        a.nome.localeCompare(b.nome),
+      ),
+      temSemConta,
+    };
+  }, [staging]);
+
+  // STAGING-01 — lista filtrada por conta_resolvida_id. 'todas' = sessão inteira.
+  const stagingFiltrado = useMemo(() => {
+    if (filtroContaResolvida === 'todas') return staging;
+    if (filtroContaResolvida === '__sem__')
+      return staging.filter((s) => !s.conta_resolvida_id);
+    return staging.filter((s) => s.conta_resolvida_id === filtroContaResolvida);
+  }, [staging, filtroContaResolvida]);
+
   const stats = useMemo(() => {
     let total = 0;
     let aprov_normal = 0;
     let excel_orfao = 0;
     let valor_total = 0;
-    staging.forEach((s) => {
+    stagingFiltrado.forEach((s) => {
       total++;
       if (s.origem_aprovacao === 'excel_orfao') excel_orfao++;
       else aprov_normal++;
       valor_total += Number(s.valor) || 0;
     });
     return { total, aprov_normal, excel_orfao, valor_total };
-  }, [staging]);
+  }, [stagingFiltrado]);
 
   if (isLoading) {
     return (
@@ -203,6 +239,29 @@ export function MesaStagingTab({ sessaoId }: Props) {
         </div>
       </div>
 
+      {/* STAGING-01 — filtro de leitura por conta resolvida (destino de promoção). */}
+      {(contasResolvidas.opcoes.length > 1 || contasResolvidas.temSemConta) && (
+        <div className="flex items-center gap-2 text-xs px-3">
+          <span className="text-muted-foreground">Conta resolvida:</span>
+          <Select value={filtroContaResolvida} onValueChange={setFiltroContaResolvida}>
+            <SelectTrigger className="h-7 w-56 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas</SelectItem>
+              {contasResolvidas.opcoes.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.nome}
+                </SelectItem>
+              ))}
+              {contasResolvidas.temSemConta && (
+                <SelectItem value="__sem__">Sem conta resolvida</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Aviso PR6.2 + botões disabled */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs flex-wrap">
         <span className="text-amber-900">
@@ -226,7 +285,7 @@ export function MesaStagingTab({ sessaoId }: Props) {
 
       {/* PR-Staging-UX / P0-C — linhas compactas. Descartados ficam visíveis (auditoria). */}
       <div className="space-y-1">
-        {staging.map((row) => (
+        {stagingFiltrado.map((row) => (
           <CardLinha
             key={row.staging_id}
             row={row}
