@@ -1485,6 +1485,7 @@ export function MesaPareamentoModal({
 
           {/* PR6.1E-1 — Linha B: pills de escopo + toggle Modo + indicador.
               Mantém PR6.1D-3 (4 pills puramente visuais) + PR3.3 (toggle modo). */}
+          {abaAtiva === 'pareamento' && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <Button
               size="sm"
@@ -1567,9 +1568,11 @@ export function MesaPareamentoModal({
               </Button>
             </div>
           </div>
+          )}
           {/* PR6.1E-2 — Toolbar densa de filtros internos da lista.
               Compactacao pura: labels encurtados (Ver/Origem/Ord.), triggers
               h-6 text-[10px], gap-1.5. Logica e opcoes 100% preservadas. */}
+          {abaAtiva === 'pareamento' && (
           <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
             {modoVisualizacao === 'excel' ? (
               <>
@@ -1656,6 +1659,7 @@ export function MesaPareamentoModal({
               </span>
             )}
           </div>
+          )}
         </DialogHeader>
 
         {/* PR6.1A — Tabs internas: Pareamento (conteúdo atual) + Revisão Staging */}
