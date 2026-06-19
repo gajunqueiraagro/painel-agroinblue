@@ -134,7 +134,15 @@ export function MesaStagingTab({ sessaoId }: Props) {
       const sb = supabase as any; // mesmo padrão do useStaging (tabelas/RPC v2 não tipadas)
       const { data, error } = await sb.rpc('fn_promover_staging', { p_sessao_id: sessaoId });
       if (error) throw error;
-      toast.success(`${data?.promovidos ?? 0} lançamento(s) promovido(s) ao caixa real.`);
+      const promovidos = data?.promovidos ?? 0;
+      const jaPromovidos = data?.ja_promovidos ?? 0;
+      if (promovidos > 0) {
+        toast.success(`${promovidos} lançamento(s) promovido(s) ao caixa real.`);
+      } else if (jaPromovidos > 0) {
+        toast.info('Nada novo a promover — itens deste OFX já estão no banco real.');
+      } else {
+        toast.info('Nada a promover.');
+      }
       await queryClient.invalidateQueries({ queryKey: ['mesa-staging', sessaoId] });
     } catch (e: any) {
       toast.error(e?.message ?? 'Falha ao promover.');
