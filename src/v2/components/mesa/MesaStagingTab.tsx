@@ -135,13 +135,33 @@ export function MesaStagingTab({ sessaoId }: Props) {
       const { data, error } = await sb.rpc('fn_promover_staging', { p_sessao_id: sessaoId });
       if (error) throw error;
       const promovidos = data?.promovidos ?? 0;
+      const enriquecidos = data?.enriquecidos ?? 0;
       const jaPromovidos = data?.ja_promovidos ?? 0;
-      if (promovidos > 0) {
-        toast.success(`${promovidos} lançamento(s) promovido(s) ao caixa real.`);
+      const protegidosManual = data?.protegidos_manual ?? 0;
+      const ambiguos = data?.ambiguos ?? 0;
+      const divergentesMerge = data?.divergentes_merge ?? 0;
+      const partes: string[] = [];
+      if (promovidos > 0) partes.push(`${promovidos} criado(s)`);
+      if (enriquecidos > 0) partes.push(`${enriquecidos} enriquecido(s)`);
+      const pendurados = protegidosManual + ambiguos + divergentesMerge;
+      if (promovidos > 0 || enriquecidos > 0) {
+        toast.success(`Mesa: ${partes.join(' · ')} no caixa real.`);
       } else if (jaPromovidos > 0) {
         toast.info('Nada novo a promover — itens deste OFX já estão no banco real.');
       } else {
         toast.info('Nada a promover.');
+      }
+      if (pendurados > 0) {
+        toast.warning(
+          `${pendurados} pendente(s) sem merge — ` +
+            [
+              protegidosManual > 0 ? `${protegidosManual} com correção manual` : null,
+              ambiguos > 0 ? `${ambiguos} com vínculo ambíguo` : null,
+              divergentesMerge > 0 ? `${divergentesMerge} com valor/data divergente` : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+        );
       }
       await queryClient.invalidateQueries({ queryKey: ['mesa-staging', sessaoId] });
     } catch (e: any) {
