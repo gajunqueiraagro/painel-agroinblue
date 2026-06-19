@@ -105,6 +105,7 @@ export function MesaStagingTab({ sessaoId }: Props) {
   const [descartandoId, setDescartandoId] = useState<string | null>(null);
   // STAGING-01 — filtro de leitura por conta resolvida (client-side; não toca useStaging).
   const [filtroContaResolvida, setFiltroContaResolvida] = useState<string>('todas');
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'promovido' | 'pendente' | 'descartado'>('todos');
 
   // P0-C — descarte de linha pendente (somente 'pendente'; promovido fica para a RPC de reversão PR6.3).
   async function handleDescartar(stagingId: string) {
@@ -198,6 +199,23 @@ export function MesaStagingTab({ sessaoId }: Props) {
     return staging.filter((s) => s.conta_resolvida_id === filtroContaResolvida);
   }, [staging, filtroContaResolvida]);
 
+  // PR-MESA-UX-01 — contadores por status, sobre o recorte ja filtrado por conta
+  const contadoresStatus = useMemo(() => {
+    let promovido = 0, pendente = 0, descartado = 0;
+    for (const s of stagingFiltrado) {
+      if (s.status_promocao === 'promovido') promovido++;
+      else if (s.status_promocao === 'pendente') pendente++;
+      else if (s.status_promocao === 'descartado') descartado++;
+    }
+    return { total: stagingFiltrado.length, promovido, pendente, descartado };
+  }, [stagingFiltrado]);
+
+  // lista exibida = filtro de conta (existente) + filtro de status (novo)
+  const stagingVisivel = useMemo(() => {
+    if (filtroStatus === 'todos') return stagingFiltrado;
+    return stagingFiltrado.filter((s) => s.status_promocao === filtroStatus);
+  }, [stagingFiltrado, filtroStatus]);
+
   const stats = useMemo(() => {
     let total = 0;
     let aprov_normal = 0;
@@ -267,6 +285,34 @@ export function MesaStagingTab({ sessaoId }: Props) {
         </div>
       </div>
 
+      {/* PR-MESA-UX-01 — cards de resumo por status (respeitam o filtro de conta) */}
+      <div className="flex flex-wrap gap-2 px-3">
+        {([
+          { key: 'todos', label: 'Todos', n: contadoresStatus.total },
+          { key: 'promovido', label: 'Promovidos', n: contadoresStatus.promovido },
+          { key: 'pendente', label: 'Pendentes', n: contadoresStatus.pendente },
+          { key: 'descartado', label: 'Descartados', n: contadoresStatus.descartado },
+        ] as const).map((c) => {
+          const ativo = filtroStatus === c.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setFiltroStatus(c.key)}
+              className={
+                'flex min-w-[96px] flex-col items-start rounded-md border px-3 py-2 text-left transition-colors ' +
+                (ativo
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted')
+              }
+            >
+              <span className="text-xs text-muted-foreground">{c.label}</span>
+              <span className="text-lg font-semibold tabular-nums text-foreground">{c.n}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* STAGING-01 — filtro de leitura por conta resolvida (destino de promoção). */}
       {(contasResolvidas.opcoes.length > 1 || contasResolvidas.temSemConta) && (
         <div className="flex items-center gap-2 text-xs px-3">
@@ -313,7 +359,7 @@ export function MesaStagingTab({ sessaoId }: Props) {
 
       {/* PR-Staging-UX / P0-C — linhas compactas. Descartados ficam visíveis (auditoria). */}
       <div className="space-y-1">
-        {stagingFiltrado.map((row) => (
+        {stagingVisivel.map((row) => (
           <CardLinha
             key={row.staging_id}
             row={row}
