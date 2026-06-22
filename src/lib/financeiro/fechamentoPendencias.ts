@@ -56,6 +56,41 @@ export function detectarDuplicatasCrossOrigin(lancs: readonly LancMin[]) {
 
 export interface ItemPendencia { tipo: string; label: string; qtd: number; impacto: number | null; }
 
+export interface LancDetalhe {
+  id: string;
+  data_pagamento: string | null;
+  descricao: string | null;
+  valor: number;
+  conta_bancaria_id: string | null;
+  subcentro: string | null;
+  favorecido_id: string | null;
+  macro_custo: string | null;
+  centro_custo: string | null;
+}
+
+export interface LancPendenciaItem {
+  id: string;
+  data: string | null;
+  descricao: string | null;
+  valor: number;
+  conta_bancaria_id: string | null;
+  pendencias: string[];
+}
+
+export function derivarDetalhePendencias(lancs: readonly LancDetalhe[]): LancPendenciaItem[] {
+  const out: LancPendenciaItem[] = [];
+  for (const l of lancs) {
+    const pend: string[] = [];
+    if (!l.subcentro || l.subcentro.trim() === '') pend.push('Subcentro');
+    if (l.favorecido_id === null) pend.push('Fornecedor');
+    if (l.macro_custo === null || l.centro_custo === null) pend.push('Macro/Centro');
+    if (pend.length > 0) {
+      out.push({ id: l.id, data: l.data_pagamento, descricao: l.descricao, valor: l.valor, conta_bancaria_id: l.conta_bancaria_id, pendencias: pend });
+    }
+  }
+  return out;
+}
+
 export interface LancClassificacao {
   origem_lancamento: string | null;
   subcentro: string | null;

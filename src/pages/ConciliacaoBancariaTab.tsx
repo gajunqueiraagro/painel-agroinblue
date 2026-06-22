@@ -20,8 +20,7 @@ import {
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
-import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais } from '@/lib/financeiro/fechamentoPendencias';
-import { SituacaoFechamentoPanel } from '@/components/financeiro-v2/SituacaoFechamentoPanel';
+import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
@@ -347,6 +346,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   /* Fase 1B: import OFX/CSV + visualização do extrato importado */
   const [showImportExtrato, setShowImportExtrato] = useState(false);
+  const [showPendencias, setShowPendencias] = useState(false);
   const [vistaExtrato, setVistaExtrato] = useState<'conciliacao' | 'extrato' | 'referencias'>('conciliacao');
 
   /* Edit saldo */
@@ -478,19 +478,31 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     dif: r2(perContaSaldos.reduce((s,c)=>s+c.dif,0)),
   }), [perContaSaldos]);
 
-  // PR-FechamentoFinanceiro-Pendencias-A1 — verdict read-time (saldo + duplicados).
-  const situacao = useMemo(() => {
+  // Fonte única conta+mês — situacao e diagPendencias derivam DESTE lancMes (proibido recriar o filtro).
+  const lancMes = useMemo(() => {
     const anoMes = `${ano}-${selectedMes}`;
-    const lancMes = lancamentos.filter(l =>
+    return lancamentos.filter(l =>
       (l.data_pagamento || '').slice(0, 7) === anoMes &&
       (selectedConta === '__all__' || belongsToConta(l, selectedConta)));
+  }, [ano, selectedMes, selectedConta, lancamentos]);
+
+  // PR-FechamentoFinanceiro-Pendencias-A1 — verdict read-time (saldo + duplicados).
+  const situacao = useMemo(() => {
     const dup = detectarDuplicatasCrossOrigin(lancMes);
     const pendGerenciais = derivarPendenciasGerenciais(lancMes);
     const difSaldo = selectedConta === '__all__'
       ? ((totalSaldos.ext ?? 0) - totalSaldos.sis)
       : (selectedCard?.diferenca ?? 0);
     return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup, pendenciasGerenciais: pendGerenciais });
-  }, [ano, selectedMes, selectedConta, lancamentos, selectedCard, totalSaldos]);
+  }, [lancMes, selectedConta, selectedCard, totalSaldos]);
+
+  // Detalhe de pendências (mesmo lancMes canônico) — alimenta card Status + modal.
+  const diagPendencias = useMemo(() => {
+    const semClassificacao = derivarDetalhePendencias(lancMes);
+    const dup = detectarDuplicatasCrossOrigin(lancMes);
+    const duplicados = lancMes.filter(l => dup.ids.includes(l.id));
+    return { semClassificacao, duplicadosCount: dup.qtd, duplicados };
+  }, [lancMes]);
 
   /* ── Lançamentos for modal ── */
   const fornecedorMap = useMemo(() => new Map(fornecedores.map(f=>[f.id,f.nome])), [fornecedores]);
@@ -757,9 +769,6 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {/* PR-FechamentoFinanceiro-Pendencias-A1 — Situação do Fechamento */}
-        {!loading && selectedCard && <SituacaoFechamentoPanel situacao={situacao} />}
-
         {/* Aba interna: Conciliação (atual) | Extrato importado (novo) */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center pt-1">
@@ -916,6 +925,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     <div className="text-[9px] leading-tight font-medium text-amber-700">
                       ⚠ {formatMoeda((selectedCard?.semContaSaidas ?? 0) + (selectedCard?.semContaEntradas ?? 0))} em lançamentos sem conta bancária
                     </div>
+                  )}
+                  {diagPendencias.semClassificacao.length > 0 && (
+                    <div className="text-[9px] leading-tight font-medium text-red-700">
+                      🔴 {diagPendencias.semClassificacao.length} sem classificação
+                    </div>
+                  )}
+                  {diagPendencias.duplicadosCount > 0 && (
+                    <div className="text-[9px] leading-tight font-medium text-red-700">
+                      🔴 {diagPendencias.duplicadosCount} duplicados
+                    </div>
+                  )}
+                  {(diagPendencias.semClassificacao.length > 0 || diagPendencias.duplicadosCount > 0) && (
+                    <button type="button" onClick={() => setShowPendencias(true)}
+                      className="text-[9px] underline text-muted-foreground hover:text-foreground mt-0.5">
+                      Ver detalhes
+                    </button>
                   )}
                   {cardStatus === 'parcial' && (
                     <div className="mt-1 w-full border-t pt-1.5 space-y-0.5" style={{borderColor:`${cor.border}80`}}>
@@ -1215,6 +1240,52 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             <Button variant="outline" size="sm" onClick={()=>setEditingSaldo(null)}>Cancelar</Button>
             <Button size="sm" onClick={handleSaveSaldo} disabled={savingSaldo}>{savingSaldo ? 'Salvando...' : 'Salvar'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPendencias} onOpenChange={setShowPendencias}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Pendências de fechamento — {selectedConta === '__all__' ? 'Todas as contas' : (contas.find(c => c.id === selectedConta)?.nome_exibicao ?? '')} · {ano}-{selectedMes}</DialogTitle>
+          </DialogHeader>
+          <div className="text-xs max-h-[60vh] overflow-auto space-y-4">
+            {diagPendencias.semClassificacao.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Sem classificação ({diagPendencias.semClassificacao.length})</div>
+                <div className="divide-y">
+                  {diagPendencias.semClassificacao.map(l => (
+                    <div key={l.id} className="py-2">
+                      <div className="flex items-center gap-2">
+                        {selectedConta === '__all__' && <span className="text-muted-foreground w-28 shrink-0 truncate">{contas.find(c => c.id === l.conta_bancaria_id)?.nome_exibicao ?? '—'}</span>}
+                        <span className="w-14 shrink-0 text-muted-foreground">{l.data ? l.data.slice(8,10)+'/'+l.data.slice(5,7) : '—'}</span>
+                        <span className="flex-1 truncate font-medium">{l.descricao ?? '—'}</span>
+                        <span className="w-24 text-right tabular-nums">{formatMoeda(l.valor)}</span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[10px] text-muted-foreground">Faltando:</span>
+                        {l.pendencias.map(p => <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">{p}</span>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {diagPendencias.duplicadosCount > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Duplicados ({diagPendencias.duplicadosCount})</div>
+                <div className="divide-y">
+                  {diagPendencias.duplicados.map(l => (
+                    <div key={l.id} className="py-1.5 flex items-center gap-2">
+                      {selectedConta === '__all__' && <span className="text-muted-foreground w-28 shrink-0 truncate">{contas.find(c => c.id === l.conta_bancaria_id)?.nome_exibicao ?? '—'}</span>}
+                      <span className="w-14 shrink-0 text-muted-foreground">{l.data_pagamento ? l.data_pagamento.slice(8,10)+'/'+l.data_pagamento.slice(5,7) : '—'}</span>
+                      <span className="flex-1 truncate">{l.descricao ?? '—'}</span>
+                      <span className="w-24 text-right tabular-nums">{formatMoeda(l.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
