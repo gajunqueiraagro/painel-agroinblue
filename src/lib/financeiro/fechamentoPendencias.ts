@@ -55,6 +55,32 @@ export function detectarDuplicatasCrossOrigin(lancs: readonly LancMin[]) {
 }
 
 export interface ItemPendencia { tipo: string; label: string; qtd: number; impacto: number | null; }
+
+export interface LancClassificacao {
+  origem_lancamento: string | null;
+  subcentro: string | null;
+  favorecido_id: string | null;
+  macro_custo: string | null;
+  centro_custo: string | null;
+}
+
+export function derivarPendenciasGerenciais(lancs: LancClassificacao[]): ItemPendencia[] {
+  const semSubcentro = (l: LancClassificacao) => !l.subcentro || l.subcentro.trim() === '';
+  const semMacroCentro = (l: LancClassificacao) => l.macro_custo === null || l.centro_custo === null;
+  const semSub = lancs.filter(semSubcentro);
+  const semFav = lancs.filter((l) => l.favorecido_id === null);
+  const semMC = lancs.filter(semMacroCentro);
+  const ofxDireto = lancs.filter(
+    (l) => l.origem_lancamento === 'ofx' &&
+      (semSubcentro(l) || l.favorecido_id === null || semMacroCentro(l)),
+  );
+  const out: ItemPendencia[] = [];
+  if (semSub.length) out.push({ tipo: 'sem_subcentro', label: 'Lançamentos sem subcentro', qtd: semSub.length, impacto: null });
+  if (semFav.length) out.push({ tipo: 'sem_favorecido', label: 'Lançamentos sem fornecedor', qtd: semFav.length, impacto: null });
+  if (semMC.length) out.push({ tipo: 'sem_macro_centro', label: 'Lançamentos sem macro/centro', qtd: semMC.length, impacto: null });
+  if (ofxDireto.length) out.push({ tipo: 'ofx_direto_sem_enriq', label: 'OFX-direto sem enriquecimento', qtd: ofxDireto.length, impacto: null });
+  return out;
+}
 export interface SituacaoFechamento {
   bloqueios: ItemPendencia[];
   avisos: ItemPendencia[];
@@ -66,6 +92,7 @@ export function montarSituacaoFechamento(input: {
   diferencaSaldo: number;
   duplicatas: { qtd: number; impacto: number };
   tolSaldo?: number;
+  pendenciasGerenciais?: ItemPendencia[];
 }): SituacaoFechamento {
   const tol = input.tolSaldo ?? 0.005;
   const bloqueios: ItemPendencia[] = [];
@@ -73,5 +100,6 @@ export function montarSituacaoFechamento(input: {
     bloqueios.push({ tipo: 'saldo', label: 'Saldo não fecha', qtd: 1, impacto: input.diferencaSaldo });
   if (input.duplicatas.qtd > 0)
     bloqueios.push({ tipo: 'duplicado', label: 'Lançamentos duplicados', qtd: input.duplicatas.qtd, impacto: input.duplicatas.impacto });
+  for (const p of (input.pendenciasGerenciais ?? [])) bloqueios.push(p);
   return { bloqueios, avisos: [], apto: bloqueios.length === 0 };
 }

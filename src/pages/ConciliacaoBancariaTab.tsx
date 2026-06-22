@@ -20,7 +20,7 @@ import {
   type ConciliacaoLancamentoBase,
   type ConciliacaoStatus,
 } from '@/lib/financeiro/conciliacaoCalc';
-import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento } from '@/lib/financeiro/fechamentoPendencias';
+import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais } from '@/lib/financeiro/fechamentoPendencias';
 import { SituacaoFechamentoPanel } from '@/components/financeiro-v2/SituacaoFechamentoPanel';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
@@ -67,6 +67,8 @@ interface LancamentoResumo {
   ano_mes: string;
   subcentro: string | null;
   origem_lancamento: string | null;
+  macro_custo: string | null;
+  centro_custo: string | null;
 }
 
 interface FornecedorRef { id: string; nome: string; }
@@ -417,7 +419,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     while (true) {
       const {data:lData} = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro,origem_lancamento')
+        .select('id,tipo_operacao,valor,sinal,data_competencia,data_pagamento,descricao,status_transacao,favorecido_id,numero_documento,conta_bancaria_id,conta_destino_id,ano_mes,subcentro,origem_lancamento,macro_custo,centro_custo')
         .eq('cliente_id',clienteId).eq('cancelado',false)
         .eq('sem_movimentacao_caixa', false)
         .eq('status_transacao', 'realizado')
@@ -483,10 +485,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
       (l.data_pagamento || '').slice(0, 7) === anoMes &&
       (selectedConta === '__all__' || belongsToConta(l, selectedConta)));
     const dup = detectarDuplicatasCrossOrigin(lancMes);
+    const pendGerenciais = derivarPendenciasGerenciais(lancMes);
     const difSaldo = selectedConta === '__all__'
       ? ((totalSaldos.ext ?? 0) - totalSaldos.sis)
       : (selectedCard?.diferenca ?? 0);
-    return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup });
+    return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup, pendenciasGerenciais: pendGerenciais });
   }, [ano, selectedMes, selectedConta, lancamentos, selectedCard, totalSaldos]);
 
   /* ── Lançamentos for modal ── */
