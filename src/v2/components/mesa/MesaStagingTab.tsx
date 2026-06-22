@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStaging } from '@/v2/lib/staging/useStaging';
 import { supabase } from '@/integrations/supabase/client';
+import { DiagFechamentoPanel } from '@/v2/components/mesa/DiagFechamentoPanel';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -254,13 +255,18 @@ export function MesaStagingTab({ sessaoId }: Props) {
   }
 
   if (staging.length === 0) {
+    // DIAG-01: o painel renderiza mesmo sem staging — uma conta com OFX e zero
+    // Excel ainda precisa aparecer como "OFX sem Excel" (nao escondida no empty-state).
     return (
-      <div className="p-12 text-center">
-        <div className="text-sm text-muted-foreground mb-2">
-          Nenhum registro em staging ainda.
-        </div>
-        <div className="text-xs text-muted-foreground">
-          Finalize a sessão na aba "Pareamento" para gerar staging.
+      <div className="space-y-3 p-2 overflow-auto h-full">
+        <DiagFechamentoPanel sessaoId={sessaoId} />
+        <div className="p-12 text-center">
+          <div className="text-sm text-muted-foreground mb-2">
+            Nenhum registro em staging ainda.
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Finalize a sessão na aba "Pareamento" para gerar staging.
+          </div>
         </div>
       </div>
     );
@@ -268,6 +274,8 @@ export function MesaStagingTab({ sessaoId }: Props) {
 
   return (
     <div className="space-y-3 p-2 overflow-auto h-full">
+      <DiagFechamentoPanel sessaoId={sessaoId} />
+
       {/* Stats compactos */}
       <div className="flex items-center justify-between text-xs px-3 py-2 bg-muted/30 rounded flex-wrap gap-2">
         <div className="flex items-center gap-4 flex-wrap">
