@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Upload, X, LayoutGrid } from 'lucide-react';
@@ -76,6 +77,9 @@ interface LancamentoLinha {
   descricao: string | null;
   subcentro: string | null;
   status_transacao: string;
+  favorecido_id: string | null;
+  macro_custo: string | null;
+  centro_custo: string | null;
 }
 
 interface SaldoMes {
@@ -99,6 +103,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
 
   const [extratos, setExtratos] = useState<ExtratoLinha[]>([]);
   const [lancamentos, setLancamentos] = useState<LancamentoLinha[]>([]);
+  const [semExcelCount, setSemExcelCount] = useState<number | null>(null);
   const [saldos, setSaldos] = useState<SaldoMes[]>([]);
   const [extratosConciliados, setExtratosConciliados] = useState<Set<string>>(new Set<string>());
   const [lancsConciliados, setLancsConciliados] = useState<Set<string>>(new Set<string>());
@@ -189,7 +194,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
         // B) Lançamentos sistema (mesmo mês+conta)
         const { data: lan } = await (supabase as any)
           .from('financeiro_lancamentos_v2')
-          .select('id, data_pagamento, data_competencia, valor, sinal, descricao, subcentro, status_transacao')
+          .select('id, data_pagamento, data_competencia, valor, sinal, descricao, subcentro, status_transacao, favorecido_id, macro_custo, centro_custo')
           .eq('cliente_id', clienteAtual.id)
           .eq('conta_bancaria_id', contaId)
           .eq('ano_mes', anoMes)
@@ -321,6 +326,21 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
   const fmtBRL = (v: number): string =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 
+  // Sem classificação — mesma lógica do 01B (derivarDetalhePendencias), contando
+  // lançamentos distintos realizados que faltam subcentro/favorecido/macro/centro.
+  const semClassificacaoCount = useMemo(
+    () =>
+      derivarDetalhePendencias(
+        lancamentos
+          .filter((l) => l.status_transacao === 'realizado')
+          .map((l) => ({
+            ...l,
+            conta_bancaria_id: contaId,
+          })),
+      ).length,
+    [lancamentos, contaId],
+  );
+
   const contaSelecionada = contas.find((c) => c.id === contaId);
 
   // ── PR2 PREVIEW EXCEL ────────────────────────────────────────────────
@@ -410,6 +430,30 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
     contaId,
     anoMesPR5,
   );
+
+  // DIAGNÓSTICO DA SESSÃO — "Pendentes do Excel" = cobertura.sem_excel do fn_diag.
+  // RPC não tipado nos types gerados → (supabase as any).rpc (padrão do projeto, TSC neutro).
+  useEffect(() => {
+    const sid = sessaoCompleta?.sessao?.id;
+    if (!sid) {
+      setSemExcelCount(null);
+      return;
+    }
+    let ativo = true;
+    (async () => {
+      const { data, error } = await (supabase as any).rpc('fn_diag_fechamento_sessao', {
+        p_sessao_id: sid,
+      });
+      if (!ativo) return;
+      const cobertura = error
+        ? null
+        : (data as { cobertura?: { sem_excel?: number } } | null)?.cobertura;
+      setSemExcelCount(cobertura?.sem_excel ?? null);
+    })();
+    return () => {
+      ativo = false;
+    };
+  }, [sessaoCompleta?.sessao?.id]);
 
   // Handler: cria/recupera sessão antes de abrir modal.
   // PR6.1B-3 — trata discriminated union de criarOuRecuperarSessao.
@@ -540,7 +584,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
           {' · '}{lancamentos.length} lanç.
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-xs">
+        <div className="grid grid-cols-3 gap-4 text-xs">
           {/* OFX */}
           <div className="space-y-0.5">
             <div className="text-[10px] font-bold text-foreground mb-1">BANCO (OFX real)</div>
@@ -600,6 +644,53 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
               </span>
             </div>
           </div>
+
+          {/* DIAGNÓSTICO DA SESSÃO */}
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-bold text-foreground mb-1">
+              DIAGNÓSTICO DA SESSÃO
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Lanç. sistema:</span>
+              <span className="tabular-nums">{lancamentos.length}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Conciliados:</span>
+              <span className="tabular-nums">{calc.countConciliado}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Transferências:</span>
+              <span className="tabular-nums">{calc.countTransfConfirmada}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Banco sem sistema:</span>
+              <span className="tabular-nums">{calc.countBancoOrfao}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sistema sem OFX:</span>
+              <span className="tabular-nums">{calc.countApontamentoOrfao}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pendentes do Excel:</span>
+              <span className="tabular-nums">{semExcelCount ?? '—'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sem classificação:</span>
+              <span
+                className={
+                  semClassificacaoCount > 0
+                    ? 'tabular-nums text-rose-600 font-semibold'
+                    : 'tabular-nums text-muted-foreground'
+                }
+              >
+                {semClassificacaoCount}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Agrupamentos:</span>
+              <span className="tabular-nums text-muted-foreground">—</span>
+            </div>
+          </div>
         </div>
 
         {/* DIFERENÇA */}
@@ -615,12 +706,6 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
             {statusOverall === 'nao_explicado' && '❌ NÃO EXPLICADO'}
             {': '}
             {fmtBRL(calc.naoExplicado)}
-          </span>
-          <span className="text-[10px] tabular-nums">
-            {calc.countConciliado} conciliado
-            {' · '}<span className="text-violet-600">⇄ {calc.countTransfConfirmada} transferência{calc.countTransfConfirmada === 1 ? '' : 's'}</span>
-            {' · '}{calc.countBancoOrfao} banco órfão
-            {' · '}{calc.countApontamentoOrfao} apontamento órfão
           </span>
         </div>
       </Card>
