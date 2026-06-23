@@ -67,6 +67,14 @@ interface DiagnosticoSoberano {
   };
 }
 
+// Existência/contagem do extrato salvo (derivada de extrato_bancario_v2).
+interface ExtratoExistencia {
+  movimentos: number;
+  periodo_ini: string | null;
+  periodo_fim: string | null;
+  importado_em: string | null;
+}
+
 // ── Rótulos legíveis (nunca campo técnico) ─────────────────────────────────
 const LABEL_ORIGEM: Record<string, string> = {
   movimentacao_rebanho: 'Movimentação Rebanho', mesa_excel: 'Mesa Excel', manual: 'Manual',
@@ -95,6 +103,20 @@ const fmtData = (s: string | null) => {
 const labelOrigem = (o: string | null) => (o ? LABEL_ORIGEM[o] ?? o : '—');
 const labelMotivo = (m: string) => LABEL_MOTIVO[m] ?? m;
 const labelStatus = (s: string | null) => (s ? LABEL_STATUS[s] ?? s : '—');
+const fmtDataHora = (s: string | null) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return isNaN(d.getTime())
+    ? s
+    : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+// Próxima ação — rótulos PT dos bloqueios do veredito 01.4 (ordem do array).
+const LABEL_BLOQUEIO: Record<string, (n: number) => string> = {
+  divergencias_vinculo: (n) => `${n} ${n === 1 ? 'divergência de vínculo' : 'divergências de vínculo'}`,
+  sistema_sem_extrato: (n) => `${n} ${n === 1 ? 'lançamento sem extrato' : 'lançamentos sem extrato'}`,
+  extrato_sem_sistema: (n) => `${n} ${n === 1 ? 'movimento sem lançamento' : 'movimentos sem lançamento'}`,
+};
 
 type Tom = 'rose' | 'amber' | 'violet' | 'emerald' | 'muted';
 
@@ -113,6 +135,13 @@ function StatusBadge({ texto, tom }: { texto: string; tom: Tom }) {
 type FiltroKey =
   | 'todos' | 'divergencias' | 'sistema_sem_extrato' | 'extrato_sem_sistema'
   | 'agrupamentos' | 'desconsiderados' | 'corretos';
+
+// tipo do bloqueio (veredito) -> card-filtro correspondente da lista.
+const BLOQUEIO_FILTRO: Record<string, FiltroKey> = {
+  divergencias_vinculo: 'divergencias',
+  sistema_sem_extrato: 'sistema_sem_extrato',
+  extrato_sem_sistema: 'extrato_sem_sistema',
+};
 
 interface LinhaAud {
   key: string;
@@ -237,6 +266,85 @@ function CardsFiltro({
   );
 }
 
+function Campo({ label, valor, muted }: { label: string; valor: string; muted?: boolean }) {
+  return (
+    <div className="flex flex-col min-w-0">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className={`truncate ${muted ? 'text-muted-foreground italic' : ''}`} title={valor}>{valor}</span>
+    </div>
+  );
+}
+
+// ── MUDANÇA 2 — Extrato soberano do mês (cabeçalho de decisão) ─────────────
+function ExtratoSoberanoCard({
+  extrato, nomeConta, ano, mes, onCarregar,
+}: {
+  extrato: ExtratoExistencia; nomeConta: string; ano: number; mes: number; onCarregar: () => void;
+}) {
+  if (extrato.movimentos === 0) {
+    return (
+      <Card className="p-3 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold">Extrato soberano do mês</span>
+          <StatusBadge texto="Nenhum extrato carregado" tom="muted" />
+        </div>
+        <p className="text-[11px] text-muted-foreground">Carregue o extrato para auditar esta conta/mês.</p>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>↑ Carregar Extrato</Button>
+      </Card>
+    );
+  }
+  return (
+    <Card className="p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold">Extrato soberano do mês</span>
+        <StatusBadge texto="Extrato carregado" tom="emerald" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
+        <Campo label="Conta" valor={nomeConta || '—'} />
+        <Campo label="Mês" valor={`${MESES[mes - 1]}/${ano}`} />
+        <Campo label="Movimentos" valor={String(extrato.movimentos)} />
+        <Campo label="Período" valor={`${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}`} />
+        <Campo label="Importado em" valor={fmtDataHora(extrato.importado_em)} />
+        <Campo label="Arquivo" valor="não disponível" muted />
+        <Campo label="Saldo" valor="não disponível" muted />
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Ver extrato</Button>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Carregar versão atualizada</Button>
+      </div>
+    </Card>
+  );
+}
+
+// ── MUDANÇA 3 — Próxima ação (derivada EXCLUSIVAMENTE do veredito 01.4) ─────
+function ProximaAcao({ diag, onResolver }: { diag: DiagnosticoSoberano; onResolver: (f: FiltroKey) => void }) {
+  if (diag.veredito.conciliado) {
+    return (
+      <Card className="p-3 flex items-center gap-2 text-xs border-emerald-200 bg-emerald-50/50">
+        <span className="font-semibold text-emerald-700">Próxima ação ·</span>
+        <span className="text-emerald-800">Conta conciliada contra o extrato.</span>
+      </Card>
+    );
+  }
+  const bloqueios = diag.veredito.bloqueios.filter((b) => b.count > 0 && LABEL_BLOQUEIO[b.tipo]);
+  const frase = bloqueios.map((b) => LABEL_BLOQUEIO[b.tipo](b.count)).join(' e ');
+  const primeiro = bloqueios[0];
+  return (
+    <Card className="p-3 space-y-1.5 border-rose-200 bg-rose-50/40">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs">
+          <span className="font-semibold text-rose-700">Próxima ação · </span>Conta não fecha.
+        </span>
+        {primeiro && BLOQUEIO_FILTRO[primeiro.tipo] && (
+          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
+            onClick={() => onResolver(BLOQUEIO_FILTRO[primeiro.tipo])}>Resolver agora</Button>
+        )}
+      </div>
+      {frase && <p className="text-[11px] text-muted-foreground">Resolva {frase}.</p>}
+    </Card>
+  );
+}
+
 export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateToLancamentos }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -262,9 +370,44 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
 
   const anoMes = `${ano}-${String(mes).padStart(2, '0')}`;
 
+  // MUDANÇA 1 — existência/contagem do extrato salvo (fonte: extrato_bancario_v2).
+  // Range por data_movimento (não há ano_mes nesta tabela). count/min/max derivados
+  // client-side (read-only; sem RPC/SQL novo). Sem filtro de status/cancelado_em —
+  // espelha o range da RPC 01.4.
+  const { data: extrato, isLoading: loadingExtrato } = useQuery({
+    queryKey: ['auditoria-extrato-existe', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<ExtratoExistencia> => {
+      const mm = String(mes).padStart(2, '0');
+      const d1 = `${ano}-${mm}-01`;
+      const ultimoDia = new Date(ano, mes, 0).getDate();
+      const d2 = `${ano}-${mm}-${String(ultimoDia).padStart(2, '0')}`;
+      const { data, error: e } = await (supabase as any)
+        .from('extrato_bancario_v2')
+        .select('data_movimento, created_at')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .gte('data_movimento', d1)
+        .lte('data_movimento', d2);
+      if (e) throw e;
+      const rows = (data as { data_movimento: string; created_at: string }[]) || [];
+      if (rows.length === 0) return { movimentos: 0, periodo_ini: null, periodo_fim: null, importado_em: null };
+      let ini = rows[0].data_movimento, fim = rows[0].data_movimento, imp = rows[0].created_at;
+      for (const r of rows) {
+        if (r.data_movimento < ini) ini = r.data_movimento;
+        if (r.data_movimento > fim) fim = r.data_movimento;
+        if (r.created_at < imp) imp = r.created_at;
+      }
+      return { movimentos: rows.length, periodo_ini: ini, periodo_fim: fim, importado_em: imp };
+    },
+  });
+  const temExtrato = (extrato?.movimentos ?? 0) > 0;
+
+  // Diagnóstico só faz sentido com extrato salvo -> enabled gated por temExtrato.
   const { data: diag, isLoading, error } = useQuery({
     queryKey: ['auditoria-soberana', clienteId, contaId, anoMes],
-    enabled: !!clienteId && !!contaId,
+    enabled: !!clienteId && !!contaId && temExtrato,
     staleTime: 30_000,
     queryFn: async (): Promise<DiagnosticoSoberano | null> => {
       const { data, error: e } = await (supabase as any).rpc('fn_conciliacao_soberana', {
@@ -389,24 +532,35 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         <select className="text-xs border rounded px-2 py-1 bg-background" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        {diag && (
+        {temExtrato && diag && (
           diag.veredito.conciliado
             ? <StatusBadge texto="Conciliado" tom="emerald" />
             : <StatusBadge texto="Não fecha" tom="rose" />
         )}
-        <div className="ml-auto">
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
-            ↑ Carregar Extrato
-          </Button>
-        </div>
       </div>
 
-      {isLoading && <Card className="p-3 text-xs text-muted-foreground">Carregando diagnóstico…</Card>}
-      {error && <Card className="p-3 text-xs text-rose-600">Falha ao carregar o diagnóstico.</Card>}
+      {/* MUDANÇA 2 — Extrato soberano do mês (sempre no topo) */}
+      {loadingExtrato && <Card className="p-3 text-xs text-muted-foreground">Verificando extrato…</Card>}
+      {!loadingExtrato && extrato && (
+        <ExtratoSoberanoCard
+          extrato={extrato}
+          nomeConta={nomeConta}
+          ano={ano}
+          mes={mes}
+          onCarregar={() => setImportOpen(true)}
+        />
+      )}
 
-      {diag && (
+      {/* Sem extrato salvo: nada a auditar abaixo. */}
+      {temExtrato && isLoading && <Card className="p-3 text-xs text-muted-foreground">Carregando diagnóstico…</Card>}
+      {temExtrato && error && <Card className="p-3 text-xs text-rose-600">Falha ao carregar o diagnóstico.</Card>}
+
+      {temExtrato && diag && (
         <>
           <ResumoAuditoria diag={diag} nomeConta={nomeConta} />
+
+          {/* MUDANÇA 3 — Próxima ação (derivada do veredito 01.4) */}
+          <ProximaAcao diag={diag} onResolver={setFiltroAtivo} />
 
           <CardsFiltro ativo={filtroAtivo} onSelect={setFiltroAtivo} contagens={contagens} />
 
@@ -443,6 +597,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         contaBancariaIdInicial={contaId ?? undefined}
         onImported={(r) => {
           toast.success(`${r.inseridos} movimento(s) importado(s).`);
+          // MUDANÇA 4 — recarrega existência do extrato + diagnóstico (sem F5).
+          queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
           queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
         }}
       />
