@@ -698,6 +698,16 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     return preview.movimentos.filter((m) => aplicarFiltro(m, filtro));
   }, [preview, filtro]);
 
+  // BUG-H1.1A — OFX já 100% importado anteriormente: nada novo a salvar e sem
+  // pendências/parciais. Nesse caso o modal entra em modo informativo (sem trilha
+  // de etapas, sem "Finalizar conciliação"). Só exibição — não grava nada.
+  const jaImportadoIntegralmente =
+    !!preview &&
+    preview.novosParaSalvar === 0 &&
+    preview.parciais === 0 &&
+    preview.pendentes === 0 &&
+    preview.totalLinhas > 0;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="w-[94vw] max-w-7xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
@@ -740,7 +750,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
           </Button>
 
           {/* Step indicator + Ver divergência empurrados para a direita. */}
-          {preview && (() => {
+          {preview && !jaImportadoIntegralmente && (() => {
             const algoSalvo = preview.existentesNoBanco > 0;
             const tudoSalvo = preview.novosParaSalvar === 0 && preview.totalLinhas > 0;
             const temPendencia = preview.pendentes > 0 || preview.parciais > 0;
@@ -1318,7 +1328,16 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
 
         <DialogFooter className="shrink-0 border-t bg-background px-6 py-3 flex items-center justify-between gap-3 z-20 flex-col-reverse sm:flex-row">
           {/* Zona 1: resumo do estado atual */}
-          {preview ? (
+          {preview && jaImportadoIntegralmente ? (
+            <div className="text-[11px] text-muted-foreground sm:mr-auto">
+              <span className="font-semibold text-foreground">OFX já importado anteriormente</span>
+              {' · '}Movimentos no arquivo: <span className="tabular-nums">{preview.totalLinhas}</span>
+              {' · '}Já existentes no banco: <span className="tabular-nums">{preview.existentesNoBanco}</span>
+              {' · '}Novos para importar: <span className="tabular-nums">0</span>
+              {preview.ignorados > 0 && <> · Ignorados: <span className="tabular-nums">{preview.ignorados}</span></>}
+              {' · '}<span className="text-emerald-700">Nenhuma ação necessária.</span>
+            </div>
+          ) : preview ? (
             <div className="text-[11px] text-muted-foreground sm:mr-auto truncate">
               {preview.totalLinhas} mov.
               {preview.conciliados > 0 && <> · <span className="text-emerald-700 font-semibold">{preview.conciliados} conciliados</span></>}
@@ -1348,6 +1367,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
             {/* Zona 3: ação principal — varia conforme o estado do fluxo */}
             {(() => {
               if (!preview) return null;
+              // OFX já importado integralmente: sem ação. Só o "Fechar" fixo acima.
+              if (jaImportadoIntegralmente) return null;
               if (preview.novosParaSalvar > 0) {
                 // Estado 1: ainda há novos para salvar → botão de save (primário, padrão)
                 return (
