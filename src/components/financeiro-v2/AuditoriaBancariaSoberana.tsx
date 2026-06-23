@@ -1,20 +1,23 @@
 // ============================================================================
-// P0-H1 — Auditoria Bancária Soberana (render-only / diagnóstico).
-// Consome o read-model fn_conciliacao_soberana (SOBERANA-01.3, vínculo governa)
-// e exibe, orientado por exceção: Resumo → problemas primeiro → Corretos recolhido.
+// P0-H1.1 — Auditoria Bancária Soberana (UX render-only / diagnóstico).
+// Consome o read-model fn_conciliacao_soberana (SOBERANA-01.4, status realizado)
+// e exibe: Resumo compacto → cards-filtro clicáveis → lista única filtrável.
 //
-// READ-ONLY: nenhuma ação grava/altera dado. Botões = deep-link/atalho operacional
-// (navegação + toast de contexto). Gravação (aceitar agrupamento, criar lançamento)
-// fica para o P0-H2. Frente separada da Conciliação Bancária atual.
+// READ-ONLY: nenhuma ação grava/altera dado. Botões = navegação por mês
+// (onNavigateToLancamentos) + toast de contexto (descrição/valor/motivo/origem).
+// Agrupamento é apenas sugestão visual. Gravação fica para o P0-H2.
+// Frente isolada da Conciliação Bancária atual.
 //
 // RPC não tipado nos types gerados -> (supabase as any).rpc (idioma do projeto).
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
+import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { toast } from 'sonner';
 
 interface Props {
@@ -23,22 +26,17 @@ interface Props {
   onNavigateToLancamentos?: (ano: number, mes: number) => void;
 }
 
-interface ContaRef {
-  id: string;
-  nome_conta: string;
-  nome_exibicao: string | null;
-}
-
-// ── Contrato do JSON 01.3 ──────────────────────────────────────────────────
+// ── Contrato do JSON 01.4 ──────────────────────────────────────────────────
 interface DivItem {
   link_id: string; motivo: string;
   extrato_id: string; data_ofx: string | null; valor: number; descricao: string | null;
   lancamento_id: string | null; data_lancamento: string | null; valor_lancamento: number | null;
-  origem_lancamento: string | null; dias: number | null;
+  origem_lancamento: string | null; status_transacao: string | null; dias: number | null;
 }
 interface SistemaItem {
   lancamento_id: string; data: string | null; valor_assinado: number;
   sinal: string | null; descricao: string | null; origem_lancamento: string | null;
+  status_transacao: string | null;
 }
 interface ExtratoItem {
   extrato_id: string; data: string | null; valor: number; tipo: string | null; descricao: string | null;
@@ -79,6 +77,11 @@ const LABEL_ORIGEM: Record<string, string> = {
 const LABEL_MOTIVO: Record<string, string> = {
   cancelado: 'Cancelado', sinal_cruzado: 'Sinal cruzado', conta_divergente: 'Conta divergente',
   valor_divergente: 'Valor divergente', data_divergente: 'Data divergente', sem_lancamento: 'Sem lançamento',
+  status_nao_realizado: 'Não realizado',
+};
+// status_transacao do lançamento (exposto pelo 01.4).
+const LABEL_STATUS: Record<string, string> = {
+  realizado: 'Realizado', previsto: 'Previsto', projetado: 'Projetado', cancelado: 'Cancelado',
 };
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -91,8 +94,11 @@ const fmtData = (s: string | null) => {
 };
 const labelOrigem = (o: string | null) => (o ? LABEL_ORIGEM[o] ?? o : '—');
 const labelMotivo = (m: string) => LABEL_MOTIVO[m] ?? m;
+const labelStatus = (s: string | null) => (s ? LABEL_STATUS[s] ?? s : '—');
 
-function StatusBadge({ texto, tom }: { texto: string; tom: 'rose' | 'amber' | 'violet' | 'emerald' | 'muted' }) {
+type Tom = 'rose' | 'amber' | 'violet' | 'emerald' | 'muted';
+
+function StatusBadge({ texto, tom }: { texto: string; tom: Tom }) {
   const cor = {
     rose: 'bg-rose-50 text-rose-700 border-rose-200',
     amber: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -103,37 +109,152 @@ function StatusBadge({ texto, tom }: { texto: string; tom: 'rose' | 'amber' | 'v
   return <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${cor}`}>{texto}</span>;
 }
 
-function BlocoProblema({
-  titulo, count, children,
-}: { titulo: string; count: number; children: React.ReactNode }) {
-  if (count === 0) return null;
+// ── Linha normalizada da lista única ───────────────────────────────────────
+type FiltroKey =
+  | 'todos' | 'divergencias' | 'sistema_sem_extrato' | 'extrato_sem_sistema'
+  | 'agrupamentos' | 'desconsiderados' | 'corretos';
+
+interface LinhaAud {
+  key: string;
+  bucket: Exclude<FiltroKey, 'todos' | 'corretos'>;
+  status: string;
+  tom: Tom;
+  data: string | null;
+  descricao: string;
+  origem: string;
+  valor: number;
+  motivo: string;
+  acaoLabel: string | null;
+  onAcao?: () => void;
+}
+
+const tomStatusTransacao = (s: string | null): Tom => {
+  if (s === 'realizado') return 'emerald';
+  if (s === 'previsto' || s === 'projetado') return 'amber';
+  if (s === 'cancelado') return 'rose';
+  return 'muted';
+};
+
+function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
   return (
-    <Card className="p-3 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">{titulo}</span>
-        <span className="text-xs text-muted-foreground tabular-nums">{count}</span>
+    <div className="py-1.5 flex items-center gap-2 text-xs">
+      <StatusBadge texto={linha.status} tom={linha.tom} />
+      <span className="w-12 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
+      <span className="flex-1 min-w-0 truncate" title={linha.descricao}>{linha.descricao}</span>
+      <span className="w-28 shrink-0 truncate text-[11px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
+      <span className="w-24 shrink-0 text-right tabular-nums">R$ {fmtBRL(linha.valor)}</span>
+      <span className="w-36 shrink-0 truncate text-[10px] text-muted-foreground" title={linha.motivo}>{linha.motivo}</span>
+      {linha.acaoLabel ? (
+        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0 w-[68px]" onClick={linha.onAcao}>
+          {linha.acaoLabel}
+        </Button>
+      ) : (
+        <span className="w-[68px] shrink-0" />
+      )}
+    </div>
+  );
+}
+
+// ── Resumo compacto (espelha "Resumo das Movimentações") ───────────────────
+function ResumoAuditoria({ diag, nomeConta }: { diag: DiagnosticoSoberano; nomeConta: string }) {
+  const difEnt = diag.resumo.ofx.entradas - diag.resumo.lv2.entradas;
+  const difSai = diag.resumo.ofx.saidas - diag.resumo.lv2.saidas;
+  const Dif = ({ v }: { v: number }) => (
+    <span className={`text-right tabular-nums ${Math.abs(v) >= 0.005 ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}>{fmtBRL(v)}</span>
+  );
+  return (
+    <div className="rounded-lg border overflow-hidden bg-card">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        <span className="text-xs font-semibold">📊 Resumo da auditoria</span>
+        <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 truncate max-w-[55%]">{nomeConta}</span>
       </div>
-      <div className="divide-y">{children}</div>
-    </Card>
+      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-xs">
+        <span />
+        <span className="text-right font-medium text-muted-foreground">Extrato</span>
+        <span className="text-right font-medium text-muted-foreground">Sistema</span>
+        <span className="text-right font-medium text-muted-foreground">Diferença</span>
+
+        <span className="text-muted-foreground">Saldo Inicial</span>
+        <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_inicial == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_inicial)}</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
+
+        <span className="text-muted-foreground">Entradas</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.entradas)}</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+        <Dif v={difEnt} />
+
+        <span className="text-muted-foreground">Saídas</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.saidas)}</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+        <Dif v={difSai} />
+
+        <span className="text-muted-foreground">Saldo Final</span>
+        <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_final == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_final)}</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Cards-filtro clicáveis ─────────────────────────────────────────────────
+function CardsFiltro({
+  ativo, onSelect, contagens,
+}: {
+  ativo: FiltroKey;
+  onSelect: (k: FiltroKey) => void;
+  contagens: Record<FiltroKey, number>;
+}) {
+  const FILTROS: { key: FiltroKey; label: string }[] = [
+    { key: 'todos', label: 'Todos' },
+    { key: 'divergencias', label: 'Divergências' },
+    { key: 'sistema_sem_extrato', label: 'Sistema sem Extrato' },
+    { key: 'extrato_sem_sistema', label: 'Extrato sem Sistema' },
+    { key: 'agrupamentos', label: 'Agrupamentos' },
+    { key: 'desconsiderados', label: 'Desconsiderados' },
+    { key: 'corretos', label: 'Corretos' },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {FILTROS.map((f) => {
+        const on = ativo === f.key;
+        return (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => onSelect(f.key)}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
+              on ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            <span>{f.label}</span>
+            <span className={`tabular-nums font-semibold ${on ? 'text-foreground' : 'text-foreground/80'}`}>{contagens[f.key]}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
 export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateToLancamentos }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
-  const [contas, setContas] = useState<ContaRef[]>([]);
+  const queryClient = useQueryClient();
+  const [contas, setContas] = useState<ContaSelecionavel[]>([]);
   const [contaId, setContaId] = useState<string | null>(null);
   const [ano, setAno] = useState<number>(Number(initialAno) || new Date().getFullYear());
   const [mes, setMes] = useState<number>(initialMes ?? new Date().getMonth() + 1);
-  const [corretosAberto, setCorretosAberto] = useState(false);
+  const [filtroAtivo, setFiltroAtivo] = useState<FiltroKey>('todos');
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (!clienteId) return;
     supabase.from('financeiro_contas_bancarias')
-      .select('id,nome_conta,nome_exibicao')
+      .select('id,nome_conta,nome_exibicao,tipo_conta')
       .eq('cliente_id', clienteId).eq('ativa', true).order('ordem_exibicao')
       .then(({ data }) => {
-        const cs = (data as ContaRef[]) || [];
+        const cs = (data as ContaSelecionavel[]) || [];
         setContas(cs);
         setContaId((prev) => prev ?? cs[0]?.id ?? null);
       });
@@ -160,28 +281,108 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     return c ? (c.nome_exibicao ?? c.nome_conta) : '';
   }, [contas, contaId]);
 
-  // H1 read-only: botão = navegação/atalho + toast de contexto. Nunca grava.
+  // H1.1 read-only: botão = navegação por mês + toast de contexto. Nunca grava.
   const irLancamentos = (ctx: string) => {
     toast.info(ctx);
     onNavigateToLancamentos?.(ano, mes);
   };
 
+  // Normaliza todos os buckets em linhas comuns da lista única.
+  const linhas = useMemo<LinhaAud[]>(() => {
+    if (!diag) return [];
+    const b = diag.buckets;
+    const out: LinhaAud[] = [];
+
+    for (const it of b.divergencias_vinculo) {
+      const desc = it.descricao ?? '—';
+      const origem = labelOrigem(it.origem_lancamento);
+      const motivo = it.motivo === 'data_divergente' && it.dias != null
+        ? `${labelMotivo(it.motivo)} (${it.dias}d)`
+        : labelMotivo(it.motivo);
+      out.push({
+        key: `div-${it.link_id}`, bucket: 'divergencias', status: 'Divergência', tom: 'rose',
+        data: it.data_ofx, descricao: desc, origem, valor: it.valor, motivo,
+        acaoLabel: 'Corrigir',
+        onAcao: () => irLancamentos(`Corrigir vínculo · ${desc} · R$ ${fmtBRL(it.valor)} · ${motivo} · ${origem}`),
+      });
+    }
+
+    for (const it of b.sistema_sem_extrato) {
+      const desc = it.descricao ?? '—';
+      const origem = labelOrigem(it.origem_lancamento);
+      const valor = Math.abs(it.valor_assinado);
+      out.push({
+        key: `sis-${it.lancamento_id}`, bucket: 'sistema_sem_extrato',
+        status: labelStatus(it.status_transacao), tom: tomStatusTransacao(it.status_transacao),
+        data: it.data, descricao: desc, origem, valor, motivo: 'Sem extrato correspondente',
+        acaoLabel: 'Verificar',
+        onAcao: () => irLancamentos(`Verificar lançamento sem extrato · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
+      });
+    }
+
+    for (const it of b.extrato_sem_sistema) {
+      const desc = it.descricao ?? '—';
+      const valor = Math.abs(it.valor);
+      out.push({
+        key: `ext-${it.extrato_id}`, bucket: 'extrato_sem_sistema', status: 'Sem sistema', tom: 'amber',
+        data: it.data, descricao: desc, origem: 'Extrato', valor, motivo: 'Sem lançamento no sistema',
+        acaoLabel: 'Criar',
+        onAcao: () => irLancamentos(`Criar lançamento p/ extrato · ${desc} · R$ ${fmtBRL(valor)} · Sem lançamento no sistema · Extrato`),
+      });
+    }
+
+    for (const it of b.agrupamentos) {
+      const composicao = it.lancamentos.map((l) => `R$ ${fmtBRL(Math.abs(l.valor_assinado))}`).join(' + ');
+      const desc = `R$ ${fmtBRL(it.valor)} = ${composicao}`;
+      out.push({
+        key: `agr-${it.extrato_id}`, bucket: 'agrupamentos', status: 'Agrupado', tom: 'violet',
+        data: null, descricao: desc, origem: 'Sugestão', valor: it.valor, motivo: 'candidato de agrupamento',
+        acaoLabel: 'Agrupar',
+        onAcao: () => toast.info(`Candidato de agrupamento: ${desc} (sugestão; gravação no H2)`),
+      });
+    }
+
+    for (const it of b.desconsiderados) {
+      const desc = it.descricao ?? '—';
+      out.push({
+        key: `des-${it.extrato_id}`, bucket: 'desconsiderados', status: 'Desconsiderado', tom: 'muted',
+        data: it.data, descricao: desc, origem: it.tipo ?? 'Extrato', valor: Math.abs(it.valor),
+        motivo: 'Não entra na conciliação', acaoLabel: null,
+      });
+    }
+
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diag, ano, mes]);
+
+  const contagens = useMemo<Record<FiltroKey, number>>(() => {
+    const c: Record<FiltroKey, number> = {
+      todos: linhas.length, divergencias: 0, sistema_sem_extrato: 0, extrato_sem_sistema: 0,
+      agrupamentos: 0, desconsiderados: 0, corretos: diag?.resumo.corretos.qtd ?? 0,
+    };
+    for (const l of linhas) c[l.bucket] += 1;
+    return c;
+  }, [linhas, diag]);
+
+  const linhasFiltradas = useMemo(() => {
+    if (filtroAtivo === 'todos' || filtroAtivo === 'corretos') return linhas;
+    return linhas.filter((l) => l.bucket === filtroAtivo);
+  }, [linhas, filtroAtivo]);
+
   const anos = [ano - 1, ano, ano + 1].filter((a, i, arr) => arr.indexOf(a) === i);
 
   return (
     <div className="space-y-3 p-2 overflow-auto h-full">
-      {/* Cabeçalho: conta + mês + veredito */}
+      {/* Cabeçalho: conta (agrupada) + mês + ano + veredito + carregar extrato */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold">Auditoria Bancária Soberana</span>
-        <select
-          className="text-xs border rounded px-2 py-1 bg-background"
-          value={contaId ?? ''}
-          onChange={(e) => setContaId(e.target.value || null)}
-        >
-          {contas.map((c) => (
-            <option key={c.id} value={c.id}>{c.nome_exibicao ?? c.nome_conta}</option>
-          ))}
-        </select>
+        <ContaBancariaSelect
+          value={contaId}
+          onValueChange={(id) => setContaId(id || null)}
+          contas={contas}
+          placeholder="Selecionar conta"
+          className="h-8 text-xs w-[220px]"
+        />
         <select className="text-xs border rounded px-2 py-1 bg-background" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
           {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
@@ -193,147 +394,58 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
             ? <StatusBadge texto="Conciliado" tom="emerald" />
             : <StatusBadge texto="Não fecha" tom="rose" />
         )}
+        <div className="ml-auto">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
+            ↑ Carregar Extrato
+          </Button>
+        </div>
       </div>
 
       {isLoading && <Card className="p-3 text-xs text-muted-foreground">Carregando diagnóstico…</Card>}
       {error && <Card className="p-3 text-xs text-rose-600">Falha ao carregar o diagnóstico.</Card>}
 
-      {diag && (() => {
-        const b = diag.buckets;
-        const difEnt = diag.resumo.ofx.entradas - diag.resumo.lv2.entradas;
-        const difSai = diag.resumo.ofx.saidas - diag.resumo.lv2.saidas;
-        return (
-          <>
-            {/* BLOCO 1 — RESUMO (Extrato × Sistema × Diferença) */}
-            <Card className="p-3">
-              <div className="text-xs font-semibold mb-1.5">Resumo da auditoria — {nomeConta}</div>
-              <div className="grid grid-cols-4 gap-x-3 gap-y-1 text-xs">
-                <span className="text-muted-foreground" />
-                <span className="text-right font-medium text-muted-foreground">Extrato</span>
-                <span className="text-right font-medium text-muted-foreground">Sistema</span>
-                <span className="text-right font-medium text-muted-foreground">Diferença</span>
+      {diag && (
+        <>
+          <ResumoAuditoria diag={diag} nomeConta={nomeConta} />
 
-                <span className="text-muted-foreground">Saldo Inicial</span>
-                <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_inicial == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_inicial)}</span>
-                <span className="text-right tabular-nums text-muted-foreground">—</span>
-                <span className="text-right tabular-nums text-muted-foreground">—</span>
+          <CardsFiltro ativo={filtroAtivo} onSelect={setFiltroAtivo} contagens={contagens} />
 
-                <span className="text-muted-foreground">Entradas</span>
-                <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.entradas)}</span>
-                <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
-                <span className={`text-right tabular-nums ${Math.abs(difEnt) >= 0.005 ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}>{fmtBRL(difEnt)}</span>
-
-                <span className="text-muted-foreground">Saídas</span>
-                <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.saidas)}</span>
-                <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
-                <span className={`text-right tabular-nums ${Math.abs(difSai) >= 0.005 ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}>{fmtBRL(difSai)}</span>
-
-                <span className="text-muted-foreground">Saldo Final</span>
-                <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_final == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_final)}</span>
-                <span className="text-right tabular-nums text-muted-foreground">—</span>
-                <span className="text-right tabular-nums text-muted-foreground">—</span>
-              </div>
-            </Card>
-
-            {/* Tira compacta de contadores (blocos vazios não ocupam a tela) */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-[11px] text-muted-foreground">
-              <span>Divergências: <b className="tabular-nums text-foreground">{b.divergencias_vinculo.length}</b></span>
-              <span>Sistema sem Extrato: <b className="tabular-nums text-foreground">{b.sistema_sem_extrato.length}</b></span>
-              <span>Extrato sem Sistema: <b className="tabular-nums text-foreground">{b.extrato_sem_sistema.length}</b></span>
-              <span>Agrupamentos: <b className="tabular-nums text-foreground">{b.agrupamentos.length}</b></span>
-              <span>Desconsiderados: <b className="tabular-nums text-foreground">{b.desconsiderados.length}</b></span>
-              <span>Corretos: <b className="tabular-nums text-foreground">{diag.resumo.corretos.qtd}</b></span>
-            </div>
-
-            {/* PROBLEMAS PRIMEIRO — só renderiza não-vazio */}
-            <BlocoProblema titulo="Divergências de Vínculo" count={b.divergencias_vinculo.length}>
-              {b.divergencias_vinculo.map((it) => (
-                <div key={it.link_id} className="py-1.5 flex items-center gap-2 text-xs">
-                  <StatusBadge texto={labelMotivo(it.motivo)} tom="rose" />
-                  <span className="w-12 shrink-0 text-muted-foreground">{fmtData(it.data_ofx)}</span>
-                  <span className="w-24 text-right tabular-nums shrink-0">{fmtBRL(it.valor)}</span>
-                  <span className="flex-1 truncate">{it.descricao ?? '—'}</span>
-                  <span className="w-24 shrink-0 truncate text-muted-foreground">{labelOrigem(it.origem_lancamento)}</span>
-                  <span className="w-16 shrink-0 text-[10px] text-muted-foreground text-right">{it.dias != null ? `${it.dias}d` : ''}</span>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
-                    onClick={() => irLancamentos(`Corrigir vínculo (${labelMotivo(it.motivo)}) · R$ ${fmtBRL(it.valor)}`)}>Corrigir</Button>
-                </div>
-              ))}
-            </BlocoProblema>
-
-            <BlocoProblema titulo="Sistema sem Extrato" count={b.sistema_sem_extrato.length}>
-              {b.sistema_sem_extrato.map((it) => (
-                <div key={it.lancamento_id} className="py-1.5 flex items-center gap-2 text-xs">
-                  <StatusBadge texto="Sem Extrato" tom="amber" />
-                  <span className="w-12 shrink-0 text-muted-foreground">{fmtData(it.data)}</span>
-                  <span className="w-24 text-right tabular-nums shrink-0">{fmtBRL(Math.abs(it.valor_assinado))}</span>
-                  <span className="flex-1 truncate">{it.descricao ?? '—'}</span>
-                  <span className="w-28 shrink-0 truncate text-muted-foreground">{labelOrigem(it.origem_lancamento)}</span>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
-                    onClick={() => irLancamentos(`Verificar lançamento sem extrato · R$ ${fmtBRL(Math.abs(it.valor_assinado))}`)}>Verificar</Button>
-                </div>
-              ))}
-            </BlocoProblema>
-
-            <BlocoProblema titulo="Extrato sem Sistema" count={b.extrato_sem_sistema.length}>
-              {b.extrato_sem_sistema.map((it) => (
-                <div key={it.extrato_id} className="py-1.5 flex items-center gap-2 text-xs">
-                  <StatusBadge texto="Sem Sistema" tom="amber" />
-                  <span className="w-12 shrink-0 text-muted-foreground">{fmtData(it.data)}</span>
-                  <span className="w-24 text-right tabular-nums shrink-0">{fmtBRL(Math.abs(it.valor))}</span>
-                  <span className="flex-1 truncate">{it.descricao ?? '—'}</span>
-                  <span className="w-20 shrink-0 truncate text-muted-foreground">{it.tipo ?? '—'}</span>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
-                    onClick={() => irLancamentos(`Criar lançamento p/ extrato · R$ ${fmtBRL(Math.abs(it.valor))} (${fmtData(it.data)})`)}>Criar</Button>
-                </div>
-              ))}
-            </BlocoProblema>
-
-            <BlocoProblema titulo="Agrupamentos (sugestão)" count={b.agrupamentos.length}>
-              {b.agrupamentos.map((it) => (
-                <div key={it.extrato_id} className="py-1.5 flex items-center gap-2 text-xs">
-                  <StatusBadge texto="Agrupado" tom="violet" />
-                  <span className="w-24 text-right tabular-nums shrink-0">{fmtBRL(it.valor)}</span>
-                  <span className="flex-1 truncate text-muted-foreground">
-                    = {it.lancamentos.map((l) => fmtBRL(Math.abs(l.valor_assinado))).join(' + ')}
-                  </span>
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
-                    onClick={() => toast.info(`Candidato de agrupamento: R$ ${fmtBRL(it.valor)} = ${it.lancamentos.map((l) => fmtBRL(Math.abs(l.valor_assinado))).join(' + ')} (sugestão; gravação no H2)`)}>Agrupar</Button>
-                </div>
-              ))}
-            </BlocoProblema>
-
-            {/* Desconsiderados (fora do fechamento) */}
-            <BlocoProblema titulo="Movimentos Desconsiderados" count={b.desconsiderados.length}>
-              {b.desconsiderados.map((it) => (
-                <div key={it.extrato_id} className="py-1.5 flex items-center gap-2 text-xs">
-                  <StatusBadge texto="Desconsiderado" tom="muted" />
-                  <span className="w-12 shrink-0 text-muted-foreground">{fmtData(it.data)}</span>
-                  <span className="w-24 text-right tabular-nums shrink-0">{fmtBRL(Math.abs(it.valor))}</span>
-                  <span className="flex-1 truncate">{it.descricao ?? '—'}</span>
-                  <span className="w-20 shrink-0 truncate text-muted-foreground">{it.tipo ?? '—'}</span>
-                </div>
-              ))}
-            </BlocoProblema>
-
-            {/* Corretos — recolhido (só qtd + valor; sem lista) */}
-            <Card className="p-3">
-              <button type="button" onClick={() => setCorretosAberto((v) => !v)}
-                className="w-full flex items-center justify-between text-xs">
-                <span className="font-semibold text-emerald-700">{corretosAberto ? '▾' : '▸'} Corretos</span>
+          {filtroAtivo === 'corretos' ? (
+            <Card className="p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-emerald-700">Corretos</span>
                 <span className="text-muted-foreground tabular-nums">
                   {diag.resumo.corretos.qtd} · R$ {fmtBRL(diag.resumo.corretos.valor)}
                 </span>
-              </button>
-              {corretosAberto && (
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  {diag.resumo.corretos.qtd} movimento(s) com vínculo válido. Lista detalhada fora do escopo do H1.
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {diag.resumo.corretos.qtd} movimento(s) com vínculo válido. Lista detalhada fora do escopo do H1.
+              </div>
+            </Card>
+          ) : (
+            <Card className="p-0">
+              {linhasFiltradas.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">Nenhum movimento neste filtro. 🎉</div>
+              ) : (
+                <div className="divide-y px-3">
+                  {linhasFiltradas.map((l) => <LinhaAuditoria key={l.key} linha={l} />)}
                 </div>
               )}
             </Card>
-          </>
-        );
-      })()}
+          )}
+        </>
+      )}
+
+      {/* Carregar Extrato — reusa o modal de importação (OFX hoje; CSV/PDF/TXT depois) */}
+      <ExtratoImportPreview
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        contaBancariaIdInicial={contaId ?? undefined}
+        onImported={(r) => {
+          toast.success(`${r.inseridos} movimento(s) importado(s).`);
+          queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+        }}
+      />
     </div>
   );
 }
