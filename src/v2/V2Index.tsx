@@ -54,6 +54,7 @@ import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import FinanciamentoCadastro from '@/pages/FinanciamentoCadastro';
 import FinanciamentosPainelTab from '@/pages/FinanciamentosPainelTab';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { AuditoriaBancariaSoberana } from '@/components/financeiro-v2/AuditoriaBancariaSoberana';
 import CusteioTxtImportTab from './pages/CusteioTxtImportTab';
 import { V2MesaOperacional } from './pages/V2MesaOperacional';
 import { V2MesaClassificacao } from './pages/V2MesaClassificacao';
@@ -526,6 +527,17 @@ export default function V2Index() {
           setAno(String(a));
           setMes(String(m));
           setVoltarParaConciliacao(true);
+          setSection('financeiro-lanc');
+        }}
+      />
+    );
+    if (section === 'auditoria-bancaria') return (
+      <AuditoriaBancariaSoberana
+        initialAno={ano}
+        initialMes={mes !== '0' ? Number(mes) : undefined}
+        onNavigateToLancamentos={(a, m) => {
+          setAno(String(a));
+          setMes(String(m));
           setSection('financeiro-lanc');
         }}
       />
