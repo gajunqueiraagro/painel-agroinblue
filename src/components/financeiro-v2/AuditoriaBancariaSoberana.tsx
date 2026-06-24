@@ -82,10 +82,36 @@ const LABEL_ORIGEM: Record<string, string> = {
   parcela_financiamento: 'Financiamento', contrato: 'Contrato',
   referencia_operacional: 'Referência', extrato: 'Extrato', boitel: 'Boitel',
 };
-const LABEL_MOTIVO: Record<string, string> = {
-  cancelado: 'Cancelado', sinal_cruzado: 'Sinal cruzado', conta_divergente: 'Conta divergente',
-  valor_divergente: 'Valor divergente', data_divergente: 'Data divergente', sem_lancamento: 'Sem lançamento',
-  status_nao_realizado: 'Não realizado',
+// Motivo técnico -> linguagem operacional: { problema (curto, na linha), acao (no tooltip) }.
+const MOTIVO_INFO: Record<string, { problema: string; acao: string }> = {
+  cancelado: {
+    problema: 'Lançamento vinculado está cancelado',
+    acao: 'Revise o vínculo ou recrie o lançamento correto.',
+  },
+  sinal_cruzado: {
+    problema: 'Entrada/saída não bate com o lançamento',
+    acao: 'Verifique se o lançamento foi registrado na direção correta.',
+  },
+  conta_divergente: {
+    problema: 'Lançamento vinculado está em outra conta',
+    acao: 'Corrija a conta do lançamento ou o vínculo.',
+  },
+  valor_divergente: {
+    problema: 'Valor do extrato difere do lançamento',
+    acao: 'Confira o valor lançado.',
+  },
+  data_divergente: {
+    problema: 'Data do extrato e do lançamento diferem',
+    acao: 'Confira a data de pagamento/compensação.',
+  },
+  sem_lancamento: {
+    problema: 'Extrato sem lançamento no sistema',
+    acao: 'Crie o lançamento correspondente.',
+  },
+  status_nao_realizado: {
+    problema: 'Lançamento vinculado não está realizado',
+    acao: 'Realize o lançamento ou remova o vínculo.',
+  },
 };
 // status_transacao do lançamento (exposto pelo 01.4).
 const LABEL_STATUS: Record<string, string> = {
@@ -101,7 +127,8 @@ const fmtData = (s: string | null) => {
   return d && m ? `${d}/${m}` : s;
 };
 const labelOrigem = (o: string | null) => (o ? LABEL_ORIGEM[o] ?? o : '—');
-const labelMotivo = (m: string) => LABEL_MOTIVO[m] ?? m;
+const problemaMotivo = (m: string) => MOTIVO_INFO[m]?.problema ?? m;
+const acaoMotivo = (m: string) => MOTIVO_INFO[m]?.acao ?? '';
 const labelStatus = (s: string | null) => (s ? LABEL_STATUS[s] ?? s : '—');
 const fmtDataHora = (s: string | null) => {
   if (!s) return '—';
@@ -151,11 +178,19 @@ interface LinhaAud {
   data: string | null;
   descricao: string;
   origem: string;
+  tipo: 'entrada' | 'saida';
   valor: number;
   motivo: string;
+  motivoAcao: string;
   acaoLabel: string | null;
   onAcao?: () => void;
 }
+
+// Direção pelo SINAL numérico (entrada = credito/positivo, saida = debito/negativo).
+const dirSinal = (v: number): 'entrada' | 'saida' => (v >= 0 ? 'entrada' : 'saida');
+// Direção pelo TIPO do movimento do extrato (credito/debito).
+const dirTipo = (t: string | null, fallbackVal: number): 'entrada' | 'saida' =>
+  t === 'credito' ? 'entrada' : t === 'debito' ? 'saida' : dirSinal(fallbackVal);
 
 const tomStatusTransacao = (s: string | null): Tom => {
   if (s === 'realizado') return 'emerald';
@@ -164,15 +199,30 @@ const tomStatusTransacao = (s: string | null): Tom => {
   return 'muted';
 };
 
-function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
+function TipoBadge({ tipo }: { tipo: 'entrada' | 'saida' }) {
+  const entrada = tipo === 'entrada';
   return (
-    <div className="py-1.5 flex items-center gap-2 text-xs">
+    <span
+      className={`w-16 shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold ${
+        entrada ? 'text-emerald-700' : 'text-rose-700'
+      }`}
+    >
+      {entrada ? '▲' : '▼'} {entrada ? 'Entrada' : 'Saída'}
+    </span>
+  );
+}
+
+function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
+  const motivoTitle = linha.motivoAcao ? `${linha.motivo} — ${linha.motivoAcao}` : linha.motivo;
+  return (
+    <div className="py-1 flex items-center gap-2 text-[11px]">
       <StatusBadge texto={linha.status} tom={linha.tom} />
-      <span className="w-12 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
+      <span className="w-10 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
       <span className="flex-1 min-w-0 truncate" title={linha.descricao}>{linha.descricao}</span>
-      <span className="w-28 shrink-0 truncate text-[11px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
+      <span className="w-24 shrink-0 truncate text-[10px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
+      <TipoBadge tipo={linha.tipo} />
       <span className="w-24 shrink-0 text-right tabular-nums">R$ {fmtBRL(linha.valor)}</span>
-      <span className="w-36 shrink-0 truncate text-[10px] text-muted-foreground" title={linha.motivo}>{linha.motivo}</span>
+      <span className="w-36 shrink-0 truncate text-[10px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
       {linha.acaoLabel ? (
         <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0 w-[68px]" onClick={linha.onAcao}>
           {linha.acaoLabel}
@@ -439,14 +489,17 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     for (const it of b.divergencias_vinculo) {
       const desc = it.descricao ?? '—';
       const origem = labelOrigem(it.origem_lancamento);
+      // valor de divergencia representa o movimento do extrato (lado OFX) -> direcao pelo sinal.
+      const tipo = dirSinal(it.valor);
+      const valor = Math.abs(it.valor);
       const motivo = it.motivo === 'data_divergente' && it.dias != null
-        ? `${labelMotivo(it.motivo)} (${it.dias}d)`
-        : labelMotivo(it.motivo);
+        ? `${problemaMotivo(it.motivo)} (${it.dias}d)`
+        : problemaMotivo(it.motivo);
       out.push({
         key: `div-${it.link_id}`, bucket: 'divergencias', status: 'Divergência', tom: 'rose',
-        data: it.data_ofx, descricao: desc, origem, valor: it.valor, motivo,
+        data: it.data_ofx, descricao: desc, origem, tipo, valor, motivo, motivoAcao: acaoMotivo(it.motivo),
         acaoLabel: 'Corrigir',
-        onAcao: () => irLancamentos(`Corrigir vínculo · ${desc} · R$ ${fmtBRL(it.valor)} · ${motivo} · ${origem}`),
+        onAcao: () => irLancamentos(`Corrigir vínculo · ${desc} · R$ ${fmtBRL(valor)} · ${motivo} · ${origem}`),
       });
     }
 
@@ -454,10 +507,13 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       const desc = it.descricao ?? '—';
       const origem = labelOrigem(it.origem_lancamento);
       const valor = Math.abs(it.valor_assinado);
+      const tipo = dirSinal(it.valor_assinado);
       out.push({
         key: `sis-${it.lancamento_id}`, bucket: 'sistema_sem_extrato',
         status: labelStatus(it.status_transacao), tom: tomStatusTransacao(it.status_transacao),
-        data: it.data, descricao: desc, origem, valor, motivo: 'Sem extrato correspondente',
+        data: it.data, descricao: desc, origem, tipo, valor,
+        motivo: 'Lançado no sistema, sem movimento no extrato',
+        motivoAcao: 'Confirme se o movimento existe no extrato ou ajuste o lançamento.',
         acaoLabel: 'Verificar',
         onAcao: () => irLancamentos(`Verificar lançamento sem extrato · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
       });
@@ -466,9 +522,12 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     for (const it of b.extrato_sem_sistema) {
       const desc = it.descricao ?? '—';
       const valor = Math.abs(it.valor);
+      const tipo = dirTipo(it.tipo, it.valor);
       out.push({
-        key: `ext-${it.extrato_id}`, bucket: 'extrato_sem_sistema', status: 'Sem sistema', tom: 'amber',
-        data: it.data, descricao: desc, origem: 'Extrato', valor, motivo: 'Sem lançamento no sistema',
+        key: `ext-${it.extrato_id}`, bucket: 'extrato_sem_sistema', status: 'Falta no sistema', tom: 'amber',
+        data: it.data, descricao: desc, origem: 'Extrato', tipo, valor,
+        motivo: 'Movimento no extrato, sem lançamento no sistema',
+        motivoAcao: 'Crie o lançamento correspondente a este movimento.',
         acaoLabel: 'Criar',
         onAcao: () => irLancamentos(`Criar lançamento p/ extrato · ${desc} · R$ ${fmtBRL(valor)} · Sem lançamento no sistema · Extrato`),
       });
@@ -479,7 +538,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       const desc = `R$ ${fmtBRL(it.valor)} = ${composicao}`;
       out.push({
         key: `agr-${it.extrato_id}`, bucket: 'agrupamentos', status: 'Agrupado', tom: 'violet',
-        data: null, descricao: desc, origem: 'Sugestão', valor: it.valor, motivo: 'candidato de agrupamento',
+        data: null, descricao: desc, origem: 'Sugestão', tipo: dirSinal(it.valor), valor: Math.abs(it.valor),
+        motivo: 'Candidato de agrupamento',
+        motivoAcao: 'Sugestão de agrupar vários lançamentos para um único movimento.',
         acaoLabel: 'Agrupar',
         onAcao: () => toast.info(`Candidato de agrupamento: ${desc} (sugestão; gravação no H2)`),
       });
@@ -489,8 +550,11 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       const desc = it.descricao ?? '—';
       out.push({
         key: `des-${it.extrato_id}`, bucket: 'desconsiderados', status: 'Desconsiderado', tom: 'muted',
-        data: it.data, descricao: desc, origem: it.tipo ?? 'Extrato', valor: Math.abs(it.valor),
-        motivo: 'Não entra na conciliação', acaoLabel: null,
+        data: it.data, descricao: desc, origem: it.tipo ?? 'Extrato', tipo: dirTipo(it.tipo, it.valor),
+        valor: Math.abs(it.valor),
+        motivo: 'Fora da conciliação por decisão operacional',
+        motivoAcao: 'Movimento marcado para não entrar na conciliação.',
+        acaoLabel: null,
       });
     }
 
