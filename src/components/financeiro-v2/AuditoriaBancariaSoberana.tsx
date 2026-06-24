@@ -139,13 +139,6 @@ const fmtDataHora = (s: string | null) => {
     : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-// Próxima ação — rótulos PT dos bloqueios do veredito 01.4 (ordem do array).
-const LABEL_BLOQUEIO: Record<string, (n: number) => string> = {
-  divergencias_vinculo: (n) => `${n} ${n === 1 ? 'divergência de vínculo' : 'divergências de vínculo'}`,
-  sistema_sem_extrato: (n) => `${n} ${n === 1 ? 'lançamento sem vínculo' : 'lançamentos sem vínculo'}`,
-  extrato_sem_sistema: (n) => `${n} ${n === 1 ? 'movimento sem vínculo' : 'movimentos sem vínculo'}`,
-};
-
 type Tom = 'rose' | 'amber' | 'violet' | 'emerald' | 'muted';
 
 function StatusBadge({ texto, tom }: { texto: string; tom: Tom }) {
@@ -163,13 +156,6 @@ function StatusBadge({ texto, tom }: { texto: string; tom: Tom }) {
 type FiltroKey =
   | 'todos' | 'divergencias' | 'sistema_sem_extrato' | 'extrato_sem_sistema'
   | 'agrupamentos' | 'desconsiderados' | 'corretos';
-
-// tipo do bloqueio (veredito) -> card-filtro correspondente da lista.
-const BLOQUEIO_FILTRO: Record<string, FiltroKey> = {
-  divergencias_vinculo: 'divergencias',
-  sistema_sem_extrato: 'sistema_sem_extrato',
-  extrato_sem_sistema: 'extrato_sem_sistema',
-};
 
 interface LinhaAud {
   key: string;
@@ -371,6 +357,12 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
   // Indicador principal: Diferença de Saldo = Saldo Calculado (Sistema) − Saldo Extrato Real (banco/PDF).
   const difSaldo = (saldoCalcSistema != null && saldoExtratoReal != null) ? saldoCalcSistema - saldoExtratoReal : null;
   const difZero = difSaldo != null && Math.abs(difSaldo) < 0.005;
+  // Coluna "Dif." — mesma régua em TODAS as linhas: Dif = Extrato − Sistema.
+  const difEnt = diag.resumo.extrato_cru.entradas - diag.resumo.lv2.entradas;
+  const difSai = diag.resumo.extrato_cru.saidas - diag.resumo.lv2.saidas;
+  const difSFC = (saldoCalcExtrato != null && saldoCalcSistema != null) ? saldoCalcExtrato - saldoCalcSistema : null;
+  const corDif = (d: number | null) =>
+    d == null ? 'text-muted-foreground' : (Math.abs(d) < 0.005 ? 'text-emerald-600' : 'text-rose-600');
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
       <div className="flex items-center justify-between px-3 py-1 border-b">
@@ -393,38 +385,44 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
         </div>
       )}
       {aberto && (
-      <div className="px-3 py-2 grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
+      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
         <span />
         <span className="text-right font-medium text-muted-foreground">Extrato</span>
         <span className="text-right font-medium text-muted-foreground">Sistema</span>
+        <span className="text-right font-medium text-muted-foreground">Dif.</span>
 
         <span className="text-muted-foreground">Saldo Inicial</span>
-        <span className="text-right tabular-nums">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
-        <span className="text-right tabular-nums">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
 
         <span className="text-muted-foreground">Entradas</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+        <span className="text-right tabular-nums text-[12px]">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
+        <span className="text-right tabular-nums text-[12px]">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+        <span className={`text-right tabular-nums text-[12px] ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
         <span className="text-muted-foreground">Saídas</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+        <span className="text-right tabular-nums text-[12px]">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
+        <span className="text-right tabular-nums text-[12px]">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+        <span className={`text-right tabular-nums text-[12px] ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-        <span className="col-span-3 border-t my-1" />
+        <span className="col-span-4 border-t my-1" />
 
         <span className="text-muted-foreground font-medium">Saldo Final Calculado</span>
-        <span className="text-right tabular-nums font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
-        <span className="text-right tabular-nums font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
 
         <span className="col-span-2 text-muted-foreground">Saldo Extrato Real</span>
-        <span className="text-right tabular-nums font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-muted-foreground">—</span>
 
-        <span className="col-span-3 border-t my-1" />
+        <span className="col-span-4 border-t my-1" />
 
         <span className="text-muted-foreground font-semibold">Diferença de Saldo</span>
-        <span className={`col-span-2 text-right tabular-nums font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
+        <span className={`col-span-3 text-right tabular-nums text-[13px] font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
           {difSaldo != null ? fmtBRL(difSaldo) : '—'}
         </span>
       </div>
@@ -477,8 +475,8 @@ function CardsFiltro({
 function Campo({ label, valor, muted }: { label: string; valor: string; muted?: boolean }) {
   return (
     <div className="flex flex-col min-w-0">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <span className={`truncate ${muted ? 'text-muted-foreground italic' : ''}`} title={valor}>{valor}</span>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className={`text-[13px] truncate ${muted ? 'text-muted-foreground italic' : ''}`} title={valor}>{valor}</span>
     </div>
   );
 }
@@ -503,7 +501,7 @@ function ExtratoSoberanoCard({
     );
   }
   return (
-    <Card className="p-3 space-y-2">
+    <Card className="p-3 space-y-1.5">
       <div className="flex items-center justify-between">
         <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
           {aberto ? '▼' : '▶'} Extrato soberano do mês
@@ -512,7 +510,7 @@ function ExtratoSoberanoCard({
       </div>
       {aberto ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
             <Campo label="Conta" valor={nomeConta || '—'} />
             <Campo label="Mês" valor={`${MESES[mes - 1]}/${ano}`} />
             <Campo label="Movimentos" valor={String(extrato.movimentos)} />
@@ -521,7 +519,7 @@ function ExtratoSoberanoCard({
             <Campo label="Arquivo" valor="não disponível" muted />
             <Campo label="Saldo" valor="não disponível" muted />
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex justify-start gap-2 flex-wrap">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Ver extrato</Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Carregar versão atualizada</Button>
           </div>
@@ -531,35 +529,6 @@ function ExtratoSoberanoCard({
           {nomeConta || '—'} · {MESES[mes - 1]}/{ano} · {extrato.movimentos} movimentos · carregado
         </div>
       )}
-    </Card>
-  );
-}
-
-// ── MUDANÇA 3 — Próxima ação (derivada EXCLUSIVAMENTE do veredito 01.4) ─────
-function ProximaAcao({ diag, onResolver }: { diag: DiagnosticoSoberano; onResolver: (f: FiltroKey) => void }) {
-  if (diag.veredito.conciliado) {
-    return (
-      <Card className="p-2 flex items-center gap-2 text-xs border-emerald-200 bg-emerald-50/50">
-        <span className="font-semibold text-emerald-700">Próxima ação ·</span>
-        <span className="text-emerald-800">Conta conciliada contra o extrato.</span>
-      </Card>
-    );
-  }
-  const bloqueios = diag.veredito.bloqueios.filter((b) => b.count > 0 && LABEL_BLOQUEIO[b.tipo]);
-  const frase = bloqueios.map((b) => LABEL_BLOQUEIO[b.tipo](b.count)).join(' e ');
-  const primeiro = bloqueios[0];
-  return (
-    <Card className="p-2 space-y-1 border-rose-200 bg-rose-50/40">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs">
-          <span className="font-semibold text-rose-700">Próxima ação · </span>Conta não fecha.
-        </span>
-        {primeiro && BLOQUEIO_FILTRO[primeiro.tipo] && (
-          <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0"
-            onClick={() => onResolver(BLOQUEIO_FILTRO[primeiro.tipo])}>Resolver agora</Button>
-        )}
-      </div>
-      {frase && <p className="text-[11px] text-muted-foreground line-clamp-2" title={`Resolva ${frase}.`}>Resolva {frase}.</p>}
     </Card>
   );
 }
@@ -883,9 +852,6 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
               onToggle={() => setCardsTopoAbertos((v) => !v)}
             />
           </div>
-
-          {/* MUDANÇA 3 — Próxima ação (derivada do veredito 01.4) */}
-          <ProximaAcao diag={diag} onResolver={setFiltroAtivo} />
 
           <CardsFiltro ativo={filtroAtivo} onSelect={setFiltroAtivo} contagens={contagens} valores={valores} />
 
