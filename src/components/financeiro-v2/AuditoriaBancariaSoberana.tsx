@@ -235,13 +235,15 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
 }
 
 // ── C2 — Demonstrativo de posição da conta (Extrato × Sistema) ──────────────
-function ResumoAuditoria({ diag, nomeConta, saldoInicial, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; saldoInicial: number | null; aberto: boolean; onToggle: () => void }) {
+function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; saldoInicial: number | null; saldoExtratoReal: number | null; aberto: boolean; onToggle: () => void }) {
   const temSaldo = saldoInicial != null;
+  // Saldo final calculado (inicial + entradas - saídas), por fonte.
   // Estreitamento por null-check no próprio saldoInicial (TS strict não narrowa via `temSaldo`).
-  const saldoFinalExtrato = saldoInicial != null ? saldoInicial + diag.resumo.ofx.entradas - diag.resumo.ofx.saidas : null;
-  const saldoFinalSistema = saldoInicial != null ? saldoInicial + diag.resumo.lv2.entradas - diag.resumo.lv2.saidas : null;
-  const diferencaFinal = (saldoFinalExtrato != null && saldoFinalSistema != null) ? saldoFinalExtrato - saldoFinalSistema : null;
-  const difZero = diferencaFinal != null && Math.abs(diferencaFinal) < 0.005;
+  const saldoCalcExtrato = saldoInicial != null ? saldoInicial + diag.resumo.ofx.entradas - diag.resumo.ofx.saidas : null;
+  const saldoCalcSistema = saldoInicial != null ? saldoInicial + diag.resumo.lv2.entradas - diag.resumo.lv2.saidas : null;
+  // Indicador principal: Diferença de Saldo = Saldo Calculado (Sistema) − Saldo Extrato Real (banco/PDF).
+  const difSaldo = (saldoCalcSistema != null && saldoExtratoReal != null) ? saldoCalcSistema - saldoExtratoReal : null;
+  const difZero = difSaldo != null && Math.abs(difSaldo) < 0.005;
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
       <div className="flex items-center justify-between px-3 py-1 border-b">
@@ -254,9 +256,9 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, aberto, onToggle }: { 
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
           {temSaldo ? (
             <>
-              <span>Saldo Extrato {fmtBRL(saldoFinalExtrato)}</span>
-              <span>Saldo Sistema {fmtBRL(saldoFinalSistema)}</span>
-              <span className={difZero ? 'text-emerald-600' : 'text-rose-600 font-semibold'}>Diferença Final {fmtBRL(diferencaFinal)}</span>
+              <span>Saldo Calculado {fmtBRL(saldoCalcSistema)}</span>
+              <span>Saldo Extrato Real {fmtBRL(saldoExtratoReal)}</span>
+              <span className={difZero ? 'text-emerald-600' : 'text-rose-600 font-semibold'}>Diferença de Saldo {fmtBRL(difSaldo)}</span>
             </>
           ) : (
             <span className="text-muted-foreground">Saldo inicial não informado</span>
@@ -276,22 +278,27 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, aberto, onToggle }: { 
         <span className="text-muted-foreground">Entradas</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.entradas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+        {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
         <span className="text-muted-foreground">Saídas</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.saidas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+        {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
         <span className="col-span-3 border-t my-1" />
 
-        <span className="text-muted-foreground font-medium">Saldo Final</span>
-        <span className="text-right tabular-nums font-medium">{saldoFinalExtrato != null ? fmtBRL(saldoFinalExtrato) : '—'}</span>
-        <span className="text-right tabular-nums font-medium">{saldoFinalSistema != null ? fmtBRL(saldoFinalSistema) : '—'}</span>
+        <span className="text-muted-foreground font-medium">Saldo Final Calculado</span>
+        <span className="text-right tabular-nums font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
+        <span className="text-right tabular-nums font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+
+        <span className="col-span-2 text-muted-foreground">Saldo Extrato Real</span>
+        <span className="text-right tabular-nums font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
 
         <span className="col-span-3 border-t my-1" />
 
-        <span className="text-muted-foreground font-semibold">Diferença Final</span>
+        <span className="text-muted-foreground font-semibold">Diferença de Saldo</span>
         <span className={`col-span-2 text-right tabular-nums font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
-          {diferencaFinal != null ? fmtBRL(diferencaFinal) : '—'}
+          {difSaldo != null ? fmtBRL(difSaldo) : '—'}
         </span>
       </div>
       )}
@@ -440,8 +447,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [mes, setMes] = useState<number>(initialMes ?? new Date().getMonth() + 1);
   const [filtroAtivo, setFiltroAtivo] = useState<FiltroKey>('todos');
   const [importOpen, setImportOpen] = useState(false);
-  const [extratoAberto, setExtratoAberto] = useState(false);
-  const [resumoAberto, setResumoAberto] = useState(false);
+  const [cardsTopoAbertos, setCardsTopoAbertos] = useState(false);
   const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
 
   useEffect(() => {
@@ -507,6 +513,24 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         .eq('cliente_id', clienteId)
         .eq('conta_bancaria_id', contaId)
         .eq('ano_mes', anoMesPrev)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.saldo_final != null ? Number(data.saldo_final) : null;
+    },
+  });
+
+  // C2.1 — saldo final REAL conferido do extrato (financeiro_saldos_bancarios_v2.saldo_final do mês atual).
+  const { data: saldoExtratoReal } = useQuery({
+    queryKey: ['auditoria-saldo-extrato-real', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<number | null> => {
+      const { data, error } = await (supabase as any)
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .eq('ano_mes', anoMes)
         .maybeSingle();
       if (error) throw error;
       return data?.saldo_final != null ? Number(data.saldo_final) : null;
@@ -697,8 +721,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           ano={ano}
           mes={mes}
           onCarregar={() => setImportOpen(true)}
-          aberto={extratoAberto}
-          onToggle={() => setExtratoAberto((v) => !v)}
+          aberto={cardsTopoAbertos}
+          onToggle={() => setCardsTopoAbertos((v) => !v)}
         />
       )}
 
@@ -716,15 +740,16 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
               ano={ano}
               mes={mes}
               onCarregar={() => setImportOpen(true)}
-              aberto={extratoAberto}
-              onToggle={() => setExtratoAberto((v) => !v)}
+              aberto={cardsTopoAbertos}
+              onToggle={() => setCardsTopoAbertos((v) => !v)}
             />
             <ResumoAuditoria
               diag={diag}
               nomeConta={nomeConta}
               saldoInicial={saldoAnterior ?? null}
-              aberto={resumoAberto}
-              onToggle={() => setResumoAberto((v) => !v)}
+              saldoExtratoReal={saldoExtratoReal ?? null}
+              aberto={cardsTopoAbertos}
+              onToggle={() => setCardsTopoAbertos((v) => !v)}
             />
           </div>
 
