@@ -234,14 +234,14 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
   );
 }
 
-// ── Resumo compacto (espelha "Resumo das Movimentações") ───────────────────
-function ResumoAuditoria({ diag, nomeConta, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; aberto: boolean; onToggle: () => void }) {
-  const difEnt = diag.resumo.ofx.entradas - diag.resumo.lv2.entradas;
-  const difSai = diag.resumo.ofx.saidas - diag.resumo.lv2.saidas;
-  const difPrincipal = Math.abs(difEnt) >= Math.abs(difSai) ? difEnt : difSai;
-  const Dif = ({ v }: { v: number }) => (
-    <span className={`text-right tabular-nums ${Math.abs(v) >= 0.005 ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}>{fmtBRL(v)}</span>
-  );
+// ── C2 — Demonstrativo de posição da conta (Extrato × Sistema) ──────────────
+function ResumoAuditoria({ diag, nomeConta, saldoInicial, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; saldoInicial: number | null; aberto: boolean; onToggle: () => void }) {
+  const temSaldo = saldoInicial != null;
+  // Estreitamento por null-check no próprio saldoInicial (TS strict não narrowa via `temSaldo`).
+  const saldoFinalExtrato = saldoInicial != null ? saldoInicial + diag.resumo.ofx.entradas - diag.resumo.ofx.saidas : null;
+  const saldoFinalSistema = saldoInicial != null ? saldoInicial + diag.resumo.lv2.entradas - diag.resumo.lv2.saidas : null;
+  const diferencaFinal = (saldoFinalExtrato != null && saldoFinalSistema != null) ? saldoFinalExtrato - saldoFinalSistema : null;
+  const difZero = diferencaFinal != null && Math.abs(diferencaFinal) < 0.005;
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
       <div className="flex items-center justify-between px-3 py-1 border-b">
@@ -252,37 +252,47 @@ function ResumoAuditoria({ diag, nomeConta, aberto, onToggle }: { diag: Diagnost
       </div>
       {!aberto && (
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
-          <span>Entradas R$ {fmtBRL(diag.resumo.ofx.entradas)}</span>
-          <span>Saídas R$ {fmtBRL(diag.resumo.ofx.saidas)}</span>
-          <span className={Math.abs(difPrincipal) >= 0.005 ? 'text-rose-600 font-semibold' : ''}>Diferença R$ {fmtBRL(difPrincipal)}</span>
+          {temSaldo ? (
+            <>
+              <span>Saldo Extrato {fmtBRL(saldoFinalExtrato)}</span>
+              <span>Saldo Sistema {fmtBRL(saldoFinalSistema)}</span>
+              <span className={difZero ? 'text-emerald-600' : 'text-rose-600 font-semibold'}>Diferença Final {fmtBRL(diferencaFinal)}</span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Saldo inicial não informado</span>
+          )}
         </div>
       )}
       {aberto && (
-      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
+      <div className="px-3 py-2 grid grid-cols-3 gap-x-3 gap-y-1 text-[11px]">
         <span />
         <span className="text-right font-medium text-muted-foreground">Extrato</span>
         <span className="text-right font-medium text-muted-foreground">Sistema</span>
-        <span className="text-right font-medium text-muted-foreground">Diferença</span>
 
         <span className="text-muted-foreground">Saldo Inicial</span>
-        <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_inicial == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_inicial)}</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
+        <span className="text-right tabular-nums">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-right tabular-nums">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
 
         <span className="text-muted-foreground">Entradas</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.entradas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
-        <Dif v={difEnt} />
 
         <span className="text-muted-foreground">Saídas</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.saidas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
-        <Dif v={difSai} />
 
-        <span className="text-muted-foreground">Saldo Final</span>
-        <span className="text-right tabular-nums">{diag.resumo.ofx.saldo_final == null ? 'não disp.' : fmtBRL(diag.resumo.ofx.saldo_final)}</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
+        <span className="col-span-3 border-t my-1" />
+
+        <span className="text-muted-foreground font-medium">Saldo Final</span>
+        <span className="text-right tabular-nums font-medium">{saldoFinalExtrato != null ? fmtBRL(saldoFinalExtrato) : '—'}</span>
+        <span className="text-right tabular-nums font-medium">{saldoFinalSistema != null ? fmtBRL(saldoFinalSistema) : '—'}</span>
+
+        <span className="col-span-3 border-t my-1" />
+
+        <span className="text-muted-foreground font-semibold">Diferença Final</span>
+        <span className={`col-span-2 text-right tabular-nums font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
+          {diferencaFinal != null ? fmtBRL(diferencaFinal) : '—'}
+        </span>
       </div>
       )}
     </div>
@@ -478,6 +488,28 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         if (r.created_at < imp) imp = r.created_at;
       }
       return { movimentos: rows.length, periodo_ini: ini, periodo_fim: fim, importado_em: imp };
+    },
+  });
+
+  // C2 — saldo inicial do mês = saldo_final do mês anterior (financeiro_saldos_bancarios_v2).
+  // Leitura client-side; não toca a RPC. null quando o mês anterior não foi calculado.
+  const { data: saldoAnterior } = useQuery({
+    queryKey: ['auditoria-saldo-anterior', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<number | null> => {
+      const mPrev = mes === 1 ? 12 : mes - 1;
+      const aPrev = mes === 1 ? ano - 1 : ano;
+      const anoMesPrev = `${aPrev}-${String(mPrev).padStart(2, '0')}`;
+      const { data, error } = await (supabase as any)
+        .from('financeiro_saldos_bancarios_v2')
+        .select('saldo_final')
+        .eq('cliente_id', clienteId)
+        .eq('conta_bancaria_id', contaId)
+        .eq('ano_mes', anoMesPrev)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.saldo_final != null ? Number(data.saldo_final) : null;
     },
   });
   const temExtrato = (extrato?.movimentos ?? 0) > 0;
@@ -690,6 +722,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
             <ResumoAuditoria
               diag={diag}
               nomeConta={nomeConta}
+              saldoInicial={saldoAnterior ?? null}
               aberto={resumoAberto}
               onToggle={() => setResumoAberto((v) => !v)}
             />
