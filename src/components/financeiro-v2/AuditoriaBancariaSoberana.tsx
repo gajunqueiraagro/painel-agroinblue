@@ -105,7 +105,7 @@ const MOTIVO_INFO: Record<string, { problema: string; acao: string }> = {
     acao: 'Confira a data de pagamento/compensação.',
   },
   sem_lancamento: {
-    problema: 'Extrato sem lançamento no sistema',
+    problema: 'Extrato sem vínculo com o sistema',
     acao: 'Crie o lançamento correspondente.',
   },
   status_nao_realizado: {
@@ -141,8 +141,8 @@ const fmtDataHora = (s: string | null) => {
 // Próxima ação — rótulos PT dos bloqueios do veredito 01.4 (ordem do array).
 const LABEL_BLOQUEIO: Record<string, (n: number) => string> = {
   divergencias_vinculo: (n) => `${n} ${n === 1 ? 'divergência de vínculo' : 'divergências de vínculo'}`,
-  sistema_sem_extrato: (n) => `${n} ${n === 1 ? 'lançamento sem extrato' : 'lançamentos sem extrato'}`,
-  extrato_sem_sistema: (n) => `${n} ${n === 1 ? 'movimento sem lançamento' : 'movimentos sem lançamento'}`,
+  sistema_sem_extrato: (n) => `${n} ${n === 1 ? 'lançamento sem vínculo' : 'lançamentos sem vínculo'}`,
+  extrato_sem_sistema: (n) => `${n} ${n === 1 ? 'movimento sem vínculo' : 'movimentos sem vínculo'}`,
 };
 
 type Tom = 'rose' | 'amber' | 'violet' | 'emerald' | 'muted';
@@ -318,8 +318,8 @@ function CardsFiltro({
   const FILTROS: { key: FiltroKey; label: string }[] = [
     { key: 'todos', label: 'Todos' },
     { key: 'divergencias', label: 'Divergências' },
-    { key: 'sistema_sem_extrato', label: 'Sistema sem Extrato' },
-    { key: 'extrato_sem_sistema', label: 'Extrato sem Sistema' },
+    { key: 'sistema_sem_extrato', label: 'Sistema sem vínculo' },
+    { key: 'extrato_sem_sistema', label: 'Extrato sem vínculo' },
     { key: 'agrupamentos', label: 'Agrupamentos' },
     { key: 'desconsiderados', label: 'Desconsiderados' },
     { key: 'corretos', label: 'Corretos' },
@@ -596,10 +596,10 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         key: `sis-${it.lancamento_id}`, bucket: 'sistema_sem_extrato',
         status: labelStatus(it.status_transacao), tom: tomStatusTransacao(it.status_transacao),
         data: it.data, descricao: desc, origem, tipo, valor,
-        motivo: 'Lançado no sistema, sem movimento no extrato',
+        motivo: 'Lançado no sistema, sem vínculo com o extrato',
         motivoAcao: 'Confirme se o movimento existe no extrato ou ajuste o lançamento.',
         acaoLabel: 'Verificar',
-        onAcao: () => irLancamentos(`Verificar lançamento sem extrato · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
+        onAcao: () => irLancamentos(`Verificar lançamento sem vínculo · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
       });
     }
 
@@ -608,9 +608,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       const valor = Math.abs(it.valor);
       const tipo = dirTipo(it.tipo, it.valor);
       out.push({
-        key: `ext-${it.extrato_id}`, bucket: 'extrato_sem_sistema', status: 'Falta no sistema', tom: 'amber',
+        key: `ext-${it.extrato_id}`, bucket: 'extrato_sem_sistema', status: 'Sem vínculo', tom: 'amber',
         data: it.data, descricao: desc, origem: 'Extrato', tipo, valor,
-        motivo: 'Movimento no extrato, sem lançamento no sistema',
+        motivo: 'Movimento no extrato, sem vínculo com o sistema',
         motivoAcao: 'Crie o lançamento correspondente a este movimento.',
         acaoLabel: 'Criar',
         onAcao: () => irLancamentos(`Criar lançamento p/ extrato · ${desc} · R$ ${fmtBRL(valor)} · Sem lançamento no sistema · Extrato`),
