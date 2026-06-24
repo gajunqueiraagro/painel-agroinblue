@@ -533,6 +533,185 @@ function ExtratoSoberanoCard({
   );
 }
 
+// ── C3 ONDA 1 — Extratos espelhados (Comparação + Diagnóstico). READ-ONLY ──
+// Tudo derivado do diag existente. Consome o motor bilateral; não reimplementa
+// matching, não busca dados, não escreve. NÃO é o extrato completo linha-a-linha.
+interface LadoOfx { extrato_id: string; data: string | null; valor: number; descricao: string; }
+interface LadoSis { lancamento_id: string; data: string | null; valor: number; descricao: string; }
+interface ParEspelho { key: string; ofx?: LadoOfx; sistema?: LadoSis; classe?: 'forte' | 'possiveis'; nPossiveis?: number; }
+
+function montarPares(diag: DiagnosticoSoberano): ParEspelho[] {
+  const b = diag.buckets;
+  const sug = gerarSugestoes(diag);          // lancamento_id -> OFX candidatos
+  const sugInv = gerarSugestoesInverso(diag); // extrato_id -> lançamento candidatos
+  const seen = new Set<string>();
+  const out: ParEspelho[] = [];
+  for (const l of (b.sistema_sem_extrato ?? [])) {
+    const sis: LadoSis = { lancamento_id: l.lancamento_id, data: l.data, valor: l.valor_assinado, descricao: l.descricao ?? '—' };
+    const s = sug[l.lancamento_id];
+    if (s && s.candidatos.length) {
+      const c = s.candidatos[0];
+      const key = `${c.extrato_id}|${l.lancamento_id}`;
+      seen.add(key);
+      out.push({ key, sistema: sis, ofx: { extrato_id: c.extrato_id, data: c.data, valor: c.valor, descricao: c.descricao }, classe: s.classe === 'sugestao' ? 'forte' : 'possiveis', nPossiveis: s.candidatos.length });
+    } else {
+      out.push({ key: `sis-${l.lancamento_id}`, sistema: sis });
+    }
+  }
+  for (const e of (b.extrato_sem_sistema ?? [])) {
+    const ofx: LadoOfx = { extrato_id: e.extrato_id, data: e.data, valor: e.valor, descricao: e.descricao ?? '—' };
+    const s = sugInv[e.extrato_id];
+    if (s && s.candidatos.length) {
+      const c = s.candidatos[0];
+      const key = `${e.extrato_id}|${c.lancamento_id}`;
+      if (seen.has(key)) continue; // dedup: par já mostrado via sistema->ofx
+      seen.add(key);
+      out.push({ key, ofx, sistema: { lancamento_id: c.lancamento_id, data: c.data, valor: c.valor, descricao: c.descricao }, classe: s.classe === 'sugestao' ? 'forte' : 'possiveis', nPossiveis: s.candidatos.length });
+    } else {
+      out.push({ key: `ext-${e.extrato_id}`, ofx });
+    }
+  }
+  return out;
+}
+
+type Sev = 'vermelho' | 'laranja' | 'amarelo' | 'verde';
+interface Achado { sev: Sev; titulo: string; texto: string; }
+
+function montarAchados(diag: DiagnosticoSoberano): Achado[] {
+  const b = diag.buckets;
+  const r = diag.resumo;
+  const sug = gerarSugestoes(diag);
+  const sugInv = gerarSugestoesInverso(diag);
+  const out: Achado[] = [];
+
+  // Divergência Extrato x Sistema — líquido (Extrato − Sistema). NÃO é "saldo não fecha".
+  const difLiquido = (r.extrato_cru.entradas - r.extrato_cru.saidas) - (r.lv2.entradas - r.lv2.saidas);
+  if (Math.abs(difLiquido) >= 0.005) {
+    out.push({ sev: 'vermelho', titulo: 'Divergência Extrato × Sistema', texto: `Diferença líquida (Extrato − Sistema): R$ ${fmtBRL(difLiquido)}.` });
+  }
+  const fortesOfx = (b.extrato_sem_sistema ?? []).filter((e) => sugInv[e.extrato_id]?.classe === 'sugestao').length;
+  if (fortesOfx > 0) {
+    out.push({ sev: 'verde', titulo: 'Vínculos prováveis encontrados', texto: `${fortesOfx} movimento(s) do extrato já têm lançamento provável no sistema.` });
+  }
+  const lancSemOfx = (b.sistema_sem_extrato ?? []).filter((l) => !sug[l.lancamento_id]).length;
+  if (lancSemOfx > 0) {
+    out.push({ sev: 'amarelo', titulo: 'Lançamentos sem movimento no extrato', texto: `${lancSemOfx} lançamento(s) sem movimento correspondente no extrato.` });
+  }
+  const ofxSemLanc = (b.extrato_sem_sistema ?? []).filter((e) => !sugInv[e.extrato_id]).length;
+  if (ofxSemLanc > 0) {
+    out.push({ sev: 'amarelo', titulo: 'Movimentos sem lançamento', texto: `${ofxSemLanc} movimento(s) do extrato sem lançamento no sistema.` });
+  }
+  // Duplicidade provável — só nos itens disponíveis do diag (não afirma extrato completo).
+  const grupos = new Map<string, { valor: number; data: string | null; n: number }>();
+  for (const e of (b.extrato_sem_sistema ?? [])) {
+    const k = `${Math.round(Math.abs(e.valor) * 100)}|${e.data ?? ''}`;
+    const g = grupos.get(k);
+    if (g) g.n += 1; else grupos.set(k, { valor: Math.abs(e.valor), data: e.data, n: 1 });
+  }
+  for (const g of grupos.values()) {
+    if (g.n >= 2) out.push({ sev: 'laranja', titulo: 'Possível duplicidade', texto: `${g.n} movimentos de R$ ${fmtBRL(g.valor)} em ${fmtData(g.data)} (nos itens disponíveis do diag).` });
+  }
+  const invRe = /cdb|invest|aplic|resg/i;
+  const invest = (b.extrato_sem_sistema ?? []).filter((e) => invRe.test(e.descricao ?? '')).length;
+  if (invest > 0) {
+    out.push({ sev: 'amarelo', titulo: 'Movimentos de investimento', texto: `${invest} movimento(s) de investimento podem inflar o bruto.` });
+  }
+  if (out.length === 0) out.push({ sev: 'verde', titulo: 'Sem achados relevantes', texto: 'Nada a destacar nos itens disponíveis do diagnóstico.' });
+  return out;
+}
+
+function LadoCelula({ data, valor, descricao }: { data: string | null; valor: number; descricao: string }) {
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      <span className="w-9 shrink-0 text-muted-foreground">{fmtData(data)}</span>
+      <span className={`shrink-0 ${valor >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{valor >= 0 ? '▲' : '▼'}</span>
+      <span className="flex-1 min-w-0 truncate" title={descricao}>{descricao}</span>
+      <span className="shrink-0 tabular-nums">{fmtBRL(Math.abs(valor))}</span>
+    </div>
+  );
+}
+
+function LinhaPar({ par }: { par: ParEspelho }) {
+  return (
+    <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
+      <div className="flex-1 min-w-0">
+        {par.ofx ? <LadoCelula data={par.ofx.data} valor={par.ofx.valor} descricao={par.ofx.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem vínculo</span>}
+      </div>
+      <div className="w-16 shrink-0 flex justify-center">
+        {par.classe === 'forte' && <span className="px-1 rounded bg-emerald-100 text-emerald-700 text-[8px] font-medium">forte</span>}
+        {par.classe === 'possiveis' && <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium">{par.nPossiveis} poss.</span>}
+      </div>
+      <div className="flex-1 min-w-0">
+        {par.sistema ? <LadoCelula data={par.sistema.data} valor={par.sistema.valor} descricao={par.sistema.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem vínculo</span>}
+      </div>
+    </div>
+  );
+}
+
+function ComparacaoEspelhada({ diag }: { diag: DiagnosticoSoberano }) {
+  const pares = useMemo(() => montarPares(diag), [diag]);
+  if (pares.length === 0) return <div className="p-3 text-center text-[11px] text-muted-foreground">Nada a comparar — sem itens não resolvidos. 🎉</div>;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground">
+        <span className="flex-1">Extrato (OFX)</span>
+        <span className="w-16 shrink-0 text-center" />
+        <span className="flex-1">Sistema</span>
+      </div>
+      <div className="max-h-[50vh] overflow-y-auto divide-y-0">
+        {pares.map((p) => <LinhaPar key={p.key} par={p} />)}
+      </div>
+    </div>
+  );
+}
+
+function ChipAchado({ sev, titulo, texto }: Achado) {
+  const cor = { vermelho: 'border-rose-300 bg-rose-50', laranja: 'border-orange-300 bg-orange-50', amarelo: 'border-amber-300 bg-amber-50', verde: 'border-emerald-300 bg-emerald-50' }[sev];
+  const dot = { vermelho: 'bg-rose-500', laranja: 'bg-orange-500', amarelo: 'bg-amber-500', verde: 'bg-emerald-500' }[sev];
+  return (
+    <div className={`flex items-start gap-2 rounded border px-2 py-1 ${cor}`}>
+      <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${dot}`} />
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold">{titulo}</div>
+        <div className="text-[10px] text-muted-foreground">{texto}</div>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticoAutomatico({ diag }: { diag: DiagnosticoSoberano }) {
+  const achados = useMemo(() => montarAchados(diag), [diag]);
+  return (
+    <div className="space-y-1">
+      {achados.map((a, i) => <ChipAchado key={i} sev={a.sev} titulo={a.titulo} texto={a.texto} />)}
+    </div>
+  );
+}
+
+function ExtratosEspelhados({ diag, saldoInicial, saldoExtratoReal, nomeConta }: { diag: DiagnosticoSoberano; saldoInicial: number | null; saldoExtratoReal: number | null; nomeConta: string }) {
+  const [aberto, setAberto] = useState(false);
+  const [view, setView] = useState<'comparacao' | 'diagnostico'>('comparacao');
+  return (
+    <Card className="p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={() => setAberto((v) => !v)} className="text-xs font-semibold inline-flex items-center gap-1">
+          {aberto ? '▼' : '▶'} Ver comparação e diagnóstico
+        </button>
+        <span className="text-[10px] text-muted-foreground truncate max-w-[45%]" title={nomeConta}>{nomeConta}</span>
+      </div>
+      {aberto && (
+        <>
+          <div className="flex gap-1">
+            <button type="button" onClick={() => setView('comparacao')} className={`px-2 py-0.5 rounded text-[10px] border ${view === 'comparacao' ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground'}`}>Comparação</button>
+            <button type="button" onClick={() => setView('diagnostico')} className={`px-2 py-0.5 rounded text-[10px] border ${view === 'diagnostico' ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground'}`}>Diagnóstico</button>
+          </div>
+          {view === 'comparacao' ? <ComparacaoEspelhada diag={diag} /> : <DiagnosticoAutomatico diag={diag} />}
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateToLancamentos }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -893,6 +1072,14 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
               </Card>
             </>
           )}
+
+          {/* C3 ONDA 1 — Comparação e diagnóstico (card recolhível, read-only) */}
+          <ExtratosEspelhados
+            diag={diag}
+            saldoInicial={saldoAnterior ?? null}
+            saldoExtratoReal={saldoExtratoReal ?? null}
+            nomeConta={nomeConta}
+          />
         </>
       )}
 
