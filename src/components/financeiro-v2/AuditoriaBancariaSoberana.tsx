@@ -54,6 +54,7 @@ interface DiagnosticoSoberano {
   resumo: {
     ofx: { movimentos: number; entradas: number; saidas: number; saldo_inicial: number | null; saldo_final: number | null };
     lv2: { lancamentos: number; entradas: number; saidas: number };
+    extrato_cru: { movimentos: number; entradas: number; saidas: number; liquido: number; ignorados: number };
     corretos: { qtd: number; valor: number };
     desconsiderados: { movimentos: number; entradas: number; saidas: number };
   };
@@ -306,7 +307,7 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
   const temSaldo = saldoInicial != null;
   // Saldo final calculado (inicial + entradas - saídas), por fonte.
   // Estreitamento por null-check no próprio saldoInicial (TS strict não narrowa via `temSaldo`).
-  const saldoCalcExtrato = saldoInicial != null ? saldoInicial + diag.resumo.ofx.entradas - diag.resumo.ofx.saidas : null;
+  const saldoCalcExtrato = saldoInicial != null ? saldoInicial + diag.resumo.extrato_cru.entradas - diag.resumo.extrato_cru.saidas : null;
   const saldoCalcSistema = saldoInicial != null ? saldoInicial + diag.resumo.lv2.entradas - diag.resumo.lv2.saidas : null;
   // Indicador principal: Diferença de Saldo = Saldo Calculado (Sistema) − Saldo Extrato Real (banco/PDF).
   const difSaldo = (saldoCalcSistema != null && saldoExtratoReal != null) ? saldoCalcSistema - saldoExtratoReal : null;
@@ -343,12 +344,12 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
         <span className="text-right tabular-nums">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
 
         <span className="text-muted-foreground">Entradas</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.entradas)}</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.entradas)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
         <span className="text-muted-foreground">Saídas</span>
-        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.ofx.saidas)}</span>
+        <span className="text-right tabular-nums">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
         <span className="text-right tabular-nums">{fmtBRL(diag.resumo.lv2.saidas)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
