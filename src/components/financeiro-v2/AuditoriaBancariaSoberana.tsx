@@ -215,20 +215,20 @@ function TipoBadge({ tipo }: { tipo: 'entrada' | 'saida' }) {
 function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
   const motivoTitle = linha.motivoAcao ? `${linha.motivo} — ${linha.motivoAcao}` : linha.motivo;
   return (
-    <div className="py-1 flex items-center gap-2 text-[11px]">
+    <div className="py-0.5 flex items-center gap-1 text-[10px]">
       <StatusBadge texto={linha.status} tom={linha.tom} />
       <span className="w-10 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
       <span className="flex-1 min-w-0 truncate" title={linha.descricao}>{linha.descricao}</span>
-      <span className="w-24 shrink-0 truncate text-[10px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
+      <span className="w-20 shrink-0 truncate text-[9px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
       <TipoBadge tipo={linha.tipo} />
-      <span className="w-24 shrink-0 text-right tabular-nums">R$ {fmtBRL(linha.valor)}</span>
-      <span className="w-36 shrink-0 truncate text-[10px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
+      <span className="w-24 shrink-0 text-right tabular-nums text-[11px]">R$ {fmtBRL(linha.valor)}</span>
+      <span className="w-28 shrink-0 truncate text-[9px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
       {linha.acaoLabel ? (
-        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 shrink-0 w-[68px]" onClick={linha.onAcao}>
+        <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0 w-[56px]" onClick={linha.onAcao}>
           {linha.acaoLabel}
         </Button>
       ) : (
-        <span className="w-[68px] shrink-0" />
+        <span className="w-[56px] shrink-0" />
       )}
     </div>
   );
@@ -244,21 +244,21 @@ function ResumoAuditoria({ diag, nomeConta, aberto, onToggle }: { diag: Diagnost
   );
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+      <div className="flex items-center justify-between px-3 py-1 border-b">
         <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
           {aberto ? '▼' : '▶'} 📊 Resumo da auditoria
         </button>
         <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 truncate max-w-[55%]">{nomeConta}</span>
       </div>
       {!aberto && (
-        <div className="px-3 py-1.5 text-[11px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
+        <div className="px-3 py-1.5 text-[10px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
           <span>Entradas R$ {fmtBRL(diag.resumo.ofx.entradas)}</span>
           <span>Saídas R$ {fmtBRL(diag.resumo.ofx.saidas)}</span>
           <span className={Math.abs(difPrincipal) >= 0.005 ? 'text-rose-600 font-semibold' : ''}>Diferença R$ {fmtBRL(difPrincipal)}</span>
         </div>
       )}
       {aberto && (
-      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-xs">
+      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-[11px]">
         <span />
         <span className="text-right font-medium text-muted-foreground">Extrato</span>
         <span className="text-right font-medium text-muted-foreground">Sistema</span>
@@ -316,13 +316,13 @@ function CardsFiltro({
             key={f.key}
             type="button"
             onClick={() => onSelect(f.key)}
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] transition-colors ${
+            className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[9px] transition-colors ${
               on ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground hover:bg-accent'
             }`}
           >
             <span>{f.label}</span>
             <span className={`tabular-nums font-semibold ${on ? 'text-foreground' : 'text-foreground/80'}`}>{contagens[f.key]}</span>
-            <span className="text-[10px] text-muted-foreground tabular-nums">R$ {fmtBRL(valores[f.key])}</span>
+            <span className="text-[8px] text-muted-foreground tabular-nums">R$ {fmtBRL(valores[f.key])}</span>
           </button>
         );
       })}
@@ -395,7 +395,7 @@ function ExtratoSoberanoCard({
 function ProximaAcao({ diag, onResolver }: { diag: DiagnosticoSoberano; onResolver: (f: FiltroKey) => void }) {
   if (diag.veredito.conciliado) {
     return (
-      <Card className="p-3 flex items-center gap-2 text-xs border-emerald-200 bg-emerald-50/50">
+      <Card className="p-2 flex items-center gap-2 text-xs border-emerald-200 bg-emerald-50/50">
         <span className="font-semibold text-emerald-700">Próxima ação ·</span>
         <span className="text-emerald-800">Conta conciliada contra o extrato.</span>
       </Card>
@@ -405,7 +405,7 @@ function ProximaAcao({ diag, onResolver }: { diag: DiagnosticoSoberano; onResolv
   const frase = bloqueios.map((b) => LABEL_BLOQUEIO[b.tipo](b.count)).join(' e ');
   const primeiro = bloqueios[0];
   return (
-    <Card className="p-3 space-y-1.5 border-rose-200 bg-rose-50/40">
+    <Card className="p-2 space-y-1 border-rose-200 bg-rose-50/40">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs">
           <span className="font-semibold text-rose-700">Próxima ação · </span>Conta não fecha.
@@ -415,7 +415,7 @@ function ProximaAcao({ diag, onResolver }: { diag: DiagnosticoSoberano; onResolv
             onClick={() => onResolver(BLOQUEIO_FILTRO[primeiro.tipo])}>Resolver agora</Button>
         )}
       </div>
-      {frase && <p className="text-[11px] text-muted-foreground">Resolva {frase}.</p>}
+      {frase && <p className="text-[11px] text-muted-foreground line-clamp-2" title={`Resolva ${frase}.`}>Resolva {frase}.</p>}
     </Card>
   );
 }
@@ -602,7 +602,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const valores = useMemo<Record<FiltroKey, number>>(() => {
     const v: Record<FiltroKey, number> = {
       todos: 0, divergencias: 0, sistema_sem_extrato: 0, extrato_sem_sistema: 0,
-      agrupamentos: 0, desconsiderados: 0, corretos: diag?.resumo.corretos.valor ?? 0,
+      agrupamentos: 0, desconsiderados: 0, corretos: Math.abs(diag?.resumo.corretos.valor ?? 0),
     };
     for (const l of linhas) {
       const a = Math.abs(l.valor);
@@ -632,7 +632,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const anos = [ano - 1, ano, ano + 1].filter((a, i, arr) => arr.indexOf(a) === i);
 
   return (
-    <div className="space-y-2 p-2 overflow-auto h-full">
+    <div className="space-y-1.5 p-2 overflow-auto h-full">
       {/* Cabeçalho: conta (agrupada) + mês + ano + veredito + carregar extrato */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold">Auditoria Bancária Soberana</span>
@@ -677,7 +677,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       {temExtrato && diag && (
         <>
           {/* FASE 2 — Extrato + Resumo lado a lado (empilha no mobile) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
             <ExtratoSoberanoCard
               extrato={extrato!}
               nomeConta={nomeConta}
