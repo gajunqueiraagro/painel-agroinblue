@@ -186,6 +186,7 @@ interface LinhaAud {
   acaoLabel: string | null;
   onAcao?: () => void;
   sugestao?: SugestaoPorLancamento;
+  sugestaoInversa?: SugestaoPorOfx;
 }
 
 // Direção pelo SINAL numérico (entrada = credito/positivo, saida = debito/negativo).
@@ -227,6 +228,20 @@ interface SugestaoPorLancamento {
   candidatos: SugestaoVinculo[];
   classe: 'sugestao' | 'possiveis';
 }
+// Espelho — sentido inverso OFX -> Sistema.
+interface SugestaoLancamento {
+  lancamento_id: string;
+  data: string | null;
+  valor: number;          // assinado (sinal do lançamento)
+  descricao: string;
+  status_transacao: string;
+  origem_lancamento?: string | null;
+  dataIgual: boolean;
+}
+interface SugestaoPorOfx {
+  candidatos: SugestaoLancamento[];
+  classe: 'sugestao' | 'possiveis';
+}
 
 // Cruza lançamentos órfãos (sistema_sem_extrato) com OFX disponíveis
 // (extrato_sem_sistema + divergências motivo='cancelado' = vínculo morto).
@@ -254,6 +269,30 @@ function gerarSugestoes(diag: DiagnosticoSoberano): Record<string, SugestaoPorLa
     const fortes = cands.filter((c) => c.dataIgual);
     const classe: 'sugestao' | 'possiveis' = fortes.length === 1 ? 'sugestao' : 'possiveis';
     out[l.lancamento_id] = { candidatos: cands, classe };
+  }
+  return out;
+}
+
+// Espelho de gerarSugestoes: sentido inverso OFX -> Sistema. Para cada OFX órfão
+// (extrato_sem_sistema), busca lançamentos órfãos (sistema_sem_extrato) com
+// |valor| igual + mesmo sinal. Data igual = confiança máxima. PURO, read-only.
+function gerarSugestoesInverso(diag: DiagnosticoSoberano): Record<string, SugestaoPorOfx> {
+  const b = diag.buckets;
+  const pool: SugestaoLancamento[] = [];
+  for (const l of (b.sistema_sem_extrato ?? [])) {
+    pool.push({ lancamento_id: l.lancamento_id, data: l.data, valor: l.valor_assinado, descricao: l.descricao ?? '—', status_transacao: l.status_transacao ?? '', origem_lancamento: l.origem_lancamento, dataIgual: false });
+  }
+  const out: Record<string, SugestaoPorOfx> = {};
+  for (const e of (b.extrato_sem_sistema ?? [])) {
+    const alvo = e.valor;
+    const cands = pool
+      .filter((c) => Math.abs(Math.abs(c.valor) - Math.abs(alvo)) < 0.005 && Math.sign(c.valor) === Math.sign(alvo))
+      .map((c) => ({ ...c, dataIgual: c.data === e.data }));
+    if (cands.length === 0) continue;
+    cands.sort((a, c) => Number(c.dataIgual) - Number(a.dataIgual));
+    const fortes = cands.filter((c) => c.dataIgual);
+    const classe: 'sugestao' | 'possiveis' = fortes.length === 1 ? 'sugestao' : 'possiveis';
+    out[e.extrato_id] = { candidatos: cands, classe };
   }
   return out;
 }
@@ -295,6 +334,26 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
         ) : (
           <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 text-[9px] text-amber-700">
             Possíveis vínculos: {linha.sugestao.candidatos.length} candidatos
+          </div>
+        )
+      )}
+      {linha.sugestaoInversa && (
+        linha.sugestaoInversa.classe === 'sugestao' ? (
+          <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="px-1 rounded bg-amber-100 text-amber-800 font-medium shrink-0">Sugestão</span>
+            <span className="w-10 shrink-0">{fmtData(linha.sugestaoInversa.candidatos[0].data)}</span>
+            <span className="flex-1 min-w-0 truncate" title={linha.sugestaoInversa.candidatos[0].descricao}>{linha.sugestaoInversa.candidatos[0].descricao}</span>
+            <span className="shrink-0 text-[8px] italic">no sistema</span>
+            <span className="w-24 shrink-0 text-right tabular-nums">R$ {fmtBRL(Math.abs(linha.sugestaoInversa.candidatos[0].valor))}</span>
+            <span className="flex gap-1 shrink-0">
+              <Button size="sm" variant="outline" disabled title="Em breve — ação de vínculo (C2.4)" className="h-4 px-1 text-[8px]">Vincular</Button>
+              <Button size="sm" variant="outline" disabled title="Em breve (C2.4)" className="h-4 px-1 text-[8px]">Ignorar</Button>
+              <Button size="sm" variant="outline" disabled title="Em breve (C2.4)" className="h-4 px-1 text-[8px]">Editar</Button>
+            </span>
+          </div>
+        ) : (
+          <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 text-[9px] text-amber-700">
+            Possíveis vínculos: {linha.sugestaoInversa.candidatos.length} candidatos
           </div>
         )
       )}
@@ -637,6 +696,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     if (!diag) return [];
     const b = diag.buckets;
     const sugestoes = gerarSugestoes(diag);
+    const sugestoesInv = gerarSugestoesInverso(diag);
     const out: LinhaAud[] = [];
 
     for (const it of b.divergencias_vinculo) {
@@ -684,6 +744,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         motivoAcao: 'Crie o lançamento correspondente a este movimento.',
         acaoLabel: 'Criar',
         onAcao: () => irLancamentos(`Criar lançamento p/ extrato · ${desc} · R$ ${fmtBRL(valor)} · Sem lançamento no sistema · Extrato`),
+        sugestaoInversa: sugestoesInv[it.extrato_id],
       });
     }
 
