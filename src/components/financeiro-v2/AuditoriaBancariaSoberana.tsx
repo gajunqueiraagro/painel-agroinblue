@@ -712,139 +712,75 @@ function ExtratosEspelhados({ diag, saldoInicial, saldoExtratoReal, nomeConta }:
   );
 }
 
-// ── C3.2-MOCK — Protótipo visual dos Extratos Espelhados (DADOS FICTÍCIOS) ──
-// PROTÓTIPO de UI. Tudo hardcoded; NÃO usa diag/buckets/banco/RPC. Read-only.
-// Objetivo: aprovar layout das 4 abas antes da fonte de dados real (C3.3-DADOS).
-type MockStatus = 'conciliado' | 'sem_vinculo' | 'dup' | 'investimento' | 'transferencia' | null;
 
-const MOCK_OFX = [
-  { data: '01/05', hist: 'Saldo Inicial',   valor: null,        saldo: 100.00,     status: null as MockStatus },
-  { data: '04/05', hist: 'Pix Cliente X',   valor: 10000.00,    saldo: 10100.00,   status: 'conciliado' as MockStatus },
-  { data: '07/05', hist: 'Compra Insumos',  valor: -2500.00,    saldo: 7600.00,    status: 'conciliado' as MockStatus },
-  { data: '11/05', hist: 'Parcela Crédito', valor: -195720.44,  saldo: -188120.44, status: 'sem_vinculo' as MockStatus },
-  { data: '21/05', hist: 'Pix Diocese',     valor: -2500.00,    saldo: -190620.44, status: 'sem_vinculo' as MockStatus },
-];
-const MOCK_SISTEMA = [
-  { data: '01/05', desc: 'Saldo Inicial', centro: '',                       valor: null,     saldo: 100.00,  status: null as MockStatus },
-  { data: '21/05', desc: 'Pix Diocese',   centro: 'Receitas / Doações',     valor: -2500.00, saldo: 5100.00, status: 'conciliado' as MockStatus },
-  { data: '14/05', desc: 'Salário',       centro: 'Mão de obra / Salários', valor: -1200.00, saldo: 6400.00, status: 'sem_vinculo' as MockStatus },
-];
-const MOCK_ESPELHO = [
-  { ofx: '21/05 Pix Diocese -2.500',       sistema: '21/05 Pix Diocese -2.500', rel: 'par' as const },
-  { ofx: '11/05 Parcela Crédito -195.720', sistema: null as string | null,      rel: 'so_ofx' as const },
-  { ofx: null as string | null,            sistema: '14/05 Salário -1.200',     rel: 'so_sistema' as const },
-];
-const MOCK_EVOLUCAO = [
-  { data: '01/05', saldoOfx: 100.00,     saldoSis: 100.00,  dif: 0.00 },
-  { data: '07/05', saldoOfx: 7600.00,    saldoSis: 7600.00, dif: 0.00 },
-  { data: '11/05', saldoOfx: -188120.44, saldoSis: 7600.00, dif: 195720.44 },
-  { data: '21/05', saldoOfx: -190620.44, saldoSis: 5100.00, dif: 195720.44 },
-];
-
-const corValor = (v: number | null) => (v == null ? 'text-muted-foreground' : v >= 0 ? 'text-blue-600' : 'text-rose-600');
-const corSaldo = (v: number) => (v >= 0 ? 'text-blue-600' : 'text-rose-600');
-const STATUS_MOCK: Record<string, { icon: string; label: string; cls: string }> = {
-  conciliado:    { icon: '✓',  label: 'conciliado',    cls: 'text-emerald-700' },
-  sem_vinculo:   { icon: '⚠',  label: 'sem vínculo',   cls: 'text-amber-700' },
-  dup:           { icon: '⚠',  label: 'dup?',          cls: 'text-orange-700' },
-  investimento:  { icon: '💰', label: 'investimento',  cls: 'text-violet-700' },
-  transferencia: { icon: '🔄', label: 'transferência', cls: 'text-blue-700' },
-};
-function StatusMockCell({ status }: { status: MockStatus }) {
-  if (!status) return <span className="text-muted-foreground">—</span>;
-  const s = STATUS_MOCK[status];
-  return <span className={`${s.cls} text-[9px]`}>{s.icon} {s.label}</span>;
-}
-function SeloMock() {
-  return (
-    <span className="px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700 text-[9px] font-bold uppercase tracking-wide shrink-0">
-      MOCK · exemplo visual
-    </span>
-  );
+// ── C3.4 — Extratos espelhados REAIS (consome fn_extratos_espelhados) ──────
+type EspStatus = 'conciliado' | 'sem_vinculo' | 'ignorado';
+interface EspOfx { extrato_id: string; data: string | null; historico: string | null; documento: string | null; valor: number; status: EspStatus; flag_dup: boolean; flag_investimento: boolean; }
+interface EspSis { lancamento_id: string; data: string | null; descricao: string | null; centro: string | null; subcentro: string | null; valor_assinado: number; sinal: string | null; status: 'conciliado' | 'sem_vinculo'; }
+interface EspelhadosReais {
+  escopo: { cliente_id: string; conta_id: string; ano_mes: string; nome_conta: string | null };
+  saldos: { inicial: number | null; final_oficial: number | null; periodo_ini: string | null; periodo_fim: string | null; extrato_ini: string | null; extrato_fim: string | null };
+  ofx_completo: EspOfx[];
+  sistema_completo: EspSis[];
+  versao: string;
+  gerado_em: string;
 }
 
-function AbaOfxMock() {
+const corValReal = (v: number) => (v >= 0 ? 'text-blue-600' : 'text-rose-600');
+function EspStatusCell({ status }: { status: string }) {
+  if (status === 'conciliado') return <span className="text-emerald-700 text-[9px] shrink-0">✓ conciliado</span>;
+  if (status === 'ignorado') return <span className="text-muted-foreground text-[9px] shrink-0">⊘ ignorado</span>;
+  return <span className="text-amber-700 text-[9px] shrink-0">⚠ sem vínculo</span>;
+}
+
+function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
+  const rows = useMemo(() => {
+    let acc = inicial;
+    return ofx.map((r) => { acc += r.valor; return { r, saldo: acc }; });
+  }, [ofx, inicial]);
   return (
-    <div className="text-[10px]">
-      <div className="grid grid-cols-[40px_1fr_90px_90px_90px] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
-        <span>Data</span><span>Histórico</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+    <div className="text-[10px] max-h-[55vh] overflow-y-auto">
+      <div className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+        <span>Data</span><span>Histórico</span><span>Documento</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
       </div>
-      {MOCK_OFX.map((r, i) => (
-        <div key={i} className="grid grid-cols-[40px_1fr_90px_90px_90px] gap-1 py-0.5 border-b last:border-b-0 items-center">
-          <span className="text-muted-foreground">{r.data}</span>
-          <span className="truncate" title={r.hist}>{r.hist}</span>
-          <span className={`text-right tabular-nums ${corValor(r.valor)}`}>{fmtBRL(r.valor)}</span>
-          <span className={`text-right tabular-nums ${corSaldo(r.saldo)}`}>{fmtBRL(r.saldo)}</span>
-          <StatusMockCell status={r.status} />
+      {rows.map(({ r, saldo }) => (
+        <div key={r.extrato_id} className="grid grid-cols-[44px_1fr_72px_92px_92px_92px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+          <span className="text-muted-foreground">{fmtData(r.data)}</span>
+          <span className="truncate flex items-center gap-1" title={r.historico ?? ''}>
+            <span className="truncate">{r.historico ?? '—'}</span>
+            {r.flag_dup && <span className="px-1 rounded bg-orange-100 text-orange-700 text-[8px] shrink-0">dup</span>}
+            {r.flag_investimento && <span className="px-1 rounded bg-violet-100 text-violet-700 text-[8px] shrink-0">invest</span>}
+          </span>
+          <span className="truncate text-muted-foreground" title={r.documento ?? ''}>{r.documento ?? '—'}</span>
+          <span className={`text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
+          <span className={`text-right tabular-nums ${corValReal(saldo)}`}>{fmtBRL(saldo)}</span>
+          <EspStatusCell status={r.status} />
         </div>
       ))}
     </div>
   );
 }
-function AbaSistemaMock() {
+
+function AbaSistemaReal({ sistema, inicial }: { sistema: EspSis[]; inicial: number }) {
+  const rows = useMemo(() => {
+    let acc = inicial;
+    return sistema.map((r) => { acc += r.valor_assinado; return { r, saldo: acc }; });
+  }, [sistema, inicial]);
   return (
-    <div className="text-[10px]">
-      <div className="grid grid-cols-[40px_1fr_120px_80px_80px_80px] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
+    <div className="text-[10px] max-h-[55vh] overflow-y-auto">
+      <div className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
         <span>Data</span><span>Descrição</span><span>Centro/Subcentro</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
       </div>
-      {MOCK_SISTEMA.map((r, i) => (
-        <div key={i} className="grid grid-cols-[40px_1fr_120px_80px_80px_80px] gap-1 py-0.5 border-b last:border-b-0 items-center">
-          <span className="text-muted-foreground">{r.data}</span>
-          <span className="truncate" title={r.desc}>{r.desc}</span>
-          <span className="truncate text-muted-foreground" title={r.centro}>{r.centro || '—'}</span>
-          <span className={`text-right tabular-nums ${corValor(r.valor)}`}>{fmtBRL(r.valor)}</span>
-          <span className={`text-right tabular-nums ${corSaldo(r.saldo)}`}>{fmtBRL(r.saldo)}</span>
-          <StatusMockCell status={r.status} />
-        </div>
-      ))}
-    </div>
-  );
-}
-function EspelhoParMock({ par }: { par: typeof MOCK_ESPELHO[number] }) {
-  return (
-    <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
-      <div className="flex-1 min-w-0">
-        {par.ofx ? <span className="truncate block" title={par.ofx}>{par.ofx}</span> : <span className="text-[9px] italic text-muted-foreground">SEM OFX</span>}
-      </div>
-      <div className="w-16 shrink-0 text-center">
-        {par.rel === 'par' ? <span className="text-emerald-600">◀────▶</span> : <span className="text-muted-foreground">────</span>}
-      </div>
-      <div className="flex-1 min-w-0 text-right">
-        {par.sistema ? <span className="truncate block" title={par.sistema}>{par.sistema}</span> : <span className="text-[9px] italic text-muted-foreground">SEM LANÇAMENTO</span>}
-      </div>
-    </div>
-  );
-}
-function AbaEspelhoMock() {
-  return (
-    <div>
-      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5">
-        <span className="flex-1">Extrato OFX</span><span className="w-16 text-center" /><span className="flex-1 text-right">Sistema</span>
-      </div>
-      {MOCK_ESPELHO.map((p, i) => <EspelhoParMock key={i} par={p} />)}
-    </div>
-  );
-}
-function AbaEvolucaoMock() {
-  // primeira linha onde a diferença passa de 0 -> != 0 (onde a divergência nasce).
-  let nasceIdx = -1;
-  for (let i = 0; i < MOCK_EVOLUCAO.length; i++) {
-    if (Math.abs(MOCK_EVOLUCAO[i].dif) >= 0.005 && (i === 0 || Math.abs(MOCK_EVOLUCAO[i - 1].dif) < 0.005)) { nasceIdx = i; break; }
-  }
-  return (
-    <div className="text-[10px]">
-      <div className="grid grid-cols-[64px_1fr_1fr_1fr] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
-        <span>Data</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sistema</span><span className="text-right">Diferença</span>
-      </div>
-      {MOCK_EVOLUCAO.map((r, i) => {
-        const difZero = Math.abs(r.dif) < 0.005;
-        const nasce = i === nasceIdx;
+      {rows.map(({ r, saldo }) => {
+        const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
         return (
-          <div key={i} className={`grid grid-cols-[64px_1fr_1fr_1fr] gap-1 py-0.5 border-b last:border-b-0 items-center ${nasce ? 'border-l-2 border-l-rose-500 bg-rose-50/50' : ''}`}>
-            <span className="text-muted-foreground flex items-center gap-1">{r.data}{nasce && <span className="px-1 rounded bg-rose-200 text-rose-800 text-[8px] font-bold">nasce aqui</span>}</span>
-            <span className={`text-right tabular-nums ${corSaldo(r.saldoOfx)}`}>{fmtBRL(r.saldoOfx)}</span>
-            <span className={`text-right tabular-nums ${corSaldo(r.saldoSis)}`}>{fmtBRL(r.saldoSis)}</span>
-            <span className={`text-right tabular-nums ${difZero ? 'text-muted-foreground' : 'text-rose-600 font-medium'}`}>{fmtBRL(r.dif)}</span>
+          <div key={r.lancamento_id} className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+            <span className="text-muted-foreground">{fmtData(r.data)}</span>
+            <span className="truncate" title={r.descricao ?? ''}>{r.descricao ?? '—'}</span>
+            <span className="truncate text-muted-foreground" title={cs}>{cs}</span>
+            <span className={`text-right tabular-nums ${corValReal(r.valor_assinado)}`}>{fmtBRL(r.valor_assinado)}</span>
+            <span className={`text-right tabular-nums ${corValReal(saldo)}`}>{fmtBRL(saldo)}</span>
+            <EspStatusCell status={r.status} />
           </div>
         );
       })}
@@ -852,22 +788,127 @@ function AbaEvolucaoMock() {
   );
 }
 
-function ExtratosEspelhadosMock() {
+// Aba 3 (Opção B): conciliados (status) + sugestões/sem-vínculo (motor via diag).
+type ClasseEsp = 'conciliado' | 'forte' | 'possiveis' | 'sem_vinculo';
+interface ParReal { key: string; classe: ClasseEsp; ofx?: string; sis?: string; nPossiveis?: number; }
+function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): ParReal[] {
+  const out: ParReal[] = [];
+  const fmtO = (d: string | null, h: string | null, v: number) => `${fmtData(d)} · ${h ?? '—'} · ${fmtBRL(v)}`;
+  // Conciliados: pareamento de exibição (mesmo valor assinado + data; fallback só valor). Não é o motor.
+  const cOfx = data.ofx_completo.filter((o) => o.status === 'conciliado');
+  const cSis = data.sistema_completo.filter((s) => s.status === 'conciliado');
+  const usado = new Set<number>();
+  for (const o of cOfx) {
+    let idx = cSis.findIndex((s, i) => !usado.has(i) && Math.abs(s.valor_assinado - o.valor) < 0.005 && s.data === o.data);
+    if (idx < 0) idx = cSis.findIndex((s, i) => !usado.has(i) && Math.abs(s.valor_assinado - o.valor) < 0.005);
+    let s: EspSis | null = null;
+    if (idx >= 0) { usado.add(idx); s = cSis[idx]; }
+    out.push({ key: `c-${o.extrato_id}`, classe: 'conciliado', ofx: fmtO(o.data, o.historico, o.valor), sis: s ? fmtO(s.data, s.descricao, s.valor_assinado) : undefined });
+  }
+  cSis.forEach((s, i) => { if (!usado.has(i)) out.push({ key: `cs-${s.lancamento_id}`, classe: 'conciliado', sis: fmtO(s.data, s.descricao, s.valor_assinado) }); });
+  // Sugestões (forte/possíveis) + sem-vínculo: reusa montarPares(diag) — sem reescrever o motor.
+  for (const p of montarPares(diag)) {
+    const classe: ClasseEsp = p.classe === 'forte' ? 'forte' : p.classe === 'possiveis' ? 'possiveis' : 'sem_vinculo';
+    out.push({
+      key: `m-${p.key}`, classe, nPossiveis: p.nPossiveis,
+      ofx: p.ofx ? fmtO(p.ofx.data, p.ofx.descricao, p.ofx.valor) : undefined,
+      sis: p.sistema ? fmtO(p.sistema.data, p.sistema.descricao, p.sistema.valor) : undefined,
+    });
+  }
+  return out;
+}
+function LinhaEspReal({ par }: { par: ParReal }) {
+  const conector =
+    par.classe === 'conciliado' ? <span className="text-emerald-600 text-[9px]">◀══▶</span>
+    : par.classe === 'forte' ? <span className="px-1 rounded bg-emerald-100 text-emerald-700 text-[8px] font-medium">forte</span>
+    : par.classe === 'possiveis' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium">{par.nPossiveis} poss.</span>
+    : <span className="text-muted-foreground">────</span>;
+  return (
+    <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
+      <div className="flex-1 min-w-0">{par.ofx ? <span className="truncate block" title={par.ofx}>{par.ofx}</span> : <span className="text-[9px] italic text-muted-foreground">SEM OFX</span>}</div>
+      <div className="w-16 shrink-0 text-center">{conector}</div>
+      <div className="flex-1 min-w-0 text-right">{par.sis ? <span className="truncate block" title={par.sis}>{par.sis}</span> : <span className="text-[9px] italic text-muted-foreground">SEM LANÇAMENTO</span>}</div>
+    </div>
+  );
+}
+function AbaEspelhoReal({ data, diag }: { data: EspelhadosReais; diag: DiagnosticoSoberano }) {
+  const pares = useMemo(() => montarEspelhoReal(data, diag), [data, diag]);
+  return (
+    <div className="max-h-[55vh] overflow-y-auto">
+      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+        <span className="flex-1">Extrato OFX</span><span className="w-16 text-center">vínculo</span><span className="flex-1 text-right">Sistema</span>
+      </div>
+      {pares.map((p) => <LinhaEspReal key={p.key} par={p} />)}
+    </div>
+  );
+}
+
+// Aba 4: evolução diária (todos os dias do mês), saldo corrido e diferença acumulada.
+function montarEvolucao(data: EspelhadosReais) {
+  const inicial = data.saldos.inicial ?? 0;
+  const nDias = data.saldos.periodo_fim ? Number(data.saldos.periodo_fim.split('-')[2]) : 31;
+  const dia = (s: string | null) => (s ? Number(s.split('-')[2]) : 0);
+  const movOfx = Array(nDias + 1).fill(0);
+  const movSis = Array(nDias + 1).fill(0);
+  for (const o of data.ofx_completo) { const d = dia(o.data); if (d >= 1 && d <= nDias) movOfx[d] += o.valor; }
+  for (const s of data.sistema_completo) { const d = dia(s.data); if (d >= 1 && d <= nDias) movSis[d] += s.valor_assinado; }
+  const rows: { dia: number; movOfx: number; movSis: number; saldoOfx: number; saldoSis: number; dif: number; nasce: boolean }[] = [];
+  let accO = inicial, accS = inicial, nasceu = false;
+  for (let d = 1; d <= nDias; d++) {
+    accO += movOfx[d]; accS += movSis[d];
+    const dif = accO - accS;
+    const nasce = Math.abs(dif) >= 0.005 && !nasceu;
+    if (nasce) nasceu = true;
+    rows.push({ dia: d, movOfx: movOfx[d], movSis: movSis[d], saldoOfx: accO, saldoSis: accS, dif, nasce });
+  }
+  return rows;
+}
+function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
+  const rows = useMemo(() => montarEvolucao(data), [data]);
+  const mm = data.saldos.periodo_ini ? data.saldos.periodo_ini.split('-')[1] : '';
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] max-h-[50vh] overflow-y-auto">
+        <div className="grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 font-semibold text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+          <span>Data</span><span className="text-right">Mov. OFX</span><span className="text-right">Mov. Sist.</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sist.</span><span className="text-right">Dif. Acum.</span>
+        </div>
+        {rows.map((r) => {
+          const difZero = Math.abs(r.dif) < 0.005;
+          return (
+            <div key={r.dia} className={`grid grid-cols-[52px_1fr_1fr_1fr_1fr_1fr] gap-1 py-0.5 border-b last:border-b-0 items-center ${r.nasce ? 'border-l-2 border-l-rose-500 bg-rose-50/50' : ''}`}>
+              <span className="text-muted-foreground flex items-center gap-1">{String(r.dia).padStart(2, '0')}/{mm}{r.nasce && <span className="px-1 rounded bg-rose-200 text-rose-800 text-[8px] font-bold shrink-0">nasceu aqui</span>}</span>
+              <span className={`text-right tabular-nums ${r.movOfx === 0 ? 'text-muted-foreground' : corValReal(r.movOfx)}`}>{fmtBRL(r.movOfx)}</span>
+              <span className={`text-right tabular-nums ${r.movSis === 0 ? 'text-muted-foreground' : corValReal(r.movSis)}`}>{fmtBRL(r.movSis)}</span>
+              <span className={`text-right tabular-nums ${corValReal(r.saldoOfx)}`}>{fmtBRL(r.saldoOfx)}</span>
+              <span className={`text-right tabular-nums ${corValReal(r.saldoSis)}`}>{fmtBRL(r.saldoSis)}</span>
+              <span className={`text-right tabular-nums ${difZero ? 'text-muted-foreground' : 'text-rose-600 font-medium'}`}>{fmtBRL(r.dif)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-amber-700">Extrato bancário importado contém movimentos até {fmtData(data.saldos.extrato_fim)}.</div>
+      <div className="text-[11px] font-semibold">Saldo final oficial (extrato): {fmtBRL(data.saldos.final_oficial)}</div>
+    </div>
+  );
+}
+
+function ExtratosEspelhadosReais({ data, diag }: { data: EspelhadosReais; diag: DiagnosticoSoberano }) {
   const [aberto, setAberto] = useState(false);
   const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
-  const abas: { key: 'ofx' | 'sistema' | 'espelho' | 'evolucao'; label: string }[] = [
-    { key: 'ofx', label: 'Extrato OFX' },
-    { key: 'sistema', label: 'Extrato Sistema' },
-    { key: 'espelho', label: 'Espelhado' },
-    { key: 'evolucao', label: 'Evolução da Divergência' },
+  const inicial = data.saldos.inicial ?? 0;
+  const abas = [
+    { key: 'ofx' as const, label: 'Extrato OFX' },
+    { key: 'sistema' as const, label: 'Extrato Sistema' },
+    { key: 'espelho' as const, label: 'Espelhado' },
+    { key: 'evolucao' as const, label: 'Evolução da Divergência' },
   ];
   return (
-    <Card className="p-3 space-y-2 border-dashed border-fuchsia-300">
+    <Card className="p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={() => setAberto((v) => !v)} className="text-xs font-semibold inline-flex items-center gap-1">
-          {aberto ? '▼' : '▶'} Ver protótipo: Extratos Espelhados (MOCK)
+          {aberto ? '▼' : '▶'} Extratos espelhados (OFX × Sistema)
         </button>
-        <SeloMock />
+        <span className="text-[10px] text-muted-foreground truncate max-w-[45%]" title={data.escopo.nome_conta ?? ''}>{data.escopo.nome_conta ?? ''}</span>
       </div>
       {aberto && (
         <>
@@ -879,13 +920,10 @@ function ExtratosEspelhadosMock() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 text-[9px] text-fuchsia-700">
-            <SeloMock /> <span>Números fictícios — apenas para validar o layout. Nenhum dado real.</span>
-          </div>
-          {aba === 'ofx' && <AbaOfxMock />}
-          {aba === 'sistema' && <AbaSistemaMock />}
-          {aba === 'espelho' && <AbaEspelhoMock />}
-          {aba === 'evolucao' && <AbaEvolucaoMock />}
+          {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
+          {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} />}
+          {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} />}
+          {aba === 'evolucao' && <AbaEvolucaoReal data={data} />}
         </>
       )}
     </Card>
@@ -1005,6 +1043,20 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       if (e) throw e;
       if (!data || !data.buckets) return null;
       return data as DiagnosticoSoberano;
+    },
+  });
+
+  // C3.4 — listas completas (OFX/Sistema) + saldos-ancora p/ as telas espelhadas.
+  const { data: espelhados } = useQuery({
+    queryKey: ['extratos-espelhados', clienteId, contaId, anoMes],
+    enabled: !!clienteId && !!contaId && temExtrato,
+    staleTime: 30_000,
+    queryFn: async (): Promise<EspelhadosReais | null> => {
+      const { data, error: e } = await (supabase as any).rpc('fn_extratos_espelhados', {
+        p_cliente: clienteId, p_conta: contaId, p_mes: anoMes,
+      });
+      if (e) throw e;
+      return (data as EspelhadosReais) ?? null;
     },
   });
 
@@ -1261,8 +1313,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
             nomeConta={nomeConta}
           />
 
-          {/* C3.2-MOCK — Protótipo visual (dados fictícios, sem banco) */}
-          <ExtratosEspelhadosMock />
+          {/* C3.4 — Extratos espelhados reais (fn_extratos_espelhados) */}
+          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} />}
         </>
       )}
 
