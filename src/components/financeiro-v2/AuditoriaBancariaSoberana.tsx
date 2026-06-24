@@ -184,6 +184,7 @@ interface LinhaAud {
   motivoAcao: string;
   acaoLabel: string | null;
   onAcao?: () => void;
+  sugestao?: SugestaoPorLancamento;
 }
 
 // Direção pelo SINAL numérico (entrada = credito/positivo, saida = debito/negativo).
@@ -212,23 +213,89 @@ function TipoBadge({ tipo }: { tipo: 'entrada' | 'saida' }) {
   );
 }
 
+// ── C2.3 — Motor de SUGESTÃO de vínculo (PURO, read-only) ──────────────────
+interface SugestaoVinculo {
+  extrato_id: string;
+  data: string | null;
+  valor: number;          // assinado (sinal do OFX)
+  descricao: string;
+  origem: 'sem_vinculo' | 'vinculo_morto';
+  dataIgual: boolean;
+}
+interface SugestaoPorLancamento {
+  candidatos: SugestaoVinculo[];
+  classe: 'sugestao' | 'possiveis';
+}
+
+// Cruza lançamentos órfãos (sistema_sem_extrato) com OFX disponíveis
+// (extrato_sem_sistema + divergências motivo='cancelado' = vínculo morto).
+// |valor| igual (obrigatório) + mesmo sinal. Data igual = confiança máxima.
+// OFX com vínculo vivo NUNCA entra no pool. Não escreve nada.
+function gerarSugestoes(diag: DiagnosticoSoberano): Record<string, SugestaoPorLancamento> {
+  const b = diag.buckets;
+  const pool: SugestaoVinculo[] = [];
+  for (const x of (b.extrato_sem_sistema ?? [])) {
+    pool.push({ extrato_id: x.extrato_id, data: x.data, valor: x.valor, descricao: x.descricao ?? '—', origem: 'sem_vinculo', dataIgual: false });
+  }
+  for (const x of (b.divergencias_vinculo ?? [])) {
+    if (x.motivo === 'cancelado') {
+      pool.push({ extrato_id: x.extrato_id, data: x.data_ofx, valor: x.valor, descricao: x.descricao ?? '—', origem: 'vinculo_morto', dataIgual: false });
+    }
+  }
+  const out: Record<string, SugestaoPorLancamento> = {};
+  for (const l of (b.sistema_sem_extrato ?? [])) {
+    const alvo = l.valor_assinado;
+    const cands = pool
+      .filter((o) => Math.abs(Math.abs(o.valor) - Math.abs(alvo)) < 0.005 && Math.sign(o.valor) === Math.sign(alvo))
+      .map((o) => ({ ...o, dataIgual: o.data === l.data }));
+    if (cands.length === 0) continue;
+    cands.sort((a, c) => Number(c.dataIgual) - Number(a.dataIgual));
+    const fortes = cands.filter((c) => c.dataIgual);
+    const classe: 'sugestao' | 'possiveis' = fortes.length === 1 ? 'sugestao' : 'possiveis';
+    out[l.lancamento_id] = { candidatos: cands, classe };
+  }
+  return out;
+}
+
 function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
   const motivoTitle = linha.motivoAcao ? `${linha.motivo} — ${linha.motivoAcao}` : linha.motivo;
   return (
-    <div className="py-0.5 flex items-center gap-1 text-[10px]">
-      <StatusBadge texto={linha.status} tom={linha.tom} />
-      <span className="w-10 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
-      <span className="flex-1 min-w-0 truncate" title={linha.descricao}>{linha.descricao}</span>
-      <span className="w-20 shrink-0 truncate text-[9px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
-      <TipoBadge tipo={linha.tipo} />
-      <span className="w-24 shrink-0 text-right tabular-nums text-[11px]">R$ {fmtBRL(linha.valor)}</span>
-      <span className="w-28 shrink-0 truncate text-[9px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
-      {linha.acaoLabel ? (
-        <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0 w-[56px]" onClick={linha.onAcao}>
-          {linha.acaoLabel}
-        </Button>
-      ) : (
-        <span className="w-[56px] shrink-0" />
+    <div className="py-0.5">
+      <div className="flex items-center gap-1 text-[10px]">
+        <StatusBadge texto={linha.status} tom={linha.tom} />
+        <span className="w-10 shrink-0 text-muted-foreground">{fmtData(linha.data)}</span>
+        <span className="flex-1 min-w-0 truncate" title={linha.descricao}>{linha.descricao}</span>
+        <span className="w-20 shrink-0 truncate text-[9px] text-muted-foreground" title={linha.origem}>{linha.origem}</span>
+        <TipoBadge tipo={linha.tipo} />
+        <span className="w-24 shrink-0 text-right tabular-nums text-[11px]">R$ {fmtBRL(linha.valor)}</span>
+        <span className="w-28 shrink-0 truncate text-[9px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
+        {linha.acaoLabel ? (
+          <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0 w-[56px]" onClick={linha.onAcao}>
+            {linha.acaoLabel}
+          </Button>
+        ) : (
+          <span className="w-[56px] shrink-0" />
+        )}
+      </div>
+      {linha.sugestao && (
+        linha.sugestao.classe === 'sugestao' ? (
+          <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="px-1 rounded bg-amber-100 text-amber-800 font-medium shrink-0">Sugestão</span>
+            <span className="w-10 shrink-0">{fmtData(linha.sugestao.candidatos[0].data)}</span>
+            <span className="flex-1 min-w-0 truncate" title={linha.sugestao.candidatos[0].descricao}>{linha.sugestao.candidatos[0].descricao}</span>
+            <span className="shrink-0 text-[8px] italic">{linha.sugestao.candidatos[0].origem === 'vinculo_morto' ? 'vínculo cancelado' : 'sem vínculo'}</span>
+            <span className="w-24 shrink-0 text-right tabular-nums">R$ {fmtBRL(Math.abs(linha.sugestao.candidatos[0].valor))}</span>
+            <span className="flex gap-1 shrink-0">
+              <Button size="sm" variant="outline" disabled title="Em breve — ação de vínculo (C2.4)" className="h-4 px-1 text-[8px]">Vincular</Button>
+              <Button size="sm" variant="outline" disabled title="Em breve (C2.4)" className="h-4 px-1 text-[8px]">Ignorar</Button>
+              <Button size="sm" variant="outline" disabled title="Em breve (C2.4)" className="h-4 px-1 text-[8px]">Editar</Button>
+            </span>
+          </div>
+        ) : (
+          <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 text-[9px] text-amber-700">
+            Possíveis vínculos: {linha.sugestao.candidatos.length} candidatos
+          </div>
+        )
       )}
     </div>
   );
@@ -568,6 +635,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const linhas = useMemo<LinhaAud[]>(() => {
     if (!diag) return [];
     const b = diag.buckets;
+    const sugestoes = gerarSugestoes(diag);
     const out: LinhaAud[] = [];
 
     for (const it of b.divergencias_vinculo) {
@@ -600,6 +668,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         motivoAcao: 'Confirme se o movimento existe no extrato ou ajuste o lançamento.',
         acaoLabel: 'Verificar',
         onAcao: () => irLancamentos(`Verificar lançamento sem vínculo · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
+        sugestao: sugestoes[it.lancamento_id],
       });
     }
 
