@@ -712,6 +712,186 @@ function ExtratosEspelhados({ diag, saldoInicial, saldoExtratoReal, nomeConta }:
   );
 }
 
+// ── C3.2-MOCK — Protótipo visual dos Extratos Espelhados (DADOS FICTÍCIOS) ──
+// PROTÓTIPO de UI. Tudo hardcoded; NÃO usa diag/buckets/banco/RPC. Read-only.
+// Objetivo: aprovar layout das 4 abas antes da fonte de dados real (C3.3-DADOS).
+type MockStatus = 'conciliado' | 'sem_vinculo' | 'dup' | 'investimento' | 'transferencia' | null;
+
+const MOCK_OFX = [
+  { data: '01/05', hist: 'Saldo Inicial',   valor: null,        saldo: 100.00,     status: null as MockStatus },
+  { data: '04/05', hist: 'Pix Cliente X',   valor: 10000.00,    saldo: 10100.00,   status: 'conciliado' as MockStatus },
+  { data: '07/05', hist: 'Compra Insumos',  valor: -2500.00,    saldo: 7600.00,    status: 'conciliado' as MockStatus },
+  { data: '11/05', hist: 'Parcela Crédito', valor: -195720.44,  saldo: -188120.44, status: 'sem_vinculo' as MockStatus },
+  { data: '21/05', hist: 'Pix Diocese',     valor: -2500.00,    saldo: -190620.44, status: 'sem_vinculo' as MockStatus },
+];
+const MOCK_SISTEMA = [
+  { data: '01/05', desc: 'Saldo Inicial', centro: '',                       valor: null,     saldo: 100.00,  status: null as MockStatus },
+  { data: '21/05', desc: 'Pix Diocese',   centro: 'Receitas / Doações',     valor: -2500.00, saldo: 5100.00, status: 'conciliado' as MockStatus },
+  { data: '14/05', desc: 'Salário',       centro: 'Mão de obra / Salários', valor: -1200.00, saldo: 6400.00, status: 'sem_vinculo' as MockStatus },
+];
+const MOCK_ESPELHO = [
+  { ofx: '21/05 Pix Diocese -2.500',       sistema: '21/05 Pix Diocese -2.500', rel: 'par' as const },
+  { ofx: '11/05 Parcela Crédito -195.720', sistema: null as string | null,      rel: 'so_ofx' as const },
+  { ofx: null as string | null,            sistema: '14/05 Salário -1.200',     rel: 'so_sistema' as const },
+];
+const MOCK_EVOLUCAO = [
+  { data: '01/05', saldoOfx: 100.00,     saldoSis: 100.00,  dif: 0.00 },
+  { data: '07/05', saldoOfx: 7600.00,    saldoSis: 7600.00, dif: 0.00 },
+  { data: '11/05', saldoOfx: -188120.44, saldoSis: 7600.00, dif: 195720.44 },
+  { data: '21/05', saldoOfx: -190620.44, saldoSis: 5100.00, dif: 195720.44 },
+];
+
+const corValor = (v: number | null) => (v == null ? 'text-muted-foreground' : v >= 0 ? 'text-blue-600' : 'text-rose-600');
+const corSaldo = (v: number) => (v >= 0 ? 'text-blue-600' : 'text-rose-600');
+const STATUS_MOCK: Record<string, { icon: string; label: string; cls: string }> = {
+  conciliado:    { icon: '✓',  label: 'conciliado',    cls: 'text-emerald-700' },
+  sem_vinculo:   { icon: '⚠',  label: 'sem vínculo',   cls: 'text-amber-700' },
+  dup:           { icon: '⚠',  label: 'dup?',          cls: 'text-orange-700' },
+  investimento:  { icon: '💰', label: 'investimento',  cls: 'text-violet-700' },
+  transferencia: { icon: '🔄', label: 'transferência', cls: 'text-blue-700' },
+};
+function StatusMockCell({ status }: { status: MockStatus }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const s = STATUS_MOCK[status];
+  return <span className={`${s.cls} text-[9px]`}>{s.icon} {s.label}</span>;
+}
+function SeloMock() {
+  return (
+    <span className="px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700 text-[9px] font-bold uppercase tracking-wide shrink-0">
+      MOCK · exemplo visual
+    </span>
+  );
+}
+
+function AbaOfxMock() {
+  return (
+    <div className="text-[10px]">
+      <div className="grid grid-cols-[40px_1fr_90px_90px_90px] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
+        <span>Data</span><span>Histórico</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+      </div>
+      {MOCK_OFX.map((r, i) => (
+        <div key={i} className="grid grid-cols-[40px_1fr_90px_90px_90px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+          <span className="text-muted-foreground">{r.data}</span>
+          <span className="truncate" title={r.hist}>{r.hist}</span>
+          <span className={`text-right tabular-nums ${corValor(r.valor)}`}>{fmtBRL(r.valor)}</span>
+          <span className={`text-right tabular-nums ${corSaldo(r.saldo)}`}>{fmtBRL(r.saldo)}</span>
+          <StatusMockCell status={r.status} />
+        </div>
+      ))}
+    </div>
+  );
+}
+function AbaSistemaMock() {
+  return (
+    <div className="text-[10px]">
+      <div className="grid grid-cols-[40px_1fr_120px_80px_80px_80px] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
+        <span>Data</span><span>Descrição</span><span>Centro/Subcentro</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
+      </div>
+      {MOCK_SISTEMA.map((r, i) => (
+        <div key={i} className="grid grid-cols-[40px_1fr_120px_80px_80px_80px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+          <span className="text-muted-foreground">{r.data}</span>
+          <span className="truncate" title={r.desc}>{r.desc}</span>
+          <span className="truncate text-muted-foreground" title={r.centro}>{r.centro || '—'}</span>
+          <span className={`text-right tabular-nums ${corValor(r.valor)}`}>{fmtBRL(r.valor)}</span>
+          <span className={`text-right tabular-nums ${corSaldo(r.saldo)}`}>{fmtBRL(r.saldo)}</span>
+          <StatusMockCell status={r.status} />
+        </div>
+      ))}
+    </div>
+  );
+}
+function EspelhoParMock({ par }: { par: typeof MOCK_ESPELHO[number] }) {
+  return (
+    <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
+      <div className="flex-1 min-w-0">
+        {par.ofx ? <span className="truncate block" title={par.ofx}>{par.ofx}</span> : <span className="text-[9px] italic text-muted-foreground">SEM OFX</span>}
+      </div>
+      <div className="w-16 shrink-0 text-center">
+        {par.rel === 'par' ? <span className="text-emerald-600">◀────▶</span> : <span className="text-muted-foreground">────</span>}
+      </div>
+      <div className="flex-1 min-w-0 text-right">
+        {par.sistema ? <span className="truncate block" title={par.sistema}>{par.sistema}</span> : <span className="text-[9px] italic text-muted-foreground">SEM LANÇAMENTO</span>}
+      </div>
+    </div>
+  );
+}
+function AbaEspelhoMock() {
+  return (
+    <div>
+      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5">
+        <span className="flex-1">Extrato OFX</span><span className="w-16 text-center" /><span className="flex-1 text-right">Sistema</span>
+      </div>
+      {MOCK_ESPELHO.map((p, i) => <EspelhoParMock key={i} par={p} />)}
+    </div>
+  );
+}
+function AbaEvolucaoMock() {
+  // primeira linha onde a diferença passa de 0 -> != 0 (onde a divergência nasce).
+  let nasceIdx = -1;
+  for (let i = 0; i < MOCK_EVOLUCAO.length; i++) {
+    if (Math.abs(MOCK_EVOLUCAO[i].dif) >= 0.005 && (i === 0 || Math.abs(MOCK_EVOLUCAO[i - 1].dif) < 0.005)) { nasceIdx = i; break; }
+  }
+  return (
+    <div className="text-[10px]">
+      <div className="grid grid-cols-[64px_1fr_1fr_1fr] gap-1 font-semibold text-muted-foreground border-b pb-0.5">
+        <span>Data</span><span className="text-right">Saldo OFX</span><span className="text-right">Saldo Sistema</span><span className="text-right">Diferença</span>
+      </div>
+      {MOCK_EVOLUCAO.map((r, i) => {
+        const difZero = Math.abs(r.dif) < 0.005;
+        const nasce = i === nasceIdx;
+        return (
+          <div key={i} className={`grid grid-cols-[64px_1fr_1fr_1fr] gap-1 py-0.5 border-b last:border-b-0 items-center ${nasce ? 'border-l-2 border-l-rose-500 bg-rose-50/50' : ''}`}>
+            <span className="text-muted-foreground flex items-center gap-1">{r.data}{nasce && <span className="px-1 rounded bg-rose-200 text-rose-800 text-[8px] font-bold">nasce aqui</span>}</span>
+            <span className={`text-right tabular-nums ${corSaldo(r.saldoOfx)}`}>{fmtBRL(r.saldoOfx)}</span>
+            <span className={`text-right tabular-nums ${corSaldo(r.saldoSis)}`}>{fmtBRL(r.saldoSis)}</span>
+            <span className={`text-right tabular-nums ${difZero ? 'text-muted-foreground' : 'text-rose-600 font-medium'}`}>{fmtBRL(r.dif)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExtratosEspelhadosMock() {
+  const [aberto, setAberto] = useState(false);
+  const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
+  const abas: { key: 'ofx' | 'sistema' | 'espelho' | 'evolucao'; label: string }[] = [
+    { key: 'ofx', label: 'Extrato OFX' },
+    { key: 'sistema', label: 'Extrato Sistema' },
+    { key: 'espelho', label: 'Espelhado' },
+    { key: 'evolucao', label: 'Evolução da Divergência' },
+  ];
+  return (
+    <Card className="p-3 space-y-2 border-dashed border-fuchsia-300">
+      <div className="flex items-center justify-between gap-2">
+        <button type="button" onClick={() => setAberto((v) => !v)} className="text-xs font-semibold inline-flex items-center gap-1">
+          {aberto ? '▼' : '▶'} Ver protótipo: Extratos Espelhados (MOCK)
+        </button>
+        <SeloMock />
+      </div>
+      {aberto && (
+        <>
+          <div className="flex flex-wrap gap-1">
+            {abas.map((a) => (
+              <button key={a.key} type="button" onClick={() => setAba(a.key)}
+                className={`px-2 py-0.5 rounded text-[10px] border ${aba === a.key ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground'}`}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-[9px] text-fuchsia-700">
+            <SeloMock /> <span>Números fictícios — apenas para validar o layout. Nenhum dado real.</span>
+          </div>
+          {aba === 'ofx' && <AbaOfxMock />}
+          {aba === 'sistema' && <AbaSistemaMock />}
+          {aba === 'espelho' && <AbaEspelhoMock />}
+          {aba === 'evolucao' && <AbaEvolucaoMock />}
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateToLancamentos }: Props) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -1080,6 +1260,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
             saldoExtratoReal={saldoExtratoReal ?? null}
             nomeConta={nomeConta}
           />
+
+          {/* C3.2-MOCK — Protótipo visual (dados fictícios, sem banco) */}
+          <ExtratosEspelhadosMock />
         </>
       )}
 
