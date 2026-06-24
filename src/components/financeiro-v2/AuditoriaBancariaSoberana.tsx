@@ -235,18 +235,29 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
 }
 
 // ── Resumo compacto (espelha "Resumo das Movimentações") ───────────────────
-function ResumoAuditoria({ diag, nomeConta }: { diag: DiagnosticoSoberano; nomeConta: string }) {
+function ResumoAuditoria({ diag, nomeConta, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; aberto: boolean; onToggle: () => void }) {
   const difEnt = diag.resumo.ofx.entradas - diag.resumo.lv2.entradas;
   const difSai = diag.resumo.ofx.saidas - diag.resumo.lv2.saidas;
+  const difPrincipal = Math.abs(difEnt) >= Math.abs(difSai) ? difEnt : difSai;
   const Dif = ({ v }: { v: number }) => (
     <span className={`text-right tabular-nums ${Math.abs(v) >= 0.005 ? 'text-rose-600 font-semibold' : 'text-muted-foreground'}`}>{fmtBRL(v)}</span>
   );
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <span className="text-xs font-semibold">📊 Resumo da auditoria</span>
+        <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
+          {aberto ? '▼' : '▶'} 📊 Resumo da auditoria
+        </button>
         <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 truncate max-w-[55%]">{nomeConta}</span>
       </div>
+      {!aberto && (
+        <div className="px-3 py-1.5 text-[11px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
+          <span>Entradas R$ {fmtBRL(diag.resumo.ofx.entradas)}</span>
+          <span>Saídas R$ {fmtBRL(diag.resumo.ofx.saidas)}</span>
+          <span className={Math.abs(difPrincipal) >= 0.005 ? 'text-rose-600 font-semibold' : ''}>Diferença R$ {fmtBRL(difPrincipal)}</span>
+        </div>
+      )}
+      {aberto && (
       <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1 text-xs">
         <span />
         <span className="text-right font-medium text-muted-foreground">Extrato</span>
@@ -273,17 +284,19 @@ function ResumoAuditoria({ diag, nomeConta }: { diag: DiagnosticoSoberano; nomeC
         <span className="text-right tabular-nums text-muted-foreground">—</span>
         <span className="text-right tabular-nums text-muted-foreground">—</span>
       </div>
+      )}
     </div>
   );
 }
 
 // ── Cards-filtro clicáveis ─────────────────────────────────────────────────
 function CardsFiltro({
-  ativo, onSelect, contagens,
+  ativo, onSelect, contagens, valores,
 }: {
   ativo: FiltroKey;
   onSelect: (k: FiltroKey) => void;
   contagens: Record<FiltroKey, number>;
+  valores: Record<FiltroKey, number>;
 }) {
   const FILTROS: { key: FiltroKey; label: string }[] = [
     { key: 'todos', label: 'Todos' },
@@ -309,6 +322,7 @@ function CardsFiltro({
           >
             <span>{f.label}</span>
             <span className={`tabular-nums font-semibold ${on ? 'text-foreground' : 'text-foreground/80'}`}>{contagens[f.key]}</span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">R$ {fmtBRL(valores[f.key])}</span>
           </button>
         );
       })}
@@ -327,9 +341,10 @@ function Campo({ label, valor, muted }: { label: string; valor: string; muted?: 
 
 // ── MUDANÇA 2 — Extrato soberano do mês (cabeçalho de decisão) ─────────────
 function ExtratoSoberanoCard({
-  extrato, nomeConta, ano, mes, onCarregar,
+  extrato, nomeConta, ano, mes, onCarregar, aberto, onToggle,
 }: {
   extrato: ExtratoExistencia; nomeConta: string; ano: number; mes: number; onCarregar: () => void;
+  aberto: boolean; onToggle: () => void;
 }) {
   if (extrato.movimentos === 0) {
     return (
@@ -346,22 +361,32 @@ function ExtratoSoberanoCard({
   return (
     <Card className="p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold">Extrato soberano do mês</span>
+        <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
+          {aberto ? '▼' : '▶'} Extrato soberano do mês
+        </button>
         <StatusBadge texto="Extrato carregado" tom="emerald" />
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
-        <Campo label="Conta" valor={nomeConta || '—'} />
-        <Campo label="Mês" valor={`${MESES[mes - 1]}/${ano}`} />
-        <Campo label="Movimentos" valor={String(extrato.movimentos)} />
-        <Campo label="Período" valor={`${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}`} />
-        <Campo label="Importado em" valor={fmtDataHora(extrato.importado_em)} />
-        <Campo label="Arquivo" valor="não disponível" muted />
-        <Campo label="Saldo" valor="não disponível" muted />
-      </div>
-      <div className="flex gap-2 flex-wrap">
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Ver extrato</Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Carregar versão atualizada</Button>
-      </div>
+      {aberto ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px]">
+            <Campo label="Conta" valor={nomeConta || '—'} />
+            <Campo label="Mês" valor={`${MESES[mes - 1]}/${ano}`} />
+            <Campo label="Movimentos" valor={String(extrato.movimentos)} />
+            <Campo label="Período" valor={`${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}`} />
+            <Campo label="Importado em" valor={fmtDataHora(extrato.importado_em)} />
+            <Campo label="Arquivo" valor="não disponível" muted />
+            <Campo label="Saldo" valor="não disponível" muted />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Ver extrato</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>Carregar versão atualizada</Button>
+          </div>
+        </>
+      ) : (
+        <div className="text-[11px] text-muted-foreground truncate">
+          {nomeConta || '—'} · {MESES[mes - 1]}/{ano} · {extrato.movimentos} movimentos · carregado
+        </div>
+      )}
     </Card>
   );
 }
@@ -405,6 +430,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [mes, setMes] = useState<number>(initialMes ?? new Date().getMonth() + 1);
   const [filtroAtivo, setFiltroAtivo] = useState<FiltroKey>('todos');
   const [importOpen, setImportOpen] = useState(false);
+  const [extratoAberto, setExtratoAberto] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
+  const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
 
   useEffect(() => {
     if (!clienteId) return;
@@ -571,15 +599,40 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     return c;
   }, [linhas, diag]);
 
+  const valores = useMemo<Record<FiltroKey, number>>(() => {
+    const v: Record<FiltroKey, number> = {
+      todos: 0, divergencias: 0, sistema_sem_extrato: 0, extrato_sem_sistema: 0,
+      agrupamentos: 0, desconsiderados: 0, corretos: diag?.resumo.corretos.valor ?? 0,
+    };
+    for (const l of linhas) {
+      const a = Math.abs(l.valor);
+      v[l.bucket] += a;
+      v.todos += a;
+    }
+    return v;
+  }, [linhas, diag]);
+
   const linhasFiltradas = useMemo(() => {
-    if (filtroAtivo === 'todos' || filtroAtivo === 'corretos') return linhas;
-    return linhas.filter((l) => l.bucket === filtroAtivo);
-  }, [linhas, filtroAtivo]);
+    const base = (filtroAtivo === 'todos' || filtroAtivo === 'corretos')
+      ? linhas
+      : linhas.filter((l) => l.bucket === filtroAtivo);
+    const arr = [...base];
+    const cmpData = (a: LinhaAud, b: LinhaAud) => (a.data ?? '').localeCompare(b.data ?? '');
+    switch (ordenacao) {
+      case 'valor_desc': arr.sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor)); break;
+      case 'valor_asc':  arr.sort((a, b) => Math.abs(a.valor) - Math.abs(b.valor)); break;
+      case 'data_asc':   arr.sort(cmpData); break;
+      case 'data_desc':  arr.sort((a, b) => cmpData(b, a)); break;
+      case 'descricao':  arr.sort((a, b) => a.descricao.localeCompare(b.descricao)); break;
+      case 'tipo':       arr.sort((a, b) => a.tipo.localeCompare(b.tipo)); break;
+    }
+    return arr;
+  }, [linhas, filtroAtivo, ordenacao]);
 
   const anos = [ano - 1, ano, ano + 1].filter((a, i, arr) => arr.indexOf(a) === i);
 
   return (
-    <div className="space-y-3 p-2 overflow-auto h-full">
+    <div className="space-y-2 p-2 overflow-auto h-full">
       {/* Cabeçalho: conta (agrupada) + mês + ano + veredito + carregar extrato */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold">Auditoria Bancária Soberana</span>
@@ -603,15 +656,17 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         )}
       </div>
 
-      {/* MUDANÇA 2 — Extrato soberano do mês (sempre no topo) */}
+      {/* MUDANÇA 2 — Extrato soberano do mês (standalone só quando não há diag p/ 2 colunas) */}
       {loadingExtrato && <Card className="p-3 text-xs text-muted-foreground">Verificando extrato…</Card>}
-      {!loadingExtrato && extrato && (
+      {!loadingExtrato && extrato && !(temExtrato && diag) && (
         <ExtratoSoberanoCard
           extrato={extrato}
           nomeConta={nomeConta}
           ano={ano}
           mes={mes}
           onCarregar={() => setImportOpen(true)}
+          aberto={extratoAberto}
+          onToggle={() => setExtratoAberto((v) => !v)}
         />
       )}
 
@@ -621,12 +676,29 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
 
       {temExtrato && diag && (
         <>
-          <ResumoAuditoria diag={diag} nomeConta={nomeConta} />
+          {/* FASE 2 — Extrato + Resumo lado a lado (empilha no mobile) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <ExtratoSoberanoCard
+              extrato={extrato!}
+              nomeConta={nomeConta}
+              ano={ano}
+              mes={mes}
+              onCarregar={() => setImportOpen(true)}
+              aberto={extratoAberto}
+              onToggle={() => setExtratoAberto((v) => !v)}
+            />
+            <ResumoAuditoria
+              diag={diag}
+              nomeConta={nomeConta}
+              aberto={resumoAberto}
+              onToggle={() => setResumoAberto((v) => !v)}
+            />
+          </div>
 
           {/* MUDANÇA 3 — Próxima ação (derivada do veredito 01.4) */}
           <ProximaAcao diag={diag} onResolver={setFiltroAtivo} />
 
-          <CardsFiltro ativo={filtroAtivo} onSelect={setFiltroAtivo} contagens={contagens} />
+          <CardsFiltro ativo={filtroAtivo} onSelect={setFiltroAtivo} contagens={contagens} valores={valores} />
 
           {filtroAtivo === 'corretos' ? (
             <Card className="p-3 text-xs">
@@ -641,15 +713,30 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
               </div>
             </Card>
           ) : (
-            <Card className="p-0">
-              {linhasFiltradas.length === 0 ? (
-                <div className="p-4 text-center text-xs text-muted-foreground">Nenhum movimento neste filtro. 🎉</div>
-              ) : (
-                <div className="divide-y px-3">
-                  {linhasFiltradas.map((l) => <LinhaAuditoria key={l.key} linha={l} />)}
-                </div>
-              )}
-            </Card>
+            <>
+              {/* FASE 6 — ordenação (client-side, fora do container que scrolla) */}
+              <div className="flex items-center justify-end gap-2">
+                <span className="text-[11px] text-muted-foreground">Ordenar:</span>
+                <select className="text-xs border rounded px-2 py-1 bg-background"
+                  value={ordenacao} onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}>
+                  <option value="data_desc">Data ↓</option>
+                  <option value="data_asc">Data ↑</option>
+                  <option value="valor_desc">Maior valor</option>
+                  <option value="valor_asc">Menor valor</option>
+                  <option value="descricao">Descrição A-Z</option>
+                  <option value="tipo">Tipo</option>
+                </select>
+              </div>
+              <Card className="p-0">
+                {linhasFiltradas.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">Nenhum movimento neste filtro. 🎉</div>
+                ) : (
+                  <div className="divide-y px-3 max-h-[60vh] overflow-y-auto">
+                    {linhasFiltradas.map((l) => <LinhaAuditoria key={l.key} linha={l} />)}
+                  </div>
+                )}
+              </Card>
+            </>
           )}
         </>
       )}
