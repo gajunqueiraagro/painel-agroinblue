@@ -96,6 +96,10 @@ export interface MovimentoPreview extends MovimentoBruto {
   dupResumo?: string | null;
   /** Default sugerido p/ a 1B: FORTE=false (pular), PROVÁVEL/COINCIDÊNCIA=true. */
   dupImportar?: boolean;
+  /** 1B (display) — descrição da linha existente que disparou a suspeita. */
+  dupExistenteDescricao?: string | null;
+  /** 1B (display) — documento/FITID da linha existente que disparou a suspeita. */
+  dupExistenteDocumento?: string | null;
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -225,6 +229,12 @@ export interface ConfirmarParams {
   contaBancariaId: string;
   nomeArquivo: string;
   formato: 'OFX' | 'CSV';
+  /**
+   * 1B — quando true, importa TODAS as suspeitas (ignora dupImportar===false).
+   * Usado pela ação "Importar tudo" do alerta. Default/false respeita a decisão
+   * por linha (FORTE pula por padrão; PROVÁVEL/COINCIDÊNCIA importam).
+   */
+  forcarImportarSuspeitas?: boolean;
 }
 
 function detectarFormato(nomeArquivo: string, conteudo: string): 'OFX' | 'CSV' | 'PDF' | null {
@@ -891,6 +901,11 @@ export function useImportacaoExtrato() {
           m.dupExistenteId = dup.registroExistenteId;
           m.dupResumo = dup.resumo;
           m.dupImportar = dup.dupImportar;
+          // 1B (display): histórico/documento da linha existente — só p/ a UI mostrar
+          // com o que está duplicando. Não altera a régua.
+          const existente = candidatosDup.find((c) => c.id === dup.registroExistenteId);
+          m.dupExistenteDescricao = existente?.descricao ?? null;
+          m.dupExistenteDocumento = existente?.documento ?? null;
         }
       }
 
@@ -927,7 +942,14 @@ export function useImportacaoExtrato() {
     const fazendaId = fazendaAtual?.id;
     const fazendaEspecifica = !!fazendaId && fazendaId !== '__global__';
 
-    const novos = preview.movimentos.filter((m) => !m.existeNoDB);
+    // P0-OFX-DUP-GUARD / FASE 1B — SKIP controlado: pula APENAS o que o operador
+    // (ou o default da régua) marcou explicitamente p/ pular (dupImportar===false).
+    // undefined (sem suspeita) e true (importar) entram como antes -> sem suspeitas,
+    // o conjunto é byte-idêntico ao comportamento pré-1B. "Importar tudo" do alerta
+    // passa forcarImportarSuspeitas=true (ignora o skip).
+    const novos = preview.movimentos.filter(
+      (m) => !m.existeNoDB && (params.forcarImportarSuspeitas || m.dupImportar !== false),
+    );
     if (novos.length === 0) throw new Error('Nenhum movimento novo para importar');
 
     setLoading(true);
@@ -1083,6 +1105,17 @@ export function useImportacaoExtrato() {
     });
   }
 
+  // ── P0-OFX-DUP-GUARD / FASE 1B — decisão importar/pular das suspeitas ──
+  /** Inverte a decisão de uma suspeita (toggle Importar/Pular por linha). */
+  function toggleImportarSuspeita(hash: string): void {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      const movs = prev.movimentos.map((m) =>
+        m.hash === hash && m.dupClassificacao ? { ...m, dupImportar: !m.dupImportar } : m,
+      );
+      return { ...prev, movimentos: movs, ...recomputarAgregados(movs) };
+    });
+  }
   return {
     preview,
     loading,
@@ -1091,5 +1124,6 @@ export function useImportacaoExtrato() {
     confirmarImportacao,
     refreshStatusPersistidos,
     reset,
+    toggleImportarSuspeita,
   };
 }

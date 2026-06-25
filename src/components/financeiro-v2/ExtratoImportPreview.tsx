@@ -44,7 +44,8 @@ type FiltroTabela =
   | 'agrupados'
   | 'ambiguos'
   | 'sem_match'
-  | 'ja_no_banco';
+  | 'ja_no_banco'
+  | 'suspeita_dup';
 
 /**
  * Filtro local da tabela — apenas visualização, sem mexer em dados.
@@ -74,8 +75,20 @@ function aplicarFiltro(m: MovimentoPreview, f: FiltroTabela): boolean {
     case 'ambiguos':     return acionavel && m.matchAmbiguo;
     // sem_match exclui ambíguos — eles têm candidatos, só não há vencedor único.
     case 'sem_match':    return acionavel && !m.matchEncontrado && !m.matchAmbiguo;
+    // P0-OFX-DUP-GUARD 1B — movimentos novos classificados como suspeita de duplicata.
+    case 'suspeita_dup': return !!m.dupClassificacao;
   }
 }
+
+// P0-OFX-DUP-GUARD 1B — rótulo/cor do Grau de suspeita.
+const GRAU_LABEL: Record<string, string> = {
+  FORTE: 'FORTE', PROVAVEL: 'PROVÁVEL', COINCIDENCIA_POSSIVEL: 'COINCIDÊNCIA',
+};
+const GRAU_CLS: Record<string, string> = {
+  FORTE: 'bg-rose-100 text-rose-800',
+  PROVAVEL: 'bg-amber-100 text-amber-800',
+  COINCIDENCIA_POSSIVEL: 'bg-slate-100 text-slate-700',
+};
 
 interface ChipFiltroProps {
   active: boolean;
@@ -218,6 +231,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const {
     preview, loading, error,
     gerarPreview, confirmarImportacao, refreshStatusPersistidos, reset,
+    toggleImportarSuspeita,
   } = useImportacaoExtrato();
   const { baixarLancamentoViaExtrato } = useBaixaViaExtrato();
 
@@ -243,6 +257,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
   const [importacaoConfirmada, setImportacaoConfirmada] = useState(false);
   // AlertDialog de confirmação ao sair com movimentos parcialmente conciliados.
   const [confirmFinalizarParcial, setConfirmFinalizarParcial] = useState(false);
+  // P0-OFX-DUP-GUARD 1B — alerta de suspeitas antes de salvar.
+  const [confirmDup, setConfirmDup] = useState(false);
   // Filtro local da tabela — apenas visualização.
   const [filtro, setFiltro] = useState<FiltroTabela>('todos');
   // Modal de auditoria da diferença residual.
@@ -355,14 +371,17 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     setSelecionadosMassa(new Set());
   };
 
-  const handleConfirmar = async () => {
+  // P0-OFX-DUP-GUARD 1B — salva de fato. forcarImportarSuspeitas vem da ação
+  // "Importar tudo" do alerta; default respeita a decisão por linha (FORTE pula).
+  const executarImportacao = async (forcarImportarSuspeitas = false) => {
     if (!arquivo || !preview) return;
-    if (!validarContaDoCliente()) return;
+    setConfirmDup(false);
     try {
       const r = await confirmarImportacao({
         contaBancariaId: contaId,
         nomeArquivo: arquivo.name,
         formato: preview.formato,
+        forcarImportarSuspeitas,
       });
       toast.success(
         `Extrato salvo (${r.inseridos} movimento(s)). ` +
@@ -374,6 +393,17 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     } catch (e: any) {
       toast.error('Erro ao confirmar: ' + (e?.message ?? e));
     }
+  };
+
+  const handleConfirmar = async () => {
+    if (!arquivo || !preview) return;
+    if (!validarContaDoCliente()) return;
+    // Se há suspeitas de duplicata, o operador decide ANTES de salvar (nunca skip silencioso).
+    if ((preview.suspeitasDuplicata ?? 0) > 0) {
+      setConfirmDup(true);
+      return;
+    }
+    await executarImportacao(false);
   };
 
   /**
@@ -708,6 +738,12 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
     preview.pendentes === 0 &&
     preview.totalLinhas > 0;
 
+  // P0-OFX-DUP-GUARD 1B — quantos serão REALMENTE importados (desconta as suspeitas
+  // marcadas p/ pular). Honestidade do contador no botão "Salvar extrato".
+  const nAImportar = preview
+    ? preview.movimentos.filter((m) => !m.existeNoDB && m.dupImportar !== false).length
+    : 0;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="w-[94vw] max-w-7xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
@@ -892,6 +928,15 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   onClick={() => setFiltro('ignorados')}
                 />
               )}
+              {preview.suspeitasDuplicata > 0 && (
+                <ChipFiltro
+                  cls="bg-rose-100 text-rose-800"
+                  label={`${preview.suspeitasDuplicata} suspeita${preview.suspeitasDuplicata !== 1 ? 's' : ''} de duplicata`}
+                  count={preview.suspeitasDuplicata}
+                  active={filtro === 'suspeita_dup'}
+                  onClick={() => setFiltro('suspeita_dup')}
+                />
+              )}
               <span className="text-muted-foreground ml-auto">
                 Total {formatMoeda(totalValor)} (a salvar)
               </span>
@@ -1030,6 +1075,14 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                                   já no banco
                                 </span>
                               )}
+                              {m.dupClassificacao && (
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-px rounded text-[9px] font-semibold whitespace-nowrap ${GRAU_CLS[m.dupClassificacao]}`}
+                                  title={m.dupResumo ?? ''}
+                                >
+                                  dup: {GRAU_LABEL[m.dupClassificacao]}
+                                </span>
+                              )}
                             </div>
                             <div className="whitespace-normal break-words leading-snug" title={m.descricao}>
                               {m.descricao || '—'}
@@ -1037,6 +1090,34 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                             {m.documento && (
                               <div className="text-[9px] text-muted-foreground font-mono break-all">
                                 Doc: {m.documento}
+                              </div>
+                            )}
+                            {/* P0-OFX-DUP-GUARD 1B — revisão da suspeita: com o que duplica + decisão. */}
+                            {m.dupClassificacao && (
+                              <div className="mt-1 rounded border border-amber-200 bg-amber-50/60 px-2 py-1 space-y-0.5">
+                                <div className="text-[9px] font-semibold text-amber-800">
+                                  Possível duplicata · {GRAU_LABEL[m.dupClassificacao]}
+                                </div>
+                                <div className="text-[9px] text-muted-foreground break-words" title={m.dupResumo ?? ''}>
+                                  {m.dupResumo}
+                                </div>
+                                <div className="text-[9px] break-words">
+                                  Existente: {m.dupExistenteDescricao || '—'}
+                                </div>
+                                <div className="text-[9px] font-mono text-muted-foreground break-all">
+                                  Doc existente: {m.dupExistenteDocumento || '—'}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleImportarSuspeita(m.hash)}
+                                  className={`mt-0.5 inline-flex items-center px-2 py-0.5 rounded text-[9px] font-semibold border ${
+                                    m.dupImportar
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                                  }`}
+                                >
+                                  {m.dupImportar ? '✓ Importar (clique p/ pular)' : '⊘ Pular (clique p/ importar)'}
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1378,7 +1459,7 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                   >
                     {importacaoConfirmada
                       ? 'Extrato salvo ✓'
-                      : (loading ? 'Salvando...' : `Salvar extrato (${preview.novosParaSalvar})`)}
+                      : (loading ? 'Salvando...' : `Salvar extrato (${nAImportar})`)}
                   </Button>
                 );
               }
@@ -1453,6 +1534,41 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
                 ? 'Processando...'
                 : ((confirm1a1?.statusMatch || '').toLowerCase() === 'realizado' ? 'Vincular' : 'Marcar realizado')}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* P0-OFX-DUP-GUARD 1B — alerta de suspeitas de duplicata antes de salvar. */}
+      <AlertDialog open={confirmDup} onOpenChange={(v) => { if (!v) setConfirmDup(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Movimentos que parecem já existir</AlertDialogTitle>
+            <AlertDialogDescription>
+              {preview && (
+                <span className="block space-y-2 text-[13px]">
+                  <span className="block">
+                    Encontramos <b>{preview.suspeitasDuplicata}</b> movimento(s) que parecem já existir nesta conta
+                    (mesma conta + data + valor de um extrato ativo).
+                  </span>
+                  <span className="block text-muted-foreground">
+                    Por padrão, pulamos só as <b>FORTE</b> (documento/FITID igual) e importamos o resto —
+                    inclusive PROVÁVEL/COINCIDÊNCIA (podem ser transações reais). Nada é descartado sem você ver.
+                  </span>
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+            <Button variant="outline" disabled={loading} onClick={() => { setConfirmDup(false); setFiltro('suspeita_dup'); }}>
+              Revisar uma a uma
+            </Button>
+            <Button variant="outline" disabled={loading} onClick={() => executarImportacao(true)}>
+              Importar tudo
+            </Button>
+            <Button disabled={loading} onClick={() => executarImportacao(false)}>
+              Pular só as FORTE e importar o resto
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
