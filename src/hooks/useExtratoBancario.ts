@@ -23,6 +23,7 @@ export interface ExtratoMovimento {
   saldo_apos: number | null;
   hash_movimento: string;
   status: ExtratoStatus;
+  cancelado_em: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,11 @@ export interface UseExtratoBancarioParams {
   /** ISO 'YYYY-MM-DD' (inclusive). */
   dataFim?: string;
   status?: ExtratoStatus;
+  /**
+   * Quando `true`, inclui movimentos com soft delete (cancelado_em != null).
+   * Default `false` = só ativos (espelho do banco "vivo").
+   */
+  incluirCancelados?: boolean;
   /** Quando `false`, query fica desabilitada. */
   enabled?: boolean;
 }
@@ -41,10 +47,10 @@ export interface UseExtratoBancarioParams {
 export function useExtratoBancario(params: UseExtratoBancarioParams = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
-  const { contaBancariaId, dataInicio, dataFim, status, enabled = true } = params;
+  const { contaBancariaId, dataInicio, dataFim, status, incluirCancelados = false, enabled = true } = params;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['extrato-bancario-v2', clienteId, contaBancariaId, dataInicio, dataFim, status],
+    queryKey: ['extrato-bancario-v2', clienteId, contaBancariaId, dataInicio, dataFim, status, incluirCancelados],
     enabled: enabled && !!clienteId,
     queryFn: async () => {
       let q = supabase
@@ -57,6 +63,9 @@ export function useExtratoBancario(params: UseExtratoBancarioParams = {}) {
       if (dataInicio) q = q.gte('data_movimento', dataInicio);
       if (dataFim) q = q.lte('data_movimento', dataFim);
       if (status) q = q.eq('status', status);
+      // P0-OFX-CANCELADO-FILTER-EXTRATO — espelho do banco "vivo": exclui soft delete.
+      // Padrão idêntico ao useExtratoParesOfx.ts. incluirCancelados=true desliga o filtro.
+      if (!incluirCancelados) q = q.is('cancelado_em', null);
       const { data, error } = await q;
       if (error) throw error;
       return (data as unknown as ExtratoMovimento[]) ?? [];
