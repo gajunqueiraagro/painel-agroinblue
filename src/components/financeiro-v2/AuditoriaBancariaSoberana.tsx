@@ -49,6 +49,17 @@ interface AgrItem {
   extrato_id: string; valor: number;
   lancamentos: { lancamento_id: string; valor_assinado: number }[];
 }
+// grupos_conciliados (RPC 01.10): vínculos REAIS do cbi (1xN/Nx1). NÃO confundir
+// com AgrItem (bucket agrupamentos = sugestão/heurística). São buckets distintos.
+interface GrupoAncora { id: string; data: string | null; valor: number; descricao: string | null; }
+interface GrupoMembro { id: string; data: string | null; valor_assinado: number; descricao: string | null; }
+interface GrupoConciliado {
+  tipo: '1xN' | 'Nx1';
+  ancora: GrupoAncora;
+  membros: GrupoMembro[];
+  total_ofx: number; total_sistema: number; diferenca: number;
+  status_grupo: 'batido' | 'divergente';
+}
 interface DiagnosticoSoberano {
   versao: string;
   resumo: {
@@ -65,6 +76,7 @@ interface DiagnosticoSoberano {
     extrato_sem_sistema: ExtratoItem[];
     desconsiderados: DesconItem[];
     agrupamentos: AgrItem[];
+    grupos_conciliados: GrupoConciliado[];
   };
 }
 
@@ -648,19 +660,95 @@ function LinhaPar({ par }: { par: ParEspelho }) {
   );
 }
 
+// Bloco de grupo conciliado REAL (cbi): 1 âncora + N membros. NUNCA "sem vínculo".
+// 1xN: âncora=OFX (esq), membros=lançamentos (dir). Nx1: espelhado.
+function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compartilhados: Set<string> }) {
+  const batido = grupo.status_grupo === 'batido';
+  const corBloco = batido ? 'border-emerald-300 bg-emerald-50/50' : 'border-amber-400 bg-amber-50/60';
+  const ancoraEsq = grupo.tipo === '1xN';
+  const selo = (id: string) =>
+    compartilhados.has(id) ? (
+      <span className="ml-1 px-1 rounded bg-violet-100 text-violet-700 text-[8px] shrink-0"
+        title="Este item também aparece em outro grupo (relação N:N).">↔ também em outro grupo</span>
+    ) : null;
+  const ancoraCell = (
+    <div className="flex items-center gap-1 min-w-0">
+      <LadoCelula data={grupo.ancora.data} valor={grupo.ancora.valor} descricao={grupo.ancora.descricao ?? '—'} />
+      {selo(grupo.ancora.id)}
+    </div>
+  );
+  const membrosCells = (
+    <div className="space-y-0.5">
+      {grupo.membros.map((m) => (
+        <div key={m.id} className="flex items-center gap-1 min-w-0">
+          <LadoCelula data={m.data} valor={m.valor_assinado} descricao={m.descricao ?? '—'} />
+          {selo(m.id)}
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div className={`rounded border ${corBloco} px-1 py-1 mb-1`}>
+      <div className="flex items-stretch gap-1 text-[10px]">
+        <div className="flex-1 min-w-0">{ancoraEsq ? ancoraCell : membrosCells}</div>
+        <div className="w-16 shrink-0 flex flex-col items-center justify-center gap-0.5">
+          <span className={`px-1 rounded text-[8px] font-bold ${batido ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-900'}`}>
+            {ancoraEsq ? '1×N' : 'N×1'}
+          </span>
+          <span className={`text-[8px] ${batido ? 'text-emerald-700' : 'text-amber-800'}`}>{batido ? 'batido' : 'divergente'}</span>
+        </div>
+        <div className="flex-1 min-w-0">{ancoraEsq ? membrosCells : ancoraCell}</div>
+      </div>
+      {!batido && (
+        <div className="mt-1 pt-0.5 border-t border-amber-300 text-[8px] text-amber-900 text-right tabular-nums">
+          OFX R$ {fmtBRL(grupo.total_ofx)} · Sistema R$ {fmtBRL(grupo.total_sistema)} · dif R$ {fmtBRL(grupo.diferenca)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ComparacaoEspelhada({ diag }: { diag: DiagnosticoSoberano }) {
   const pares = useMemo(() => montarPares(diag), [diag]);
-  if (pares.length === 0) return <div className="p-3 text-center text-[11px] text-muted-foreground">Nada a comparar — sem itens não resolvidos. 🎉</div>;
+  const grupos = useMemo(() => diag.buckets.grupos_conciliados ?? [], [diag]);
+  // N:N — ids (âncora + membros) que aparecem em mais de um grupo.
+  const compartilhados = useMemo(() => {
+    const cont = new Map<string, number>();
+    for (const g of grupos) {
+      for (const id of [g.ancora.id, ...g.membros.map((m) => m.id)]) cont.set(id, (cont.get(id) ?? 0) + 1);
+    }
+    const s = new Set<string>();
+    cont.forEach((n, id) => { if (n > 1) s.add(id); });
+    return s;
+  }, [grupos]);
+  if (pares.length === 0 && grupos.length === 0)
+    return <div className="p-3 text-center text-[11px] text-muted-foreground">Nada a comparar — sem itens não resolvidos. 🎉</div>;
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground">
-        <span className="flex-1">Extrato (OFX)</span>
-        <span className="w-16 shrink-0 text-center" />
-        <span className="flex-1">Sistema</span>
-      </div>
-      <div className="max-h-[50vh] overflow-y-auto divide-y-0">
-        {pares.map((p) => <LinhaPar key={p.key} par={p} />)}
-      </div>
+      {grupos.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[9px] font-semibold uppercase text-muted-foreground">Grupos conciliados</div>
+          <div className="max-h-[40vh] overflow-y-auto">
+            {/* ordem da RPC (soberana) preservada — sem reordenar */}
+            {grupos.map((g, i) => <LinhaGrupo key={`grp-${i}`} grupo={g} compartilhados={compartilhados} />)}
+          </div>
+        </div>
+      )}
+      {pares.length > 0 && (
+        <div className="space-y-1">
+          {grupos.length > 0 && (
+            <div className="text-[9px] font-semibold uppercase text-muted-foreground pt-1 border-t">Pares / não resolvidos</div>
+          )}
+          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground">
+            <span className="flex-1">Extrato (OFX)</span>
+            <span className="w-16 shrink-0 text-center" />
+            <span className="flex-1">Sistema</span>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto divide-y-0">
+            {pares.map((p) => <LinhaPar key={p.key} par={p} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
