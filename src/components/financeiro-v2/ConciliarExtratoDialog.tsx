@@ -538,7 +538,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
 
         {/* PR2 — Sugestões Referência Operacional (TRAVA 8: separadas dos
             candidatos oficiais; TRAVA 9: linha aplicada some daqui mas fica
-            visível na aba ReferenciasOperacionaisTab com badge verde).
+            visível na aba Lotes Excel com badge verde).
             PR2.2 — quando NÃO há candidatos, vira destaque central (sem
             border-dashed superior) e título muda. */}
         {sugestoes.length > 0 && (

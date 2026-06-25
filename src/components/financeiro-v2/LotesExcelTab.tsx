@@ -1,5 +1,7 @@
 /**
- * ReferenciasOperacionaisTab — terceira aba do hub de conciliação.
+ * LotesExcelTab — terceira aba do hub de conciliação ("Lotes Excel").
+ * (Renomeada de ReferenciasOperacionaisTab em M1: o nome "Referências
+ * Operacionais" passou a ser o conceito maior — a Mesa/Excel/Staging.)
  *
  * Lista linhas de excel_linhas_aux agrupadas por batch_id para a conta
  * + mês selecionados no header da página pai. Permite descartar linha
@@ -57,7 +59,7 @@ function shortId(id: string): string {
   return id.slice(0, 8);
 }
 
-export function ReferenciasOperacionaisTab({ contaBancariaId, anoMes }: Props) {
+export function LotesExcelTab({ contaBancariaId, anoMes }: Props) {
   const { clienteAtual } = useCliente();
   const { listarPorContaMes, apagarBatch, descartarLinha } = useExcelLinhasAux();
 

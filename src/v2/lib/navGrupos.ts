@@ -110,7 +110,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
           { id: 'auditoria-bancaria',  label: 'Auditoria Bancária',      status: 'ready' },
           { id: 'mesa-classificacao',  label: 'Mesa de Classificação',   status: 'ready' },
           ...(FEATURE_FLAGS.MESA_OPERACIONAL_V2
-            ? [{ id: 'mesa-operacional' as const, label: 'Mesa Operacional ⚡', status: 'ready' as const }]
+            ? [{ id: 'mesa-operacional' as const, label: 'Referências Operacionais', status: 'ready' as const }]
             : []),
           { id: 'financiamentos',      label: 'Financiamentos',          status: 'needs-wrapper' },
           { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },

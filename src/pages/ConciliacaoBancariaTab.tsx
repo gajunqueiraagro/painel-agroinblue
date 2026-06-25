@@ -25,7 +25,7 @@ import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenc
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
-import { ReferenciasOperacionaisTab } from '@/components/financeiro-v2/ReferenciasOperacionaisTab';
+import { LotesExcelTab } from '@/components/financeiro-v2/LotesExcelTab';
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
 type MesStatusExt = ConciliacaoStatus | 'parcial';
@@ -793,7 +793,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               onClick={() => setVistaExtrato('referencias')}
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'referencias' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
-              Referências Operacionais
+              Lotes Excel
             </button>
           </div>
         )}
@@ -808,7 +808,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'referencias' && (
-          <ReferenciasOperacionaisTab
+          <LotesExcelTab
             contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
             anoMes={`${ano}-${selectedMes}`}
           />

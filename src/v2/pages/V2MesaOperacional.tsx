@@ -1046,7 +1046,7 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
 /**
  * V2MesaOperacional — wrapper de Tabs (PR-M2).
  *
- * Tab 1 "Conciliação OFX" mantém o componente original (renomeado
+ * Tab 1 "Conciliação por Conta" mantém o componente original (renomeado
  * para MesaConciliacaoView). Tab 2 "Classificação Excel" usa o
  * fluxo PR-M (parser local → RPC populate → revisão → RPC apply).
  *
@@ -1060,7 +1060,7 @@ export function V2MesaOperacional(props: V2MesaOperacionalProps) {
     <Tabs defaultValue="conciliacao">
       <div className="px-4 pt-3">
         <TabsList>
-          <TabsTrigger value="conciliacao">Conciliação OFX</TabsTrigger>
+          <TabsTrigger value="conciliacao">Conciliação por Conta</TabsTrigger>
           <TabsTrigger value="classificacao">Classificação Excel</TabsTrigger>
         </TabsList>
       </div>
