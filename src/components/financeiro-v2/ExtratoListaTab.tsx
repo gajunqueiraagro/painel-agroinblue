@@ -706,8 +706,59 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     return 'text-red-700';
   })();
 
+  // F2 — "último movimento inserido em": max(created_at) sobre o que já está em
+  // memória (created_at é ISO -> compara lexicograficamente). Não é "arquivo".
+  const ultimaCargaISO = movimentos.length
+    ? movimentos.reduce((max, m) => (m.created_at > max ? m.created_at : max), movimentos[0].created_at)
+    : null;
+
   return (
     <div className="space-y-2">
+      {/* F2 — card "Extrato do mês" (UI-only, derivado do que já está em memória;
+          sem query/hook novo). Arquivo/Saldo OFX são placeholders honestos: o
+          extrato_bancario_v2 não rastreia arquivo nem saldo_apos hoje. */}
+      <div className="rounded-md border bg-card px-3 py-2">
+        <div className="text-[11px] font-semibold mb-1">📄 Extrato do mês</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-[11px]">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Conta</div>
+            <div className="truncate" title={nomeConta(contaBancariaId)}>{nomeConta(contaBancariaId)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Mês</div>
+            <div>{anoMes}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Movimentos</div>
+            <div className="tabular-nums">{movimentos.length}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Período</div>
+            <div>{movimentos.length ? `${fmtData(movimentos[movimentos.length - 1].data_movimento)} a ${fmtData(movimentos[0].data_movimento)}` : '—'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Último movimento inserido em</div>
+            <div>{ultimaCargaISO ? fmtData(ultimaCargaISO) : '—'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Status do mês</div>
+            <div>{saldoSistema?.status_mes ?? (saldoSistema?.fechado ? 'Fechado' : 'Aberto')}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Saldo do sistema</div>
+            <div className="tabular-nums">{fmtSaldo(saldoSistema?.saldo_final ?? null)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Arquivo</div>
+            <div className="italic text-muted-foreground">não rastreado</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-muted-foreground">Saldo OFX</div>
+            <div className="italic text-muted-foreground">não disponível</div>
+          </div>
+        </div>
+      </div>
+
       {/* PR-Conciliacao-FilaOperacional-1 — headline operacional por conta.
           `!contaBancariaId` já tratado por early-return acima; aqui a conta
           é sempre selecionada → só empty-state (sem OFX) vs headline. */}
