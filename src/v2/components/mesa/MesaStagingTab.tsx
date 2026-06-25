@@ -8,6 +8,9 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useStaging } from '@/v2/lib/staging/useStaging';
+import { useCliente } from '@/contexts/ClienteContext';
+import { useCatalogoCliente } from '@/v2/lib/excelPreview/catalogoCliente';
+import { construirSetCanonico, podePromover } from '@/v2/lib/mesa/validarSubcentroCanonico';
 import { supabase } from '@/integrations/supabase/client';
 import { DiagFechamentoPanel } from '@/v2/components/mesa/DiagFechamentoPanel';
 import { Button } from '@/components/ui/button';
@@ -109,6 +112,18 @@ function Categoria({ row }: { row: StagingRow }) {
 export function MesaStagingTab({ sessaoId }: Props) {
   const { data: staging = [], isLoading, error } = useStaging(sessaoId);
   const queryClient = useQueryClient();
+  // B1b — plano canônico (global + cliente) p/ pré-checar subcentro antes de promover.
+  const { clienteAtual } = useCliente();
+  const { data: catalogo } = useCatalogoCliente(clienteAtual?.id ?? null);
+  const canonicos = useMemo(() => construirSetCanonico(catalogo), [catalogo]);
+  // Linhas a promover (pendentes) com subcentro fora do plano e não-dividendo.
+  // Só avalia com o catálogo carregado (senão set vazio -> falso positivo).
+  const orfaosSubcentro = useMemo(() => {
+    if (!catalogo) return [] as StagingRow[];
+    return staging.filter(
+      (s) => s.status_promocao === 'pendente' && !podePromover(s.subcentro, s.macro_custo, canonicos),
+    );
+  }, [staging, catalogo, canonicos]);
   const [promovendo, setPromovendo] = useState(false);
   const [descartandoId, setDescartandoId] = useState<string | null>(null);
   // STAGING-01 — filtro de leitura por conta resolvida (client-side; não toca useStaging).
@@ -138,6 +153,15 @@ export function MesaStagingTab({ sessaoId }: Props) {
 
   // PR6.2-F1 — promoção transacional da sessão inteira via RPC fn_promover_staging.
   async function handlePromover() {
+    // B1b — gate amigável: a promoção é transacional; um único subcentro órfão
+    // dispararia o RAISE do trigger e derrubaria a sessão inteira. Bloqueia antes.
+    if (orfaosSubcentro.length > 0) {
+      toast.error(
+        `${orfaosSubcentro.length} linha(s) com subcentro fora do plano de contas. ` +
+        `Corrija para uma string canônica do plano antes de promover.`,
+      );
+      return;
+    }
     setPromovendo(true);
     try {
       const sb = supabase as any; // mesmo padrão do useStaging (tabelas/RPC v2 não tipadas)
@@ -354,14 +378,17 @@ export function MesaStagingTab({ sessaoId }: Props) {
       {/* Aviso PR6.2 + botões disabled */}
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs flex-wrap">
         <span className="text-amber-900">
-          ⓘ Reversão será habilitada em PR6.3.
+          {orfaosSubcentro.length > 0
+            ? `⚠ ${orfaosSubcentro.length} linha(s) com subcentro fora do plano de contas — corrija antes de promover.`
+            : 'ⓘ Reversão será habilitada em PR6.3.'}
         </span>
         <div className="flex gap-2">
           <Button
             size="sm"
             variant="default"
             className="h-7 text-xs"
-            disabled={promovendo}
+            disabled={promovendo || orfaosSubcentro.length > 0}
+            title={orfaosSubcentro.length > 0 ? 'Há subcentro fora do plano de contas — corrija antes de promover.' : undefined}
             onClick={handlePromover}
           >
             {promovendo ? 'Promovendo…' : 'Promover ao banco real'}
