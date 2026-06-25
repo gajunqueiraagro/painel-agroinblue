@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -304,6 +305,7 @@ interface ConciliacaoProps {
 
 export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initialAno, initialMes }: ConciliacaoProps = {}) {
   const { clienteAtual } = useCliente();
+  const queryClient = useQueryClient();
   const perm = usePermissions();
   const isAdmin = perm.perfil === 'admin_agroinblue' || perm.perfil === 'gestor_cliente';
   const isFinanceiro = perm.perfil === 'financeiro';
@@ -756,10 +758,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </span>
             {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
             <div className="flex-1" />
-            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
-              onClick={() => setShowImportExtrato(true)}>
-              ⬆ Importar OFX/CSV
-            </Button>
+            {/* F1 — importar é responsabilidade da vista Extrato (a casa de OFX/CSV/PDF). */}
+            {vistaExtrato === 'extrato' && (
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
+                onClick={() => setShowImportExtrato(true)}>
+                ⬆ Importar Extrato
+              </Button>
+            )}
             {onNavigateToLancamentos && (
               <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
                 onClick={() => onNavigateToLancamentos(ano, parseInt(selectedMes))}>
@@ -986,6 +991,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <Plus className="h-2.5 w-2.5" /> Cadastrar
                     </button>
                   </div>
+                </div>
+
+                {/* F1 — orientação: o saldo final REAL é informado pelo lápis da conta. */}
+                <div className="px-3 py-1 text-[9px] text-amber-800 bg-amber-50/70 border-b">
+                  Informe o saldo final REAL do banco clicando no lápis (✏) da conta →
                 </div>
 
                 {/* Tabela única — garante alinhamento perfeito entre todos os grupos */}
@@ -1293,6 +1303,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         open={showImportExtrato}
         onClose={() => setShowImportExtrato(false)}
         contaBancariaIdInicial={selectedConta !== '__all__' ? selectedConta : undefined}
+        onImported={() => queryClient.invalidateQueries({ queryKey: ['extrato-bancario-v2'] })}
       />
     </div>
   );
