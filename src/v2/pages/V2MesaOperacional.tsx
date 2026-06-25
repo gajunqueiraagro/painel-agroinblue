@@ -580,7 +580,8 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
           <span className="text-foreground">
             {calc.statusMes === 'fechado' ? 'CONTA FECHADA' : 'CONTA ABERTA'}
           </span>
-          {' · '}{extratos.length} mov.
+          {/* M2 — label honesto: sem OFX no período não vira "0 mov." cru. */}
+          {' · '}{extratos.length > 0 ? `${extratos.length} mov.` : 'sem extrato OFX'}
           {' · '}{lancamentos.length} lanç.
         </div>
 
@@ -796,7 +797,9 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
         {/* Esquerda — OFX */}
         <Card className="p-2 max-h-[calc(100vh-280px)] flex flex-col">
           <div className="text-[10px] font-bold uppercase text-muted-foreground px-1 pb-1">
-            Extrato OFX ({extratos.length} movimentos)
+            {extratos.length > 0
+              ? `Extrato OFX (${extratos.length} movimentos)`
+              : 'Extrato OFX — sem extrato neste período'}
           </div>
           <div className="flex-1 overflow-y-auto space-y-0.5">
             {loading && Array.from({ length: 5 }).map((_, i) => (
