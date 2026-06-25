@@ -26,6 +26,11 @@ import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX'
 import { parseCSV } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
+import {
+  classificarDuplicidadeOFX,
+  type ClassificacaoOFXDup,
+  type RegistroExtratoExistente,
+} from '@/lib/financeiro/duplicidadeImportacao';
 
 /** Status operacional persistido em extrato_bancario_v2.status. */
 export type StatusPersistido = 'nao_conciliado' | 'parcial' | 'conciliado' | 'ignorado';
@@ -78,6 +83,19 @@ export interface MovimentoPreview extends MovimentoBruto {
   matchAmbiguo: boolean;
   /** Candidatos top equivalentes — populado SOMENTE quando matchAmbiguo=true. */
   candidatosAmbiguos: CandidatoPossivel[];
+
+  // ── P0-OFX-DUP-GUARD / FASE 1A — suspeita de duplicata (camada aditiva) ──
+  // Só populado em movimentos NOVOS (existeNoDB=false) que casam conta+data+valor
+  // com um extrato ATIVO (cancelado_em IS NULL). FASE 1A é só detecção: NÃO
+  // altera o insert nem pula linha (decisão/skip ficam para a 1B).
+  /** Classificação da suspeita (null/undefined = sem suspeita). */
+  dupClassificacao?: ClassificacaoOFXDup | null;
+  /** id do extrato existente que disparou a suspeita. */
+  dupExistenteId?: string | null;
+  /** Resumo legível da decisão. */
+  dupResumo?: string | null;
+  /** Default sugerido p/ a 1B: FORTE=false (pular), PROVÁVEL/COINCIDÊNCIA=true. */
+  dupImportar?: boolean;
 }
 
 export interface LancamentoAgrupadoInfo {
@@ -152,6 +170,8 @@ export interface PreviewResult {
   semMatch: number;
   /** Movimentos com 2+ candidatos top equivalentes — exigem escolha manual. */
   ambiguos: number;
+  /** P0-OFX-DUP-GUARD 1A — movimentos NOVOS classificados como suspeita de duplicata. */
+  suspeitasDuplicata: number;
   formato: 'OFX' | 'CSV';
 }
 
@@ -170,7 +190,7 @@ function recomputarAgregados(
   PreviewResult,
   | 'novosParaSalvar' | 'existentesNoBanco' | 'pendentes' | 'parciais'
   | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados'
-  | 'semMatch' | 'ambiguos'
+  | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata'
 > {
   const acionaveis = movimentos.filter(
     (m) =>
@@ -195,6 +215,9 @@ function recomputarAgregados(
     // semMatch exclui ambíguos — eles têm candidatos, só não há vencedor único.
     semMatch:          acionaveis.filter((m) => !m.matchEncontrado && !m.matchAmbiguo).length,
     ambiguos:          acionaveis.filter((m) => m.matchAmbiguo).length,
+    // P0-OFX-DUP-GUARD 1A — suspeitas só existem em movimentos novos; campo
+    // preservado pelos rebuilds (spread ...m). Não afeta nenhum outro contador.
+    suspeitasDuplicata: movimentos.filter((m) => !!m.dupClassificacao).length,
   };
 }
 
@@ -549,6 +572,21 @@ export function useImportacaoExtrato() {
       const datas = movimentosComHash.map((m) => m.data).sort();
       const dataMin = datas[0];
       const dataMax = datas[datas.length - 1];
+
+      // ── P0-OFX-DUP-GUARD / FASE 1A — candidatos p/ suspeita de duplicata ──
+      // Extratos ATIVOS (cancelado_em IS NULL) da mesma conta no range de datas
+      // do arquivo. Camada ADITIVA: não altera o dedup por hash nem o insert.
+      const { data: candRows, error: errCand } = await supabase
+        .from('extrato_bancario_v2' as any)
+        .select('id, data_movimento, valor, documento, descricao')
+        .eq('cliente_id', clienteAtual.id)
+        .eq('conta_bancaria_id', params.contaBancariaId)
+        .gte('data_movimento', dataMin)
+        .lte('data_movimento', dataMax)
+        .is('cancelado_em', null);
+      if (errCand) throw errCand;
+      const candidatosDup = (candRows ?? []) as unknown as RegistroExtratoExistente[];
+
       const fetchIni = addDays(dataMin, -10);
       const fetchFim = addDays(dataMax, +10);
 
@@ -838,6 +876,23 @@ export function useImportacaoExtrato() {
 
         return baseFields;
       });
+
+      // ── P0-OFX-DUP-GUARD / FASE 1A — pós-pass: classifica suspeita de duplicata
+      // SÓ nos movimentos novos (existeNoDB=false). Apenas seta campos dup*; não
+      // pula nada e não toca o insert (skip/UI ficam para a 1B).
+      for (const m of movimentos) {
+        if (m.existeNoDB) continue;
+        const dup = classificarDuplicidadeOFX(
+          { contaBancariaId: params.contaBancariaId, dataMovimento: m.data, valor: m.valor, documento: m.documento, descricao: m.descricao },
+          candidatosDup,
+        );
+        if (dup) {
+          m.dupClassificacao = dup.classificacao;
+          m.dupExistenteId = dup.registroExistenteId;
+          m.dupResumo = dup.resumo;
+          m.dupImportar = dup.dupImportar;
+        }
+      }
 
       const result: PreviewResult = {
         movimentos,

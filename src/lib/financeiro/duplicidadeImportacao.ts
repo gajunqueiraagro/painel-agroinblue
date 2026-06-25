@@ -434,3 +434,87 @@ export function classificarLote(
 
   return resultados;
 }
+
+// ── OFX duplicate detection (P0-OFX-DUP-GUARD / FASE 1A) ────────────────────
+// Camada ADITIVA ao dedup por hash do import OFX. Reusa os helpers acima
+// (norm/valorIgual/dataIgual/textoSimilar/documentoIgual). NAO reescreve o motor.
+//
+// REGRA TRAVADA — obrigatorio p/ qualquer suspeita: mesma conta (a query ja
+// fixa a conta) + mesma data + mesmo valor + existente cancelado_em IS NULL
+// (filtrado na query). Classificacao:
+//   FORTE                -> documento/FITID igual                  (dupImportar=false)
+//   PROVAVEL             -> doc diferente/ausente + texto parecido (dupImportar=true)
+//   COINCIDENCIA_POSSIVEL-> texto e documento diferentes           (dupImportar=true)
+// Texto igual NUNCA vira FORTE se o documento diferir (ex.: Diocese 21/05 —
+// texto identico, FITID diferente, transacao provavelmente real).
+
+export type ClassificacaoOFXDup = 'FORTE' | 'PROVAVEL' | 'COINCIDENCIA_POSSIVEL';
+
+export interface RegistroExtratoExistente {
+  id: string;
+  data_movimento: string | null;
+  valor: number | null;
+  documento: string | null;
+  descricao: string | null;
+}
+
+export interface LinhaOFXParaDup {
+  contaBancariaId: string | null;
+  dataMovimento: string | null;
+  valor: number;
+  documento: string | null;
+  descricao: string | null;
+}
+
+export interface ResultadoDupOFX {
+  classificacao: ClassificacaoOFXDup;
+  registroExistenteId: string;
+  resumo: string;
+  dupImportar: boolean;
+}
+
+/**
+ * Classifica uma linha OFX nova contra candidatos EXISTENTES (mesma conta, ja
+ * filtrados cancelado_em IS NULL pela query). Retorna null quando nao ha
+ * suspeita (sem candidato com mesma data + mesmo valor).
+ */
+export function classificarDuplicidadeOFX(
+  linha: LinhaOFXParaDup,
+  candidatos: RegistroExtratoExistente[],
+): ResultadoDupOFX | null {
+  // Obrigatorio: mesma data + mesmo valor (conta ja fixada pela query).
+  const obrig = candidatos.filter(
+    (c) => dataIgual(linha.dataMovimento, c.data_movimento) && valorIgual(linha.valor, c.valor),
+  );
+  if (obrig.length === 0) return null;
+
+  // FORTE: documento/FITID igual (texto NAO promove a FORTE).
+  const porDoc = obrig.find((c) => documentoIgual(linha.documento, c.documento));
+  if (porDoc) {
+    return {
+      classificacao: 'FORTE',
+      registroExistenteId: porDoc.id,
+      resumo: 'FORTE: conta+data+valor iguais + documento/FITID igual',
+      dupImportar: false,
+    };
+  }
+
+  // PROVAVEL: documento diferente/ausente + texto muito/parcialmente parecido.
+  const porTexto = obrig.find((c) => textoSimilar(linha.descricao, c.descricao, 0.5));
+  if (porTexto) {
+    return {
+      classificacao: 'PROVAVEL',
+      registroExistenteId: porTexto.id,
+      resumo: 'PROVAVEL: conta+data+valor iguais + texto parecido, documento diferente',
+      dupImportar: true,
+    };
+  }
+
+  // COINCIDENCIA_POSSIVEL: texto e documento diferentes.
+  return {
+    classificacao: 'COINCIDENCIA_POSSIVEL',
+    registroExistenteId: obrig[0].id,
+    resumo: 'COINCIDENCIA POSSIVEL: conta+data+valor iguais, texto e documento diferentes',
+    dupImportar: true,
+  };
+}
