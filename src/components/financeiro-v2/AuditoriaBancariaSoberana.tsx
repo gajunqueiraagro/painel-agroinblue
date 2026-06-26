@@ -531,61 +531,72 @@ function ExtratoSoberanoCard({
         <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
           {aberto ? '▼' : '▶'} Extrato soberano do mês
         </button>
-        <StatusBadge texto="Extrato carregado" tom="emerald" />
+        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Carregado
+        </span>
       </div>
       {aberto ? (
         <>
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {/* IDENTIFICAÇÃO */}
             <section>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Identificação</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Conta</span>
-                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{nomeConta || '—'}</span>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 shrink-0">Identificação</span>
+                <span className="flex-1 border-t border-border/50" />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Conta</span>
+                  <span className="text-[11px] font-medium text-right min-w-0 break-words">{nomeConta || '—'}</span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Competência</span>
-                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{MESES[mes - 1]}/{ano}</span>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Competência</span>
+                  <span className="text-[11px] font-medium text-right min-w-0 break-words">{MESES[mes - 1]}/{ano}</span>
                 </div>
               </div>
             </section>
             {/* VOLUME */}
             <section>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Volume</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Movimentos</span>
-                  <span className="text-[12px] font-medium text-right min-w-0 break-words tabular-nums">{extrato.movimentos}</span>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 shrink-0">Volume</span>
+                <span className="flex-1 border-t border-border/50" />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Movimentos</span>
+                  <span className="text-[11px] font-medium text-right min-w-0 break-words tabular-nums">{extrato.movimentos}</span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Período</span>
-                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{fmtData(extrato.periodo_ini)} – {fmtData(extrato.periodo_fim)}</span>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Período</span>
+                  <span className="text-[11px] font-medium text-right min-w-0 break-words">{fmtData(extrato.periodo_ini)} – {fmtData(extrato.periodo_fim)}</span>
                 </div>
               </div>
             </section>
             {/* ORIGEM DO ARQUIVO */}
             <section>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Origem do arquivo</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Importado</span>
-                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{fmtDataHora(extrato.importado_em)}</span>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 shrink-0">Origem do arquivo</span>
+                <span className="flex-1 border-t border-border/50" />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Importado</span>
+                  <span className="text-[11px] font-medium text-right min-w-0 break-words">{fmtDataHora(extrato.importado_em)}</span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Saldo</span>
-                  <span className="text-[12px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Saldo</span>
+                  <span className="text-[11px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
                 </div>
-                <div className="col-span-2 flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
-                  <span className="text-[11px] text-muted-foreground shrink-0">Arquivo</span>
-                  <span className="text-[12px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
+                <div className="col-span-2 flex items-baseline justify-between gap-2 border-b border-border/30 py-0 leading-tight">
+                  <span className="text-[10px] text-muted-foreground shrink-0">Arquivo</span>
+                  <span className="text-[11px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
                 </div>
               </div>
             </section>
           </div>
-          <div className="flex justify-end gap-2 flex-wrap pt-1">
-            <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Ver OFX</Button>
-            <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Atualizar OFX</Button>
+          <div className="flex justify-end gap-1 border-t border-border/50 pt-1 mt-1">
+            <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2 text-muted-foreground hover:text-foreground" onClick={onCarregar}>Ver OFX</Button>
+            <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2 text-muted-foreground hover:text-foreground" onClick={onCarregar}>Atualizar OFX</Button>
           </div>
         </>
       ) : (
