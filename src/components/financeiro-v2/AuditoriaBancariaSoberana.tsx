@@ -535,21 +535,53 @@ function ExtratoSoberanoCard({
       </div>
       {aberto ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
-            {[
-              { l: 'Conta', v: nomeConta || '—' },
-              { l: 'Movimentos', v: String(extrato.movimentos) },
-              { l: 'Mês', v: `${MESES[mes - 1]}/${ano}` },
-              { l: 'Importado em', v: fmtDataHora(extrato.importado_em) },
-              { l: 'Período', v: `${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}` },
-              { l: 'Arquivo', v: 'não disponível', muted: true },
-              { l: 'Saldo', v: 'não disponível', muted: true },
-            ].map((c) => (
-              <div key={c.l} className="flex items-baseline justify-between gap-2 min-w-0 py-0.5 border-b border-border/40">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">{c.l}</span>
-                <span className={`text-[12px] truncate text-right ${c.muted ? 'text-muted-foreground italic' : 'font-medium'}`} title={c.v}>{c.v}</span>
+          <div className="space-y-1.5">
+            {/* IDENTIFICAÇÃO */}
+            <section>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Identificação</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Conta</span>
+                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{nomeConta || '—'}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Competência</span>
+                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{MESES[mes - 1]}/{ano}</span>
+                </div>
               </div>
-            ))}
+            </section>
+            {/* VOLUME */}
+            <section>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Volume</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Movimentos</span>
+                  <span className="text-[12px] font-medium text-right min-w-0 break-words tabular-nums">{extrato.movimentos}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Período</span>
+                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{fmtData(extrato.periodo_ini)} – {fmtData(extrato.periodo_fim)}</span>
+                </div>
+              </div>
+            </section>
+            {/* ORIGEM DO ARQUIVO */}
+            <section>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/80 mb-0.5">Origem do arquivo</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-0.5">
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Importado</span>
+                  <span className="text-[12px] font-medium text-right min-w-0 break-words">{fmtDataHora(extrato.importado_em)}</span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Saldo</span>
+                  <span className="text-[12px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
+                </div>
+                <div className="col-span-2 flex items-baseline justify-between gap-2 border-b border-border/40 py-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Arquivo</span>
+                  <span className="text-[12px] italic text-muted-foreground text-right min-w-0 break-words">não disponível</span>
+                </div>
+              </div>
+            </section>
           </div>
           <div className="flex justify-end gap-2 flex-wrap pt-1">
             <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Ver OFX</Button>
