@@ -377,11 +377,11 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
     d == null ? 'text-muted-foreground' : (Math.abs(d) < 0.005 ? 'text-emerald-600' : 'text-rose-600');
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <button type="button" onClick={onToggle} className="text-base font-bold inline-flex items-center gap-1">
+      <div className="flex items-center justify-between px-3 py-1 border-b">
+        <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
           {aberto ? '▼' : '▶'} 📊 Resumo da auditoria
         </button>
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 truncate max-w-[55%]">{nomeConta}</span>
+        <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-100 text-blue-800 truncate max-w-[55%]">{nomeConta}</span>
       </div>
       {!aberto && (
         <div className="px-3 py-1.5 text-[10px] text-muted-foreground flex flex-wrap gap-x-3 tabular-nums">
@@ -397,44 +397,44 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
         </div>
       )}
       {aberto && (
-      <div className="px-3 py-2 grid grid-cols-4 gap-x-3 gap-y-1.5 text-[12px]">
+      <div className="px-3 py-1.5 grid grid-cols-4 gap-x-3 gap-y-0.5 text-[11px]">
         <span />
-        <span className="text-right text-[11px] font-medium text-muted-foreground">Extrato</span>
-        <span className="text-right text-[11px] font-medium text-muted-foreground">Sistema</span>
-        <span className="text-right text-[11px] font-medium text-muted-foreground">Dif.</span>
+        <span className="text-right text-[10px] font-medium text-muted-foreground">Extrato</span>
+        <span className="text-right text-[10px] font-medium text-muted-foreground">Sistema</span>
+        <span className="text-right text-[10px] font-medium text-muted-foreground">Dif.</span>
 
-        <span className="text-[12px] text-muted-foreground">Saldo Inicial</span>
-        <span className="text-right tabular-nums text-[15px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
-        <span className="text-right tabular-nums text-[15px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-[11px] text-muted-foreground">Saldo Inicial</span>
+        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
         <span className="text-right tabular-nums text-muted-foreground">—</span>
 
-        <span className="text-[12px] text-muted-foreground">Entradas</span>
-        <span className="text-right tabular-nums text-[15px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
-        <span className="text-right tabular-nums text-[15px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
-        <span className={`text-right tabular-nums text-[14px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
+        <span className="text-[11px] text-muted-foreground">Entradas</span>
+        <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
+        <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-        <span className="text-[12px] text-muted-foreground">Saídas</span>
-        <span className="text-right tabular-nums text-[15px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
-        <span className="text-right tabular-nums text-[15px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
-        <span className={`text-right tabular-nums text-[14px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
+        <span className="text-[11px] text-muted-foreground">Saídas</span>
+        <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
+        <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
         {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-        <span className="col-span-4 border-t my-1" />
+        <span className="col-span-4 border-t my-0.5" />
 
-        <span className="text-[12px] text-muted-foreground font-medium">Saldo Final Calculado</span>
-        <span className="text-right tabular-nums text-[15px] font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
-        <span className="text-right tabular-nums text-[15px] font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
-        <span className={`text-right tabular-nums text-[14px] font-medium ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
+        <span className="text-[11px] text-muted-foreground font-medium">Saldo Final Calculado</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
 
-        <span className="col-span-2 text-[12px] text-muted-foreground">Saldo Extrato Real</span>
-        <span className="text-right tabular-nums text-[15px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
+        <span className="col-span-2 text-[11px] text-muted-foreground">Saldo Extrato Real</span>
+        <span className="text-right tabular-nums text-[12px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
         <span className="text-right tabular-nums text-muted-foreground">—</span>
 
-        <span className="col-span-4 border-t my-1" />
+        <span className="col-span-4 border-t my-0.5" />
 
-        <span className="text-[13px] text-muted-foreground font-semibold">Diferença de Saldo</span>
-        <span className={`col-span-3 text-right tabular-nums text-[15px] font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
+        <span className="text-[11px] text-muted-foreground font-semibold">Diferença de Saldo</span>
+        <span className={`col-span-3 text-right tabular-nums text-[12px] font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
           {difSaldo == null ? '—' : `${difZero ? '✔' : '✖'} ${fmtBRL(difSaldo)}`}
         </span>
       </div>
@@ -487,8 +487,8 @@ function CardsFiltro({
 function Campo({ label, valor, muted }: { label: string; valor: string; muted?: boolean }) {
   return (
     <div className="flex flex-col min-w-0">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={`text-[13px] truncate ${muted ? 'text-muted-foreground italic' : ''}`} title={valor}>{valor}</span>
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      <span className={`text-[12px] truncate ${muted ? 'text-muted-foreground italic' : ''}`} title={valor}>{valor}</span>
     </div>
   );
 }
@@ -513,7 +513,7 @@ function ExtratoSoberanoCard({
     );
   }
   return (
-    <Card className="p-2 space-y-1">
+    <Card className="p-1.5 space-y-0.5">
       <div className="flex items-center justify-between">
         <button type="button" onClick={onToggle} className="text-xs font-semibold inline-flex items-center gap-1">
           {aberto ? '▼' : '▶'} Extrato soberano do mês
@@ -532,8 +532,8 @@ function ExtratoSoberanoCard({
             <Campo label="Saldo" valor="não disponível" muted />
           </div>
           <div className="flex justify-start gap-2 flex-wrap">
-            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={onCarregar}>Ver OFX</Button>
-            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={onCarregar}>Atualizar OFX</Button>
+            <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Ver OFX</Button>
+            <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Atualizar OFX</Button>
           </div>
         </>
       ) : (
@@ -1290,18 +1290,18 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     <div className="space-y-1.5 p-2 overflow-auto h-full">
       {/* Cabeçalho: conta (agrupada) + mês + ano + veredito + carregar extrato */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-bold mr-1">Central de Conciliação Bancária</span>
+        <span className="text-sm font-bold mr-1">Central de Conciliação Bancária</span>
         <ContaBancariaSelect
           value={contaId}
           onValueChange={(id) => setContaId(id || null)}
           contas={contas}
           placeholder="Selecionar conta"
-          className="h-8 text-xs w-[220px]"
+          className="h-7 text-xs w-[200px]"
         />
-        <select className="text-xs border rounded px-2 py-1 bg-background" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+        <select className="text-xs border rounded px-2 py-0.5 h-7 bg-background" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
           {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </select>
-        <select className="text-xs border rounded px-2 py-1 bg-background" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+        <select className="text-xs border rounded px-2 py-0.5 h-7 bg-background" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
         {temExtrato && diag && (
