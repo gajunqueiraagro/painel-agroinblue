@@ -415,37 +415,37 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
         </div>
 
         {/* TABELA — ordem cronológica; Saldo Final Calculado destacado (3º ponto de atenção) */}
-        <div className="grid grid-cols-4 gap-x-3 gap-y-0.5 text-[11px]">
+        <div className="grid grid-cols-4 gap-x-3 gap-y-0 text-[11px] leading-tight">
           <span />
-          <span className="text-right text-[10px] font-medium text-muted-foreground">Extrato</span>
-          <span className="text-right text-[10px] font-medium text-muted-foreground">Sistema</span>
-          <span className="text-right text-[10px] font-medium text-muted-foreground">Dif.</span>
+          <span className="text-right text-[9px] font-medium text-muted-foreground">Extrato</span>
+          <span className="text-right text-[9px] font-medium text-muted-foreground">Sistema</span>
+          <span className="text-right text-[9px] font-medium text-muted-foreground">Dif.</span>
 
           <span className="text-[11px] text-muted-foreground">Saldo Inicial</span>
-          <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
-          <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-[11px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-[11px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
           <span className="text-right tabular-nums text-muted-foreground">—</span>
 
           <span className="text-[11px] text-muted-foreground">Entradas</span>
-          <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
-          <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
-          <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
+          <span className="text-right tabular-nums text-[11px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
+          <span className="text-right tabular-nums text-[11px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+          <span className={`text-right tabular-nums text-[11px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
           {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
           <span className="text-[11px] text-muted-foreground">Saídas</span>
-          <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
-          <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
-          <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
+          <span className="text-right tabular-nums text-[11px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
+          <span className="text-right tabular-nums text-[11px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+          <span className={`text-right tabular-nums text-[11px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
           {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-          {/* Saldo Final Calculado — realce (3º), mantém difSFC e ordem natural */}
-          <span className="text-[12px] font-semibold bg-amber-50 py-0.5 pl-1 rounded-l">Saldo Final Calculado</span>
-          <span className="text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
-          <span className="text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
-          <span className={`text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5 pr-1 rounded-r ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
+          {/* Saldo Final Calculado — realce (3º) via bg-amber, sem aumentar fonte */}
+          <span className="text-[12px] font-medium bg-amber-50 py-0.5 pl-1 rounded-l">Saldo Final Calculado</span>
+          <span className="text-right tabular-nums text-[12px] font-medium bg-amber-50 py-0.5">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
+          <span className="text-right tabular-nums text-[12px] font-medium bg-amber-50 py-0.5">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+          <span className={`text-right tabular-nums text-[12px] font-medium bg-amber-50 py-0.5 pr-1 rounded-r ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
 
           <span className="col-span-2 text-[11px] text-muted-foreground">Saldo Extrato Real</span>
-          <span className="text-right tabular-nums text-[12px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-[11px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
           <span className="text-right tabular-nums text-muted-foreground">—</span>
         </div>
       </div>
