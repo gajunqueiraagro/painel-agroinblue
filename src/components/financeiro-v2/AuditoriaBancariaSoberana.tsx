@@ -397,46 +397,57 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
         </div>
       )}
       {aberto && (
-      <div className="px-3 py-1.5 grid grid-cols-4 gap-x-3 gap-y-0.5 text-[11px]">
-        <span />
-        <span className="text-right text-[10px] font-medium text-muted-foreground">Extrato</span>
-        <span className="text-right text-[10px] font-medium text-muted-foreground">Sistema</span>
-        <span className="text-right text-[10px] font-medium text-muted-foreground">Dif.</span>
+      <div className="px-3 py-1.5 space-y-1.5">
+        {/* HERO — 1º Status (veredito: fecha?) · 2º Diferença de Saldo (saldo bate?) */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`rounded-md border px-2 py-1 ${diag.veredito.conciliado ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <span className="block text-[9px] uppercase tracking-wide text-muted-foreground">Status</span>
+            <span className={`block text-[15px] font-bold leading-tight ${diag.veredito.conciliado ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {diag.veredito.conciliado ? '✔ Conciliado' : '✖ Não fecha'}
+            </span>
+          </div>
+          <div className={`rounded-md border px-2 py-1 ${difSaldo == null ? 'bg-muted/30' : difZero ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <span className="block text-[9px] uppercase tracking-wide text-muted-foreground">Diferença de Saldo</span>
+            <span className={`block text-[15px] font-bold leading-tight tabular-nums ${difSaldo == null ? 'text-muted-foreground' : difZero ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {difSaldo == null ? '—' : `${difZero ? '✔' : '✖'} ${fmtBRL(difSaldo)}`}
+            </span>
+          </div>
+        </div>
 
-        <span className="text-[11px] text-muted-foreground">Saldo Inicial</span>
-        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
-        <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
+        {/* TABELA — ordem cronológica; Saldo Final Calculado destacado (3º ponto de atenção) */}
+        <div className="grid grid-cols-4 gap-x-3 gap-y-0.5 text-[11px]">
+          <span />
+          <span className="text-right text-[10px] font-medium text-muted-foreground">Extrato</span>
+          <span className="text-right text-[10px] font-medium text-muted-foreground">Sistema</span>
+          <span className="text-right text-[10px] font-medium text-muted-foreground">Dif.</span>
 
-        <span className="text-[11px] text-muted-foreground">Entradas</span>
-        <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
-        <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
-        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
-        {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
+          <span className="text-[11px] text-muted-foreground">Saldo Inicial</span>
+          <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-[12px]">{temSaldo ? fmtBRL(saldoInicial) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-muted-foreground">—</span>
 
-        <span className="text-[11px] text-muted-foreground">Saídas</span>
-        <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
-        <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
-        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
-        {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
+          <span className="text-[11px] text-muted-foreground">Entradas</span>
+          <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
+          <span className="text-right tabular-nums text-[12px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
+          <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
+          {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-        <span className="col-span-4 border-t my-0.5" />
+          <span className="text-[11px] text-muted-foreground">Saídas</span>
+          <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
+          <span className="text-right tabular-nums text-[12px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
+          <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
+          {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
-        <span className="text-[11px] text-muted-foreground font-medium">Saldo Final Calculado</span>
-        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
-        <span className="text-right tabular-nums text-[12px] font-medium">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
-        <span className={`text-right tabular-nums text-[12px] font-medium ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
+          {/* Saldo Final Calculado — realce (3º), mantém difSFC e ordem natural */}
+          <span className="text-[12px] font-semibold bg-amber-50 py-0.5 pl-1 rounded-l">Saldo Final Calculado</span>
+          <span className="text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5">{saldoCalcExtrato != null ? fmtBRL(saldoCalcExtrato) : '—'}</span>
+          <span className="text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5">{saldoCalcSistema != null ? fmtBRL(saldoCalcSistema) : '—'}</span>
+          <span className={`text-right tabular-nums text-[13px] font-semibold bg-amber-50 py-0.5 pr-1 rounded-r ${corDif(difSFC)}`}>{difSFC != null ? fmtBRL(difSFC) : '—'}</span>
 
-        <span className="col-span-2 text-[11px] text-muted-foreground">Saldo Extrato Real</span>
-        <span className="text-right tabular-nums text-[12px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
-        <span className="text-right tabular-nums text-muted-foreground">—</span>
-
-        <span className="col-span-4 border-t my-0.5" />
-
-        <span className="text-[11px] text-muted-foreground font-semibold">Diferença de Saldo</span>
-        <span className={`col-span-3 text-right tabular-nums text-[12px] font-bold ${difZero ? 'text-emerald-600' : 'text-rose-600'}`}>
-          {difSaldo == null ? '—' : `${difZero ? '✔' : '✖'} ${fmtBRL(difSaldo)}`}
-        </span>
+          <span className="col-span-2 text-[11px] text-muted-foreground">Saldo Extrato Real</span>
+          <span className="text-right tabular-nums text-[12px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
+          <span className="text-right tabular-nums text-muted-foreground">—</span>
+        </div>
       </div>
       )}
     </div>
@@ -502,13 +513,15 @@ function ExtratoSoberanoCard({
 }) {
   if (extrato.movimentos === 0) {
     return (
-      <Card className="p-3 space-y-1.5">
+      <Card className="p-2 space-y-1">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold">Extrato soberano do mês</span>
           <StatusBadge texto="Nenhum extrato carregado" tom="muted" />
         </div>
-        <p className="text-[11px] text-muted-foreground">Carregue o extrato para auditar esta conta/mês.</p>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCarregar}>↑ Carregar Extrato</Button>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">Carregue o extrato para auditar esta conta/mês.</p>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={onCarregar}>↑ Carregar Extrato</Button>
+        </div>
       </Card>
     );
   }
@@ -522,16 +535,23 @@ function ExtratoSoberanoCard({
       </div>
       {aberto ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5">
-            <Campo label="Conta" valor={nomeConta || '—'} />
-            <Campo label="Mês" valor={`${MESES[mes - 1]}/${ano}`} />
-            <Campo label="Movimentos" valor={String(extrato.movimentos)} />
-            <Campo label="Período" valor={`${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}`} />
-            <Campo label="Importado em" valor={fmtDataHora(extrato.importado_em)} />
-            <Campo label="Arquivo" valor="não disponível" muted />
-            <Campo label="Saldo" valor="não disponível" muted />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
+            {[
+              { l: 'Conta', v: nomeConta || '—' },
+              { l: 'Movimentos', v: String(extrato.movimentos) },
+              { l: 'Mês', v: `${MESES[mes - 1]}/${ano}` },
+              { l: 'Importado em', v: fmtDataHora(extrato.importado_em) },
+              { l: 'Período', v: `${fmtData(extrato.periodo_ini)} – ${fmtData(extrato.periodo_fim)}` },
+              { l: 'Arquivo', v: 'não disponível', muted: true },
+              { l: 'Saldo', v: 'não disponível', muted: true },
+            ].map((c) => (
+              <div key={c.l} className="flex items-baseline justify-between gap-2 min-w-0 py-0.5 border-b border-border/40">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">{c.l}</span>
+                <span className={`text-[12px] truncate text-right ${c.muted ? 'text-muted-foreground italic' : 'font-medium'}`} title={c.v}>{c.v}</span>
+              </div>
+            ))}
           </div>
-          <div className="flex justify-start gap-2 flex-wrap">
+          <div className="flex justify-end gap-2 flex-wrap pt-1">
             <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Ver OFX</Button>
             <Button size="sm" variant="outline" className="h-5 text-[11px]" onClick={onCarregar}>Atualizar OFX</Button>
           </div>
