@@ -91,28 +91,28 @@ const fmtData = (s: string | null | undefined): string => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 };
 
-// null / '' -> "vazio" itálico muted. NUNCA esconde o campo.
+// null / '' -> "—" itálico muted (fallback VISUAL; não altera payload). NUNCA esconde o campo.
 function Valor({ v }: { v: string | number | null | undefined }) {
   if (v === null || v === undefined || v === '') {
-    return <span className="italic text-muted-foreground">vazio</span>;
+    return <span className="italic text-muted-foreground/70">—</span>;
   }
   return <span className="text-foreground">{v}</span>;
 }
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="text-sm break-words">{children}</span>
+    <div className="flex flex-col gap-px">
+      <span className="text-[9px] uppercase tracking-wide text-muted-foreground/80">{label}</span>
+      <span className="text-xs leading-snug break-words">{children}</span>
     </div>
   );
 }
 
 function CardSecao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <Card className="p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{titulo}</div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">{children}</div>
+    <Card className="p-2">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70 mb-1.5">{titulo}</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">{children}</div>
     </Card>
   );
 }
@@ -121,19 +121,30 @@ function CardSecao({ titulo, children }: { titulo: string; children: React.React
 function CritBool({ label, v }: { label: string; v: boolean | null }) {
   const ok = v === true;
   return (
-    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${ok ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ok ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
       {ok ? '✓' : '✗'} {label}
     </span>
   );
 }
 function CritInfo({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] bg-muted text-muted-foreground">{children}</span>;
+  return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-muted/60 text-muted-foreground/80">{children}</span>;
 }
 
 function badgeConfianca(c: string | null): 'default' | 'secondary' | 'outline' {
   if (c === 'alta') return 'default';
   if (c === 'media') return 'secondary';
   return 'outline';
+}
+
+// Humanização VISUAL do rótulo de lacuna a partir de lacunas[].campo (não toca payload).
+const LACUNA_LABEL: Record<string, string> = {
+  produto: 'Produto inexistente na origem',
+  fitid: 'FITID inexistente na origem',
+  anexo_nf: 'Anexo NF inexistente na origem',
+};
+function rotuloLacuna(campo: string | null): string {
+  if (!campo) return '—';
+  return LACUNA_LABEL[campo] ?? `${campo} inexistente na origem`;
 }
 
 export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConciliacaoProps) {
@@ -185,35 +196,38 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
         {/* 1. Cabeçalho enxuto */}
-        <header className="shrink-0 border-b px-5 py-3 flex items-start justify-between gap-4">
+        <header className="shrink-0 border-b px-5 pr-12 py-2.5 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Estação de Conciliação</div>
-            <DialogTitle className="text-base font-semibold mt-0.5 truncate">{TIPO_LEGIVEL[tipo] ?? tipo}</DialogTitle>
-            <DialogDescription className="text-xs mt-0.5">
+            <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">Estação de Conciliação</div>
+            <DialogTitle className="text-sm font-semibold mt-0.5 truncate">{TIPO_LEGIVEL[tipo] ?? tipo}</DialogTitle>
+            <DialogDescription className="text-[11px] mt-0.5">
               Conta: <span className="font-medium text-foreground">{nomeConta || '—'}</span>
               {' · '}Competência: <span className="font-medium text-foreground">{contexto?.ano_mes ?? '—'}</span>
             </DialogDescription>
           </div>
-          <Badge variant="outline" className="shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400">READ ONLY</Badge>
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500/70" />
+            Somente leitura
+          </span>
         </header>
 
         {/* Corpo: loading | erro | ok */}
         <div className="flex-1 min-h-0">
           {estado === 'loading' && (
             <div className="h-full flex">
-              <div className="flex-[1.7] p-4 space-y-3 overflow-hidden">
+              <div className="flex-[1.7] p-3 space-y-2 overflow-hidden">
                 {[0, 1, 2, 3].map((i) => (
-                  <Card key={i} className="p-3 space-y-2">
-                    <Skeleton className="h-3 w-28" />
-                    <div className="grid grid-cols-2 gap-3">
-                      <Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" />
-                      <Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" />
+                  <Card key={i} className="p-2 space-y-1.5">
+                    <Skeleton className="h-2.5 w-24" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Skeleton className="h-7 w-full" /><Skeleton className="h-7 w-full" />
+                      <Skeleton className="h-7 w-full" /><Skeleton className="h-7 w-full" />
                     </div>
                   </Card>
                 ))}
               </div>
-              <div className="flex-1 p-4 space-y-3 border-l bg-muted/20 overflow-hidden">
-                {[0, 1].map((i) => <Skeleton key={i} className="h-32 w-full" />)}
+              <div className="flex-1 p-3 space-y-2 border-l bg-muted/20 overflow-hidden">
+                {[0, 1].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
               </div>
             </div>
           )}
@@ -233,7 +247,7 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
           {estado === 'ok' && payload && (
             <div className="h-full flex">
               {/* 2. Painel âncora (esq, flex 1.7) */}
-              <section className="flex-[1.7] min-w-0 overflow-y-auto p-4 space-y-3">
+              <section className="flex-[1.7] min-w-0 overflow-y-auto p-3 space-y-2">
                 {tipo === 'sistema_sem_vinculo' ? (
                   <>
                     <CardSecao titulo="Identificação">
@@ -283,12 +297,9 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                       {lacunas.length === 0 ? (
                         <Campo label="—"><Valor v={null} /></Campo>
                       ) : (
-                        <div className="col-span-2 flex flex-col gap-1">
+                        <div className="col-span-2 flex flex-col gap-0.5">
                           {lacunas.map((l, i) => (
-                            <span key={i} className="text-sm">
-                              <span className="font-medium text-foreground">{l.campo ?? '—'}</span>
-                              <span className="text-muted-foreground">: não existe na origem</span>
-                            </span>
+                            <span key={i} className="text-xs text-foreground/90">{rotuloLacuna(l.campo)}</span>
                           ))}
                         </div>
                       )}
@@ -322,12 +333,9 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                       {lacunas.length === 0 ? (
                         <Campo label="—"><Valor v={null} /></Campo>
                       ) : (
-                        <div className="col-span-2 flex flex-col gap-1">
+                        <div className="col-span-2 flex flex-col gap-0.5">
                           {lacunas.map((l, i) => (
-                            <span key={i} className="text-sm">
-                              <span className="font-medium text-foreground">{l.campo ?? '—'}</span>
-                              <span className="text-muted-foreground">: não existe na origem</span>
-                            </span>
+                            <span key={i} className="text-xs text-foreground/90">{rotuloLacuna(l.campo)}</span>
                           ))}
                         </div>
                       )}
@@ -337,35 +345,38 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
               </section>
 
               {/* 3. Trilho de candidatos (dir, flex 1) */}
-              <aside className="flex-1 min-w-0 overflow-y-auto p-4 space-y-3 border-l bg-muted/20">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <aside className="flex-1 min-w-0 overflow-y-auto p-3 space-y-2 border-l bg-muted/20">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                   Candidatos automáticos
                 </div>
                 {sugestoes.length === 0 ? (
-                  <div className="text-sm text-muted-foreground italic py-6 text-center">nenhum candidato automático</div>
+                  <div className="text-xs text-muted-foreground italic py-6 text-center">nenhum candidato automático</div>
                 ) : (
                   sugestoes.map((s, i) => {
                     const c = s.criterios;
                     return (
-                      <Card key={i} className="p-3 space-y-2">
+                      <Card key={i} className="p-2 space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.candidato?.origem ?? '—'}</span>
-                          <Badge variant={badgeConfianca(s.confianca)} className="text-[10px] capitalize">{s.confianca ?? '—'}</Badge>
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.candidato?.origem ?? '—'}</span>
+                          <Badge variant={badgeConfianca(s.confianca)} className="text-[9px] px-1.5 py-0 capitalize">{s.confianca ?? '—'}</Badge>
                         </div>
-                        <div className="text-lg font-semibold tabular-nums">{fmtBRL(s.candidato?.valor)}</div>
-                        <div className="text-xs text-muted-foreground">{fmtData(s.candidato?.data) || '—'}</div>
-                        <div className="text-sm break-words"><Valor v={s.candidato?.descricao} /></div>
-                        <div className="flex flex-wrap gap-1 pt-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-base font-semibold tabular-nums leading-none">{fmtBRL(s.candidato?.valor)}</span>
+                          <span className="text-[11px] text-muted-foreground">{fmtData(s.candidato?.data) || '—'}</span>
+                        </div>
+                        <div className="text-xs break-words"><Valor v={s.candidato?.descricao} /></div>
+                        {/* Critérios = justificativa da sugestão (destacados) */}
+                        <div className="rounded border border-border/60 bg-background/60 p-1.5 flex flex-wrap gap-1">
                           <CritBool label="valor" v={c?.valor_igual ?? null} />
                           <CritBool label="sinal" v={c?.mesmo_sinal ?? null} />
                           <CritBool label="data" v={c?.data_igual ?? null} />
                           {(c?.descricao_semelhante ?? null) === null && <CritInfo>descrição: não calculado</CritInfo>}
                           {(c?.mesmo_banco ?? null) === null && <CritInfo>banco: não calculado</CritInfo>}
                           {c?.existem_outros_candidatos === true && (
-                            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-400">⚠ outros</span>
+                            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400">⚠ outros</span>
                           )}
                         </div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground pt-1">somente leitura</div>
+                        <div className="text-[9px] uppercase tracking-wide text-muted-foreground/70">somente leitura</div>
                       </Card>
                     );
                   })
@@ -375,9 +386,9 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
           )}
         </div>
 
-        {/* 4. Barra inferior fixa — todas as ações desabilitadas (read-only) */}
-        <footer className="shrink-0 border-t px-5 py-3 flex items-center justify-between gap-3 bg-background">
-          <div className="flex flex-wrap gap-2">
+        {/* 4. Barra inferior fixa — slots visuais; todas as ações desabilitadas (read-only) */}
+        <footer className="shrink-0 border-t px-5 py-2 flex items-center justify-between gap-3 bg-muted/30">
+          <div className="flex flex-wrap gap-1.5">
             {ACOES.map((a) => (
               <Button
                 key={a.key}
@@ -385,12 +396,13 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                 variant="outline"
                 disabled={!(payload?.acoes_disponiveis?.[a.key] === true)}
                 title="próximo PR"
+                className="h-6 px-2 text-[11px] border-dashed text-muted-foreground/70 opacity-60"
               >
                 {a.label}
               </Button>
             ))}
           </div>
-          <span className="text-[11px] text-muted-foreground">(Read Only)</span>
+          <span className="text-[10px] text-muted-foreground/70">(somente leitura)</span>
         </footer>
       </DialogContent>
     </Dialog>
