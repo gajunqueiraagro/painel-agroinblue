@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
+import { EstacaoConciliacao } from '@/components/financeiro-v2/EstacaoConciliacao';
 import { toast } from 'sonner';
 
 interface Props {
@@ -1093,6 +1094,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [importOpen, setImportOpen] = useState(false);
   const [cardsTopoAbertos, setCardsTopoAbertos] = useState(false);
   const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
+  // WS1 — contexto da Estação de Conciliação (read-only). null = fechada.
+  const [estacaoCtx, setEstacaoCtx] = useState<{ tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo'; id: string } | null>(null);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -1259,7 +1262,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         motivo: 'Lançado no sistema, sem vínculo com o extrato',
         motivoAcao: 'Confirme se o movimento existe no extrato ou ajuste o lançamento.',
         acaoLabel: 'Verificar',
-        onAcao: () => irLancamentos(`Verificar lançamento sem vínculo · ${desc} · R$ ${fmtBRL(valor)} · ${labelStatus(it.status_transacao)} · ${origem}`),
+        // WS1 — abre a Estação de Conciliação (read-only) em vez de navegar.
+        onAcao: () => setEstacaoCtx({ tipo: 'sistema_sem_vinculo', id: it.lancamento_id }),
         sugestao: sugestoes[it.lancamento_id],
       });
     }
@@ -1483,6 +1487,16 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
         }}
       />
+
+      {/* WS1 — Estação de Conciliação (read-only). Acionada pelo botão "Verificar". */}
+      {estacaoCtx && (
+        <EstacaoConciliacao
+          tipo={estacaoCtx.tipo}
+          id={estacaoCtx.id}
+          contaNome={nomeConta}
+          onClose={() => setEstacaoCtx(null)}
+        />
+      )}
     </div>
   );
 }
