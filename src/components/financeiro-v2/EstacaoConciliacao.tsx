@@ -9,7 +9,7 @@
 // RPC não tipado nos types gerados -> (supabase as any).rpc (idioma do projeto).
 // ============================================================================
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -17,6 +17,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 // ── Contrato do payload (fn_ws_conciliacao, versao ws-01-readonly) ───────────
 interface Contexto { cliente_id: string | null; conta_bancaria_id: string | null; ano_mes: string | null; }
@@ -169,6 +171,14 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
   // TASK-003/D1 — índice do candidato em vinculação (null = ocioso).
   const [vinculandoIdx, setVinculandoIdx] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  // TASK-005/D2 — mini-form de criação a partir do OFX (modo extrato).
+  const [criando, setCriando] = useState(false);
+  const [fazendaId, setFazendaId] = useState('');
+  const [subcentro, setSubcentro] = useState('');
+  const [favorecidoId, setFavorecidoId] = useState('');
+  const [obs, setObs] = useState('');
+  const [doc, setDoc] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
   // RPC executada UMA ÚNICA VEZ ao abrir / quando {tipo,id} mudarem. Deps SÓ [tipo,id].
   useEffect(() => {
@@ -244,6 +254,72 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao vincular.');
       setVinculandoIdx(null);
+    }
+  }
+
+  // TASK-005/D2 — criação atômica de lançamento a partir do OFX (modo extrato).
+  // Verdade bancária (data/valor/sinal/tipo/conta) é semeada pela RPC do extrato;
+  // o operador só completa fazenda (obrigatória) + classificação opcional.
+  const clienteId = payload?.contexto?.cliente_id ?? null;
+  const modoExtrato = tipo === 'extrato_sem_vinculo';
+  const tipoOp = (ofx?.valor ?? 0) < 0 ? '2-Saídas' : '1-Entradas';
+  const habilitarQueries = criando && modoExtrato && !!clienteId;
+
+  const fazendasQ = useQuery({
+    queryKey: ['estacao-fazendas', clienteId],
+    enabled: habilitarQueries,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('fazendas').select('id,nome').eq('cliente_id', clienteId).order('nome');
+      if (error) throw error;
+      return (data ?? []) as { id: string; nome: string }[];
+    },
+  });
+  const fornecedoresQ = useQuery({
+    queryKey: ['estacao-fornecedores', clienteId],
+    enabled: habilitarQueries,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('financeiro_fornecedores').select('id,nome').eq('cliente_id', clienteId).order('nome');
+      if (error) throw error;
+      return (data ?? []) as { id: string; nome: string }[];
+    },
+  });
+  const subcentrosQ = useQuery({
+    queryKey: ['estacao-subcentros', clienteId, tipoOp],
+    enabled: habilitarQueries,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('financeiro_plano_contas').select('subcentro')
+        .eq('ativo', true).eq('tipo_operacao', tipoOp)
+        .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`);
+      if (error) throw error;
+      const set = new Set<string>();
+      for (const r of (data ?? []) as { subcentro: string | null }[]) if (r.subcentro) set.add(r.subcentro);
+      return Array.from(set).sort();
+    },
+  });
+
+  async function criarLancamento() {
+    if (!ofx?.extrato_id || !fazendaId) { toast.error('Selecione a fazenda.'); return; }
+    setSalvando(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_criar_lancamento_de_extrato', {
+        p_extrato_id: ofx.extrato_id,
+        p_fazenda_id: fazendaId,
+        p_subcentro: subcentro || null,
+        p_observacao: obs || null,
+        p_favorecido_id: favorecidoId || null,
+        p_numero_documento: doc || null,
+      });
+      if (error) throw error;
+      toast.success('Lançamento criado e vinculado — pendência resolvida.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao criar lançamento.');
+      setSalvando(false);
     }
   }
 
@@ -466,6 +542,78 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                     );
                     })}
                   </>
+                )}
+
+                {/* TASK-005/D2 — criar lançamento a partir do OFX (só modo extrato) */}
+                {modoExtrato && (
+                  <Card className="p-2 space-y-2 border-primary/30">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
+                      Criar lançamento deste OFX
+                    </div>
+                    {!criando ? (
+                      <Button size="sm" variant="outline" className="w-full h-7 text-[11px]"
+                              onClick={() => setCriando(true)}>
+                        Criar lançamento
+                      </Button>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Verdade bancária — read-only */}
+                        <div className="rounded border bg-muted/30 p-1.5 text-[10px] space-y-0.5">
+                          <div>Data <b>{fmtData(ofx?.data) || '—'}</b> · {tipoOp === '2-Saídas' ? 'Saída' : 'Entrada'}</div>
+                          <div>Valor <b>{fmtBRL(Math.abs(ofx?.valor ?? 0))}</b></div>
+                          <div>Conta <b>{ofx?.conta_bancaria_nome ?? '—'}</b></div>
+                          <div className="truncate">Descrição: {ofx?.descricao ?? '—'}</div>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] uppercase text-muted-foreground">Fazenda *</span>
+                          <Select value={fazendaId} onValueChange={setFazendaId}>
+                            <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+                            <SelectContent>
+                              {(fazendasQ.data ?? []).map((f) => (
+                                <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] uppercase text-muted-foreground">Subcentro (opcional)</span>
+                          <Select value={subcentro} onValueChange={setSubcentro}>
+                            <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              {(subcentrosQ.data ?? []).map((s) => (
+                                <SelectItem key={s} value={s} className="text-[11px]">{s}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] uppercase text-muted-foreground">Favorecido (opcional)</span>
+                          <Select value={favorecidoId} onValueChange={setFavorecidoId}>
+                            <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              {(fornecedoresQ.data ?? []).map((f) => (
+                                <SelectItem key={f.id} value={f.id} className="text-[11px]">{f.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Input value={obs} onChange={(e) => setObs(e.target.value)}
+                               placeholder="Observação (opcional)" className="h-7 text-[11px]" />
+                        <Input value={doc} onChange={(e) => setDoc(e.target.value)}
+                               placeholder="Documento (opcional)" className="h-7 text-[11px]" />
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="ghost" className="h-7 text-[11px] flex-1"
+                                  disabled={salvando} onClick={() => setCriando(false)}>
+                            Cancelar
+                          </Button>
+                          <Button size="sm" className="h-7 text-[11px] flex-1"
+                                  disabled={!fazendaId || salvando} onClick={criarLancamento}>
+                            {salvando ? 'Salvando…' : 'Salvar'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
                 )}
               </aside>
             </div>
