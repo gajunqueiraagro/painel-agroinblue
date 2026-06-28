@@ -93,6 +93,19 @@ const fmtData = (s: string | null | undefined): string => {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 };
 
+// TASK-004 — janela de conciliação normal. Candidato com |Δdata| > 7 dias NÃO é
+// candidato automático (evita sugestão absurda, ex.: lançamento de 2020 p/ OFX de 2026).
+// Filtro de APRESENTAÇÃO; não toca a RPC/score. Datas inparseáveis => mantém visível.
+const JANELA_DIAS = 7;
+function diffDias(a: string | null | undefined, b: string | null | undefined): number | null {
+  const pa = a ? /^(\d{4})-(\d{2})-(\d{2})/.exec(a) : null;
+  const pb = b ? /^(\d{4})-(\d{2})-(\d{2})/.exec(b) : null;
+  if (!pa || !pb) return null;
+  const da = Date.UTC(Number(pa[1]), Number(pa[2]) - 1, Number(pa[3]));
+  const db = Date.UTC(Number(pb[1]), Number(pb[2]) - 1, Number(pb[3]));
+  return Math.abs(Math.round((da - db) / 86400000));
+}
+
 // null / '' -> "—" itálico muted (fallback VISUAL; não altera payload). NUNCA esconde o campo.
 function Valor({ v }: { v: string | number | null | undefined }) {
   if (v === null || v === undefined || v === '') {
@@ -196,6 +209,15 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
   const ofx = payload?.ofx ?? null;
   const sugestoes = payload?.sugestoes ?? [];
   const lacunas = payload?.lacunas ?? [];
+
+  // TASK-004/A — âncora de data por modo (sistema=lançamento, extrato=OFX) e
+  // ocultação dos candidatos fora da janela de ±7 dias.
+  const ancoraData = tipo === 'sistema_sem_vinculo' ? (sistema?.data ?? null) : (ofx?.data ?? null);
+  const sugestoesVisiveis = sugestoes.filter((s) => {
+    const d = diffDias(s.candidato?.data ?? null, ancoraData);
+    return d === null || d <= JANELA_DIAS;
+  });
+  const ocultadosPorData = sugestoes.length - sugestoesVisiveis.length;
 
   // TASK-003/D1 — Vincular avulso via fn_vincular_extrato_lancamento.
   // sistema_sem_vinculo: âncora=lançamento, candidato=OFX (extrato_id).
@@ -382,10 +404,26 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                 <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                   Candidatos automáticos
                 </div>
-                {sugestoes.length === 0 ? (
-                  <div className="text-xs text-muted-foreground italic py-6 text-center">nenhum candidato automático</div>
+                {sugestoesVisiveis.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-6 text-center space-y-1">
+                    <div className="italic">nenhum candidato automático</div>
+                    {ocultadosPorData > 0 && (
+                      <div className="text-[11px] text-foreground/70">
+                        Sem candidato na mesma conta dentro de ±{JANELA_DIAS} dias.
+                      </div>
+                    )}
+                    <div className="text-[11px]">
+                      Pode ser transferência entre contas próprias ou exigir agrupamento.
+                    </div>
+                  </div>
                 ) : (
-                  sugestoes.map((s, i) => {
+                  <>
+                    {ocultadosPorData > 0 && (
+                      <div className="text-[10px] italic text-muted-foreground/80 pb-1">
+                        {ocultadosPorData} candidato(s) ocultado(s) por data fora de ±{JANELA_DIAS} dias.
+                      </div>
+                    )}
+                    {sugestoesVisiveis.map((s, i) => {
                     const c = s.criterios;
                     return (
                       <Card key={i} className="p-2 space-y-1.5">
@@ -426,7 +464,8 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                         })()}
                       </Card>
                     );
-                  })
+                    })}
+                  </>
                 )}
               </aside>
             </div>
