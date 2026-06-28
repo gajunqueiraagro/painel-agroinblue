@@ -32,7 +32,8 @@ interface Relacionamentos {
 interface SistemaPayload {
   lancamento_id: string; data: string | null; valor: number | null; sinal: string | null;
   descricao: string | null; historico: string | null; status_transacao: string | null; origem_lancamento: string | null;
-  favorecido_nome: string | null; centro_custo: string | null; subcentro: string | null; conta_bancaria_nome: string | null;
+  favorecido_nome: string | null; centro_custo: string | null; subcentro: string | null;
+  conta_bancaria_id: string | null; conta_bancaria_nome: string | null;
   documento: string | null; observacao: string | null;
   duplicidade: Duplicidade | null; relacionamentos: Relacionamentos | null;
 }
@@ -480,6 +481,12 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                 <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                   Candidatos automáticos
                 </div>
+                {/* TASK-006B — lançamento com conta nula: será definida pelo OFX ao vincular */}
+                {tipo === 'sistema_sem_vinculo' && !sistema?.conta_bancaria_id && sugestoesVisiveis.length > 0 && (
+                  <div className="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-400">
+                    Conta bancária será definida pelo extrato ao vincular.
+                  </div>
+                )}
                 {sugestoesVisiveis.length === 0 ? (
                   <div className="text-xs text-muted-foreground py-6 text-center space-y-1">
                     <div className="italic">nenhum candidato automático</div>
