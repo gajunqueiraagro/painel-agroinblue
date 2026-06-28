@@ -309,13 +309,17 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
         <span className="w-24 shrink-0 text-right tabular-nums text-[11px]">R$ {fmtBRL(linha.valor)}</span>
         <span className="w-28 shrink-0 truncate text-[9px] text-muted-foreground" title={motivoTitle}>{linha.motivo}</span>
         {linha.acaoLabel ? (
-          <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0 w-[56px]" onClick={linha.onAcao}>
+          <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0 whitespace-nowrap min-w-[56px]" onClick={linha.onAcao}>
             {linha.acaoLabel}
           </Button>
         ) : (
-          <span className="w-[56px] shrink-0" />
+          <span className="min-w-[56px] shrink-0" />
         )}
       </div>
+      {/* Fase A — fila de trabalho: "por quê" explícito (guidance vinda do read-model). */}
+      {linha.motivoAcao && (
+        <div className="ml-10 mt-0.5 text-[9px] text-muted-foreground">Por quê: {linha.motivoAcao}</div>
+      )}
       {linha.sugestao && (
         linha.sugestao.classe === 'sugestao' ? (
           <div className="mt-0.5 ml-10 pl-2 border-l-2 border-amber-300 flex items-center gap-1 text-[9px] text-muted-foreground">
@@ -489,6 +493,10 @@ function CardsFiltro({
             <span>{f.label}</span>
             <span className={`tabular-nums font-semibold ${on ? 'text-foreground' : 'text-foreground/80'}`}>{contagens[f.key]}</span>
             <span className="text-[8px] text-muted-foreground tabular-nums">R$ {fmtBRL(valores[f.key])}</span>
+            {/* Fase A — card de pendência vira tarefa: cue "Resolver →" (clique segue filtrando a fila). */}
+            {(['divergencias', 'sistema_sem_extrato', 'extrato_sem_sistema'] as FiltroKey[]).includes(f.key) && contagens[f.key] > 0 && (
+              <span className="text-[8px] font-semibold text-primary">Resolver →</span>
+            )}
           </button>
         );
       })}
@@ -1245,8 +1253,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
       out.push({
         key: `div-${it.link_id}`, bucket: 'divergencias', status: 'Divergência', tom: 'rose',
         data: it.data_ofx, descricao: desc, origem, tipo, valor, motivo, motivoAcao: acaoMotivo(it.motivo),
-        acaoLabel: 'Corrigir',
-        onAcao: () => irLancamentos(`Corrigir vínculo · ${desc} · R$ ${fmtBRL(valor)} · ${motivo} · ${origem}`),
+        acaoLabel: 'Abrir lançamento',
+        onAcao: () => irLancamentos(`Abrir lançamento · ${desc} · R$ ${fmtBRL(valor)} · ${motivo} · ${origem}`),
       });
     }
 
@@ -1261,8 +1269,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         data: it.data, descricao: desc, origem, tipo, valor,
         motivo: 'Lançado no sistema, sem vínculo com o extrato',
         motivoAcao: 'Confirme se o movimento existe no extrato ou ajuste o lançamento.',
-        acaoLabel: 'Verificar',
-        // WS1 — abre a Estação de Conciliação (read-only) em vez de navegar.
+        acaoLabel: 'Resolver',
+        // WS1/Fase A — abre a Estação de Conciliação (read-only) em vez de navegar.
         onAcao: () => setEstacaoCtx({ tipo: 'sistema_sem_vinculo', id: it.lancamento_id }),
         sugestao: sugestoes[it.lancamento_id],
       });
@@ -1277,8 +1285,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         data: it.data, descricao: desc, origem: 'Extrato', tipo, valor,
         motivo: 'Movimento no extrato, sem vínculo com o sistema',
         motivoAcao: 'Crie o lançamento correspondente a este movimento.',
-        acaoLabel: 'Criar',
-        onAcao: () => irLancamentos(`Criar lançamento p/ extrato · ${desc} · R$ ${fmtBRL(valor)} · Sem lançamento no sistema · Extrato`),
+        acaoLabel: 'Resolver',
+        // Fase A — abre a Estação no modo extrato (read-only). Criação real segue no fluxo existente.
+        onAcao: () => setEstacaoCtx({ tipo: 'extrato_sem_vinculo', id: it.extrato_id }),
         sugestaoInversa: sugestoesInv[it.extrato_id],
       });
     }
@@ -1290,9 +1299,9 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         key: `agr-${it.extrato_id}`, bucket: 'agrupamentos', status: 'Agrupado', tom: 'violet',
         data: null, descricao: desc, origem: 'Sugestão', tipo: dirSinal(it.valor), valor: Math.abs(it.valor),
         motivo: 'Candidato de agrupamento',
-        motivoAcao: 'Sugestão de agrupar vários lançamentos para um único movimento.',
-        acaoLabel: 'Agrupar',
-        onAcao: () => toast.info(`Candidato de agrupamento: ${desc} (sugestão; gravação no H2)`),
+        // Fase A — sem botão: a Estação não cobre agrupamento; resolução avançada virá depois.
+        motivoAcao: 'Agrupamento sugerido — resolução avançada ainda não disponível.',
+        acaoLabel: null,
       });
     }
 
