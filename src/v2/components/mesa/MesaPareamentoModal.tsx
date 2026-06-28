@@ -203,6 +203,46 @@ function ehTransferencia(linha: ExcelLinhaNormalizada): boolean {
   return t.startsWith('3-') || t.includes('transfer');
 }
 
+// TASK-002 — apresentação: motivo legível do score a partir do detalheScore do
+// matcher (NÃO recalcula nada; só formata o que o motor já produziu).
+function motivoScore(d: MatchResult['detalheScore'] | null | undefined): string {
+  if (!d) return '—';
+  const partes: string[] = [];
+  partes.push(d.valorBate ? 'valor ✓' : 'valor ✗');
+  if (d.diasDistancia != null) partes.push(d.diasDistancia === 0 ? 'data ✓' : `+${d.diasDistancia}d`);
+  partes.push(`nome ${Math.round((d.similaridadeNome ?? 0) * 100)}%`);
+  partes.push(d.pontosConta > 0 ? 'conta ✓' : 'conta ✗');
+  partes.push(d.pontosFazenda > 0 ? 'fazenda ✓' : 'fazenda ✗');
+  return partes.join(' · ');
+}
+
+// TASK-002 — categorias visuais derivadas SÓ de sinais já existentes (decisao,
+// faixa, validacao OFX, ehTransferencia). Sem heurística de transferência nova:
+// transferência só aparece via ehTransferencia (sinal do Excel/staging).
+type CatVisual = 'transferencia' | 'aprovado_excel' | 'pendente_fraco'
+               | 'ofx_orfao_validado' | 'sem_sugestao';
+const CAT_META: Record<CatVisual, { label: string; short: string; cls: string }> = {
+  transferencia:      { label: 'Transferência',             short: 'Transf.',    cls: 'bg-blue-500/15 text-blue-700 border-blue-500/30' },
+  aprovado_excel:     { label: 'Aprovado por Excel',        short: 'Aprovado',   cls: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
+  pendente_fraco:     { label: 'Pendente · candidato fraco', short: 'Fraco',     cls: 'bg-orange-500/15 text-orange-700 border-orange-500/30' },
+  ofx_orfao_validado: { label: 'OFX órfão validado',        short: 'Órfão val.', cls: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
+  sem_sugestao:       { label: 'Sem sugestão',              short: 'Sem sug.',   cls: 'bg-slate-200 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300' },
+};
+function BadgeCat({ cat, compact }: { cat: CatVisual; compact?: boolean }) {
+  const m = CAT_META[cat];
+  return (
+    <span
+      title={m.label}
+      className={cn(
+        'shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase border leading-none tracking-tight',
+        m.cls,
+      )}
+    >
+      {compact ? m.short : m.label}
+    </span>
+  );
+}
+
 // PR6.1D-4 — Badge curto que indica a conta-da-linha-Excel resolvida via
 // resolverContaPorTexto (helper soberano do PR6.1D-1). 3 estados visuais:
 //   - Match conta-da-sessao: verde (linha pertence à conta do OFX)
@@ -1137,6 +1177,27 @@ export function MesaPareamentoModal({
                       linhaAtiva.sinal === 'entrada' ? 'entrada' : linhaAtiva.sinal === 'saida' ? 'saida' : null;
                     return (
                       <>
+                        {/* TASK-002 — linha MATCH: score/faixa/motivo (read-only; sugestão, não decisão) */}
+                        {(() => {
+                          const mAtivo = parAtivoKey ? matches.get(parAtivoKey) : undefined;
+                          if (!mAtivo) return null;
+                          const faixaTxt = mAtivo.faixa === 'forte' ? 'FORTE'
+                            : mAtivo.faixa === 'fraco' ? 'FRACO' : 'NENHUM';
+                          const tone = mAtivo.faixa === 'forte'
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30'
+                            : mAtivo.faixa === 'fraco'
+                              ? 'text-orange-700 bg-orange-50 border-orange-200 dark:bg-orange-950/30'
+                              : 'text-slate-600 bg-slate-100 border-slate-200 dark:bg-slate-800';
+                          return (
+                            <div className={cn('mb-1 rounded px-2 py-1 text-[10px] leading-tight border', tone)}>
+                              <span className="font-semibold uppercase">Match: score {mAtivo.score} · faixa {faixaTxt}</span>
+                              {mAtivo.faixa !== 'forte' && (
+                                <span className="ml-1 font-medium">⚠ sugestão, não decisão</span>
+                              )}
+                              <div className="text-[9px] opacity-80">motivo: {motivoScore(mAtivo.detalheScore)}</div>
+                            </div>
+                          );
+                        })()}
                         {/* TABELA ÚNICA — CAMPO | OFX | EXCEL | RESULTADO (uma linha por campo) */}
                         <div className="space-y-0">
                           <div className="grid grid-cols-[72px_1fr_1fr_1.1fr] gap-1 px-1 pb-1 border-b text-[8px] uppercase tracking-wide text-muted-foreground/60 font-semibold">
@@ -1228,13 +1289,14 @@ export function MesaPareamentoModal({
                                      disabled={edicaoBloqueada}
                                      className="h-7 text-[11px]" placeholder="—" />
                             } />
-                          <MatrizLinha campo="Obs / Histórico"
+                          <MatrizLinha campo="Obs/Compl. → Descrição"
                             excel={linhaAtiva.observacao}
                             fin={
                               <Input value={parAtivo.correcao?.descricao ?? linhaAtiva.observacao ?? ''}
                                      onChange={(e) => editarCorrecaoAtiva({ descricao: e.target.value })}
                                      disabled={edicaoBloqueada}
-                                     className="h-7 text-[11px]" placeholder="—" />
+                                     title="Descrição/Complemento final do lançamento (grava em descricao)"
+                                     className="h-7 text-[11px]" placeholder="Descrição/Complemento final" />
                             } />
                         </div>
 
@@ -1822,6 +1884,12 @@ export function MesaPareamentoModal({
                 // decisão) sobreponha o azul: linha aprovada/rejeitada/órfã mantém
                 // a cor de status; transferência pendente recebe a tinta azul.
                 const linhaEhTransferencia = ehTransferencia(linha);
+                // TASK-002 — badge de categoria (transferência tem badge própria abaixo).
+                const catLista: CatVisual | null = linhaEhTransferencia ? null
+                  : decisao === 'aprovado' ? 'aprovado_excel'
+                  : (!m || faixa === 'nenhum') ? 'sem_sugestao'
+                  : faixa === 'fraco' ? 'pendente_fraco'
+                  : null;
 
                 return (
                   <button
@@ -1858,6 +1926,7 @@ export function MesaPareamentoModal({
                         <span className="tracking-tight">Transferência</span>
                       </span>
                     )}
+                    {catLista && <BadgeCat cat={catLista} compact />}
                     {/* PR-4A.fix item 3 — lista é navegação: sem texto longo de fornecedor/subcentro */}
                     <span className="flex-1 min-w-0" />
                     <span className={cn('tabular-nums shrink-0 font-medium',
@@ -1925,6 +1994,13 @@ export function MesaPareamentoModal({
                 const candidatos = candidatosPorOfx.get(e.id) ?? [];
                 const ativo = ofxAtivoId === e.id;
                 const topScore = candidatos[0]?.score ?? 0;
+                // TASK-002 — categoria do OFX (órfão puro = Sem sugestão; sem heurística de transferência).
+                const catOfx: CatVisual | null =
+                  validacao === 'ofx_orfao_validado' ? 'ofx_orfao_validado'
+                  : consumido ? 'aprovado_excel'
+                  : candidatos.length === 0 ? 'sem_sugestao'
+                  : candidatos[0]?.faixa === 'fraco' ? 'pendente_fraco'
+                  : null;
 
                 const corBorda =
                   validacao === 'ofx_orfao_validado'
@@ -1963,6 +2039,7 @@ export function MesaPareamentoModal({
                       {format(new Date(e.data_movimento + 'T12:00:00'), 'dd/MM', { locale: ptBR })}
                     </span>
                     <span className="flex-1 truncate" title={e.descricao}>{e.descricao}</span>
+                    {catOfx && <BadgeCat cat={catOfx} compact />}
                     <span className={cn('tabular-nums shrink-0 font-medium',
                       e.valor >= 0 ? 'text-emerald-600' : 'text-rose-600',
                     )}>{fmtBRL(e.valor)}</span>
