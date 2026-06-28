@@ -253,7 +253,10 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
       queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao vincular.');
+      // Erro de RPC do Supabase é PostgrestError (objeto, não instância de Error)
+      // -> lê .message direto para mostrar o motivo real (ex.: "lancamento cancelado...").
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao vincular.';
+      toast.error(msg);
       setVinculandoIdx(null);
     }
   }
@@ -319,7 +322,9 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
       queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao criar lançamento.');
+      // PostgrestError (objeto, não Error) -> lê .message para mostrar o motivo real.
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao criar lançamento.';
+      toast.error(msg);
       setSalvando(false);
     }
   }
