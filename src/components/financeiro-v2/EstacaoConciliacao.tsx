@@ -9,6 +9,8 @@
 // RPC não tipado nos types gerados -> (supabase as any).rpc (idioma do projeto).
 // ============================================================================
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
@@ -151,6 +153,9 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
   const [estado, setEstado] = useState<'loading' | 'erro' | 'ok'>('loading');
   const [payload, setPayload] = useState<WsPayload | null>(null);
   const [msgErro, setMsgErro] = useState<string>('');
+  // TASK-003/D1 — índice do candidato em vinculação (null = ocioso).
+  const [vinculandoIdx, setVinculandoIdx] = useState<number | null>(null);
+  const queryClient = useQueryClient();
 
   // RPC executada UMA ÚNICA VEZ ao abrir / quando {tipo,id} mudarem. Deps SÓ [tipo,id].
   useEffect(() => {
@@ -191,6 +196,34 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
   const ofx = payload?.ofx ?? null;
   const sugestoes = payload?.sugestoes ?? [];
   const lacunas = payload?.lacunas ?? [];
+
+  // TASK-003/D1 — Vincular avulso via fn_vincular_extrato_lancamento.
+  // sistema_sem_vinculo: âncora=lançamento, candidato=OFX (extrato_id).
+  // extrato_sem_vinculo: âncora=OFX, candidato=lançamento (lancamento_id).
+  // Guards/duplicidade/mês fechado ficam na RPC (SECURITY DEFINER). Só leitura aqui não muda.
+  async function vincular(s: Sugestao, i: number) {
+    const extratoId = tipo === 'sistema_sem_vinculo' ? (s.candidato?.extrato_id ?? null) : (ofx?.extrato_id ?? null);
+    const lancamentoId = tipo === 'sistema_sem_vinculo' ? (sistema?.lancamento_id ?? null) : (s.candidato?.lancamento_id ?? null);
+    if (!extratoId || !lancamentoId) {
+      toast.error('Candidato sem IDs suficientes para vincular.');
+      return;
+    }
+    setVinculandoIdx(i);
+    try {
+      const { error } = await (supabase as any).rpc('fn_vincular_extrato_lancamento', {
+        p_extrato_id: extratoId,
+        p_lancamento_id: lancamentoId,
+      });
+      if (error) throw error;
+      toast.success('Vínculo criado — pendência resolvida.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao vincular.');
+      setVinculandoIdx(null);
+    }
+  }
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -376,7 +409,21 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                             <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400">⚠ outros</span>
                           )}
                         </div>
-                        <div className="text-[9px] uppercase tracking-wide text-muted-foreground/70">somente leitura</div>
+                        {(() => {
+                          const podeVincular = tipo === 'sistema_sem_vinculo'
+                            ? !!(s.candidato?.extrato_id && sistema?.lancamento_id)
+                            : !!(s.candidato?.lancamento_id && ofx?.extrato_id);
+                          return (
+                            <Button
+                              size="sm"
+                              className="w-full h-7 text-[11px]"
+                              disabled={!podeVincular || vinculandoIdx !== null}
+                              onClick={() => vincular(s, i)}
+                            >
+                              {vinculandoIdx === i ? 'Vinculando…' : 'Vincular'}
+                            </Button>
+                          );
+                        })()}
                       </Card>
                     );
                   })
