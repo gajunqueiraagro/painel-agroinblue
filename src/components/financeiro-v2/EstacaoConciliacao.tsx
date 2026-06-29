@@ -382,7 +382,7 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
         <div className="flex-1 min-h-0">
           {estado === 'loading' && (
             <div className="h-full flex">
-              <div className="flex-[1.7] p-3 space-y-2 overflow-hidden">
+              <div className="flex-[0.45] p-3 space-y-2 overflow-hidden">
                 {[0, 1, 2, 3].map((i) => (
                   <Card key={i} className="p-2 space-y-1.5">
                     <Skeleton className="h-2.5 w-24" />
@@ -393,7 +393,7 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                   </Card>
                 ))}
               </div>
-              <div className="flex-1 p-3 space-y-2 border-l bg-muted/20 overflow-hidden">
+              <div className="flex-[0.55] p-3 space-y-2 border-l bg-muted/20 overflow-hidden">
                 {[0, 1].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
               </div>
             </div>
@@ -414,7 +414,7 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
           {estado === 'ok' && payload && (
             <div className="h-full flex">
               {/* 2. Painel âncora (esq, flex 1.7) */}
-              <section className="flex-[1.7] min-w-0 overflow-y-auto p-2 space-y-1.5">
+              <section className="flex-[0.45] min-w-0 overflow-y-auto p-2 space-y-1.5">
                 {tipo === 'sistema_sem_vinculo' ? (
                   <>
                     <CardSecao titulo="Identificação">
@@ -512,7 +512,8 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
               </section>
 
               {/* 3. Trilho de candidatos (dir, flex 1) */}
-              <aside className="flex-1 min-w-0 overflow-y-auto p-2 space-y-1.5 border-l bg-muted/20">
+              <aside className="flex-[0.55] min-w-0 border-l bg-muted/20 flex flex-col overflow-hidden">
+                <div className="shrink-0 max-h-[40%] overflow-y-auto p-2 space-y-1.5">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                   Candidatos automáticos
                 </div>
@@ -523,16 +524,8 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                   </div>
                 )}
                 {sugestoesVisiveis.length === 0 ? (
-                  <div className="text-xs text-muted-foreground py-6 text-center space-y-1">
-                    <div className="italic">nenhum candidato automático</div>
-                    {ocultadosPorData > 0 && (
-                      <div className="text-[11px] text-foreground/70">
-                        Sem candidato na mesma conta dentro de ±{JANELA_DIAS} dias.
-                      </div>
-                    )}
-                    <div className="text-[11px]">
-                      Pode ser transferência entre contas próprias ou exigir agrupamento.
-                    </div>
+                  <div className="text-[10px] italic text-muted-foreground/70 py-1">
+                    Nenhum candidato automático{ocultadosPorData > 0 ? ` · ${ocultadosPorData} fora de ±${JANELA_DIAS}d` : ''}.
                   </div>
                 ) : (
                   <>
@@ -585,10 +578,12 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                     })}
                   </>
                 )}
+                </div>
 
                 {/* FASE 2B — "O que é este movimento?" (D2 ou transferência; nada pré-selecionado) */}
                 {modoExtrato && (
-                  <Card className="p-1.5 space-y-1 border-primary/30">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 border-t">
+                    <Card className="p-1.5 space-y-1 border-primary/30">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                       O que é este movimento?
                     </div>
@@ -698,7 +693,8 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                         </Button>
                       </div>
                     )}
-                  </Card>
+                    </Card>
+                  </div>
                 )}
               </aside>
             </div>
