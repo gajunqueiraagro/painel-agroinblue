@@ -55,12 +55,36 @@ interface Candidato {
   data: string | null; valor: number | null; descricao: string | null; origem: string | null;
 }
 interface Sugestao { tipo: string | null; confianca: string | null; candidato: Candidato | null; criterios: Criterios | null; }
+interface CandidatoFinanceiro {
+  lancamento_id: string | null;
+  valor: number | string | null;          // payload serializa numeric como string ("44.8")
+  sinal: number | string | null;
+  data_pagamento: string | null;
+  data_competencia: string | null;
+  tipo_operacao: string | null;
+  status_transacao: string | null;
+  origem_lancamento: string | null;        // INFORMATIVO — nunca usado como filtro/critério
+  descricao: string | null;
+  conta_bancaria_id: string | null;
+  conta_bancaria_nome: string | null;
+  conta_destino_id: string | null;
+  conta_destino_nome: string | null;
+  lado_match: 'origem' | 'destino' | null;
+  qual_data: 'pagamento' | 'competencia' | 'ambas' | null;
+  classificacao: 'livre' | 'alerta_mesmo_extrato' | 'alerta_outro_extrato' | null;
+  score: number | null;
+  criterios: {
+    valor_exato: boolean | null; conta_lado_ok: boolean | null;
+    data_exata: boolean | null; tipo_transferencia: boolean | null;
+  } | null;
+}
 interface Lacuna { campo: string | null; motivo: string | null; }
 interface WsPayload {
   versao: string | null; tipo: string | null; contexto: Contexto | null;
   sistema: SistemaPayload | null; ofx: OfxPayload | null;
   sugestoes: Sugestao[] | null; lacunas: Lacuna[] | null;
   acoes_disponiveis: Record<string, boolean> | null;
+  candidatos_financeiros?: CandidatoFinanceiro[] | null;
 }
 
 export interface EstacaoConciliacaoProps {
@@ -227,6 +251,8 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
   const sistema = payload?.sistema ?? null;
   const ofx = payload?.ofx ?? null;
   const sugestoes = payload?.sugestoes ?? [];
+  const candidatosFinanceiros = payload?.candidatos_financeiros ?? [];
+  const temCandidatoLivre = candidatosFinanceiros.some(cf => cf.classificacao === 'livre');
   const lacunas = payload?.lacunas ?? [];
 
   // TASK-004/A — âncora de data por modo (sistema=lançamento, extrato=OFX) e
@@ -513,7 +539,72 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
 
               {/* 3. Trilho de candidatos (dir, flex 1) */}
               <aside className="flex-[0.55] min-w-0 border-l bg-muted/20 flex flex-col overflow-hidden">
-                <div className="shrink-0 max-h-[40%] overflow-y-auto p-2 space-y-1.5">
+                <div className="shrink-0 max-h-[55%] overflow-y-auto p-2 space-y-1.5">
+                {modoExtrato && (
+                  <div className="space-y-1.5 pb-1.5 mb-1.5 border-b">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                      Candidatos financeiros
+                    </div>
+
+                    {candidatosFinanceiros.length === 0 ? (
+                      <div className="text-[10px] italic text-muted-foreground/70 py-1">
+                        Nenhum lançamento existente compatível.
+                      </div>
+                    ) : (
+                      candidatosFinanceiros.map((cf, i) => {
+                        // LIVRE — candidato forte vinculável (ação no PR E)
+                        if (cf.classificacao === 'livre') {
+                          const forte = (cf.score ?? 0) >= 85;
+                          return (
+                            <Card key={`cf-${i}`} className="p-1.5 space-y-1 border-emerald-500/40 bg-emerald-500/5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                  {cf.origem_lancamento ?? '—'}
+                                </span>
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 capitalize">
+                                  {forte ? 'forte' : 'médio'} · {cf.score ?? '—'}
+                                </Badge>
+                              </div>
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-base font-semibold tabular-nums leading-none">{fmtBRL(Number(cf.valor))}</span>
+                                <span className="text-[11px] text-muted-foreground">{fmtData(cf.data_pagamento) || '—'}</span>
+                              </div>
+                              <div className="text-xs break-words"><Valor v={cf.descricao} /></div>
+                              <div className="text-[10px] text-muted-foreground break-words">
+                                {cf.tipo_operacao ?? '—'} · {cf.conta_bancaria_nome ?? '—'} → {cf.conta_destino_nome ?? '—'}
+                                {cf.lado_match ? ` · casou por ${cf.lado_match}` : ''}
+                              </div>
+                              <div className="rounded border border-border/60 bg-background/60 p-1.5 flex flex-wrap gap-1">
+                                <CritBool label="valor" v={cf.criterios?.valor_exato ?? null} />
+                                <CritBool label="conta/lado" v={cf.criterios?.conta_lado_ok ?? null} />
+                                <CritBool label="data" v={cf.criterios?.data_exata ?? null} />
+                                {cf.criterios?.tipo_transferencia ? <CritInfo>transferência</CritInfo> : null}
+                              </div>
+                              {/* AÇÃO É PR E — aqui placeholder DESABILITADO, sem onClick, sem escrita */}
+                              <Button size="sm" className="w-full h-7 text-[11px]" disabled
+                                      title="Disponível no próximo passo">
+                                Vincular este lançamento
+                              </Button>
+                            </Card>
+                          );
+                        }
+                        // ALERTAS — sem ação de vincular
+                        const mesmo = cf.classificacao === 'alerta_mesmo_extrato';
+                        return (
+                          <div key={`cf-${i}`}
+                               className={`rounded border px-2 py-1.5 text-[10px] ${mesmo
+                                 ? 'border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-400'
+                                 : 'border-rose-400/40 bg-rose-400/10 text-rose-700 dark:text-rose-400'}`}>
+                            <div className="font-semibold tabular-nums">{fmtBRL(Number(cf.valor))} · {cf.origem_lancamento ?? '—'}</div>
+                            <div>{mesmo
+                              ? 'Já existe uma transferência conciliada a este extrato.'
+                              : 'Este lançamento já está conciliado a outro extrato.'}</div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
                 <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
                   Candidatos automáticos
                 </div>
@@ -595,6 +686,12 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                       <div>Conta <b>{ofx?.conta_bancaria_nome ?? '—'}</b></div>
                       <div className="truncate">Descrição: {ofx?.descricao ?? '—'}</div>
                     </div>
+
+                    {temCandidatoLivre && (
+                      <div className="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-400">
+                        Já existe um candidato financeiro acima — confira antes de criar um novo lançamento.
+                      </div>
+                    )}
 
                     {/* Bifurcação — mutuamente exclusiva, NADA pré-selecionado */}
                     <div className="grid grid-cols-2 gap-1.5">
