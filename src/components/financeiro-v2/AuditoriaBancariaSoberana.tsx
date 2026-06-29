@@ -1503,6 +1503,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           tipo={estacaoCtx.tipo}
           id={estacaoCtx.id}
           contaNome={nomeConta}
+          contaExtratoId={contaId ?? undefined}
+          contas={contas}
           onClose={() => setEstacaoCtx(null)}
         />
       )}

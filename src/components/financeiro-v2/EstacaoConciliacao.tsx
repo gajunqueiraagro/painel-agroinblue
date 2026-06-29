@@ -69,6 +69,10 @@ export interface EstacaoConciliacaoProps {
   // Nome da conta já resolvido pelo pai (uuid->nome via contas carregadas).
   // A Estação apenas renderiza; não faz outra query.
   contaNome?: string;
+  // FASE 2B — contas do cliente (para o select de contraparte) + conta do extrato
+  // aberto (excluída da contraparte por UUID). Opcionais: não quebram chamadas atuais.
+  contas?: { id: string; nome_exibicao: string | null; nome_conta: string | null }[];
+  contaExtratoId?: string;
   onClose: () => void;
 }
 
@@ -165,7 +169,7 @@ function rotuloLacuna(campo: string | null): string {
   return LACUNA_LABEL[campo] ?? `${campo} inexistente na origem`;
 }
 
-export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConciliacaoProps) {
+export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId, onClose }: EstacaoConciliacaoProps) {
   const [estado, setEstado] = useState<'loading' | 'erro' | 'ok'>('loading');
   const [payload, setPayload] = useState<WsPayload | null>(null);
   const [msgErro, setMsgErro] = useState<string>('');
@@ -180,6 +184,10 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
   const [obs, setObs] = useState('');
   const [doc, setDoc] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // FASE 2B — bifurcação "O que é este movimento?" (nada pré-selecionado).
+  const [resolucao, setResolucao] = useState<'' | 'receita_despesa' | 'transferencia'>('');
+  const [contraparteId, setContraparteId] = useState('');
+  const [salvandoTransf, setSalvandoTransf] = useState(false);
 
   // RPC executada UMA ÚNICA VEZ ao abrir / quando {tipo,id} mudarem. Deps SÓ [tipo,id].
   useEffect(() => {
@@ -326,6 +334,28 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
       const msg = (e as { message?: string } | null)?.message || 'Falha ao criar lançamento.';
       toast.error(msg);
       setSalvando(false);
+    }
+  }
+
+  // FASE 2B — marca o extrato como transferência entre contas próprias (RPC FASE 2A).
+  async function marcarTransferencia() {
+    if (!ofx?.extrato_id || !contraparteId) { toast.error('Selecione a conta contraparte.'); return; }
+    setSalvandoTransf(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_marcar_extrato_transferencia', {
+        p_extrato_id: ofx.extrato_id,
+        p_conta_contraparte: contraparteId,
+        p_motivo: null,
+      });
+      if (error) throw error;
+      toast.success('Transferência registrada — pendência resolvida.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao marcar transferência.';
+      toast.error(msg);
+      setSalvandoTransf(false);
     }
   }
 
@@ -556,26 +586,38 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                   </>
                 )}
 
-                {/* TASK-005/D2 — criar lançamento a partir do OFX (só modo extrato) */}
+                {/* FASE 2B — "O que é este movimento?" (D2 ou transferência; nada pré-selecionado) */}
                 {modoExtrato && (
                   <Card className="p-2 space-y-2 border-primary/30">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-foreground/70">
-                      Criar lançamento deste OFX
+                      O que é este movimento?
                     </div>
-                    {!criando ? (
-                      <Button size="sm" variant="outline" className="w-full h-7 text-[11px]"
-                              onClick={() => setCriando(true)}>
-                        Criar lançamento
+
+                    {/* Verdade bancária — read-only (reutilizado do card D2) */}
+                    <div className="rounded border bg-muted/30 p-1.5 text-[10px] space-y-0.5">
+                      <div>Data <b>{fmtData(ofx?.data) || '—'}</b> · {tipoOp === '2-Saídas' ? 'Saída' : 'Entrada'}</div>
+                      <div>Valor <b>{fmtBRL(Math.abs(ofx?.valor ?? 0))}</b></div>
+                      <div>Conta <b>{ofx?.conta_bancaria_nome ?? '—'}</b></div>
+                      <div className="truncate">Descrição: {ofx?.descricao ?? '—'}</div>
+                    </div>
+
+                    {/* Bifurcação — mutuamente exclusiva, NADA pré-selecionado */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <Button variant={resolucao === 'receita_despesa' ? 'default' : 'outline'} size="sm"
+                              className="h-auto py-1.5 text-[10px] whitespace-normal"
+                              onClick={() => { setResolucao('receita_despesa'); setCriando(true); }}>
+                        Receita / despesa
                       </Button>
-                    ) : (
+                      <Button variant={resolucao === 'transferencia' ? 'default' : 'outline'} size="sm"
+                              className="h-auto py-1.5 text-[10px] whitespace-normal"
+                              onClick={() => setResolucao('transferencia')}>
+                        Transferência entre contas próprias
+                      </Button>
+                    </div>
+
+                    {/* RAMO 1 — Receita/despesa: form D2 ATUAL (lógica/handlers/queries intactos) */}
+                    {resolucao === 'receita_despesa' && (
                       <div className="space-y-2">
-                        {/* Verdade bancária — read-only */}
-                        <div className="rounded border bg-muted/30 p-1.5 text-[10px] space-y-0.5">
-                          <div>Data <b>{fmtData(ofx?.data) || '—'}</b> · {tipoOp === '2-Saídas' ? 'Saída' : 'Entrada'}</div>
-                          <div>Valor <b>{fmtBRL(Math.abs(ofx?.valor ?? 0))}</b></div>
-                          <div>Conta <b>{ofx?.conta_bancaria_nome ?? '—'}</b></div>
-                          <div className="truncate">Descrição: {ofx?.descricao ?? '—'}</div>
-                        </div>
                         <div className="space-y-0.5">
                           <span className="text-[9px] uppercase text-muted-foreground">Fazenda *</span>
                           <Select value={fazendaId} onValueChange={setFazendaId}>
@@ -615,7 +657,7 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                                placeholder="Documento (opcional)" className="h-7 text-[11px]" />
                         <div className="flex gap-1.5">
                           <Button size="sm" variant="ghost" className="h-7 text-[11px] flex-1"
-                                  disabled={salvando} onClick={() => setCriando(false)}>
+                                  disabled={salvando} onClick={() => { setResolucao(''); setCriando(false); }}>
                             Cancelar
                           </Button>
                           <Button size="sm" className="h-7 text-[11px] flex-1"
@@ -623,6 +665,37 @@ export function EstacaoConciliacao({ tipo, id, contaNome, onClose }: EstacaoConc
                             {salvando ? 'Salvando…' : 'Salvar'}
                           </Button>
                         </div>
+                      </div>
+                    )}
+
+                    {/* RAMO 2 — Transferência entre contas próprias (RPC FASE 2A) */}
+                    {resolucao === 'transferencia' && (
+                      <div className="space-y-2">
+                        <div className="rounded border bg-muted/30 p-1.5 text-[10px]">
+                          {(ofx?.valor ?? 0) >= 0
+                            ? 'Crédito: entra nesta conta. Origem = conta contraparte escolhida.'
+                            : 'Débito: sai desta conta. Destino = conta contraparte escolhida.'}
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] uppercase text-muted-foreground">Conta contraparte *</span>
+                          <Select value={contraparteId} onValueChange={setContraparteId}>
+                            <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+                            <SelectContent>
+                              {(contas ?? [])
+                                .filter((c) => c.id !== contaExtratoId)
+                                .map((c) => (
+                                  <SelectItem key={c.id} value={c.id} className="text-[11px]">
+                                    {c.nome_exibicao ?? c.nome_conta}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button size="sm" className="h-7 text-[11px] w-full"
+                                disabled={!contraparteId || salvandoTransf}
+                                onClick={marcarTransferencia}>
+                          {salvandoTransf ? 'Registrando…' : 'Confirmar transferência'}
+                        </Button>
                       </div>
                     )}
                   </Card>
