@@ -385,6 +385,37 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
     }
   }
 
+  // PR E — vincula um candidato FINANCEIRO *livre* (lançamento já existente) ao OFX,
+  // reusando a D1 fn_vincular_extrato_lancamento (fonte única de vínculo). Chamado SOMENTE
+  // para classificacao === 'livre'; alertas nunca renderizam botão ativo. Guards (mês
+  // fechado, extrato/lançamento já vinculado, duplicidade, conta por lado) ficam na D1.
+  async function vincularFinanceiro(cf: CandidatoFinanceiro, idx: number) {
+    const extratoId = ofx?.extrato_id ?? null;
+    const lancamentoId = cf.lancamento_id;
+    if (!extratoId || !lancamentoId) {
+      toast.error('Candidato financeiro sem IDs suficientes para vincular.');
+      return;
+    }
+    setVinculandoIdx(idx);
+    try {
+      const { error } = await (supabase as any).rpc('fn_vincular_extrato_lancamento', {
+        p_extrato_id: extratoId,
+        p_lancamento_id: lancamentoId,
+        p_valor_aplicado: Number(cf.valor),
+      });
+      if (error) throw error;
+      toast.success('Lançamento vinculado — pendência resolvida.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      // PostgrestError (objeto, não Error) -> lê .message para o motivo real do PostgreSQL.
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao vincular lançamento.';
+      toast.error(msg);
+      setVinculandoIdx(null);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
@@ -580,10 +611,12 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                                 <CritBool label="data" v={cf.criterios?.data_exata ?? null} />
                                 {cf.criterios?.tipo_transferencia ? <CritInfo>transferência</CritInfo> : null}
                               </div>
-                              {/* AÇÃO É PR E — aqui placeholder DESABILITADO, sem onClick, sem escrita */}
-                              <Button size="sm" className="w-full h-7 text-[11px]" disabled
-                                      title="Disponível no próximo passo">
-                                Vincular este lançamento
+                              {/* PR E — vínculo reusando a D1; só o candidato LIVRE tem botão ativo.
+                                  Índice +1000 evita colisão com o contador dos candidatos automáticos. */}
+                              <Button size="sm" className="w-full h-7 text-[11px]"
+                                      disabled={vinculandoIdx !== null}
+                                      onClick={() => vincularFinanceiro(cf, 1000 + i)}>
+                                {vinculandoIdx === 1000 + i ? 'Vinculando…' : 'Vincular este lançamento'}
                               </Button>
                             </Card>
                           );
