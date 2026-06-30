@@ -1104,6 +1104,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
   // WS1 — contexto da Estação de Conciliação (read-only). null = fechada.
   const [estacaoCtx, setEstacaoCtx] = useState<{ tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo'; id: string } | null>(null);
+  // PR F — extrato em reversão de desconsideração (loading do botão). null = ocioso.
+  const [revertendoId, setRevertendoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -1233,6 +1235,28 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
     onNavigateToLancamentos?.(ano, mes);
   };
 
+  // PR F — reverte a desconsideração de um extrato: recalcula o status pelo CBI ativo
+  // (RPC fn_reverter_desconsideracao_extrato). Só toca extrato_bancario_v2.status; não
+  // desfaz vínculo nem reconcilia. Card sai do bucket via invalidate de 'auditoria-soberana'.
+  const reverterDesconsideracao = async (extratoId: string) => {
+    if (revertendoId) return;
+    setRevertendoId(extratoId);
+    try {
+      const { error } = await (supabase as any).rpc('fn_reverter_desconsideracao_extrato', { p_extrato_id: extratoId });
+      if (error) throw error;
+      toast.success('Desconsideração revertida.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      queryClient.invalidateQueries({ queryKey: ['extratos-espelhados'] });
+    } catch (e) {
+      // PostgrestError (objeto, não Error) -> lê .message para o motivo real do PostgreSQL.
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao reverter desconsideração.';
+      toast.error(msg);
+    } finally {
+      setRevertendoId(null);
+    }
+  };
+
   // Normaliza todos os buckets em linhas comuns da lista única.
   const linhas = useMemo<LinhaAud[]>(() => {
     if (!diag) return [];
@@ -1313,13 +1337,15 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         valor: Math.abs(it.valor),
         motivo: 'Fora da conciliação por decisão operacional',
         motivoAcao: 'Movimento marcado para não entrar na conciliação.',
-        acaoLabel: null,
+        // PR F — reverte a desconsideração (recalcula status pelo CBI ativo).
+        acaoLabel: revertendoId === it.extrato_id ? 'Revertendo…' : 'Reverter',
+        onAcao: () => reverterDesconsideracao(it.extrato_id),
       });
     }
 
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diag, ano, mes]);
+  }, [diag, ano, mes, revertendoId]);
 
   const contagens = useMemo<Record<FiltroKey, number>>(() => {
     const c: Record<FiltroKey, number> = {
