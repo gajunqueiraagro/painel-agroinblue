@@ -956,6 +956,7 @@ interface ParReal {
   ofx?: LadoCell; sis?: LadoCell; nPossiveis?: number;
   extrato_id?: string;     // quando há lado OFX (para a ação Resolver)
   lancamento_id?: string;  // quando há lado Sistema
+  dataChave?: string | null; // data que posiciona o item na timeline (OFX soberano)
 }
 function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): ParReal[] {
   const out: ParReal[] = [];
@@ -992,7 +993,29 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
       lancamento_id: p.sistema?.lancamento_id,
     });
   }
-  return out;
+  // dataChave por item (OFX soberano: data do OFX ancora; senão a do Sistema). Não muda pareamento.
+  return out.map((p) => ({ ...p, dataChave: p.ofx?.data ?? p.sis?.data ?? null }));
+}
+// Agrupa ParReal por dataChave, grupos em data ASC (cronológico), grupo sem-data por último.
+// ESTÁVEL: preserva a ordem dos itens dentro do mesmo dia (não re-pareia nem reordena).
+function agruparPorData(pares: ParReal[]): { data: string | null; itens: ParReal[] }[] {
+  const KNULL = ' sem-data';
+  const ordem: (string | null)[] = [];
+  const mapa = new Map<string, ParReal[]>();
+  for (const p of pares) {
+    const d = p.dataChave ?? null;
+    const k = d ?? KNULL;
+    if (!mapa.has(k)) { mapa.set(k, []); ordem.push(d); }
+    mapa.get(k)!.push(p);
+  }
+  return ordem
+    .map((d) => ({ data: d, itens: mapa.get(d ?? KNULL)! }))
+    .sort((a, b) => {
+      if (a.data === b.data) return 0;
+      if (a.data === null) return 1;
+      if (b.data === null) return -1;
+      return a.data < b.data ? -1 : 1; // 'YYYY-MM-DD' ordena lexicograficamente = cronológico
+    });
 }
 type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: string };
 function LinhaEspReal({ par, onResolver }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void }) {
@@ -1024,7 +1047,8 @@ function LinhaEspReal({ par, onResolver }: { par: ParReal; onResolver: (ctx: Res
   );
 }
 function AbaEspelhoReal({ data, diag, onResolver }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void }) {
-  const pares = useMemo(() => montarEspelhoReal(data, diag), [data, diag]);
+  // Timeline única: agrupa por data a saída de montarEspelhoReal (sem re-parear nem recalcular).
+  const grupos = useMemo(() => agruparPorData(montarEspelhoReal(data, diag)), [data, diag]);
   return (
     <div className="max-h-[55vh] overflow-y-auto">
       {/* Legenda de cores (4 estados) */}
@@ -1034,10 +1058,17 @@ function AbaEspelhoReal({ data, diag, onResolver }: { data: EspelhadosReais; dia
         <span className="inline-flex items-center gap-1"><span className="text-rose-600">●</span> divergência</span>
         <span className="inline-flex items-center gap-1"><span className="text-muted-foreground">●</span> sem vínculo</span>
       </div>
-      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card z-10">
         <span className="flex-1">Extrato (banco)</span><span className="w-16 text-center">vínculo</span><span className="flex-1">Sistema</span><span className="w-16 text-right">ação</span>
       </div>
-      {pares.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} />)}
+      {grupos.map((g) => (
+        <div key={g.data ?? 'sem-data'}>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/40 px-1 py-0.5 border-b mt-1">
+            {g.data ? fmtData(g.data) : 'Sem data'}
+          </div>
+          {g.itens.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} />)}
+        </div>
+      ))}
     </div>
   );
 }
