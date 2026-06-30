@@ -736,7 +736,7 @@ function LinhaPar({ par }: { par: ParEspelho }) {
 // 1xN: âncora=OFX (esq), membros=lançamentos (dir). Nx1: espelhado.
 function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compartilhados: Set<string> }) {
   const batido = grupo.status_grupo === 'batido';
-  const corBloco = batido ? 'border-emerald-300 bg-emerald-50/50' : 'border-amber-400 bg-amber-50/60';
+  const corBloco = batido ? 'border-emerald-300 bg-emerald-50/50' : 'border-rose-400 bg-rose-50/60';
   const ancoraEsq = grupo.tipo === '1xN';
   const selo = (id: string) =>
     compartilhados.has(id) ? (
@@ -764,15 +764,15 @@ function LinhaGrupo({ grupo, compartilhados }: { grupo: GrupoConciliado; compart
       <div className="flex items-stretch gap-1 text-[10px]">
         <div className="flex-1 min-w-0">{ancoraEsq ? ancoraCell : membrosCells}</div>
         <div className="w-16 shrink-0 flex flex-col items-center justify-center gap-0.5">
-          <span className={`px-1 rounded text-[8px] font-bold ${batido ? 'bg-emerald-200 text-emerald-800' : 'bg-amber-200 text-amber-900'}`}>
+          <span className={`px-1 rounded text-[8px] font-bold ${batido ? 'bg-emerald-200 text-emerald-800' : 'bg-rose-200 text-rose-900'}`}>
             {ancoraEsq ? '1×N' : 'N×1'}
           </span>
-          <span className={`text-[8px] ${batido ? 'text-emerald-700' : 'text-amber-800'}`}>{batido ? 'batido' : 'divergente'}</span>
+          <span className={`text-[8px] ${batido ? 'text-emerald-700' : 'text-rose-700'}`}>{batido ? 'batido' : 'divergente'}</span>
         </div>
         <div className="flex-1 min-w-0">{ancoraEsq ? membrosCells : ancoraCell}</div>
       </div>
       {!batido && (
-        <div className="mt-1 pt-0.5 border-t border-amber-300 text-[8px] text-amber-900 text-right tabular-nums">
+        <div className="mt-1 pt-0.5 border-t border-rose-300 text-[8px] text-rose-800 text-right tabular-nums">
           OFX R$ {fmtBRL(grupo.total_ofx)} · Sistema R$ {fmtBRL(grupo.total_sistema)} · dif R$ {fmtBRL(grupo.diferenca)}
         </div>
       )}
@@ -950,10 +950,15 @@ function AbaSistemaReal({ sistema, inicial }: { sistema: EspSis[]; inicial: numb
 
 // Aba 3 (Opção B): conciliados (status) + sugestões/sem-vínculo (motor via diag).
 type ClasseEsp = 'conciliado' | 'forte' | 'possiveis' | 'sem_vinculo';
-interface ParReal { key: string; classe: ClasseEsp; ofx?: string; sis?: string; nPossiveis?: number; }
+interface LadoCell { data: string | null; valor: number; descricao: string; }
+interface ParReal {
+  key: string; classe: ClasseEsp;
+  ofx?: LadoCell; sis?: LadoCell; nPossiveis?: number;
+  extrato_id?: string;     // quando há lado OFX (para a ação Resolver)
+  lancamento_id?: string;  // quando há lado Sistema
+}
 function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): ParReal[] {
   const out: ParReal[] = [];
-  const fmtO = (d: string | null, h: string | null, v: number) => `${fmtData(d)} · ${h ?? '—'} · ${fmtBRL(v)}`;
   // Conciliados: pareamento de exibição (mesmo valor assinado + data; fallback só valor). Não é o motor.
   const cOfx = data.ofx_completo.filter((o) => o.status === 'conciliado');
   const cSis = data.sistema_completo.filter((s) => s.status === 'conciliado');
@@ -963,42 +968,76 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
     if (idx < 0) idx = cSis.findIndex((s, i) => !usado.has(i) && Math.abs(s.valor_assinado - o.valor) < 0.005);
     let s: EspSis | null = null;
     if (idx >= 0) { usado.add(idx); s = cSis[idx]; }
-    out.push({ key: `c-${o.extrato_id}`, classe: 'conciliado', ofx: fmtO(o.data, o.historico, o.valor), sis: s ? fmtO(s.data, s.descricao, s.valor_assinado) : undefined });
+    out.push({
+      key: `c-${o.extrato_id}`, classe: 'conciliado',
+      ofx: { data: o.data, valor: o.valor, descricao: o.historico ?? '—' }, extrato_id: o.extrato_id,
+      sis: s ? { data: s.data, valor: s.valor_assinado, descricao: s.descricao ?? '—' } : undefined,
+      lancamento_id: s?.lancamento_id,
+    });
   }
-  cSis.forEach((s, i) => { if (!usado.has(i)) out.push({ key: `cs-${s.lancamento_id}`, classe: 'conciliado', sis: fmtO(s.data, s.descricao, s.valor_assinado) }); });
+  cSis.forEach((s, i) => {
+    if (!usado.has(i)) out.push({
+      key: `cs-${s.lancamento_id}`, classe: 'conciliado',
+      sis: { data: s.data, valor: s.valor_assinado, descricao: s.descricao ?? '—' }, lancamento_id: s.lancamento_id,
+    });
+  });
   // Sugestões (forte/possíveis) + sem-vínculo: reusa montarPares(diag) — sem reescrever o motor.
   for (const p of montarPares(diag)) {
     const classe: ClasseEsp = p.classe === 'forte' ? 'forte' : p.classe === 'possiveis' ? 'possiveis' : 'sem_vinculo';
     out.push({
       key: `m-${p.key}`, classe, nPossiveis: p.nPossiveis,
-      ofx: p.ofx ? fmtO(p.ofx.data, p.ofx.descricao, p.ofx.valor) : undefined,
-      sis: p.sistema ? fmtO(p.sistema.data, p.sistema.descricao, p.sistema.valor) : undefined,
+      ofx: p.ofx ? { data: p.ofx.data, valor: p.ofx.valor, descricao: p.ofx.descricao } : undefined,
+      extrato_id: p.ofx?.extrato_id,
+      sis: p.sistema ? { data: p.sistema.data, valor: p.sistema.valor, descricao: p.sistema.descricao } : undefined,
+      lancamento_id: p.sistema?.lancamento_id,
     });
   }
   return out;
 }
-function LinhaEspReal({ par }: { par: ParReal }) {
+type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: string };
+function LinhaEspReal({ par, onResolver }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void }) {
+  // Conector por classe — 4 estados (verde/amarelo/amarelo/cinza). Vermelho = divergência REAL,
+  // tratado nos GRUPOS (LinhaGrupo), não aqui (sem classe 'divergente' por linha no contrato).
   const conector =
-    par.classe === 'conciliado' ? <span className="text-emerald-600 text-[9px]">◀══▶</span>
-    : par.classe === 'forte' ? <span className="px-1 rounded bg-emerald-100 text-emerald-700 text-[8px] font-medium">forte</span>
-    : par.classe === 'possiveis' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium">{par.nPossiveis} poss.</span>
-    : <span className="text-muted-foreground">────</span>;
+    par.classe === 'conciliado' ? <span className="text-emerald-600 text-[10px]" title="Conciliado">◀══▶</span>
+    : par.classe === 'forte' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium" title="Sugestão forte">sugestão</span>
+    : par.classe === 'possiveis' ? <span className="px-1 rounded bg-amber-100 text-amber-700 text-[8px] font-medium" title="Candidatos possíveis">{par.nPossiveis} poss.</span>
+    : <span className="text-muted-foreground text-[10px]" title="Sem vínculo">────</span>;
+  // Ação Resolver → abre a MESMA Estação dos buckets (reusa onResolver=setEstacaoCtx).
+  let acao: React.ReactNode = null;
+  if (par.classe !== 'conciliado') {
+    const ctx: ResolverCtx | null =
+      par.ofx && par.extrato_id ? { tipo: 'extrato_sem_vinculo', id: par.extrato_id }
+      : par.sis && par.lancamento_id ? { tipo: 'sistema_sem_vinculo', id: par.lancamento_id }
+      : null;
+    if (ctx) acao = (
+      <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5 shrink-0" onClick={() => onResolver(ctx)}>Resolver →</Button>
+    );
+  }
   return (
     <div className="flex items-center gap-1 py-0.5 text-[10px] border-b last:border-b-0">
-      <div className="flex-1 min-w-0">{par.ofx ? <span className="truncate block" title={par.ofx}>{par.ofx}</span> : <span className="text-[9px] italic text-muted-foreground">SEM OFX</span>}</div>
-      <div className="w-16 shrink-0 text-center">{conector}</div>
-      <div className="flex-1 min-w-0 text-right">{par.sis ? <span className="truncate block" title={par.sis}>{par.sis}</span> : <span className="text-[9px] italic text-muted-foreground">SEM LANÇAMENTO</span>}</div>
+      <div className="flex-1 min-w-0">{par.ofx ? <LadoCelula data={par.ofx.data} valor={par.ofx.valor} descricao={par.ofx.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem OFX</span>}</div>
+      <div className="w-16 shrink-0 flex justify-center">{conector}</div>
+      <div className="flex-1 min-w-0">{par.sis ? <LadoCelula data={par.sis.data} valor={par.sis.valor} descricao={par.sis.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem lançamento</span>}</div>
+      <div className="w-16 shrink-0 flex justify-end">{acao}</div>
     </div>
   );
 }
-function AbaEspelhoReal({ data, diag }: { data: EspelhadosReais; diag: DiagnosticoSoberano }) {
+function AbaEspelhoReal({ data, diag, onResolver }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void }) {
   const pares = useMemo(() => montarEspelhoReal(data, diag), [data, diag]);
   return (
     <div className="max-h-[55vh] overflow-y-auto">
-      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
-        <span className="flex-1">Extrato OFX</span><span className="w-16 text-center">vínculo</span><span className="flex-1 text-right">Sistema</span>
+      {/* Legenda de cores (4 estados) */}
+      <div className="flex flex-wrap items-center gap-2 text-[9px] text-muted-foreground pb-1">
+        <span className="inline-flex items-center gap-1"><span className="text-emerald-600">●</span> conciliado</span>
+        <span className="inline-flex items-center gap-1"><span className="text-amber-600">●</span> sugestão</span>
+        <span className="inline-flex items-center gap-1"><span className="text-rose-600">●</span> divergência</span>
+        <span className="inline-flex items-center gap-1"><span className="text-muted-foreground">●</span> sem vínculo</span>
       </div>
-      {pares.map((p) => <LinhaEspReal key={p.key} par={p} />)}
+      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card">
+        <span className="flex-1">Extrato (banco)</span><span className="w-16 text-center">vínculo</span><span className="flex-1">Sistema</span><span className="w-16 text-right">ação</span>
+      </div>
+      {pares.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} />)}
     </div>
   );
 }
@@ -1052,15 +1091,16 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
   );
 }
 
-function ExtratosEspelhadosReais({ data, diag }: { data: EspelhadosReais; diag: DiagnosticoSoberano }) {
+function ExtratosEspelhadosReais({ data, diag, onResolver }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void }) {
   const [aberto, setAberto] = useState(false);
   const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
   const inicial = data.saldos.inicial ?? 0;
+  // Conferência (foto) primeiro: é a tela principal de conferência operacional. Demais = apoio.
   const abas = [
-    { key: 'ofx' as const, label: 'Extrato OFX' },
-    { key: 'sistema' as const, label: 'Extrato Sistema' },
-    { key: 'espelho' as const, label: 'Espelhado' },
-    { key: 'evolucao' as const, label: 'Evolução da Divergência' },
+    { key: 'espelho' as const, label: 'Conferência' },
+    { key: 'ofx' as const, label: 'Extrato (banco)' },
+    { key: 'sistema' as const, label: 'Sistema' },
+    { key: 'evolucao' as const, label: 'Evolução do saldo' },
   ];
   return (
     <Card className="p-3 space-y-2">
@@ -1082,7 +1122,7 @@ function ExtratosEspelhadosReais({ data, diag }: { data: EspelhadosReais; diag: 
           </div>
           {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
           {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} />}
-          {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} />}
+          {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} onResolver={onResolver} />}
           {aba === 'evolucao' && <AbaEvolucaoReal data={data} />}
         </>
       )}
@@ -1506,7 +1546,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           />
 
           {/* C3.4 — Extratos espelhados reais (fn_extratos_espelhados) */}
-          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} />}
+          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} onResolver={setEstacaoCtx} />}
         </>
       )}
 
