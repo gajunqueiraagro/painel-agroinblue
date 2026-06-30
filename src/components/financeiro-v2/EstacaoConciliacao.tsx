@@ -73,6 +73,7 @@ interface CandidatoFinanceiro {
   qual_data: 'pagamento' | 'competencia' | 'ambas' | null;
   classificacao: 'livre' | 'alerta_mesmo_extrato' | 'alerta_outro_extrato' | null;
   score: number | null;
+  extrato_vinculado_id?: string | null;    // extrato a que o candidato está vinculado hoje (NULL se livre)
   criterios: {
     valor_exato: boolean | null; conta_lado_ok: boolean | null;
     data_exata: boolean | null; tipo_transferencia: boolean | null;
@@ -416,6 +417,53 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
     }
   }
 
+  // PR Desvincular/Transferir — desfaz o vínculo ativo de um extrato (RPC fn_desfazer_vinculo_extrato).
+  async function desvincular(extratoId: string, idx: number) {
+    setVinculandoIdx(idx);
+    try {
+      const { error } = await (supabase as any).rpc('fn_desfazer_vinculo_extrato', {
+        p_extrato_id: extratoId, p_motivo: 'desvinculo_estacao',
+      });
+      if (error) throw error;
+      toast.success('Vínculo desfeito.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao desvincular.';
+      toast.error(msg);
+      setVinculandoIdx(null);
+    }
+  }
+
+  // PR Desvincular/Transferir — move o vínculo do extrato de origem para ESTE OFX, atômico
+  // na RPC fn_transferir_vinculo_extrato (desfaz origem + vincula destino, tudo-ou-nada).
+  async function transferir(cf: CandidatoFinanceiro, idx: number) {
+    const origem = cf.extrato_vinculado_id ?? null;
+    const destino = ofx?.extrato_id ?? null;
+    if (!origem || !destino || !cf.lancamento_id) {
+      toast.error('IDs insuficientes para transferir.');
+      return;
+    }
+    setVinculandoIdx(idx);
+    try {
+      const { error } = await (supabase as any).rpc('fn_transferir_vinculo_extrato', {
+        p_extrato_origem: origem,
+        p_extrato_destino: destino,
+        p_lancamento_id: cf.lancamento_id,
+      });
+      if (error) throw error;
+      toast.success('Vínculo transferido para este extrato.');
+      queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+      queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+      onClose();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao transferir.';
+      toast.error(msg);
+      setVinculandoIdx(null);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[90vw] w-[90vw] h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
@@ -621,17 +669,43 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                             </Card>
                           );
                         }
-                        // ALERTAS — sem ação de vincular
-                        const mesmo = cf.classificacao === 'alerta_mesmo_extrato';
+                        // ALERTA MESMO EXTRATO — card âmbar com Desvincular (desfaz o vínculo deste OFX).
+                        if (cf.classificacao === 'alerta_mesmo_extrato') {
+                          const ofxId = ofx?.extrato_id ?? null;
+                          return (
+                            <div key={`cf-${i}`}
+                                 className="rounded border px-2 py-1.5 text-[10px] space-y-1 border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-400">
+                              <div className="font-semibold tabular-nums">{fmtBRL(Number(cf.valor))} · {cf.origem_lancamento ?? '—'}</div>
+                              <div>Já vinculado a este extrato.</div>
+                              <Button size="sm" variant="outline" className="w-full h-7 text-[11px]"
+                                      disabled={!ofxId || vinculandoIdx !== null}
+                                      onClick={() => ofxId && desvincular(ofxId, 3000 + i)}>
+                                {vinculandoIdx === 3000 + i ? 'Desvinculando…' : 'Desvincular'}
+                              </Button>
+                            </div>
+                          );
+                        }
+                        // ALERTA OUTRO EXTRATO — card rosa com Desvincular + Transferir p/ este OFX.
+                        const temOrigem = !!cf.extrato_vinculado_id;
                         return (
                           <div key={`cf-${i}`}
-                               className={`rounded border px-2 py-1.5 text-[10px] ${mesmo
-                                 ? 'border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-400'
-                                 : 'border-rose-400/40 bg-rose-400/10 text-rose-700 dark:text-rose-400'}`}>
+                               className="rounded border px-2 py-1.5 text-[10px] space-y-1 border-rose-400/40 bg-rose-400/10 text-rose-700 dark:text-rose-400">
                             <div className="font-semibold tabular-nums">{fmtBRL(Number(cf.valor))} · {cf.origem_lancamento ?? '—'}</div>
-                            <div>{mesmo
-                              ? 'Já existe uma transferência conciliada a este extrato.'
-                              : 'Este lançamento já está conciliado a outro extrato.'}</div>
+                            <div>Vinculado a outro extrato.</div>
+                            <div className="flex gap-1.5">
+                              <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]"
+                                      disabled={!temOrigem || vinculandoIdx !== null}
+                                      title={temOrigem ? undefined : 'Sem extrato de origem identificado'}
+                                      onClick={() => cf.extrato_vinculado_id && desvincular(cf.extrato_vinculado_id, 3000 + i)}>
+                                {vinculandoIdx === 3000 + i ? 'Desvinculando…' : 'Desvincular'}
+                              </Button>
+                              <Button size="sm" className="flex-1 h-7 text-[11px]"
+                                      disabled={!temOrigem || vinculandoIdx !== null}
+                                      title={temOrigem ? undefined : 'Sem extrato de origem identificado'}
+                                      onClick={() => transferir(cf, 4000 + i)}>
+                                {vinculandoIdx === 4000 + i ? 'Transferindo…' : 'Transferir p/ este OFX'}
+                              </Button>
+                            </div>
                           </div>
                         );
                       })
