@@ -6,6 +6,7 @@
 // ============================================================================
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,17 +55,20 @@ export interface LancamentoLeituraDialogProps {
   onClose: () => void;
   onResolver?: (id: string) => void;        // sem vínculo → Estação
   onVerOfx?: (extratoId: string) => void;   // conciliado → best-effort
+  onCancelado?: () => void;                 // P3.3b — após cancelar, recarrega a Auditoria
 }
 
-export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolver, onVerOfx }: LancamentoLeituraDialogProps) {
+export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolver, onVerOfx, onCancelado }: LancamentoLeituraDialogProps) {
   const [estado, setEstado] = useState<'loading' | 'erro' | 'ok'>('loading');
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [msgErro, setMsgErro] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     if (!open || !lancamentoId) return;
     let vivo = true;
-    setEstado('loading'); setFicha(null); setMsgErro('');
+    setEstado('loading'); setFicha(null); setMsgErro(''); setConfirmCancel(false); setCancelando(false);
     (async () => {
       try {
         const { data: l, error } = await (supabase as any)
@@ -101,6 +105,23 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
   const l = ficha?.lanc;
   const valorAssinado = l ? (l.sinal === '-1' ? -(l.valor ?? 0) : (l.valor ?? 0)) : 0;
   const semVinculo = !!ficha && !ficha.ofx_extrato_id;
+
+  // P3.3b — cancelar (soft-delete auditado) via RPC. Desfaz CBI ativo, se houver.
+  async function cancelar() {
+    if (!l) return;
+    setCancelando(true);
+    try {
+      const { error } = await (supabase as any).rpc('fn_cancelar_lancamento_auditoria', { p_lancamento_id: l.id });
+      if (error) throw error;
+      toast.success('Lançamento cancelado.');
+      onClose();
+      onCancelado?.();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao cancelar o lançamento.';
+      toast.error(msg);
+      setCancelando(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -156,14 +177,34 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
           )}
         </div>
 
+        {estado === 'ok' && confirmCancel && (
+          <div className="shrink-0 border-t bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-[10px] text-amber-800 dark:text-amber-300">
+            Cancelar este lançamento? Use apenas quando ele estiver duplicado ou lançado errado.
+            Essa ação não apaga fisicamente o registro e poderá ser auditada.
+          </div>
+        )}
         <footer className="shrink-0 border-t px-4 py-2 flex items-center justify-end gap-2 bg-muted/30">
-          {estado === 'ok' && semVinculo && onResolver && l && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onResolver(l.id)}>Resolver</Button>
+          {estado === 'ok' && confirmCancel ? (
+            <>
+              <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={cancelando} onClick={() => setConfirmCancel(false)}>Voltar</Button>
+              <Button size="sm" variant="destructive" className="h-7 text-[11px]" disabled={cancelando} onClick={cancelar}>
+                {cancelando ? 'Cancelando…' : 'Confirmar cancelamento'}
+              </Button>
+            </>
+          ) : (
+            <>
+              {estado === 'ok' && l && !l.cancelado && (
+                <Button size="sm" variant="outline" className="h-7 text-[11px] text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30" onClick={() => setConfirmCancel(true)}>Cancelar lançamento</Button>
+              )}
+              {estado === 'ok' && semVinculo && onResolver && l && (
+                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onResolver(l.id)}>Resolver</Button>
+              )}
+              {estado === 'ok' && ficha?.ofx_extrato_id && onVerOfx && (
+                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onVerOfx(ficha.ofx_extrato_id!)}>Ver OFX</Button>
+              )}
+              <Button size="sm" className="h-7 text-[11px]" onClick={onClose}>Fechar</Button>
+            </>
           )}
-          {estado === 'ok' && ficha?.ofx_extrato_id && onVerOfx && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onVerOfx(ficha.ofx_extrato_id!)}>Ver OFX</Button>
-          )}
-          <Button size="sm" className="h-7 text-[11px]" onClick={onClose}>Fechar</Button>
         </footer>
       </DialogContent>
     </Dialog>

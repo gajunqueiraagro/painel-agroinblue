@@ -1617,6 +1617,13 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
         lancamentoId={lancLeituraId}
         onClose={() => setLancLeituraId(null)}
         onResolver={(id) => { setLancLeituraId(null); setEstacaoCtx({ tipo: 'sistema_sem_vinculo', id }); }}
+        onCancelado={() => {
+          setLancLeituraId(null);
+          // recarrega a Auditoria sem sair da tela/conta/mês.
+          queryClient.invalidateQueries({ queryKey: ['extratos-espelhados'] });
+          queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+          queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+        }}
       />
     </div>
   );
