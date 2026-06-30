@@ -53,6 +53,9 @@ interface Criterios {
 interface Candidato {
   extrato_id: string | null; lancamento_id: string | null;
   data: string | null; valor: number | null; descricao: string | null; origem: string | null;
+  // P3.2 — modo sistema_sem_vinculo: ocupação do extrato candidato (CBI ativo).
+  extrato_ja_vinculado?: boolean | null;
+  lancamento_vinculado_id?: string | null;
 }
 interface Sugestao { tipo: string | null; confianca: string | null; candidato: Candidato | null; criterios: Criterios | null; }
 interface CandidatoFinanceiro {
@@ -757,9 +760,23 @@ export function EstacaoConciliacao({ tipo, id, contaNome, contas, contaExtratoId
                           )}
                         </div>
                         {(() => {
+                          // P3.2 — no modo sistema, extrato candidato com CBI ativo está OCUPADO:
+                          // não esconde (a RPC já o rebaixa), mas bloqueia o Vincular e explica.
+                          const extratoOcupado = tipo === 'sistema_sem_vinculo' && s.candidato?.extrato_ja_vinculado === true;
                           const podeVincular = tipo === 'sistema_sem_vinculo'
-                            ? !!(s.candidato?.extrato_id && sistema?.lancamento_id)
+                            ? !!(s.candidato?.extrato_id && sistema?.lancamento_id) && !extratoOcupado
                             : !!(s.candidato?.lancamento_id && ofx?.extrato_id);
+                          if (extratoOcupado) {
+                            const lv = s.candidato?.lancamento_vinculado_id ?? null;
+                            const proprio = !!lv && lv === sistema?.lancamento_id;
+                            return (
+                              <div className="rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-400">
+                                {proprio
+                                  ? 'Este extrato já está vinculado a este próprio lançamento. Atualize/recarregue a auditoria.'
+                                  : 'Este extrato já está vinculado a outro lançamento. Resolva o duplicado antes de vincular.'}
+                              </div>
+                            );
+                          }
                           return (
                             <Button
                               size="sm"
