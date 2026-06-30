@@ -362,6 +362,8 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
 
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
   const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
+  // PR G — extrato em desfazer/reativar vínculo (loading dos botões). null = ocioso.
+  const [vinculoBusyId, setVinculoBusyId] = useState<string | null>(null);
   const [movCriando, setMovCriando] = useState<ExtratoMovimento | null>(null);
   // PR-F — fluxo "Transferência" via OFX (3-Transferências). Reaproveita
   // o LancamentoV2Dialog em modo pré-populado com a conta OFX travada
@@ -613,6 +615,54 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     }
     toast.success('Movimento marcado como ignorado');
     refetch();
+  };
+
+  // PR G — invalida as queries que refletem o estado de conciliação (lista + auditoria).
+  const invalidarConciliacao = () => {
+    queryClient.invalidateQueries({ queryKey: ['cbi-batch'] });
+    queryClient.invalidateQueries({ queryKey: ['saldo-sistema-conta'] });
+    queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+    queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+  };
+
+  // PR G — desfaz o único vínculo ativo do extrato (RPC fn_desfazer_vinculo_extrato).
+  // Recalcula extrato.status e audita; guards (0 ou >1 ativo) ficam na RPC.
+  const handleDesfazerVinculo = async (mov: ExtratoMovimento) => {
+    if (vinculoBusyId) return;
+    setVinculoBusyId(mov.id);
+    try {
+      const { error } = await (supabase as any).rpc('fn_desfazer_vinculo_extrato', { p_extrato_id: mov.id });
+      if (error) throw error;
+      toast.success('Vínculo desfeito.');
+      invalidarConciliacao();
+      refetch();
+    } catch (e) {
+      // PostgrestError (objeto, não Error) -> lê .message para o motivo real do PostgreSQL.
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao desfazer vínculo.';
+      toast.error(msg);
+    } finally {
+      setVinculoBusyId(null);
+    }
+  };
+
+  // PR G — reativa o MESMO vínculo desfeito manualmente (RPC fn_reativar_vinculo_extrato).
+  // Fallback: o botão aparece em todo item nao_conciliado (o read-model não indica
+  // reativabilidade); a RPC decide e retorna erro real quando não há desfeito_manual.
+  const handleReativarVinculo = async (mov: ExtratoMovimento) => {
+    if (vinculoBusyId) return;
+    setVinculoBusyId(mov.id);
+    try {
+      const { error } = await (supabase as any).rpc('fn_reativar_vinculo_extrato', { p_extrato_id: mov.id });
+      if (error) throw error;
+      toast.success('Vínculo reativado.');
+      invalidarConciliacao();
+      refetch();
+    } catch (e) {
+      const msg = (e as { message?: string } | null)?.message || 'Falha ao reativar vínculo.';
+      toast.error(msg);
+    } finally {
+      setVinculoBusyId(null);
+    }
   };
 
   const handleCriarFromExtrato = async (
@@ -1136,6 +1186,33 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                         <ArrowLeftRight className="h-3 w-3 mr-1" />
                         Transferência
                       </Button>
+                      {/* PR G — desfazer vínculo ativo (item conciliado). */}
+                      {m.status === 'conciliado' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2"
+                          disabled={vinculoBusyId === m.id}
+                          onClick={() => handleDesfazerVinculo(m)}
+                          title="Desfazer o vínculo de conciliação deste extrato"
+                        >
+                          {vinculoBusyId === m.id ? 'Desfazendo…' : 'Desfazer vínculo'}
+                        </Button>
+                      )}
+                      {/* PR G — reativar o MESMO vínculo desfeito manualmente (fallback:
+                          aparece em todo nao_conciliado; a RPC decide a elegibilidade). */}
+                      {m.status === 'nao_conciliado' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2"
+                          disabled={vinculoBusyId === m.id}
+                          onClick={() => handleReativarVinculo(m)}
+                          title="Reativar um vínculo desfeito manualmente"
+                        >
+                          {vinculoBusyId === m.id ? 'Reativando…' : 'Reverter (reativar vínculo)'}
+                        </Button>
+                      )}
                       {m.status !== 'ignorado' && (
                         <Button
                           size="sm"
