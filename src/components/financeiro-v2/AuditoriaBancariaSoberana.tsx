@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { EstacaoConciliacao } from '@/components/financeiro-v2/EstacaoConciliacao';
+import { LancamentoLeituraDialog } from '@/components/financeiro-v2/LancamentoLeituraDialog';
 import { toast } from 'sonner';
 
 interface Props {
@@ -921,7 +922,7 @@ function AbaOfxReal({ ofx, inicial }: { ofx: EspOfx[]; inicial: number }) {
   );
 }
 
-function AbaSistemaReal({ sistema, inicial }: { sistema: EspSis[]; inicial: number }) {
+function AbaSistemaReal({ sistema, inicial, onAbrir }: { sistema: EspSis[]; inicial: number; onAbrir?: (lancamentoId: string) => void }) {
   const rows = useMemo(() => {
     let acc = inicial;
     return sistema.map((r) => { acc += r.valor_assinado; return { r, saldo: acc }; });
@@ -934,7 +935,9 @@ function AbaSistemaReal({ sistema, inicial }: { sistema: EspSis[]; inicial: numb
       {rows.map(({ r, saldo }) => {
         const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
         return (
-          <div key={r.lancamento_id} className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 py-0.5 border-b last:border-b-0 items-center">
+          <div key={r.lancamento_id}
+               onClick={() => r.lancamento_id && onAbrir?.(r.lancamento_id)}
+               className="grid grid-cols-[44px_1fr_130px_92px_92px_80px] gap-1 py-0.5 border-b last:border-b-0 items-center cursor-pointer hover:bg-muted/50">
             <span className="text-muted-foreground">{fmtData(r.data)}</span>
             <span className="truncate" title={r.descricao ?? ''}>{r.descricao ?? '—'}</span>
             <span className="truncate text-muted-foreground" title={cs}>{cs}</span>
@@ -999,7 +1002,7 @@ function montarEspelhoReal(data: EspelhadosReais, diag: DiagnosticoSoberano): Pa
 // Agrupa ParReal por dataChave, grupos em data ASC (cronológico), grupo sem-data por último.
 // ESTÁVEL: preserva a ordem dos itens dentro do mesmo dia (não re-pareia nem reordena).
 function agruparPorData(pares: ParReal[]): { data: string | null; itens: ParReal[] }[] {
-  const KNULL = ' sem-data';
+  const KNULL = '__sem_data__';
   const ordem: (string | null)[] = [];
   const mapa = new Map<string, ParReal[]>();
   for (const p of pares) {
@@ -1122,7 +1125,7 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
   );
 }
 
-function ExtratosEspelhadosReais({ data, diag, onResolver }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void }) {
+function ExtratosEspelhadosReais({ data, diag, onResolver, onAbrirLanc }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onAbrirLanc?: (id: string) => void }) {
   const [aberto, setAberto] = useState(false);
   const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
   const inicial = data.saldos.inicial ?? 0;
@@ -1152,7 +1155,7 @@ function ExtratosEspelhadosReais({ data, diag, onResolver }: { data: EspelhadosR
             ))}
           </div>
           {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
-          {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} />}
+          {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLanc} />}
           {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} onResolver={onResolver} />}
           {aba === 'evolucao' && <AbaEvolucaoReal data={data} />}
         </>
@@ -1175,6 +1178,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [ordenacao, setOrdenacao] = useState<'valor_desc' | 'valor_asc' | 'data_asc' | 'data_desc' | 'descricao' | 'tipo'>('data_desc');
   // WS1 — contexto da Estação de Conciliação (read-only). null = fechada.
   const [estacaoCtx, setEstacaoCtx] = useState<{ tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo'; id: string } | null>(null);
+  // P3.3 — leitura do lançamento oficial (aba Sistema → linha clicável).
+  const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
   // PR F — extrato em reversão de desconsideração (loading do botão). null = ocioso.
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
 
@@ -1577,7 +1582,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           />
 
           {/* C3.4 — Extratos espelhados reais (fn_extratos_espelhados) */}
-          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} onResolver={setEstacaoCtx} />}
+          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} onResolver={setEstacaoCtx} onAbrirLanc={setLancLeituraId} />}
         </>
       )}
 
@@ -1605,6 +1610,14 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           onClose={() => setEstacaoCtx(null)}
         />
       )}
+
+      {/* P3.3 — Leitura do lançamento oficial (aba Sistema). Sem editar/cancelar. */}
+      <LancamentoLeituraDialog
+        open={!!lancLeituraId}
+        lancamentoId={lancLeituraId}
+        onClose={() => setLancLeituraId(null)}
+        onResolver={(id) => { setLancLeituraId(null); setEstacaoCtx({ tipo: 'sistema_sem_vinculo', id }); }}
+      />
     </div>
   );
 }
