@@ -799,6 +799,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </button>
           </div>
         )}
+      </div>
+
+      {/* PR-2.7.2 — Região de conteúdo: recebe o flex-1 real do app-shell; as branches
+          (Importar/Enriquecer/Conciliação) vivem aqui. O cabeçalho/abas acima é shrink-0.
+          Padding horizontal/inferior preservado (px-3 pb-3). */}
+      <div className="px-3 pb-3 md:flex-1 md:min-h-0 md:flex md:flex-col md:min-w-0">
 
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
