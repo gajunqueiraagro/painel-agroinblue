@@ -1,7 +1,6 @@
-// EnriquecimentoRow — dumb. Linha ENXUTA (lado Sistema): só serve para localizar
-// o lançamento → Data · Valor · Banco · Favorecido (+ indicador de Match).
-// Colunas de largura fixa (alinhamento estável); só o texto interno faz ellipsis.
-// Produto/Fazenda/Subcentro/Descrição vivem no painel da direita.
+// EnriquecimentoRow — dumb. Linha densa do lado SISTEMA (localizar o lançamento).
+// Linha 1: Match · Data · Banco · Valor (dominante, à direita).
+// Linha 2: Favorecido. Largura fixa; só o texto interno faz ellipsis.
 import { STATUS_META } from './fmt';
 import type { EnriqRowVM } from './types';
 
@@ -11,7 +10,7 @@ export interface EnriquecimentoRowProps {
   onSelecionar: () => void;
 }
 
-const COLS = '10px 60px 90px minmax(0,1fr) minmax(0,1.2fr)';
+const COLS = '9px 52px minmax(0,1fr) 104px';
 
 export function EnriquecimentoRow({ row, selecionado, onSelecionar }: EnriquecimentoRowProps) {
   const meta = STATUS_META[row.status] ?? STATUS_META.sem_match;
@@ -19,16 +18,22 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar }: Enriquecim
     <button
       type="button"
       onClick={onSelecionar}
-      className={`w-full text-left rounded-md border px-2 py-1.5 transition-colors ${
-        selecionado ? 'border-primary bg-primary/5' : 'bg-card hover:bg-muted/50'
+      className={`w-full text-left rounded-md border px-2 py-1 transition-colors ${
+        selecionado
+          ? 'border-primary bg-primary/10 ring-1 ring-primary/40 shadow-sm'
+          : 'border-transparent bg-card hover:bg-muted/50'
       }`}
     >
-      <div className="grid items-center gap-2 text-[11px]" style={{ gridTemplateColumns: COLS }}>
+      {/* Linha 1: Match · Data · Banco · Valor (dominante) */}
+      <div className="grid items-center gap-2" style={{ gridTemplateColumns: COLS }}>
         <span className={`h-2 w-2 rounded-full ${meta.dot}`} title={meta.label} />
-        <span className="truncate text-muted-foreground tabular-nums" title={row.data}>{row.data}</span>
-        <span className="truncate tabular-nums text-right" title={row.valor}>{row.valor}</span>
-        <span className="truncate" title={row.banco}>{row.banco}</span>
-        <span className="truncate" title={row.fornecedor}>{row.fornecedor}</span>
+        <span className="truncate text-[10px] text-muted-foreground tabular-nums" title={row.data}>{row.data}</span>
+        <span className="truncate text-[11px]" title={row.banco}>{row.banco}</span>
+        <span className="truncate text-right text-[13px] font-bold tabular-nums" title={row.valor}>{row.valor}</span>
+      </div>
+      {/* Linha 2: Favorecido */}
+      <div className="truncate text-[11px] text-muted-foreground" style={{ paddingLeft: 19 }} title={row.fornecedor}>
+        {row.fornecedor}
       </div>
     </button>
   );

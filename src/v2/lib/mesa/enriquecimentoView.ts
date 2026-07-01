@@ -44,7 +44,10 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const favTom: EnriqTom = row.will_set_favorecido ? 'muda' : 'neutro';
 
   const banco = row.lanc_conta_bancaria_nome ?? row.conta_filtro_nome ?? row.excel_conta_origem;
-  const descricao = row.lanc_descricao ?? row.lanc_observacao ?? row.excel_produto;
+  // Descrição = observação/complemento do Sistema (NUNCA produto). O Excel não expõe
+  // campo de descrição/obs no staging, então o lado Excel de "Descrição" é '—'.
+  // O texto de produto (ex.: "27,5t quirera de milho") pertence à linha "Produto".
+  const descricao = row.lanc_descricao ?? row.lanc_observacao;
 
   const comparativo: EnriqComparativoLinha[] = [
     refLinha('Data', row.lanc_data_pagamento, row.excel_data, fmtData(row.lanc_data_pagamento), fmtData(row.excel_data)),
@@ -64,7 +67,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     { campo: 'Documento', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' },
-    refLinha('Descrição', descricao, row.excel_produto, fmtTexto(descricao), fmtTexto(row.excel_produto)),
+    refLinha('Descrição', descricao, null, fmtTexto(descricao), '—'),
   ];
 
   return {

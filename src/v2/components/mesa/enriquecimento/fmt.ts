@@ -9,6 +9,15 @@ export const TOM_CLS: Record<EnriqTom, string> = {
   difere: 'text-amber-700',
 };
 
+// Badge do "Resultado" — slot que no futuro (P0-9) hospedará select/input/autocomplete.
+export const TOM_BADGE: Record<EnriqTom, string> = {
+  neutro: 'bg-muted text-muted-foreground border border-transparent',
+  ok: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  muda: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  bloqueio: 'bg-red-50 text-red-700 border border-red-200',
+  difere: 'bg-amber-50 text-amber-700 border border-amber-200',
+};
+
 export const fmtData = (s: string | null | undefined): string => {
   if (!s) return '—';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
