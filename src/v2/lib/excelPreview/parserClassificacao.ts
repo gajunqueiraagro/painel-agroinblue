@@ -34,6 +34,8 @@ export interface ClassificacaoExcelRow {
   valor: number | null;      // sempre absoluto (positivo)
   tipo_operacao: string | null;
   fazenda_codigo: string | null;
+  observacao: string | null;  // PR-MAP-0 — contexto p/ o motor (NJ etc.)
+  documento: string | null;   // PR-MAP-0 — texto (preserva zeros à esquerda)
   // PR-DePara-Conta-Fase1: UUID resolvido pelo DE/PARA do operador na Mesa.
   // Preenchido só no enriquecimento pré-populate (não no parsing do Excel).
   conta_origem_id?: string | null;
@@ -55,6 +57,17 @@ function trimOrNull(v: unknown): string | null {
   const s = String(v).trim();
   return s || null;
 }
+
+// PR-MAP-0 — lê a 1ª coluna não-vazia dentre os cabeçalhos aceitos (tolerante a variações).
+function pickCol(raw: Record<string, unknown>, names: string[]): string | null {
+  for (const n of names) {
+    const v = trimOrNull(raw[n]);
+    if (v !== null) return v;
+  }
+  return null;
+}
+const OBS_COLS = ['Obs', 'OBS', 'Observação', 'Observacao', 'Observações', 'Observacoes'];
+const DOC_COLS = ['Documento', 'Documento_Numero', 'Nº Documento', 'Numero Documento', 'Número Documento'];
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BR_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
@@ -194,6 +207,8 @@ function parseRow(
     valor: valorAbs,
     tipo_operacao: normalizeTipo(tipo),
     fazenda_codigo: trimOrNull(raw['Fazenda']),
+    observacao: pickCol(raw, OBS_COLS),
+    documento: pickCol(raw, DOC_COLS),
   };
 
   return { row, erro: null };
