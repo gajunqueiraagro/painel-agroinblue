@@ -28,6 +28,23 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
   }, [open, clienteId, hookFin.loadContas]);
 
   const contas = hookFin.contasBancarias;
+
+  // Agrupamento visual do select por tipo_conta (mesmo vocabulário do cadastro:
+  // cc/inv/cartao). Só apresentação — IDs e DE/PARA inalterados. Cabeçalhos via
+  // <optgroup> (nativamente não-selecionáveis); alfabético dentro do grupo.
+  const nomeConta = (cb: (typeof contas)[number]) =>
+    `${cb.nome_exibicao ?? cb.nome_conta}${cb.codigo_conta ? ` (${cb.codigo_conta})` : ''}`;
+  const GRUPOS_CONTA: Array<{ tipo: string | null; label: string }> = [
+    { tipo: 'cc', label: 'CONTAS CORRENTES' },
+    { tipo: 'inv', label: 'INVESTIMENTOS' },
+    { tipo: 'cartao', label: 'CARTÕES' },
+    { tipo: null, label: 'OUTRAS' }, // legado sem tipo_conta
+  ];
+  const contasDoGrupo = (tipo: string | null) =>
+    contas
+      .filter((cb) => (cb.tipo_conta ?? null) === tipo)
+      .sort((a, b) => nomeConta(a).localeCompare(nomeConta(b), 'pt-BR'));
+
   const lote = imp.lote;
   const podePopular = !!lote && lote.linhasValidas > 0 && imp.todasResolvidasOuIgnoradas && !imp.isPopulating;
 
@@ -99,11 +116,17 @@ export function EnriquecimentoImportarDialog({ open, onClose, clienteId, onImpor
                         onChange={(e) => imp.resolverConta(c.texto, { contaId: e.target.value || null })}
                       >
                         <option value="">Selecione a conta…</option>
-                        {contas.map((cb) => (
-                          <option key={cb.id} value={cb.id}>
-                            {cb.nome_exibicao ?? cb.nome_conta}{cb.codigo_conta ? ` (${cb.codigo_conta})` : ''}
-                          </option>
-                        ))}
+                        {GRUPOS_CONTA.map((g) => {
+                          const cs = contasDoGrupo(g.tipo);
+                          if (cs.length === 0) return null;
+                          return (
+                            <optgroup key={g.label} label={g.label}>
+                              {cs.map((cb) => (
+                                <option key={cb.id} value={cb.id}>{nomeConta(cb)}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                       </select>
                       <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
                         <Checkbox checked={ignorar} onCheckedChange={(v) => imp.resolverConta(c.texto, { ignorar: v === true })} />
