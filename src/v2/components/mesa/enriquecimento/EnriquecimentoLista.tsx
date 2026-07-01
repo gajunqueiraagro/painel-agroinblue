@@ -11,8 +11,8 @@ export interface EnriquecimentoListaProps {
 
 export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar }: EnriquecimentoListaProps) {
   return (
-    <div className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between">
+    <div className="rounded-lg border bg-card overflow-hidden md:h-full md:flex md:flex-col md:min-h-0">
+      <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between md:shrink-0">
         <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground">
           Lançamentos do sistema
         </span>
@@ -21,7 +21,7 @@ export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar }: Enriq
       {rows.length === 0 ? (
         <div className="text-[11px] text-muted-foreground text-center py-6">Nenhuma linha nesta sessão/filtro.</div>
       ) : (
-        <div className="space-y-px p-1 max-h-[72vh] overflow-y-auto">
+        <div className="space-y-px p-1 overflow-y-auto max-h-[60vh] md:max-h-none md:flex-1 md:min-h-0">
           {rows.map((r) => (
             <EnriquecimentoRow
               key={r.id}

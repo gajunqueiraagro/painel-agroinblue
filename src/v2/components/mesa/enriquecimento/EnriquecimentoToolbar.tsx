@@ -26,7 +26,7 @@ export function EnriquecimentoToolbar({
   onImportar, isImporting, sessaoDisabled, importarDisabled,
 }: EnriquecimentoToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card px-2 py-1">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card px-2 py-1 md:shrink-0">
       <div className="flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">Sessão</span>
         <select

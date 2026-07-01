@@ -26,7 +26,7 @@ export function EnriquecimentoActions({
   escritaDesabilitada,
 }: EnriquecimentoActionsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1 md:shrink-0">
       {/* ── Bloco principal: revisão por lançamento ── */}
       <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={onAnterior} disabled={!canAnterior}>
         ◀ Anterior

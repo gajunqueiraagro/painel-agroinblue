@@ -694,8 +694,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   /* ── Render ── */
   return (
-    <div className="animate-fade-in pb-20">
-      <div className="p-3 space-y-2 sticky top-0 z-20 bg-background">
+    <div className="animate-fade-in pb-20 md:pb-0 md:h-full md:min-h-0 md:flex md:flex-col md:overflow-hidden">
+      <div className="p-3 space-y-2 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
 
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}
         <div className="flex items-center gap-2">
@@ -803,7 +803,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
         {!loading && selectedCard && vistaExtrato === 'importar' && (
-          <div className="rounded-lg border bg-card p-4 space-y-2">
+          <div className="rounded-lg border bg-card p-4 space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="text-sm font-semibold">Importar Banco</div>
             <p className="text-[11px] text-muted-foreground leading-snug">
               Importe o extrato do banco (OFX/CSV/PDF/Excel/API) para criar os movimentos crus em
@@ -818,10 +818,10 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
-          <div className="space-y-2">
+          <div className="space-y-2 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1 md:overflow-hidden">
             <MesaEnriquecimentoTab />
             {/* Transição — Mesa de Classificação antiga segue acessível como referência, discreta. */}
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-end pt-1 md:shrink-0">
               <button
                 type="button"
                 className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground hover:underline"
@@ -837,7 +837,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'conciliacao' && (
-          <div className="space-y-2">
+          <div className="space-y-2 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
                 Resumo encurta um pouco; Saldos ganha espaço para evitar corte
                 em Sistema/Extrato/Diferença. Status mantido compacto. */}

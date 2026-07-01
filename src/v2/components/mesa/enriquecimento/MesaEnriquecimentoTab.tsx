@@ -62,7 +62,7 @@ export function MesaEnriquecimentoTab() {
   const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsFiltradas.length}`;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 md:space-y-0 md:h-full md:min-h-0 md:flex md:flex-col md:gap-1">
       <EnriquecimentoToolbar
         sessoes={sessoesVM}
         sessaoAtivaId={sessaoId}
@@ -77,10 +77,11 @@ export function MesaEnriquecimentoTab() {
         importarDisabled
       />
 
-      {isFetching && <div className="text-[10px] text-muted-foreground px-1">Carregando…</div>}
+      {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
 
-      {/* Hierarquia: ESQUERDA (~38%) seleciona o lançamento · DIREITA (~62%) analisa/decide (foco). */}
-      <div className="grid gap-1.5" style={{ gridTemplateColumns: '0.62fr 1fr', alignItems: 'start' }}>
+      {/* Hierarquia: ESQUERDA (~38%) seleciona o lançamento · DIREITA (~62%) analisa/decide (foco).
+          Desktop: grid ocupa o espaço restante (flex-1) e só a lista rola. Mobile: empilha. */}
+      <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.62fr_1fr] md:flex-1 md:min-h-0">
         <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} />
         <EnriquecimentoDetalhe row={selecionado} />
       </div>

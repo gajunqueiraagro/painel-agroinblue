@@ -24,7 +24,7 @@ export function EnriquecimentoDetalhe({ row }: EnriquecimentoDetalheProps) {
   const bloqueado = row.comparativo.some((c) => c.tom === 'bloqueio');
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-lg border bg-card md:max-h-full md:overflow-y-auto">
       {/* Cabeçalho do lançamento: Match · Data · Valor */}
       <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30">
         <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${meta.cls}`}>

@@ -1014,12 +1014,22 @@ export default function V2Index() {
           </div>
         )}
 
-        {/* SCROLL — chamada ÚNICA de renderContent() */}
-        <section className={intensivo
-          ? "flex-1 min-h-0 w-full overflow-auto bg-background"
-          : "flex-1 min-h-0 min-w-0 overflow-auto"
+        {/* SCROLL — chamada ÚNICA de renderContent().
+            App-shell (só na Conciliação, desktop): a section deixa de rolar (overflow-hidden)
+            para o scroll viver dentro da aba (Enriquecer = lista; Importar/Conciliação = wrapper).
+            No mobile mantém overflow-auto (fallback empilhado). */}
+        <section className={
+          section === 'conciliacao'
+            ? "flex-1 min-h-0 min-w-0 overflow-auto md:overflow-hidden md:flex md:flex-col bg-background"
+            : intensivo
+              ? "flex-1 min-h-0 w-full overflow-auto bg-background"
+              : "flex-1 min-h-0 min-w-0 overflow-auto"
         }>
-          <div className="w-full min-w-0 pb-16 md:pb-0">
+          <div className={
+            section === 'conciliacao'
+              ? "w-full min-w-0 pb-16 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col"
+              : "w-full min-w-0 pb-16 md:pb-0"
+          }>
             {renderContent()}
           </div>
         </section>
