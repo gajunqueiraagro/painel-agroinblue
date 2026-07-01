@@ -43,9 +43,13 @@ import {
 } from '@/v2/lib/excelPreview/parserClassificacao';
 import {
   useClassificacaoStaging,
+  useSessoesClassificacao,
   type MatchStatus,
   type ClassificacaoStagingPreviewRow,
 } from '@/v2/hooks/useClassificacaoStaging';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select';
 import {
   useFinanceiroV2,
   type LancamentoV2,
@@ -304,6 +308,27 @@ export function MesaClassificacaoTab() {
     isApplying,
     applyResult,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+
+  // PR-P4 — sessões existentes do cliente (read-only) para reabrir/trocar.
+  const { data: sessoes } = useSessoesClassificacao(clienteAtual?.id ?? null);
+
+  // PR-P4 — auto-seleção da sessão mais ÚTIL na ABERTURA (só quando sessaoId ainda é null).
+  // Critério: maior (exatos+ambiguos); desempate por criada_em desc. Se a melhor tiver 0
+  // úteis, NÃO auto-seleciona (operador decide via seletor/Popular). NÃO sobrepõe escolha ativa.
+  useEffect(() => {
+    if (sessaoId) return;
+    if (!sessoes || sessoes.length === 0) return;
+    const ordenadas = [...sessoes].sort((a, b) => {
+      const ua = a.exatos + a.ambiguos, ub = b.exatos + b.ambiguos;
+      if (ub !== ua) return ub - ua;
+      return b.criada_em.localeCompare(a.criada_em);
+    });
+    const melhor = ordenadas[0];
+    if (melhor && (melhor.exatos + melhor.ambiguos) > 0) {
+      setSessaoId(melhor.sessao_id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId, sessoes]);
 
   const countsPorStatus = useMemo(() => {
     const c: Record<MatchStatus, number> = {
@@ -724,6 +749,25 @@ export function MesaClassificacaoTab() {
                 .join(' · ')}
               {errosParser.length > 3 && ` (+${errosParser.length - 3})`}
             </div>
+          </div>
+        )}
+
+        {/* PR-P4 — seletor manual de sessão existente (reabrir/trocar). Read-only: só troca sessaoId. */}
+        {sessoes && sessoes.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-muted-foreground shrink-0">Sessão de classificação:</span>
+            <Select value={sessaoId ?? ''} onValueChange={(v) => setSessaoId(v)}>
+              <SelectTrigger className="h-8 text-[11px] w-auto min-w-[300px]">
+                <SelectValue placeholder="Selecione uma sessão…" />
+              </SelectTrigger>
+              <SelectContent>
+                {[...sessoes].sort((a, b) => b.criada_em.localeCompare(a.criada_em)).map((s) => (
+                  <SelectItem key={s.sessao_id} value={s.sessao_id} className="text-[11px]">
+                    {(s.excel_ano_mes ?? '—')} · {s.total} · {s.exatos} exatos · {s.ambiguos} amb · {s.aplicados} aplic · {s.sessao_id.slice(0, 8)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 

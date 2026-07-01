@@ -228,3 +228,47 @@ export function useClassificacaoStaging(
     applyResult: applyMutation.data ?? null,
   };
 }
+
+// ── PR-P4: listagem read-only de sessões de classificação (para reabrir/trocar) ──
+export interface SessaoClassificacaoResumo {
+  sessao_id: string;
+  excel_ano_mes: string | null;
+  total: number;
+  exatos: number;
+  ambiguos: number;
+  sem_match: number;
+  aplicados: number;
+  criada_em: string;   // max(created_at) da sessão
+}
+
+// SOMENTE SELECT: agrega staging por sessão no cliente. Não escreve, não popula, não aplica.
+export function useSessoesClassificacao(clienteId: string | null) {
+  return useQuery({
+    queryKey: ['classificacao-sessoes', clienteId],
+    enabled: !!clienteId,
+    staleTime: 30_000,
+    queryFn: async (): Promise<SessaoClassificacaoResumo[]> => {
+      const { data, error } = await (supabase as any)
+        .from('financeiro_classificacao_staging')
+        .select('sessao_id, excel_ano_mes, match_status, aplicado, created_at')
+        .eq('cliente_id', clienteId);
+      if (error) throw error;
+      const map = new Map<string, SessaoClassificacaoResumo>();
+      for (const r of (data ?? []) as Array<{ sessao_id: string; excel_ano_mes: string | null; match_status: string | null; aplicado: boolean | null; created_at: string }>) {
+        const k = r.sessao_id;
+        const cur = map.get(k) ?? {
+          sessao_id: k, excel_ano_mes: r.excel_ano_mes,
+          total: 0, exatos: 0, ambiguos: 0, sem_match: 0, aplicados: 0, criada_em: r.created_at,
+        };
+        cur.total++;
+        if (r.match_status === 'exato') cur.exatos++;
+        else if (r.match_status === 'ambiguo') cur.ambiguos++;
+        else if (r.match_status === 'sem_match') cur.sem_match++;
+        if (r.aplicado) cur.aplicados++;
+        if (r.created_at > cur.criada_em) cur.criada_em = r.created_at;
+        map.set(k, cur);
+      }
+      return [...map.values()];
+    },
+  });
+}
