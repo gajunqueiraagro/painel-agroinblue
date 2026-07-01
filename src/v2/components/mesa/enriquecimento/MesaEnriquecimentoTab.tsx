@@ -11,6 +11,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
   toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, escolherMelhorSessaoId,
+  listarContas, filtrarPorConta,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
 import { EnriquecimentoLista } from './EnriquecimentoLista';
@@ -24,6 +25,7 @@ export function MesaEnriquecimentoTab() {
 
   // Estado de UI apenas.
   const [sessaoId, setSessaoId] = useState<string | null>(null);
+  const [filtroConta, setFiltroConta] = useState<string>('todas');
   const [filtroStatus, setFiltroStatus] = useState<EnriqStatus | 'todos'>('todos');
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [revisei, setRevisei] = useState(false);
@@ -39,9 +41,12 @@ export function MesaEnriquecimentoTab() {
 
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
-  const contagens = useMemo(() => contarContagens(staging), [staging]);
-  const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
-  const rowsVM = useMemo(() => staging.map(toRowVM), [staging]);
+  const contas = useMemo(() => listarContas(staging), [staging]);
+  // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
+  const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
+  const contagens = useMemo(() => contarContagens(stagingConta), [stagingConta]);
+  const nAplicaveis = useMemo(() => contarAplicaveisExatos(stagingConta), [stagingConta]);
+  const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
   const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsVM, filtroStatus), [rowsVM, filtroStatus]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
@@ -50,7 +55,10 @@ export function MesaEnriquecimentoTab() {
       <EnriquecimentoToolbar
         sessoes={sessoesVM}
         sessaoAtivaId={sessaoId}
-        onSelecionarSessao={(id) => { setSessaoId(id); setSelecionadoId(null); }}
+        onSelecionarSessao={(id) => { setSessaoId(id); setFiltroConta('todas'); setSelecionadoId(null); }}
+        contas={contas}
+        contaAtivaId={filtroConta}
+        onSelecionarConta={(id) => { setFiltroConta(id); setSelecionadoId(null); }}
         contagens={contagens}
         filtroStatus={filtroStatus}
         onFiltroStatus={setFiltroStatus}

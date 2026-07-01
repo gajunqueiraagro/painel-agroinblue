@@ -10,7 +10,7 @@ import type {
   SessaoClassificacaoResumo,
 } from '@/v2/hooks/useClassificacaoStaging';
 import type {
-  EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
+  EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqContaVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 
@@ -118,6 +118,31 @@ export function toSessoesVM(sessoes: SessaoClassificacaoResumo[] | undefined | n
 }
 
 // ── Selectors (extração da lógica inline do MesaClassificacaoTab) ────────────
+
+// Contas presentes na sessão (para o filtro visual). '__sem__' = sem conta canônica.
+export function listarContas(staging: ClassificacaoStagingPreviewRow[]): EnriqContaVM[] {
+  const m = new Map<string, EnriqContaVM>();
+  for (const r of staging) {
+    const id = r.conta_filtro_id ?? '__sem__';
+    const nome = r.conta_filtro_nome ?? 'Sem conta';
+    const cur = m.get(id) ?? { id, nome, total: 0 };
+    cur.total++;
+    m.set(id, cur);
+  }
+  return [...m.values()].sort((a, b) =>
+    a.id === '__sem__' ? 1 : b.id === '__sem__' ? -1 : b.total - a.total,
+  );
+}
+
+// Filtra o staging por conta ('todas' = sem filtro). Só visualização.
+export function filtrarPorConta(
+  staging: ClassificacaoStagingPreviewRow[],
+  contaId: string,
+): ClassificacaoStagingPreviewRow[] {
+  return contaId === 'todas'
+    ? staging
+    : staging.filter((r) => (r.conta_filtro_id ?? '__sem__') === contaId);
+}
 
 export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): EnriqContagensVM {
   const c: EnriqContagensVM = { total: staging.length, exatos: 0, ambiguos: 0, semMatch: 0, aplicados: 0 };

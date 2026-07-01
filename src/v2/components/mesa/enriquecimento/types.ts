@@ -21,6 +21,13 @@ export interface EnriqContagensVM {
   aplicados: number;
 }
 
+// Conta bancária para o filtro visual (Todas/BB/Bradesco/…). id '__sem__' = sem conta.
+export interface EnriqContaVM {
+  id: string;
+  nome: string;
+  total: number;
+}
+
 // Tom para colorir o "Resultado" (e o subcentro na lista).
 export type EnriqTom = 'neutro' | 'ok' | 'muda' | 'bloqueio' | 'difere';
 

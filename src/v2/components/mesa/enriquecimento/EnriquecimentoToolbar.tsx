@@ -2,12 +2,15 @@
 // A antiga barra de botões Todos/Exatos/… foi removida (os cards fazem o filtro).
 import { Button } from '@/components/ui/button';
 import { EnriquecimentoResumo } from './EnriquecimentoResumo';
-import type { EnriqSessaoVM, EnriqStatus, EnriqContagensVM } from './types';
+import type { EnriqSessaoVM, EnriqStatus, EnriqContagensVM, EnriqContaVM } from './types';
 
 export interface EnriquecimentoToolbarProps {
   sessoes: EnriqSessaoVM[];
   sessaoAtivaId: string | null;
   onSelecionarSessao: (id: string) => void;
+  contas: EnriqContaVM[];
+  contaAtivaId: string;
+  onSelecionarConta: (id: string) => void;
   contagens: EnriqContagensVM;
   filtroStatus: EnriqStatus | 'todos';
   onFiltroStatus: (f: EnriqStatus | 'todos') => void;
@@ -18,7 +21,8 @@ export interface EnriquecimentoToolbarProps {
 }
 
 export function EnriquecimentoToolbar({
-  sessoes, sessaoAtivaId, onSelecionarSessao, contagens, filtroStatus, onFiltroStatus,
+  sessoes, sessaoAtivaId, onSelecionarSessao, contas, contaAtivaId, onSelecionarConta,
+  contagens, filtroStatus, onFiltroStatus,
   onImportar, isImporting, sessaoDisabled, importarDisabled,
 }: EnriquecimentoToolbarProps) {
   return (
@@ -39,6 +43,21 @@ export function EnriquecimentoToolbar({
         <Button size="sm" variant="outline" className="h-6 text-[11px] gap-1 px-2" disabled={isImporting || importarDisabled} onClick={onImportar}>
           ⬆ Importar Excel
         </Button>
+      </div>
+
+      {/* Conta bancária — partição de trabalho: muda lista, contadores e fluxo. */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">Conta</span>
+        <select
+          value={contaAtivaId}
+          onChange={(e) => onSelecionarConta(e.target.value)}
+          className="h-6 rounded border bg-background text-[11px] px-2 min-w-[180px]"
+        >
+          <option value="todas">Todas</option>
+          {contas.map((c) => (
+            <option key={c.id} value={c.id}>{c.nome} ({c.total})</option>
+          ))}
+        </select>
       </div>
 
       {/* Cards de contagem = filtro (fonte única). */}
