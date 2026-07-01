@@ -26,6 +26,7 @@ import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type Sal
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { ExtratoListaTab } from '@/components/financeiro-v2/ExtratoListaTab';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
+import { MesaEnriquecimentoTab } from '@/v2/components/mesa/enriquecimento/MesaEnriquecimentoTab';
 
 /* ── Extended status type (adds 'parcial' to existing) ── */
 type MesStatusExt = ConciliacaoStatus | 'parcial';
@@ -817,31 +818,21 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         )}
 
         {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
-          <div className="rounded-lg border border-dashed bg-amber-50/40 p-4 space-y-2 max-w-2xl">
-            {/* PR-MOS-2 — desacoplado das Referências Operacionais antigas (LotesExcelTab vira
-                legado; NÃO usado aqui). Apenas a casa + encaminhamento ao fluxo oficial atual.
-                A versão definitiva (padrão Mesa Global: lista ampla + detalhe lado a lado) vem em PR futuro. */}
-            <div className="text-sm font-semibold">Enriquecer (Excel → lançamentos)</div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              O enriquecimento por Excel (classificação/subcentro/favorecido) faz <b>UPDATE</b> nos
-              lançamentos existentes — <b>nunca cria lançamento</b>. O fluxo oficial atual é a
-              <b> Classificação Excel</b>, em <b>Financeiro → Mesa de Classificação</b>. O antigo
-              modal de Referências Operacionais foi descontinuado (legado). A versão definitiva desta
-              aba, no padrão da <b>Mesa Global</b> (lista ampla à esquerda + detalhe comparativo à
-              direita), será implementada em PR futuro.
-            </p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-[11px] gap-1"
-              onClick={() => {
-                // Navegação segura pelo padrão da casa (v2:autoSection + reload) → Mesa de Classificação.
-                try { sessionStorage.setItem('v2:autoSection', 'mesa-classificacao'); } catch { /* sessionStorage indisponível */ }
-                window.location.reload();
-              }}
-            >
-              Abrir Classificação Excel →
-            </Button>
+          <div className="space-y-2">
+            <MesaEnriquecimentoTab />
+            {/* Transição — Mesa de Classificação antiga segue acessível como referência, discreta. */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground/70 hover:text-muted-foreground hover:underline"
+                onClick={() => {
+                  try { sessionStorage.setItem('v2:autoSection', 'mesa-classificacao'); } catch { /* sessionStorage indisponível */ }
+                  window.location.reload();
+                }}
+              >
+                Abrir tela antiga
+              </button>
+            </div>
           </div>
         )}
 
