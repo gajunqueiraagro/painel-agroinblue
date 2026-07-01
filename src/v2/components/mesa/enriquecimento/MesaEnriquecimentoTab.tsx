@@ -69,8 +69,17 @@ export function MesaEnriquecimentoTab() {
 
   // Escrita por linha (PR-U1). Salvar = apply_row(overwrite=true); Reverter = reverter_row.
   const isBusy = isApplyingRow || isRevertingRow;
-  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch;
+  // Linha órfã (subcentro fora do plano) não pode ser aplicada — a trigger do
+  // lançamento rejeita. Só será salvável após editar o subcentro (PR-U2).
+  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch && !selecionado.subcentroOrfao;
   const podeReverter = !!selecionado && selecionado.aplicado;
+
+  // Extrai mensagem humana de qualquer erro (PostgrestError não é instanceof Error).
+  const errMsg = (e: unknown): string => {
+    if (e instanceof Error && e.message) return e.message;
+    if (e && typeof e === 'object' && 'message' in e && (e as any).message) return String((e as any).message);
+    try { return JSON.stringify(e); } catch { return String(e); }
+  };
 
   const MOTIVO_MSG: Record<string, string> = {
     sem_lancamento_vinculado: 'Sem lançamento vinculado — resolva o ambíguo ou não é possível salvar sem match.',
@@ -88,7 +97,7 @@ export function MesaEnriquecimentoTab() {
       toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
       return false;
     } catch (e: unknown) {
-      toast.error(`Erro ao salvar: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(`Erro ao salvar: ${errMsg(e)}`);
       return false;
     }
   }
@@ -103,7 +112,7 @@ export function MesaEnriquecimentoTab() {
       if (res?.ok) toast.success('Revertido.');
       else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não revertido (${res?.motivo ?? 'erro'}).`);
     } catch (e: unknown) {
-      toast.error(`Erro ao reverter: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(`Erro ao reverter: ${errMsg(e)}`);
     }
   }
 

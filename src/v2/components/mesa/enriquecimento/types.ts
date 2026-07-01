@@ -46,7 +46,8 @@ export interface EnriqRowVM {
   status: EnriqStatus;
   statusLabel: string;
   aplicado: boolean;
-  temMatch: boolean;   // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
+  temMatch: boolean;        // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
+  subcentroOrfao: boolean;  // proposto fora do plano → NÃO pode Salvar (trigger rejeita); editar no PR-U2
   mudaAlgo: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   data: string;
