@@ -17,6 +17,7 @@ import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
 import { EnriquecimentoLista } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { EnriquecimentoActions } from './EnriquecimentoActions';
+import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import type { EnriqStatus } from './types';
 
 export function MesaEnriquecimentoTab() {
@@ -29,6 +30,7 @@ export function MesaEnriquecimentoTab() {
   const [filtroStatus, setFiltroStatus] = useState<EnriqStatus | 'todos'>('todos');
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [revisei, setRevisei] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Auto-seleção da sessão mais útil na abertura (regra extraída para o módulo puro).
   useEffect(() => {
@@ -73,8 +75,7 @@ export function MesaEnriquecimentoTab() {
         contagens={contagens}
         filtroStatus={filtroStatus}
         onFiltroStatus={setFiltroStatus}
-        onImportar={() => { /* ligado no PR-3 (upload + fn_classificacao_populate_staging) */ }}
-        importarDisabled
+        onImportar={() => setImportOpen(true)}
       />
 
       {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
@@ -99,6 +100,13 @@ export function MesaEnriquecimentoTab() {
         onAplicarTodos={() => { /* ligado no PR-5 (fn_classificacao_apply em lote) */ }}
         nAplicaveis={nAplicaveis}
         escritaDesabilitada
+      />
+
+      <EnriquecimentoImportarDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        clienteId={clienteAtual?.id ?? null}
+        onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroStatus('todos'); setSelecionadoId(null); setImportOpen(false); }}
       />
     </div>
   );
