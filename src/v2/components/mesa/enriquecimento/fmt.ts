@@ -1,4 +1,14 @@
 // Formatação pura de apresentação (Mesa Global de Enriquecimento).
+import type { EnriqTom } from './types';
+
+export const TOM_CLS: Record<EnriqTom, string> = {
+  neutro: 'text-muted-foreground',
+  ok: 'text-emerald-700',
+  muda: 'text-emerald-700',
+  bloqueio: 'text-red-700',
+  difere: 'text-amber-700',
+};
+
 export const fmtData = (s: string | null | undefined): string => {
   if (!s) return '—';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
@@ -10,6 +20,24 @@ export const fmtBRL = (n: number | null | undefined): string =>
 
 export const fmtTexto = (s: string | null | undefined): string =>
   s === null || s === undefined || s === '' ? '—' : s;
+
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+/** "2026-05" → "Mai/2026" (identifica o mês da importação sem ambiguidade). */
+export const mesAbrev = (anoMes: string | null | undefined): string => {
+  if (!anoMes) return '—';
+  const m = /^(\d{4})-(\d{2})/.exec(anoMes);
+  if (!m) return anoMes;
+  const idx = parseInt(m[2], 10) - 1;
+  return `${MESES_ABREV[idx] ?? m[2]}/${m[1]}`;
+};
+
+/** ISO "2026-07-01T09:15:..." → "01/07 09:15" (carimbo da importação). */
+export const dataHoraCurta = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]} ${m[4]}:${m[5]}` : '';
+};
 
 export const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   exato:          { label: 'Exato',          cls: 'text-emerald-700', dot: 'bg-emerald-500' },

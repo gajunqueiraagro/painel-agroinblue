@@ -1,13 +1,13 @@
 // ============================================================================
-// Mesa Global de Enriquecimento — view-models da UI (PR-1 layout).
-// A UI é BURRA: só apresenta estes tipos. Nenhuma regra de negócio aqui.
-// O container mapeia (em PR-2+) vw_classificacao_staging_preview -> estes VMs.
+// Mesa Global de Enriquecimento — view-models da UI.
+// A UI é BURRA: só apresenta strings/flags já prontos. Nenhuma regra de negócio,
+// nenhum SELECT, nenhum formato aqui — tudo vem do adapter puro enriquecimentoView.
 // ============================================================================
 export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente';
 
 export interface EnriqSessaoVM {
   id: string;
-  label: string;          // ex.: "2026-05 · 191 linhas"
+  label: string;          // ex.: "Mai/2026 · Imp 02 · 01/07 09:15 · 191 linhas"
   exatos: number;
   ambiguos: number;
   aplicados: number;
@@ -21,20 +21,37 @@ export interface EnriqContagensVM {
   aplicados: number;
 }
 
+// Tom para colorir o "Resultado" (e o subcentro na lista).
+export type EnriqTom = 'neutro' | 'ok' | 'muda' | 'bloqueio' | 'difere';
+
+// Uma linha do comparativo Sistema atual | Excel | Resultado (strings já formatadas).
+export interface EnriqComparativoLinha {
+  campo: string;
+  sistema: string;   // '—' quando vazio/indisponível
+  excel: string;
+  resultado: string;
+  tom: EnriqTom;
+}
+
 export interface EnriqRowVM {
   id: string;
-  data: string | null;
-  valor: number | null;
-  descricao: string | null;
+  linha: number | null;      // excel_linha_origem (contexto)
   status: EnriqStatus;
+  statusLabel: string;
   aplicado: boolean;
-  // comparativo (o que o Aplicar faria — só leitura)
-  subcentroAtual: string | null;
-  subcentroProposto: string | null;
-  gravaSubcentro: boolean;
-  subcentroOrfao: boolean;
-  favorecidoAtual: string | null;
-  favorecidoProposto: string | null;
-  gravaFavorecido: boolean;
   mudaAlgo: boolean;
+  // Resumo pronto para a LISTA (strings já formatadas).
+  data: string;
+  valor: string;
+  banco: string;
+  produto: string;
+  fornecedor: string;
+  fazenda: string;
+  subcentro: string;
+  subcentroTom: EnriqTom;
+  dataComp: string;
+  documento: string;
+  descricao: string;
+  // Comparativo completo para o DETALHE (direita).
+  comparativo: EnriqComparativoLinha[];
 }

@@ -10,10 +10,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessaoVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, escolherMelhorSessaoId,
+  toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, escolherMelhorSessaoId,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
-import { EnriquecimentoResumo } from './EnriquecimentoResumo';
 import { EnriquecimentoLista } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { EnriquecimentoActions } from './EnriquecimentoActions';
@@ -39,7 +38,7 @@ export function MesaEnriquecimentoTab() {
   const { staging, isFetching } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
   // ViewModels prontos (adapters/selectors puros).
-  const sessoesVM = useMemo(() => (sessoes ?? []).map(toSessaoVM), [sessoes]);
+  const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
   const contagens = useMemo(() => contarContagens(staging), [staging]);
   const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
   const rowsVM = useMemo(() => staging.map(toRowVM), [staging]);
@@ -52,18 +51,17 @@ export function MesaEnriquecimentoTab() {
         sessoes={sessoesVM}
         sessaoAtivaId={sessaoId}
         onSelecionarSessao={(id) => { setSessaoId(id); setSelecionadoId(null); }}
+        contagens={contagens}
         filtroStatus={filtroStatus}
         onFiltroStatus={setFiltroStatus}
-        onPopular={() => { /* ligado no PR-3 (upload + fn_classificacao_populate_staging) */ }}
-        popularDisabled
+        onImportar={() => { /* ligado no PR-3 (upload + fn_classificacao_populate_staging) */ }}
+        importarDisabled
       />
-
-      <EnriquecimentoResumo contagens={contagens} />
 
       {isFetching && <div className="text-[11px] text-muted-foreground px-1">Carregando…</div>}
 
-      {/* Padrão Mesa Global: lista ampla à esquerda + detalhe comparativo à direita. */}
-      <div className="grid gap-2" style={{ gridTemplateColumns: '1.4fr 1fr', alignItems: 'start' }}>
+      {/* Padrão Mesa Global: lista à esquerda (~46%) + detalhe comparativo à direita (~54%). */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1.15fr', alignItems: 'start' }}>
         <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} />
         <EnriquecimentoDetalhe row={selecionado} />
       </div>
