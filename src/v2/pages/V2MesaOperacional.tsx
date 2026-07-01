@@ -30,6 +30,7 @@ import { Upload, X, LayoutGrid } from 'lucide-react';
 import { parseExcelToLote } from '@/v2/lib/excelPreview/parser';
 import { matchTodosLotes, type ExtratoMatcher } from '@/v2/lib/excelPreview/matchEngine';
 import type { LoteExcel, MatchResult } from '@/v2/lib/excelPreview/types';
+import { toast } from 'sonner';
 import { MesaPareamentoModal } from '@/v2/components/mesa/MesaPareamentoModal';
 import { useMesaSessao } from '@/v2/lib/mesaSessao/useMesaSessao';
 import { useTransferenciasDecididas } from '@/hooks/useTransferenciasDecididas';
@@ -459,6 +460,14 @@ function MesaConciliacaoView({ initialAno, initialMes }: V2MesaOperacionalProps)
   // PR6.1B-3 — trata discriminated union de criarOuRecuperarSessao.
   async function abrirMesaPareamento() {
     if (!clienteAtual?.id || !contaId || criandoSessao) return;
+    // Guard — lote "oco": o parser contou linhas (totalLinhas>0) mas não produziu
+    // NENHUMA linha válida → o Excel não está no modelo da Mesa de Pareamento.
+    // Não cria/continua sessão silenciosamente (evita sessão OFX N × Excel 0).
+    const loteOco = lotes.find((l) => l.totalLinhas > 0 && l.linhas.length === 0);
+    if (loteOco) {
+      toast.error('Este Excel não está no modelo da Mesa de Pareamento. Use Classificação Excel / Enriquecimento.');
+      return;
+    }
     setCriandoSessao(true);
     try {
       const resultado = await criarOuRecuperarSessao(
