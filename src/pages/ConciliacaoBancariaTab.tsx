@@ -349,7 +349,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* Fase 1B: import OFX/CSV + visualização do extrato importado */
   const [showImportExtrato, setShowImportExtrato] = useState(false);
   const [showPendencias, setShowPendencias] = useState(false);
-  const [vistaExtrato, setVistaExtrato] = useState<'conciliacao' | 'extrato' | 'referencias'>('conciliacao');
+  // PR-MOS-1 — 3 abas oficiais: Importar Banco · Enriquecer · Conciliação (só layout/roteamento).
+  const [vistaExtrato, setVistaExtrato] = useState<'importar' | 'enriquecer' | 'conciliacao'>('conciliacao');
 
   /* Edit saldo */
   const [editingSaldo, setEditingSaldo] = useState<{anoMes:string;contaId:string;current:number}|null>(null);
@@ -758,8 +759,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             </span>
             {meta.sub && <span className="text-[10px] text-muted-foreground">{meta.sub}</span>}
             <div className="flex-1" />
-            {/* F1 — importar é responsabilidade da vista Extrato (a casa de OFX/CSV/PDF). */}
-            {vistaExtrato === 'extrato' && (
+            {/* Importar é responsabilidade da aba Importar Banco (a casa de OFX/CSV/PDF). */}
+            {vistaExtrato === 'importar' && (
               <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 px-2.5"
                 onClick={() => setShowImportExtrato(true)}>
                 ⬆ Importar Extrato
@@ -774,44 +775,68 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
           </div>
         )}
 
-        {/* Aba interna: Conciliação (atual) | Extrato importado (novo) */}
+        {/* PR-MOS-1 — 3 abas oficiais da Conciliação Bancária (Auditoria fica separada). */}
         {!loading && selectedCard && (
           <div className="flex gap-1 items-center pt-1">
+            <button
+              onClick={() => setVistaExtrato('importar')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'importar' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Importar Banco
+            </button>
+            <button
+              onClick={() => setVistaExtrato('enriquecer')}
+              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'enriquecer' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Enriquecer
+            </button>
             <button
               onClick={() => setVistaExtrato('conciliacao')}
               className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'conciliacao' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               Conciliação
             </button>
-            <button
-              onClick={() => setVistaExtrato('extrato')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'extrato' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-            >
-              Extrato Importado
-            </button>
-            <button
-              onClick={() => setVistaExtrato('referencias')}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold transition-colors ${vistaExtrato === 'referencias' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-            >
-              Lotes Excel
-            </button>
           </div>
         )}
 
         {loading && <div className="text-center text-xs text-muted-foreground py-8">Carregando...</div>}
 
-        {!loading && selectedCard && vistaExtrato === 'extrato' && (
-          <ExtratoListaTab
-            contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
-            anoMes={`${ano}-${selectedMes}`}
-          />
+        {!loading && selectedCard && vistaExtrato === 'importar' && (
+          <div className="rounded-lg border bg-card p-4 space-y-2">
+            <div className="text-sm font-semibold">Importar Banco</div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Importe o extrato do banco (OFX/CSV/PDF/Excel/API) para criar os movimentos crus em
+              <span className="font-mono"> extrato_bancario_v2</span>. Use o botão <b>⬆ Importar Extrato</b> no topo.
+              Depois de importar, os movimentos ficam disponíveis na aba <b>Conciliação</b> para casar com o sistema.
+            </p>
+            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1"
+              onClick={() => setShowImportExtrato(true)}>
+              ⬆ Importar Extrato
+            </Button>
+          </div>
         )}
 
-        {!loading && selectedCard && vistaExtrato === 'referencias' && (
-          <LotesExcelTab
-            contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
-            anoMes={`${ano}-${selectedMes}`}
-          />
+        {!loading && selectedCard && vistaExtrato === 'enriquecer' && (
+          <div className="space-y-2">
+            {/* Placeholder honesto — o enriquecimento por Excel (Classificação → UPDATE em
+                financeiro_lancamentos_v2, nunca INSERT) vive hoje na "Mesa de Classificação"
+                (menu separado). Será trazido para cá no padrão Mesa Global (lista ampla à
+                esquerda + detalhe comparativo à direita) em PR futuro. Aqui só a casa correta. */}
+            <div className="rounded-lg border border-dashed bg-amber-50/40 p-4 space-y-1">
+              <div className="text-sm font-semibold">Enriquecer (Excel → lançamentos)</div>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                O enriquecimento por Excel (classificação/subcentro/favorecido) faz <b>UPDATE</b> nos
+                lançamentos existentes — nunca cria lançamento. Hoje ele está na tela
+                <b> Mesa de Classificação</b> (menu Financeiro). A integração desta aba, no padrão da
+                Mesa Global (lista + detalhe lado a lado), virá em PR futuro. Abaixo, as referências de
+                Excel já disponíveis para esta conta/mês.
+              </p>
+            </div>
+            <LotesExcelTab
+              contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
+              anoMes={`${ano}-${selectedMes}`}
+            />
+          </div>
         )}
 
         {!loading && selectedCard && vistaExtrato === 'conciliacao' && (
@@ -1085,7 +1110,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               </div>
             </div>
 
-
+            {/* PR-MOS-1 — casar sistema × banco: lista de movimentos do extrato (reuso). */}
+            <ExtratoListaTab
+              contaBancariaId={selectedConta !== '__all__' ? selectedConta : null}
+              anoMes={`${ano}-${selectedMes}`}
+            />
           </div>
         )}
       </div>
