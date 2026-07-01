@@ -248,13 +248,27 @@ export function useSessoesClassificacao(clienteId: string | null) {
     enabled: !!clienteId,
     staleTime: 30_000,
     queryFn: async (): Promise<SessaoClassificacaoResumo[]> => {
-      const { data, error } = await (supabase as any)
-        .from('financeiro_classificacao_staging')
-        .select('sessao_id, excel_ano_mes, match_status, aplicado, created_at')
-        .eq('cliente_id', clienteId);
-      if (error) throw error;
+      // PR-P4.1 — PostgREST limita ~1000 linhas por request; Santa Rita tem milhares
+      // (ex.: 9k+), então um único select escondia sessões (as de Maio sumiam do seletor).
+      // Pagina por staging_id (PK → ordem estável, sem pular/duplicar) em blocos de 1000.
+      type Row = { sessao_id: string; excel_ano_mes: string | null; match_status: string | null; aplicado: boolean | null; created_at: string };
+      const PAGE = 1000;
+      const linhas: Row[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await (supabase as any)
+          .from('financeiro_classificacao_staging')
+          .select('sessao_id, excel_ano_mes, match_status, aplicado, created_at')
+          .eq('cliente_id', clienteId)
+          .order('staging_id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as Row[];
+        linhas.push(...batch);
+        if (batch.length < PAGE) break;
+        if (from > 200_000) break; // salvaguarda anti-loop
+      }
       const map = new Map<string, SessaoClassificacaoResumo>();
-      for (const r of (data ?? []) as Array<{ sessao_id: string; excel_ano_mes: string | null; match_status: string | null; aplicado: boolean | null; created_at: string }>) {
+      for (const r of linhas) {
         const k = r.sessao_id;
         const cur = map.get(k) ?? {
           sessao_id: k, excel_ano_mes: r.excel_ano_mes,
