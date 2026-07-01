@@ -7,8 +7,9 @@ export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
 }
 
-// Larguras FIXAS — "Excel" recebe mais espaço (subcentros longos legíveis).
-const COLS = '80px minmax(0,1fr) minmax(0,1.3fr) 92px';
+// Larguras FIXAS — "Resultado" nasce LARGA (P0-4: futuramente conterá o valor
+// que será gravado, não só confere/mantém). "Excel" também amplo.
+const COLS = '72px minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.5fr)';
 
 export function EnriquecimentoDetalhe({ row }: EnriquecimentoDetalheProps) {
   if (!row) {

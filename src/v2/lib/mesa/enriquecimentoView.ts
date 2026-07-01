@@ -77,14 +77,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),
     banco: fmtTexto(banco),
-    produto: fmtTexto(row.excel_produto),
     fornecedor: fmtTexto(favSistema ?? favExcel),
-    fazenda: fmtTexto(row.excel_fazenda_codigo),
-    subcentro: fmtTexto(subSistema ?? subExcel),
-    subcentroTom: subTom,
-    dataComp: fmtData(row.lanc_data_competencia),
-    documento: '—',
-    descricao: fmtTexto(descricao),
     comparativo,
   };
 }

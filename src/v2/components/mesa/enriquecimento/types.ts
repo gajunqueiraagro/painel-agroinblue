@@ -40,18 +40,11 @@ export interface EnriqRowVM {
   statusLabel: string;
   aplicado: boolean;
   mudaAlgo: boolean;
-  // Resumo pronto para a LISTA (strings já formatadas).
+  // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   data: string;
   valor: string;
   banco: string;
-  produto: string;
   fornecedor: string;
-  fazenda: string;
-  subcentro: string;
-  subcentroTom: EnriqTom;
-  dataComp: string;
-  documento: string;
-  descricao: string;
-  // Comparativo completo para o DETALHE (direita).
+  // DETALHE (direita) — comparativo completo Sistema | Excel | Resultado.
   comparativo: EnriqComparativoLinha[];
 }

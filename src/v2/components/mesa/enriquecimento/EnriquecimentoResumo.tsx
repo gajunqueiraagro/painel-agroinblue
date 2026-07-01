@@ -1,28 +1,45 @@
-// EnriquecimentoResumo — dumb. Só apresenta as contagens da sessão.
-import type { EnriqContagensVM } from './types';
+// EnriquecimentoResumo — dumb. Cards de contagem que TAMBÉM são o filtro
+// (Total/Exatos/Ambíguos/Sem match clicáveis). Substitui a antiga barra de
+// botões de filtro (fonte única). "Aplicados" é informativo (não filtra).
+import type { EnriqContagensVM, EnriqStatus } from './types';
 
 export interface EnriquecimentoResumoProps {
   contagens: EnriqContagensVM;
+  filtroAtivo: EnriqStatus | 'todos';
+  onFiltro: (f: EnriqStatus | 'todos') => void;
 }
 
-function Chip({ label, valor, cls }: { label: string; valor: number; cls: string }) {
+function CardFiltro({
+  label, valor, dot, ativo, onClick,
+}: { label: string; valor: number; dot: string; ativo: boolean; onClick: () => void }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-md border px-2 py-1">
-      <span className={`h-2 w-2 rounded-full ${cls}`} />
-      <span className="text-[10px] text-muted-foreground">{label}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+        ativo ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'
+      }`}
+    >
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <span className="text-[10px]">{label}</span>
       <span className="text-[11px] font-semibold tabular-nums">{valor}</span>
-    </div>
+    </button>
   );
 }
 
-export function EnriquecimentoResumo({ contagens }: EnriquecimentoResumoProps) {
+export function EnriquecimentoResumo({ contagens, filtroAtivo, onFiltro }: EnriquecimentoResumoProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Chip label="Total" valor={contagens.total} cls="bg-slate-400" />
-      <Chip label="Exatos" valor={contagens.exatos} cls="bg-emerald-500" />
-      <Chip label="Ambíguos" valor={contagens.ambiguos} cls="bg-amber-500" />
-      <Chip label="Sem match" valor={contagens.semMatch} cls="bg-rose-500" />
-      <Chip label="Aplicados" valor={contagens.aplicados} cls="bg-blue-500" />
+    <div className="flex flex-wrap items-center gap-1.5">
+      <CardFiltro label="Total"     valor={contagens.total}    dot="bg-slate-400"   ativo={filtroAtivo === 'todos'}     onClick={() => onFiltro('todos')} />
+      <CardFiltro label="Exatos"    valor={contagens.exatos}   dot="bg-emerald-500" ativo={filtroAtivo === 'exato'}     onClick={() => onFiltro('exato')} />
+      <CardFiltro label="Ambíguos"  valor={contagens.ambiguos} dot="bg-amber-500"   ativo={filtroAtivo === 'ambiguo'}   onClick={() => onFiltro('ambiguo')} />
+      <CardFiltro label="Sem match" valor={contagens.semMatch} dot="bg-rose-500"    ativo={filtroAtivo === 'sem_match'} onClick={() => onFiltro('sem_match')} />
+      {/* Informativo — não é filtro (não havia botão equivalente). */}
+      <div className="flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-blue-500" />
+        <span className="text-[10px]">Aplicados</span>
+        <span className="text-[11px] font-semibold tabular-nums">{contagens.aplicados}</span>
+      </div>
     </div>
   );
 }
