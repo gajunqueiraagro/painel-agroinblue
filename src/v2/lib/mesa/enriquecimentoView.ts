@@ -76,6 +76,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     status: row.match_status as EnriqStatus,
     statusLabel,
     aplicado: row.aplicado,
+    temMatch: row.lanc_id != null,
     mudaAlgo: row.will_change_anything,
     data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),

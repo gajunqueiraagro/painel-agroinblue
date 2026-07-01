@@ -7,6 +7,7 @@
 // lista de sessões. Popular (PR-3) e Aplicar (PR-5) seguem desabilitados.
 // ============================================================================
 import { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
@@ -39,7 +40,10 @@ export function MesaEnriquecimentoTab() {
     if (melhor) setSessaoId(melhor);
   }, [sessaoId, sessoes]);
 
-  const { staging, isFetching } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+  const {
+    staging, isFetching,
+    applyRow, isApplyingRow, reverterRow, isRevertingRow,
+  } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
@@ -62,6 +66,46 @@ export function MesaEnriquecimentoTab() {
     else if (canProximo) setSelecionadoId(rowsFiltradas[idx + 1].id);
   };
   const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsFiltradas.length}`;
+
+  // Escrita por linha (PR-U1). Salvar = apply_row(overwrite=true); Reverter = reverter_row.
+  const isBusy = isApplyingRow || isRevertingRow;
+  const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch;
+  const podeReverter = !!selecionado && selecionado.aplicado;
+
+  const MOTIVO_MSG: Record<string, string> = {
+    sem_lancamento_vinculado: 'Sem lançamento vinculado — resolva o ambíguo ou não é possível salvar sem match.',
+    lancamento_inexistente_ou_cancelado: 'Lançamento não encontrado ou cancelado.',
+    pulado_subcentro_preenchido: 'Subcentro já preenchido — nada a gravar no modo conservador.',
+    sem_permissao: 'Sem permissão para este cliente.',
+    nada_a_reverter: 'Nada a reverter nesta linha.',
+  };
+
+  async function salvar(): Promise<boolean> {
+    if (!selecionado) return false;
+    try {
+      const res: any = await applyRow({ staging_id: selecionado.id, overwrite: true });
+      if (res?.aplicado) { toast.success('Lançamento salvo.'); return true; }
+      toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
+      return false;
+    } catch (e: unknown) {
+      toast.error(`Erro ao salvar: ${e instanceof Error ? e.message : String(e)}`);
+      return false;
+    }
+  }
+  async function handleSalvarProximo() {
+    const ok = await salvar();
+    if (ok) irProximo();
+  }
+  async function handleReverter() {
+    if (!selecionado) return;
+    try {
+      const res: any = await reverterRow(selecionado.id);
+      if (res?.ok) toast.success('Revertido.');
+      else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não revertido (${res?.motivo ?? 'erro'}).`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao reverter: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   return (
     <div className="space-y-1 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1">
@@ -95,11 +139,15 @@ export function MesaEnriquecimentoTab() {
         canProximo={canProximo}
         revisado={revisei}
         onRevisado={setRevisei}
-        onSalvar={() => { /* ligado no PR-U1 (save por lançamento) */ }}
-        onSalvarProximo={() => { /* ligado no PR-U1 */ }}
-        onAplicarTodos={() => { /* ligado no PR-5 (fn_classificacao_apply em lote) */ }}
+        onSalvar={() => { void salvar(); }}
+        onSalvarProximo={() => { void handleSalvarProximo(); }}
+        onReverter={() => { void handleReverter(); }}
+        onAplicarTodos={() => { /* ligado no PR-lote (fn_classificacao_apply) */ }}
         nAplicaveis={nAplicaveis}
-        escritaDesabilitada
+        salvarDisabled={!podeSalvar}
+        reverterDisabled={!podeReverter}
+        aplicarTodosDisabled
+        isBusy={isBusy}
       />
 
       <EnriquecimentoImportarDialog

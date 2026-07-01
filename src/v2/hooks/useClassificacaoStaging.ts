@@ -216,6 +216,37 @@ export function useClassificacaoStaging(
     },
   });
 
+  // PR-U1 — escrita por linha (revisão manual). Retorna o jsonb da RPC
+  // ({ ok, aplicado, motivo, ... }); a RPC NÃO lança em rejeições de regra
+  // (sem_lancamento_vinculado, sem_permissao, etc) — o chamador checa `ok`.
+  const invalidarSessaoAtual = () => {
+    if (sessaoId) qc.invalidateQueries({ queryKey: queryKeyStaging(sessaoId) });
+    if (clienteId) qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
+  };
+
+  const applyRowMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; overwrite: boolean }): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_apply_row', {
+        p_staging_id: params.staging_id,
+        p_overwrite: params.overwrite,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
+  const reverterRowMutation = useMutation({
+    mutationFn: async (staging_id: string): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_reverter_row', {
+        p_staging_id: staging_id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -226,6 +257,10 @@ export function useClassificacaoStaging(
     apply: applyMutation.mutateAsync,
     isApplying: applyMutation.isPending,
     applyResult: applyMutation.data ?? null,
+    applyRow: applyRowMutation.mutateAsync,
+    isApplyingRow: applyRowMutation.isPending,
+    reverterRow: reverterRowMutation.mutateAsync,
+    isRevertingRow: reverterRowMutation.isPending,
   };
 }
 

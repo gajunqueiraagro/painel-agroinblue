@@ -46,6 +46,7 @@ export interface EnriqRowVM {
   status: EnriqStatus;
   statusLabel: string;
   aplicado: boolean;
+  temMatch: boolean;   // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
   mudaAlgo: boolean;
   // LISTA (esquerda) — só o necessário para localizar o lançamento (lado SISTEMA).
   data: string;
