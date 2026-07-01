@@ -50,6 +50,17 @@ export function MesaEnriquecimentoTab() {
   const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsVM, filtroStatus), [rowsVM, filtroStatus]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
+  // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
+  const idx = rowsFiltradas.findIndex((r) => r.id === selecionadoId);
+  const canAnterior = idx > 0;
+  const canProximo = rowsFiltradas.length > 0 && idx < rowsFiltradas.length - 1;
+  const irAnterior = () => { if (canAnterior) setSelecionadoId(rowsFiltradas[idx - 1].id); };
+  const irProximo = () => {
+    if (idx < 0) { if (rowsFiltradas.length) setSelecionadoId(rowsFiltradas[0].id); }
+    else if (canProximo) setSelecionadoId(rowsFiltradas[idx + 1].id);
+  };
+  const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsFiltradas.length}`;
+
   return (
     <div className="space-y-1">
       <EnriquecimentoToolbar
@@ -75,11 +86,18 @@ export function MesaEnriquecimentoTab() {
       </div>
 
       <EnriquecimentoActions
+        posicao={posicao}
+        onAnterior={irAnterior}
+        onProximo={irProximo}
+        canAnterior={canAnterior}
+        canProximo={canProximo}
+        revisado={revisei}
+        onRevisado={setRevisei}
+        onSalvar={() => { /* ligado no PR-U1 (save por lançamento) */ }}
+        onSalvarProximo={() => { /* ligado no PR-U1 */ }}
+        onAplicarTodos={() => { /* ligado no PR-5 (fn_classificacao_apply em lote) */ }}
         nAplicaveis={nAplicaveis}
-        revisei={revisei}
-        onRevisei={setRevisei}
-        onAplicar={() => { /* ligado no PR-5 (fn_classificacao_apply) */ }}
-        desabilitado
+        escritaDesabilitada
       />
     </div>
   );
