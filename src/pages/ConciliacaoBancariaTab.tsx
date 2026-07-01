@@ -694,7 +694,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
 
   /* ── Render ── */
   return (
-    <div className="animate-fade-in pb-20 md:pb-0 md:h-full md:min-h-0 md:flex md:flex-col md:overflow-hidden">
+    <div className="animate-fade-in pb-20 md:pb-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:overflow-hidden">
       <div className="p-3 space-y-2 sticky top-0 z-20 bg-background md:static md:z-auto md:shrink-0">
 
         {/* ════ HEADER: year dropdown + 12 month cards ════ */}

@@ -11,7 +11,7 @@ export interface EnriquecimentoListaProps {
 
 export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar }: EnriquecimentoListaProps) {
   return (
-    <div className="rounded-lg border bg-card overflow-hidden md:h-full md:flex md:flex-col md:min-h-0">
+    <div className="rounded-lg border bg-card overflow-hidden md:self-stretch md:h-full md:flex md:flex-col md:min-h-0">
       <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between md:shrink-0">
         <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground">
           Lançamentos do sistema
