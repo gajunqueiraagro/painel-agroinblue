@@ -18,9 +18,9 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar }: Enriquecim
     <button
       type="button"
       onClick={onSelecionar}
-      className={`w-full text-left rounded-md border px-2 py-1 transition-colors ${
+      className={`w-full text-left rounded border px-2 py-0.5 leading-tight transition-colors ${
         selecionado
-          ? 'border-primary bg-primary/10 ring-1 ring-primary/40 shadow-sm'
+          ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
           : 'border-transparent bg-card hover:bg-muted/50'
       }`}
     >
@@ -29,10 +29,10 @@ export function EnriquecimentoRow({ row, selecionado, onSelecionar }: Enriquecim
         <span className={`h-2 w-2 rounded-full ${meta.dot}`} title={meta.label} />
         <span className="truncate text-[10px] text-muted-foreground tabular-nums" title={row.data}>{row.data}</span>
         <span className="truncate text-[11px]" title={row.banco}>{row.banco}</span>
-        <span className="truncate text-right text-[13px] font-bold tabular-nums" title={row.valor}>{row.valor}</span>
+        <span className="truncate text-right text-[12px] font-bold tabular-nums" title={row.valor}>{row.valor}</span>
       </div>
       {/* Linha 2: Favorecido */}
-      <div className="truncate text-[11px] text-muted-foreground" style={{ paddingLeft: 19 }} title={row.fornecedor}>
+      <div className="truncate text-[10px] text-muted-foreground" style={{ paddingLeft: 19 }} title={row.fornecedor}>
         {row.fornecedor}
       </div>
     </button>

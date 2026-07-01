@@ -46,7 +46,7 @@ export function MesaEnriquecimentoTab() {
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <EnriquecimentoToolbar
         sessoes={sessoesVM}
         sessaoAtivaId={sessaoId}
@@ -58,10 +58,10 @@ export function MesaEnriquecimentoTab() {
         importarDisabled
       />
 
-      {isFetching && <div className="text-[11px] text-muted-foreground px-1">Carregando…</div>}
+      {isFetching && <div className="text-[10px] text-muted-foreground px-1">Carregando…</div>}
 
       {/* Hierarquia: ESQUERDA (~38%) seleciona o lançamento · DIREITA (~62%) analisa/decide (foco). */}
-      <div className="grid gap-2" style={{ gridTemplateColumns: '0.62fr 1fr', alignItems: 'start' }}>
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: '0.62fr 1fr', alignItems: 'start' }}>
         <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} />
         <EnriquecimentoDetalhe row={selecionado} />
       </div>

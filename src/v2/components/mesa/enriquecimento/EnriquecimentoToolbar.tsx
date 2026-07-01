@@ -22,21 +22,21 @@ export function EnriquecimentoToolbar({
   onImportar, isImporting, sessaoDisabled, importarDisabled,
 }: EnriquecimentoToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-card px-3 py-2">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card px-2 py-1">
       <div className="flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">Sessão</span>
         <select
           value={sessaoAtivaId ?? ''}
           onChange={(e) => onSelecionarSessao(e.target.value)}
           disabled={sessaoDisabled}
-          className="h-7 rounded border bg-background text-[11px] px-2 min-w-[260px] disabled:opacity-60"
+          className="h-6 rounded border bg-background text-[11px] px-2 min-w-[260px] disabled:opacity-60"
         >
           {sessoes.length === 0 && <option value="">— nenhuma sessão —</option>}
           {sessoes.map((s) => (
             <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
-        <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" disabled={isImporting || importarDisabled} onClick={onImportar}>
+        <Button size="sm" variant="outline" className="h-6 text-[11px] gap-1 px-2" disabled={isImporting || importarDisabled} onClick={onImportar}>
           ⬆ Importar Excel
         </Button>
       </div>

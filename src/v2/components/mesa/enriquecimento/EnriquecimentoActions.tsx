@@ -16,14 +16,14 @@ export function EnriquecimentoActions({
   nAplicaveis, revisei, onRevisei, onAplicar, isApplying, bloqueado, desabilitado,
 }: EnriquecimentoActionsProps) {
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+    <div className="flex flex-wrap items-center justify-end gap-3 rounded-lg border bg-muted/30 px-2 py-1">
       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
         <input type="checkbox" checked={revisei} disabled={desabilitado} onChange={(e) => onRevisei(e.target.checked)} />
         Revisei os candidatos ambíguos
       </label>
       <Button
         size="sm"
-        className="h-7 text-[11px]"
+        className="h-6 text-[11px]"
         disabled={desabilitado || !revisei || nAplicaveis === 0 || !!isApplying || !!bloqueado}
         onClick={onAplicar}
       >

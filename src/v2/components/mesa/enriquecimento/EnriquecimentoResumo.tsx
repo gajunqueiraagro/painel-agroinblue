@@ -16,7 +16,7 @@ function CardFiltro({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+      className={`flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 transition-colors ${
         ativo ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'
       }`}
     >
@@ -35,7 +35,7 @@ export function EnriquecimentoResumo({ contagens, filtroAtivo, onFiltro }: Enriq
       <CardFiltro label="Ambíguos"  valor={contagens.ambiguos} dot="bg-amber-500"   ativo={filtroAtivo === 'ambiguo'}   onClick={() => onFiltro('ambiguo')} />
       <CardFiltro label="Sem match" valor={contagens.semMatch} dot="bg-rose-500"    ativo={filtroAtivo === 'sem_match'} onClick={() => onFiltro('sem_match')} />
       {/* Informativo — não é filtro (não havia botão equivalente). */}
-      <div className="flex items-center gap-1.5 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+      <div className="flex items-center gap-1.5 rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground">
         <span className="h-2 w-2 rounded-full bg-blue-500" />
         <span className="text-[10px]">Aplicados</span>
         <span className="text-[11px] font-semibold tabular-nums">{contagens.aplicados}</span>
