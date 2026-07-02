@@ -3,8 +3,8 @@
 // Consome APENAS ViewModels prontos (via @/v2/lib/mesa/enriquecimentoView) e
 // guarda só estado de UI (sessão ativa, filtro, seleção, revisei). Nenhuma regra
 // de negócio aqui — a inteligência fica em parser → staging → vw_...preview →
-// fn_classificacao_apply. Read-only: usa apenas `staging` (SELECT via view) e a
-// lista de sessões. Popular (PR-3) e Aplicar (PR-5) seguem desabilitados.
+// fn_classificacao_apply. Salvar/Reverter/editar por linha estão ativos (apply_row /
+// reverter_row / editar_proposto); Aplicar em lote (fn_classificacao_apply) segue pausado.
 // ============================================================================
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
@@ -185,16 +185,18 @@ export function MesaEnriquecimentoTab() {
 
       {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
 
-      {/* Hierarquia: ESQUERDA (~38%) seleciona o lançamento · DIREITA (~62%) analisa/decide (foco).
-          Desktop: grid ocupa o espaço restante (flex-1) e só a lista rola. Mobile: empilha. */}
-      <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.62fr_1fr] md:[grid-template-rows:minmax(0,1fr)] md:flex-1 md:min-h-0">
-        <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} />
+      {/* Hierarquia: ESQUERDA (~29%) só LOCALIZA o lançamento · DIREITA (~71%) é a área de
+          trabalho (foco). Desktop: grid ocupa o restante (flex-1) e só a lista rola. Mobile: empilha.
+          hideBanco: sob filtro por conta, Banco é redundante (some na lista e no detalhe). */}
+      <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.40fr_1fr] md:[grid-template-rows:minmax(0,1fr)] md:flex-1 md:min-h-0">
+        <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} hideBanco={filtroConta !== 'todas'} />
         <EnriquecimentoDetalhe
           row={selecionado}
           classificacoes={classificacoes}
           fornecedores={fornecedores}
           fazendas={fazendas}
           clienteId={clienteAtual?.id}
+          hideBanco={filtroConta !== 'todas'}
           onEditar={onEditar}
           onCriarFornecedor={criarFornecedor}
         />

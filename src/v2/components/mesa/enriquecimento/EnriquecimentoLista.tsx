@@ -7,9 +7,10 @@ export interface EnriquecimentoListaProps {
   rows: EnriqRowVM[];
   selecionadoId: string | null;
   onSelecionar: (id: string) => void;
+  hideBanco?: boolean;   // U2 — some com Banco quando há filtro por conta
 }
 
-export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar }: EnriquecimentoListaProps) {
+export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBanco }: EnriquecimentoListaProps) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden md:self-stretch md:h-full md:flex md:flex-col md:min-h-0">
       <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between md:shrink-0">
@@ -28,6 +29,7 @@ export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar }: Enriq
               row={r}
               selecionado={r.id === selecionadoId}
               onSelecionar={() => onSelecionar(r.id)}
+              hideBanco={hideBanco}
             />
           ))}
         </div>

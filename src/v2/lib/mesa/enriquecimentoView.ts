@@ -28,6 +28,15 @@ function refLinha(campo: string, sistema: string | null, excel: string | null, s
   return { campo, sistema: sFmt, excel: eFmt, resultado, tom };
 }
 
+// REGRA PERMANENTE [[feedback-resultado-nunca-vazio]] — Resultado de campo EDITÁVEL nunca
+// aparenta vazio: proposta → mostra a proposta ("muda"); sem proposta mas Sistema==Excel
+// → "confere"; sem proposta e sem conferir → "mantém". Jamais '—'.
+function resultadoEditavel(sistema: string | null, excel: string | null, proposta: string | null): { resultado: string; tom: EnriqTom } {
+  if (!vazio(proposta)) return { resultado: fmtTexto(proposta), tom: 'muda' };
+  if (!vazio(sistema) && !vazio(excel) && norm(sistema) === norm(excel)) return { resultado: 'confere', tom: 'ok' };
+  return { resultado: 'mantém', tom: 'neutro' };
+}
+
 export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
@@ -44,10 +53,11 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const favRes = row.will_set_favorecido ? 'grava' : 'mantém';
   const favTom: EnriqTom = row.will_set_favorecido ? 'muda' : 'neutro';
 
+  // C1 — Sistema do Banco = a MESMA conta que a lista mostra (COALESCE origem/staging/excel),
+  // não só conta_bancaria_nome; evita '—' no detalhe quando a lista já exibe a conta.
   const banco = row.lanc_conta_bancaria_nome ?? row.conta_filtro_nome ?? row.excel_conta_origem;
-  // Descrição = observação/complemento do Sistema (NUNCA produto). O Excel não expõe
-  // campo de descrição/obs no staging, então o lado Excel de "Descrição" é '—'.
-  // O texto de produto (ex.: "27,5t quirera de milho") pertence à linha "Produto".
+  // Descrição/Produto do Sistema = descricao do lançamento (unificado em "Produto / Descrição",
+  // P0-3); fallback para observacao quando não há descricao.
   const descricao = row.lanc_descricao ?? row.lanc_observacao;
 
   const comparativo: EnriqComparativoLinha[] = [
@@ -61,25 +71,27 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
           ? { resultado: 'confere', tom: 'ok' as EnriqTom }
           : { resultado: 'difere', tom: 'difere' as EnriqTom }),
     },
-    refLinha('Banco', row.lanc_conta_bancaria_nome, row.excel_conta_origem, fmtTexto(row.lanc_conta_bancaria_nome), fmtTexto(row.excel_conta_origem)),
-    // PR-U2b — Produto/Fazenda agora com Resultado (proposta de enriquecimento), read-only.
+    // C1 — Banco do Sistema via COALESCE (mesma conta da lista); não '—' quando a conta existe.
+    refLinha('Banco', banco, row.excel_conta_origem, fmtTexto(banco), fmtTexto(row.excel_conta_origem)),
     // P0-3 — linha única "Produto / Descrição" (Produto ≡ descricao no oficial). Sistema = descrição do lançamento.
-    { campo: 'Produto / Descrição', sistema: fmtTexto(descricao), excel: fmtTexto(row.excel_produto), resultado: fmtTexto(row.proposto_produto), tom: (vazio(row.proposto_produto) ? 'neutro' : 'muda') as EnriqTom },
+    { campo: 'Produto / Descrição', sistema: fmtTexto(descricao), excel: fmtTexto(row.excel_produto), ...resultadoEditavel(descricao, row.excel_produto, row.proposto_produto) },
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
-    { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
+    { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), ...resultadoEditavel(row.lanc_fazenda_nome, row.excel_fazenda_codigo, row.proposto_fazenda_nome) },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
-    { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), resultado: fmtTexto(row.proposto_numero_documento), tom: (vazio(row.proposto_numero_documento) ? 'neutro' : 'muda') as EnriqTom },
+    { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), ...resultadoEditavel(row.lanc_numero_documento, row.excel_documento, row.proposto_numero_documento) },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
   ];
 
-  // PR-U2b — descritores de campo editável (a UI de U2c consome; aqui só prepara).
+  // D3 — descritores LEGADO (PR-U2b), NÃO renderizados: o detalhe usa editores hardcoded
+  // por campo. Mantido só como referência; flags alinhadas à realidade — produto passou a
+  // ser aplicado (P0-3, → descricao); safra/categoria continuam carry-only e SEM editor na Mesa.
   const camposEditaveis: EnriqCampoEditavel[] = [
     { campo: 'subcentro',     label: 'Subcentro',  editor: 'plano',      valorAtual: row.proposto_subcentro,        suportadoPeloApply: true },
     { campo: 'favorecido_id', label: 'Favorecido', editor: 'fornecedor', valorAtual: row.proposto_favorecido_nome,  suportadoPeloApply: true },
     { campo: 'fazenda_id',    label: 'Fazenda',    editor: 'fazenda',    valorAtual: row.proposto_fazenda_nome,     suportadoPeloApply: true },
-    { campo: 'produto',       label: 'Produto',    editor: 'texto',      valorAtual: row.proposto_produto,          suportadoPeloApply: false },
+    { campo: 'produto',       label: 'Produto',    editor: 'texto',      valorAtual: row.proposto_produto,          suportadoPeloApply: true },
     { campo: 'safra',         label: 'Safra',      editor: 'texto',      valorAtual: row.proposto_safra,            suportadoPeloApply: false },
     { campo: 'categoria',     label: 'Categoria',  editor: 'texto',      valorAtual: row.proposto_categoria,        suportadoPeloApply: false },
   ];

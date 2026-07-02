@@ -2,7 +2,7 @@
 // densa Sistema atual | Excel | Resultado. Identidade de coluna por título/borda
 // (P0-6, sem fundo). "Resultado" é um badge largo — slot pronto para, no futuro
 // (P0-9), receber select/autocomplete/input sem redesenhar a tela.
-import { TOM_BADGE, STATUS_META, ESTADO_META } from './fmt';
+import { TOM_BADGE, ESTADO_META } from './fmt';
 import type { EnriqRowVM } from './types';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -19,6 +19,7 @@ export interface EnriquecimentoDetalheProps {
   fornecedores?: FornecedorV2[];
   fazendas?: Fazenda[];
   clienteId?: string;
+  hideBanco?: boolean;   // U2 — sob filtro por conta, a linha Banco some (redundante)
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor?: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
@@ -26,7 +27,7 @@ export interface EnriquecimentoDetalheProps {
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
 const COLS = '68px minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.75fr)';
 
-export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, clienteId, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
+export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, clienteId, hideBanco, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
   if (!row) {
     return (
       <div className="rounded-lg border bg-card p-4 text-[11px] text-muted-foreground text-center">
@@ -34,22 +35,17 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
       </div>
     );
   }
-  const meta = STATUS_META[row.status] ?? STATUS_META.sem_match;
   const estadoMeta = ESTADO_META[row.estado];   // PR-U2d-1 — leitura principal
   const bloqueado = row.comparativo.some((c) => c.tom === 'bloqueio');
 
   return (
-    <div className="rounded-lg border bg-card md:max-h-full md:overflow-y-auto">
-      {/* Cabeçalho do lançamento: Match · Data · Valor */}
-      <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30">
-        {/* PR-U2d-1 — selo do estado operacional em destaque; match cru fica secundário. */}
-        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${estadoMeta.cls}`}>
-          <span className={`h-2 w-2 rounded-full ${estadoMeta.dot}`} /> {estadoMeta.label}
+    // U8 — sem overflow-y-auto: após densificar e remover o cabeçalho, o detalhe cabe sem scroll.
+    <div className="rounded-lg border bg-card">
+      {/* U7 — selo de estado MÍNIMO (1 linha fina). Data/valor/status cru removidos (redundantes: já estão na lista). */}
+      <div className="flex items-center px-2 py-0.5 border-b bg-muted/30">
+        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${estadoMeta.cls}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${estadoMeta.dot}`} /> {estadoMeta.label}
         </span>
-        <span className="text-[9px] text-muted-foreground/70">· {row.statusLabel}</span>
-        <div className="flex-1" />
-        <span className="text-[11px] text-muted-foreground tabular-nums">{row.data}</span>
-        <span className="text-[13px] font-bold tabular-nums">{row.valor}</span>
       </div>
 
       <div className="px-2 py-1">
@@ -63,11 +59,15 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
 
         {/* Linhas densas, estilo planilha (P0-7) */}
         <div className="divide-y divide-border/50 mt-0.5">
-          {row.comparativo.map((c) => (
-            <div key={c.campo} className="grid gap-x-2 items-center py-px" style={{ gridTemplateColumns: COLS }}>
-              <span className="text-[10px] text-muted-foreground truncate" title={c.campo}>{c.campo}</span>
-              <span className="text-[11px] truncate" title={c.sistema}>{c.sistema}</span>
-              <span className="text-[11px] text-blue-700/90 truncate" title={c.excel}>{c.excel}</span>
+          {/* U2 — sob filtro por conta, a linha Banco some (redundante). */}
+          {row.comparativo.filter((c) => !(hideBanco && c.campo === 'Banco')).map((c) => {
+            // U6 — Produto/Descrição e Fornecedor NUNCA truncam no detalhe (wrap multi-linha); demais truncam.
+            const wrap = c.campo === 'Produto / Descrição' || c.campo === 'Fornecedor';
+            return (
+            <div key={c.campo} className="grid gap-x-2 items-start py-px" style={{ gridTemplateColumns: COLS }}>
+              <span className="text-[10px] text-muted-foreground truncate pt-0.5" title={c.campo}>{c.campo}</span>
+              <span className={`text-[11px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
+              <span className={`text-[11px] text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
               <div className="min-w-0">
                 {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
                 {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (
@@ -113,7 +113,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                   />
                 ) : (
                   <span
-                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] max-w-full truncate ${TOM_BADGE[c.tom]}`}
+                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] max-w-full ${wrap ? 'whitespace-normal break-words' : 'truncate'} ${TOM_BADGE[c.tom]}`}
                     title={c.resultado}
                   >
                     {c.resultado}
@@ -121,7 +121,8 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Resumo do que o Aplicar faria */}
