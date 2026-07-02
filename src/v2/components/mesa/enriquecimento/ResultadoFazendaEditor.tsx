@@ -14,6 +14,7 @@ import type { Fazenda } from '@/contexts/FazendaContext';
 
 export interface ResultadoFazendaEditorProps {
   value: string | null;
+  fazendaIdAtual: string | null;  // BUG2: valor efetivo (lanc_fazenda_id) — fallback quando não há proposta
   fazendas: Fazenda[];
   forcaAdministrativo: boolean;   // = edicao.macro === 'Dividendos'
   disabled?: boolean;
@@ -21,15 +22,20 @@ export interface ResultadoFazendaEditorProps {
 }
 
 export function ResultadoFazendaEditor({
-  value, fazendas, forcaAdministrativo, disabled, onEditar,
+  value, fazendaIdAtual, fazendas, forcaAdministrativo, disabled, onEditar,
 }: ResultadoFazendaEditorProps) {
+  // BUG2 — "Resultado nunca vazio": sem proposta explícita, o Select mostra a fazenda
+  // EFETIVA do lançamento (não "Selecione"). Só é fallback de exibição — não grava no
+  // mount (o onChange automático segue bloqueado; ver regra abaixo). Fica vazio só quando
+  // não há proposta NEM fazenda no lançamento.
   return (
     <FazendaSelect
-      value={value ?? ''}
+      value={value ?? fazendaIdAtual ?? ''}
       onChange={(id) => { if (!forcaAdministrativo) void onEditar({ fazenda_id: id }); }}
       fazendas={fazendas}
       forcaAdministrativo={forcaAdministrativo}
       disabled={disabled}
+      triggerClassName="h-6 text-[11px]"
     />
   );
 }

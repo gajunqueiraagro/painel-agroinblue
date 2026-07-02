@@ -73,6 +73,7 @@ export interface EnriqEdicao {
   descricaoAtual: string | null;   // P0-3: lanc_descricao (editor "Produto / Descrição")
   numeroDocumento: string | null;      // P0-5: proposto_numero_documento
   numeroDocumentoAtual: string | null; // P0-5: lanc_numero_documento (fallback)
+  fazendaIdAtual: string | null;       // BUG2: lanc_fazenda_id (valor efetivo p/ o Select não parecer vazio)
 }
 
 export interface EnriqRowVM {

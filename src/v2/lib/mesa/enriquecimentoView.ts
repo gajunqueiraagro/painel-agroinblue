@@ -112,6 +112,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     descricaoAtual: descricao,   // P0-3: lanc_descricao (editor "Produto / Descrição")
     numeroDocumento: row.proposto_numero_documento,        // P0-5
     numeroDocumentoAtual: row.lanc_numero_documento,       // P0-5
+    fazendaIdAtual: row.lanc_fazenda_id,                   // BUG2: fallback do Select da Fazenda
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).

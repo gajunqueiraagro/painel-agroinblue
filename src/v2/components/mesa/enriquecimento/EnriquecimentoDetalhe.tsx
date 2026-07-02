@@ -48,13 +48,13 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
         </span>
       </div>
 
-      <div className="px-2 py-1">
-        {/* Cabeçalhos fortes + identidade de coluna (P0-4 / P0-6) */}
+      <div className="px-2 py-0.5">
+        {/* Cabeçalhos fortes + identidade de coluna (P0-4 / P0-6) — compactados (BUG1). */}
         <div className="grid gap-x-2" style={{ gridTemplateColumns: COLS }}>
           <span />
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 border-t-2 border-slate-300 pt-0.5">Sistema atual</span>
-          <span className="text-[10px] font-bold uppercase tracking-wide text-blue-600 border-t-2 border-blue-300 pt-0.5">Excel</span>
-          <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-600 border-t-2 border-emerald-400 pt-0.5">Resultado</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500 border-t border-slate-300">Sistema atual</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-blue-600 border-t border-blue-300">Excel</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600 border-t border-emerald-400">Resultado</span>
         </div>
 
         {/* Linhas densas, estilo planilha (P0-7) */}
@@ -64,10 +64,10 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
             // U6 — Produto/Descrição e Fornecedor NUNCA truncam no detalhe (wrap multi-linha); demais truncam.
             const wrap = c.campo === 'Produto / Descrição' || c.campo === 'Fornecedor';
             return (
-            <div key={c.campo} className="grid gap-x-2 items-start py-px" style={{ gridTemplateColumns: COLS }}>
-              <span className="text-[10px] text-muted-foreground truncate pt-0.5" title={c.campo}>{c.campo}</span>
-              <span className={`text-[11px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
-              <span className={`text-[11px] text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
+            <div key={c.campo} className="grid gap-x-2 items-start" style={{ gridTemplateColumns: COLS }}>
+              <span className="text-[9px] text-muted-foreground truncate pt-1" title={c.campo}>{c.campo}</span>
+              <span className={`text-[10px] pt-1 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
+              <span className={`text-[10px] text-blue-700/90 pt-1 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
               <div className="min-w-0">
                 {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
                 {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (
@@ -90,6 +90,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                   // (Select disabled + aviso); nunca grava no mount (só em seleção explícita).
                   <ResultadoFazendaEditor
                     value={row.edicao.fazendaId}
+                    fazendaIdAtual={row.edicao.fazendaIdAtual}
                     fazendas={fazendas}
                     forcaAdministrativo={row.edicao.macro === 'Dividendos'}
                     onEditar={onEditar}
@@ -113,7 +114,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                   />
                 ) : (
                   <span
-                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] max-w-full ${wrap ? 'whitespace-normal break-words' : 'truncate'} ${TOM_BADGE[c.tom]}`}
+                    className={`inline-flex items-center rounded px-1 py-px text-[9px] max-w-full ${wrap ? 'whitespace-normal break-words' : 'truncate'} ${TOM_BADGE[c.tom]}`}
                     title={c.resultado}
                   >
                     {c.resultado}
@@ -125,8 +126,8 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
           })}
         </div>
 
-        {/* Resumo do que o Aplicar faria */}
-        <div className="text-[10px] border-t border-dashed pt-1 mt-1">
+        {/* Resumo do que o Aplicar faria — compactado (BUG1). */}
+        <div className="text-[9px] leading-tight border-t border-dashed pt-0.5 mt-0.5">
           {bloqueado
             ? <span className="text-red-700">Bloqueado no Aplicar: subcentro proposto fora do plano oficial.</span>
             : row.mudaAlgo
@@ -135,7 +136,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
         </div>
 
         {/* PR-U2b — proveniência da resolução (read-only, rastreabilidade). '—' em linhas sem _meta. */}
-        <div className="text-[10px] text-muted-foreground pt-0.5" title="Como esta proposta foi resolvida (metadado)">
+        <div className="text-[9px] leading-tight text-muted-foreground" title="Como esta proposta foi resolvida (metadado)">
           Resolução: {row.proveniencia.origem ?? '—'}
           {row.proveniencia.tier && row.proveniencia.tier !== row.proveniencia.origem ? ` (${row.proveniencia.tier})` : ''}
           {row.proveniencia.motorVersion != null ? ` · motor v${row.proveniencia.motorVersion}` : ''}

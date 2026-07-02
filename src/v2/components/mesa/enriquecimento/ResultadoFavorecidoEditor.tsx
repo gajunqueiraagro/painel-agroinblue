@@ -35,6 +35,7 @@ export function ResultadoFavorecidoEditor({
         onSearchChange={setSearch}
         onCriarNovo={() => { setDefaultNome(search); setDialogOpen(true); }}
         disabled={disabled}
+        triggerClassName="h-6 text-[11px]"
       />
       <NovoFornecedorDialog
         open={dialogOpen}

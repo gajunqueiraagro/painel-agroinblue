@@ -27,6 +27,7 @@ export function ResultadoSubcentroEditor({
       search={search}
       onSearchChange={setSearch}
       disabled={disabled}
+      triggerClassName="h-6 text-[11px]"
     />
   );
 }
