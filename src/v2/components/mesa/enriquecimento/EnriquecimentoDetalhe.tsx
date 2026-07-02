@@ -2,7 +2,7 @@
 // densa Sistema atual | Excel | Resultado. Identidade de coluna por título/borda
 // (P0-6, sem fundo). "Resultado" é um badge largo — slot pronto para, no futuro
 // (P0-9), receber select/autocomplete/input sem redesenhar a tela.
-import { TOM_BADGE, ESTADO_META } from './fmt';
+import { TOM_BADGE } from './fmt';
 import type { EnriqRowVM } from './types';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -35,19 +35,12 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
       </div>
     );
   }
-  const estadoMeta = ESTADO_META[row.estado];   // PR-U2d-1 — leitura principal
   const bloqueado = row.comparativo.some((c) => c.tom === 'bloqueio');
 
   return (
-    // U8 — sem overflow-y-auto: após densificar e remover o cabeçalho, o detalhe cabe sem scroll.
-    <div className="rounded-lg border bg-card">
-      {/* U7 — selo de estado MÍNIMO (1 linha fina). Data/valor/status cru removidos (redundantes: já estão na lista). */}
-      <div className="flex items-center px-2 py-0.5 border-b bg-muted/30">
-        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${estadoMeta.cls}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${estadoMeta.dot}`} /> {estadoMeta.label}
-        </span>
-      </div>
-
+    // Limitado à própria área (h-full + overflow-y-auto): NUNCA invade a barra inferior;
+    // com a densidade, cabe sem rolar na maioria das telas. Selo de estado removido (está na lista).
+    <div className="rounded-lg border bg-card md:h-full md:min-h-0 md:overflow-y-auto">
       <div className="px-2 py-0.5">
         {/* Cabeçalhos fortes + identidade de coluna (P0-4 / P0-6) — compactados (BUG1). */}
         <div className="grid gap-x-2" style={{ gridTemplateColumns: COLS }}>
@@ -65,9 +58,9 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
             const wrap = c.campo === 'Produto / Descrição' || c.campo === 'Fornecedor';
             return (
             <div key={c.campo} className="grid gap-x-2 items-start" style={{ gridTemplateColumns: COLS }}>
-              <span className="text-[9px] text-muted-foreground truncate pt-1" title={c.campo}>{c.campo}</span>
-              <span className={`text-[10px] pt-1 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
-              <span className={`text-[10px] text-blue-700/90 pt-1 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
+              <span className="text-[9px] text-muted-foreground truncate pt-0.5" title={c.campo}>{c.campo}</span>
+              <span className={`text-[10px] pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.sistema}>{c.sistema}</span>
+              <span className={`text-[10px] text-blue-700/90 pt-0.5 ${wrap ? 'break-words' : 'truncate'}`} title={c.excel}>{c.excel}</span>
               <div className="min-w-0">
                 {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
                 {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (

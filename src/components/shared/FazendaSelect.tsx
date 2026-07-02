@@ -21,11 +21,12 @@ export interface FazendaSelectProps {
   triggerClassName?: string;      // ex.: fieldBg
   tabIndex?: number;
   disabled?: boolean;             // disabled adicional (além de forçado)
+  hideAviso?: boolean;            // Mesa: suprime o texto "Dividendos são salvos..." (densidade)
 }
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, tabIndex, disabled,
+  label, className, triggerClassName, tabIndex, disabled, hideAviso,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -49,7 +50,7 @@ export function FazendaSelect({
           {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
         </SelectContent>
       </Select>
-      {forcaAdministrativo && fazendaAdm && (
+      {!hideAviso && forcaAdministrativo && fazendaAdm && (
         <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
           <AlertTriangle className="h-3 w-3" />
           Dividendos são salvos automaticamente em {fazendaAdm.nome}

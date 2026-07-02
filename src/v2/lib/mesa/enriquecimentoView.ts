@@ -41,11 +41,19 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   const statusLabel = STATUS_META[row.match_status]?.label ?? row.match_status;
 
   // Subcentro — campo GRAVADO pelo apply (usa flags da view).
+  // SOBERANIA DO PLANO/SISTEMA: proposta órfã (fora do plano oficial) NUNCA vira Resultado.
+  // O editor usa a proposta só se VÁLIDA no plano; caso contrário mantém o subcentro do Sistema
+  // (Excel é hipótese, não fonte soberana). Nunca aplicamos subcentro fora do plano.
   const subSistema = row.lanc_subcentro_atual;
-  const subExcel = row.proposto_subcentro ?? row.excel_subcentro;
+  const subExcel = row.proposto_subcentro ?? row.excel_subcentro;   // lado Excel = hipótese (pode ser órfã)
+  const subcentroValido = !row.will_create_subcentro_orfao ? row.proposto_subcentro : null;
+  const subcentroEfetivo = subcentroValido ?? row.lanc_subcentro_atual;   // valor do editor: nunca a órfã
   let subRes = 'mantém'; let subTom: EnriqTom = 'neutro';
-  if (row.will_create_subcentro_orfao) { subRes = 'bloqueado'; subTom = 'bloqueio'; }
-  else if (row.will_set_subcentro) { subRes = 'grava'; subTom = 'muda'; }
+  if (row.will_create_subcentro_orfao) {
+    // Excel propôs órfã: Sistema é soberano — se já há subcentro no Sistema, MANTÉM; senão, revisar.
+    if (!vazio(subSistema)) { subRes = 'mantém'; subTom = 'neutro'; }
+    else { subRes = 'revisar'; subTom = 'bloqueio'; }
+  } else if (row.will_set_subcentro) { subRes = 'grava'; subTom = 'muda'; }
 
   // Favorecido/Fornecedor — campo GRAVADO pelo apply (usa flag da view).
   const favSistema = row.lanc_favorecido_nome_atual;
@@ -103,7 +111,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
   };
   // PR-U2c-2A — valores crus da proposta para os editores inline.
   const edicao: EnriqEdicao = {
-    subcentro: row.proposto_subcentro,
+    subcentro: subcentroEfetivo,   // BUG — nunca a proposta órfã; proposta válida ou o Sistema soberano
     favorecidoId: row.proposto_favorecido_id,
     fazendaId: row.proposto_fazenda_id,
     produto: row.proposto_produto,

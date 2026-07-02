@@ -36,6 +36,7 @@ export function ResultadoFazendaEditor({
       forcaAdministrativo={forcaAdministrativo}
       disabled={disabled}
       triggerClassName="h-6 text-[10px] px-2"
+      hideAviso
     />
   );
 }
