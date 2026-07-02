@@ -71,6 +71,13 @@ export function EnriquecimentoDetalhe({ row }: EnriquecimentoDetalheProps) {
               ? <span className="text-emerald-700">Ao Aplicar, os campos “grava” são atualizados no lançamento existente (nunca cria lançamento).</span>
               : <span className="text-muted-foreground">Nada muda: os campos já estão preenchidos/idênticos ao proposto.</span>}
         </div>
+
+        {/* PR-U2b — proveniência da resolução (read-only, rastreabilidade). '—' em linhas sem _meta. */}
+        <div className="text-[10px] text-muted-foreground pt-0.5" title="Como esta proposta foi resolvida (metadado)">
+          Resolução: {row.proveniencia.origem ?? '—'}
+          {row.proveniencia.tier && row.proveniencia.tier !== row.proveniencia.origem ? ` (${row.proveniencia.tier})` : ''}
+          {row.proveniencia.motorVersion != null ? ` · motor v${row.proveniencia.motorVersion}` : ''}
+        </div>
       </div>
     </div>
   );

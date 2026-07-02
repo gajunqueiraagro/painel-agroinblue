@@ -11,6 +11,7 @@ import type {
 } from '@/v2/hooks/useClassificacaoStaging';
 import type {
   EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqContaVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
+  EnriqCampoEditavel, EnriqProveniencia,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 
@@ -61,14 +62,31 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
           : { resultado: 'difere', tom: 'difere' as EnriqTom }),
     },
     refLinha('Banco', row.lanc_conta_bancaria_nome, row.excel_conta_origem, fmtTexto(row.lanc_conta_bancaria_nome), fmtTexto(row.excel_conta_origem)),
-    refLinha('Produto', null, row.excel_produto, '—', fmtTexto(row.excel_produto)),
+    // PR-U2b — Produto/Fazenda agora com Resultado (proposta de enriquecimento), read-only.
+    { campo: 'Produto', sistema: '—', excel: fmtTexto(row.excel_produto), resultado: fmtTexto(row.proposto_produto), tom: (vazio(row.proposto_produto) ? 'neutro' : 'muda') as EnriqTom },
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
-    refLinha('Fazenda', null, row.excel_fazenda_codigo, '—', fmtTexto(row.excel_fazenda_codigo)),
+    { campo: 'Fazenda', sistema: '—', excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     { campo: 'Documento', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' },
     refLinha('Descrição', descricao, null, fmtTexto(descricao), '—'),
   ];
+
+  // PR-U2b — descritores de campo editável (a UI de U2c consome; aqui só prepara).
+  const camposEditaveis: EnriqCampoEditavel[] = [
+    { campo: 'subcentro',     label: 'Subcentro',  editor: 'plano',      valorAtual: row.proposto_subcentro,        suportadoPeloApply: true },
+    { campo: 'favorecido_id', label: 'Favorecido', editor: 'fornecedor', valorAtual: row.proposto_favorecido_nome,  suportadoPeloApply: true },
+    { campo: 'fazenda_id',    label: 'Fazenda',    editor: 'fazenda',    valorAtual: row.proposto_fazenda_nome,     suportadoPeloApply: true },
+    { campo: 'produto',       label: 'Produto',    editor: 'texto',      valorAtual: row.proposto_produto,          suportadoPeloApply: false },
+    { campo: 'safra',         label: 'Safra',      editor: 'texto',      valorAtual: row.proposto_safra,            suportadoPeloApply: false },
+    { campo: 'categoria',     label: 'Categoria',  editor: 'texto',      valorAtual: row.proposto_categoria,        suportadoPeloApply: false },
+  ];
+  // PR-U2b — proveniência (projeção read-only de _meta; só rastreabilidade).
+  const proveniencia: EnriqProveniencia = {
+    tier: row.proposto_tier,
+    origem: row.proposto_origem_resolucao,
+    motorVersion: row.motor_version,
+  };
 
   return {
     id: row.staging_id,
@@ -84,6 +102,8 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     banco: fmtTexto(banco),
     fornecedor: fmtTexto(favSistema ?? favExcel),
     comparativo,
+    camposEditaveis,
+    proveniencia,
   };
 }
 

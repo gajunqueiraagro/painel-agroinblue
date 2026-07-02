@@ -40,6 +40,24 @@ export interface EnriqComparativoLinha {
   tom: EnriqTom;
 }
 
+// PR-U2b — descritor de campo editável da proposta (a UI de U2c consome; aqui só
+// prepara). editor = qual componente OFICIAL dos Lançamentos reutilizar.
+export type EnriqCampoId = 'subcentro' | 'favorecido_id' | 'fazenda_id' | 'produto' | 'safra' | 'categoria';
+export interface EnriqCampoEditavel {
+  campo: EnriqCampoId;
+  label: string;
+  editor: 'plano' | 'fornecedor' | 'fazenda' | 'texto';
+  valorAtual: string | null;       // valor proposto atual (display)
+  suportadoPeloApply: boolean;     // subcentro/favorecido/fazenda=true; produto/safra/categoria=false (carry-only)
+}
+
+// PR-U2b — proveniência da resolução (projeção read-only de _meta). Só rastreabilidade.
+export interface EnriqProveniencia {
+  tier: string | null;
+  origem: string | null;           // origem_resolucao (tier | 'manual' | 'orfao')
+  motorVersion: number | null;
+}
+
 export interface EnriqRowVM {
   id: string;
   linha: number | null;      // excel_linha_origem (contexto)
@@ -56,4 +74,7 @@ export interface EnriqRowVM {
   fornecedor: string;
   // DETALHE (direita) — comparativo completo Sistema | Excel | Resultado.
   comparativo: EnriqComparativoLinha[];
+  // PR-U2b — infra do editor (ainda SEM edição visual): descritores + proveniência.
+  camposEditaveis: EnriqCampoEditavel[];
+  proveniencia: EnriqProveniencia;
 }

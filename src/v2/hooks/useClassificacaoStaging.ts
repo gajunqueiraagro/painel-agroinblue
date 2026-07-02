@@ -127,6 +127,19 @@ export interface ClassificacaoStagingPreviewRow {
   // PR-B: conta canônica (via vw migration 253 — fonte soberana)
   conta_filtro_id: string | null;
   conta_filtro_nome: string | null;
+
+  // PR-U2b: enriquecimento (proposta completa) + _meta (projeção read-only p/ rastreabilidade).
+  proposto_fazenda_id: string | null;
+  proposto_fazenda_nome: string | null;
+  proposto_produto: string | null;
+  proposto_safra: string | null;
+  proposto_categoria: string | null;
+  will_set_fazenda: boolean;        // "muda fazenda": proposta ≠ atual
+  proposto_tier: string | null;
+  proposto_origem_resolucao: string | null;
+  proposto_regra_id: string | null;
+  proposto_alias_id: string | null;
+  motor_version: number | null;
 }
 
 export interface PopulateResult {
@@ -247,6 +260,32 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  // PR-U2b — edição da proposta de enriquecimento (subcentro/favorecido/fazenda/
+  // produto/safra/categoria) via RPC existente. Retorna o jsonb ({ ok, motivo,
+  // update_proposto, campos_aplicados, campos_rejeitados }); o chamador checa `ok`.
+  const editarPropostoMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; patch: Record<string, unknown> }): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_editar_proposto', {
+        p_staging_id: params.staging_id,
+        p_patch: params.patch,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
+  const resetarPropostoMutation = useMutation({
+    mutationFn: async (staging_id: string): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_resetar_proposto', {
+        p_staging_id: staging_id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -261,6 +300,10 @@ export function useClassificacaoStaging(
     isApplyingRow: applyRowMutation.isPending,
     reverterRow: reverterRowMutation.mutateAsync,
     isRevertingRow: reverterRowMutation.isPending,
+    editarProposto: editarPropostoMutation.mutateAsync,
+    isEditando: editarPropostoMutation.isPending,
+    resetarProposto: resetarPropostoMutation.mutateAsync,
+    isResetando: resetarPropostoMutation.isPending,
   };
 }
 
