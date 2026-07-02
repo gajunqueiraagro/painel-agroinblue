@@ -9,13 +9,13 @@ import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/Con
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
@@ -313,38 +313,14 @@ export function LancamentoV2Dialog({
   // Product suggestions state
   // PR-U2c-1A: sugestões de Produto migraram para <ProdutoAutocomplete />.
 
-  // Subcentro search
-  const [subcentroOpen, setSubcentroOpen] = useState(false);
+  // PR-U2c-1D: seletor de Subcentro migrou p/ <PlanoSubcentroSelect />. `subcentroSearch`
+  // permanece controlado aqui pois o reset ao trocar tipo_operacao o usa.
   const [subcentroSearch, setSubcentroSearch] = useState('');
-  const [subcentroHighlight, setSubcentroHighlight] = useState(0);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const subcentroItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const isTransferencia = tipoOperacao === '3-Transferências';
   const isEntrada = tipoOperacao === '1-Entradas';
 
-  const classMap = useMemo(() => {
-    const m = new Map<string, ClassificacaoItem>();
-    for (const c of classificacoes) {
-      if (c.subcentro && !m.has(c.subcentro)) m.set(c.subcentro, c);
-    }
-    return m;
-  }, [classificacoes]);
-
-  /** Subcentros filtered by tipo_operacao then by search text.
-   *  Uses the selected tipoOperacao directly – each type has its own subtree. */
-  const filteredSubcentros = useMemo(() => {
-    const unique = Array.from(classMap.values());
-    const byTipo = unique.filter(c => {
-      if (!tipoOperacao) return true;
-      // Flexible match: DB may store "3-Transferências" while UI uses "3-Transferência"
-      if (tipoOperacao.startsWith('3-')) return c.tipo_operacao.startsWith('3-');
-      return c.tipo_operacao === tipoOperacao;
-    });
-    if (!subcentroSearch.trim()) return byTipo;
-    const term = subcentroSearch.toLowerCase();
-    return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
-  }, [classMap, subcentroSearch, tipoOperacao]);
+  // PR-U2c-1D: classMap + filteredSubcentros migraram para <PlanoSubcentroSelect />.
 
   useEffect(() => {
     if (lancamento) {
@@ -552,47 +528,6 @@ export function LancamentoV2Dialog({
       setDadosPagamento(buildDadosPagamento(f, metodo));
     }
   }, [fornecedores, favorecidoId, buildDadosPagamento]);
-
-  const handleSubcentroSelect = (value: string) => {
-    setSubcentro(value);
-    setSubcentroOpen(false);
-    setSubcentroSearch('');
-    const cls = classMap.get(value);
-    if (cls) {
-      setMacroCusto(cls.macro_custo);
-      setCentroCusto(cls.centro_custo);
-      // Derive escopo_negocio from official plano de contas (no keyword heuristic)
-      setEscopoNegocio(cls.escopo_negocio || '');
-    }
-  };
-
-  const handleSubcentroKeyDown = (e: React.KeyboardEvent) => {
-    if (filteredSubcentros.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSubcentroHighlight(prev => {
-        const next = Math.min(prev + 1, filteredSubcentros.length - 1);
-        subcentroItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSubcentroHighlight(prev => {
-        const next = Math.max(prev - 1, 0);
-        subcentroItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const sc = filteredSubcentros[subcentroHighlight];
-      if (sc) handleSubcentroSelect(sc.subcentro || '');
-    } else if (e.key === 'Tab') {
-      const sc = filteredSubcentros[subcentroHighlight];
-      if (sc) handleSubcentroSelect(sc.subcentro || '');
-    } else if (e.key === 'Escape') {
-      setSubcentroOpen(false);
-    }
-  };
 
   const handleDataPagamentoChange = (val: string) => {
     setDataPagamento(val);
@@ -1204,49 +1139,26 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">Valor (R$) *</Label>
                   <Input tabIndex={10} value={valorDisplay} onChange={handleValorChange} onFocus={e => e.target.select()} className={cn("h-8 text-right font-mono", fieldBg)} placeholder="0,00" inputMode="numeric" disabled={lockedFields?.includes('valor')} />
                 </div>
+                {/* Subcentro — PR-U2c-1D: extraído para <PlanoSubcentroSelect /> (fonte única) */}
                 <div>
-                  <Label className="text-[10px]">Subcentro *</Label>
-                  <Popover open={subcentroOpen} onOpenChange={v => { setSubcentroOpen(v); if (!v) { setSubcentroSearch(''); setSubcentroHighlight(0); } }}>
-                    <PopoverTrigger asChild>
-                      <Button tabIndex={11} variant="outline" role="combobox" aria-expanded={subcentroOpen} className={cn("w-full h-8 justify-between font-normal text-xs", fieldBg)}>
-                        <span className="truncate">{subcentro || 'Selecione o subcentro...'}</span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <div className="flex items-center border-b px-3 py-2">
-                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <input
-                          ref={searchInputRef}
-                          className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                          placeholder="Buscar subcentro..."
-                          value={subcentroSearch}
-                          onChange={e => { setSubcentroSearch(e.target.value); setSubcentroHighlight(0); }}
-                          onKeyDown={handleSubcentroKeyDown}
-                          autoFocus
-                        />
-                      </div>
-                      <div className="max-h-48 overflow-y-auto p-1">
-                        {filteredSubcentros.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum subcentro encontrado</p>}
-                        {filteredSubcentros.map((sc, idx) => (
-                          <button
-                            key={sc.subcentro || idx}
-                            ref={el => { subcentroItemRefs.current[idx] = el; }}
-                            className={cn(
-                              "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                              idx === subcentroHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                              subcentro === sc.subcentro && idx !== subcentroHighlight && "bg-accent/30"
-                            )}
-                            onClick={() => handleSubcentroSelect(sc.subcentro || '')}
-                            onMouseEnter={() => setSubcentroHighlight(idx)}
-                          >
-                            <Check className={cn("mr-2 h-4 w-4", subcentro === sc.subcentro ? "opacity-100" : "opacity-0")} />
-                            <span className="truncate">{sc.subcentro}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                  <PlanoSubcentroSelect
+                    value={subcentro}
+                    onChange={setSubcentro}
+                    onSelected={(_sub, cls) => {
+                      if (cls) {
+                        setMacroCusto(cls.macro_custo);
+                        setCentroCusto(cls.centro_custo);
+                        setEscopoNegocio(cls.escopo_negocio || '');
+                      }
+                    }}
+                    classificacoes={classificacoes}
+                    tipoOperacao={tipoOperacao}
+                    search={subcentroSearch}
+                    onSearchChange={setSubcentroSearch}
+                    label="Subcentro *"
+                    triggerClassName={fieldBg}
+                    tabIndex={11}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
