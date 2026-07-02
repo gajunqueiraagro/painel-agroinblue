@@ -6,6 +6,7 @@ import { TOM_BADGE, STATUS_META } from './fmt';
 import type { EnriqRowVM } from './types';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
+import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
 
 export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
@@ -20,7 +21,7 @@ export interface EnriquecimentoDetalheProps {
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
 const COLS = '68px minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.75fr)';
 
-export function EnriquecimentoDetalhe({ row }: EnriquecimentoDetalheProps) {
+export function EnriquecimentoDetalhe({ row, classificacoes, onEditar }: EnriquecimentoDetalheProps) {
   if (!row) {
     return (
       <div className="rounded-lg border bg-card p-4 text-[11px] text-muted-foreground text-center">
@@ -60,12 +61,23 @@ export function EnriquecimentoDetalhe({ row }: EnriquecimentoDetalheProps) {
               <span className="text-[11px] truncate" title={c.sistema}>{c.sistema}</span>
               <span className="text-[11px] text-blue-700/90 truncate" title={c.excel}>{c.excel}</span>
               <div className="min-w-0">
-                <span
-                  className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] max-w-full truncate ${TOM_BADGE[c.tom]}`}
-                  title={c.resultado}
-                >
-                  {c.resultado}
-                </span>
+                {c.campo === 'Subcentro' && onEditar && classificacoes ? (
+                  // PR-U2c-2B — editor inline do Subcentro (fonte única). Desabilitado em linha aplicada.
+                  <ResultadoSubcentroEditor
+                    value={row.edicao.subcentro}
+                    tipoOperacao={row.edicao.tipoOperacao}
+                    classificacoes={classificacoes}
+                    disabled={row.aplicado}
+                    onEditar={onEditar}
+                  />
+                ) : (
+                  <span
+                    className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] max-w-full truncate ${TOM_BADGE[c.tom]}`}
+                    title={c.resultado}
+                  >
+                    {c.resultado}
+                  </span>
+                )}
               </div>
             </div>
           ))}
