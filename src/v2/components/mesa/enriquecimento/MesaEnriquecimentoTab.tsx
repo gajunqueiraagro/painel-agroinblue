@@ -97,6 +97,10 @@ export function MesaEnriquecimentoTab() {
   };
   const posicao = `${idx >= 0 ? idx + 1 : '—'} / ${rowsFiltradas.length}`;
 
+  // R1 — Promise da edição em voo (commit-on-blur de Produto/Documento). salvar() a aguarda
+  // antes do apply, para o apply_row NUNCA ler update_proposto antes do editar_proposto commitar.
+  const pendingEditRef = useRef<Promise<unknown> | null>(null);
+
   // Escrita por linha (PR-U1). Salvar = apply_row(overwrite=true); Reverter = reverter_row.
   const isBusy = isApplyingRow || isRevertingRow;
   // Linha órfã (subcentro fora do plano) não pode ser aplicada — a trigger do
@@ -123,6 +127,10 @@ export function MesaEnriquecimentoTab() {
     if (!selecionado) return false;
     const id = selecionado.id;                       // captura antes do await (seleção pode mudar)
     try {
+      // R1 — aguarda qualquer edição pendente (commit-on-blur de Produto/Documento) COMMITAR
+      // antes de o apply_row ler update_proposto. Sem timeout/polling: só await da Promise.
+      // (erro da edição já foi tratado no onEditar; aqui só garantimos a ordem.)
+      try { await pendingEditRef.current; } catch { /* noop */ }
       const res: any = await applyRow({ staging_id: id, overwrite: true });
       if (res?.aplicado) { manterEmGraca(id); toast.success('Lançamento salvo.'); return true; }
       toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
@@ -151,8 +159,12 @@ export function MesaEnriquecimentoTab() {
   // 2B..2E chamam isto). patch = { subcentro | favorecido_id | fazenda_id | produto | ... }.
   async function onEditar(patch: Record<string, unknown>): Promise<void> {
     if (!selecionado) return;
+    // R1 — dispara a edição e registra a Promise SINCRONAMENTE (antes do 1º await), para o
+    // salvar() disparado logo em seguida (blur→click) poder aguardá-la antes do apply.
+    const p = editarProposto({ staging_id: selecionado.id, patch });
+    pendingEditRef.current = p;
     try {
-      const res: any = await editarProposto({ staging_id: selecionado.id, patch });
+      const res: any = await p;
       if (res?.ok) {
         const rej = res?.campos_rejeitados;
         if (rej && Object.keys(rej).length > 0) {
@@ -163,6 +175,8 @@ export function MesaEnriquecimentoTab() {
       }
     } catch (e: unknown) {
       toast.error(`Erro ao editar: ${errMsg(e)}`);
+    } finally {
+      if (pendingEditRef.current === p) pendingEditRef.current = null;
     }
   }
 
