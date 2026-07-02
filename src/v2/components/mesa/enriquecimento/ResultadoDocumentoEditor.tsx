@@ -31,7 +31,7 @@ export function ResultadoDocumentoEditor({ value, numeroDocumentoAtual, onEditar
 
   return (
     <Input
-      className="h-6 text-[11px]"
+      className="h-6 text-[10px] px-2"
       value={text}
       onChange={(e) => setBoth(e.target.value)}
       onBlur={commitValue}

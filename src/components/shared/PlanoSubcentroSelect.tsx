@@ -22,13 +22,15 @@ export interface PlanoSubcentroSelectProps {
   onSearchChange: (s: string) => void;
   label?: string;
   triggerClassName?: string;                                       // ex.: fieldBg
+  contentClassName?: string;                                       // dropdown: largura/densidade (Mesa = mais largo)
+  itemClassName?: string;                                          // itens do dropdown: fonte/padding menores
   tabIndex?: number;
   disabled?: boolean;
 }
 
 export function PlanoSubcentroSelect({
   value, onChange, onSelected, classificacoes, tipoOperacao,
-  search, onSearchChange, label, triggerClassName, tabIndex, disabled,
+  search, onSearchChange, label, triggerClassName, contentClassName, itemClassName, tabIndex, disabled,
 }: PlanoSubcentroSelectProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -104,7 +106,7 @@ export function PlanoSubcentroSelect({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <PopoverContent className={cn("w-[--radix-popover-trigger-width] p-0", contentClassName)} align="start">
           <div className="flex items-center border-b px-3 py-2">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <input
@@ -127,6 +129,7 @@ export function PlanoSubcentroSelect({
                   "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
                   idx === highlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
                   value === sc.subcentro && idx !== highlight && "bg-accent/30",
+                  itemClassName,
                 )}
                 onClick={() => handleSelect(sc.subcentro || '')}
                 onMouseEnter={() => setHighlight(idx)}

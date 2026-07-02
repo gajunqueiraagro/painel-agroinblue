@@ -35,7 +35,7 @@ export function ResultadoFazendaEditor({
       fazendas={fazendas}
       forcaAdministrativo={forcaAdministrativo}
       disabled={disabled}
-      triggerClassName="h-6 text-[11px]"
+      triggerClassName="h-6 text-[10px] px-2"
     />
   );
 }

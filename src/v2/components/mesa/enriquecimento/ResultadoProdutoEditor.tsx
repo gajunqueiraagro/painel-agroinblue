@@ -33,7 +33,7 @@ export function ResultadoProdutoEditor({ value, descricaoAtual, clienteId, onEdi
 
   return (
     <div onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) commitValue(textRef.current); }}>
-      <ProdutoAutocomplete value={text} onChange={setBoth} onCommit={commitValue} clienteId={clienteId} inputClassName="h-6 text-[11px]" />
+      <ProdutoAutocomplete value={text} onChange={setBoth} onCommit={commitValue} clienteId={clienteId} inputClassName="h-6 text-[10px] px-2" />
     </div>
   );
 }
