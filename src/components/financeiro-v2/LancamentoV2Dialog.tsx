@@ -7,6 +7,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
+import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -695,18 +696,12 @@ export function LancamentoV2Dialog({
     return fornecedores.find(f => f.id === favorecidoId)?.nome || '';
   }, [favorecidoId, fornecedores]);
 
-  const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
-
-  // Dividendos sempre na fazenda Administrativo do cliente.
+  // PR-U2c-1B: Select de Fazenda + regra Dividendos migraram para <FazendaSelect />.
+  // fazendaAdm permanece aqui pois o SAVE (fazendaIdEfetivo) também o usa.
   const fazendaAdm = useMemo(
     () => fazendas.find(f => f.nome?.toLowerCase().includes('administrat')),
     [fazendas],
   );
-  useEffect(() => {
-    if (macroCusto === 'Dividendos' && fazendaAdm && fazendaId !== fazendaAdm.id) {
-      setFazendaId(fazendaAdm.id);
-    }
-  }, [macroCusto, fazendaAdm, fazendaId]);
 
   // Validation
   const contaOrigemValid = isTransferencia || !isEntrada ? !!contaOrigemId && contaOrigemId !== '__none__' : true;
@@ -1200,22 +1195,16 @@ export function LancamentoV2Dialog({
                   </div>
                 </div>
 
-                {/* Fazenda */}
-                <div>
-                  <Label className="text-[10px]">Fazenda *</Label>
-                  <Select value={fazendaId} onValueChange={setFazendaId} disabled={macroCusto === 'Dividendos'}>
-                    <SelectTrigger tabIndex={7} className={cn("h-8", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent className={DARK_GLASS_CONTENT}>
-                      {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {macroCusto === 'Dividendos' && fazendaAdm && (
-                    <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Dividendos são salvos automaticamente em {fazendaAdm.nome}
-                    </p>
-                  )}
-                </div>
+                {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
+                <FazendaSelect
+                  value={fazendaId}
+                  onChange={setFazendaId}
+                  fazendas={fazendas}
+                  forcaAdministrativo={macroCusto === 'Dividendos'}
+                  label="Fazenda *"
+                  triggerClassName={fieldBg}
+                  tabIndex={7}
+                />
 
                 {/* Safra (opcional) */}
                 <div>
