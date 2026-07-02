@@ -8,6 +8,7 @@ import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
 import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
+import { ResultadoFazendaEditor } from './ResultadoFazendaEditor';
 
 export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
@@ -23,7 +24,7 @@ export interface EnriquecimentoDetalheProps {
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
 const COLS = '68px minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.75fr)';
 
-export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
+export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazendas, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
   if (!row) {
     return (
       <div className="rounded-lg border bg-card p-4 text-[11px] text-muted-foreground text-center">
@@ -81,6 +82,15 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, onEdi
                     fazendaId={row.edicao.fazendaId}
                     onEditar={onEditar}
                     onCriarFornecedor={onCriarFornecedor}
+                  />
+                ) : !row.aplicado && c.campo === 'Fazenda' && onEditar && fazendas ? (
+                  // P0-4 — editor inline da Fazenda (fonte única). Dividendos → força Administrativo
+                  // (Select disabled + aviso); nunca grava no mount (só em seleção explícita).
+                  <ResultadoFazendaEditor
+                    value={row.edicao.fazendaId}
+                    fazendas={fazendas}
+                    forcaAdministrativo={row.edicao.macro === 'Dividendos'}
+                    onEditar={onEditar}
                   />
                 ) : (
                   <span

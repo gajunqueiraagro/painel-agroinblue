@@ -141,6 +141,7 @@ export interface ClassificacaoStagingPreviewRow {
   proposto_alias_id: string | null;
   motor_version: number | null;
   proposto_macro: string | null;   // PR-U2c-2A: para FazendaSelect forçar Administrativo em Dividendos
+  lanc_fazenda_nome: string | null; // P0-4: nome real da fazenda do lançamento (Sistema Atual)
 }
 
 export interface PopulateResult {

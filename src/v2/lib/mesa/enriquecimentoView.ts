@@ -65,7 +65,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     // PR-U2b — Produto/Fazenda agora com Resultado (proposta de enriquecimento), read-only.
     { campo: 'Produto', sistema: '—', excel: fmtTexto(row.excel_produto), resultado: fmtTexto(row.proposto_produto), tom: (vazio(row.proposto_produto) ? 'neutro' : 'muda') as EnriqTom },
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
-    { campo: 'Fazenda', sistema: '—', excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
+    { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     { campo: 'Documento', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' },
