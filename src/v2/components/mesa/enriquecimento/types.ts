@@ -3,7 +3,7 @@
 // A UI é BURRA: só apresenta strings/flags já prontos. Nenhuma regra de negócio,
 // nenhum SELECT, nenhum formato aqui — tudo vem do adapter puro enriquecimentoView.
 // ============================================================================
-export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente';
+export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido';
 
 // PR-U2d-1 — estado OPERACIONAL da linha (ciclo Editar → Aplicar → Resolvida).
 // Derivado do VM (aplicado/temMatch/órfão/match_status); é a leitura principal.
@@ -17,12 +17,12 @@ export interface EnriqSessaoVM {
   aplicados: number;
 }
 
+// PR-P0-2 — contadores cobrem TODOS os status e somam ao Total; `aplicados` é
+// dimensão/flag ortogonal (sobrepõe qualquer status) e NÃO entra na soma.
 export interface EnriqContagensVM {
-  total: number;
-  exatos: number;
-  ambiguos: number;
-  semMatch: number;
-  aplicados: number;
+  total: number;                        // = soma dos 6 status
+  status: Record<EnriqStatus, number>;  // exato/ambiguo/sem_match/divergente/ja_classificado/ambiguo_resolvido
+  aplicados: number;                    // flag informativa (fora da soma)
 }
 
 // Conta bancária para o filtro visual (Todas/BB/Bradesco/…). id '__sem__' = sem conta.

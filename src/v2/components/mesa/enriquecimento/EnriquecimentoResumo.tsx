@@ -1,6 +1,8 @@
-// EnriquecimentoResumo — dumb. Cards de contagem que TAMBÉM são o filtro
-// (Total/Exatos/Ambíguos/Sem match clicáveis). Substitui a antiga barra de
-// botões de filtro (fonte única). "Aplicados" é informativo (não filtra).
+// EnriquecimentoResumo — dumb. Cards de contagem que TAMBÉM são o filtro.
+// PR-P0-2: 2 linhas para legibilidade —
+//   superior: Total | Aplicados (Aplicados é flag informativa, fora da soma);
+//   inferior: os 6 status (somam ao Total), todos clicáveis. Zerados esmaecidos.
+import { STATUS_META } from './fmt';
 import type { EnriqContagensVM, EnriqStatus } from './types';
 
 export interface EnriquecimentoResumoProps {
@@ -9,16 +11,26 @@ export interface EnriquecimentoResumoProps {
   onFiltro: (f: EnriqStatus | 'todos') => void;
 }
 
+// Ordem/rótulos da linha de status (a soma == Total). Cor vem do STATUS_META.
+const STATUS_CARDS: { key: EnriqStatus; label: string }[] = [
+  { key: 'exato',             label: 'Exatos' },
+  { key: 'divergente',        label: 'Divergentes' },
+  { key: 'ambiguo',           label: 'Ambíguos' },
+  { key: 'ambiguo_resolvido', label: 'Amb. resolvidos' },
+  { key: 'sem_match',         label: 'Sem match' },
+  { key: 'ja_classificado',   label: 'Já classificados' },
+];
+
 function CardFiltro({
-  label, valor, dot, ativo, onClick,
-}: { label: string; valor: number; dot: string; ativo: boolean; onClick: () => void }) {
+  label, valor, dot, ativo, zerado, onClick,
+}: { label: string; valor: number; dot: string; ativo: boolean; zerado?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 transition-colors ${
         ativo ? 'border-primary bg-primary/10 text-foreground' : 'bg-card text-muted-foreground hover:bg-muted/60'
-      }`}
+      } ${zerado && !ativo ? 'opacity-45' : ''}`}
     >
       <span className={`h-2 w-2 rounded-full ${dot}`} />
       <span className="text-[10px]">{label}</span>
@@ -29,16 +41,33 @@ function CardFiltro({
 
 export function EnriquecimentoResumo({ contagens, filtroAtivo, onFiltro }: EnriquecimentoResumoProps) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <CardFiltro label="Total"     valor={contagens.total}    dot="bg-slate-400"   ativo={filtroAtivo === 'todos'}     onClick={() => onFiltro('todos')} />
-      <CardFiltro label="Exatos"    valor={contagens.exatos}   dot="bg-emerald-500" ativo={filtroAtivo === 'exato'}     onClick={() => onFiltro('exato')} />
-      <CardFiltro label="Ambíguos"  valor={contagens.ambiguos} dot="bg-amber-500"   ativo={filtroAtivo === 'ambiguo'}   onClick={() => onFiltro('ambiguo')} />
-      <CardFiltro label="Sem match" valor={contagens.semMatch} dot="bg-rose-500"    ativo={filtroAtivo === 'sem_match'} onClick={() => onFiltro('sem_match')} />
-      {/* Informativo — não é filtro (não havia botão equivalente). */}
-      <div className="flex items-center gap-1.5 rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground">
-        <span className="h-2 w-2 rounded-full bg-blue-500" />
-        <span className="text-[10px]">Aplicados</span>
-        <span className="text-[11px] font-semibold tabular-nums">{contagens.aplicados}</span>
+    <div className="flex flex-col gap-1">
+      {/* Linha superior: Total (limpa o filtro) | Aplicados (informativo, não filtra) */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <CardFiltro label="Total" valor={contagens.total} dot="bg-slate-400" ativo={filtroAtivo === 'todos'} onClick={() => onFiltro('todos')} />
+        <div className="flex items-center gap-1.5 rounded-md border border-dashed px-1.5 py-0.5 text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-blue-500" />
+          <span className="text-[10px]">Aplicados</span>
+          <span className="text-[11px] font-semibold tabular-nums">{contagens.aplicados}</span>
+        </div>
+      </div>
+
+      {/* Linha inferior: os 6 status (somam ao Total), todos clicáveis. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {STATUS_CARDS.map(({ key, label }) => {
+          const valor = contagens.status[key];
+          return (
+            <CardFiltro
+              key={key}
+              label={label}
+              valor={valor}
+              dot={STATUS_META[key].dot}
+              ativo={filtroAtivo === key}
+              zerado={valor === 0}
+              onClick={() => onFiltro(key)}
+            />
+          );
+        })}
       </div>
     </div>
   );

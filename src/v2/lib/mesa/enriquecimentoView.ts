@@ -189,14 +189,17 @@ export function filtrarPorConta(
 }
 
 export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): EnriqContagensVM {
-  const c: EnriqContagensVM = { total: staging.length, exatos: 0, ambiguos: 0, semMatch: 0, aplicados: 0 };
+  // PR-P0-2 — conta os 6 status (somam ao total); aplicados é flag à parte.
+  const status: Record<EnriqStatus, number> = {
+    exato: 0, ambiguo: 0, sem_match: 0, divergente: 0, ja_classificado: 0, ambiguo_resolvido: 0,
+  };
+  let aplicados = 0;
   for (const r of staging) {
-    if (r.match_status === 'exato') c.exatos++;
-    else if (r.match_status === 'ambiguo') c.ambiguos++;
-    else if (r.match_status === 'sem_match') c.semMatch++;
-    if (r.aplicado) c.aplicados++;
+    const k = r.match_status as EnriqStatus;
+    if (k in status) status[k]++;
+    if (r.aplicado) aplicados++;
   }
-  return c;
+  return { total: staging.length, status, aplicados };
 }
 
 export function contarAplicaveisExatos(staging: ClassificacaoStagingPreviewRow[]): number {

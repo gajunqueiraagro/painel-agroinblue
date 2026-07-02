@@ -54,6 +54,7 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   sem_match:      { label: 'Sem match',      cls: 'text-rose-700',    dot: 'bg-rose-500' },
   ja_classificado:{ label: 'Já classificado',cls: 'text-blue-700',    dot: 'bg-blue-500' },
   divergente:     { label: 'Divergente',     cls: 'text-amber-700',   dot: 'bg-amber-500' },
+  ambiguo_resolvido:{ label: 'Ambíguo resolvido', cls: 'text-teal-700', dot: 'bg-teal-500' },
 };
 
 // PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).
