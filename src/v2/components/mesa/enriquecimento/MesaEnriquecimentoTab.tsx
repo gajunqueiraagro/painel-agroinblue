@@ -50,7 +50,7 @@ export function MesaEnriquecimentoTab() {
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
-  const { classificacoes, fornecedores, loadClassificacoes, loadFornecedores } = useFinanceiroV2();
+  const { classificacoes, fornecedores, loadClassificacoes, loadFornecedores, criarFornecedor } = useFinanceiroV2();
   const { fazendas } = useFazenda();
   useEffect(() => {
     if (!clienteAtual?.id) return;
@@ -176,6 +176,7 @@ export function MesaEnriquecimentoTab() {
           fazendas={fazendas}
           clienteId={clienteAtual?.id}
           onEditar={onEditar}
+          onCriarFornecedor={criarFornecedor}
         />
       </div>
 

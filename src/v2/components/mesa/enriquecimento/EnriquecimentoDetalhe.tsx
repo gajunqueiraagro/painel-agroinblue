@@ -7,6 +7,7 @@ import type { EnriqRowVM } from './types';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
+import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
 
 export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
@@ -16,12 +17,13 @@ export interface EnriquecimentoDetalheProps {
   fazendas?: Fazenda[];
   clienteId?: string;
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
+  onCriarFornecedor?: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
 const COLS = '68px minmax(0,1fr) minmax(0,1.05fr) minmax(0,1.75fr)';
 
-export function EnriquecimentoDetalhe({ row, classificacoes, onEditar }: EnriquecimentoDetalheProps) {
+export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, onEditar, onCriarFornecedor }: EnriquecimentoDetalheProps) {
   if (!row) {
     return (
       <div className="rounded-lg border bg-card p-4 text-[11px] text-muted-foreground text-center">
@@ -69,6 +71,16 @@ export function EnriquecimentoDetalhe({ row, classificacoes, onEditar }: Enrique
                     classificacoes={classificacoes}
                     disabled={row.aplicado}
                     onEditar={onEditar}
+                  />
+                ) : c.campo === 'Fornecedor' && onEditar && fornecedores && onCriarFornecedor ? (
+                  // PR-U2c-2C — editor inline do Fornecedor (fonte única) + criação inline. Desabilitado em linha aplicada.
+                  <ResultadoFavorecidoEditor
+                    value={row.edicao.favorecidoId}
+                    fornecedores={fornecedores}
+                    fazendaId={row.edicao.fazendaId}
+                    disabled={row.aplicado}
+                    onEditar={onEditar}
+                    onCriarFornecedor={onCriarFornecedor}
                   />
                 ) : (
                   <span
