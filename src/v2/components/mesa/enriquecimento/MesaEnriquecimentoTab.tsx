@@ -6,14 +6,14 @@
 // fn_classificacao_apply. Read-only: usa apenas `staging` (SELECT via view) e a
 // lista de sessões. Popular (PR-3) e Aplicar (PR-5) seguem desabilitados.
 // ============================================================================
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
-  toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, escolherMelhorSessaoId,
+  toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, filtrarPorModo, escolherMelhorSessaoId,
   listarContas, filtrarPorConta,
 } from '@/v2/lib/mesa/enriquecimentoView';
 import { EnriquecimentoToolbar } from './EnriquecimentoToolbar';
@@ -31,6 +31,21 @@ export function MesaEnriquecimentoTab() {
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [filtroConta, setFiltroConta] = useState<string>('todas');
   const [filtroStatus, setFiltroStatus] = useState<EnriqStatus | 'todos'>('todos');
+  const [filtroModo, setFiltroModo] = useState<'pendentes' | 'todas'>('pendentes');   // PR-U2d-1 — burn-down
+
+  // PR-U2d-1 — janela de graça: ids recém-aplicados ficam visíveis ~1,4s antes do
+  // burn-down (só timing de apresentação; nada de dados do VM aqui).
+  const GRACE_MS = 1400;
+  const [graceIds, setGraceIds] = useState<Set<string>>(() => new Set());
+  const graceTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => { graceTimers.current.forEach(clearTimeout); }, []);
+  function manterEmGraca(id: string) {
+    setGraceIds((prev) => { const n = new Set(prev); n.add(id); return n; });
+    const t = setTimeout(() => {
+      setGraceIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    }, GRACE_MS);
+    graceTimers.current.push(t);
+  }
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
   const [revisei, setRevisei] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -66,7 +81,9 @@ export function MesaEnriquecimentoTab() {
   const contagens = useMemo(() => contarContagens(stagingConta), [stagingConta]);
   const nAplicaveis = useMemo(() => contarAplicaveisExatos(stagingConta), [stagingConta]);
   const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
-  const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsVM, filtroStatus), [rowsVM, filtroStatus]);
+  // PR-U2d-1 — modo (pendentes/todas) é o gate; o filtro por status refina dentro dele.
+  const rowsModo = useMemo(() => filtrarPorModo(rowsVM, filtroModo, graceIds), [rowsVM, filtroModo, graceIds]);
+  const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsModo, filtroStatus), [rowsModo, filtroStatus]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
@@ -104,9 +121,10 @@ export function MesaEnriquecimentoTab() {
 
   async function salvar(): Promise<boolean> {
     if (!selecionado) return false;
+    const id = selecionado.id;                       // captura antes do await (seleção pode mudar)
     try {
-      const res: any = await applyRow({ staging_id: selecionado.id, overwrite: true });
-      if (res?.aplicado) { toast.success('Lançamento salvo.'); return true; }
+      const res: any = await applyRow({ staging_id: id, overwrite: true });
+      if (res?.aplicado) { manterEmGraca(id); toast.success('Lançamento salvo.'); return true; }
       toast.error(MOTIVO_MSG[res?.motivo] ?? `Não salvo (${res?.motivo ?? 'erro'}).`);
       return false;
     } catch (e: unknown) {
@@ -160,6 +178,8 @@ export function MesaEnriquecimentoTab() {
         contagens={contagens}
         filtroStatus={filtroStatus}
         onFiltroStatus={setFiltroStatus}
+        filtroModo={filtroModo}
+        onFiltroModo={setFiltroModo}
         onImportar={() => setImportOpen(true)}
       />
 

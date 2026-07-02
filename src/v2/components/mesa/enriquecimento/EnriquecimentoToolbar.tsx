@@ -14,6 +14,8 @@ export interface EnriquecimentoToolbarProps {
   contagens: EnriqContagensVM;
   filtroStatus: EnriqStatus | 'todos';
   onFiltroStatus: (f: EnriqStatus | 'todos') => void;
+  filtroModo: 'pendentes' | 'todas';                 // PR-U2d-1 — burn-down
+  onFiltroModo: (m: 'pendentes' | 'todas') => void;
   onImportar: () => void;
   isImporting?: boolean;
   sessaoDisabled?: boolean;
@@ -22,7 +24,7 @@ export interface EnriquecimentoToolbarProps {
 
 export function EnriquecimentoToolbar({
   sessoes, sessaoAtivaId, onSelecionarSessao, contas, contaAtivaId, onSelecionarConta,
-  contagens, filtroStatus, onFiltroStatus,
+  contagens, filtroStatus, onFiltroStatus, filtroModo, onFiltroModo,
   onImportar, isImporting, sessaoDisabled, importarDisabled,
 }: EnriquecimentoToolbarProps) {
   return (
@@ -60,7 +62,21 @@ export function EnriquecimentoToolbar({
         </select>
       </div>
 
-      {/* Cards de contagem = filtro (fonte única). */}
+      {/* PR-U2d-1 — burn-down: Pendentes (default) esconde aplicadas/nada; Todas mostra tudo. */}
+      <div className="flex items-center rounded border overflow-hidden">
+        {(['pendentes', 'todas'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onFiltroModo(m)}
+            className={`h-6 px-2 text-[11px] capitalize ${filtroModo === m ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted/50'}`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {/* Cards de contagem = filtro secundário por status (leitura). */}
       <EnriquecimentoResumo contagens={contagens} filtroAtivo={filtroStatus} onFiltro={onFiltroStatus} />
     </div>
   );

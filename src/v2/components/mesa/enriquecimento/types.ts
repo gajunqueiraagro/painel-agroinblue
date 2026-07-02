@@ -5,6 +5,10 @@
 // ============================================================================
 export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente';
 
+// PR-U2d-1 — estado OPERACIONAL da linha (ciclo Editar → Aplicar → Resolvida).
+// Derivado do VM (aplicado/temMatch/órfão/match_status); é a leitura principal.
+export type EnriqEstado = 'pronto' | 'revisar' | 'aplicado' | 'sem_vinculo' | 'nada';
+
 export interface EnriqSessaoVM {
   id: string;
   label: string;          // ex.: "Mai/2026 · Imp 02 · 01/07 09:15 · 191 linhas"
@@ -73,6 +77,7 @@ export interface EnriqRowVM {
   linha: number | null;      // excel_linha_origem (contexto)
   status: EnriqStatus;
   statusLabel: string;
+  estado: EnriqEstado;       // PR-U2d-1 — estado operacional (leitura principal)
   aplicado: boolean;
   temMatch: boolean;        // lanc_id != null → pode Salvar (sem_match/ambíguo não resolvido = false)
   subcentroOrfao: boolean;  // proposto fora do plano → NÃO pode Salvar (trigger rejeita); editar no PR-U2

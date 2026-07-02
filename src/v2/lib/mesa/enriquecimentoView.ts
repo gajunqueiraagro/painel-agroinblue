@@ -11,7 +11,7 @@ import type {
 } from '@/v2/hooks/useClassificacaoStaging';
 import type {
   EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqContaVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
-  EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao,
+  EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao, EnriqEstado,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 
@@ -97,14 +97,26 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     macro: row.proposto_macro,
   };
 
+  // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
+  const temMatch = row.lanc_id != null;
+  const subcentroOrfao = row.will_create_subcentro_orfao || row.proposto_subcentro_existe_no_plano === false;
+  const estado: EnriqEstado =
+    row.aplicado ? 'aplicado'
+    : !temMatch ? 'sem_vinculo'                         // sem_match / ambíguo não resolvido
+    : subcentroOrfao ? 'revisar'                        // proposta fora do plano → bloqueia apply
+    : row.match_status === 'divergente' ? 'revisar'     // lançamento já tem valor diferente
+    : row.match_status === 'ja_classificado' ? 'nada'   // já == proposta
+    : 'pronto';                                         // exato / ambiguo_resolvido
+
   return {
     id: row.staging_id,
     linha: row.excel_linha_origem,
     status: row.match_status as EnriqStatus,
     statusLabel,
+    estado,
     aplicado: row.aplicado,
-    temMatch: row.lanc_id != null,
-    subcentroOrfao: row.will_create_subcentro_orfao || row.proposto_subcentro_existe_no_plano === false,
+    temMatch,
+    subcentroOrfao,
     mudaAlgo: row.will_change_anything,
     data: fmtData(row.excel_data ?? row.lanc_data_pagamento),
     valor: fmtBRL(row.excel_valor ?? row.lanc_valor),
@@ -193,6 +205,18 @@ export function contarAplicaveisExatos(staging: ClassificacaoStagingPreviewRow[]
 
 export function filtrarPorStatus(rows: EnriqRowVM[], filtro: EnriqStatus | 'todos'): EnriqRowVM[] {
   return filtro === 'todos' ? rows : rows.filter((r) => r.status === filtro);
+}
+
+// PR-U2d-1 — burn-down. 'pendentes' (default) mostra só o que precisa de ação
+// (pronto/revisar/sem_vinculo); 'todas' mostra tudo (aplicado/nada esmaecidos na lista).
+// `graceIds` (janela de graça): ids recém-aplicados seguram na lista ~1,4s para o
+// operador ver o estado resolvido antes do burn-down (só timing de visibilidade —
+// o conteúdo da linha segue 100% derivado do VM).
+export function filtrarPorModo(rows: EnriqRowVM[], modo: 'pendentes' | 'todas', graceIds?: Set<string>): EnriqRowVM[] {
+  if (modo === 'todas') return rows;
+  return rows.filter((r) =>
+    r.estado === 'pronto' || r.estado === 'revisar' || r.estado === 'sem_vinculo' || (graceIds?.has(r.id) ?? false),
+  );
 }
 
 export function escolherMelhorSessaoId(sessoes: SessaoClassificacaoResumo[] | undefined | null): string | null {

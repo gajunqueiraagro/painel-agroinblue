@@ -2,7 +2,7 @@
 // densa Sistema atual | Excel | Resultado. Identidade de coluna por título/borda
 // (P0-6, sem fundo). "Resultado" é um badge largo — slot pronto para, no futuro
 // (P0-9), receber select/autocomplete/input sem redesenhar a tela.
-import { TOM_BADGE, STATUS_META } from './fmt';
+import { TOM_BADGE, STATUS_META, ESTADO_META } from './fmt';
 import type { EnriqRowVM } from './types';
 import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -32,15 +32,18 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, onEdi
     );
   }
   const meta = STATUS_META[row.status] ?? STATUS_META.sem_match;
+  const estadoMeta = ESTADO_META[row.estado];   // PR-U2d-1 — leitura principal
   const bloqueado = row.comparativo.some((c) => c.tom === 'bloqueio');
 
   return (
     <div className="rounded-lg border bg-card md:max-h-full md:overflow-y-auto">
       {/* Cabeçalho do lançamento: Match · Data · Valor */}
       <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/30">
-        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${meta.cls}`}>
-          <span className={`h-2 w-2 rounded-full ${meta.dot}`} /> {row.statusLabel}
+        {/* PR-U2d-1 — selo do estado operacional em destaque; match cru fica secundário. */}
+        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${estadoMeta.cls}`}>
+          <span className={`h-2 w-2 rounded-full ${estadoMeta.dot}`} /> {estadoMeta.label}
         </span>
+        <span className="text-[9px] text-muted-foreground/70">· {row.statusLabel}</span>
         <div className="flex-1" />
         <span className="text-[11px] text-muted-foreground tabular-nums">{row.data}</span>
         <span className="text-[13px] font-bold tabular-nums">{row.valor}</span>
@@ -63,22 +66,19 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, onEdi
               <span className="text-[11px] truncate" title={c.sistema}>{c.sistema}</span>
               <span className="text-[11px] text-blue-700/90 truncate" title={c.excel}>{c.excel}</span>
               <div className="min-w-0">
-                {c.campo === 'Subcentro' && onEditar && classificacoes ? (
-                  // PR-U2c-2B — editor inline do Subcentro (fonte única). Desabilitado em linha aplicada.
+                {/* PR-U2d-1 — editor só enquanto !aplicado; aplicada recua para o badge (valor final na coluna Sistema). */}
+                {!row.aplicado && c.campo === 'Subcentro' && onEditar && classificacoes ? (
                   <ResultadoSubcentroEditor
                     value={row.edicao.subcentro}
                     tipoOperacao={row.edicao.tipoOperacao}
                     classificacoes={classificacoes}
-                    disabled={row.aplicado}
                     onEditar={onEditar}
                   />
-                ) : c.campo === 'Fornecedor' && onEditar && fornecedores && onCriarFornecedor ? (
-                  // PR-U2c-2C — editor inline do Fornecedor (fonte única) + criação inline. Desabilitado em linha aplicada.
+                ) : !row.aplicado && c.campo === 'Fornecedor' && onEditar && fornecedores && onCriarFornecedor ? (
                   <ResultadoFavorecidoEditor
                     value={row.edicao.favorecidoId}
                     fornecedores={fornecedores}
                     fazendaId={row.edicao.fazendaId}
-                    disabled={row.aplicado}
                     onEditar={onEditar}
                     onCriarFornecedor={onCriarFornecedor}
                   />

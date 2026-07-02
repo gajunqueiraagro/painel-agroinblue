@@ -1,5 +1,5 @@
 // Formatação pura de apresentação (Mesa Global de Enriquecimento).
-import type { EnriqTom } from './types';
+import type { EnriqTom, EnriqEstado } from './types';
 
 export const TOM_CLS: Record<EnriqTom, string> = {
   neutro: 'text-muted-foreground',
@@ -54,4 +54,14 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   sem_match:      { label: 'Sem match',      cls: 'text-rose-700',    dot: 'bg-rose-500' },
   ja_classificado:{ label: 'Já classificado',cls: 'text-blue-700',    dot: 'bg-blue-500' },
   divergente:     { label: 'Divergente',     cls: 'text-amber-700',   dot: 'bg-amber-500' },
+};
+
+// PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).
+// `short` para a lista densa; `label` para o cabeçalho do Detalhe.
+export const ESTADO_META: Record<EnriqEstado, { label: string; short: string; cls: string; dot: string }> = {
+  pronto:      { label: 'Pronto para aplicar', short: 'Pronto',      cls: 'text-blue-700',         dot: 'bg-blue-500' },
+  revisar:     { label: 'A revisar',           short: 'Revisar',     cls: 'text-amber-700',        dot: 'bg-amber-500' },
+  aplicado:    { label: '✓ Aplicado',          short: '✓ Aplicado',  cls: 'text-emerald-700',      dot: 'bg-emerald-500' },
+  sem_vinculo: { label: 'Sem vínculo',         short: 'Sem vínculo', cls: 'text-rose-700',         dot: 'bg-rose-400' },
+  nada:        { label: 'Nada a fazer',        short: 'OK',          cls: 'text-muted-foreground',  dot: 'bg-muted-foreground/40' },
 };
