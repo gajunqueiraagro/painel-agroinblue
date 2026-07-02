@@ -1,9 +1,10 @@
 // ProdutoAutocomplete — extraído do LancamentoV2Dialog (PR-U2c-1A) para FONTE ÚNICA.
-// Relocação pura: mesmo markup, mesmo teclado (↑↓ Enter/Esc/Tab), mesma busca de
-// sugestões (histórico de descrições do cliente). SEM side effects — só onChange do
-// valor. `value`/`onChange` são o campo (descrição); o componente cuida de sugestões,
-// dropdown e navegação. Consumido pelo LancamentoV2Dialog e (PR-U2c-2) pela Mesa.
-import { useState, useEffect, useMemo, useRef } from 'react';
+// P0-3: busca SERVER-SIDE (ilike + limit + debounce) — corrige o cap de 1000 do
+// fetch-tudo-no-mount (agora só traz o que casa o termo). `value`/`onChange` = o campo.
+// `onCommit?` (opcional) dispara em Enter/seleção — a Mesa usa p/ gravar só em ação
+// explícita (o oficial não passa → comportamento inalterado). Consumido pelo
+// LancamentoV2Dialog e (PR-U2c-2) pela Mesa.
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils';
 export interface ProdutoAutocompleteProps {
   value: string;
   onChange: (v: string) => void;
+  onCommit?: (v: string) => void;   // P0-3: seleção/Enter (a Mesa grava aqui)
   clienteId: string | null | undefined;
   label?: string;
   className?: string;        // wrapper (ex.: "col-span-2")
@@ -21,10 +23,8 @@ export interface ProdutoAutocompleteProps {
   disabled?: boolean;
 }
 
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
 export function ProdutoAutocomplete({
-  value, onChange, clienteId, label,
+  value, onChange, onCommit, clienteId, label,
   className, inputClassName, tabIndex,
   placeholder = 'Descrição do produto', disabled,
 }: ProdutoAutocompleteProps) {
@@ -34,75 +34,59 @@ export function ProdutoAutocomplete({
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Fetch distinct product names for suggestions
+  // P0-3: busca SERVER-SIDE por termo (ilike), debounced, limitada — sem cap de 1000.
   useEffect(() => {
-    if (!clienteId) return;
-    (async () => {
+    const term = value.trim();
+    if (!clienteId || term.length < 2) { setSugestoes([]); return; }
+    const t = setTimeout(async () => {
       const { data } = await supabase
         .from('financeiro_lancamentos_v2')
         .select('descricao')
         .eq('cliente_id', clienteId)
+        .ilike('descricao', `%${term}%`)
         .not('descricao', 'is', null)
-        .order('descricao');
-      if (data) {
-        const unique = [...new Set(data.map(r => r.descricao).filter(Boolean) as string[])];
-        setSugestoes(unique);
-      }
-    })();
-  }, [clienteId]);
+        .order('descricao')
+        .limit(30);
+      const unique = [...new Set((data ?? []).map(r => r.descricao).filter(Boolean) as string[])]
+        .filter(p => p !== value)
+        .slice(0, 8);
+      setSugestoes(unique);
+      setHighlight(-1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [value, clienteId]);
 
-  // Filter product suggestions by current input
-  const filtered = useMemo(() => {
-    if (!value.trim() || value.trim().length < 2) return [];
-    const term = norm(value);
-    return sugestoes
-      .filter(p => norm(p).includes(term) && p !== value)
-      .slice(0, 8);
-  }, [value, sugestoes]);
-
-  // Close product suggestions on click outside
+  // Fecha o dropdown ao clicar fora.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setOpen(false);
+    if (e.key === 'Escape') { setOpen(false); return; }
+    if (e.key === 'Tab') { setOpen(false); return; } // deixa o Tab seguir
+    if (e.key === 'Enter') {
+      if (open && highlight >= 0 && sugestoes[highlight]) {
+        e.preventDefault();
+        onChange(sugestoes[highlight]);
+        onCommit?.(sugestoes[highlight]);
+        setOpen(false);
+      } else {
+        onCommit?.(value);   // texto livre confirmado
+      }
       return;
     }
-    if (e.key === 'Tab') {
-      setOpen(false);
-      return; // let Tab proceed naturally
-    }
-    if (!open || filtered.length === 0) return;
+    if (!open || sugestoes.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlight(prev => {
-        const next = Math.min(prev + 1, filtered.length - 1);
-        itemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
+      setHighlight(prev => { const next = Math.min(prev + 1, sugestoes.length - 1); itemRefs.current[next]?.scrollIntoView({ block: 'nearest' }); return next; });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setHighlight(prev => {
-        const next = Math.max(prev - 1, 0);
-        itemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
-    } else if (e.key === 'Enter') {
-      if (highlight >= 0 && filtered[highlight]) {
-        e.preventDefault();
-        onChange(filtered[highlight]);
-        setOpen(false);
-      }
-      // If no highlight (-1), let Enter pass through naturally
+      setHighlight(prev => { const next = Math.max(prev - 1, 0); itemRefs.current[next]?.scrollIntoView({ block: 'nearest' }); return next; });
     }
   };
 
@@ -112,11 +96,7 @@ export function ProdutoAutocomplete({
       <Input
         tabIndex={tabIndex}
         value={value}
-        onChange={e => {
-          onChange(e.target.value);
-          setOpen(true);
-          setHighlight(-1);
-        }}
+        onChange={e => { onChange(e.target.value); setOpen(true); setHighlight(-1); }}
         onFocus={() => { if (value.trim().length >= 2) setOpen(true); }}
         onKeyDown={handleKeyDown}
         className={cn('h-8', inputClassName)}
@@ -124,9 +104,9 @@ export function ProdutoAutocomplete({
         autoComplete="off"
         disabled={disabled}
       />
-      {open && filtered.length > 0 && (
+      {open && sugestoes.length > 0 && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-y-auto">
-          {filtered.map((p, i) => (
+          {sugestoes.map((p, i) => (
             <div
               key={p}
               ref={el => { itemRefs.current[i] = el; }}
@@ -134,11 +114,7 @@ export function ProdutoAutocomplete({
                 'px-3 py-1.5 text-sm cursor-pointer',
                 i === highlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
               )}
-              onMouseDown={e => {
-                e.preventDefault();
-                onChange(p);
-                setOpen(false);
-              }}
+              onMouseDown={e => { e.preventDefault(); onChange(p); onCommit?.(p); setOpen(false); }}
               onMouseEnter={() => setHighlight(i)}
             >
               {p}

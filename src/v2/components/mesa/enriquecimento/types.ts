@@ -70,6 +70,7 @@ export interface EnriqEdicao {
   produto: string | null;
   tipoOperacao: string | null;     // filtro do PlanoSubcentroSelect
   macro: string | null;            // FazendaSelect: força Administrativo se 'Dividendos'
+  descricaoAtual: string | null;   // P0-3: lanc_descricao (editor "Produto / Descrição")
 }
 
 export interface EnriqRowVM {

@@ -63,13 +63,14 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     },
     refLinha('Banco', row.lanc_conta_bancaria_nome, row.excel_conta_origem, fmtTexto(row.lanc_conta_bancaria_nome), fmtTexto(row.excel_conta_origem)),
     // PR-U2b — Produto/Fazenda agora com Resultado (proposta de enriquecimento), read-only.
-    { campo: 'Produto', sistema: '—', excel: fmtTexto(row.excel_produto), resultado: fmtTexto(row.proposto_produto), tom: (vazio(row.proposto_produto) ? 'neutro' : 'muda') as EnriqTom },
+    // P0-3 — linha única "Produto / Descrição" (Produto ≡ descricao no oficial). Sistema = descrição do lançamento.
+    { campo: 'Produto / Descrição', sistema: fmtTexto(descricao), excel: fmtTexto(row.excel_produto), resultado: fmtTexto(row.proposto_produto), tom: (vazio(row.proposto_produto) ? 'neutro' : 'muda') as EnriqTom },
     { campo: 'Fornecedor', sistema: fmtTexto(favSistema), excel: fmtTexto(favExcel), resultado: favRes, tom: favTom },
     { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
     { campo: 'Documento', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' },
-    refLinha('Descrição', descricao, null, fmtTexto(descricao), '—'),
+    // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
   ];
 
   // PR-U2b — descritores de campo editável (a UI de U2c consome; aqui só prepara).
@@ -95,6 +96,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     produto: row.proposto_produto,
     tipoOperacao: row.lanc_tipo_operacao ?? row.excel_tipo_operacao,
     macro: row.proposto_macro,
+    descricaoAtual: descricao,   // P0-3: lanc_descricao (editor "Produto / Descrição")
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).
