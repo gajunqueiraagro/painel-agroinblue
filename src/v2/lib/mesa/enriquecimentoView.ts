@@ -69,7 +69,8 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     { campo: 'Fazenda', sistema: fmtTexto(row.lanc_fazenda_nome), excel: fmtTexto(row.excel_fazenda_codigo), resultado: fmtTexto(row.proposto_fazenda_nome), tom: (row.will_set_fazenda ? 'muda' : 'neutro') as EnriqTom },
     { campo: 'Subcentro', sistema: fmtTexto(subSistema), excel: fmtTexto(subExcel), resultado: subRes, tom: subTom },
     refLinha('Data comp.', row.lanc_data_competencia, row.excel_data, fmtData(row.lanc_data_competencia), fmtData(row.excel_data)),
-    { campo: 'Documento', sistema: '—', excel: '—', resultado: '—', tom: 'neutro' },
+    // P0-5 — Documento: Sistema = numero_documento do lançamento; Excel = excel_documento; Resultado = proposta.
+    { campo: 'Documento', sistema: fmtTexto(row.lanc_numero_documento), excel: fmtTexto(row.excel_documento), resultado: fmtTexto(row.proposto_numero_documento), tom: (vazio(row.proposto_numero_documento) ? 'neutro' : 'muda') as EnriqTom },
     // P0-3 — linha "Descrição" separada removida (unificada em "Produto / Descrição").
   ];
 
@@ -97,6 +98,8 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     tipoOperacao: row.lanc_tipo_operacao ?? row.excel_tipo_operacao,
     macro: row.proposto_macro,
     descricaoAtual: descricao,   // P0-3: lanc_descricao (editor "Produto / Descrição")
+    numeroDocumento: row.proposto_numero_documento,        // P0-5
+    numeroDocumentoAtual: row.lanc_numero_documento,       // P0-5
   };
 
   // PR-U2d-1 — estado operacional da linha (ordem: primeira condição que casar vence).

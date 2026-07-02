@@ -10,6 +10,7 @@ import { ResultadoSubcentroEditor } from './ResultadoSubcentroEditor';
 import { ResultadoFavorecidoEditor } from './ResultadoFavorecidoEditor';
 import { ResultadoFazendaEditor } from './ResultadoFazendaEditor';
 import { ResultadoProdutoEditor } from './ResultadoProdutoEditor';
+import { ResultadoDocumentoEditor } from './ResultadoDocumentoEditor';
 
 export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
@@ -100,6 +101,14 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                     value={row.edicao.produto}
                     descricaoAtual={row.edicao.descricaoAtual}
                     clienteId={clienteId}
+                    onEditar={onEditar}
+                  />
+                ) : !row.aplicado && c.campo === 'Documento' && onEditar ? (
+                  // P0-5 — editor inline do Documento. Commit só no blur/Enter;
+                  // apply grava em lancamentos.numero_documento.
+                  <ResultadoDocumentoEditor
+                    value={row.edicao.numeroDocumento}
+                    numeroDocumentoAtual={row.edicao.numeroDocumentoAtual}
                     onEditar={onEditar}
                   />
                 ) : (

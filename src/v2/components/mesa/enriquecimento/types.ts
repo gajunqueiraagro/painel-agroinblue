@@ -71,6 +71,8 @@ export interface EnriqEdicao {
   tipoOperacao: string | null;     // filtro do PlanoSubcentroSelect
   macro: string | null;            // FazendaSelect: força Administrativo se 'Dividendos'
   descricaoAtual: string | null;   // P0-3: lanc_descricao (editor "Produto / Descrição")
+  numeroDocumento: string | null;      // P0-5: proposto_numero_documento
+  numeroDocumentoAtual: string | null; // P0-5: lanc_numero_documento (fallback)
 }
 
 export interface EnriqRowVM {

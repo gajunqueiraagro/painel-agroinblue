@@ -84,6 +84,7 @@ export interface ClassificacaoStagingPreviewRow {
   excel_fornecedor: string | null;
   excel_produto: string | null;
   excel_fazenda_codigo: string | null;
+  excel_documento: string | null;   // P0-5: documento do Excel
 
   // SISTEMA (estado vivo do lançamento)
   lanc_id: string | null;
@@ -142,6 +143,8 @@ export interface ClassificacaoStagingPreviewRow {
   motor_version: number | null;
   proposto_macro: string | null;   // PR-U2c-2A: para FazendaSelect forçar Administrativo em Dividendos
   lanc_fazenda_nome: string | null; // P0-4: nome real da fazenda do lançamento (Sistema Atual)
+  lanc_numero_documento: string | null;      // P0-5: documento do lançamento (Sistema Atual)
+  proposto_numero_documento: string | null;  // P0-5: documento proposto (editor)
 }
 
 export interface PopulateResult {
