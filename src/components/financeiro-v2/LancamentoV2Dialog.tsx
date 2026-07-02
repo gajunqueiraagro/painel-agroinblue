@@ -8,13 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
 import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
+import { Search, Check, ChevronsUpDown, AlertCircle, AlertTriangle, Copy, KeyRound, RefreshCw, CalendarDays, User, DollarSign, FileText, Beef } from 'lucide-react';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
 import { toast } from 'sonner';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
@@ -272,11 +273,9 @@ export function LancamentoV2Dialog({
   };
 
   // Fornecedor search state
-  const [fornecedorOpen, setFornecedorOpen] = useState(false);
+  // PR-U2c-1C: seletor de Fornecedor migrou p/ <FavorecidoSelect />. `fornecedorSearch`
+  // permanece controlado aqui pois o SAVE reaproveita o texto p/ auto-criar fornecedor.
   const [fornecedorSearch, setFornecedorSearch] = useState('');
-  const [fornecedorHighlight, setFornecedorHighlight] = useState(0);
-  const fornecedorInputRef = useRef<HTMLInputElement>(null);
-  const fornecedorItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Installment state
   const [formaPagamentoParc, setFormaPagamentoParc] = useState<'avista' | 'parcelada'>('avista');
@@ -545,18 +544,6 @@ export function LancamentoV2Dialog({
     return lines.join('\n');
   }, []);
 
-  /** Auto-fill payment data when supplier changes */
-  const handleFornecedorSelect = useCallback((fId: string) => {
-    setFavorecidoId(fId);
-    setFornecedorOpen(false);
-    setFornecedorSearch('');
-    const f = fornecedores.find(x => x.id === fId);
-    if (f && f.tipo_recebimento) {
-      setFormaPgto(f.tipo_recebimento);
-      setDadosPagamento(buildDadosPagamento(f, f.tipo_recebimento));
-    }
-  }, [fornecedores, buildDadosPagamento]);
-
   /** Re-fill payment data when payment method changes */
   const handleFormaPgtoChange = useCallback((metodo: string) => {
     setFormaPgto(metodo === '__none_fp__' ? '' : metodo);
@@ -651,50 +638,8 @@ export function LancamentoV2Dialog({
 
   const contasDisponiveis = contas;
 
-  const fornecedoresList = useMemo(() =>
-    fornecedores.filter(f => f.ativo !== false),
-  [fornecedores]);
-
-  function normalizeSearch(s: string): string {
-    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  }
-
-  const filteredFornecedores = useMemo(() => {
-    if (!fornecedorSearch.trim()) return fornecedoresList;
-    const q = normalizeSearch(fornecedorSearch);
-    return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
-  }, [fornecedoresList, fornecedorSearch]);
-
-  useEffect(() => {
-    setFornecedorHighlight(0);
-  }, [fornecedorSearch]);
-
-  useEffect(() => {
-    const el = fornecedorItemRefs.current[fornecedorHighlight];
-    if (el) el.scrollIntoView({ block: 'nearest' });
-  }, [fornecedorHighlight]);
-
-  const handleFornecedorKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setFornecedorHighlight(prev => Math.min(prev + 1, filteredFornecedores.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setFornecedorHighlight(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      if (filteredFornecedores[fornecedorHighlight]) {
-        e.preventDefault();
-        handleFornecedorSelect(filteredFornecedores[fornecedorHighlight].id);
-      }
-    } else if (e.key === 'Escape') {
-      setFornecedorOpen(false);
-    }
-  };
-
-  const selectedFornecedorNome = useMemo(() => {
-    if (!favorecidoId) return '';
-    return fornecedores.find(f => f.id === favorecidoId)?.nome || '';
-  }, [favorecidoId, fornecedores]);
+  // PR-U2c-1C: fornecedoresList/normalizeSearch/filteredFornecedores/effects/keyDown/
+  // selectedFornecedorNome migraram para <FavorecidoSelect />.
 
   // PR-U2c-1B: Select de Fazenda + regra Dividendos migraram para <FazendaSelect />.
   // fazendaAdm permanece aqui pois o SAVE (fazendaIdEfetivo) também o usa.
@@ -1144,56 +1089,24 @@ export function LancamentoV2Dialog({
                   placeholder="Descrição do produto"
                 />
 
-                {/* Fornecedor */}
-                <div>
-                  <Label className="text-[10px]">Fornecedor *</Label>
-                  <div className="flex gap-1">
-                    <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) setFornecedorSearch(''); }}>
-                      <PopoverTrigger asChild>
-                        <Button tabIndex={6} variant="outline" role="combobox" aria-expanded={fornecedorOpen} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-xs", fieldBg)}>
-                          <span className="truncate">{selectedFornecedorNome || 'Selecione fornecedor...'}</span>
-                          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                        <div className="flex items-center border-b px-3 py-2">
-                          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                          <input
-                            ref={fornecedorInputRef}
-                            className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                            placeholder="Buscar fornecedor..."
-                            value={fornecedorSearch}
-                            onChange={e => setFornecedorSearch(e.target.value)}
-                            onKeyDown={handleFornecedorKeyDown}
-                            autoFocus
-                          />
-                        </div>
-                        <div className="max-h-48 overflow-y-auto p-1">
-                          {filteredFornecedores.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum fornecedor encontrado</p>}
-                          {filteredFornecedores.map((f, idx) => (
-                            <button
-                              key={f.id}
-                              ref={el => { fornecedorItemRefs.current[idx] = el; }}
-                              className={cn(
-                                "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                                idx === fornecedorHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
-                                favorecidoId === f.id && idx !== fornecedorHighlight && "bg-accent/30"
-                              )}
-                              onClick={() => handleFornecedorSelect(f.id)}
-                              onMouseEnter={() => setFornecedorHighlight(idx)}
-                            >
-                              <Check className={cn("mr-2 h-4 w-4", favorecidoId === f.id ? "opacity-100" : "opacity-0")} />
-                              <span className="truncate">{f.nome}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setFornecedorDialogOpen(true)} title="Novo Fornecedor">
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
+                {/* Fornecedor — PR-U2c-1C: extraído para <FavorecidoSelect /> (fonte única) */}
+                <FavorecidoSelect
+                  value={favorecidoId}
+                  onChange={setFavorecidoId}
+                  onSelected={f => {
+                    if (f.tipo_recebimento) {
+                      setFormaPgto(f.tipo_recebimento);
+                      setDadosPagamento(buildDadosPagamento(f, f.tipo_recebimento));
+                    }
+                  }}
+                  fornecedores={fornecedores}
+                  search={fornecedorSearch}
+                  onSearchChange={setFornecedorSearch}
+                  onCriarNovo={() => setFornecedorDialogOpen(true)}
+                  label="Fornecedor *"
+                  triggerClassName={fieldBg}
+                  tabIndex={6}
+                />
 
                 {/* Fazenda — PR-U2c-1B: extraído para <FazendaSelect /> (fonte única) */}
                 <FazendaSelect
