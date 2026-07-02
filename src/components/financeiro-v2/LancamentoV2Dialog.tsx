@@ -6,6 +6,7 @@ import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } 
 import { useCliente } from '@/contexts/ClienteContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContaBancariaSelect, DARK_GLASS_CONTENT } from '@/components/shared/ContaBancariaSelect';
+import { ProdutoAutocomplete } from '@/components/shared/ProdutoAutocomplete';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -310,11 +311,7 @@ export function LancamentoV2Dialog({
   const [dadosPagamento, setDadosPagamento] = useState('');
 
   // Product suggestions state
-  const [produtoSugestoes, setProdutoSugestoes] = useState<string[]>([]);
-  const [produtoOpen, setProdutoOpen] = useState(false);
-  const [produtoHighlight, setProdutoHighlight] = useState(-1);
-  const produtoItemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const produtoWrapperRef = useRef<HTMLDivElement>(null);
+  // PR-U2c-1A: sugestões de Produto migraram para <ProdutoAutocomplete />.
 
   // Subcentro search
   const [subcentroOpen, setSubcentroOpen] = useState(false);
@@ -465,79 +462,6 @@ export function LancamentoV2Dialog({
     setSubcentroSearch('');
     setFornecedorSearch('');
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
-
-  // Fetch distinct product names for suggestions
-  useEffect(() => {
-    if (!open || !clienteAtual?.id) return;
-    (async () => {
-      const { data } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('descricao')
-        .eq('cliente_id', clienteAtual.id)
-        .not('descricao', 'is', null)
-        .order('descricao');
-      if (data) {
-        const unique = [...new Set(data.map(r => r.descricao).filter(Boolean) as string[])];
-        setProdutoSugestoes(unique);
-      }
-    })();
-  }, [open, clienteAtual?.id]);
-
-  // Filter product suggestions by current input
-  const filteredProdutos = useMemo(() => {
-    if (!descricao.trim() || descricao.trim().length < 2) return [];
-    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const term = norm(descricao);
-    return produtoSugestoes
-      .filter(p => norm(p).includes(term) && p !== descricao)
-      .slice(0, 8);
-  }, [descricao, produtoSugestoes]);
-
-  // Close product suggestions on click outside
-  useEffect(() => {
-    if (!produtoOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (produtoWrapperRef.current && !produtoWrapperRef.current.contains(e.target as Node)) {
-        setProdutoOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [produtoOpen]);
-
-  const handleProdutoKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setProdutoOpen(false);
-      return;
-    }
-    if (e.key === 'Tab') {
-      setProdutoOpen(false);
-      return; // let Tab proceed naturally
-    }
-    if (!produtoOpen || filteredProdutos.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setProdutoHighlight(prev => {
-        const next = Math.min(prev + 1, filteredProdutos.length - 1);
-        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setProdutoHighlight(prev => {
-        const next = Math.max(prev - 1, 0);
-        produtoItemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-        return next;
-      });
-    } else if (e.key === 'Enter') {
-      if (produtoHighlight >= 0 && filteredProdutos[produtoHighlight]) {
-        e.preventDefault();
-        setDescricao(filteredProdutos[produtoHighlight]);
-        setProdutoOpen(false);
-      }
-      // If no highlight (-1), let Enter pass through naturally
-    }
-  };
 
   // Regenerate parcela rows when key inputs change
   const valorNum = parseBRL(valorDisplay);
@@ -1213,46 +1137,17 @@ export function LancamentoV2Dialog({
             <section className={sectionClass}>
               <p className={sectionTitleClass}><User className="h-3.5 w-3.5" /> Identificação</p>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                {/* Produto */}
-                <div ref={produtoWrapperRef} className="relative col-span-2">
-                  <Label className="text-[10px]">Produto / Descrição *</Label>
-                  <Input
-                    tabIndex={5}
-                    value={descricao}
-                    onChange={e => {
-                      setDescricao(e.target.value);
-                      setProdutoOpen(true);
-                      setProdutoHighlight(-1);
-                    }}
-                    onFocus={() => { if (descricao.trim().length >= 2) setProdutoOpen(true); }}
-                    onKeyDown={handleProdutoKeyDown}
-                    className={cn("h-8", fieldBg)}
-                    placeholder="Descrição do produto"
-                    autoComplete="off"
-                  />
-                  {produtoOpen && filteredProdutos.length > 0 && (
-                    <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-md border border-border bg-popover shadow-md max-h-48 overflow-y-auto">
-                      {filteredProdutos.map((p, i) => (
-                        <div
-                          key={p}
-                          ref={el => { produtoItemRefs.current[i] = el; }}
-                          className={cn(
-                            'px-3 py-1.5 text-sm cursor-pointer',
-                            i === produtoHighlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-                          )}
-                          onMouseDown={e => {
-                            e.preventDefault();
-                            setDescricao(p);
-                            setProdutoOpen(false);
-                          }}
-                          onMouseEnter={() => setProdutoHighlight(i)}
-                        >
-                          {p}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                {/* Produto — PR-U2c-1A: extraído para <ProdutoAutocomplete /> (fonte única) */}
+                <ProdutoAutocomplete
+                  value={descricao}
+                  onChange={setDescricao}
+                  clienteId={clienteAtual?.id}
+                  label="Produto / Descrição *"
+                  className="col-span-2"
+                  inputClassName={fieldBg}
+                  tabIndex={5}
+                  placeholder="Descrição do produto"
+                />
 
                 {/* Fornecedor */}
                 <div>
