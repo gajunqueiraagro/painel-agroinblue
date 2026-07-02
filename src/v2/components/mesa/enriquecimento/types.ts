@@ -58,6 +58,16 @@ export interface EnriqProveniencia {
   motorVersion: number | null;
 }
 
+// PR-U2c-2A — valores crus da proposta que os editores inline (U2c-2B..2E) consomem.
+export interface EnriqEdicao {
+  subcentro: string | null;
+  favorecidoId: string | null;
+  fazendaId: string | null;
+  produto: string | null;
+  tipoOperacao: string | null;     // filtro do PlanoSubcentroSelect
+  macro: string | null;            // FazendaSelect: força Administrativo se 'Dividendos'
+}
+
 export interface EnriqRowVM {
   id: string;
   linha: number | null;      // excel_linha_origem (contexto)
@@ -77,4 +87,6 @@ export interface EnriqRowVM {
   // PR-U2b — infra do editor (ainda SEM edição visual): descritores + proveniência.
   camposEditaveis: EnriqCampoEditavel[];
   proveniencia: EnriqProveniencia;
+  // PR-U2c-2A — valores crus da proposta (para os editores inline).
+  edicao: EnriqEdicao;
 }

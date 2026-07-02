@@ -9,6 +9,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useClassificacaoStaging, useSessoesClassificacao } from '@/v2/hooks/useClassificacaoStaging';
 import {
   toRowVM, toSessoesVM, contarContagens, contarAplicaveisExatos, filtrarPorStatus, escolherMelhorSessaoId,
@@ -43,7 +45,18 @@ export function MesaEnriquecimentoTab() {
   const {
     staging, isFetching,
     applyRow, isApplyingRow, reverterRow, isRevertingRow,
+    editarProposto,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+
+  // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
+  // Lançamento oficial). Loaders manuais → só carrega o necessário.
+  const { classificacoes, fornecedores, loadClassificacoes, loadFornecedores } = useFinanceiroV2();
+  const { fazendas } = useFazenda();
+  useEffect(() => {
+    if (!clienteAtual?.id) return;
+    loadClassificacoes();
+    loadFornecedores();
+  }, [clienteAtual?.id, loadClassificacoes, loadFornecedores]);
 
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
@@ -116,6 +129,25 @@ export function MesaEnriquecimentoTab() {
     }
   }
 
+  // PR-U2c-2A — edição da proposta via editarProposto (os editores dos passos
+  // 2B..2E chamam isto). patch = { subcentro | favorecido_id | fazenda_id | produto | ... }.
+  async function onEditar(patch: Record<string, unknown>): Promise<void> {
+    if (!selecionado) return;
+    try {
+      const res: any = await editarProposto({ staging_id: selecionado.id, patch });
+      if (res?.ok) {
+        const rej = res?.campos_rejeitados;
+        if (rej && Object.keys(rej).length > 0) {
+          toast.error(`Alguns campos não aplicados: ${JSON.stringify(rej)}`);
+        }
+      } else {
+        toast.error(MOTIVO_MSG[res?.motivo] ?? `Não editado (${res?.motivo ?? 'erro'}).`);
+      }
+    } catch (e: unknown) {
+      toast.error(`Erro ao editar: ${errMsg(e)}`);
+    }
+  }
+
   return (
     <div className="space-y-1 md:space-y-0 md:flex-1 md:min-h-0 md:flex md:flex-col md:gap-1">
       <EnriquecimentoToolbar
@@ -137,7 +169,14 @@ export function MesaEnriquecimentoTab() {
           Desktop: grid ocupa o espaço restante (flex-1) e só a lista rola. Mobile: empilha. */}
       <div className="grid gap-1.5 grid-cols-1 items-start md:[grid-template-columns:0.62fr_1fr] md:[grid-template-rows:minmax(0,1fr)] md:flex-1 md:min-h-0">
         <EnriquecimentoLista rows={rowsFiltradas} selecionadoId={selecionadoId} onSelecionar={setSelecionadoId} />
-        <EnriquecimentoDetalhe row={selecionado} />
+        <EnriquecimentoDetalhe
+          row={selecionado}
+          classificacoes={classificacoes}
+          fornecedores={fornecedores}
+          fazendas={fazendas}
+          clienteId={clienteAtual?.id}
+          onEditar={onEditar}
+        />
       </div>
 
       <EnriquecimentoActions

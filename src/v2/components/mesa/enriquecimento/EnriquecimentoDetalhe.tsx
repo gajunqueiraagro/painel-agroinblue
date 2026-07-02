@@ -4,9 +4,17 @@
 // (P0-9), receber select/autocomplete/input sem redesenhar a tela.
 import { TOM_BADGE, STATUS_META } from './fmt';
 import type { EnriqRowVM } from './types';
+import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { Fazenda } from '@/contexts/FazendaContext';
 
 export interface EnriquecimentoDetalheProps {
   row: EnriqRowVM | null;
+  // PR-U2c-2A — data layer para os editores inline (consumidos a partir do U2c-2B).
+  classificacoes?: ClassificacaoItem[];
+  fornecedores?: FornecedorV2[];
+  fazendas?: Fazenda[];
+  clienteId?: string;
+  onEditar?: (patch: Record<string, unknown>) => Promise<void>;
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).

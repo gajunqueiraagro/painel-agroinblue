@@ -140,6 +140,7 @@ export interface ClassificacaoStagingPreviewRow {
   proposto_regra_id: string | null;
   proposto_alias_id: string | null;
   motor_version: number | null;
+  proposto_macro: string | null;   // PR-U2c-2A: para FazendaSelect forçar Administrativo em Dividendos
 }
 
 export interface PopulateResult {

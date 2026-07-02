@@ -11,7 +11,7 @@ import type {
 } from '@/v2/hooks/useClassificacaoStaging';
 import type {
   EnriqRowVM, EnriqSessaoVM, EnriqContagensVM, EnriqContaVM, EnriqStatus, EnriqTom, EnriqComparativoLinha,
-  EnriqCampoEditavel, EnriqProveniencia,
+  EnriqCampoEditavel, EnriqProveniencia, EnriqEdicao,
 } from '@/v2/components/mesa/enriquecimento/types';
 import { fmtData, fmtBRL, fmtTexto, mesAbrev, dataHoraCurta, STATUS_META } from '@/v2/components/mesa/enriquecimento/fmt';
 
@@ -87,6 +87,15 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     origem: row.proposto_origem_resolucao,
     motorVersion: row.motor_version,
   };
+  // PR-U2c-2A — valores crus da proposta para os editores inline.
+  const edicao: EnriqEdicao = {
+    subcentro: row.proposto_subcentro,
+    favorecidoId: row.proposto_favorecido_id,
+    fazendaId: row.proposto_fazenda_id,
+    produto: row.proposto_produto,
+    tipoOperacao: row.lanc_tipo_operacao ?? row.excel_tipo_operacao,
+    macro: row.proposto_macro,
+  };
 
   return {
     id: row.staging_id,
@@ -104,6 +113,7 @@ export function toRowVM(row: ClassificacaoStagingPreviewRow): EnriqRowVM {
     comparativo,
     camposEditaveis,
     proveniencia,
+    edicao,
   };
 }
 
