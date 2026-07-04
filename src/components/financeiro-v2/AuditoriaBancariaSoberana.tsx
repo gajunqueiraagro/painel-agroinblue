@@ -16,6 +16,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { ExtratoImportPreview } from '@/components/financeiro-v2/ExtratoImportPreview';
 import { EstacaoConciliacao } from '@/components/financeiro-v2/EstacaoConciliacao';
@@ -1021,7 +1022,7 @@ function agruparPorData(pares: ParReal[]): { data: string | null; itens: ParReal
     });
 }
 type ResolverCtx = { tipo: 'extrato_sem_vinculo' | 'sistema_sem_vinculo'; id: string };
-function LinhaEspReal({ par, onResolver }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void }) {
+function LinhaEspReal({ par, onResolver, onDesconsiderar }: { par: ParReal; onResolver: (ctx: ResolverCtx) => void; onDesconsiderar?: (extratoId: string) => void }) {
   // Conector por classe — 4 estados (verde/amarelo/amarelo/cinza). Vermelho = divergência REAL,
   // tratado nos GRUPOS (LinhaGrupo), não aqui (sem classe 'divergente' por linha no contrato).
   const conector =
@@ -1045,11 +1046,18 @@ function LinhaEspReal({ par, onResolver }: { par: ParReal; onResolver: (ctx: Res
       <div className="flex-1 min-w-0">{par.ofx ? <LadoCelula data={par.ofx.data} valor={par.ofx.valor} descricao={par.ofx.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem OFX</span>}</div>
       <div className="w-16 shrink-0 flex justify-center">{conector}</div>
       <div className="flex-1 min-w-0">{par.sis ? <LadoCelula data={par.sis.data} valor={par.sis.valor} descricao={par.sis.descricao} /> : <span className="text-[9px] italic text-muted-foreground">— sem lançamento</span>}</div>
-      <div className="w-16 shrink-0 flex justify-end">{acao}</div>
+      <div className="w-24 shrink-0 flex flex-col items-end gap-0.5">
+        {acao}
+        {par.ofx && par.extrato_id && onDesconsiderar && (
+          <button type="button" title="Desconsiderar este movimento da conciliação"
+                  onClick={() => onDesconsiderar(par.extrato_id!)}
+                  className="text-[8px] text-muted-foreground hover:text-rose-600 underline">desconsiderar</button>
+        )}
+      </div>
     </div>
   );
 }
-function AbaEspelhoReal({ data, diag, onResolver }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void }) {
+function AbaEspelhoReal({ data, diag, onResolver, onDesconsiderar }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onDesconsiderar?: (extratoId: string) => void }) {
   // Timeline única: agrupa por data a saída de montarEspelhoReal (sem re-parear nem recalcular).
   const grupos = useMemo(() => agruparPorData(montarEspelhoReal(data, diag)), [data, diag]);
   return (
@@ -1062,14 +1070,14 @@ function AbaEspelhoReal({ data, diag, onResolver }: { data: EspelhadosReais; dia
         <span className="inline-flex items-center gap-1"><span className="text-muted-foreground">●</span> sem vínculo</span>
       </div>
       <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-muted-foreground border-b pb-0.5 sticky top-0 bg-card z-10">
-        <span className="flex-1">Extrato (banco)</span><span className="w-16 text-center">vínculo</span><span className="flex-1">Sistema</span><span className="w-16 text-right">ação</span>
+        <span className="flex-1">Extrato (banco)</span><span className="w-16 text-center">vínculo</span><span className="flex-1">Sistema</span><span className="w-24 text-right">ação</span>
       </div>
       {grupos.map((g) => (
         <div key={g.data ?? 'sem-data'}>
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/40 px-1 py-0.5 border-b mt-1">
             {g.data ? fmtData(g.data) : 'Sem data'}
           </div>
-          {g.itens.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} />)}
+          {g.itens.map((p) => <LinhaEspReal key={p.key} par={p} onResolver={onResolver} onDesconsiderar={onDesconsiderar} />)}
         </div>
       ))}
     </div>
@@ -1125,7 +1133,7 @@ function AbaEvolucaoReal({ data }: { data: EspelhadosReais }) {
   );
 }
 
-function ExtratosEspelhadosReais({ data, diag, onResolver, onAbrirLanc }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onAbrirLanc?: (id: string) => void }) {
+function ExtratosEspelhadosReais({ data, diag, onResolver, onAbrirLanc, onDesconsiderar }: { data: EspelhadosReais; diag: DiagnosticoSoberano; onResolver: (ctx: ResolverCtx) => void; onAbrirLanc?: (id: string) => void; onDesconsiderar?: (extratoId: string) => void }) {
   const [aberto, setAberto] = useState(false);
   const [aba, setAba] = useState<'ofx' | 'sistema' | 'espelho' | 'evolucao'>('espelho');
   const inicial = data.saldos.inicial ?? 0;
@@ -1156,7 +1164,7 @@ function ExtratosEspelhadosReais({ data, diag, onResolver, onAbrirLanc }: { data
           </div>
           {aba === 'ofx' && <AbaOfxReal ofx={data.ofx_completo} inicial={inicial} />}
           {aba === 'sistema' && <AbaSistemaReal sistema={data.sistema_completo} inicial={inicial} onAbrir={onAbrirLanc} />}
-          {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} onResolver={onResolver} />}
+          {aba === 'espelho' && <AbaEspelhoReal data={data} diag={diag} onResolver={onResolver} onDesconsiderar={onDesconsiderar} />}
           {aba === 'evolucao' && <AbaEvolucaoReal data={data} />}
         </>
       )}
@@ -1180,6 +1188,8 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
   const [estacaoCtx, setEstacaoCtx] = useState<{ tipo: 'sistema_sem_vinculo' | 'extrato_sem_vinculo'; id: string } | null>(null);
   // P3.3 — leitura do lançamento oficial (aba Sistema → linha clicável).
   const [lancLeituraId, setLancLeituraId] = useState<string | null>(null);
+  // PR-PROTOCOLO-01 — invalidação de origem (extrato): abre o protocolo de derivados.
+  const [protocoloExtrato, setProtocoloExtrato] = useState<{ id: string; modo: 'ignorar' | 'resolver' } | null>(null);
   // PR F — extrato em reversão de desconsideração (loading do botão). null = ocioso.
   const [revertendoId, setRevertendoId] = useState<string | null>(null);
 
@@ -1582,7 +1592,7 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           />
 
           {/* C3.4 — Extratos espelhados reais (fn_extratos_espelhados) */}
-          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} onResolver={setEstacaoCtx} onAbrirLanc={setLancLeituraId} />}
+          {espelhados && <ExtratosEspelhadosReais data={espelhados} diag={diag} onResolver={setEstacaoCtx} onAbrirLanc={setLancLeituraId} onDesconsiderar={(id) => setProtocoloExtrato({ id, modo: 'ignorar' })} />}
         </>
       )}
 
@@ -1623,6 +1633,19 @@ export function AuditoriaBancariaSoberana({ initialAno, initialMes, onNavigateTo
           queryClient.invalidateQueries({ queryKey: ['extratos-espelhados'] });
           queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
           queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+        }}
+      />
+
+      {/* PR-PROTOCOLO-01 — invalidação de origem (mesmo dialog do ExtratoListaTab; 1 implementação). */}
+      <DecisaoDerivadosDialog
+        extratoId={protocoloExtrato?.id ?? null}
+        aberto={!!protocoloExtrato}
+        modo={protocoloExtrato?.modo ?? 'ignorar'}
+        onClose={() => setProtocoloExtrato(null)}
+        onConcluido={() => {
+          queryClient.invalidateQueries({ queryKey: ['auditoria-soberana'] });
+          queryClient.invalidateQueries({ queryKey: ['auditoria-extrato-existe'] });
+          queryClient.invalidateQueries({ queryKey: ['extratos-espelhados'] });
         }}
       />
     </div>

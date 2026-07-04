@@ -30,6 +30,7 @@ import { ArrowLeftRight } from 'lucide-react';
 import { useExtratoBancario, type ExtratoMovimento } from '@/hooks/useExtratoBancario';
 import { ConciliarExtratoDialog, type ExtratoMovimentoRef } from './ConciliarExtratoDialog';
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
+import { DecisaoDerivadosDialog } from './DecisaoDerivadosDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { format, parseISO } from 'date-fns';
@@ -361,7 +362,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   );
 
   const [conciliando, setConciliando] = useState<ExtratoMovimentoRef | null>(null);
-  const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
+  const [protocoloExtrato, setProtocoloExtrato] = useState<{ id: string; modo: 'ignorar' | 'resolver' } | null>(null);
   // PR G — extrato em desfazer/reativar vínculo (loading dos botões). null = ocioso.
   const [vinculoBusyId, setVinculoBusyId] = useState<string | null>(null);
   const [movCriando, setMovCriando] = useState<ExtratoMovimento | null>(null);
@@ -602,19 +603,10 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
     loadClassificacoes();
   }, [loadContas, loadFornecedores, loadClassificacoes]);
 
-  const handleIgnorar = async (mov: ExtratoMovimento) => {
-    setIgnorandoId(mov.id);
-    const { error } = await supabase
-      .from('extrato_bancario_v2' as any)
-      .update({ status: 'ignorado' })
-      .eq('id', mov.id);
-    setIgnorandoId(null);
-    if (error) {
-      toast.error('Erro ao ignorar: ' + error.message);
-      return;
-    }
-    toast.success('Movimento marcado como ignorado');
-    refetch();
+  // PR-PROTOCOLO-01: "Ignorar" abre o protocolo de invalidação de origem (derivados +
+  // decisão). O update cru saiu — a fonte única do fluxo é a RPC fn_invalidar_origem_extrato.
+  const handleIgnorar = (mov: ExtratoMovimento) => {
+    setProtocoloExtrato({ id: mov.id, modo: 'ignorar' });
   };
 
   // PR G — invalida as queries que refletem o estado de conciliação (lista + auditoria).
@@ -1218,10 +1210,23 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                           size="sm"
                           variant="ghost"
                           className="h-6 text-[10px] px-2 text-muted-foreground"
-                          disabled={ignorandoId === m.id}
                           onClick={() => handleIgnorar(m)}
                         >
                           Ignorar
+                        </Button>
+                      )}
+                      {/* PR-PROTOCOLO-01 — ignorados: resolver derivados vivos (fecha o caso
+                          Vera). Degradado (sem query pesada na lista): sempre visível; o dialog
+                          mostra "nenhum derivado" quando vazio. */}
+                      {m.status === 'ignorado' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => setProtocoloExtrato({ id: m.id, modo: 'resolver' })}
+                          title="Revisar/decidir os lançamentos derivados deste movimento ignorado"
+                        >
+                          Resolver derivados
                         </Button>
                       )}
                     </div>
@@ -1232,6 +1237,14 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
           </TableBody>
         </Table>
       </div>
+
+      <DecisaoDerivadosDialog
+        extratoId={protocoloExtrato?.id ?? null}
+        aberto={!!protocoloExtrato}
+        modo={protocoloExtrato?.modo ?? 'ignorar'}
+        onClose={() => setProtocoloExtrato(null)}
+        onConcluido={() => refetch()}
+      />
 
       <LancamentoV2Dialog
         open={!!movCriando}
