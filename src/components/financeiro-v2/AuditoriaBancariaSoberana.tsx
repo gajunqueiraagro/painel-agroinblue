@@ -68,7 +68,9 @@ interface DiagnosticoSoberano {
   resumo: {
     ofx: { movimentos: number; entradas: number; saidas: number; saldo_inicial: number | null; saldo_final: number | null };
     lv2: { lancamentos: number; entradas: number; saidas: number };
-    extrato_cru: { movimentos: number; entradas: number; saidas: number; liquido: number; ignorados: number };
+    extrato_cru: { movimentos: number; entradas: number; saidas: number; liquido: number; ignorados: number; ignorados_valor?: number };
+    // PR-OFX-VALIDO-1: OFX VÁLIDO (exclui ignorados). Opcional p/ retrocompat.
+    extrato_valido?: { movimentos: number; entradas: number; saidas: number; liquido: number };
     corretos: { qtd: number; valor: number };
     desconsiderados: { movimentos: number; entradas: number; saidas: number };
   };
@@ -369,16 +371,22 @@ function LinhaAuditoria({ linha }: { linha: LinhaAud }) {
 // ── C2 — Demonstrativo de posição da conta (Extrato × Sistema) ──────────────
 function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aberto, onToggle }: { diag: DiagnosticoSoberano; nomeConta: string; saldoInicial: number | null; saldoExtratoReal: number | null; aberto: boolean; onToggle: () => void }) {
   const temSaldo = saldoInicial != null;
+  // PR-OFX-VALIDO-1: o fechamento segue o OFX VÁLIDO (exclui ignorados) quando presente;
+  // fallback = extrato_cru (retrocompat). O bruto vira diagnóstico rotulado (linha abaixo).
+  const extV = diag.resumo.extrato_valido ?? diag.resumo.extrato_cru;
   // Saldo final calculado (inicial + entradas - saídas), por fonte.
   // Estreitamento por null-check no próprio saldoInicial (TS strict não narrowa via `temSaldo`).
-  const saldoCalcExtrato = saldoInicial != null ? saldoInicial + diag.resumo.extrato_cru.entradas - diag.resumo.extrato_cru.saidas : null;
+  const saldoCalcExtrato = saldoInicial != null ? saldoInicial + extV.entradas - extV.saidas : null;
   const saldoCalcSistema = saldoInicial != null ? saldoInicial + diag.resumo.lv2.entradas - diag.resumo.lv2.saidas : null;
   // Indicador principal: Diferença de Saldo = Saldo Calculado (Sistema) − Saldo Extrato Real (banco/PDF).
   const difSaldo = (saldoCalcSistema != null && saldoExtratoReal != null) ? saldoCalcSistema - saldoExtratoReal : null;
   const difZero = difSaldo != null && Math.abs(difSaldo) < 0.005;
-  // Coluna "Dif." — mesma régua em TODAS as linhas: Dif = Extrato − Sistema.
-  const difEnt = diag.resumo.extrato_cru.entradas - diag.resumo.lv2.entradas;
-  const difSai = diag.resumo.extrato_cru.saidas - diag.resumo.lv2.saidas;
+  // Coluna "Dif." — mesma régua em TODAS as linhas: Dif = Extrato (válido) − Sistema.
+  const difEnt = extV.entradas - diag.resumo.lv2.entradas;
+  const difSai = extV.saidas - diag.resumo.lv2.saidas;
+  // PR-OFX-VALIDO-1: diagnóstico do bruto (só quando há desconsiderados).
+  const ignoradosN = diag.resumo.extrato_cru.ignorados;
+  const ignoradosValor = diag.resumo.extrato_cru.ignorados_valor;
   const difSFC = (saldoCalcExtrato != null && saldoCalcSistema != null) ? saldoCalcExtrato - saldoCalcSistema : null;
   const corDif = (d: number | null) =>
     d == null ? 'text-muted-foreground' : (Math.abs(d) < 0.005 ? 'text-emerald-600' : 'text-rose-600');
@@ -434,13 +442,13 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
           <span className="text-right tabular-nums text-muted-foreground">—</span>
 
           <span className="text-[11px] text-muted-foreground">Entradas</span>
-          <span className="text-right tabular-nums text-[11px] text-emerald-700">{fmtBRL(diag.resumo.extrato_cru.entradas)}</span>
+          <span className="text-right tabular-nums text-[11px] text-emerald-700">{fmtBRL(extV.entradas)}</span>
           <span className="text-right tabular-nums text-[11px] text-emerald-700">{fmtBRL(diag.resumo.lv2.entradas)}</span>
           <span className={`text-right tabular-nums text-[11px] font-medium ${corDif(difEnt)}`}>{fmtBRL(difEnt)}</span>
           {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
 
           <span className="text-[11px] text-muted-foreground">Saídas</span>
-          <span className="text-right tabular-nums text-[11px] text-rose-700">{fmtBRL(diag.resumo.extrato_cru.saidas)}</span>
+          <span className="text-right tabular-nums text-[11px] text-rose-700">{fmtBRL(extV.saidas)}</span>
           <span className="text-right tabular-nums text-[11px] text-rose-700">{fmtBRL(diag.resumo.lv2.saidas)}</span>
           <span className={`text-right tabular-nums text-[11px] font-medium ${corDif(difSai)}`}>{fmtBRL(difSai)}</span>
           {/* H1.4: sub-linhas Terceiros/Transferências aqui — NÃO implementar agora */}
@@ -454,6 +462,13 @@ function ResumoAuditoria({ diag, nomeConta, saldoInicial, saldoExtratoReal, aber
           <span className="col-span-2 text-[11px] text-muted-foreground">Saldo Extrato Real</span>
           <span className="text-right tabular-nums text-[11px] font-medium">{saldoExtratoReal != null ? fmtBRL(saldoExtratoReal) : 'não informado'}</span>
           <span className="text-right tabular-nums text-muted-foreground">—</span>
+
+          {/* PR-OFX-VALIDO-1 — bruto vira diagnóstico rotulado (excluído do fechamento). */}
+          {ignoradosN > 0 && (
+            <span className="col-span-4 text-[10px] text-muted-foreground pt-1">
+              OFX bruto: {fmtBRL(diag.resumo.extrato_cru.liquido)} · {ignoradosN} desconsiderado(s): {ignoradosValor != null ? fmtBRL(ignoradosValor) : '—'} — excluído(s) do fechamento.
+            </span>
+          )}
         </div>
       </div>
       )}

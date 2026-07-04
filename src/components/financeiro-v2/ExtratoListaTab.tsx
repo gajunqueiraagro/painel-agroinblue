@@ -261,17 +261,23 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
   //   saldo inicial/final vêm de financeiro_saldos_bancarios_v2.
   // - Diferença principal: saldo_final_banco − saldo_final_sistema.
   const resumoConciliacao = useMemo(() => {
-    // BANCO
+    // BANCO — PR-OFX-VALIDO-1: ignorados (status='ignorado') NÃO entram no cálculo;
+    // acumulam à parte como diagnóstico.
     let entradasBanco = 0;
     let saidasBanco = 0;
+    let ignoradosCount = 0;
+    let ignoradosValor = 0;   // Σ valor signed dos pulados
     for (const m of movimentos) {
+      if (m.status === 'ignorado') { ignoradosCount++; ignoradosValor += Number(m.valor) || 0; continue; }
       const v = Number(m.valor) || 0;
       if (v > 0) entradasBanco += v;
       else if (v < 0) saidasBanco += -v;
     }
     // movimentos vem em ordem DESC (mais recente primeiro) — useExtratoBancario.
-    const primeiroDoPeriodo = movimentos[movimentos.length - 1]; // mais antigo
-    const ultimoDoPeriodo = movimentos[0]; // mais recente
+    // PR-OFX-VALIDO-1: âncora de saldo_apos = primeiro/último NÃO ignorado do período.
+    const naoIgnorados = movimentos.filter(m => m.status !== 'ignorado');
+    const primeiroDoPeriodo = naoIgnorados[naoIgnorados.length - 1]; // mais antigo
+    const ultimoDoPeriodo = naoIgnorados[0]; // mais recente
 
     // BANCO — saldo inicial: saldo_apos (futuro) → saldo_inicial do sistema (mês atual) → indisponível
     let fonteSaldoInicialBanco: 'saldo_apos' | 'saldo_inicial_sistema_mes_atual' | 'indisponivel' = 'indisponivel';
@@ -332,6 +338,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       },
       diferencaSaldoFinal,
       saldoSistemaFechado: saldoSistema?.fechado ?? false,
+      desconsiderados: { count: ignoradosCount, valor: ignoradosValor },   // PR-OFX-VALIDO-1
     };
   }, [movimentos, lancamentosRealizadosDoMes, saldoSistema]);
 
@@ -899,6 +906,12 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
             {fmtSaldo(resumoConciliacao.diferencaSaldoFinal)}
           </span>
         </div>
+        {/* PR-OFX-VALIDO-1 — diagnóstico rotulado dos desconsiderados (excluídos do cálculo). */}
+        {resumoConciliacao.desconsiderados.count > 0 && (
+          <div className="border-t px-3 py-1 text-[10px] text-muted-foreground">
+            {resumoConciliacao.desconsiderados.count} movimento(s) desconsiderado(s) (Σ {fmtSaldo(resumoConciliacao.desconsiderados.valor)}) excluído(s) do cálculo — ver linhas ⊘ na lista.
+          </div>
+        )}
         {/* Badges de status agregado */}
         <div className="border-t px-3 py-2 flex flex-wrap gap-1.5 items-center">
           <Badge
