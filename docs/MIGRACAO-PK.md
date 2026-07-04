@@ -1,47 +1,37 @@
 # Migração Project Knowledge → Repositório
 
-> Tabela viva de rastreio. Nenhum documento sai do Project Knowledge
-> antes de estar com status `auditado` aqui. Documento temporário:
-> será removido quando a migração concluir.
+> Rastreio da migração. Status final em 04/07/2026 — encerramento
+> previsto após auditoria do PR-ARCH-01.
 
-Status: redigido → commitado → auditado → apto-remoção
-(docs sem conteúdo a migrar recebem apto-remoção direto, com motivo)
+Status: redigido → commitado → auditado → apto-remoção → removido
 
-## Migrados
-| Doc PK (origem) | Destino no repo | Status |
+## Migrados e removidos do PK (04/07/2026)
+| Doc PK (origem) | Destino | Commit | Status |
+|---|---|---|---|
+| Atualização_sempre_ler (checklist migração) | docs/runbooks/migracao-cliente.md | 56fc012d | removido |
+| Instructions legadas seção 13 (EXPORT_APP_UNICO) | docs/runbooks/importacao-financeira.md | 56fc012d | removido |
+| Inclusão_movimentações | docs/runbooks/importacao-zootecnica.md | 56fc012d | removido |
+| Atualizacao (SPEC P0-Z0) | docs/specs/P0-Z0-status-contraparte.md | 34322a08 | removido |
+| Financiamentos | docs/adr/ADR-2026-05-financiamentos-vinculo-estrutural.md | 34322a08 | removido |
+| RLS | docs/adr/ADR-2026-04-rls-incidente-deny-all.md | 34322a08 | removido |
+| Atualização (PR6.2 Mesa) | docs/modules/mesa-conciliacao.md | 34322a08 | removido |
+| Instructions legadas (mapeamento Caderno) | docs/modules/caderno-import.md | 34322a08 | removido |
+| Inclusão_de_animais / Atualização-pendências / Bug_Edição_Global / Refactor_Abate_Botões / Atualização-29-05 | sem conteúdo normativo a migrar (motivos na auditoria 04/07) | — | removidos |
+
+## Absorvidos neste PR (ARCH-01)
+| Doc PK (origem) | Destino | Status |
 |---|---|---|
-| Atualização_sempre_ler_em_novos_chats (checklist migração) | docs/runbooks/migracao-cliente.md | auditado (56fc012d) → origem apto-remoção |
-| Doc legado "KB Completo" seção 13 (EXPORT_APP_UNICO) | docs/runbooks/importacao-financeira.md | auditado (56fc012d) → origem apto-remoção |
-| Inclusão_movimentações | docs/runbooks/importacao-zootecnica.md | auditado (56fc012d) → origem apto-remoção |
-| Atualizacao (SPEC P0-Z0) | docs/specs/P0-Z0-status-contraparte.md | commitado (Lote 2) |
-| Financiamentos (regra soberana) | docs/adr/ADR-2026-05-financiamentos-vinculo-estrutural.md | commitado (Lote 2) |
-| RLS (post-mortem 30/04) | docs/adr/ADR-2026-04-rls-incidente-deny-all.md | commitado (Lote 2) |
-| Atualização (PR6.2 conta da linha) | docs/modules/mesa-conciliacao.md | commitado (Lote 2) |
-| Doc legado abril (mapeamento Caderno) | docs/modules/caderno-import.md | commitado (Lote 2) |
+| Resumo_do_sistema (tabela de fontes) | Constituição Título III | commitado — apto-remoção após auditoria |
+| padrão_Telas | docs/adr/ADR-2026-07-erp-operational-shell.md | commitado — apto-remoção após auditoria |
+| Novos_chats + Importante SaaS 200 + BUG | docs/evolution/riscos-estruturais-saas.md | commitado — apto-remoção após auditoria |
 
-## Sem migração — apto-remoção direto
-| Doc PK | Motivo |
+## Permanecem no PK
+| Doc | Papel |
 |---|---|
-| Inclusão_de_animais_via_texto_do_excel | duplicata desatualizada de Inclusão_movimentações |
-| Atualização (pendências useFinanceiro) | tarefas já executadas |
-| Bug___Edição_em_modo_Global | documento truncado, sem conteúdo acionável |
-| Doc legado nº1 "PK abril" | credencial viva + estado morto; resíduo útil (Caderno) migrado no Lote 2 |
-| Doc legado nº2 "KB Completo" | credencial viva + comandos perigosos; resíduo útil (seção 13) migrado no Lote 1 |
+| PK v2 (Instructions) | contexto de alto nível |
+| PlanoDeContas_Knowledge_1.md + PlanoDeContas_v2.xlsx | vocabulário normativo em uso ativo (espelho futuro em docs/ opcional) |
+| Refactor_Abate_Modal___Roadmap | adiado 04/07/2026 — documentar módulo só após estabilização |
 
-## Adiados por decisão
-| Doc PK | Decisão |
-|---|---|
-| Refactor_Abate_Modal___Roadmap (+ Botões) | 04/07/2026: documentar módulo apenas após estabilização — não cristalizar comportamento em evolução |
-
-## Insumos do PR-ARCH-01 (permanecem no PK até absorção)
-| Doc PK | Papel |
-|---|---|
-| Resumo_do_sistema_ler_antes_de_toda_conversa | semente da tabela de soberania (Constituição) |
-| Novos_chats / Importante SaaS 200 clientes | riscos estruturais + roadmap SaaS |
-| BUG (zoot cache global) | backlog estrutural |
-| Atualização (29/05 B1/B2) | descobertas estruturais (triggers, fn_lancamento_auto_derivar) |
-| padrão_Telas | ADR-ERP-Operational-Shell (nunca criado — vira ADR no ARCH-01) |
-
-## Permanecem no PK (contexto permanente)
-PK v2 (documento de contexto) · PlanoDeContas_Knowledge_1.md ·
-PlanoDeContas_v2.xlsx
+## Encerramento
+Após auditoria do ARCH-01 e remoção dos 3 insumos absorvidos, este
+arquivo pode ser removido do repo (commit de encerramento).

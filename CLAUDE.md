@@ -68,3 +68,13 @@ fail pareca cosmetico. Nao corrigir por iniciativa propria.
 Working tree pode conter trabalho estacionado de outros PRs (ex: P3.4
 desconsiderar OFX). Arquivos modificados/untracked que nao pertencem ao
 briefing atual: nao editar, nao stagear, nao limpar, nao stash.
+
+## GOVERNANCA ARQUITETURAL
+- Antes de criar componente, tela, hook ou nova fonte de dado:
+  consultar docs/constituicao/CONSTITUICAO.md e declarar o encaixe.
+- Briefings de implementacao devem conter a secao ENCAIXE
+  ARQUITETURAL (seis perguntas do Titulo IV). Briefing sem ela:
+  PARAR e solicitar.
+- Hierarquia documental: Constituicao > ADRs > specs/modules/
+  runbooks > codigo. CLAUDE.md rege a execucao; a Constituicao rege
+  a arquitetura.
