@@ -33,6 +33,11 @@ export interface DecisaoDerivadosDialogProps {
 
 const fmtBRL = (v: number | null) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// PR-A3.1 — número absoluto sem símbolo (o texto do aviso já traz "R$").
+const fmtNum = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// PR-A3.1 — proteção "última cópia válida" (campos vêm da RPC; opcionais p/ retrocompat).
+interface UltimaCopiaInfo { ultima_copia_valida: boolean; gemeas_vivas: number; impacto_valor: number; documento: string | null; }
 
 export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido, modo }: DecisaoDerivadosDialogProps) {
   const [carregando, setCarregando] = useState(false);
@@ -40,6 +45,7 @@ export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido
   const [motivo, setMotivo] = useState('');
   const [derivados, setDerivados] = useState<Derivado[]>([]);
   const [decisoes, setDecisoes] = useState<Record<string, Decisao>>({});
+  const [ultimaCopia, setUltimaCopia] = useState<UltimaCopiaInfo | null>(null);   // PR-A3.1
 
   // Abrir → LISTAR (RPC sem decisões; motivo vazio é aceito nesta fase pelo banco).
   const carregar = useCallback(async () => {
@@ -50,13 +56,22 @@ export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido
         p_extrato_id: extratoId, p_motivo: '', p_decisoes: null,
       });
       if (error) throw error;
+      // PR-A3.1 — captura os campos de última-cópia/impacto (ausentes na RPC antiga → false/0).
+      const uc: UltimaCopiaInfo = {
+        ultima_copia_valida: data?.ultima_copia_valida === true,
+        gemeas_vivas: data?.gemeas_vivas ?? 0,
+        impacto_valor: typeof data?.impacto_valor === 'number' ? data.impacto_valor : 0,
+        documento: data?.documento ?? null,
+      };
       if (data?.motivo === 'decisao_pendente') {
         const ds: Derivado[] = data.derivados ?? [];
         setDerivados(ds);
         setDecisoes(Object.fromEntries(ds.map((d) => [d.lancamento_id, d.sugestao])));
+        setUltimaCopia(uc);
       } else if (data?.motivo === 'motivo_obrigatorio') {
         setDerivados([]);   // sem derivados vivos: só falta o motivo para ignorar
         setDecisoes({});
+        setUltimaCopia(uc);
       } else if (data?.ok === false) {
         toast.error(data.motivo === 'sem_permissao' ? 'Sem permissão.' : `Não foi possível abrir (${data.motivo}).`);
         onClose();
@@ -71,7 +86,7 @@ export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido
 
   useEffect(() => {
     if (aberto && extratoId) { setMotivo(''); void carregar(); }
-    else { setDerivados([]); setDecisoes({}); }
+    else { setDerivados([]); setDecisoes({}); setUltimaCopia(null); }
   }, [aberto, extratoId, carregar]);
 
   const confirmar = async () => {
@@ -112,6 +127,27 @@ export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido
         </header>
 
         <div className="p-3 space-y-3 overflow-y-auto max-h-[60vh]">
+          {/* PR-A3.1 — última ocorrência válida: remover = remover dinheiro real do banco. */}
+          {ultimaCopia?.ultima_copia_valida && (
+            <div className="rounded border border-amber-400 bg-amber-50 p-2.5 space-y-1">
+              <div className="text-[11px] font-bold text-amber-800">ATENÇÃO</div>
+              <div className="text-[11px] text-amber-900 leading-snug">
+                Esta é a <b>última ocorrência válida</b> deste documento. Após confirmar:
+              </div>
+              <ul className="text-[11px] text-amber-900 leading-snug list-disc pl-4">
+                <li>o movimento desaparecerá do OFX válido;</li>
+                <li>o saldo do extrato será <b>{ultimaCopia.impacto_valor < 0 ? 'reduzido' : 'aumentado'}</b> em R$ {fmtNum(ultimaCopia.impacto_valor)};</li>
+                <li>o fechamento poderá deixar de bater.</li>
+              </ul>
+              <div className="text-[11px] text-amber-900">Deseja continuar?</div>
+            </div>
+          )}
+          {/* PR-A3.1 — há cópias vivas: informativo discreto (dialog atual, sem bloco forte). */}
+          {ultimaCopia && !ultimaCopia.ultima_copia_valida && ultimaCopia.gemeas_vivas > 0 && (
+            <p className="text-[10px] text-muted-foreground">
+              {ultimaCopia.gemeas_vivas} outra(s) cópia(s) válida(s) deste documento permanecem no extrato.
+            </p>
+          )}
           <div className="space-y-1">
             <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Motivo *</span>
             <Input value={motivo} onChange={(e) => setMotivo(e.target.value)}
@@ -160,10 +196,22 @@ export function DecisaoDerivadosDialog({ extratoId, aberto, onClose, onConcluido
         </div>
 
         <footer className="shrink-0 border-t px-4 py-2 flex items-center justify-end gap-2 bg-muted/30">
-          <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={enviando} onClick={onClose}>Cancelar</Button>
-          <Button size="sm" className="h-7 text-[11px]" disabled={!motivo.trim() || enviando || carregando} onClick={() => void confirmar()}>
-            {enviando ? 'Aplicando…' : 'Confirmar'}
-          </Button>
+          {ultimaCopia?.ultima_copia_valida ? (
+            <>
+              {/* PR-A3.1 — Cancelar é o default seguro; confirmar exige gesto explícito. */}
+              <Button size="sm" className="h-7 text-[11px]" disabled={enviando} onClick={onClose}>Cancelar</Button>
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={!motivo.trim() || enviando || carregando} onClick={() => void confirmar()}>
+                {enviando ? 'Aplicando…' : 'Confirmar assim mesmo'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={enviando} onClick={onClose}>Cancelar</Button>
+              <Button size="sm" className="h-7 text-[11px]" disabled={!motivo.trim() || enviando || carregando} onClick={() => void confirmar()}>
+                {enviando ? 'Aplicando…' : 'Confirmar'}
+              </Button>
+            </>
+          )}
         </footer>
       </DialogContent>
     </Dialog>
