@@ -22,6 +22,3 @@ operacional de execução e referencia esta árvore.
 A verdade técnica vive AQUI (versionada), nunca em contexto de chat
 ou Project Knowledge. Estado atual do sistema se descobre
 empiricamente, nunca se assume de documento.
-
-MIGRACAO-PK.md (nesta raiz) é temporário: rastreia a migração do
-Project Knowledge legado e será removido ao concluir.
