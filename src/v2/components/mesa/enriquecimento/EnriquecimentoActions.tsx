@@ -1,8 +1,8 @@
 // EnriquecimentoActions — dumb. Barra operacional da Mesa de Revisão.
 // Bloco PRINCIPAL = revisão por lançamento (Anterior/Salvar/Salvar e Próximo/Reverter/Próximo).
 // Bloco SECUNDÁRIO (após separador) = acelerador em lote "Aplicar todos os Exatos".
-// PR-U1: Salvar/Salvar e Próximo/Reverter ligados (flags granulares). "Aplicar todos"
-// e "Revisado" seguem desabilitados (ligam no PR-U-lote).
+// PR-U1: Salvar/Salvar e Próximo/Reverter ligados (flags granulares). P0-1A: "Aplicar
+// todos" e "Revisado" ligados — lote conservador da sessão (fn_classificacao_apply).
 import { Button } from '@/components/ui/button';
 
 export interface EnriquecimentoActionsProps {
@@ -48,7 +48,7 @@ export function EnriquecimentoActions({
         Próximo ▶
       </Button>
       <label className={`flex items-center gap-1.5 text-[11px] ${aplicarTodosDisabled ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>
-        <input type="checkbox" checked={revisado} disabled={aplicarTodosDisabled} onChange={(e) => onRevisado(e.target.checked)} />
+        <input type="checkbox" checked={revisado} disabled={aplicarTodosDisabled || isBusy} onChange={(e) => onRevisado(e.target.checked)} />
         Revisado
       </label>
       <span className="text-[10px] text-muted-foreground tabular-nums">{posicao}</span>
@@ -62,8 +62,8 @@ export function EnriquecimentoActions({
         variant="ghost"
         className="h-6 text-[11px] px-2 text-muted-foreground"
         onClick={onAplicarTodos}
-        disabled={aplicarTodosDisabled}
-        title="Acelerador: aplica todos os lançamentos exatos sem revisar um a um."
+        disabled={aplicarTodosDisabled || !revisado || isBusy}
+        title="Acelerador: aplica todos os Exatos pendentes DA SESSÃO (todas as contas), sem sobrescrever classificações existentes. Marque 'Revisado' para habilitar."
       >
         Aplicar todos os Exatos ({nAplicaveis})
       </Button>

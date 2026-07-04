@@ -4,7 +4,7 @@
 // guarda só estado de UI (sessão ativa, filtro, seleção, revisei). Nenhuma regra
 // de negócio aqui — a inteligência fica em parser → staging → vw_...preview →
 // fn_classificacao_apply. Salvar/Reverter/editar por linha estão ativos (apply_row /
-// reverter_row / editar_proposto); Aplicar em lote (fn_classificacao_apply) segue pausado.
+// reverter_row / editar_proposto); Aplicar em lote (fn_classificacao_apply) ligado no P0-1A.
 // ============================================================================
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
@@ -60,6 +60,7 @@ export function MesaEnriquecimentoTab() {
   const {
     staging, isFetching,
     applyRow, isApplyingRow, reverterRow, isRevertingRow,
+    apply, isApplying,
     editarProposto,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
@@ -79,7 +80,8 @@ export function MesaEnriquecimentoTab() {
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
   const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
   const contagens = useMemo(() => contarContagens(stagingConta), [stagingConta]);
-  const nAplicaveis = useMemo(() => contarAplicaveisExatos(stagingConta), [stagingConta]);
+  // P0-1A: o lote é da SESSÃO (todas as contas) — não pode depender do filtro de conta.
+  const nAplicaveis = useMemo(() => contarAplicaveisExatos(staging), [staging]);
   const rowsVM = useMemo(() => stagingConta.map(toRowVM), [stagingConta]);
   // PR-U2d-1 — modo (pendentes/todas) é o gate; o filtro por status refina dentro dele.
   const rowsModo = useMemo(() => filtrarPorModo(rowsVM, filtroModo, graceIds), [rowsVM, filtroModo, graceIds]);
@@ -102,7 +104,7 @@ export function MesaEnriquecimentoTab() {
   const pendingEditRef = useRef<Promise<unknown> | null>(null);
 
   // Escrita por linha (PR-U1). Salvar = apply_row(overwrite=true); Reverter = reverter_row.
-  const isBusy = isApplyingRow || isRevertingRow;
+  const isBusy = isApplyingRow || isRevertingRow || isApplying;
   // Linha órfã (subcentro fora do plano) não pode ser aplicada — a trigger do
   // lançamento rejeita. Só será salvável após editar o subcentro (PR-U2).
   const podeSalvar = !!selecionado && !selecionado.aplicado && selecionado.temMatch && !selecionado.subcentroOrfao;
@@ -152,6 +154,19 @@ export function MesaEnriquecimentoTab() {
       else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não revertido (${res?.motivo ?? 'erro'}).`);
     } catch (e: unknown) {
       toast.error(`Erro ao reverter: ${errMsg(e)}`);
+    }
+  }
+
+  // P0-1A — acelerador em lote: aplica todos os Exatos pendentes DA SESSÃO (conservador,
+  // nunca sobrescreve). A RPC retorna contagens (não ids) → burn-down direto via
+  // invalidation; sem janela de graça.
+  async function handleAplicarTodos() {
+    if (!sessaoId) return;
+    try {
+      const res = await apply(sessaoId);
+      toast.success(`Lote concluído: ${res.aplicados} aplicados · ${res.pulados_subcentro_preenchido} pulados (já classificados) · ${res.erros} erros.`);
+    } catch (e: unknown) {
+      toast.error(`Erro no lote: ${errMsg(e)}`);
     }
   }
 
@@ -227,11 +242,11 @@ export function MesaEnriquecimentoTab() {
         onSalvar={() => { void salvar(); }}
         onSalvarProximo={() => { void handleSalvarProximo(); }}
         onReverter={() => { void handleReverter(); }}
-        onAplicarTodos={() => { /* ligado no PR-lote (fn_classificacao_apply) */ }}
+        onAplicarTodos={() => { void handleAplicarTodos(); }}
         nAplicaveis={nAplicaveis}
         salvarDisabled={!podeSalvar}
         reverterDisabled={!podeReverter}
-        aplicarTodosDisabled
+        aplicarTodosDisabled={!sessaoId || nAplicaveis === 0}
         isBusy={isBusy}
       />
 

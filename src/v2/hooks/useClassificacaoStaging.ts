@@ -145,6 +145,8 @@ export interface ClassificacaoStagingPreviewRow {
   lanc_fazenda_nome: string | null; // P0-4: nome real da fazenda do lançamento (Sistema Atual)
   lanc_numero_documento: string | null;      // P0-5: documento do lançamento (Sistema Atual)
   proposto_numero_documento: string | null;  // P0-5: documento proposto (editor)
+  /** P0-1A: fonte única "aplicável em lote" (calculada na view). */
+  lote_aplicavel: boolean;
 }
 
 export interface PopulateResult {
@@ -231,6 +233,9 @@ export function useClassificacaoStaging(
     },
     onSuccess: (_data, sessao_id) => {
       qc.invalidateQueries({ queryKey: queryKeyStaging(sessao_id) });
+      // P0-1A: o lote muda contadores de aplicados da sessão → invalidar o seletor
+      // de sessões também (padrão de invalidarSessaoAtual), senão fica com dado velho.
+      if (clienteId) qc.invalidateQueries({ queryKey: ['classificacao-sessoes', clienteId] });
     },
   });
 

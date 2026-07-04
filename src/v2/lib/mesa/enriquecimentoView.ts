@@ -228,8 +228,10 @@ export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): Enri
   return { total: staging.length, status, aplicados };
 }
 
+// P0-1A: conceito "aplicável em lote" vem PRONTO da view (lote_aplicavel) —
+// nenhuma regra da apply_row replicada aqui.
 export function contarAplicaveisExatos(staging: ClassificacaoStagingPreviewRow[]): number {
-  return staging.filter((r) => r.match_status === 'exato' && !r.aplicado).length;
+  return staging.filter((r) => r.lote_aplicavel).length;
 }
 
 export function filtrarPorStatus(rows: EnriqRowVM[], filtro: EnriqStatus | 'todos'): EnriqRowVM[] {
