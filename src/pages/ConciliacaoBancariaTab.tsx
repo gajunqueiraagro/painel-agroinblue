@@ -102,6 +102,9 @@ interface PerContaSaldo {
   dif: number;
   status: MesStatusExt;
   saldoRow: SaldoRow | null;
+  // PR-E1-F1 — proveniência do saldo inicial (fim do saldo_final=0 fantasma).
+  siOrigem: 'informado' | 'herdado' | 'ausente';
+  temMovimento: boolean;
 }
 
 /* ── Constants ── */
@@ -460,18 +463,32 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     const anoMes = `${ano}-${selectedMes}`;
     const anoMesSel2 = `${ano}-${selectedMes}`;
     const contasAtivas = contas.filter(c => !c.mes_inicio || c.mes_inicio <= anoMesSel2);
+    // PR-E1-F1 — mês anterior (mesma lógica de handleFecharSemMovimento) para herdar o SI.
+    const [anoNum, mesNum] = anoMes.split('-').map(Number);
+    const mesAnterior = mesNum === 1
+      ? `${anoNum - 1}-12`
+      : `${anoNum}-${String(mesNum - 1).padStart(2, '0')}`;
     return sortContas(contasAtivas).map(c => {
       const saldoRow = saldos.find(s => s.ano_mes===anoMes && s.conta_bancaria_id===c.id)||null;
+      // PR-E1-F1 — SI vem da linha do mês (informado) OU do SF do mês anterior (herdado);
+      // sem nenhum dos dois = ausente. O 0 residual é só p/ exibição; nunca é gravado (Mudança 2).
+      const rowAnterior = saldos.find(s => s.conta_bancaria_id===c.id && s.ano_mes===mesAnterior);
+      const siOrigem: 'informado' | 'herdado' | 'ausente' =
+        saldoRow ? 'informado'
+        : (rowAnterior?.saldo_final != null) ? 'herdado'
+        : 'ausente';
       const official = calcConciliacaoMensal({
         contaId:c.id, anoMes, saldoRows:saldos,
         lancamentos: lancamentos as ConciliacaoLancamentoBase[],
-        fallbackSaldoInicial: saldoRow?.saldo_inicial ?? 0,
+        fallbackSaldoInicial: saldoRow?.saldo_inicial ?? rowAnterior?.saldo_final ?? 0,
         monthBy: 'data_pagamento',
       });
       return {
         conta:c, sis:official.saldoCalculado,
         ext:official.saldoExtrato, dif:official.diferenca,
         status:official.status as MesStatusExt, saldoRow,
+        siOrigem,
+        temMovimento: official.totalEntradas !== 0 || official.totalSaidas !== 0,
       };
     });
   }, [ano, selectedMes, saldos, lancamentos, contas]);
@@ -643,9 +660,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     setFechandoSemMovimento(true);
     let salvos = 0;
     let erros = 0;
+    let semReferencia = 0;   // PR-E1-F1 — contas sem SI anterior (não inventamos 0)
 
     try {
       for (const p of contasSemExtrato) {
+        // PR-E1-F1 — sem referência de saldo anterior: NÃO inventar 0; pular e avisar.
+        if (p.siOrigem === 'ausente') { semReferencia++; continue; }
         // Saldo inicial = saldo_final do registro do mês anterior, se existir
         const [anoNum, mesNum] = anoMes.split('-').map(Number);
         const mesAnterior = mesNum === 1
@@ -675,6 +695,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
             saldo_final: p.sis,
             origem_saldo_inicial: 'propagacao_automatica',
             status_mes: 'aberto',
+            // PR-E1-F1 — marca 'sem_movimento' só quando não há movimento; senão NULL (atual).
+            ...(!p.temMovimento ? { origem_saldo: 'sem_movimento' } : {}),
           });
 
         if (error) { erros++; } else { salvos++; }
@@ -689,6 +711,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     }
     if (erros > 0) {
       toast.error(`${erros} conta${erros > 1 ? 's' : ''} com erro ao fechar.`);
+    }
+    if (semReferencia > 0) {
+      toast.info(`${semReferencia} conta(s) sem referência de saldo anterior — informe o saldo manualmente.`);
     }
   }, [clienteId, anoMesSel, perContaSaldos, saldos, loadData]);
 
