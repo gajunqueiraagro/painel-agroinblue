@@ -476,7 +476,8 @@ export function ExtratoImportPreview({ open, onClose, contaBancariaIdInicial, on
       .from('conciliacao_bancaria_itens' as any)
       .select('lancamento_id, valor_aplicado')
       .eq('cliente_id', clienteId)
-      .in('lancamento_id', ids);
+      .in('lancamento_id', ids)
+      .is('desfeito_em', null);   // PR-CBI-READ-01: só vínculos ativos (valorJaConciliado real)
     const aplicado = new Map<string, number>();
     for (const v of (data ?? []) as { lancamento_id: string; valor_aplicado: number }[]) {
       aplicado.set(

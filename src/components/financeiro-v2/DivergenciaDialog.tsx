@@ -92,6 +92,7 @@ export function DivergenciaDialog({ open, onClose, preview, clienteId }: Props) 
       .select('extrato_id, valor_aplicado')
       .eq('cliente_id', clienteId)
       .in('extrato_id', ids)
+      .is('desfeito_em', null)   // PR-CBI-READ-01: só vínculos ativos
       .then(({ data }) => {
         const map = new Map<string, number>();
         for (const v of (data ?? []) as { extrato_id: string; valor_aplicado: number }[]) {

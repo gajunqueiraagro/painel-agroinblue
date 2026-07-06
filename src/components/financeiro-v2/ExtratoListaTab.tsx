@@ -153,7 +153,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         .select(`
           id, data_pagamento, valor, sinal, descricao,
           conta_bancaria_id, conta_destino_id,
-          conciliacao_bancaria_itens!left(id)
+          conciliacao_bancaria_itens!left(id,desfeito_em)
         `)
         .eq('cliente_id', clienteAtual!.id)
         .or(`conta_bancaria_id.eq.${contaBancariaId},conta_destino_id.eq.${contaBancariaId}`)
@@ -174,7 +174,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         descricao: string | null;
         conta_bancaria_id: string | null;
         conta_destino_id: string | null;
-        conciliacao_bancaria_itens: Array<{ id: string }> | null;
+        conciliacao_bancaria_itens: Array<{ id: string; desfeito_em: string | null }> | null;
       }>;
       return rows
         .filter((l): l is typeof l & { data_pagamento: string } => !!l.data_pagamento)
@@ -187,8 +187,12 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
           descricao: l.descricao,
           conta_bancaria_id: l.conta_bancaria_id,
           conta_destino_id: l.conta_destino_id,
+          // PR-CBI-READ-01: vínculo ativo = desfeito_em IS NULL. Filtro client-side no embed
+          // (!left) para não arriscar dropar linhas — a query alimenta o resumo com TODOS os
+          // realizados; só temVinculo é refinado.
           temVinculo:
-            !!l.conciliacao_bancaria_itens && l.conciliacao_bancaria_itens.length > 0,
+            !!l.conciliacao_bancaria_itens &&
+            l.conciliacao_bancaria_itens.some((c) => c.desfeito_em === null),
         }));
     },
     staleTime: 30_000,

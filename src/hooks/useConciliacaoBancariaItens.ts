@@ -54,6 +54,7 @@ export function useConciliacaoBancariaItens() {
       .from('conciliacao_bancaria_itens' as any)
       .select('*')
       .eq('extrato_id', extrato_id)
+      .is('desfeito_em', null)   // PR-CBI-READ-01: só vínculos ativos (desfeito = memória)
       .order('created_at', { ascending: true });
     if (error) throw error;
     return (data as unknown as ConciliacaoItem[]) ?? [];
@@ -69,6 +70,7 @@ export function useConciliacaoBancariaItens() {
       .from('conciliacao_bancaria_itens' as any)
       .select('*')
       .in('extrato_id', extratoIds)
+      .is('desfeito_em', null)   // PR-CBI-READ-01: só vínculos ativos (desfeito = memória)
       .order('created_at', { ascending: true });
     if (error) throw error;
     const items = (data as unknown as ConciliacaoItem[]) ?? [];
@@ -105,6 +107,7 @@ export function useConciliacaoBancariaItens() {
       .from('conciliacao_bancaria_itens' as any)
       .select('*')
       .eq('lancamento_id', lancamentoId)
+      .is('desfeito_em', null)   // PR-CBI-READ-01: só vínculos ativos (desfeito = memória)
       .order('created_at', { ascending: true });
     if (error) throw error;
     return (data as unknown as ConciliacaoItem[]) ?? [];

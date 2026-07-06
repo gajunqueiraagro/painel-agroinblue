@@ -650,6 +650,7 @@ export function useImportacaoExtrato() {
               .select('lancamento_id, valor_aplicado')
               .eq('cliente_id', clienteAtual.id)
               .in('lancamento_id', lancIds)
+              .is('desfeito_em', null)   // PR-CBI-READ-01: só vínculos ativos
           : Promise.resolve({ data: [] as { lancamento_id: string; valor_aplicado: number }[] }),
       ]);
 
