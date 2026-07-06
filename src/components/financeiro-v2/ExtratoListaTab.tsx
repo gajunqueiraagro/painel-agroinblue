@@ -1177,7 +1177,7 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                         size="sm"
                         variant="outline"
                         className="h-6 text-[10px] px-2"
-                        disabled={m.status === 'ignorado' || m.status === 'conciliado'}
+                        disabled={m.status === 'ignorado' || m.vinculos.length > 0}
                         onClick={() => setMovCriando(m)}
                       >
                         Criar lançamento
@@ -1188,15 +1188,17 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
                         size="sm"
                         variant="outline"
                         className="h-6 text-[10px] px-2"
-                        disabled={m.status === 'ignorado' || m.status === 'conciliado'}
+                        disabled={m.status === 'ignorado' || m.vinculos.length > 0}
                         onClick={() => setMovTransferencia(m)}
                         title="Registrar como transferência entre contas"
                       >
                         <ArrowLeftRight className="h-3 w-3 mr-1" />
                         Transferência
                       </Button>
-                      {/* PR G — desfazer vínculo ativo (item conciliado). */}
-                      {m.status === 'conciliado' && (
+                      {/* PR-UI-ACOES-01 — render por estado operacional real:
+                          existe vínculo ATIVO (m.vinculos já filtrado por desfeito_em IS NULL).
+                          Não usa m.status ('conciliado'/derivado) — botão obedece a realidade. */}
+                      {m.vinculos.length > 0 && (
                         <Button
                           size="sm"
                           variant="outline"
