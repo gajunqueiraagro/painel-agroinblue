@@ -33,7 +33,8 @@ export async function recomputarStatusExtrato(extratoId: string): Promise<void> 
   const { data: itens } = await supabase
     .from('conciliacao_bancaria_itens' as any)
     .select('valor_aplicado')
-    .eq('extrato_id', extratoId);
+    .eq('extrato_id', extratoId)
+    .is('desfeito_em', null);   // PR-STATUS-SYNC-01: soma só vínculos vivos
   const soma = ((itens as unknown as { valor_aplicado: number }[]) ?? [])
     .reduce((s, r) => s + Math.abs(Number(r.valor_aplicado) || 0), 0);
 
@@ -91,7 +92,8 @@ export async function sincronizarVinculosDoLancamento(
   const { data: vinculos, error: eList } = await supabase
     .from('conciliacao_bancaria_itens' as any)
     .select('id, extrato_id, valor_aplicado')
-    .eq('lancamento_id', lancamentoId);
+    .eq('lancamento_id', lancamentoId)
+    .is('desfeito_em', null);   // PR-STATUS-SYNC-01: nunca sincronizar vínculo morto
   if (eList) throw eList;
 
   const vinculosArr =

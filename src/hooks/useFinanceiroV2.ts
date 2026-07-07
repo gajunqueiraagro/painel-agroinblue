@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { sincronizarVinculosDoLancamento } from '@/lib/financeiro/conciliacaoSync';
+import { sincronizarVinculosDoLancamento, recomputarStatusExtrato } from '@/lib/financeiro/conciliacaoSync';
 
 
 export interface LancamentoV2 {
@@ -615,6 +615,18 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   }, [clienteId, user, classificacoes]);
 
   const excluirLancamento = useCallback(async (id: string) => {
+    // PR-STATUS-SYNC-01: ANTES de cancelar, coletar os extratos com vínculo ATIVO
+    // deste lançamento (após o cancelamento o trigger trg_cbi_desfazer_on_cancelamento
+    // desfaz os cbi, e ninguém recomputa o status neste caminho).
+    const { data: vincAntes } = await supabase
+      .from('conciliacao_bancaria_itens' as any)
+      .select('extrato_id')
+      .eq('lancamento_id', id)
+      .is('desfeito_em', null);
+    const extratoIds = Array.from(new Set(
+      ((vincAntes as unknown as { extrato_id: string }[]) ?? []).map((v) => v.extrato_id),
+    ));
+
     // Universal soft delete: mark as cancelled regardless of origin
     const { error } = await supabase
       .from('financeiro_lancamentos_v2')
@@ -631,6 +643,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       toast.error('Erro ao excluir lançamento');
       return false;
     }
+
+    // PR-STATUS-SYNC-01: trigger desfez os cbi → recomputar status de cada extrato
+    // afetado (uma vez cada; o recompute soma só vínculos vivos).
+    for (const extratoId of extratoIds) {
+      await recomputarStatusExtrato(extratoId);
+    }
+
     toast.success('Lançamento excluído com sucesso');
     return true;
   }, [user]);
@@ -638,10 +657,26 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const excluirLancamentosEmLote = useCallback(async (ids: string[]): Promise<{ excluidos: number; bloqueados: string[] }> => {
     if (ids.length === 0) return { excluidos: 0, bloqueados: [] };
 
+    // PR-STATUS-SYNC-01: acumula os extratos com vínculo ATIVO dos lançamentos-alvo,
+    // DEDUPLICADOS (recompute uma vez por extrato ao final, mesmo com dezenas de
+    // lançamentos do mesmo extrato no lote).
+    const extratosAfetados = new Set<string>();
+
     // Universal soft delete in batches of 100 - no origin-based blocking
     let totalExcluidos = 0;
     for (let i = 0; i < ids.length; i += 100) {
       const batch = ids.slice(i, i + 100);
+
+      // coletar ANTES do cancelamento deste batch (depois o trigger desfaz os cbi)
+      const { data: vincAntes } = await supabase
+        .from('conciliacao_bancaria_itens' as any)
+        .select('extrato_id')
+        .in('lancamento_id', batch)
+        .is('desfeito_em', null);
+      for (const v of ((vincAntes as unknown as { extrato_id: string }[]) ?? [])) {
+        extratosAfetados.add(v.extrato_id);
+      }
+
       const { error } = await supabase
         .from('financeiro_lancamentos_v2')
         .update({
@@ -659,6 +694,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         break;
       }
       totalExcluidos += batch.length;
+    }
+
+    // PR-STATUS-SYNC-01: recomputar status de cada extrato afetado, UMA vez.
+    for (const extratoId of extratosAfetados) {
+      await recomputarStatusExtrato(extratoId);
     }
 
     return { excluidos: totalExcluidos, bloqueados: [] };
