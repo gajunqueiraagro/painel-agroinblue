@@ -19,6 +19,9 @@ const STATUS_CARDS: { key: EnriqStatus; label: string }[] = [
   { key: 'ambiguo_resolvido', label: 'Amb. resolvidos' },
   { key: 'sem_match',         label: 'Sem match' },
   { key: 'ja_classificado',   label: 'Já classificados' },
+  // PR-MESA-RESOLUCAO-01 — chip do fluxo de decisão humana por data (±3d) e seu resolvido.
+  { key: 'candidatos_proximos', label: 'Candidatos próximos' },
+  { key: 'resolvido_manual',    label: 'Resolvido manual' },
 ];
 
 function CardFiltro({

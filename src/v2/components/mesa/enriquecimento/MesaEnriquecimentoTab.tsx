@@ -21,6 +21,8 @@ import { EnriquecimentoLista } from './EnriquecimentoLista';
 import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { EnriquecimentoActions } from './EnriquecimentoActions';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
+import { EnriquecimentoCandidatosDrawer } from './EnriquecimentoCandidatosDrawer';
+import { Button } from '@/components/ui/button';
 import type { EnriqStatus } from './types';
 
 export function MesaEnriquecimentoTab() {
@@ -62,7 +64,11 @@ export function MesaEnriquecimentoTab() {
     applyRow, isApplyingRow, reverterRow, isRevertingRow,
     apply, isApplying,
     editarProposto,
+    resolverProximos, isResolvendoProximos, desfazerProximos,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
+
+  // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
+  const [candDrawerId, setCandDrawerId] = useState<string | null>(null);
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
@@ -87,6 +93,28 @@ export function MesaEnriquecimentoTab() {
   const rowsModo = useMemo(() => filtrarPorModo(rowsVM, filtroModo, graceIds), [rowsVM, filtroModo, graceIds]);
   const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsModo, filtroStatus), [rowsModo, filtroStatus]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
+
+  // PR-MESA-RESOLUCAO-01 — lançamentos já vinculados por QUALQUER linha da sessão
+  // (lanc_id = match_lancamento_id via view) → o drawer os oculta (o guard server-side
+  // é a trava real). E a linha crua p/ o contexto Excel do drawer.
+  const lancIdsUsados = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of staging) if (r.lanc_id) s.add(r.lanc_id);
+    return s;
+  }, [staging]);
+  const candRow = useMemo(
+    () => staging.find((r) => r.staging_id === candDrawerId) ?? null,
+    [staging, candDrawerId],
+  );
+  const candContexto = candRow
+    ? {
+        linha: candRow.excel_linha_origem,
+        data: candRow.excel_data,
+        valor: candRow.excel_valor,
+        tipo_operacao: candRow.excel_tipo_operacao,
+        fornecedor: candRow.excel_fornecedor,
+      }
+    : null;
 
   // Navegação read-only entre linhas da lista (Anterior/Próximo) — só troca a seleção.
   const idx = rowsFiltradas.findIndex((r) => r.id === selecionadoId);
@@ -123,7 +151,38 @@ export function MesaEnriquecimentoTab() {
     pulado_subcentro_preenchido: 'Subcentro já preenchido — nada a gravar no modo conservador.',
     sem_permissao: 'Sem permissão para este cliente.',
     nada_a_reverter: 'Nada a reverter nesta linha.',
+    // PR-MESA-RESOLUCAO-01
+    nao_candidatos_proximos: 'Esta linha não está em "candidatos próximos".',
+    candidato_invalido: 'Candidato fora da janela — recarregue os candidatos.',
+    lancamento_ja_escolhido: 'Lançamento já escolhido por outra linha desta sessão.',
+    nao_resolvido: 'Linha não está resolvida manualmente.',
   };
+
+  // PR-MESA-RESOLUCAO-01 — escolhe UM candidato (resolver_proximos). O guard
+  // anti-duplo-match responde com `mensagem` citando a linha conflitante.
+  async function handleResolverProximos(lancId: string) {
+    if (!candDrawerId) return;
+    try {
+      const res: any = await resolverProximos({ staging_id: candDrawerId, lancamento_id: lancId });
+      if (res?.ok) {
+        toast.success('Candidato escolhido — vínculo gravado.');
+        setCandDrawerId(null);
+      } else {
+        toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não resolvido (${res?.motivo ?? 'erro'}).`);
+      }
+    } catch (e: unknown) {
+      toast.error(`Erro ao escolher: ${errMsg(e)}`);
+    }
+  }
+  async function handleDesfazerProximos(stagingId: string) {
+    try {
+      const res: any = await desfazerProximos(stagingId);
+      if (res?.ok) toast.success('Escolha desfeita.');
+      else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não desfeito (${res?.motivo ?? 'erro'}).`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao desfazer: ${errMsg(e)}`);
+    }
+  }
 
   async function salvar(): Promise<boolean> {
     if (!selecionado) return false;
@@ -231,6 +290,28 @@ export function MesaEnriquecimentoTab() {
         />
       </div>
 
+      {/* PR-MESA-RESOLUCAO-01 — faixa de decisão humana da linha selecionada. */}
+      {selecionado?.status === 'candidatos_proximos' && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] md:shrink-0">
+          <span className="text-violet-800">
+            Esta linha tem <strong>candidatos próximos</strong> (±3 dias). A escolha é sua — o sistema não decide sozinho.
+          </span>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => setCandDrawerId(selecionado.id)}>
+            Ver candidatos
+          </Button>
+        </div>
+      )}
+      {selecionado?.status === 'resolvido_manual' && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] md:shrink-0">
+          <span className="text-cyan-800">
+            Candidato <strong>escolhido manualmente</strong>. Salve para enriquecer o lançamento, ou desfaça a escolha.
+          </span>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" disabled={isResolvendoProximos} onClick={() => { void handleDesfazerProximos(selecionado.id); }}>
+            Desfazer escolha
+          </Button>
+        </div>
+      )}
+
       <EnriquecimentoActions
         posicao={posicao}
         onAnterior={irAnterior}
@@ -255,6 +336,16 @@ export function MesaEnriquecimentoTab() {
         onClose={() => setImportOpen(false)}
         clienteId={clienteAtual?.id ?? null}
         onImportado={(sid) => { setSessaoId(sid); setFiltroConta('todas'); setFiltroStatus('todos'); setSelecionadoId(null); setImportOpen(false); }}
+      />
+
+      <EnriquecimentoCandidatosDrawer
+        stagingId={candDrawerId}
+        open={!!candDrawerId}
+        onOpenChange={(o) => { if (!o) setCandDrawerId(null); }}
+        contextoExcel={candContexto}
+        onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
+        isResolvendo={isResolvendoProximos}
+        lancIdsUsados={lancIdsUsados}
       />
     </div>
   );

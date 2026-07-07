@@ -215,9 +215,12 @@ export function filtrarPorConta(
 }
 
 export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): EnriqContagensVM {
-  // PR-P0-2 — conta os 6 status (somam ao total); aplicados é flag à parte.
+  // PR-P0-2 — conta os status (somam ao total); aplicados é flag à parte.
+  // PR-MESA-RESOLUCAO-01 — +candidatos_proximos/+resolvido_manual (o `if (k in status)`
+  // abaixo ignora status sem chave; sem estes dois o chip ficaria sempre zerado).
   const status: Record<EnriqStatus, number> = {
     exato: 0, ambiguo: 0, sem_match: 0, divergente: 0, ja_classificado: 0, ambiguo_resolvido: 0,
+    candidatos_proximos: 0, resolvido_manual: 0,
   };
   let aplicados = 0;
   for (const r of staging) {

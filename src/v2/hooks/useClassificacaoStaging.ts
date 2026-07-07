@@ -296,6 +296,32 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  // PR-MESA-RESOLUCAO-01 — decisão humana de 'candidatos_proximos'. Retornam o jsonb
+  // ({ ok, motivo, ... }); a RPC NÃO lança em rejeições de regra (nao_candidatos_proximos,
+  // candidato_invalido, lancamento_ja_escolhido) — o chamador checa `ok`/`motivo`.
+  const resolverProximosMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; lancamento_id: string }): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_resolver_proximos', {
+        p_staging_id: params.staging_id,
+        p_lancamento_id: params.lancamento_id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
+  const desfazerProximosMutation = useMutation({
+    mutationFn: async (staging_id: string): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_desfazer_proximos', {
+        p_staging_id: staging_id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -314,6 +340,11 @@ export function useClassificacaoStaging(
     isEditando: editarPropostoMutation.isPending,
     resetarProposto: resetarPropostoMutation.mutateAsync,
     isResetando: resetarPropostoMutation.isPending,
+    // PR-MESA-RESOLUCAO-01
+    resolverProximos: resolverProximosMutation.mutateAsync,
+    isResolvendoProximos: resolverProximosMutation.isPending,
+    desfazerProximos: desfazerProximosMutation.mutateAsync,
+    isDesfazendoProximos: desfazerProximosMutation.isPending,
   };
 }
 

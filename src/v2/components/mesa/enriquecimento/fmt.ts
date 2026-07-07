@@ -55,6 +55,9 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   ja_classificado:{ label: 'Já classificado',cls: 'text-blue-700',    dot: 'bg-blue-500' },
   divergente:     { label: 'Divergente',     cls: 'text-amber-700',   dot: 'bg-amber-500' },
   ambiguo_resolvido:{ label: 'Ambíguo resolvido', cls: 'text-teal-700', dot: 'bg-teal-500' },
+  // PR-MESA-RESOLUCAO-01
+  candidatos_proximos:{ label: 'Candidatos próximos', cls: 'text-violet-700', dot: 'bg-violet-500' },
+  resolvido_manual: { label: 'Resolvido manual',   cls: 'text-cyan-700',   dot: 'bg-cyan-600' },
 };
 
 // PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).
