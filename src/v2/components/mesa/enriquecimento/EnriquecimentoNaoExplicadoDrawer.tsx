@@ -9,11 +9,32 @@
  * futuro (SPLIT-01). Só inteligência de apoio à auditoria.
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
-import { useComposicaoSugerida } from '@/v2/hooks/useComposicaoSugerida';
+import { useSistemaNaoExplicado, type LancamentoNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
+import { useComposicaoSugerida, type ComposicaoSugerida } from '@/v2/hooks/useComposicaoSugerida';
+import { useSplitSubstituir } from '@/v2/hooks/useSplitSubstituir';
+
+const TOL = 0.005;
+const MOTIVO_SPLIT: Record<string, string> = {
+  soma_divergente: 'A soma das linhas não bate com o valor do lançamento.',
+  staging_invalido: 'Alguma linha não está elegível (já aplicada, com match, ou fora da sessão).',
+  ja_referenciado: 'Este lançamento já é referenciado por alguma linha — não é "não explicado".',
+  sem_vinculo_ofx: 'Lançamento sem vínculo OFX — split não disponível aqui.',
+  multi_extrato_nao_suportado: 'Lançamento com múltiplos extratos — não suportado neste fluxo.',
+  extrato_divergente: 'O valor do movimento bancário diverge do lançamento.',
+  conta_incompativel: 'Alguma linha é de conta incompatível com o lançamento.',
+  poucos_itens: 'A composição precisa de ao menos 2 linhas.',
+  ids_duplicados: 'Há linhas repetidas na composição.',
+  lancamento_inexistente_ou_cancelado: 'Lançamento não encontrado ou cancelado.',
+  sem_permissao: 'Sem permissão para este cliente.',
+};
 
 interface Props {
   sessaoId: string | null;
@@ -28,9 +49,31 @@ function fmtData(s: string | null): string {
   return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
 }
 
-// Bloco de composição de UM lançamento (fn 2). Read-only, sem ação.
-function ComposicaoBloco({ lancId, sessaoId }: { lancId: string; sessaoId: string | null }) {
-  const { data: comps, isLoading, error } = useComposicaoSugerida(lancId, sessaoId);
+// Bloco de composição de UM lançamento (fn 2). O botão "Substituir" aparece só quando
+// diferença = 0 — e executa EXATAMENTE a composição exibida (staging_ids da fn 2, sem
+// recálculo/seleção livre no front). PR-MESA-SPLIT-01.
+function ComposicaoBloco({ lanc, sessaoId }: { lanc: LancamentoNaoExplicado; sessaoId: string | null }) {
+  const { data: comps, isLoading, error } = useComposicaoSugerida(lanc.lanc_id, sessaoId);
+  const split = useSplitSubstituir(sessaoId);
+  const [confirmComp, setConfirmComp] = useState<ComposicaoSugerida | null>(null);
+
+  async function executar() {
+    if (!confirmComp) return;
+    const comp = confirmComp;
+    setConfirmComp(null);
+    try {
+      // FIDELIDADE: passa os staging_ids da composição exibida — sem recalcular.
+      const res: any = await split.mutateAsync({ lancamentoId: lanc.lanc_id, stagingIds: comp.staging_ids });
+      if (res?.ok) {
+        toast.success(`Substituído: ${res.lancamentos_criados?.length ?? comp.linhas.length} lançamentos · OFX ${res.status_extrato_final}.`);
+      } else {
+        toast.error(res?.mensagem ?? MOTIVO_SPLIT[res?.motivo] ?? `Não substituído (${res?.motivo ?? 'erro'}).`);
+      }
+    } catch (e) {
+      toast.error(`Erro ao substituir: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   if (isLoading) return <div className="text-[10px] text-muted-foreground py-1">Buscando composição…</div>;
   if (error) return <div className="text-[10px] text-rose-700 py-1">Erro ao buscar composição.</div>;
   if (!comps || comps.length === 0) {
@@ -39,21 +82,50 @@ function ComposicaoBloco({ lancId, sessaoId }: { lancId: string; sessaoId: strin
   return (
     <div className="space-y-2 pt-1">
       <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-700">Possível composição encontrada</div>
-      <div className="text-[10px] text-muted-foreground">Estas linhas do Excel somam o valor deste lançamento (apoio à auditoria — sem ação).</div>
-      {comps.map((c) => (
-        <div key={c.composicao_n} className="rounded-md border bg-muted/30 p-2 space-y-0.5">
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-muted-foreground">Composição {c.composicao_n} · {c.linhas.length} linhas</span>
-            <span className="font-mono tabular-nums font-semibold">{formatMoeda(c.soma ?? 0)}</span>
+      <div className="text-[10px] text-muted-foreground">Estas linhas do Excel somam o valor deste lançamento.</div>
+      {comps.map((c) => {
+        const exato = Math.abs(c.diferenca ?? 1) <= TOL;
+        return (
+          <div key={c.composicao_n} className="rounded-md border bg-muted/30 p-2 space-y-0.5">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">Composição {c.composicao_n} · {c.linhas.length} linhas</span>
+              <span className="font-mono tabular-nums font-semibold">{formatMoeda(c.soma ?? 0)}</span>
+            </div>
+            <div className="text-[10px] font-mono">Linhas Excel: {c.linhas.join(' + ')}</div>
+            <div className="text-[10px] text-muted-foreground">
+              diferença {(c.diferenca ?? 0) >= 0 ? '+' : ''}{formatMoeda(c.diferenca ?? 0)}
+            </div>
+            {exato && (
+              <Button size="sm" className="h-6 text-[11px] mt-1" disabled={split.isPending} onClick={() => setConfirmComp(c)}>
+                Substituir por estes detalhes ({c.linhas.length})
+              </Button>
+            )}
           </div>
-          <div className="text-[10px] font-mono">
-            Linhas Excel: {c.linhas.join(' + ')}
-          </div>
-          <div className="text-[10px] text-muted-foreground">
-            diferença {(c.diferenca ?? 0) >= 0 ? '+' : ''}{formatMoeda(c.diferenca ?? 0)}
-          </div>
-        </div>
-      ))}
+        );
+      })}
+
+      <AlertDialog open={!!confirmComp} onOpenChange={(o) => { if (!o) setConfirmComp(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Substituir consolidado pelos detalhes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmComp && (
+                <>
+                  {confirmComp.linhas.length} linhas do Excel (nºs {confirmComp.linhas.join(', ')}) virarão {confirmComp.linhas.length} lançamentos classificados;
+                  o lançamento consolidado <strong>{lanc.descricao ?? '(sem descrição)'}</strong> ({lanc.valor != null ? formatMoeda(lanc.valor) : '-'}) será cancelado;
+                  o movimento bancário será reconciliado com os {confirmComp.linhas.length} novos.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { void executar(); }} disabled={split.isPending}>
+              {split.isPending ? 'Executando…' : 'Substituir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -113,7 +185,7 @@ export function EnriquecimentoNaoExplicadoDrawer({ sessaoId, open, onOpenChange 
                         {l.valor != null ? formatMoeda(l.valor) : '-'}
                       </span>
                     </div>
-                    {aberto && <ComposicaoBloco lancId={l.lanc_id} sessaoId={sessaoId} />}
+                    {aberto && <ComposicaoBloco lanc={l} sessaoId={sessaoId} />}
                     {!aberto && (
                       <div className="text-[9px] text-muted-foreground/70">Clique para ver composição possível</div>
                     )}
