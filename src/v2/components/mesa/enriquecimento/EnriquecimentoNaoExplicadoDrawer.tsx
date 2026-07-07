@@ -31,6 +31,7 @@ const MOTIVO_SPLIT: Record<string, string> = {
   extrato_divergente: 'O valor do movimento bancário diverge do lançamento.',
   conta_incompativel: 'Alguma linha é de conta incompatível com o lançamento.',
   subcentro_nao_canonico: 'Classifique a linha com um subcentro canônico na Mesa antes de substituir.',
+  conta_indeterminada: 'Não foi possível determinar a conta bancária do lançamento. Corrija o consolidado ou o extrato antes de substituir.',
   poucos_itens: 'A composição precisa de ao menos 2 linhas.',
   ids_duplicados: 'Há linhas repetidas na composição.',
   lancamento_inexistente_ou_cancelado: 'Lançamento não encontrado ou cancelado.',
