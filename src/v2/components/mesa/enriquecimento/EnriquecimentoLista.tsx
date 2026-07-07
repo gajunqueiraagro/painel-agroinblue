@@ -15,7 +15,7 @@ export function EnriquecimentoLista({ rows, selecionadoId, onSelecionar, hideBan
     <div className="rounded-lg border bg-card overflow-hidden md:self-stretch md:h-full md:flex md:flex-col md:min-h-0">
       <div className="px-2 py-0.5 border-b bg-muted/40 flex items-baseline justify-between md:shrink-0">
         <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground">
-          Lançamentos do sistema
+          Linhas do Excel (sessão)
         </span>
         <span className="text-[9px] text-muted-foreground/70 tabular-nums">{rows.length}</span>
       </div>

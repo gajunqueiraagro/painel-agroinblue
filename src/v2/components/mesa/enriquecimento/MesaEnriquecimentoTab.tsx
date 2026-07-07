@@ -22,6 +22,8 @@ import { EnriquecimentoDetalhe } from './EnriquecimentoDetalhe';
 import { EnriquecimentoActions } from './EnriquecimentoActions';
 import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { EnriquecimentoCandidatosDrawer } from './EnriquecimentoCandidatosDrawer';
+import { EnriquecimentoNaoExplicadoDrawer } from './EnriquecimentoNaoExplicadoDrawer';
+import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
 import { Button } from '@/components/ui/button';
 import type { EnriqStatus } from './types';
 
@@ -70,6 +72,9 @@ export function MesaEnriquecimentoTab() {
 
   // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
   const [candDrawerId, setCandDrawerId] = useState<string | null>(null);
+  // PR-MESA-INVERSO-01 — visão read-only "sistema não explicado".
+  const [naoExplicadoOpen, setNaoExplicadoOpen] = useState(false);
+  const { data: naoExplicados } = useSistemaNaoExplicado(sessaoId);
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
@@ -303,6 +308,8 @@ export function MesaEnriquecimentoTab() {
         filtroModo={filtroModo}
         onFiltroModo={setFiltroModo}
         onImportar={() => setImportOpen(true)}
+        naoExplicadoCount={naoExplicados?.length ?? 0}
+        onAbrirNaoExplicado={() => setNaoExplicadoOpen(true)}
       />
 
       {isFetching && <div className="text-[10px] text-muted-foreground px-1 md:shrink-0">Carregando…</div>}
@@ -404,6 +411,12 @@ export function MesaEnriquecimentoTab() {
         isResolvendo={isResolvendoProximos}
         isAgrupando={isResolvendoGrupo}
         lancIdsUsados={lancIdsUsados}
+      />
+
+      <EnriquecimentoNaoExplicadoDrawer
+        sessaoId={sessaoId}
+        open={naoExplicadoOpen}
+        onOpenChange={setNaoExplicadoOpen}
       />
     </div>
   );

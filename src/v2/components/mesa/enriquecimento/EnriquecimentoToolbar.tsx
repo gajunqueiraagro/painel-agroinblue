@@ -20,12 +20,16 @@ export interface EnriquecimentoToolbarProps {
   isImporting?: boolean;
   sessaoDisabled?: boolean;
   importarDisabled?: boolean;
+  // PR-MESA-INVERSO-01 — visão read-only "sistema não explicado".
+  naoExplicadoCount?: number;
+  onAbrirNaoExplicado?: () => void;
 }
 
 export function EnriquecimentoToolbar({
   sessoes, sessaoAtivaId, onSelecionarSessao, contas, contaAtivaId, onSelecionarConta,
   contagens, filtroStatus, onFiltroStatus, filtroModo, onFiltroModo,
   onImportar, isImporting, sessaoDisabled, importarDisabled,
+  naoExplicadoCount, onAbrirNaoExplicado,
 }: EnriquecimentoToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card px-2 py-1 md:shrink-0">
@@ -78,6 +82,20 @@ export function EnriquecimentoToolbar({
 
       {/* Cards de contagem = filtro secundário por status (leitura). */}
       <EnriquecimentoResumo contagens={contagens} filtroAtivo={filtroStatus} onFiltro={onFiltroStatus} />
+
+      {/* PR-MESA-INVERSO-01 — chip read-only: abre a visão "sistema não explicado". */}
+      {onAbrirNaoExplicado && (
+        <button
+          type="button"
+          onClick={onAbrirNaoExplicado}
+          title="Lançamentos do sistema que nenhuma linha do Excel referencia"
+          className="flex items-center gap-1.5 rounded-md border border-dashed border-rose-300 bg-rose-50/60 px-1.5 py-0.5 text-rose-700 hover:bg-rose-50"
+        >
+          <span className="h-2 w-2 rounded-full bg-rose-500" />
+          <span className="text-[10px]">Sistema não explicado</span>
+          <span className="text-[11px] font-semibold tabular-nums">{naoExplicadoCount ?? 0}</span>
+        </button>
+      )}
     </div>
   );
 }
