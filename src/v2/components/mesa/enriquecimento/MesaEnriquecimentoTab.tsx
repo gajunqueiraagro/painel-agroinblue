@@ -108,13 +108,18 @@ export function MesaEnriquecimentoTab() {
   const rowsFiltradas = useMemo(() => filtrarPorStatus(rowsModo, filtroStatus), [rowsModo, filtroStatus]);
   const selecionado = rowsFiltradas.find((r) => r.id === selecionadoId) ?? null;
 
-  // PR-MESA-RESOLUCAO-01 — lançamentos já vinculados por QUALQUER linha da sessão
-  // (lanc_id = match_lancamento_id via view) → o drawer os oculta (o guard server-side
-  // é a trava real). E a linha crua p/ o contexto Excel do drawer.
+  // PR-MESA-RESOLUCAO-01 / PR-DRAWER-1TO1-01 — lançamentos já vinculados por QUALQUER linha
+  // da sessão (lanc_id = match_lancamento_id via view) → o drawer os oculta (o guard
+  // server-side é a trava real) e mostra QUAIS linhas os usaram. Map: lanc_id → linhas Excel.
   const lancIdsUsados = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of staging) if (r.lanc_id) s.add(r.lanc_id);
-    return s;
+    const m = new Map<string, number[]>();
+    for (const r of staging) {
+      if (!r.lanc_id) continue;
+      const arr = m.get(r.lanc_id) ?? [];
+      if (r.excel_linha_origem != null && !arr.includes(r.excel_linha_origem)) arr.push(r.excel_linha_origem);
+      m.set(r.lanc_id, arr);
+    }
+    return m;
   }, [staging]);
   const candRow = useMemo(
     () => staging.find((r) => r.staging_id === candDrawerId) ?? null,
