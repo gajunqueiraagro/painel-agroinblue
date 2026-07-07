@@ -1,0 +1,18 @@
+-- ============================================================================
+-- PR-MESA-INVERSO-02-fix — Remover overload órfão da fn 1.
+--
+-- DEFEITO (pg_proc pós-apply): o CREATE OR REPLACE do INVERSO-02 mudou a assinatura
+-- de fn_classificacao_sistema_nao_explicado (uuid) → (uuid, uuid DEFAULT NULL). Mudar
+-- assinatura NÃO substitui — cria OVERLOAD. Ficaram duas assinaturas vivas: a antiga
+-- (uuid) sem filtro de conta e a nova (uuid, uuid). Lição: mudar assinatura exige
+-- DROP IF EXISTS antes.
+--
+-- FIX: dropar SOMENTE a assinatura de 1 argumento (a órfã). A de 2 argumentos
+-- (INVERSO-02, a correta) permanece. Zero mudança de lógica.
+--
+-- PERMISSÕES: nem o INVERSO-01 nem o INVERSO-02 aplicaram REVOKE/GRANT explícito
+-- nesta fn (ambas as assinaturas herdaram o default do Postgres). Logo NÃO há
+-- política por-assinatura a reaplicar na sobrevivente — nada a fazer aqui além do DROP.
+-- (Declarado no relatório.)
+-- ============================================================================
+DROP FUNCTION IF EXISTS public.fn_classificacao_sistema_nao_explicado(uuid);
