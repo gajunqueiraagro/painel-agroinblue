@@ -35,10 +35,24 @@ import {
 /** Status operacional persistido em extrato_bancario_v2.status. */
 export type StatusPersistido = 'nao_conciliado' | 'parcial' | 'conciliado' | 'ignorado';
 
+// PR-OFX-DEDUP-01 — ESPELHO TS de public.fn_extrato_chave_doc(text) (a fn SQL IMMUTABLE
+// da migration 20260707_pr_ofx_dedup01_chave_natural.sql). Manter os dois lados idênticos:
+// 4+ segmentos ':' → 4º segmento (miolo estável do Bradesco); senão coalesce(d,'').
+function chaveDocOFX(doc: string | null | undefined): string {
+  if (doc != null && doc.split(':').length >= 4) return doc.split(':')[3];
+  return doc ?? '';
+}
+
 export interface MovimentoPreview extends MovimentoBruto {
   hash: string;
   /** Hash já está em extrato_bancario_v2 (apenas fato físico). */
   existeNoDB: boolean;
+  // PR-OFX-DEDUP-01 (1B) — chave natural: seq de ocorrência (ordem física do arquivo)
+  // e flag de já-existente por chave natural nos VIVOS do banco (renumeração do FITID).
+  /** Enésima ocorrência da mesma chave natural (sem seq) dentro do arquivo, em ordem física. */
+  seqOcorrencia?: number;
+  /** Um VIVO com a MESMA chave natural (incl. seq) já existe no banco → pular no insert. */
+  jaExistenteChave?: boolean;
   /** id do registro em extrato_bancario_v2, quando existeNoDB=true. */
   extratoIdExistente: string | null;
   /** Status operacional do registro persistido (null se não existe). */
@@ -157,6 +171,8 @@ export interface PreviewResult {
   novosParaSalvar: number;
   /** Total de movimentos cujo hash já existe em extrato_bancario_v2 (qualquer status). */
   existentesNoBanco: number;
+  /** PR-OFX-DEDUP-01 (1B) — novos por hash mas já existentes por chave natural (renumerados). */
+  jaExistentesPorChave: number;
   /** existeNoDB && statusPersistido='nao_conciliado'. Pendência aberta. */
   pendentes: number;
   /** existeNoDB && statusPersistido='parcial'. Parcialmente conciliado. */
@@ -192,7 +208,7 @@ function recomputarAgregados(
   movimentos: MovimentoPreview[],
 ): Pick<
   PreviewResult,
-  | 'novosParaSalvar' | 'existentesNoBanco' | 'pendentes' | 'parciais'
+  | 'novosParaSalvar' | 'existentesNoBanco' | 'jaExistentesPorChave' | 'pendentes' | 'parciais'
   | 'conciliados' | 'ignorados' | 'matchDireto' | 'matchAgrupados'
   | 'semMatch' | 'ambiguos' | 'suspeitasDuplicata'
 > {
@@ -203,8 +219,10 @@ function recomputarAgregados(
       m.statusPersistido === 'parcial',
   );
   return {
-    novosParaSalvar:   movimentos.filter((m) => !m.existeNoDB).length,
+    // PR-OFX-DEDUP-01 (1B) — renumerados (jaExistenteChave) saem de "novos" e viram "já existentes".
+    novosParaSalvar:   movimentos.filter((m) => !m.existeNoDB && !m.jaExistenteChave).length,
     existentesNoBanco: movimentos.filter((m) =>  m.existeNoDB).length,
+    jaExistentesPorChave: movimentos.filter((m) => !m.existeNoDB && m.jaExistenteChave === true).length,
     // Pendente = null (não salvo) OR nao_conciliado. Conciliado/parcial/ignorado
     // NUNCA entram, mesmo que sejam agrupados.
     pendentes:         movimentos.filter((m) =>
@@ -588,7 +606,7 @@ export function useImportacaoExtrato() {
       // do arquivo. Camada ADITIVA: não altera o dedup por hash nem o insert.
       const { data: candRows, error: errCand } = await supabase
         .from('extrato_bancario_v2' as any)
-        .select('id, data_movimento, valor, documento, descricao')
+        .select('id, data_movimento, valor, documento, descricao, seq_ocorrencia, status')
         .eq('cliente_id', clienteAtual.id)
         .eq('conta_bancaria_id', params.contaBancariaId)
         .gte('data_movimento', dataMin)
@@ -596,6 +614,15 @@ export function useImportacaoExtrato() {
         .is('cancelado_em', null);
       if (errCand) throw errCand;
       const candidatosDup = (candRows ?? []) as unknown as RegistroExtratoExistente[];
+
+      // PR-OFX-DEDUP-01 (1B) — conjunto das CHAVES NATURAIS VIVAS já no banco (cancelado_em
+      // null pela query + status <> 'ignorado'), para o dedupe determinístico pré-insert.
+      const chavesVivasNoBanco = new Set<string>();
+      for (const r of (candRows ?? []) as unknown as
+        { data_movimento: string; valor: number; documento: string | null; seq_ocorrencia: number; status: string }[]) {
+        if (r.status === 'ignorado') continue;
+        chavesVivasNoBanco.add(`${r.data_movimento}|${r.valor}|${chaveDocOFX(r.documento)}|${r.seq_ocorrencia}`);
+      }
 
       const fetchIni = addDays(dataMin, -10);
       const fetchFim = addDays(dataMax, +10);
@@ -910,6 +937,19 @@ export function useImportacaoExtrato() {
         }
       }
 
+      // PR-OFX-DEDUP-01 (1B) — seq de ocorrência em ORDEM FÍSICA do arquivo (movimentos
+      // preserva a ordem de parseOFX → .map; índice do array = sequência do STMTTRN) +
+      // dedupe determinístico por chave natural contra os VIVOS do banco (pega a renumeração
+      // do FITID que o hash não pega). Camadas hash e FASE 1A permanecem intactas.
+      const seqPorChave = new Map<string, number>();
+      for (const m of movimentos) {
+        const kSemSeq = `${m.data}|${m.valor}|${chaveDocOFX(m.documento)}`;
+        const seq = (seqPorChave.get(kSemSeq) ?? 0) + 1;
+        seqPorChave.set(kSemSeq, seq);
+        m.seqOcorrencia = seq;
+        m.jaExistenteChave = chavesVivasNoBanco.has(`${kSemSeq}|${seq}`);
+      }
+
       const result: PreviewResult = {
         movimentos,
         totalLinhas: movimentos.length,
@@ -949,7 +989,9 @@ export function useImportacaoExtrato() {
     // o conjunto é byte-idêntico ao comportamento pré-1B. "Importar tudo" do alerta
     // passa forcarImportarSuspeitas=true (ignora o skip).
     const novos = preview.movimentos.filter(
-      (m) => !m.existeNoDB && (params.forcarImportarSuspeitas || m.dupImportar !== false),
+      // PR-OFX-DEDUP-01 (1B): jaExistenteChave é dedupe DETERMINÍSTICO (chave natural viva no
+      // banco) → sempre pula, mesmo com forcarImportarSuspeitas (reinserir violaria o UNIQUE).
+      (m) => !m.existeNoDB && !m.jaExistenteChave && (params.forcarImportarSuspeitas || m.dupImportar !== false),
     );
     if (novos.length === 0) throw new Error('Nenhum movimento novo para importar');
 
@@ -1008,6 +1050,7 @@ export function useImportacaoExtrato() {
           valor: m.valor,
           tipo_movimento: m.tipo,
           hash_movimento: m.hash,
+          seq_ocorrencia: m.seqOcorrencia ?? 1,   // PR-OFX-DEDUP-01 (1B)
           status: 'nao_conciliado' as const,
         }));
         const { data: inserted, error: e2 } = await supabase
