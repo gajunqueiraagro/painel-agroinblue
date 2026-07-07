@@ -127,22 +127,32 @@ export function RematchOnDemandPanel({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          disabled={loading || pendenciasCount === 0}
-          onClick={handleRematch}
-          title={pendenciasCount === 0 ? 'Sem pendências para reprocessar' : undefined}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Reprocessando…' : '🔄 Reprocessar matching'}
-        </Button>
-        {pendenciasCount > 0 && !resultados && (
-          <span className="text-[11px] text-muted-foreground">
-            {pendenciasCount} pendência(s) elegível(eis)
-          </span>
-        )}
-      </div>
+      {/* PR-CONCILIACAO-UX-REMATCH-01 — sem pendências, comunicar a CONCLUSÃO (verde/positivo)
+          no lugar do botão morto. Substitui só o BOTÃO; o painel de resultados abaixo permanece
+          (caso de borda: count zera com resultados na tela). count>0 = comportamento atual intacto. */}
+      {pendenciasCount === 0 ? (
+        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 py-0.5">
+          <span aria-hidden>✓</span>
+          <span>Tudo conciliado nesta conta/mês — nada a reprocessar.</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            disabled={loading || pendenciasCount === 0}
+            onClick={handleRematch}
+            title={pendenciasCount === 0 ? 'Sem pendências para reprocessar' : undefined}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Reprocessando…' : '🔄 Reprocessar matching'}
+          </Button>
+          {pendenciasCount > 0 && !resultados && (
+            <span className="text-[11px] text-muted-foreground">
+              {pendenciasCount} pendência(s) elegível(eis)
+            </span>
+          )}
+        </div>
+      )}
 
       {erro && (
         <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5">
