@@ -119,7 +119,9 @@ BEGIN
     LIMIT 40
   ),
   combos AS (
-    SELECT ARRAY[a.staging_id, b.staging_id] AS sids, ARRAY[a.linha, b.linha] AS linhas, (a.valor + b.valor) AS soma, 2 AS n
+    -- PR-INVERSO-01-fix: aliases c_* NÃO podem colidir com as colunas do RETURNS TABLE
+    -- (composicao_n/staging_ids/linhas/soma/diferenca) — 42702 ambiguous no RETURN QUERY.
+    SELECT ARRAY[a.staging_id, b.staging_id] AS c_sids, ARRAY[a.linha, b.linha] AS c_linhas, (a.valor + b.valor) AS c_soma, 2 AS c_n
     FROM cand a JOIN cand b ON a.staging_id < b.staging_id
     WHERE ABS(a.valor + b.valor - v_alvo) <= 0.005
     UNION ALL
@@ -131,10 +133,10 @@ BEGIN
     FROM cand a JOIN cand b ON a.staging_id < b.staging_id JOIN cand c ON b.staging_id < c.staging_id JOIN cand d ON c.staging_id < d.staging_id
     WHERE ABS(a.valor + b.valor + c.valor + d.valor - v_alvo) <= 0.005
   )
-  SELECT (row_number() OVER (ORDER BY n, ABS(soma - v_alvo)))::int,
-         sids, linhas, soma, (soma - v_alvo)
+  SELECT (row_number() OVER (ORDER BY c_n, ABS(c_soma - v_alvo)))::int,
+         c_sids, c_linhas, c_soma, (c_soma - v_alvo)
   FROM combos
-  ORDER BY n, ABS(soma - v_alvo)
+  ORDER BY c_n, ABS(c_soma - v_alvo)
   LIMIT 5;
 END;
 $function$;
