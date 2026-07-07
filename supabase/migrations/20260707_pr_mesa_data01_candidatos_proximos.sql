@@ -1,11 +1,11 @@
 -- ============================================================================
--- PR-MESA-DATA-01 — Candidatos próximos por data (±3 dias), decisão sempre humana.
+-- PR-MESA-DATA-01 — Candidatos próximos por data (±10 dias ∩ ano_mes), decisão sempre humana.
 --
 -- "Não quero corrigir o bug. Quero eliminar a classe." [Princípio 9]
 -- Etapa: MESA/ENRIQUECIMENTO. O matcher exige data_pagamento = excel_data (igualdade
 -- estrita); linhas com candidato plausível a 1-3 dias caem em 'sem_match' e ficam
 -- invisíveis. Novo conceito: 'candidatos_proximos' = "há candidatos, o operador
--- escolhe" (Princípio 5). DECISÃO DE PRODUTO (Gabriel): janela ±3 dias; NUNCA
+-- escolhe" (Princípio 5). DECISÃO DE PRODUTO (Gabriel): janela ±10 dias ∩ mesmo ano_mes; NUNCA
 -- escolher sozinho (nem com candidato único).
 --
 -- Base: fn_classificacao_populate_staging vigente = corpo de
@@ -15,7 +15,7 @@
 --
 -- DELTA 1 — populate: passo "candidatos próximos" SÓ quando NOT v_herdado AND
 --   NOT v_sem_conta AND v_match_count = 0 (data exata zerou, conta resolvida, sem
---   herança). count(±3d, realizado, mesmo ramo de conta) >= 1 ⇒ 'candidatos_proximos'
+--   herança). count(±10d ∩ ano_mes, realizado, mesmo ramo de conta) >= 1 ⇒ 'candidatos_proximos'
 --   com match_lancamento_id = NULL (nunca auto-escolhe). count=0 ⇒ permanece sem_match.
 -- DELTA 2 — CHECK de match_status += 'candidatos_proximos'.
 -- DELTA 3 — fn IRMÃ fn_classificacao_candidatos_proximos: mesma janela/filtros do
@@ -55,7 +55,7 @@ DECLARE
   v_match_count int; v_match_lanc_id uuid; v_match_subcentro text; v_match_status text; v_update_proposto jsonb;
   -- PR-MESA-MATCH-01: memória de aplicação anterior + transparência do guard
   v_heranca_count int; v_heranca_lanc_id uuid; v_herdado boolean; v_sem_conta boolean;
-  -- PR-MESA-DATA-01: candidatos próximos por data (±3d)
+  -- PR-MESA-DATA-01: candidatos próximos por data (±10d ∩ ano_mes)
   v_prox_count int;
   v_total int := 0; v_inseridos int := 0; v_counts jsonb := '{}'::jsonb;
 BEGIN
@@ -171,7 +171,7 @@ BEGIN
       ELSE v_match_status := 'divergente'; END IF;
     END IF;
 
-    -- PR-MESA-DATA-01 · DELTA 1 — CANDIDATOS PRÓXIMOS (±3 dias). Só quando a data
+    -- PR-MESA-DATA-01 · DELTA 1 — CANDIDATOS PRÓXIMOS (±10 dias ∩ ano_mes). Só quando a data
     -- exata zerou (v_match_count=0), a conta foi resolvida (NOT v_sem_conta) e não
     -- houve herança. count>=1 ⇒ 'candidatos_proximos'; match_lancamento_id fica NULL
     -- (NUNCA auto-escolhe — nem com candidato único). count=0 ⇒ permanece sem_match.
@@ -182,7 +182,7 @@ BEGIN
         AND ano_mes = COALESCE(v_ano_mes, to_char(v_data,'YYYY-MM'))
         AND ABS(valor) BETWEEN v_valor-0.005 AND v_valor+0.005
         AND tipo_operacao = v_tipo_op
-        AND data_pagamento BETWEEN v_data - 3 AND v_data + 3
+        AND data_pagamento BETWEEN v_data - 10 AND v_data + 10
         AND (
           (v_tipo_op = '1-Entradas' AND (CASE WHEN v_conta_destino_id IS NOT NULL THEN conta_destino_id = v_conta_destino_id
                                               ELSE (conta_destino_id = v_conta_origem_id OR conta_bancaria_id = v_conta_origem_id) END)) OR
@@ -215,9 +215,9 @@ BEGIN
 END;
 $function$;
 
--- ── DELTA 3) fn IRMÃ: candidatos próximos (±3d) com distancia_dias ────────────
+-- ── DELTA 3) fn IRMÃ: candidatos próximos (±10d ∩ ano_mes) com distancia_dias ──
 -- Corpo de fn_classificacao_candidatos_ambiguo (20260702) VERBATIM, exceto:
---   • data EXATA → janela BETWEEN excel_data-3 AND excel_data+3;
+--   • data EXATA → janela BETWEEN excel_data-10 AND excel_data+10 (∩ ano_mes mantido);
 --   • + AND l.status_transacao = 'realizado' (mesmo filtro do delta 1);
 --   • RETURNS/SELECT += numero_documento e distancia_dias = ABS(data_pagamento - excel_data);
 --   • ORDER BY distância (mais perto primeiro), depois id.
@@ -250,7 +250,7 @@ BEGIN
     AND l.cancelado = false
     AND l.status_transacao = 'realizado'
     AND l.ano_mes = v_ano_mes
-    AND l.data_pagamento BETWEEN v_s.excel_data - 3 AND v_s.excel_data + 3
+    AND l.data_pagamento BETWEEN v_s.excel_data - 10 AND v_s.excel_data + 10
     AND ABS(l.valor) BETWEEN v_s.excel_valor - 0.005 AND v_s.excel_valor + 0.005
     AND l.tipo_operacao = v_s.excel_tipo_operacao
     AND (
