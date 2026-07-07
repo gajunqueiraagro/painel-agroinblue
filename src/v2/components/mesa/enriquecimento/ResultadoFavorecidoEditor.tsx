@@ -2,9 +2,9 @@
 // reutilizando o FavorecidoSelect OFICIAL (fonte única) + NovoFornecedorDialog para
 // criação inline. Estado local só de busca e do diálogo; a gravação vai por
 // onEditar({ favorecido_id }). `onSelected` (forma/dados de pagamento) é omitido —
-// não se aplica à Mesa. Criação usa a fazenda proposta da linha (edicao.fazendaId).
+// não se aplica à Mesa. PR-FORNECEDOR-FAZENDA-01: a criação usa a fazenda proposta da
+// linha QUANDO EXISTIR; sem fazenda, o fornecedor nasce do cliente (fazenda é opcional).
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
@@ -15,7 +15,7 @@ export interface ResultadoFavorecidoEditorProps {
   fazendaId: string | null;   // fazenda proposta da linha (para cadastrar fornecedor)
   disabled?: boolean;
   onEditar: (patch: Record<string, unknown>) => Promise<void>;
-  onCriarFornecedor: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  onCriarFornecedor: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
 export function ResultadoFavorecidoEditor({
@@ -42,11 +42,8 @@ export function ResultadoFavorecidoEditor({
         onClose={() => setDialogOpen(false)}
         defaultNome={defaultNome}
         onSave={async (nome, cpfCnpj) => {
-          if (!fazendaId) {
-            toast.error('Selecione uma fazenda antes de cadastrar o fornecedor.');
-            return;
-          }
-          const f = await onCriarFornecedor(nome, fazendaId, cpfCnpj);
+          // PR-FORNECEDOR-FAZENDA-01: sem guard de fazenda — fazenda é opcional.
+          const f = await onCriarFornecedor(nome, fazendaId ?? null, cpfCnpj);
           if (f) { void onEditar({ favorecido_id: f.id }); setDialogOpen(false); }
         }}
       />

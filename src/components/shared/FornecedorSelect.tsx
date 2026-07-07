@@ -74,7 +74,7 @@ interface FornecedorRow {
   nome_normalizado: string | null;
   aliases: string[] | null;
   cpf_cnpj: string | null;
-  fazenda_id: string;
+  fazenda_id: string | null;   // PR-FORNECEDOR-FAZENDA-01: fazenda opcional
   ativo: boolean;
   tipo_recebimento: string | null;
   pix_tipo_chave: string | null;

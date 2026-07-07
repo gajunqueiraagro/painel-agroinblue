@@ -12,11 +12,15 @@ import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 
+// PR-FORNECEDOR-FAZENDA-01: fazenda é opcional. Sentinela do "— Sem fazenda —"
+// (Radix Select não aceita SelectItem com value vazio) → mapeado para null no save.
+const SEM_FAZENDA = '__sem_fazenda__';
+
 interface Fornecedor {
   id: string;
   nome: string;
   cpf_cnpj: string | null;
-  fazenda_id: string;
+  fazenda_id: string | null;   // PR-FORNECEDOR-FAZENDA-01: fazenda opcional
   ativo: boolean;
   tipo_recebimento?: string | null;
   pix_tipo_chave?: string | null;
@@ -110,7 +114,7 @@ export function FornecedorFormDialog({
       if (editing) {
         setNome(editing.nome);
         setCpfCnpj(editing.cpf_cnpj || '');
-        setFazendaId(editing.fazenda_id);
+        setFazendaId(editing.fazenda_id ?? '');
         setAtivo(editing.ativo);
         setTipoRecebimento(editing.tipo_recebimento || '');
         setPixTipoChave(editing.pix_tipo_chave || '');
@@ -129,7 +133,7 @@ export function FornecedorFormDialog({
       } else {
         setNome('');
         setCpfCnpj('');
-        setFazendaId(fazendas[0]?.id || '');
+        setFazendaId('');   // PR-FORNECEDOR-FAZENDA-01: sem default inventado — nasce vazio
         setAtivo(true);
         setLancamentoCount(null);
         setTipoRecebimento('');
@@ -160,8 +164,8 @@ export function FornecedorFormDialog({
 
   const save = useCallback(async () => {
     if (saving) return;
-    if (!clienteId || !nome.trim() || !fazendaId) {
-      toast.error('Preencha nome e fazenda');
+    if (!clienteId || !nome.trim()) {
+      toast.error('Preencha o nome');
       return;
     }
 
@@ -187,7 +191,8 @@ export function FornecedorFormDialog({
     setSaving(true);
     const payload: any = {
       cliente_id: clienteId,
-      fazenda_id: fazendaId,
+      // PR-FORNECEDOR-FAZENDA-01: '' (nasce vazio) e o sentinela → null; nunca ''.
+      fazenda_id: fazendaId && fazendaId !== SEM_FAZENDA ? fazendaId : null,
       nome: nome.trim(),
       cpf_cnpj: cpfCnpj.trim() || null,
       ativo,
@@ -365,10 +370,12 @@ export function FornecedorFormDialog({
             <Input value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} className="h-9" placeholder="000.000.000-00" />
           </div>
           <div>
-            <Label className="text-xs">Fazenda *</Label>
+            <Label className="text-xs">Fazenda</Label>
             <Select value={fazendaId} onValueChange={setFazendaId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="— Sem fazenda —" /></SelectTrigger>
               <SelectContent>
+                {/* PR-FORNECEDOR-FAZENDA-01: fazenda opcional — opção explícita "sem fazenda". */}
+                <SelectItem value={SEM_FAZENDA}>— Sem fazenda —</SelectItem>
                 {fazendas.map(f => (
                   <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
                 ))}

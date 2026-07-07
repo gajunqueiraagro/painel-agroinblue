@@ -108,7 +108,7 @@ export interface FornecedorV2 {
   id: string;
   nome: string;
   cpf_cnpj: string | null;
-  fazenda_id: string;
+  fazenda_id: string | null;   // PR-FORNECEDOR-FAZENDA-01: fazenda opcional
   ativo: boolean;
   tipo_recebimento: string | null;
   pix_tipo_chave: string | null;
@@ -196,7 +196,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     setFornecedores(all);
   }, [clienteId]);
 
-  const criarFornecedor = useCallback(async (nome: string, fazendaId: string, cpfCnpj?: string) => {
+  // PR-FORNECEDOR-FAZENDA-01: fazenda é OPCIONAL — fornecedor é entidade do cliente.
+  // fazendaId null vai como null (NUNCA ''); lookups são por cliente_id+nome (sem fazenda).
+  const criarFornecedor = useCallback(async (nome: string, fazendaId: string | null, cpfCnpj?: string) => {
     if (!clienteId) return null;
     const { data, error } = await supabase
       .from('financeiro_fornecedores')

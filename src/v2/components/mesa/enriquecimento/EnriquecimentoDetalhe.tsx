@@ -21,7 +21,7 @@ export interface EnriquecimentoDetalheProps {
   clienteId?: string;
   hideBanco?: boolean;   // U2 — sob filtro por conta, a linha Banco some (redundante)
   onEditar?: (patch: Record<string, unknown>) => Promise<void>;
-  onCriarFornecedor?: (nome: string, fazendaId: string, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;   // PR-FORNECEDOR-FAZENDA-01
 }
 
 // Larguras FIXAS — "Resultado" é a mais larga (coração da tela).
