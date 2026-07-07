@@ -684,6 +684,10 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       });
       toast.success('Lançamento criado e conciliado');
       setMovCriando(null);
+      // PR-CBI-REFRESH-01: invalida ['cbi-batch', …] (fonte de m.vinculos) pra a
+      // linha refletir o vínculo recém-criado na hora — sem isto UI-ACOES reoferece
+      // "Criar lançamento" por até 30s (staleTime) → duplicação.
+      queryClient.invalidateQueries({ queryKey: ['cbi-batch'] });
       refetch();
       return true;
     } catch (e: any) {
@@ -696,6 +700,9 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         + '. Use o botão Conciliar para vincular manualmente.',
       );
       setMovCriando(null);
+      // PR-CBI-REFRESH-01: o lançamento já existe mesmo no catch — invalidar cbi-batch
+      // pra a linha refletir o estado real e não reoferecer "Criar lançamento".
+      queryClient.invalidateQueries({ queryKey: ['cbi-batch'] });
       refetch();
       return true;
     }
@@ -721,6 +728,9 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
       });
       toast.success('Transferência criada e conciliada');
       setMovTransferencia(null);
+      // PR-CBI-REFRESH-01: invalida ['cbi-batch', …] (fonte de m.vinculos) pra a
+      // linha refletir o vínculo recém-criado na hora — mesmo defeito da rota "Criar".
+      queryClient.invalidateQueries({ queryKey: ['cbi-batch'] });
       refetch();
       return true;
     } catch (e: any) {
@@ -732,6 +742,9 @@ export function ExtratoListaTab({ contaBancariaId, anoMes }: Props) {
         + '. Use o botão Conciliar para vincular manualmente.',
       );
       setMovTransferencia(null);
+      // PR-CBI-REFRESH-01: o lançamento já existe mesmo no catch — invalidar cbi-batch
+      // pra a linha refletir o estado real e não reoferecer "Criar lançamento".
+      queryClient.invalidateQueries({ queryKey: ['cbi-batch'] });
       refetch();
       return true;
     }
