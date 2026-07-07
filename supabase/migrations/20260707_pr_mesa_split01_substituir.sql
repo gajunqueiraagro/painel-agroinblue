@@ -111,6 +111,29 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'motivo', 'extrato_divergente', 'valor_extrato', v_ext.valor, 'valor_lancamento', v_lan.valor);
   END IF;
 
+  -- (h) subcentro CANÔNICO — validação prévia (ANTES de qualquer INSERT).
+  -- Espelha EXATAMENTE a condição de RAISE do trigger resolve_classificacao_from_plano
+  -- (fonte da 23514): bloqueia quando o subcentro efetivo (update_proposto->>'subcentro')
+  -- NÃO é NULL, NÃO existe em financeiro_plano_contas (ativo=true, mesma consulta da
+  -- "Tentativa 2" do trigger — sem filtro de cliente/tipo), e macro_custo IS DISTINCT
+  -- FROM 'Dividendos' (mesma exceção do trigger). ZERO normalização: não parseia caminho,
+  -- não adivinha canônico, não insere NULL silenciosamente — o operador classifica na Mesa.
+  FOR v_s IN SELECT * FROM financeiro_classificacao_staging
+             WHERE staging_id = ANY(p_staging_ids) ORDER BY excel_linha_origem
+  LOOP
+    IF (v_s.update_proposto->>'subcentro') IS NOT NULL
+       AND (v_s.update_proposto->>'macro_custo') IS DISTINCT FROM 'Dividendos'
+       AND NOT EXISTS (
+         SELECT 1 FROM public.financeiro_plano_contas
+         WHERE ativo = true AND subcentro = v_s.update_proposto->>'subcentro'
+       ) THEN
+      RETURN jsonb_build_object('ok', false, 'motivo', 'subcentro_nao_canonico',
+        'linha', v_s.excel_linha_origem,
+        'subcentro', v_s.update_proposto->>'subcentro',
+        'mensagem', format('Classifique a linha %s com um subcentro canônico na Mesa antes de substituir.', v_s.excel_linha_origem));
+    END IF;
+  END LOOP;
+
   -- ── EXECUÇÃO (atômica) ──────────────────────────────────────────────────
   -- 1) Criar os N lançamentos (classificação do update_proposto — mesmo mapeamento
   --    do apply_row overwrite) + 2) marcar cada linha staging (espelho do apply_row:
