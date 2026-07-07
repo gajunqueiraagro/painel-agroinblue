@@ -65,6 +65,7 @@ export function MesaEnriquecimentoTab() {
     apply, isApplying,
     editarProposto,
     resolverProximos, isResolvendoProximos, desfazerProximos,
+    resolverGrupo, isResolvendoGrupo, desfazerGrupo,
   } = useClassificacaoStaging(sessaoId, clienteAtual?.id);
 
   // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
@@ -156,7 +157,40 @@ export function MesaEnriquecimentoTab() {
     candidato_invalido: 'Candidato fora da janela — recarregue os candidatos.',
     lancamento_ja_escolhido: 'Lançamento já escolhido por outra linha desta sessão.',
     nao_resolvido: 'Linha não está resolvida manualmente.',
+    // PR-MESA-GRUPO-01
+    status_nao_elegivel: 'Só linhas em "candidatos próximos" ou "sem match" podem ser agrupadas.',
+    use_resolver_proximos: 'Um único lançamento — use "Escolher candidato" (não agrupamento).',
+    soma_divergente: 'A soma dos selecionados não bate com o valor do Excel.',
+    ids_duplicados: 'Há lançamentos repetidos na seleção.',
+    lista_vazia: 'Selecione ao menos dois lançamentos para agrupar.',
+    nao_resolvido_grupo: 'Linha não está resolvida como grupo.',
   };
+
+  // PR-MESA-GRUPO-01 — agrupa N lançamentos (resolver_grupo). O guard anti-duplo
+  // bidirecional e a soma são validados no banco; a `mensagem` cita a linha conflitante.
+  async function handleResolverGrupo(lancIds: string[]) {
+    if (!candDrawerId) return;
+    try {
+      const res: any = await resolverGrupo({ staging_id: candDrawerId, lancamento_ids: lancIds });
+      if (res?.ok) {
+        toast.success(`Grupo criado — ${lancIds.length} lançamentos.`);
+        setCandDrawerId(null);
+      } else {
+        toast.error(res?.mensagem ?? MOTIVO_MSG[res?.motivo] ?? `Não agrupado (${res?.motivo ?? 'erro'}).`);
+      }
+    } catch (e: unknown) {
+      toast.error(`Erro ao agrupar: ${errMsg(e)}`);
+    }
+  }
+  async function handleDesfazerGrupo(stagingId: string) {
+    try {
+      const res: any = await desfazerGrupo(stagingId);
+      if (res?.ok) toast.success('Grupo desfeito.');
+      else toast.error(MOTIVO_MSG[res?.motivo] ?? `Não desfeito (${res?.motivo ?? 'erro'}).`);
+    } catch (e: unknown) {
+      toast.error(`Erro ao desfazer grupo: ${errMsg(e)}`);
+    }
+  }
 
   // PR-MESA-RESOLUCAO-01 — escolhe UM candidato (resolver_proximos). O guard
   // anti-duplo-match responde com `mensagem` citando a linha conflitante.
@@ -290,14 +324,34 @@ export function MesaEnriquecimentoTab() {
         />
       </div>
 
-      {/* PR-MESA-RESOLUCAO-01 — faixa de decisão humana da linha selecionada. */}
+      {/* PR-MESA-RESOLUCAO-01 / -GRUPO-01 — faixa de decisão humana da linha selecionada. */}
       {selecionado?.status === 'candidatos_proximos' && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] md:shrink-0">
           <span className="text-violet-800">
-            Esta linha tem <strong>candidatos próximos</strong> (±3 dias). A escolha é sua — o sistema não decide sozinho.
+            Esta linha tem <strong>candidatos próximos</strong> (±10 dias). Escolha um — ou agrupe vários que somem o valor. O sistema não decide sozinho.
           </span>
           <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => setCandDrawerId(selecionado.id)}>
             Ver candidatos
+          </Button>
+        </div>
+      )}
+      {selecionado?.status === 'sem_match' && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] md:shrink-0">
+          <span className="text-slate-700">
+            Sem match direto. Você pode <strong>agrupar</strong> lançamentos da janela que somem o valor do Excel (match N:1).
+          </span>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => setCandDrawerId(selecionado.id)}>
+            Agrupar candidatos
+          </Button>
+        </div>
+      )}
+      {selecionado?.status === 'resolvido_grupo' && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] md:shrink-0">
+          <span className="text-indigo-800">
+            <strong>Grupo resolvido</strong> (N lançamentos ↔ 1 linha). Aplicação em lote não inclui grupos — desfaça se precisar reabrir.
+          </span>
+          <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" disabled={isResolvendoGrupo} onClick={() => { void handleDesfazerGrupo(selecionado.id); }}>
+            Desfazer grupo
           </Button>
         </div>
       )}
@@ -343,8 +397,12 @@ export function MesaEnriquecimentoTab() {
         open={!!candDrawerId}
         onOpenChange={(o) => { if (!o) setCandDrawerId(null); }}
         contextoExcel={candContexto}
+        excelValor={candRow?.excel_valor ?? null}
+        statusLinha={candRow?.match_status ?? null}
         onEscolher={(lancId) => { void handleResolverProximos(lancId); }}
+        onAgrupar={(lancIds) => { void handleResolverGrupo(lancIds); }}
         isResolvendo={isResolvendoProximos}
+        isAgrupando={isResolvendoGrupo}
         lancIdsUsados={lancIdsUsados}
       />
     </div>

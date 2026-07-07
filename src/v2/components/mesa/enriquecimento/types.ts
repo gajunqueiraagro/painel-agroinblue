@@ -5,7 +5,7 @@
 // ============================================================================
 // PR-MESA-RESOLUCAO-01 — +'candidatos_proximos' (janela ±3d, PR-MESA-DATA-01) e
 // +'resolvido_manual' (escolha humana gravada por fn_classificacao_resolver_proximos).
-export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual';
+export type EnriqStatus = 'exato' | 'ambiguo' | 'sem_match' | 'ja_classificado' | 'divergente' | 'ambiguo_resolvido' | 'candidatos_proximos' | 'resolvido_manual' | 'resolvido_grupo';
 
 // PR-U2d-1 — estado OPERACIONAL da linha (ciclo Editar → Aplicar → Resolvida).
 // Derivado do VM (aplicado/temMatch/órfão/match_status); é a leitura principal.

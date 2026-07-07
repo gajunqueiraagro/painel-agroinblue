@@ -58,6 +58,8 @@ export const STATUS_META: Record<string, { label: string; cls: string; dot: stri
   // PR-MESA-RESOLUCAO-01
   candidatos_proximos:{ label: 'Candidatos próximos', cls: 'text-violet-700', dot: 'bg-violet-500' },
   resolvido_manual: { label: 'Resolvido manual',   cls: 'text-cyan-700',   dot: 'bg-cyan-600' },
+  // PR-MESA-GRUPO-01
+  resolvido_grupo:  { label: 'Resolvido grupo',    cls: 'text-indigo-700', dot: 'bg-indigo-600' },
 };
 
 // PR-U2d-1 — selo do estado operacional (leitura principal na Lista e no Detalhe).

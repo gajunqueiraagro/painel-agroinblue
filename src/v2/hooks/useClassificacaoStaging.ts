@@ -322,6 +322,32 @@ export function useClassificacaoStaging(
     onSuccess: invalidarSessaoAtual,
   });
 
+  // PR-MESA-GRUPO-01 — agrupamento manual N:1. Retornam o jsonb ({ ok, motivo, ... });
+  // a RPC NÃO lança em rejeições de regra (status_nao_elegivel, soma_divergente,
+  // use_resolver_proximos, lancamento_ja_escolhido, ...) — o chamador checa `ok`/`motivo`.
+  const resolverGrupoMutation = useMutation({
+    mutationFn: async (params: { staging_id: string; lancamento_ids: string[] }): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_resolver_grupo', {
+        p_staging_id: params.staging_id,
+        p_lancamento_ids: params.lancamento_ids,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
+  const desfazerGrupoMutation = useMutation({
+    mutationFn: async (staging_id: string): Promise<any> => {
+      const { data, error } = await (supabase as any).rpc('fn_classificacao_desfazer_grupo', {
+        p_staging_id: staging_id,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: invalidarSessaoAtual,
+  });
+
   return {
     staging: stagingQuery.data ?? [],
     isLoading: stagingQuery.isLoading,
@@ -345,6 +371,11 @@ export function useClassificacaoStaging(
     isResolvendoProximos: resolverProximosMutation.isPending,
     desfazerProximos: desfazerProximosMutation.mutateAsync,
     isDesfazendoProximos: desfazerProximosMutation.isPending,
+    // PR-MESA-GRUPO-01
+    resolverGrupo: resolverGrupoMutation.mutateAsync,
+    isResolvendoGrupo: resolverGrupoMutation.isPending,
+    desfazerGrupo: desfazerGrupoMutation.mutateAsync,
+    isDesfazendoGrupo: desfazerGrupoMutation.isPending,
   };
 }
 

@@ -1,19 +1,23 @@
 /**
- * EnriquecimentoCandidatosDrawer — drawer da Mesa nova para RESOLVER uma linha
- * 'candidatos_proximos' (PR-MESA-RESOLUCAO-01). Lista os candidatos da janela ±3d
- * (fn_classificacao_candidatos_proximos), com DISTÂNCIA EM DIAS destacada, ordenados
- * pelo ranking do banco. O operador escolhe UM → fn_classificacao_resolver_proximos.
+ * EnriquecimentoCandidatosDrawer — drawer da Mesa nova para resolver uma linha
+ * 'candidatos_proximos' ou 'sem_match'. Lista candidatos de GRUPO (±10d ∩ ano_mes,
+ * ABS(valor) <= excel — membros somam), com DISTÂNCIA EM DIAS destacada, ordenados
+ * pelo ranking do banco. Fonte única = fn_classificacao_candidatos_grupo (a UI NÃO
+ * re-declara a janela).
  *
- * SUPORTE FUTURO A GRUPOS: a seleção é plural por desenho (Set + checkbox); o ato
- * "Escolher" deste PR é SINGLE (habilita só com exatamente 1 marcado). Agrupamento é
- * PR-MESA-GRUPO-01 — não misturar aqui.
+ * Duas decisões humanas, nunca automáticas:
+ *   · 1 selecionado → "Escolher candidato" (1:1, fn_classificacao_resolver_proximos —
+ *     só p/ linha 'candidatos_proximos' e valor casando).
+ *   · 2+ selecionados → "Agrupar selecionados" (N:1, fn_classificacao_resolver_grupo),
+ *     habilitado só quando a SOMA = valor Excel (±0,005).
+ * Agrupamento (2+) é o PR-MESA-GRUPO-01; o 1:1 fica intacto.
  */
 import { useMemo, useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { useClassificacaoCandidatosProximos } from '@/v2/hooks/useClassificacaoCandidatosProximos';
+import { useClassificacaoCandidatosGrupo } from '@/v2/hooks/useClassificacaoCandidatosGrupo';
 
 export interface ContextoExcelProx {
   linha: number | null;
@@ -28,12 +32,19 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contextoExcel: ContextoExcelProx | null;
-  /** Executa a escolha (resolver_proximos). O pai trata toast/guard e fecha o drawer. */
+  excelValor: number | null;
+  statusLinha: string | null;
+  /** 1:1 (resolver_proximos). O pai trata toast/guard e fecha o drawer. */
   onEscolher: (lancId: string) => void;
+  /** N:1 (resolver_grupo). O pai trata toast/guard e fecha o drawer. */
+  onAgrupar: (lancIds: string[]) => void;
   isResolvendo?: boolean;
-  /** Lançamentos já escolhidos por OUTRAS linhas da sessão — ocultados (guard server-side é a trava real). */
+  isAgrupando?: boolean;
+  /** Lançamentos já usados por OUTRAS linhas da sessão (singular OU grupo) — ocultados. */
   lancIdsUsados?: Set<string>;
 }
+
+const TOL = 0.005;
 
 function fmtData(s: string | null): string {
   if (!s) return '-';
@@ -47,20 +58,21 @@ function truncUuid(uuid: string | null): string {
   return uuid.slice(0, 8);
 }
 
-// Distância em dias → tom (0-1d ok, 2d atenção, 3d limite).
+// Distância em dias → tom (0-1d ok, 2-3d atenção, 4+ limite).
 function distCls(d: number | null): string {
   if (d == null) return 'bg-muted text-muted-foreground';
   if (d <= 1) return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
-  if (d === 2) return 'bg-amber-100 text-amber-800 border border-amber-300';
+  if (d <= 3) return 'bg-amber-100 text-amber-800 border border-amber-300';
   return 'bg-orange-100 text-orange-800 border border-orange-300';
 }
 
 export function EnriquecimentoCandidatosDrawer({
-  stagingId, open, onOpenChange, contextoExcel, onEscolher, isResolvendo, lancIdsUsados,
+  stagingId, open, onOpenChange, contextoExcel, excelValor, statusLinha,
+  onEscolher, onAgrupar, isResolvendo, isAgrupando, lancIdsUsados,
 }: Props) {
-  const { data: candidatos, isLoading, error } = useClassificacaoCandidatosProximos(open ? stagingId : null);
+  const { data: candidatos, isLoading, error } = useClassificacaoCandidatosGrupo(open ? stagingId : null);
 
-  // Seleção PLURAL por desenho (Set), ação SINGLE neste PR. Reset ao trocar de linha/fechar.
+  // Seleção PLURAL (grupos). Reset ao trocar de linha/fechar.
   const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
   useEffect(() => { setSelecionados(new Set()); }, [stagingId, open]);
 
@@ -74,28 +86,38 @@ export function EnriquecimentoCandidatosDrawer({
   const toggle = (lancId: string) => {
     setSelecionados((prev) => {
       const n = new Set(prev);
-      // ato single deste PR: marcar um limpa os demais (estrutura plural pronta p/ grupos).
-      if (n.has(lancId)) { n.delete(lancId); return n; }
-      return new Set([lancId]);
+      if (n.has(lancId)) n.delete(lancId); else n.add(lancId);
+      return n;
     });
   };
 
-  const podeEscolher = selecionados.size === 1 && !isResolvendo;
-  const escolher = () => {
-    if (selecionados.size !== 1) return;
-    onEscolher([...selecionados][0]);
-  };
+  // Soma dos selecionados (ABS) e diferença vs valor Excel — ao vivo.
+  const soma = useMemo(() => {
+    if (!candidatos) return 0;
+    return candidatos
+      .filter((c) => selecionados.has(c.lanc_id))
+      .reduce((s, c) => s + Math.abs(Number(c.valor) || 0), 0);
+  }, [candidatos, selecionados]);
+  const diff = soma - (excelValor ?? 0);
+  const diffOk = Math.abs(diff) <= TOL;
+  const n = selecionados.size;
+
+  const podeEscolher = n === 1 && statusLinha === 'candidatos_proximos' && diffOk && !isResolvendo;
+  const podeAgrupar = n >= 2 && diffOk && !isAgrupando;
+
+  const escolher = () => { if (n === 1) onEscolher([...selecionados][0]); };
+  const agrupar = () => { if (n >= 2) onAgrupar([...selecionados]); };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-[480px] sm:max-w-[480px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-base">
-            Candidatos próximos — linha {contextoExcel?.linha ?? '-'}
+            Candidatos — linha {contextoExcel?.linha ?? '-'}
           </SheetTitle>
           <SheetDescription className="text-[11px]">
-            Lançamentos realizados a até 3 dias da data do Excel, mesmo valor/tipo/conta.
-            Escolha UM candidato — o sistema nunca escolhe sozinho.
+            Lançamentos realizados a até 10 dias da data do Excel, mesmo tipo/conta.
+            Escolha UM (valor igual) ou marque VÁRIOS que somem o valor do Excel — o sistema nunca decide sozinho.
           </SheetDescription>
         </SheetHeader>
 
@@ -127,7 +149,7 @@ export function EnriquecimentoCandidatosDrawer({
 
         <div className="mt-4">
           <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-700 mb-2">
-            Candidatos na janela ±3 dias (ordenados por distância)
+            Candidatos na janela ±10 dias (ordenados por distância)
           </div>
 
           {isLoading && (
@@ -148,7 +170,7 @@ export function EnriquecimentoCandidatosDrawer({
 
           {!isLoading && !error && candidatos && candidatos.length > 0 && candidatosVisiveis && candidatosVisiveis.length === 0 && (
             <div className="text-[11px] text-muted-foreground py-3 px-2 rounded-md bg-muted/40 border">
-              Todos os candidatos já foram escolhidos por outras linhas desta sessão ({ocultadosCount} oculto{ocultadosCount === 1 ? '' : 's'}).
+              Todos os candidatos já foram usados por outras linhas desta sessão ({ocultadosCount} oculto{ocultadosCount === 1 ? '' : 's'}).
             </div>
           )}
 
@@ -156,7 +178,7 @@ export function EnriquecimentoCandidatosDrawer({
             <div className="space-y-2">
               {ocultadosCount > 0 && (
                 <div className="text-[10px] text-muted-foreground italic pb-1">
-                  {ocultadosCount} candidato{ocultadosCount === 1 ? '' : 's'} oculto{ocultadosCount === 1 ? '' : 's'} (já escolhido{ocultadosCount === 1 ? '' : 's'} nesta sessão).
+                  {ocultadosCount} candidato{ocultadosCount === 1 ? '' : 's'} oculto{ocultadosCount === 1 ? '' : 's'} (já usado{ocultadosCount === 1 ? '' : 's'} nesta sessão).
                 </div>
               )}
               {candidatosVisiveis.map((c) => {
@@ -213,9 +235,30 @@ export function EnriquecimentoCandidatosDrawer({
         </div>
 
         <SheetFooter className="mt-4 flex-col gap-2 sm:flex-col sm:space-x-0">
-          <Button size="sm" className="w-full" disabled={!podeEscolher} onClick={escolher}>
-            {isResolvendo ? 'Escolhendo…' : 'Escolher candidato'}
-          </Button>
+          {/* Soma selecionada + diferença ao vivo (o gate do "Agrupar" é diferença = 0). */}
+          {n >= 1 && (
+            <div className="w-full rounded-md border px-2 py-1 text-[11px] flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">{n} selecionado{n === 1 ? '' : 's'} · soma</span>
+              <span className="font-mono tabular-nums font-semibold">{formatMoeda(soma)}</span>
+              <span className={`font-mono tabular-nums ${diffOk ? 'text-emerald-700' : 'text-rose-700'}`}>
+                dif {diff >= 0 ? '+' : ''}{formatMoeda(diff)}
+              </span>
+            </div>
+          )}
+          {n === 1 && statusLinha !== 'candidatos_proximos' && (
+            <div className="text-[10px] text-muted-foreground">
+              Linha sem match direto — marque 2+ lançamentos que somem o valor para agrupar.
+            </div>
+          )}
+          {n <= 1 ? (
+            <Button size="sm" className="w-full" disabled={!podeEscolher} onClick={escolher}>
+              {isResolvendo ? 'Escolhendo…' : 'Escolher candidato'}
+            </Button>
+          ) : (
+            <Button size="sm" className="w-full" disabled={!podeAgrupar} onClick={agrupar}>
+              {isAgrupando ? 'Agrupando…' : `Agrupar selecionados (${n})`}
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="w-full" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>

@@ -220,7 +220,7 @@ export function contarContagens(staging: ClassificacaoStagingPreviewRow[]): Enri
   // abaixo ignora status sem chave; sem estes dois o chip ficaria sempre zerado).
   const status: Record<EnriqStatus, number> = {
     exato: 0, ambiguo: 0, sem_match: 0, divergente: 0, ja_classificado: 0, ambiguo_resolvido: 0,
-    candidatos_proximos: 0, resolvido_manual: 0,
+    candidatos_proximos: 0, resolvido_manual: 0, resolvido_grupo: 0,   // PR-MESA-GRUPO-01
   };
   let aplicados = 0;
   for (const r of staging) {
