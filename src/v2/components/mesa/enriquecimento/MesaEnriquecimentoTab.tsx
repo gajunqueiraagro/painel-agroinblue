@@ -24,6 +24,7 @@ import { EnriquecimentoImportarDialog } from './EnriquecimentoImportarDialog';
 import { EnriquecimentoCandidatosDrawer } from './EnriquecimentoCandidatosDrawer';
 import { EnriquecimentoNaoExplicadoDrawer } from './EnriquecimentoNaoExplicadoDrawer';
 import { useSistemaNaoExplicado } from '@/v2/hooks/useSistemaNaoExplicado';
+import { mesAbrev } from './fmt';
 import { Button } from '@/components/ui/button';
 import type { EnriqStatus } from './types';
 
@@ -72,9 +73,12 @@ export function MesaEnriquecimentoTab() {
 
   // PR-MESA-RESOLUCAO-01 — drawer de candidatos próximos (staging_id da linha aberta).
   const [candDrawerId, setCandDrawerId] = useState<string | null>(null);
-  // PR-MESA-INVERSO-01 — visão read-only "sistema não explicado".
+  // PR-MESA-INVERSO-01/02 — visão read-only "sistema não explicado", NO ESCOPO da conta
+  // selecionada na toolbar (reusa `filtroConta`, a mesma fonte de estado do resto da Mesa;
+  // 'todas'/'__sem__' → null = todas as contas da sessão). Chip e drawer usam a mesma query.
   const [naoExplicadoOpen, setNaoExplicadoOpen] = useState(false);
-  const { data: naoExplicados } = useSistemaNaoExplicado(sessaoId);
+  const contaIdSel = (filtroConta === 'todas' || filtroConta === '__sem__') ? null : filtroConta;
+  const { data: naoExplicados } = useSistemaNaoExplicado(sessaoId, contaIdSel);
 
   // PR-U2c-2A — data layer dos editores inline (fonte única: mesmos dados do
   // Lançamento oficial). Loaders manuais → só carrega o necessário.
@@ -89,6 +93,10 @@ export function MesaEnriquecimentoTab() {
   // ViewModels prontos (adapters/selectors puros).
   const sessoesVM = useMemo(() => toSessoesVM(sessoes), [sessoes]);
   const contas = useMemo(() => listarContas(staging), [staging]);
+  // PR-MESA-INVERSO-02 — rótulos do drawer (conta/mês) para o texto de escopo verdadeiro.
+  const contaNomeSel = contaIdSel ? (contas.find((c) => c.id === contaIdSel)?.nome ?? null) : null;
+  const mesAtivo = sessoes?.find((s) => s.sessao_id === sessaoId)?.excel_ano_mes ?? null;
+  const mesLabelSel = mesAtivo ? mesAbrev(mesAtivo) : null;
   // Conta é a partição de trabalho: contadores, lista e fluxo derivam do staging DA CONTA.
   const stagingConta = useMemo(() => filtrarPorConta(staging, filtroConta), [staging, filtroConta]);
   const contagens = useMemo(() => contarContagens(stagingConta), [stagingConta]);
@@ -415,6 +423,9 @@ export function MesaEnriquecimentoTab() {
 
       <EnriquecimentoNaoExplicadoDrawer
         sessaoId={sessaoId}
+        contaId={contaIdSel}
+        contaNome={contaNomeSel}
+        mesLabel={mesLabelSel}
         open={naoExplicadoOpen}
         onOpenChange={setNaoExplicadoOpen}
       />

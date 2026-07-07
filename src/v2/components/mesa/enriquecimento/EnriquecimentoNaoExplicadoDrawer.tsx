@@ -39,6 +39,10 @@ const MOTIVO_SPLIT: Record<string, string> = {
 
 interface Props {
   sessaoId: string | null;
+  // PR-MESA-INVERSO-02 — escopo da conta selecionada na toolbar (null = todas da sessão).
+  contaId: string | null;
+  contaNome: string | null;
+  mesLabel: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -131,9 +135,12 @@ function ComposicaoBloco({ lanc, sessaoId }: { lanc: LancamentoNaoExplicado; ses
   );
 }
 
-export function EnriquecimentoNaoExplicadoDrawer({ sessaoId, open, onOpenChange }: Props) {
-  const { data: lancs, isLoading, error } = useSistemaNaoExplicado(open ? sessaoId : null);
+export function EnriquecimentoNaoExplicadoDrawer({ sessaoId, contaId, contaNome, mesLabel, open, onOpenChange }: Props) {
+  const { data: lancs, isLoading, error } = useSistemaNaoExplicado(open ? sessaoId : null, contaId);
   const [expandido, setExpandido] = useState<string | null>(null);
+  const escopoTexto = contaNome
+    ? `Lançamentos realizados de ${contaNome}${mesLabel ? ` em ${mesLabel}` : ''} que nenhuma linha do Excel referencia.`
+    : 'Lançamentos realizados de todas as contas da sessão que nenhuma linha do Excel referencia.';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -141,8 +148,7 @@ export function EnriquecimentoNaoExplicadoDrawer({ sessaoId, open, onOpenChange 
         <SheetHeader>
           <SheetTitle className="text-base">Sistema não explicado</SheetTitle>
           <SheetDescription className="text-[11px]">
-            Lançamentos realizados desta conta/mês que nenhuma linha do Excel referencia.
-            Apoio à auditoria — visão de leitura, sem ação.
+            {escopoTexto} Apoio à auditoria — visão de leitura, sem ação.
           </SheetDescription>
         </SheetHeader>
 

@@ -19,15 +19,17 @@ export interface LancamentoNaoExplicado {
   documento: string | null;
 }
 
-export function useSistemaNaoExplicado(sessaoId: string | null) {
+// PR-MESA-INVERSO-02 — contaId = conta selecionada na toolbar (null = todas da sessão).
+// Entra na queryKey → chip e drawer refletem o MESMO escopo e reagem à troca de conta.
+export function useSistemaNaoExplicado(sessaoId: string | null, contaId: string | null = null) {
   return useQuery({
-    queryKey: ['sistema-nao-explicado', sessaoId],
+    queryKey: ['sistema-nao-explicado', sessaoId, contaId ?? null],
     enabled: !!sessaoId,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc(
         'fn_classificacao_sistema_nao_explicado',
-        { p_sessao_id: sessaoId },
+        { p_sessao_id: sessaoId, p_conta_id: contaId },
       );
       if (error) throw error;
       return (data ?? []) as LancamentoNaoExplicado[];
