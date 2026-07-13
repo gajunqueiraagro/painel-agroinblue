@@ -39,6 +39,7 @@ import { buildPlanejamentoVisaoGeralData, type ZootCompPreload } from '@/v2/lib/
 import { BlocoAnaliseEconomica } from './V2PlanejamentoVisaoGeral.parts/BlocoAnaliseEconomica';
 import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo';
 import { BlocoProducaoPecuariaRealizada } from './V2FechamentoPeriodo.parts/BlocoProducaoPecuariaRealizada';
+import { BlocoReuniaoExecutiva } from './V2FechamentoPeriodo.parts/BlocoReuniaoExecutiva';
 import { BlocoMovimentacoesRebanhoFechamento } from './V2FechamentoPeriodo.parts/BlocoMovimentacoesRebanhoFechamento';
 import { BlocoConferenciaMensalRebanhoFechamento } from './V2FechamentoPeriodo.parts/BlocoConferenciaMensalRebanhoFechamento';
 import { FluxoCaixaModal } from '@/v2/components/modais/FluxoCaixaModal';
@@ -668,7 +669,16 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         )}
       </PaginaBoletim>
 
+      {/* PR-FECHAMENTO-P0.1 — página executiva da reunião (nova n={2}); Capa fica n={1}
+          e as demais avançam +1. A página financeira (fluxo/caixa + Entradas/Saídas)
+          permanece integralmente intacta, só renumerada. */}
       <PaginaBoletim n={2}>
+        <div className="print-section print-page-break">
+          <BlocoReuniaoExecutiva painel={painel} subtitulo={subtituloPadrao} />
+        </div>
+      </PaginaBoletim>
+
+      <PaginaBoletim n={3}>
         <div className="print-section print-page-break">
           <BlocoProducaoPecuariaRealizada data={blocoProducaoRealizada} subtitulo={subtituloPadrao} />
         </div>
@@ -683,7 +693,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={3}>
+      <PaginaBoletim n={4}>
         <div className="print-section print-page-break">
           <BlocoMovimentacoesRebanhoFechamento
             ano={ano}
@@ -698,7 +708,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={4}>
+      <PaginaBoletim n={5}>
         {dto && (
           <div className="print-section">
             <AnaliseZootecnica dto={dto} gmdSoberano={painel.gmdIndicador?.valor ?? null} subtitulo={subtituloPadrao} />
@@ -709,7 +719,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={5}>
+      <PaginaBoletim n={6}>
         <div className="print-section print-page-break">
           <BlocoAnaliseEconomica
             data={dtoPlanejamento.bloco3_analiseEconomica}
@@ -725,7 +735,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={6}>
+      <PaginaBoletim n={7}>
         {blocoResumoData && (
           <div className="print-section print-page-break">
             <BlocoResumoExecutivo
@@ -758,7 +768,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={7}>
+      <PaginaBoletim n={8}>
         {dto && (
           <div className="print-section print-page-break print-allow-break">
             <DesembolsoProducao
@@ -819,7 +829,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={8}>
+      <PaginaBoletim n={9}>
         <div className="print-section">
           <BoletimPlaceholder titulo="Custos Fixos R$/cab/mês" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
         </div>
@@ -828,7 +838,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={9}>
+      <PaginaBoletim n={10}>
         <div className="print-section">
           <BoletimPlaceholder titulo="Financiamentos e Aportes Pessoais" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
         </div>
@@ -837,7 +847,7 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
         </div>
       </PaginaBoletim>
 
-      <PaginaBoletim n={10}>
+      <PaginaBoletim n={11}>
         <div className="print-section">
           <BoletimPlaceholder titulo="Evolução Patrimonial" subtitulo={subtituloPadrao} badge="FINANCEIRO" tone="financeiro" />
         </div>
