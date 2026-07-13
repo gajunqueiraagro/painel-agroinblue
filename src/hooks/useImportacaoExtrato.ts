@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { parseOFX, type MovimentoBruto } from '@/lib/financeiro/parser/parseOFX';
-import { parseCSV } from '@/lib/financeiro/parser/parseCSV';
+import { parseCSVComRelatorio } from '@/lib/financeiro/parser/parseCSV';
 import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { hashMovimento } from '@/lib/financeiro/extratoHash';
 import {
@@ -192,6 +192,11 @@ export interface PreviewResult {
   ambiguos: number;
   /** P0-OFX-DUP-GUARD 1A — movimentos NOVOS classificados como suspeita de duplicata. */
   suspeitasDuplicata: number;
+  /**
+   * BUG-CSV-PARSE-VALOR-01 — linhas datadas do CSV sem NENHUM valor monetário
+   * (todas as colunas monetárias vazias), puladas como informativas. 0 para OFX.
+   */
+  linhasInformativas: number;
   formato: 'OFX' | 'CSV';
 }
 
@@ -559,7 +564,17 @@ export function useImportacaoExtrato() {
       // (o tipo de retorno de detectarFormato inclui 'PDF').
       if (formato === 'PDF') throw new Error('PDF deveria ter sido tratado pelo guard acima.');
 
-      const movimentosBrutos = formato === 'OFX' ? parseOFX(conteudo) : parseCSV(conteudo);
+      // BUG-CSV-PARSE-VALOR-01: CSV usa parseCSVComRelatorio p/ contabilizar linhas
+      // datadas SEM valor monetário (informativas), que são puladas — nunca gravadas 0.
+      let movimentosBrutos: MovimentoBruto[];
+      let linhasInformativas = 0;
+      if (formato === 'OFX') {
+        movimentosBrutos = parseOFX(conteudo);
+      } else {
+        const rel = parseCSVComRelatorio(conteudo);
+        movimentosBrutos = rel.movimentos;
+        linhasInformativas = rel.linhasInformativas.length;
+      }
       if (movimentosBrutos.length === 0) {
         throw new Error('Nenhum movimento encontrado no arquivo');
       }
@@ -963,6 +978,7 @@ export function useImportacaoExtrato() {
         movimentos,
         totalLinhas: movimentos.length,
         ...recomputarAgregados(movimentos),
+        linhasInformativas, // BUG-CSV-PARSE-VALOR-01 — datadas sem valor, puladas
         formato,
       };
       setPreview(result);
