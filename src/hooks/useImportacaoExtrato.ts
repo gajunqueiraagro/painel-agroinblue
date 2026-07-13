@@ -582,17 +582,26 @@ export function useImportacaoExtrato() {
       // possa diferenciar "existe no banco" (fato físico) de "já processado"
       // (status operacional). Hash existente NÃO significa pendência fechada.
       const hashes = movimentosComHash.map((m) => m.hash);
-      const { data: existentes, error: errSel } = await supabase
-        .from('extrato_bancario_v2' as any)
-        .select('id, hash_movimento, status')
-        .eq('cliente_id', clienteAtual.id)
-        .in('hash_movimento', hashes);
-      if (errSel) throw errSel;
+      // BUG-CSV-DEDUP-01: paginação OBRIGATÓRIA — o PostgREST corta em ~1000 linhas por
+      // request. Sem paginar, arquivos com >1000 movimentos já existentes vinham truncados,
+      // as duplicatas escapavam para o INSERT e explodiam a unique idx_extrato_v2_hash_unico.
+      // Mesmo padrão de useFinanceiroV2 / useSessoesClassificacao (.range em laço até < PAGE).
       const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
-      for (const r of (existentes as unknown as
-        { id: string; hash_movimento: string; status: StatusPersistido }[] ?? [])
-      ) {
-        persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+      const PAGE_DEDUP = 1000;
+      for (let from = 0; ; from += PAGE_DEDUP) {
+        const { data: existentes, error: errSel } = await supabase
+          .from('extrato_bancario_v2' as any)
+          .select('id, hash_movimento, status')
+          .eq('cliente_id', clienteAtual.id)
+          .in('hash_movimento', hashes)
+          .order('id', { ascending: true })
+          .range(from, from + PAGE_DEDUP - 1);
+        if (errSel) throw errSel;
+        const lote = (existentes as unknown as
+          { id: string; hash_movimento: string; status: StatusPersistido }[] ?? []);
+        for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+        if (lote.length < PAGE_DEDUP) break;
+        if (from > 500_000) break; // salvaguarda anti-loop
       }
 
       // ── Match financeiro: buscar candidatos em financeiro_lancamentos_v2 ──
@@ -993,7 +1002,8 @@ export function useImportacaoExtrato() {
       // banco) → sempre pula, mesmo com forcarImportarSuspeitas (reinserir violaria o UNIQUE).
       (m) => !m.existeNoDB && !m.jaExistenteChave && (params.forcarImportarSuspeitas || m.dupImportar !== false),
     );
-    if (novos.length === 0) throw new Error('Nenhum movimento novo para importar');
+    // BUG-CSV-DEDUP-01 (UX): tudo já existe → mensagem clara, nunca erro SQL.
+    if (novos.length === 0) throw new Error('Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.');
 
     setLoading(true);
     setError(null);
@@ -1053,15 +1063,19 @@ export function useImportacaoExtrato() {
           seq_ocorrencia: m.seqOcorrencia ?? 1,   // PR-OFX-DEDUP-01 (1B)
           status: 'nao_conciliado' as const,
         }));
+        // BUG-CSV-DEDUP-01 (blindagem — ÚLTIMA linha de defesa, não o mecanismo principal):
+        // upsert idempotente. Se a pré-detecção paginada falhar por algum motivo, duplicatas
+        // por hash são IGNORADAS em vez de estourar a unique. `.select()` só retorna as linhas
+        // REALMENTE inseridas → `inseridos` conta o que entrou de fato (as ignoradas já existiam).
         const { data: inserted, error: e2 } = await supabase
           .from('extrato_bancario_v2' as any)
-          .insert(fatia)
+          .upsert(fatia, { onConflict: 'cliente_id,hash_movimento', ignoreDuplicates: true })
           .select('id, hash_movimento');
         if (e2) throw e2;
         for (const r of (inserted ?? []) as { id: string; hash_movimento: string }[]) {
           idsPorHash.set(r.hash_movimento, r.id);
         }
-        inseridos += fatia.length;
+        inseridos += (inserted ?? []).length;
       }
 
       // Atualiza o preview em memória: cada movimento novo passa a ter
@@ -1088,9 +1102,26 @@ export function useImportacaoExtrato() {
 
       return { inseridos, importacaoId };
     } catch (e: any) {
-      const msg = e?.message ?? String(e);
+      // BUG-CSV-DEDUP-01 (UX): nunca expor erro SQL cru na tela.
+      // Distinção IMPORTANTE: só afirmamos "extrato já importado" quando o erro
+      // identifica EXPLICITAMENTE a unique de hash (idx_extrato_v2_hash_unico).
+      // Qualquer OUTRA constraint (mesmo 23505) pode ser um defeito diferente →
+      // mensagem tratada genérica, sem afirmar reimportação; detalhe técnico só em log.
+      const raw = e?.message ?? String(e);
+      const isHashDup = /idx_extrato_v2_hash_unico/i.test(raw);
+      const isOutraConstraint = !isHashDup
+        && (e?.code === '23505' || /duplicate key|violates .*constraint/i.test(raw));
+      let msg: string;
+      if (isHashDup) {
+        msg = 'Extrato já importado anteriormente. Nenhuma movimentação nova foi encontrada.';
+      } else if (isOutraConstraint) {
+        console.error('[BUG-CSV-DEDUP-01] conflito de constraint ao salvar extrato:', raw);
+        msg = 'Não foi possível salvar o extrato por conflito de dados. Nenhuma movimentação foi alterada.';
+      } else {
+        msg = raw;
+      }
       setError(msg);
-      throw e;
+      throw (isHashDup || isOutraConstraint) ? new Error(msg) : e;
     } finally {
       setLoading(false);
     }
@@ -1113,21 +1144,27 @@ export function useImportacaoExtrato() {
     const hashes = preview.movimentos.map((m) => m.hash);
     if (hashes.length === 0) return;
 
-    const { data, error } = await supabase
-      .from('extrato_bancario_v2' as any)
-      .select('id, hash_movimento, status')
-      .eq('cliente_id', clienteAtual.id)
-      .in('hash_movimento', hashes);
-    if (error) {
-      console.error('[refreshStatusPersistidos]', error);
-      return;
-    }
-
+    // BUG-CSV-DEDUP-01: mesma paginação obrigatória (PostgREST corta em ~1000) para os
+    // contadores refletirem TODOS os hashes existentes, não só os 1000 primeiros.
     const persistidoPorHash = new Map<string, { id: string; status: StatusPersistido }>();
-    for (const r of (data as unknown as
-      { id: string; hash_movimento: string; status: StatusPersistido }[] ?? [])
-    ) {
-      persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+    const PAGE_DEDUP = 1000;
+    for (let from = 0; ; from += PAGE_DEDUP) {
+      const { data, error } = await supabase
+        .from('extrato_bancario_v2' as any)
+        .select('id, hash_movimento, status')
+        .eq('cliente_id', clienteAtual.id)
+        .in('hash_movimento', hashes)
+        .order('id', { ascending: true })
+        .range(from, from + PAGE_DEDUP - 1);
+      if (error) {
+        console.error('[refreshStatusPersistidos]', error);
+        return;
+      }
+      const lote = (data as unknown as
+        { id: string; hash_movimento: string; status: StatusPersistido }[] ?? []);
+      for (const r of lote) persistidoPorHash.set(r.hash_movimento, { id: r.id, status: r.status });
+      if (lote.length < PAGE_DEDUP) break;
+      if (from > 500_000) break; // salvaguarda anti-loop
     }
 
     setPreview((prev) => {
