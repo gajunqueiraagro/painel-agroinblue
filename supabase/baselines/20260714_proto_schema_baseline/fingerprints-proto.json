@@ -1,0 +1,101 @@
+{
+  "source": {
+    "project_id": "binbcdfbisgscrifztia",
+    "project": "agroinblue-proto",
+    "database": "postgres",
+    "schema": "public"
+  },
+  "cutover": {
+    "git_file": "20260714120000_sec_rpc_p0_01b2_revoke_public_anon.sql",
+    "db_migration_version": "20260714122429",
+    "db_migration_name": "sec_rpc_p0_01b2_revoke_public_anon",
+    "git_commit": "c45279be553bb4b44f9e92c9e2094b26897bf318"
+  },
+  "hash_algo": "md5",
+  "extensions_ordered": [
+    "pg_cron",
+    "pg_stat_statements",
+    "pg_trgm",
+    "pgcrypto",
+    "plpgsql",
+    "supabase_vault",
+    "unaccent",
+    "uuid-ossp"
+  ],
+  "categories": {
+    "tabs_rls": {
+      "hash": "4b703702391f07dc482cd6641e683336",
+      "count": 116,
+      "count_desc": "tabelas base (inclui 12 backups)"
+    },
+    "cols": {
+      "hash": "ab83a8b7ce0a50c64c17f0b30610b23c",
+      "count": 1930,
+      "count_desc": "colunas"
+    },
+    "constraints": {
+      "hash": "9bf660277885bce1397ae2210a4ba63a",
+      "count": 226,
+      "count_desc": "PK 61 / FK 95 / UNIQUE 25 / CHECK 45"
+    },
+    "indexes": {
+      "hash": "20feffac508665fa3716b872c749ab78",
+      "count": 283
+    },
+    "enums": {
+      "hash": "3623b96aeab679f9af9b804243ca193d",
+      "count_types": 2,
+      "count_labels": 13
+    },
+    "views": {
+      "hash": "62b4de680377d155408336a60c8b5b02",
+      "count": 8
+    },
+    "functions": {
+      "hash": "845d8d4863428b3f81dc4a94eaed1b7f",
+      "count": 169,
+      "count_desc": "prokind=f; inclui proconfig",
+      "scope": "raw_proto_all_prokind_f",
+      "note": "inclui 35 funcoes dependentes de extensao"
+    },
+    "application_functions": {
+      "hash": "0bad2d3a13e3cab2a0e185f9722fc6c2",
+      "count": 134,
+      "scope": "public prokind=f excluindo dependentes de extensao via pg_depend deptype=e",
+      "note": "fingerprint de equivalencia do baseline; corresponde exatamente aos 134 CREATE FUNCTION do dump",
+      "reconciliation": {
+        "total_catalog": 169,
+        "extension_dependent": 35,
+        "by_extension": {
+          "pg_trgm": 31,
+          "unaccent": 4
+        },
+        "application": 134
+      },
+      "provenance": "AUD-FUNCTIONS-RECONCILE-01. Fornecido pronto; nao reproduzido localmente."
+    },
+    "triggers": {
+      "hash": "7e288e95b63ef441996b081f130333c7",
+      "count": 88,
+      "count_desc": "não-internos"
+    },
+    "policies": {
+      "hash": "a053143ccc03d91cf071c53a1aeb58c4",
+      "count": 177
+    },
+    "acl_grants": {
+      "hash": "7b37d0cd1e9ed07fe14128c46b5fd3fa",
+      "count": 3472
+    },
+    "sequences": {
+      "hash": "b50339a10e1de285ac99d4c3990b8693",
+      "count": 0,
+      "count_desc": "hash de 'NONE'"
+    },
+    "extensions": {
+      "hash": "cced67e1d766c5edc4ac1c76acc6f81d",
+      "count": 8
+    }
+  },
+  "reconciliation_audit": "AUD-FUNCTIONS-RECONCILE-01"
+}

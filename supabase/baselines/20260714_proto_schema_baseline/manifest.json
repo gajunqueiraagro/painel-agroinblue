@@ -1,0 +1,224 @@
+{
+  "package": "ENV-HOMOLOG-01B-2A",
+  "baseline_dir": "supabase/baselines/20260714_proto_schema_baseline",
+  "applied": false,
+  "applied_note": "Baseline gerado e verificado. NAO aplicado em nenhum ambiente. A aplicacao no homolog pertence ao ENV-HOMOLOG-01B-3.",
+  "cutover": {
+    "git_commit": "c45279be553bb4b44f9e92c9e2094b26897bf318",
+    "git_branch": "proto",
+    "git_file": "supabase/migrations/20260714120000_sec_rpc_p0_01b2_revoke_public_anon.sql",
+    "db_migration_version": "20260714122429",
+    "db_migration_name": "sec_rpc_p0_01b2_revoke_public_anon",
+    "note": "O timestamp do arquivo Git (20260714120000) diverge da versao aplicada no banco (20260714122429). Divergencia conhecida e confirmada; ambos registrados por decisao explicita."
+  },
+  "source": {
+    "project_id": "binbcdfbisgscrifztia",
+    "project": "agroinblue-proto",
+    "database": "postgres",
+    "schema": "public",
+    "dump_method": "pg_dump schema-only do schema public, sem owners",
+    "dump_server_version": "17.6",
+    "pg_dump_version": "18.4",
+    "raw_dump_path_local": "scratchpad/env-homolog-01b/proto_public_schemaonly.raw.sql",
+    "raw_dump_note": "Evidencia temporaria local. Nao versionada, nao commitada."
+  },
+  "artifacts": {
+    "schema.sql": {
+      "sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
+      "lines": 19272,
+      "bytes": 720443,
+      "desc": "Dump sanitizado do schema public do proto."
+    },
+    "manifest.json": {
+      "desc": "Este arquivo. Corte, origem, hashes, extensoes, query de fingerprints e allowlist."
+    },
+    "fingerprints-proto.json": {
+      "desc": "Hashes md5 das 12 categorias extraidos do proto. Fornecido pronto; nao extraido nesta fase."
+    },
+    "sanitization-report.md": {
+      "desc": "Relatorio de sanitizacao, gates e pendencias."
+    }
+  },
+  "hashes": {
+    "raw_dump_sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
+    "schema_sql_sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
+    "identical": true,
+    "identical_note": "Esperado. A sanitizacao foi um no-op: o dump nao continha cron autonomo, ALTER OWNER, referencia ambiental nem CREATE EXTENSION."
+  },
+  "sanitization": {
+    "result": "no-op",
+    "removals_total": 0,
+    "rules": {
+      "cron": {
+        "occurrences_executable": 0,
+        "removed": 0,
+        "preserved": "1 mencao em COMMENT ON FUNCTION public.fn_expirar_stagings_antigos() (linha 3614)"
+      },
+      "owners": {
+        "occurrences": 0,
+        "removed": 0
+      },
+      "env_refs": {
+        "occurrences": 0,
+        "removed": 0
+      },
+      "extensions": {
+        "create_extension_in_schema_sql": 0
+      }
+    }
+  },
+  "extensions": {
+    "required_ordered": [
+      "pg_cron",
+      "pg_stat_statements",
+      "pg_trgm",
+      "pgcrypto",
+      "plpgsql",
+      "supabase_vault",
+      "unaccent",
+      "uuid-ossp"
+    ],
+    "count": 8,
+    "rule": "Instalar no alvo APENAS o delta entre as extensoes exigidas e as ja presentes no homolog. Nao inserir CREATE EXTENSION no schema.sql. A instalacao pertence ao ENV-HOMOLOG-01B-3.",
+    "in_schema_sql": false
+  },
+  "fingerprint_query": "select\n (select md5(string_agg(c.relname||':'||c.relrowsecurity||':'||c.relforcerowsecurity,'|' order by c.relname)) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r') as tabs_rls,\n (select md5(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''),'|' order by table_name, ordinal_position)) from information_schema.columns where table_schema='public') as cols,\n (select md5(string_agg(con.conrelid::regclass::text||':'||con.conname||':'||pg_get_constraintdef(con.oid),'|' order by con.conrelid::regclass::text, con.conname)) from pg_constraint con join pg_namespace n on n.oid=con.connamespace where n.nspname='public') as constraints,\n (select md5(string_agg(indexname||':'||indexdef,'|' order by indexname)) from pg_indexes where schemaname='public') as indexes,\n (select md5(string_agg(tp.typname||':'||e.enumlabel,'|' order by tp.typname, e.enumsortorder)) from pg_type tp join pg_enum e on e.enumtypid=tp.oid join pg_namespace n on n.oid=tp.typnamespace where n.nspname='public') as enums,\n (select md5(string_agg(table_name||':'||md5(coalesce(view_definition,'')),'|' order by table_name)) from information_schema.views where table_schema='public') as views,\n (select md5(string_agg(p.proname||'('||pg_get_function_identity_arguments(p.oid)||'):'||md5(pg_get_functiondef(p.oid))||':'||coalesce(array_to_string(p.proconfig,','),''),'|' order by p.proname, pg_get_function_identity_arguments(p.oid))) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f') as functions,\n (select md5(string_agg(c.relname||'.'||t.tgname||':'||md5(pg_get_triggerdef(t.oid)),'|' order by c.relname, t.tgname)) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal) as triggers,\n (select md5(string_agg(tablename||'.'||policyname||':'||cmd||':'||coalesce(roles::text,'')||':'||coalesce(qual,'')||':'||coalesce(with_check,''),'|' order by tablename,policyname)) from pg_policies where schemaname='public') as policies,\n (select md5(string_agg(grantee||':'||table_name||':'||privilege_type,'|' order by table_name,grantee,privilege_type)) from information_schema.role_table_grants where table_schema='public') as acl_grants,\n (select md5(coalesce(string_agg(sequencename,',' order by sequencename),'NONE')) from pg_sequences where schemaname='public') as sequences,\n (select md5(string_agg(extname,',' order by extname)) from pg_extension) as extensions;\n",
+  "fingerprint_query_note": "Query literal das 12 categorias, gravada sem reescrita. Fonte de fingerprints-proto.json. Deve ser reexecutada sem alteracao no alvo para comparacao hash a hash.",
+  "fingerprints_extracted_at": null,
+  "fingerprints_extracted_at_reason": "Timestamp nao foi fornecido pela coleta read-only. Relogio local NAO foi usado como se fosse o horario da extracao.",
+  "fingerprints_provenance": "JSON fornecido pronto e gravado literalmente. Nao houve conexao read-only ao proto nesta fase: nao ha credencial de banco do binbcdfbisgscrifztia disponivel no ambiente, e CLI/config.toml estao fora do escopo autorizado.",
+  "fingerprints_independently_verified": {
+    "sequences": {
+      "hash": "b50339a10e1de285ac99d4c3990b8693",
+      "check": "md5('NONE') reproduzido localmente",
+      "result": "MATCH"
+    },
+    "extensions": {
+      "hash": "cced67e1d766c5edc4ac1c76acc6f81d",
+      "check": "md5 da lista ordenada de extensoes reproduzido localmente",
+      "result": "MATCH"
+    },
+    "note": "As outras 10 categorias dependem do conteudo do banco e nao sao reproduziveis a partir do dump."
+  },
+  "expected_diff_allowlist": [
+    {
+      "category": "indexes",
+      "fingerprint": 283,
+      "schema_sql": 197,
+      "status": "conciliado",
+      "reason": "pg_dump emite indices de PK e UNIQUE via ADD CONSTRAINT, nao via CREATE INDEX. 197 + 61 PK + 25 UNIQUE = 283."
+    },
+    {
+      "category": "constraints",
+      "fingerprint": 226,
+      "schema_sql": 181,
+      "status": "conciliado",
+      "reason": "pg_dump embute constraints CHECK na CREATE TABLE. 181 ADD CONSTRAINT + 45 CHECK inline = 226. Quebra por tipo confere: PK 61 / FK 95 / UNIQUE 25 / CHECK 45."
+    },
+    {
+      "category": "acl_grants",
+      "fingerprint": 3472,
+      "schema_sql": 749,
+      "status": "esperado",
+      "reason": "Unidades diferentes. O fingerprint conta tuplas grantee x privilegio x objeto via information_schema.role_table_grants; o dump agrega varios privilegios e roles por instrucao GRANT. Validacao real e o hash no 01B-3."
+    },
+    {
+      "category": "extensions",
+      "fingerprint": 8,
+      "schema_sql": 0,
+      "status": "esperado",
+      "reason": "Extensoes nao pertencem ao schema public e nao devem entrar no schema.sql, conforme regra 4."
+    },
+    {
+      "category": "cols",
+      "fingerprint": 1930,
+      "schema_sql": null,
+      "status": "nao verificavel",
+      "reason": "Contagem de colunas nao e extraivel por inspecao textual confiavel do dump."
+    },
+    {
+      "category": "functions",
+      "fingerprint": 169,
+      "schema_sql": 134,
+      "delta": 35,
+      "status": "conciliado",
+      "reconciled_by": "AUD-FUNCTIONS-RECONCILE-01",
+      "reason": "As 169 funcoes de pg_proc.prokind='f' em public incluem 35 dependentes de extensao (pg_depend.deptype='e'), omitidas pelo pg_dump por serem membros de extensao. Quebra: pg_trgm 31 + unaccent 4 = 35. 169 - 35 = 134, exatamente os 134 CREATE FUNCTION do dump. Nenhuma funcao de aplicacao foi perdida."
+    }
+  ],
+  "structural_counts_schema_sql": {
+    "tables": 116,
+    "backup_tables": 12,
+    "views": 8,
+    "functions_create": 134,
+    "triggers": 88,
+    "policies": 177,
+    "enum_types": 2,
+    "indexes_create": 197,
+    "constraints_add": 181,
+    "checks_inline": 45,
+    "grants": 749,
+    "revokes": 27,
+    "sequences": 0,
+    "rls_enable": 103,
+    "rls_force": 0,
+    "proconfig_search_path": 94,
+    "comments": 68,
+    "service_role_occurrences": 267
+  },
+  "gates": {
+    "data": {
+      "insert_into_top_level": 0,
+      "copy_from_stdin": 0,
+      "tabular_marker": 0,
+      "result": "PASS"
+    },
+    "secrets": {
+      "jwt": 0,
+      "sb_keys": 0,
+      "service_role_key_or_anon_key": 0,
+      "supabase_urls": 0,
+      "pg_connection_strings": 0,
+      "result": "PASS"
+    },
+    "environment": {
+      "binbcdfbisgscrifztia": 0,
+      "duttifnbxqtyyybjmouv": 0,
+      "sbwfacryawstuvhlaezm": 0,
+      "result": "PASS"
+    },
+    "cron": {
+      "autonomous_commands": 0,
+      "mentions": 1,
+      "result": "PASS"
+    }
+  },
+  "operational_risks": [
+    {
+      "id": "config-toml-aponta-para-producao",
+      "detail": "supabase/config.toml contem project_id = 'duttifnbxqtyyybjmouv' (producao). Qualquer comando Supabase CLI executado na raiz do repositorio mira producao por padrao.",
+      "classification": "risco operacional",
+      "action_taken": "nenhuma — nao alterado neste pacote",
+      "blocking": "ENV-HOMOLOG-01B-3 permanece proibido ate existir briefing especifico que use project_id explicito e nao dependa de CLI nem de config.toml."
+    }
+  ],
+  "function_fingerprints": {
+    "functions": {
+      "hash": "845d8d4863428b3f81dc4a94eaed1b7f",
+      "count": 169,
+      "meaning": "fingerprint bruto do proto",
+      "scope": "raw_proto_all_prokind_f",
+      "use_in_gate_01b3": false
+    },
+    "application_functions": {
+      "hash": "0bad2d3a13e3cab2a0e185f9722fc6c2",
+      "count": 134,
+      "meaning": "fingerprint utilizado no gate do 01B-3",
+      "scope": "public prokind=f excluindo dependentes de extensao via pg_depend deptype=e",
+      "use_in_gate_01b3": true
+    }
+  },
+  "gate_rule_01b3": "O gate do ENV-HOMOLOG-01B-3 deve comparar application_functions (0bad2d3a13e3cab2a0e185f9722fc6c2, count 134), NAO functions (845d8d4863428b3f81dc4a94eaed1b7f, count 169). A categoria functions e o fingerprint bruto do proto e inclui 35 funcoes dependentes de extensao; so seria comparavel se o alvo tivesse exatamente as mesmas extensoes residentes em public.",
+  "application_functions_query": "select md5(string_agg(\n   p.proname||'('||pg_get_function_identity_arguments(p.oid)||'):'||\n   md5(pg_get_functiondef(p.oid))||':'||\n   coalesce(array_to_string(p.proconfig,','),''),\n   '|' order by p.proname, pg_get_function_identity_arguments(p.oid)))\nfrom pg_proc p\njoin pg_namespace n\n  on n.oid = p.pronamespace\nwhere n.nspname = 'public'\n  and p.prokind = 'f'\n  and not exists (\n    select 1\n    from pg_depend d\n    where d.objid = p.oid\n      and d.deptype = 'e'\n  );\n",
+  "application_functions_query_reason": "Query literal da AUD-FUNCTIONS-RECONCILE-01, gravada sem reescrita. Gera a categoria application_functions (0bad2d3a13e3cab2a0e185f9722fc6c2, count 134). Complementa a query de 12 categorias em fingerprint_query, que NAO produz esta categoria. Deve ser reexecutada sem alteracao no alvo para o gate definido em gate_rule_01b3."
+}
