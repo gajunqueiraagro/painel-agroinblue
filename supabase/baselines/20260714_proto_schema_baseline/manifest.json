@@ -24,10 +24,10 @@
   },
   "artifacts": {
     "schema.sql": {
-      "sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
+      "sha256": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6",
       "lines": 19272,
-      "bytes": 720443,
-      "desc": "Dump sanitizado do schema public do proto."
+      "bytes": 720457,
+      "desc": "Dump sanitizado do schema public do proto, com 1 correcao manual de bootstrap. Ver manual_corrections."
     },
     "manifest.json": {
       "desc": "Este arquivo. Corte, origem, hashes, extensoes, query de fingerprints e allowlist."
@@ -41,9 +41,9 @@
   },
   "hashes": {
     "raw_dump_sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
-    "schema_sql_sha256": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
-    "identical": true,
-    "identical_note": "Esperado. A sanitizacao foi um no-op: o dump nao continha cron autonomo, ALTER OWNER, referencia ambiental nem CREATE EXTENSION."
+    "schema_sql_sha256": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6",
+    "identical": false,
+    "identical_note": "O schema.sql NAO e byte a byte identico ao dump bruto. A diferenca e exclusivamente 1 correcao manual de bootstrap aplicada no ENV-HOMOLOG-01B-3A: linha 26, CREATE SCHEMA public -> CREATE SCHEMA IF NOT EXISTS public. Ver manual_corrections. A sanitizacao do 01B-2A permanece no-op (0 remocoes); ela nao e a origem da diferenca de hash. O raw_dump_sha256 permanece inalterado: o dump bruto nao foi modificado."
   },
   "sanitization": {
     "result": "no-op",
@@ -66,6 +66,33 @@
         "create_extension_in_schema_sql": 0
       }
     }
+  },
+  "manual_corrections": {
+    "count": 1,
+    "applied_by_package": "ENV-HOMOLOG-01B-3A",
+    "scope_note": "Correcao de bootstrap. NAO e sanitizacao: as regras de sanitizacao do 01B-2A permanecem no-op com 0 remocoes.",
+    "corrections": [
+      {
+        "id": "bootstrap-create-schema-public",
+        "file": "schema.sql",
+        "line": 26,
+        "from": "CREATE SCHEMA public;",
+        "to": "CREATE SCHEMA IF NOT EXISTS public;",
+        "reason": "O schema public sempre existe em um banco Postgres/Supabase novo. A instrucao CREATE SCHEMA public; aborta a aplicacao com ERROR: schema \"public\" already exists, impedindo o bootstrap do baseline no homolog.",
+        "root_cause": "pg_dump emite CREATE SCHEMA public; quando o dump e gerado com -n/--schema=public. Em selectDumpableNamespace() (src/bin/pg_dump/pg_dump.c), o ramo schema_include_oids precede o tratamento especial do schema public na cadeia else-if; com -n, o public recebe DUMP_COMPONENT_ALL e create=true, e o ramo que faria create=false e removeria DUMP_COMPONENT_DEFINITION nunca e alcancado. Nao e defeito do Supabase, do PostgreSQL, do proto nem do homolog.",
+        "root_cause_evidence": "Comprovado empiricamente: mesmo banco e mesmo pg_dump 18.4, variando apenas o escopo. Com --schema=public emite (1 ocorrencia, linha 26); sem -n emite 0; com -N excluindo os demais schemas emite 0.",
+        "official_alternative_rejected": "A correcao na origem seria gerar o dump por exclusao (-N dos demais schemas) em vez de inclusao (-n public), o que nao emite CREATE SCHEMA public. Rejeitada por exigir reemissao do baseline, reabrindo o pacote 01B-2A ja auditado.",
+        "why_if_not_exists_instead_of_deleting_the_line": "Preserva a numeracao de linhas do arquivo. O manifest e o sanitization-report ancoram em numeros de linha (cron na linha 3614; indices trgm nas linhas 12420, 13036, 13043). Remover a linha 26 deslocaria todas as ancoras em -1 e as invalidaria. Mantem tambem o dump aplicavel em um banco onde o public nao exista.",
+        "impact": "Idempotente. No-op onde o schema public ja existe; cria o schema onde nao existir. Nenhum outro objeto, ACL, policy, funcao ou comentario e afetado. Nenhum fingerprint muda: o schema public nao e objeto medido por nenhuma das 12 categorias nem por application_functions.",
+        "lines_before": 19272,
+        "lines_after": 19272,
+        "lines_unchanged": true,
+        "bytes_before": 720443,
+        "bytes_after": 720457,
+        "sha256_before": "21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94",
+        "sha256_after": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6"
+      }
+    ]
   },
   "extensions": {
     "required_ordered": [
@@ -164,7 +191,8 @@
     "rls_force": 0,
     "proconfig_search_path": 94,
     "comments": 68,
-    "service_role_occurrences": 267
+    "service_role_lines": 267,
+    "service_role_lines_note": "Medicao em LINHAS que contem 'service_role' (grep -c). Campo renomeado de service_role_occurrences no ENV-HOMOLOG-01B-3A: o rotulo anterior dizia ocorrencias, mas o valor sempre foi contagem de linhas. Ocorrencias reais no arquivo = 268; a linha 15031 contem o termo duas vezes (nome da policy alias_all_service_role + role service_role). Correcao de rotulo apenas: nenhum ACL, GRANT ou conteudo do schema.sql foi alterado, e o valor 267 permanece o mesmo medido no 01B-2A."
   },
   "gates": {
     "data": {
@@ -197,9 +225,18 @@
     {
       "id": "config-toml-aponta-para-producao",
       "detail": "supabase/config.toml contem project_id = 'duttifnbxqtyyybjmouv' (producao). Qualquer comando Supabase CLI executado na raiz do repositorio mira producao por padrao.",
-      "classification": "risco operacional",
-      "action_taken": "nenhuma — nao alterado neste pacote",
-      "blocking": "ENV-HOMOLOG-01B-3 permanece proibido ate existir briefing especifico que use project_id explicito e nao dependa de CLI nem de config.toml."
+      "classification": "risco operacional permanente",
+      "permanent": true,
+      "permanent_note": "O risco NAO foi eliminado. O config.toml continua apontando para producao e nao foi alterado em nenhum pacote. Qualquer execucao futura que dependa do Supabase CLI na raiz do repositorio volta a mirar producao por padrao.",
+      "action_taken": "nenhuma — o arquivo nao foi alterado",
+      "control": {
+        "status": "atendido",
+        "satisfied_by_package": "ENV-HOMOLOG-01B-3",
+        "requirement": "briefing especifico que use project_id explicito e nao dependa de CLI nem de config.toml",
+        "how_satisfied": "O briefing do 01B-3 forneceu o project_id explicito (sbwfacryawstuvhlaezm). A execucao usou exclusivamente psql com host e usuario explicitos (aws-1-sa-east-1.pooler.supabase.com / postgres.sbwfacryawstuvhlaezm), autenticado por .pgpass. Nenhum comando Supabase CLI foi executado e o config.toml nao foi lido em nenhum momento.",
+        "scope": "O controle e atendido POR EXECUCAO, nao de forma permanente. Cada execucao futura precisa reatender a condicao para que o risco permaneca contido."
+      },
+      "blocking_history": "Antes do ENV-HOMOLOG-01B-3 este risco bloqueava o pacote. Texto anterior do campo blocking: 'ENV-HOMOLOG-01B-3 permanece proibido ate existir briefing especifico que use project_id explicito e nao dependa de CLI nem de config.toml.' A condicao foi satisfeita e o bloqueio foi encerrado; o risco subjacente permanece."
     }
   ],
   "function_fingerprints": {

@@ -15,10 +15,10 @@ O dump traz `\restrict <token>` na linha 5 — token aleatório gerado pelo pg_d
 
 | Arquivo | Linhas | Tamanho | SHA-256 |
 |---|---|---|---|
-| Bruto (`scratchpad/env-homolog-01b/proto_public_schemaonly.raw.sql`) | 19.272 | 704 KB | `21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94` |
-| Sanitizado (`schema.sql`) | 19.272 | 704 KB | `21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94` |
+| Bruto (`scratchpad/env-homolog-01b/proto_public_schemaonly.raw.sql`) | 19.272 | 720.443 B | `21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94` |
+| Versionado (`schema.sql`) | 19.272 | 720.457 B | `ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6` |
 
-`diff` entre bruto e sanitizado: **vazio**. Os arquivos são byte a byte idênticos.
+`diff` entre bruto e versionado: **uma única linha** — a linha 26. Os arquivos **não** são byte a byte idênticos. A diferença é integralmente a correção de bootstrap registrada na seção 3.1, aplicada pelo `ENV-HOMOLOG-01B-3A`. O dump bruto **não** foi modificado e mantém o SHA-256 original.
 
 ## 3. Remoções realizadas
 
@@ -34,7 +34,62 @@ Cada regra de sanitização autorizada foi auditada contra o bruto e não encont
 | 3 — Refs ambientais | `duttifnbxqtyyybjmouv` | 0 | 0 | Ausente do dump. |
 | 4 — Extensões | `CREATE EXTENSION` | 0 | 0 | Nada a remover; extensões não pertencem ao schema `public` dumpado. |
 
-Consequência registrada: o `schema.sql` preserva o SHA-256 do bruto. Isso é esperado e não indica falha de sanitização — indica que o dump já foi gerado com as flags corretas na origem.
+Consequência registrada: **nenhuma remoção de sanitização alterou o arquivo.** Isso não indica falha de sanitização — indica que as flags de origem já eliminaram os alvos (dump sem owners, sem `CREATE EXTENSION`, sem referência ambiental). O `schema.sql` só divergiu do bruto **depois**, por uma correção de bootstrap alheia à sanitização — ver seção 3.1.
+
+Ressalva registrada pela perícia do `ENV-HOMOLOG-01B-3A`: a afirmação "as flags de origem estavam corretas" vale para as regras de sanitização, **não** para o escopo. A flag `-n public` usada na geração é exatamente a causa do defeito de bootstrap tratado em 3.1. Ela não afeta nenhuma regra de sanitização, e por isso as conclusões desta seção 3 permanecem válidas.
+
+## 3.1 Correção manual de bootstrap — ENV-HOMOLOG-01B-3A
+
+**O baseline contém exatamente UMA alteração manual.** Esta é a única divergência entre o dump bruto e o `schema.sql` versionado.
+
+| Item | Valor |
+|---|---|
+| Arquivo | `schema.sql` |
+| Linha | 26 (única ocorrência de `CREATE SCHEMA` no arquivo) |
+| De | `CREATE SCHEMA public;` |
+| Para | `CREATE SCHEMA IF NOT EXISTS public;` |
+| Linhas antes → depois | 19.272 → **19.272 (inalterado)** |
+| Bytes antes → depois | 720.443 → 720.457 (+14) |
+| SHA-256 antes | `21dac3d43e0ec01fa1a01a9a1b13fc1b5e849b1b45e7d304decd5ef9ecce2e94` |
+| **SHA-256 depois** | **`ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6`** |
+
+### Motivo
+
+O schema `public` já existe em qualquer banco Postgres/Supabase novo. A instrução `CREATE SCHEMA public;` aborta a aplicação com `ERROR: schema "public" already exists`, impedindo o bootstrap do baseline no homolog. A primeira tentativa de aplicação do `ENV-HOMOLOG-01B-3` parou exatamente nessa linha, com rollback integral da transação.
+
+### Causa-raiz — comprovada pela perícia
+
+`pg_dump` emite `CREATE SCHEMA public;` quando o dump é gerado com `-n` / `--schema=public`. Em `selectDumpableNamespace()` (`src/bin/pg_dump/pg_dump.c`), o ramo `schema_include_oids` **precede** o tratamento especial do schema `public` numa cadeia `else if`. Com `-n`, o `public` entra pelo ramo genérico e recebe `DUMP_COMPONENT_ALL` com `create = true`; o ramo que faria `create = false` e removeria `DUMP_COMPONENT_DEFINITION` **nunca é alcançado**.
+
+**Não é defeito do Supabase, do PostgreSQL, do banco proto nem do homolog.** É consequência determinística da flag de escopo usada na geração.
+
+Evidência empírica — mesmo banco, mesmo `pg_dump` 18.4, variando apenas o escopo:
+
+| Teste | Invocação | `CREATE SCHEMA public;` |
+|---|---|---|
+| A | `--schema=public` (receita usada no baseline) | **1 — emitido, linha 26** |
+| B | sem `-n` (banco inteiro) | 0 |
+| C | `-N` excluindo os demais schemas | 0 |
+
+O teste A reproduziu o defeito contra um schema `public` intocado e default, na mesma linha 26 — o que exclui qualquer participação do conteúdo do proto.
+
+### Alternativa oficial — considerada e rejeitada
+
+A correção tecnicamente correta age na **geração**: obter o escopo por exclusão (`-N` dos demais schemas) em vez de inclusão (`-n public`), o que não emite `CREATE SCHEMA public` (teste C). **Rejeitada** por exigir reemissão do baseline, reabrindo o pacote `ENV-HOMOLOG-01B-2A` já auditado. Não existe flag dedicada no `pg_dump` para suprimir a instrução.
+
+### Por que `IF NOT EXISTS` e não remover a linha
+
+Preserva a numeração de linhas. Este relatório e o `manifest.json` ancoram em números de linha — a ocorrência de cron na **linha 3614** (seção 4) e os índices trgm nas linhas 12420, 13036 e 13043. Remover a linha 26 deslocaria todas as âncoras em −1 e as invalidaria. A forma escolhida também mantém o dump aplicável num banco onde o `public` não exista.
+
+### Impacto esperado
+
+Idempotente. No-op onde o `public` já existe; cria o schema onde não existir. Nenhum outro objeto, ACL, policy, função, trigger ou comentário é afetado.
+
+**Nenhum fingerprint muda.** O schema `public` não é objeto medido por nenhuma das 12 categorias nem por `application_functions` — as categorias medem o *conteúdo* de `public`, não sua existência. Os hashes esperados em `fingerprints-proto.json` permanecem válidos sem alteração.
+
+**A AUD-FUNCTIONS-RECONCILE-01 permanece inalterada.** A conciliação 169 / 35 / 134 e o gate por `application_functions` (`0bad2d3a…`) não são tocados por esta correção — ver seção 7.3, preservada integralmente.
+
+Todas as demais conclusões deste relatório permanecem válidas.
 
 ## 4. Ocorrências de cron e classificação
 
@@ -208,9 +263,10 @@ A query registrada (exclusão via `not exists` sobre `pg_depend.deptype='e'`) us
 2. Reexecutar a query dos 12 fingerprints no homolog após a aplicação e confrontar hash a hash com `fingerprints-proto.json`.
 3. **Funções — conciliado (ver 7.3).** Comparar o alvo por `application_functions` (`0bad2d3a…`, 134), **não** por `functions` (`845d8d48…`, 169). A query `application_functions_query` foi registrada no `manifest.json`: o gate está completamente reproduzível e o bloqueio foi encerrado.
 4. **Risco operacional — `config.toml` aponta para produção.** `supabase/config.toml` contém `project_id = "duttifnbxqtyyybjmouv"` (produção). Qualquer comando Supabase CLI executado na raiz do repositório mira produção por padrão.
-   - Classificação: **risco operacional**. Registrado, não tratado.
-   - Ação neste pacote: **nenhuma**. O arquivo não foi alterado.
-   - Bloqueio: o `ENV-HOMOLOG-01B-3` permanece **proibido** até existir briefing específico que use `project_id` explícito e não dependa de CLI nem de `config.toml`.
+   - Classificação: **risco operacional permanente**. Registrado, não tratado — o arquivo não foi alterado em nenhum pacote.
+   - Ação neste pacote: **nenhuma**.
+   - Controle: **atendido no `ENV-HOMOLOG-01B-3`.** O bloqueio anterior — *"proibido até existir briefing específico que use `project_id` explícito e não dependa de CLI nem de `config.toml`"* — foi satisfeito: o briefing forneceu o `project_id` explícito (`sbwfacryawstuvhlaezm`) e a execução usou exclusivamente `psql` com host e usuário explícitos, sem nenhum comando Supabase CLI. O `config.toml` não foi lido. Bloqueio encerrado.
+   - **O risco permanece.** O controle é atendido **por execução**, não de forma permanente: qualquer execução futura que dependa do CLI na raiz do repositório volta a mirar produção. Ver seção 9.
 
 ## 8.1 Query de fingerprints
 
@@ -218,4 +274,25 @@ A query literal das 12 categorias está gravada no campo `fingerprint_query` do 
 
 ## 9. Estado
 
-**O baseline ainda NÃO foi aplicado em nenhum ambiente.** Nada foi executado contra proto, homolog ou produção nesta fase. O dump bruto permanece íntegro em `/tmp/proto_public_schemaonly.raw.sql` e em `scratchpad/env-homolog-01b/`, ambos com SHA-256 `21dac3d4…cce2e94`.
+**O baseline ainda NÃO foi aplicado com sucesso em nenhum ambiente.**
+
+Estado do homolog (`sbwfacryawstuvhlaezm`) após o `ENV-HOMOLOG-01B-3`:
+
+| Item | Estado |
+|---|---|
+| Extensões | **3 instaladas** — `pg_cron`, `pg_trgm`, `unaccent`. Completam as 8 exigidas; as outras 5 já existiam. `pg_trgm` e `unaccent` em `public`, espelhando o proto; `pg_cron` em `pg_catalog`. |
+| Tentativa de aplicação | **1 — abortada.** Parou na linha 26 (`CREATE SCHEMA public;`) com `ERROR: schema "public" already exists`. |
+| Reversão | **Integral.** A aplicação rodou em transação única (`--single-transaction` + `ON_ERROR_STOP=1`); o rollback desfez tudo. Nenhum estado parcial. |
+| Tabelas criadas pelo baseline | **0** |
+| Funções de aplicação criadas pelo baseline | **0** — as 35 funções presentes em `public` pertencem às extensões `pg_trgm` (31) e `unaccent` (4), coerente com a AUD-FUNCTIONS-RECONCILE-01. |
+| Fingerprints | **Não executados.** Sem schema aplicado não há o que comparar. |
+
+A instalação das extensões **não** é revertida pelo rollback: são comandos DDL próprios, executados e commitados antes da tentativa de aplicação, conforme a regra de instalação do delta (seção 8, item 1).
+
+Nada foi executado contra proto ou produção. O dump bruto permanece íntegro em `/tmp/proto_public_schemaonly.raw.sql` e em `scratchpad/env-homolog-01b/`, ambos com SHA-256 `21dac3d4…cce2e94` — inalterado pela correção da seção 3.1, que atingiu apenas o `schema.sql` versionado.
+
+### 9.1 Mitigação do risco do `config.toml` nesta execução
+
+O `ENV-HOMOLOG-01B-3` **não usou o Supabase CLI em nenhum momento**. Todo o acesso ao homolog foi feito por `psql` com host e usuário explícitos (`aws-1-sa-east-1.pooler.supabase.com` / `postgres.sbwfacryawstuvhlaezm`), autenticado por `.pgpass`. O `config.toml` — que aponta para produção — não foi lido.
+
+O risco **não foi eliminado**: foi contornado por escolha de ferramenta, nesta execução. A mitigação não se estende a execuções futuras. Ver seção 8, item 4.
