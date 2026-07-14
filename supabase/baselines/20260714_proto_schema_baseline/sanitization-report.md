@@ -272,26 +272,77 @@ A query registrada (exclusão via `not exists` sobre `pg_depend.deptype='e'`) us
 
 A query literal das 12 categorias está gravada no campo `fingerprint_query` do `manifest.json`, sem reescrita, e foi verificada como byte a byte idêntica ao texto fornecido. Ela deve ser reexecutada **sem alteração** no alvo para que a comparação hash a hash seja válida.
 
-## 9. Estado
+## 9. Estado final
 
-**O baseline ainda NÃO foi aplicado com sucesso em nenhum ambiente.**
+**O baseline foi aplicado com sucesso no homolog (`sbwfacryawstuvhlaezm`). 13/13 fingerprints MATCH.**
 
-Estado do homolog (`sbwfacryawstuvhlaezm`) após o `ENV-HOMOLOG-01B-3`:
+> **O `schema.sql` versionado não foi aplicado como está.** A aplicação usou uma cópia temporária, fora do controle de versão, com 12 exclusões obrigatórias — ver 9.2. O procedimento reproduzível está no runbook [`apply-homolog.md`](apply-homolog.md) e no campo `apply_procedure` do `manifest.json`.
 
-| Item | Estado |
-|---|---|
-| Extensões | **3 instaladas** — `pg_cron`, `pg_trgm`, `unaccent`. Completam as 8 exigidas; as outras 5 já existiam. `pg_trgm` e `unaccent` em `public`, espelhando o proto; `pg_cron` em `pg_catalog`. |
-| Tentativa de aplicação | **1 — abortada.** Parou na linha 26 (`CREATE SCHEMA public;`) com `ERROR: schema "public" already exists`. |
-| Reversão | **Integral.** A aplicação rodou em transação única (`--single-transaction` + `ON_ERROR_STOP=1`); o rollback desfez tudo. Nenhum estado parcial. |
-| Tabelas criadas pelo baseline | **0** |
-| Funções de aplicação criadas pelo baseline | **0** — as 35 funções presentes em `public` pertencem às extensões `pg_trgm` (31) e `unaccent` (4), coerente com a AUD-FUNCTIONS-RECONCILE-01. |
-| Fingerprints | **Não executados.** Sem schema aplicado não há o que comparar. |
+Nada foi aplicado em proto (`binbcdfbisgscrifztia`) nem em produção (`duttifnbxqtyyybjmouv`). O dump bruto permanece íntegro em `/tmp/proto_public_schemaonly.raw.sql` e em `scratchpad/env-homolog-01b/`, ambos com SHA-256 `21dac3d4…cce2e94` — inalterado pela correção da seção 3.1, que atingiu apenas o `schema.sql` versionado.
 
-A instalação das extensões **não** é revertida pelo rollback: são comandos DDL próprios, executados e commitados antes da tentativa de aplicação, conforme a regra de instalação do delta (seção 8, item 1).
+### 9.1 Cronologia — duas paradas antes do sucesso
 
-Nada foi executado contra proto ou produção. O dump bruto permanece íntegro em `/tmp/proto_public_schemaonly.raw.sql` e em `scratchpad/env-homolog-01b/`, ambos com SHA-256 `21dac3d4…cce2e94` — inalterado pela correção da seção 3.1, que atingiu apenas o `schema.sql` versionado.
+| # | Pacote | Ponto de parada | Causa | Desfecho |
+|---|---|---|---|---|
+| 1ª tentativa | `01B-3` | Linha 26 — `CREATE SCHEMA public;` | `ERROR: schema "public" already exists`. O `public` existe em qualquer projeto Supabase novo. | Rollback integral. Perícia provou que a emissão vem da flag `-n public` no `pg_dump`. |
+| Correção | `01B-3A` | — | Baseline corrigido para `CREATE SCHEMA IF NOT EXISTS public;` — 1 linha, numeração preservada. Ver seção 3.1. | Novo SHA `ae6c7ca3…3cca6`. |
+| 2ª tentativa | `01B-3B` | Linha 19221 — `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin` | `ERROR: permission denied to change default privileges`. O role `postgres`, via pooler, não é membro de `supabase_admin`. | Rollback integral. Bootstrap passou; falhou 1.879 linhas depois. |
+| 3ª tentativa | `01B-3C` | — | Cópia temporária com **exatamente 12 exclusões** e nenhuma outra alteração. | **`EXIT_CODE=0`. Sucesso.** |
 
-### 9.1 Mitigação do risco do `config.toml` nesta execução
+Ambas as paradas têm a **mesma família de causa**: a flag `-n public` na geração trouxe para o artefato objetos de *provisionamento da plataforma* (o schema `public` em si, e as ACLs default de `supabase_admin`) que não pertencem ao schema da aplicação.
+
+### 9.2 A cópia temporária — 12 exclusões, nada mais
+
+Criada apenas em `scratchpad/`, fora do controle de versão. O `schema.sql` versionado **não foi alterado** — permanece com SHA `ae6c7ca3…3cca6` e 19.272 linhas.
+
+| Bloco | Linhas no versionado | Instruções |
+|---|---|---|
+| SEQUENCES | 19221-19224 | `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin … TO postgres, anon, authenticated, service_role` |
+| FUNCTIONS | 19241-19244 | idem |
+| TABLES | 19261-19264 | idem |
+
+Prova de que nada mais mudou: o `diff` entre versionado e cópia tem **12 deleções e 0 adições**. As 12 instruções `FOR ROLE postgres` foram **preservadas e aplicadas**.
+
+**Por que é seguro:** o `pg_default_acl` do homolog já possui as 12 combinações (3 tipos × 4 grantees) com privilégio equivalente a `GRANT ALL` — `FUNCTIONS=EXECUTE`; `SEQUENCES=SELECT,UPDATE,USAGE`; `TABLES=DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE`. Correspondência 1:1 com o excluído. Nada foi perdido.
+
+### 9.3 Fingerprints — 13 MATCH / 0 DIVERGENTE
+
+Queries extraídas literalmente do `manifest.json` e executadas sem reescrita.
+
+| Categoria | | Categoria | |
+|---|---|---|---|
+| `tabs_rls` | MATCH | `triggers` | MATCH |
+| `cols` | MATCH | `policies` | MATCH |
+| `constraints` | MATCH | `acl_grants` | MATCH |
+| `indexes` | MATCH | `sequences` | MATCH |
+| `enums` | MATCH | `extensions` | MATCH |
+| `views` | MATCH | `functions` | MATCH |
+| **`application_functions`** | **MATCH** — gate oficial (`gate_rule_01b3`) | | |
+
+**Nenhuma allowlist precisou mascarar divergência real.** A `expected_diff_allowlist` documentava diferenças de *contagem textual do dump vs catálogo* — unidades de medida, não divergências estruturais. A validação real é hash a hash no banco, e todas as categorias fecharam por hash, incluindo as duas que a allowlist marcava como "esperadas" ou "não verificáveis":
+
+- `acl_grants` — **MATCH exato** (`7b37d0cd…`, 3.472 tuplas). O manifest previa que só seria validável aqui. Fechou.
+- `cols` — **MATCH** (`ab83a8b7…`, 1.930 colunas). Estava marcada como "não verificável" por inspeção textual; o hash resolveu.
+- `functions` (bruto, 169) — **MATCH**, além do exigido. Consequência de `pg_trgm` e `unaccent` residirem em `public` no homolog, espelhando o proto.
+
+### 9.4 Estado final do homolog
+
+| Objeto | Obtido | Baseline |
+|---|---|---|
+| Tabelas | **116** | 116 |
+| Funções de aplicação | **134** | 134 |
+| Funções totais | **169** | 169 (134 + 35 de extensão) |
+| Views | **8** | 8 |
+| Triggers | **88** | 88 |
+| Policies | **177** | 177 |
+| Tabelas com RLS | **103** | 103 |
+| Extensões | **8** | 8 |
+
+As **extensões permaneceram instaladas** — `pg_cron`, `pg_trgm`, `unaccent` (instaladas no `01B-3`) mais as 5 pré-existentes. `pg_trgm` e `unaccent` residem em `public`, espelhando o proto; foi o que permitiu `functions` (bruto) dar MATCH.
+
+**O homolog ficou estruturalmente equivalente ao proto.** Produção (`duttifnbxqtyyybjmouv`) permanece intocada; nenhum comando Supabase CLI foi executado em nenhuma etapa.
+
+### 9.5 Mitigação do risco do `config.toml` nesta execução
 
 O `ENV-HOMOLOG-01B-3` **não usou o Supabase CLI em nenhum momento**. Todo o acesso ao homolog foi feito por `psql` com host e usuário explícitos (`aws-1-sa-east-1.pooler.supabase.com` / `postgres.sbwfacryawstuvhlaezm`), autenticado por `.pgpass`. O `config.toml` — que aponta para produção — não foi lido.
 

@@ -1,8 +1,21 @@
 {
   "package": "ENV-HOMOLOG-01B-2A",
   "baseline_dir": "supabase/baselines/20260714_proto_schema_baseline",
-  "applied": false,
-  "applied_note": "Baseline gerado e verificado. NAO aplicado em nenhum ambiente. A aplicacao no homolog pertence ao ENV-HOMOLOG-01B-3.",
+  "applied": true,
+  "applied_note": "Aplicado com sucesso APENAS no homolog (sbwfacryawstuvhlaezm), pelo ENV-HOMOLOG-01B-3C. ATENCAO: o schema.sql versionado NAO foi aplicado como esta. A aplicacao usou uma copia temporaria, gerada fora do controle de versao, com as 12 instrucoes ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin removidas — o filtro obrigatorio descrito em apply_procedure.managed_acl_exclusion e no runbook apply-homolog.md. Aplicar o schema.sql versionado diretamente, sem esse filtro, FALHA com 'ERROR: permission denied to change default privileges' na linha 19221. Resultado obtido: EXIT_CODE=0 e 13/13 fingerprints MATCH. NAO aplicado em proto (binbcdfbisgscrifztia) nem em producao (duttifnbxqtyyybjmouv). Campo atualizado no ENV-HOMOLOG-01B-3D; o valor anterior era false com a nota 'Baseline gerado e verificado. NAO aplicado em nenhum ambiente. A aplicacao no homolog pertence ao ENV-HOMOLOG-01B-3.'",
+  "applied_targets": [
+    {
+      "environment": "homolog",
+      "project_id": "sbwfacryawstuvhlaezm",
+      "package": "ENV-HOMOLOG-01B-3C",
+      "result": "sucesso",
+      "fingerprints": "13/13 MATCH",
+      "applied_artifact": "copia temporaria do schema.sql com as 12 ACLs gerenciadas removidas — NAO o arquivo versionado como esta",
+      "procedure": "apply-homolog.md; ver apply_procedure.managed_acl_exclusion",
+      "source_schema_sql_sha256": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6",
+      "source_schema_sql_sha256_note": "SHA do artefato versionado que originou a copia. A copia aplicada tem 19260 linhas (19272 menos as 12 exclusoes) e nao e versionada."
+    }
+  ],
   "cutover": {
     "git_commit": "c45279be553bb4b44f9e92c9e2094b26897bf318",
     "git_branch": "proto",
@@ -37,6 +50,9 @@
     },
     "sanitization-report.md": {
       "desc": "Relatorio de sanitizacao, gates e pendencias."
+    },
+    "apply-homolog.md": {
+      "desc": "Runbook operacional de aplicacao no homolog. Registra o procedimento reproduzivel validado pelo ENV-HOMOLOG-01B-3C, incluindo a exclusao das 12 ACLs gerenciadas. Ver apply_procedure."
     }
   },
   "hashes": {
@@ -93,6 +109,36 @@
         "sha256_after": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6"
       }
     ]
+  },
+  "apply_procedure": {
+    "runbook": "apply-homolog.md",
+    "validated_by_package": "ENV-HOMOLOG-01B-3C",
+    "validated_result": "EXIT_CODE=0; 13/13 fingerprints MATCH (12 categorias + application_functions).",
+    "artifact_integrity": {
+      "file": "schema.sql",
+      "sha256": "ae6c7ca3b89dee2fa56994e7e94442a1cf4958faff7df1cec3b336d03f23cca6",
+      "lines": 19272,
+      "status": "integro e versionado",
+      "rule": "O schema.sql versionado NAO deve ser editado para executar este filtro. A exclusao das 12 instrucoes acontece EXCLUSIVAMENTE em uma copia temporaria de execucao, fora do controle de versao. O artefato versionado permanece o registro fiel do proto."
+    },
+    "managed_acl_exclusion": {
+      "required_for": "projetos Supabase gerenciados, quando a aplicacao e feita pelo role postgres via Session Pooler",
+      "count": 12,
+      "statement_prefix": "ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON ...",
+      "breakdown": {
+        "SEQUENCES": 4,
+        "FUNCTIONS": 4,
+        "TABLES": 4
+      },
+      "grantees_each": ["postgres", "anon", "authenticated", "service_role"],
+      "reason": "ALTER DEFAULT PRIVILEGES FOR ROLE X exige que o usuario corrente seja membro de X. O role postgres, usado via Session Pooler, NAO e membro de supabase_admin. Verificado: postgres e membro de anon, authenticated, authenticator, service_role, supabase_privileged_role, supabase_realtime_admin e roles pg_*; supabase_admin nao esta na lista. Sem a exclusao, a aplicacao aborta com 'ERROR: permission denied to change default privileges'.",
+      "why_safe": "O estado equivalente JA existe no pg_default_acl do projeto Supabase, provisionado pela plataforma na criacao do projeto. Verificado no homolog: as 12 combinacoes (3 tipos de objeto x 4 grantees) para defaclrole=supabase_admin em schema public ja possuem privilegio equivalente a GRANT ALL — FUNCTIONS=EXECUTE; SEQUENCES=SELECT,UPDATE,USAGE; TABLES=DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE. Correspondencia 1:1 com as 12 instrucoes excluidas. Nada e perdido.",
+      "fingerprint_impact": "NENHUM. A categoria acl_grants mede information_schema.role_table_grants (privilegios sobre tabelas existentes), nao pg_default_acl. As 12 instrucoes nao participam de nenhuma das 12 categorias nem de application_functions. Comprovado: acl_grants deu MATCH exato (7b37d0cd1e9ed07fe14128c46b5fd3fa, 3472 tuplas) apos a aplicacao com as 12 exclusoes.",
+      "preserved": "As 12 instrucoes ALTER DEFAULT PRIVILEGES FOR ROLE postgres (4 SEQUENCES + 4 FUNCTIONS + 4 TABLES) sao PRESERVADAS e aplicadas normalmente: o usuario corrente e postgres e tem permissao para altera-las.",
+      "root_cause_family": "Mesma origem da correcao de bootstrap em manual_corrections: a flag -n public na geracao do dump trouxe para o artefato objetos de provisionamento da plataforma, que nao pertencem ao schema da aplicacao."
+    },
+    "gate": "application_functions, conforme gate_rule_01b3. Ver application_functions_query.",
+    "success_criteria": "13/13 MATCH: as 12 categorias de fingerprint_query mais application_functions."
   },
   "extensions": {
     "required_ordered": [
