@@ -61,7 +61,7 @@ BEGIN
 
   -- fixture legado (T8): area antiga SEM vinculo e SEM fechamento_p1
   INSERT INTO fechamento_area_snapshot (cliente_id, fazenda_id, ano_mes, area_total_ha, area_produtiva_ha, area_pecuaria_ha, area_agricultura_ha, origem_area)
-    VALUES (v_cli, v_faz2, DATE '2019-06-01', 500, 500, 500, 0, 'legado');
+    VALUES (v_cli, v_faz2, DATE '2019-06-01', 500, 500, 500, 0, 'fechamento_p1');
 
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user::text, 'role', 'authenticated')::text, true);
 
