@@ -71,10 +71,9 @@ BEGIN
   INSERT INTO public.fechamento_pastos (pasto_id, fazenda_id, cliente_id, ano_mes, status) VALUES
     (v_p_aberto, v_faz, v_cli, v_mes, 'aberto')   RETURNING id INTO v_c_aberto;
 
-  -- itens: fis1 = 2 linhas mesma categoria (T3 soma) + 1 linha categoria orfa (T5)
+  -- itens: fis1 = 1 linha v_cat_ok (UNIQUE(fechamento_id,categoria_id) proibe duplicata) + 1 linha categoria orfa (T5)
   INSERT INTO public.fechamento_pasto_itens (fechamento_id, categoria_id, quantidade, peso_total) VALUES
-    (v_c_fis1, v_cat_ok,   10, 3000),
-    (v_c_fis1, v_cat_ok,    5, 1500),
+    (v_c_fis1, v_cat_ok,   15, 4500),   -- UMA linha por (card,categoria); UNIQUE(fechamento_id,categoria_id)
     (v_c_fis1, v_cat_orfa,  3,  900),
     (v_c_zero, v_cat_ok,    0,    0),   -- qtd=0 com linha (T2 possui_itens TRUE, qtd_total=0)
     (v_c_div,  v_cat_ok,    2,  600),   -- card divergencia (eh_ajuste TRUE)
@@ -99,13 +98,19 @@ BEGIN
   IF v_bool IS DISTINCT FROM false OR v_n <> 0 THEN RAISE EXCEPTION 'T2 fis2: possui_itens=% qtd=% (esperado FALSE,0)', v_bool, v_n; END IF;
   RAISE NOTICE 'T2 OK';
 
-  -- ============================ T3 — composicao agrega card x categoria ============================
-  SELECT count(*) INTO v_n FROM public.fn_composicao_componentes_categoria_mes(v_faz, v_mes)
+  -- ============================ T3 — cardinalidade soberana por card x categoria ============================
+  -- UNIQUE(fechamento_id,categoria_id) garante no MAXIMO 1 linha fisica por (card,categoria).
+  -- O contrato retorna exatamente 1 linha para (v_c_fis1,v_cat_ok) com quantidade=15 e peso_total_kg=4500.
+  -- O GROUP BY categoria_id permanece defensivo e compativel com a cardinalidade soberana.
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class cl ON cl.oid=c.conrelid JOIN pg_namespace n ON n.oid=cl.relnamespace
+                  WHERE n.nspname='public' AND cl.relname='fechamento_pasto_itens' AND c.contype='u'
+                    AND pg_get_constraintdef(c.oid)='UNIQUE (fechamento_id, categoria_id)')
+     THEN RAISE EXCEPTION 'T3 constraint UNIQUE(fechamento_id,categoria_id) ausente — premissa de cardinalidade invalida'; END IF;
+  SELECT count(*), max(quantidade), max(peso_total_kg) INTO v_n, v_num, v_num2
+    FROM public.fn_composicao_componentes_categoria_mes(v_faz, v_mes)
    WHERE fechamento_pasto_id=v_c_fis1 AND categoria_id=v_cat_ok;
-  IF v_n <> 1 THEN RAISE EXCEPTION 'T3 fis1 x cat_ok linhas=% (esperado 1 apos soma)', v_n; END IF;
-  SELECT quantidade INTO v_n FROM public.fn_composicao_componentes_categoria_mes(v_faz, v_mes)
-   WHERE fechamento_pasto_id=v_c_fis1 AND categoria_id=v_cat_ok;
-  IF v_n <> 15 THEN RAISE EXCEPTION 'T3 quantidade somada=% (esperado 15)', v_n; END IF;
+  IF v_n <> 1 OR v_num <> 15 OR v_num2 <> 4500 THEN
+    RAISE EXCEPTION 'T3 cardinalidade: count=% qtd=% peso=% (esperado 1/15/4500)', v_n, v_num, v_num2; END IF;
   RAISE NOTICE 'T3 OK';
 
   -- ============================ T4 — peso numeric integral; medio derivado (NULL se qtd=0) ============================
