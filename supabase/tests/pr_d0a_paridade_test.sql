@@ -36,7 +36,7 @@ BEGIN
   INSERT INTO public.clientes (id, nome) VALUES (v_cli, 'CLIENTE_TESTE_D0A_'||v_tag);
   INSERT INTO public.fazendas (id, cliente_id, nome, owner_id) VALUES (v_faz, v_cli, 'FAZENDA_TESTE_D0A_'||v_tag, v_user);
   -- categoria orfa sintetica (so em `categorias`, sem row em categorias_rebanho -> codigo NULL na ponte)
-  INSERT INTO public.categorias (nome, tipo) VALUES ('CATEGORIA_ORFA_D0A_'||v_tag, 'teste') RETURNING id INTO v_cat_orfa;
+  INSERT INTO public.categorias (nome, tipo) VALUES ('CATEGORIA_ORFA_D0A_'||v_tag, 'm') RETURNING id INTO v_cat_orfa;
 
   -- ================== FIXTURE ==================
   INSERT INTO public.pastos (fazenda_id, cliente_id, nome, ativo, entra_conciliacao, tipo_uso) VALUES
