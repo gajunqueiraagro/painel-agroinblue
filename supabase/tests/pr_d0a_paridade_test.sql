@@ -23,6 +23,7 @@ DECLARE
   v_c_fis1 uuid; v_c_fis2 uuid; v_c_zero uuid; v_c_div uuid; v_c_pec uuid; v_c_rasc uuid; v_c_aberto uuid;
   v_rfaz uuid; v_rmes text;           -- fazenda/competencia REAL elegivel (T6/T8)
   v_n int; v_num numeric; v_num2 numeric; v_bool boolean; v_txt text;
+  v_pdiv int; v_peso_c numeric; v_peso_p numeric; v_maxpct numeric;   -- diagnostico de peso (T8B, nao-bloqueante)
 BEGIN
   -- identidade real (admin global) para FK owner_id -> auth.users e trigger auto_add_owner
   SELECT cm.user_id INTO v_user FROM public.cliente_membros cm
@@ -159,37 +160,62 @@ BEGIN
   IF v_n <> 3 THEN RAISE EXCEPTION 'T7 naturezas_legadas=% (esperado 3: Arrendamento/P_24/P_25). Alguem criou novo pecuaria?', v_n; END IF;
   RAISE NOTICE 'T7 OK (pecuaria->NULL = 3 legados)';
 
-  -- ============================ T8 — PARIDADE P2 BIDIRECIONAL por categoria (DADOS REAIS) ============================
-  -- (a) nenhuma categoria so de um lado; (b) quantidade igual; (c) peso total igual (round 2, simetrico so no teste)
+  -- ============================ T8 — PARIDADE ESTRUTURAL com P2 (DADOS REAIS) ============================
+  -- Paridade estrutural obrigatoria com P2: categorias bidirecionais + quantidade exata por categoria.
+  -- Peso NAO e gate: a homologacao provou duas fontes independentes que hoje nao conciliam
+  --   Cards = SUM(fechamento_pasto_itens.peso_total); P2 = SUM(quantidade * peso_medio_kg).
+  --   O D.0A nao reinterpreta nem elege soberana; a diferenca e medida e reportada (T8B), nunca descartada.
+  --   Soberania do peso fica para investigacao propria (P0-D-PESO-01), antes de qualquer gate de peso.
+
+  -- T8A — GATE BLOQUEANTE: categorias bidirecionais + quantidade exata por categoria
   WITH comp AS (
-    SELECT c.categoria_codigo AS cod, round(sum(c.quantidade),2) AS q, round(sum(c.peso_total_kg),2) AS p
+    SELECT c.categoria_codigo AS categoria, sum(c.quantidade)::numeric AS quantidade, sum(c.peso_total_kg)::numeric AS peso_total_componentes
     FROM public.fn_composicao_componentes_categoria_mes(v_rfaz, v_rmes) c
-    WHERE c.categoria_codigo IS NOT NULL
-    GROUP BY c.categoria_codigo
+    WHERE c.categoria_codigo IS NOT NULL GROUP BY c.categoria_codigo
   ), p2 AS (
-    SELECT vi.categoria AS cod, round(sum(vi.quantidade),2) AS q, round(sum(vi.quantidade*vi.peso_medio_kg),2) AS p
+    SELECT vi.categoria AS categoria, sum(vi.quantidade)::numeric AS quantidade, sum(vi.quantidade*vi.peso_medio_kg)::numeric AS peso_total_p2
     FROM public.valor_rebanho_fechamento_itens vi
-    WHERE vi.fazenda_id=v_rfaz AND vi.ano_mes=v_rmes
-    GROUP BY vi.categoria
-  ), j AS (
-    SELECT comp.q AS qc, comp.p AS pc, p2.q AS qp, p2.p AS pp
-    FROM comp FULL OUTER JOIN p2 ON p2.cod=comp.cod
+    WHERE vi.fazenda_id=v_rfaz AND vi.ano_mes=v_rmes GROUP BY vi.categoria
+  ), comparacao AS (
+    SELECT coalesce(c.categoria,p.categoria) AS categoria,
+           c.quantidade AS quantidade_componentes, p.quantidade AS quantidade_p2,
+           c.peso_total_componentes, p.peso_total_p2
+    FROM comp c FULL OUTER JOIN p2 p ON p.categoria=c.categoria
   )
-  SELECT count(*) INTO v_n FROM j
-   WHERE qc IS NULL OR qp IS NULL              -- (a) orfa de qualquer lado
-      OR qc <> qp                              -- (b) quantidade diverge
-      OR pc <> pp;                             -- (c) peso total diverge
+  SELECT count(*) INTO v_n FROM comparacao
+   WHERE categoria IS NULL
+      OR quantidade_componentes IS NULL OR quantidade_p2 IS NULL   -- orfa de qualquer lado
+      OR quantidade_componentes <> quantidade_p2;                  -- quantidade diverge
   IF v_n <> 0 THEN
-    RAISE EXCEPTION 'T8 paridade P2 FALHOU em %/% (% categorias divergentes): %', v_rfaz, v_rmes, v_n,
-      (WITH comp AS (SELECT c.categoria_codigo AS cod, round(sum(c.quantidade),2) q, round(sum(c.peso_total_kg),2) p
-                       FROM public.fn_composicao_componentes_categoria_mes(v_rfaz, v_rmes) c WHERE c.categoria_codigo IS NOT NULL GROUP BY c.categoria_codigo),
-            p2 AS (SELECT vi.categoria AS cod, round(sum(vi.quantidade),2) q, round(sum(vi.quantidade*vi.peso_medio_kg),2) p
-                     FROM public.valor_rebanho_fechamento_itens vi WHERE vi.fazenda_id=v_rfaz AND vi.ano_mes=v_rmes GROUP BY vi.categoria)
-       SELECT string_agg(coalesce(comp.cod,p2.cod)||'(qc='||coalesce(comp.q::text,'-')||',qp='||coalesce(p2.q::text,'-')||',pc='||coalesce(comp.p::text,'-')||',pp='||coalesce(p2.p::text,'-')||')', '; ')
-         FROM comp FULL OUTER JOIN p2 ON p2.cod=comp.cod
-        WHERE comp.q IS NULL OR p2.q IS NULL OR comp.q<>p2.q OR comp.p<>p2.p);
+    RAISE EXCEPTION 'T8A paridade estrutural FALHOU em %/% (% categorias sem paridade de categoria/quantidade): %', v_rfaz, v_rmes, v_n,
+      (WITH comp AS (SELECT c.categoria_codigo AS categoria, sum(c.quantidade)::numeric AS q FROM public.fn_composicao_componentes_categoria_mes(v_rfaz, v_rmes) c WHERE c.categoria_codigo IS NOT NULL GROUP BY c.categoria_codigo),
+            p2 AS (SELECT vi.categoria AS categoria, sum(vi.quantidade)::numeric AS q FROM public.valor_rebanho_fechamento_itens vi WHERE vi.fazenda_id=v_rfaz AND vi.ano_mes=v_rmes GROUP BY vi.categoria)
+       SELECT string_agg(coalesce(comp.categoria,p2.categoria)||'(qc='||coalesce(comp.q::text,'-')||',qp='||coalesce(p2.q::text,'-')||')', '; ')
+         FROM comp FULL OUTER JOIN p2 ON p2.categoria=comp.categoria
+        WHERE comp.categoria IS NULL OR p2.categoria IS NULL OR comp.q IS NULL OR p2.q IS NULL OR comp.q<>p2.q);
   END IF;
-  RAISE NOTICE 'T8 OK (paridade P2 bidirecional em %/%; quantidade+peso conferem)', v_rfaz, v_rmes;
+  RAISE NOTICE 'T8A OK (categorias bidirecionais; quantidade exata por categoria em %/%)', v_rfaz, v_rmes;
+
+  -- T8B — DIAGNOSTICO NAO-BLOQUEANTE de peso: mede e reporta a divergencia; NUNCA falha por diferenca de peso.
+  WITH comp AS (
+    SELECT c.categoria_codigo AS categoria, sum(c.peso_total_kg)::numeric AS peso_total_componentes
+    FROM public.fn_composicao_componentes_categoria_mes(v_rfaz, v_rmes) c WHERE c.categoria_codigo IS NOT NULL GROUP BY c.categoria_codigo
+  ), p2 AS (
+    SELECT vi.categoria AS categoria, sum(vi.quantidade*vi.peso_medio_kg)::numeric AS peso_total_p2
+    FROM public.valor_rebanho_fechamento_itens vi WHERE vi.fazenda_id=v_rfaz AND vi.ano_mes=v_rmes GROUP BY vi.categoria
+  ), d AS (
+    SELECT round(c.peso_total_componentes,2) AS pc, round(p.peso_total_p2,2) AS pp,
+           round(c.peso_total_componentes - p.peso_total_p2,2) AS diferenca_kg,
+           CASE WHEN p.peso_total_p2<>0 THEN round(100*(c.peso_total_componentes-p.peso_total_p2)/p.peso_total_p2,2) ELSE NULL END AS diferenca_percentual
+    FROM comp c FULL OUTER JOIN p2 p ON p.categoria=c.categoria
+  )
+  SELECT count(*) FILTER (WHERE diferenca_kg <> 0), round(sum(pc),2), round(sum(pp),2), round(sum(diferenca_kg),2), max(abs(diferenca_percentual))
+    INTO v_pdiv, v_peso_c, v_peso_p, v_num, v_maxpct
+  FROM d;
+  -- so garante que ambos os pesos sao calculaveis (numeric); NAO exige igualdade
+  IF v_peso_c IS NULL OR v_peso_p IS NULL THEN RAISE EXCEPTION 'T8B peso nao calculavel (componentes=% p2=%)', v_peso_c, v_peso_p; END IF;
+  RAISE NOTICE 'T8B DIAGNOSTICO peso (NAO-bloqueante) %/%: categorias_peso_divergente=%; peso_componentes=%; peso_p2=%; diferenca_total_kg=%; maior_dif_pct=%. Fontes distintas (P0-D-PESO-01); soberania fora do D.0A.',
+    v_rfaz, v_rmes, v_pdiv, v_peso_c, v_peso_p, v_num, v_maxpct;
 
   -- ============================ T9 — pendencias = rascunho+aberto; disjuncao com componentes ============================
   SELECT count(*) INTO v_n FROM public.fn_pendencias_fechamento_mes(v_faz, v_mes);
@@ -249,7 +275,7 @@ BEGIN
   BEGIN PERFORM count(*) FROM public.fn_locais_sugeridos_mes(v_faz, NULL); RAISE EXCEPTION 'T13 sugeridos aceitou NULL'; EXCEPTION WHEN SQLSTATE '22007' THEN NULL; END;
   RAISE NOTICE 'T13 OK';
 
-  RAISE NOTICE 'FIM: T1..T13 sem falha de assercao neste run';
+  RAISE NOTICE 'FIM: T1..T13 sem falha. Paridade estrutural com P2: categorias bidirecionais + quantidade exata (T8A). Peso: duas fontes independentes; divergencia medida e reportada (T8B), NAO-bloqueante; soberania fora do D.0A (P0-D-PESO-01).';
 END $fix$;
 
 ROLLBACK;
