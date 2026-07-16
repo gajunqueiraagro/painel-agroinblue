@@ -33,7 +33,7 @@ SELECT 'BASELINE_ANTES' AS marco,
      JOIN fazendas f ON f.id=vr.fazenda_id JOIN clientes c ON c.id=f.cliente_id
      WHERE c.nome='Santa Rita Agro' AND vr.ano_mes IN ('2026-05','2026-06')) AS p2val,
   (SELECT count(*) FROM fechamento_area_snapshot s JOIN fazendas f ON f.id=s.fazenda_id JOIN clientes c ON c.id=f.cliente_id
-     WHERE c.nome='Santa Rita Agro' AND s.ano_mes IN ('2026-05','2026-06')) AS snapshots;
+     WHERE c.nome='Santa Rita Agro' AND s.ano_mes >= DATE '2026-05-01' AND s.ano_mes < DATE '2026-07-01') AS snapshots;
 -- Esperado: 64, 64, '2026-05:fechado,2026-06:fechado', '2026-05:validado,2026-06:validado', 0
 
 BEGIN;
@@ -202,4 +202,4 @@ SELECT 'BASELINE_DEPOIS' AS marco,
      JOIN fazendas f ON f.id=vr.fazenda_id JOIN clientes c ON c.id=f.cliente_id
      WHERE c.nome='Santa Rita Agro' AND vr.ano_mes IN ('2026-05','2026-06')) AS p2val,
   (SELECT count(*) FROM fechamento_area_snapshot s JOIN fazendas f ON f.id=s.fazenda_id JOIN clientes c ON c.id=f.cliente_id
-     WHERE c.nome='Santa Rita Agro' AND s.ano_mes IN ('2026-05','2026-06')) AS snapshots;
+     WHERE c.nome='Santa Rita Agro' AND s.ano_mes >= DATE '2026-05-01' AND s.ano_mes < DATE '2026-07-01') AS snapshots;
