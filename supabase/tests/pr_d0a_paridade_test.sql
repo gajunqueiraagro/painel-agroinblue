@@ -24,6 +24,9 @@ DECLARE
   v_rfaz uuid; v_rmes text;           -- fazenda/competencia REAL elegivel (T6/T8)
   v_n int; v_num numeric; v_num2 numeric; v_bool boolean; v_txt text;
   v_pdiv int; v_peso_c numeric; v_peso_p numeric; v_maxpct numeric;   -- diagnostico de peso (T8B, nao-bloqueante)
+  v_faz2 uuid := gen_random_uuid();   -- 2a fazenda: pendencias (T14/T15) sem afetar contagens de v_faz
+  v_p_divp uuid; v_c_divp uuid; v_p_normp uuid; v_c_normp uuid;
+  v_n2 int; v_ehaj boolean; v_tent text;
 BEGIN
   -- identidade real (admin global) para FK owner_id -> auth.users e trigger auto_add_owner
   SELECT cm.user_id INTO v_user FROM public.cliente_membros cm
@@ -80,6 +83,17 @@ BEGIN
     (v_c_div,  v_cat_ok,    2,  600),   -- card divergencia (eh_ajuste TRUE)
     (v_c_pec,  v_cat_ok,    4, 1200);   -- pecuaria legado (natureza NULL)
   -- fis2: SEM itens (T2 possui_itens FALSE)
+
+  -- 2a fazenda (v_faz2): pendencias para T14/T15 (envelope M8). Isolada -> nao altera contagens de v_faz.
+  INSERT INTO public.fazendas (id, cliente_id, nome, owner_id) VALUES (v_faz2, v_cli, 'FAZENDA_TESTE_D0A_P_'||v_tag, v_user);
+  INSERT INTO public.pastos (fazenda_id, cliente_id, nome, ativo, entra_conciliacao, tipo_uso) VALUES
+    (v_faz2, v_cli, 'PASTO_DIVP_D0A_'||v_tag, true, true, 'divergencia') RETURNING id INTO v_p_divp;   -- divergencia c/ card pendente (T14)
+  INSERT INTO public.pastos (fazenda_id, cliente_id, nome, ativo, entra_conciliacao, tipo_uso) VALUES
+    (v_faz2, v_cli, 'PASTO_NORMP_D0A_'||v_tag, true, true, 'recria') RETURNING id INTO v_p_normp;       -- normal c/ card pendente (T15)
+  INSERT INTO public.fechamento_pastos (pasto_id, fazenda_id, cliente_id, ano_mes, status) VALUES
+    (v_p_divp, v_faz2, v_cli, v_mes, 'rascunho') RETURNING id INTO v_c_divp;
+  INSERT INTO public.fechamento_pastos (pasto_id, fazenda_id, cliente_id, ano_mes, status) VALUES
+    (v_p_normp, v_faz2, v_cli, v_mes, 'aberto') RETURNING id INTO v_c_normp;
 
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_user::text, 'role', 'authenticated')::text, true);
 
@@ -275,7 +289,44 @@ BEGIN
   BEGIN PERFORM count(*) FROM public.fn_locais_sugeridos_mes(v_faz, NULL); RAISE EXCEPTION 'T13 sugeridos aceitou NULL'; EXCEPTION WHEN SQLSTATE '22007' THEN NULL; END;
   RAISE NOTICE 'T13 OK';
 
-  RAISE NOTICE 'FIM: T1..T13 sem falha. Paridade estrutural com P2: categorias bidirecionais + quantidade exata (T8A). Peso: duas fontes independentes; divergencia medida e reportada (T8B), NAO-bloqueante; soberania fora do D.0A (P0-D-PESO-01).';
+  -- ============================ T14 — pendencia de AJUSTE (envelope M8) ============================
+  -- card rascunho ligado a pasto cadastral tipo_uso='divergencia'
+  SELECT status, eh_ajuste, tipo_entidade INTO v_txt, v_ehaj, v_tent
+    FROM public.fn_pendencias_fechamento_mes(v_faz2, v_mes) WHERE pasto_id=v_p_divp;
+  IF v_txt <> 'rascunho' THEN RAISE EXCEPTION 'T14 status=% (esperado rascunho)', v_txt; END IF;
+  IF v_ehaj IS DISTINCT FROM true THEN RAISE EXCEPTION 'T14 eh_ajuste=% (esperado true)', v_ehaj; END IF;
+  IF v_tent <> 'ajuste_conciliacao' THEN RAISE EXCEPTION 'T14 tipo_entidade=% (esperado ajuste_conciliacao)', v_tent; END IF;
+  -- natureza NULL (divergencia); uso_operacional=tipo_uso_mes; uso_operacional_origem NULL
+  IF EXISTS (SELECT 1 FROM public.fn_pendencias_fechamento_mes(v_faz2, v_mes)
+              WHERE pasto_id=v_p_divp AND (natureza_patrimonial IS NOT NULL
+                    OR uso_operacional IS DISTINCT FROM tipo_uso_mes OR uso_operacional_origem IS NOT NULL))
+     THEN RAISE EXCEPTION 'T14 natureza/uso/origem inconsistentes (esperado natureza NULL; uso=tipo_uso_mes; origem NULL)'; END IF;
+  RAISE NOTICE 'T14 OK (pendencia ajuste: eh_ajuste=true; ajuste_conciliacao; natureza NULL; uso=tipo_uso_mes)';
+
+  -- ============================ T15 — pendencia FISICA normal (envelope M8) ============================
+  IF EXISTS (SELECT 1 FROM public.fn_pendencias_fechamento_mes(v_faz2, v_mes)
+              WHERE pasto_id=v_p_normp AND (eh_ajuste IS DISTINCT FROM false
+                    OR tipo_entidade <> 'local_fisico'
+                    OR natureza_patrimonial IS DISTINCT FROM 'pecuaria_produtiva'))
+     THEN RAISE EXCEPTION 'T15 pendencia normal inconsistente (esperado eh_ajuste=false; local_fisico; natureza pecuaria_produtiva)'; END IF;
+  RAISE NOTICE 'T15 OK (pendencia normal: eh_ajuste=false; local_fisico; natureza canonica)';
+
+  -- ============================ GATE REAL — pendencias de divergencia reais (sem IDs fixos) ============================
+  -- Toda pendencia (rascunho/aberto) de pasto cadastral divergencia deve voltar eh_ajuste=true + ajuste_conciliacao.
+  SELECT count(*) INTO v_n FROM public.fechamento_pastos fp JOIN public.pastos p ON p.id=fp.pasto_id
+   WHERE fp.status IN ('rascunho','aberto') AND coalesce(p.tipo_uso,'')='divergencia' AND p.cliente_id <> v_cli;
+  IF v_n < 1 THEN RAISE EXCEPTION 'GATE REAL: nenhuma pendencia de divergencia real para validar'; END IF;
+  SELECT count(*) INTO v_n2
+    FROM (SELECT DISTINCT fp.fazenda_id, fp.ano_mes FROM public.fechamento_pastos fp JOIN public.pastos p ON p.id=fp.pasto_id
+           WHERE fp.status IN ('rascunho','aberto') AND coalesce(p.tipo_uso,'')='divergencia' AND p.cliente_id <> v_cli) alvo
+    JOIN LATERAL public.fn_pendencias_fechamento_mes(alvo.fazenda_id, alvo.ano_mes) pe ON true
+    JOIN public.pastos p2 ON p2.id=pe.pasto_id
+   WHERE coalesce(p2.tipo_uso,'')='divergencia' AND p2.cliente_id <> v_cli
+     AND pe.eh_ajuste=true AND pe.tipo_entidade='ajuste_conciliacao';
+  IF v_n2 <> v_n THEN RAISE EXCEPTION 'GATE REAL: pendencias divergencia com eh_ajuste/ajuste_conciliacao=% de % reais', v_n2, v_n; END IF;
+  RAISE NOTICE 'GATE REAL OK: % pendencias de divergencia reais -> eh_ajuste=true + ajuste_conciliacao', v_n;
+
+  RAISE NOTICE 'FIM: T1..T15 sem falha. Paridade estrutural com P2: categorias bidirecionais + quantidade exata (T8A). Peso: duas fontes independentes; divergencia medida e reportada (T8B), NAO-bloqueante; soberania fora do D.0A (P0-D-PESO-01). Envelope de pendencias (M8) expoe eh_ajuste/tipo_entidade/natureza/uso.';
 END $fix$;
 
 ROLLBACK;
